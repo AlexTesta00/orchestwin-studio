@@ -1,0 +1,35 @@
+{
+  "name": "orchestwin-studio",
+  "author": "Alex Testa",
+  "type": "module",
+  "description": "Human-governed multi-agent platform for end-to-end Agentic UCD workflows.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "commitlint": "commitlint --verbose",
+    "test": "python -m pytest",
+    "lint:python": "python -m ruff check .",
+    "format:python": "python -m ruff format .",
+    "format:python:check": "python -m ruff format --check .",
+    "check:python": "npm run lint:python && npm run format:python:check",
+    "check:renovate": "renovate-config-validator --strict",
+    "check:config": "node --check commitlint.config.mjs && node --check release.config.mjs && npm run check:renovate",
+    "build:python": "python -m compileall -q -f src",
+    "build": "npm run build:python && npm run check:python && npm run check:config",
+    "check": "npm run test && npm run build",
+    "release": "semantic-release"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.1",
+    "@commitlint/config-conventional": "21.2.0",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/github": "12.0.9",
+    "@semantic-release/release-notes-generator": "14.1.1",
+    "husky": "9.1.7",
+    "renovate": "43.283.0",
+    "semantic-release": "25.0.8"
+  }
+}
