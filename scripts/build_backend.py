@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST_DIRECTORY = ROOT / "dist"
 REQUIRED_PACKAGE_FILES = {
     "orchestwin/__init__.py",
+    "orchestwin/api/__init__.py",
+    "orchestwin/api/app.py",
+    "orchestwin/api/health.py",
     "orchestwin/config.py",
     "orchestwin/py.typed",
 }
@@ -75,6 +78,7 @@ def main() -> None:
 
     wheel = require_single_artifact("*.whl")
     source_distribution = require_single_artifact("*.tar.gz")
+
     verify_wheel(wheel)
     verify_source_distribution(source_distribution)
 
