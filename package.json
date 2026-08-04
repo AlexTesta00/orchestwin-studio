@@ -10,6 +10,7 @@
   "scripts": {
     "prepare": "husky",
     "commitlint": "commitlint --verbose",
+    "install:python": "python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt",
     "test": "python -m pytest",
     "lint:python": "python -m ruff check .",
     "format:python": "python -m ruff format .",
@@ -17,8 +18,8 @@
     "check:python": "npm run lint:python && npm run format:python:check",
     "check:renovate": "renovate-config-validator --strict",
     "check:config": "node --check commitlint.config.mjs && node --check release.config.mjs && npm run check:renovate",
-    "build:python": "python -m compileall -q -f src",
-    "build": "npm run build:python && npm run check:python && npm run check:config",
+    "build:python": "python scripts/build_backend.py",
+    "build": "npm run check:python && npm run build:python && npm run check:config",
     "check": "npm run test && npm run build",
     "release": "semantic-release"
   },
