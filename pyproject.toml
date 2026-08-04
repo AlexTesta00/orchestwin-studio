@@ -1,0 +1,35 @@
+[tool.pytest.ini_options]
+minversion = "9.1"
+testpaths = ["src/test/python"]
+python_files = ["test_*.py"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "node_modules",
+]
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "RUF",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
