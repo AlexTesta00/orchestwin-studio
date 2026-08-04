@@ -1,8 +1,40 @@
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchestwin-studio"
+version = "0.0.0"
+description = "Human-governed multi-agent platform for end-to-end Agentic UCD workflows."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = [
+    "pydantic-settings==2.14.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orchestwin"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/src/orchestwin",
+    "/src/test/python",
+]
+
 [tool.pytest.ini_options]
 minversion = "9.1"
 testpaths = ["src/test/python"]
 python_files = ["test_*.py"]
-addopts = ["--strict-config", "--strict-markers", "-ra"]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+]
 
 [tool.ruff]
 target-version = "py312"
