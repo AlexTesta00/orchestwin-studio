@@ -121,8 +121,8 @@ jobs:
       - name: Verify frontend dependencies
         run: npm --prefix frontend ls --depth=0
 
-      - name: Build and verify backend and frontend
-        run: npm run build:all
+      - name: Verify backend and frontend quality and builds
+        run: npm run verify:all
 
   release:
     name: Semantic release
