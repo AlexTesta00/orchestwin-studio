@@ -1,4 +1,5 @@
 import eslint from "@eslint/js";
+import eslintConfigPrettier from "eslint-config-prettier/flat";
 import eslintPluginVue from "eslint-plugin-vue";
 import globals from "globals";
 import typescriptEslint from "typescript-eslint";
@@ -9,15 +10,11 @@ const linterOptions = {
 
 export default typescriptEslint.config(
   {
-    ignores: [
-      "coverage/**",
-      "dist/**",
-      "node_modules/**",
-    ],
+    ignores: ["coverage/**", "dist/**", "node_modules/**"],
   },
   {
     ...eslint.configs.recommended,
-    files: ["eslint.config.mjs"],
+    files: ["eslint.config.mjs", "prettier.config.mjs"],
     languageOptions: {
       ecmaVersion: "latest",
       globals: globals.node,
@@ -31,10 +28,7 @@ export default typescriptEslint.config(
       ...typescriptEslint.configs.recommended,
       ...eslintPluginVue.configs["flat/essential"],
     ],
-    files: [
-      "src/**/*.{ts,vue}",
-      "vite.config.ts",
-    ],
+    files: ["src/**/*.{ts,vue}", "vite.config.ts"],
     languageOptions: {
       ecmaVersion: "latest",
       parserOptions: {
@@ -52,36 +46,19 @@ export default typescriptEslint.config(
         },
       ],
       "@typescript-eslint/no-explicit-any": "error",
-      "eqeqeq": [
-        "error",
-        "always",
-      ],
+      eqeqeq: ["error", "always"],
       "no-console": [
         "error",
         {
-          allow: [
-            "error",
-            "warn",
-          ],
+          allow: ["error", "warn"],
         },
       ],
       "prefer-const": "error",
-      "vue/component-api-style": [
-        "error",
-        [
-          "script-setup",
-        ],
-      ],
+      "vue/component-api-style": ["error", ["script-setup"]],
       "vue/no-unused-properties": [
         "error",
         {
-          groups: [
-            "props",
-            "data",
-            "computed",
-            "methods",
-            "setup",
-          ],
+          groups: ["props", "data", "computed", "methods", "setup"],
         },
       ],
     },
@@ -98,4 +75,5 @@ export default typescriptEslint.config(
       globals: globals.node,
     },
   },
+  eslintConfigPrettier,
 );

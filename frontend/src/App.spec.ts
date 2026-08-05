@@ -1,13 +1,5 @@
-import {
-  enableAutoUnmount,
-  mount,
-} from "@vue/test-utils";
-import {
-  afterEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it } from "vitest";
 
 import App from "./App.vue";
 
