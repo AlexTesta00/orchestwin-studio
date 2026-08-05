@@ -1,17 +1,25 @@
-<script setup lang="ts">
-const bootstrapStatus = "Frontend workspace operational";
-</script>
-
 <template>
-  <main class="app-shell" aria-labelledby="app-title">
-    <section class="status-panel">
-      <p class="eyebrow">Human-governed Agentic UCD</p>
+  <div class="application-shell">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
 
-      <h1 id="app-title">OrchesTwin Studio</h1>
+    <header class="site-header">
+      <RouterLink class="brand" to="/" aria-label="OrchesTwin Studio home">
+        OrchesTwin Studio
+      </RouterLink>
 
-      <p class="status-copy">
-        {{ bootstrapStatus }}
-      </p>
-    </section>
-  </main>
+      <nav class="primary-navigation" aria-label="Primary navigation">
+        <RouterLink class="primary-navigation__link" data-testid="overview-link" to="/">
+          Overview
+        </RouterLink>
+
+        <RouterLink class="primary-navigation__link" data-testid="projects-link" to="/projects">
+          Projects
+        </RouterLink>
+      </nav>
+    </header>
+
+    <main id="main-content" class="main-content" tabindex="-1">
+      <RouterView />
+    </main>
+  </div>
 </template>

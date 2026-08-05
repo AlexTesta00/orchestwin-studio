@@ -41,7 +41,8 @@
     "check": "npm run quality && npm run test && npm run bundle"
   },
   "dependencies": {
-    "vue": "3.5.40"
+    "vue": "3.5.40",
+    "vue-router": "5.2.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
