@@ -1,32 +1,41 @@
 <script setup lang="ts">
-const foundationCapabilities = [
-  "Typed FastAPI backend",
-  "Versioned health API",
-  "Verified Vue frontend workspace",
-] as const;
+import { useI18n } from "vue-i18n";
+
+const capabilityKeys = ["backend", "api", "frontend"] as const;
+
+const { t } = useI18n({
+  useScope: "global",
+});
 </script>
 
 <template>
   <section class="page" aria-labelledby="overview-title">
     <header class="page__header">
-      <p class="page__eyebrow">Human-governed Agentic UCD</p>
+      <p class="page__eyebrow">
+        {{ t("overview.eyebrow") }}
+      </p>
 
-      <h1 id="overview-title">OrchesTwin Studio</h1>
+      <h1 id="overview-title">
+        {{ t("overview.title") }}
+      </h1>
 
-      <p class="page__lead">Frontend workspace operational</p>
+      <p class="page__lead">
+        {{ t("overview.status") }}
+      </p>
 
       <p>
-        The current foundation provides independently verifiable backend and frontend workspaces.
-        Project workflows will be introduced in later sprints.
+        {{ t("overview.description") }}
       </p>
     </header>
 
     <section aria-labelledby="foundation-capabilities-title">
-      <h2 id="foundation-capabilities-title">Foundation capabilities</h2>
+      <h2 id="foundation-capabilities-title">
+        {{ t("overview.capabilitiesTitle") }}
+      </h2>
 
       <ul class="capability-grid">
-        <li v-for="capability in foundationCapabilities" :key="capability" class="capability-card">
-          {{ capability }}
+        <li v-for="capabilityKey in capabilityKeys" :key="capabilityKey" class="capability-card">
+          {{ t(`overview.capabilities.${capabilityKey}`) }}
         </li>
       </ul>
     </section>
