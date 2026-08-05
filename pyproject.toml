@@ -13,7 +13,11 @@ license-files = ["LICENSE"]
 dependencies = [
     "fastapi==0.141.1",
     "pydantic-settings==2.14.2",
+    "uvicorn==0.52.1",
 ]
+
+[project.scripts]
+orchestwin-api = "orchestwin.api.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orchestwin"]

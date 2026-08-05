@@ -11,11 +11,13 @@ from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST_DIRECTORY = ROOT / "dist"
+EXPECTED_CONSOLE_SCRIPT = "orchestwin-api = orchestwin.api.server:main"
 REQUIRED_PACKAGE_FILES = {
     "orchestwin/__init__.py",
     "orchestwin/api/__init__.py",
     "orchestwin/api/app.py",
     "orchestwin/api/health.py",
+    "orchestwin/api/server.py",
     "orchestwin/config.py",
     "orchestwin/py.typed",
 }
@@ -46,14 +48,30 @@ def require_single_artifact(pattern: str) -> Path:
 
 
 def verify_wheel(wheel_path: Path) -> None:
-    """Ensure the wheel contains the complete typed backend package."""
+    """Ensure the wheel contains the package and console entry point."""
     with ZipFile(wheel_path) as wheel:
         packaged_files = set(wheel.namelist())
+        entry_point_files = sorted(
+            name for name in packaged_files if name.endswith(".dist-info/entry_points.txt")
+        )
+
+        if len(entry_point_files) != 1:
+            names = ", ".join(entry_point_files) or "none"
+            raise RuntimeError(
+                f"wheel must contain exactly one entry_points.txt file, found: {names}"
+            )
+
+        entry_point_configuration = wheel.read(entry_point_files[0]).decode("utf-8")
 
     missing_files = REQUIRED_PACKAGE_FILES.difference(packaged_files)
     if missing_files:
         missing = ", ".join(sorted(missing_files))
         raise RuntimeError(f"wheel is missing required package files: {missing}")
+
+    if EXPECTED_CONSOLE_SCRIPT not in entry_point_configuration:
+        raise RuntimeError(
+            f"wheel is missing the expected console script: {EXPECTED_CONSOLE_SCRIPT}"
+        )
 
 
 def verify_source_distribution(source_path: Path) -> None:
