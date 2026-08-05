@@ -40,6 +40,10 @@ textarea {
   font: inherit;
 }
 
+button {
+  color: inherit;
+}
+
 :focus-visible {
   outline: 0.1875rem solid #17202a;
   outline-offset: 0.1875rem;
@@ -88,6 +92,17 @@ textarea {
 .brand:hover {
   text-decoration: underline;
   text-underline-offset: 0.25rem;
+}
+
+.navigation-toggle {
+  display: none;
+  justify-self: end;
+  padding: 0.625rem 0.875rem;
+  font-weight: 700;
+  background: #ffffff;
+  border: 0.0625rem solid #7b8794;
+  border-radius: 0.5rem;
+  cursor: pointer;
 }
 
 .primary-navigation {
@@ -197,11 +212,27 @@ h2 {
 
 @media (max-width: 40rem) {
   .site-header {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
     gap: 1rem;
   }
 
+  .navigation-toggle {
+    display: inline-flex;
+  }
+
   .primary-navigation {
-    justify-self: start;
+    display: none;
+    grid-column: 1 / -1;
+    flex-direction: column;
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .primary-navigation--open {
+    display: flex;
+  }
+
+  .primary-navigation__link {
+    width: 100%;
   }
 }
