@@ -1,26 +1,35 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 
+import LanguageSwitcher from "@/components/LanguageSwitcher.vue";
 import { useShellStore } from "@/stores/shell";
 
 const shellStore = useShellStore();
 const { isNavigationOpen } = storeToRefs(shellStore);
+const { t } = useI18n({
+  useScope: "global",
+});
 
 const navigationToggleLabel = computed(() =>
-  isNavigationOpen.value ? "Close primary navigation" : "Open primary navigation",
+  isNavigationOpen.value ? t("navigation.closeLabel") : t("navigation.openLabel"),
 );
 
-const navigationToggleText = computed(() => (isNavigationOpen.value ? "Close" : "Menu"));
+const navigationToggleText = computed(() =>
+  isNavigationOpen.value ? t("navigation.close") : t("navigation.menu"),
+);
 </script>
 
 <template>
   <div class="application-shell">
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <a class="skip-link" href="#main-content">
+      {{ t("navigation.skip") }}
+    </a>
 
     <header class="site-header">
-      <RouterLink class="brand" to="/" aria-label="OrchesTwin Studio home">
-        OrchesTwin Studio
+      <RouterLink class="brand" to="/" :aria-label="t('app.homeAriaLabel')">
+        {{ t("app.title") }}
       </RouterLink>
 
       <button
@@ -43,7 +52,7 @@ const navigationToggleText = computed(() => (isNavigationOpen.value ? "Close" : 
             'primary-navigation--open': isNavigationOpen,
           },
         ]"
-        aria-label="Primary navigation"
+        :aria-label="t('navigation.label')"
       >
         <RouterLink
           class="primary-navigation__link"
@@ -51,7 +60,7 @@ const navigationToggleText = computed(() => (isNavigationOpen.value ? "Close" : 
           to="/"
           @click="shellStore.closeNavigation"
         >
-          Overview
+          {{ t("navigation.overview") }}
         </RouterLink>
 
         <RouterLink
@@ -60,9 +69,11 @@ const navigationToggleText = computed(() => (isNavigationOpen.value ? "Close" : 
           to="/projects"
           @click="shellStore.closeNavigation"
         >
-          Projects
+          {{ t("navigation.projects") }}
         </RouterLink>
       </nav>
+
+      <LanguageSwitcher />
     </header>
 
     <main id="main-content" class="main-content" tabindex="-1">

@@ -1,19 +1,34 @@
+<script setup lang="ts">
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n({
+  useScope: "global",
+});
+</script>
+
 <template>
   <section class="page" aria-labelledby="projects-title">
     <header class="page__header">
-      <p class="page__eyebrow">Project workspace</p>
+      <p class="page__eyebrow">
+        {{ t("projects.eyebrow") }}
+      </p>
 
-      <h1 id="projects-title">Projects</h1>
+      <h1 id="projects-title">
+        {{ t("projects.title") }}
+      </h1>
 
-      <p class="page__lead">Project intake and versioned briefs will be introduced in Sprint 02.</p>
+      <p class="page__lead">
+        {{ t("projects.description") }}
+      </p>
     </header>
 
     <section class="empty-state" aria-labelledby="projects-empty-title">
-      <h2 id="projects-empty-title">No projects yet</h2>
+      <h2 id="projects-empty-title">
+        {{ t("projects.emptyTitle") }}
+      </h2>
 
       <p>
-        The foundation sprint verifies navigation and workspace structure without creating domain
-        data prematurely.
+        {{ t("projects.emptyDescription") }}
       </p>
     </section>
   </section>
