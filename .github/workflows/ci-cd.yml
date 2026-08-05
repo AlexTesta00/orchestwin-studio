@@ -17,6 +17,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -26,10 +35,15 @@ jobs:
             pyproject.toml
             requirements-dev.txt
 
-      - name: Show Python environment
+      - name: Show test environment
         run: |
+          node --version
+          npm --version
           python --version
           python -m pip --version
+
+      - name: Install frontend dependencies
+        run: npm run install:frontend
 
       - name: Install backend and test dependencies
         run: |
@@ -38,11 +52,16 @@ jobs:
             --editable . \
             --requirement requirements-dev.txt
 
-      - name: Verify installed dependencies
+      - name: Verify Python dependencies
         run: python -m pip check
 
-      - name: Run project tests
-        run: python -m pytest
+      - name: Verify frontend dependencies
+        run: npm --prefix frontend ls --depth=0
+
+      - name: Run backend and frontend tests
+        env:
+          PYTHONWARNINGS: error
+        run: npm run test:all
 
   build:
     name: Build
@@ -63,7 +82,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -81,8 +102,11 @@ jobs:
           python --version
           python -m pip --version
 
-      - name: Install Node.js tooling
+      - name: Install repository tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install frontend dependencies
+        run: npm run install:frontend
 
       - name: Install backend and build dependencies
         run: |
@@ -91,11 +115,14 @@ jobs:
             --editable . \
             --requirement requirements-dev.txt
 
-      - name: Verify installed dependencies
+      - name: Verify Python dependencies
         run: python -m pip check
 
-      - name: Build and verify project
-        run: npm run build
+      - name: Verify frontend dependencies
+        run: npm --prefix frontend ls --depth=0
+
+      - name: Build and verify backend and frontend
+        run: npm run build:all
 
   release:
     name: Semantic release
