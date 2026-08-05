@@ -11,6 +11,7 @@
     "prepare": "husky",
     "commitlint": "commitlint --verbose",
     "install:python": "python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt",
+    "start:api": "python -m orchestwin.api.server",
     "test": "python -m pytest",
     "lint:python": "python -m ruff check .",
     "format:python": "python -m ruff format .",
