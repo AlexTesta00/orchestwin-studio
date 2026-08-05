@@ -24,6 +24,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "lint": "eslint src vite.config.ts eslint.config.mjs --max-warnings=0",
+    "lint:fix": "eslint src vite.config.ts eslint.config.mjs --fix --max-warnings=0",
     "type-check:app": "vue-tsc --noEmit --project tsconfig.json",
     "type-check:node": "tsc --noEmit --project tsconfig.node.json",
     "type-check": "npm run type-check:app && npm run type-check:node",
@@ -32,19 +34,24 @@
     "build-only": "vite build",
     "build": "npm run type-check && npm run build-only",
     "preview": "vite preview",
-    "check": "npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "vue": "3.5.40"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@tsconfig/node24": "24.0.4",
     "@types/node": "24.13.3",
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/test-utils": "2.4.11",
     "@vue/tsconfig": "0.9.1",
+    "eslint": "10.8.0",
+    "eslint-plugin-vue": "10.10.0",
+    "globals": "17.9.0",
     "jsdom": "29.1.1",
     "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0",
     "vite": "8.1.5",
     "vitest": "4.1.10",
     "vue-tsc": "3.3.7"
