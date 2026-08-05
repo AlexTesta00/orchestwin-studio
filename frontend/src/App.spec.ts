@@ -1,3 +1,4 @@
+import { createPinia } from "pinia";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory } from "vue-router";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,7 +16,7 @@ async function mountApplication(initialPath = "/") {
 
   const wrapper = mount(App, {
     global: {
-      plugins: [router],
+      plugins: [createPinia(), router],
     },
   });
 
@@ -33,6 +34,24 @@ describe("App", () => {
     expect(wrapper.get("nav").attributes("aria-label")).toBe("Primary navigation");
     expect(wrapper.get("main").attributes("tabindex")).toBe("-1");
     expect(wrapper.get("h1").text()).toBe("OrchesTwin Studio");
+  });
+
+  it("opens and closes the responsive navigation through Pinia state", async () => {
+    const { wrapper } = await mountApplication();
+    const toggle = wrapper.get('[data-testid="navigation-toggle"]');
+
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get("#primary-navigation").classes()).toContain("primary-navigation--open");
+
+    await wrapper.get('[data-testid="projects-link"]').trigger("click");
+    await flushPromises();
+
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(wrapper.get("#primary-navigation").classes()).not.toContain("primary-navigation--open");
   });
 
   it("navigates between foundation routes without reloading the page", async () => {
