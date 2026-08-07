@@ -26,7 +26,6 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   return createRouter({
     history,
     routes: [...applicationRoutes],
-    linkExactActiveClass: "primary-navigation__link--active",
     scrollBehavior: () => ({
       left: 0,
       top: 0,
