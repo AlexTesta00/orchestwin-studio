@@ -9,8 +9,8 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from orchestwin.identity.persistence.models import UserRecord
 from orchestwin.persistence.config import load_database_settings
-from orchestwin.persistence.orm import OrmBase
 
 configuration = context.config
 
@@ -20,7 +20,7 @@ if configuration.config_file_name is not None:
         disable_existing_loggers=False,
     )
 
-target_metadata = OrmBase.metadata
+target_metadata = UserRecord.metadata
 
 
 def database_url() -> str:
