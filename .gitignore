@@ -459,3 +459,5 @@ pyrightconfig.json
 #
 # Recommended template: Node.gitignore
 docs/_book
+
+compose.env
