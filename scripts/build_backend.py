@@ -6,21 +6,13 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_PACKAGE_DIRECTORY = ROOT / "src" / "orchestwin"
 DIST_DIRECTORY = ROOT / "dist"
-EXPECTED_CONSOLE_SCRIPT = "orchestwin-api = orchestwin.api.server:main"
-REQUIRED_PACKAGE_FILES = {
-    "orchestwin/__init__.py",
-    "orchestwin/api/__init__.py",
-    "orchestwin/api/app.py",
-    "orchestwin/api/health.py",
-    "orchestwin/api/server.py",
-    "orchestwin/config.py",
-    "orchestwin/py.typed",
-}
 
 
 def reset_build_output() -> None:
@@ -41,49 +33,88 @@ def run_build() -> None:
 def require_single_artifact(pattern: str) -> Path:
     """Return exactly one generated artifact matching the expected pattern."""
     artifacts = sorted(DIST_DIRECTORY.glob(pattern))
+
     if len(artifacts) != 1:
         names = ", ".join(path.name for path in artifacts) or "none"
         raise RuntimeError(f"expected one {pattern} artifact, found: {names}")
+
     return artifacts[0]
 
 
+def required_package_files() -> set[str]:
+    """Discover package files that must be present in built artifacts."""
+    required: set[str] = set()
+
+    for path in SOURCE_PACKAGE_DIRECTORY.rglob("*"):
+        if not path.is_file() or "__pycache__" in path.parts:
+            continue
+
+        if path.suffix not in {".py", ".mako"} and path.name != "py.typed":
+            continue
+
+        required.add(path.relative_to(ROOT / "src").as_posix())
+
+    return required
+
+
+def expected_console_scripts() -> set[str]:
+    """Read the expected console scripts from project metadata."""
+    project_definition = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = project_definition.get("project", {}).get("scripts", {})
+
+    return {f"{name} = {target}" for name, target in scripts.items()}
+
+
 def verify_wheel(wheel_path: Path) -> None:
-    """Ensure the wheel contains the package and console entry point."""
+    """Ensure the wheel contains package files and declared entry points."""
+    required_files = required_package_files()
+    expected_scripts = expected_console_scripts()
+
     with ZipFile(wheel_path) as wheel:
         packaged_files = set(wheel.namelist())
         entry_point_files = sorted(
             name for name in packaged_files if name.endswith(".dist-info/entry_points.txt")
         )
 
-        if len(entry_point_files) != 1:
-            names = ", ".join(entry_point_files) or "none"
-            raise RuntimeError(
-                f"wheel must contain exactly one entry_points.txt file, found: {names}"
-            )
+        entry_point_configuration = ""
 
-        entry_point_configuration = wheel.read(entry_point_files[0]).decode("utf-8")
+        if expected_scripts:
+            if len(entry_point_files) != 1:
+                names = ", ".join(entry_point_files) or "none"
+                raise RuntimeError(
+                    f"wheel must contain exactly one entry_points.txt file, found: {names}"
+                )
 
-    missing_files = REQUIRED_PACKAGE_FILES.difference(packaged_files)
+            entry_point_configuration = wheel.read(entry_point_files[0]).decode("utf-8")
+
+    missing_files = required_files.difference(packaged_files)
+
     if missing_files:
         missing = ", ".join(sorted(missing_files))
         raise RuntimeError(f"wheel is missing required package files: {missing}")
 
-    if EXPECTED_CONSOLE_SCRIPT not in entry_point_configuration:
-        raise RuntimeError(
-            f"wheel is missing the expected console script: {EXPECTED_CONSOLE_SCRIPT}"
-        )
+    missing_scripts = {
+        script for script in expected_scripts if script not in entry_point_configuration
+    }
+
+    if missing_scripts:
+        missing = ", ".join(sorted(missing_scripts))
+        raise RuntimeError(f"wheel is missing console scripts: {missing}")
 
 
 def verify_source_distribution(source_path: Path) -> None:
-    """Ensure the source distribution contains the backend package sources."""
+    """Ensure the source distribution contains every package source file."""
+    required_files = required_package_files()
+
     with tarfile.open(source_path, mode="r:gz") as source_archive:
         packaged_files = source_archive.getnames()
 
     missing_files = {
         required
-        for required in REQUIRED_PACKAGE_FILES
+        for required in required_files
         if not any(name.endswith(f"/src/{required}") for name in packaged_files)
     }
+
     if missing_files:
         missing = ", ".join(sorted(missing_files))
         raise RuntimeError(f"source distribution is missing required package files: {missing}")

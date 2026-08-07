@@ -12,7 +12,9 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
     "fastapi==0.141.1",
+    "psycopg[binary]==3.3.4",
     "pydantic-settings==2.14.2",
+    "sqlalchemy[asyncio]==2.0.51",
     "uvicorn==0.52.1",
 ]
 
@@ -49,6 +51,7 @@ extend-exclude = [
     ".venv",
     "build",
     "dist",
+    "frontend",
     "node_modules",
 ]
 
