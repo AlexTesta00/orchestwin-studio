@@ -7,10 +7,7 @@ const { t } = useI18n({
 </script>
 
 <template>
-  <section
-    class="grid gap-10"
-    aria-labelledby="projects-title"
-  >
+  <section class="grid gap-10" aria-labelledby="projects-title">
     <header class="grid max-w-3xl gap-4">
       <p class="m-0 text-sm font-black tracking-[0.12em] text-slate-600 uppercase">
         {{ t("projects.eyebrow") }}
@@ -39,10 +36,7 @@ const { t } = useI18n({
         0
       </div>
 
-      <h2
-        id="projects-empty-title"
-        class="m-0 text-2xl font-black tracking-tight text-slate-950"
-      >
+      <h2 id="projects-empty-title" class="m-0 text-2xl font-black tracking-tight text-slate-950">
         {{ t("projects.emptyTitle") }}
       </h2>
 
