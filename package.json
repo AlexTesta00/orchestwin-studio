@@ -18,6 +18,7 @@
     "test": "python -m pytest",
     "test:frontend": "npm --prefix frontend run test",
     "test:all": "npm run test && npm run test:frontend",
+    "test:compose": "python scripts/smoke_compose.py",
     "type-check:frontend": "npm --prefix frontend run type-check",
     "lint:python": "python -m ruff check .",
     "lint:frontend": "npm --prefix frontend run lint",
