@@ -67,6 +67,7 @@ jobs:
     name: Build
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
       HUSKY: 0
@@ -101,6 +102,8 @@ jobs:
           npm --version
           python --version
           python -m pip --version
+          docker --version
+          docker compose version
 
       - name: Install repository tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -123,6 +126,9 @@ jobs:
 
       - name: Verify backend and frontend quality and builds
         run: npm run verify:all
+
+      - name: Smoke-test the local container platform
+        run: npm run test:compose
 
   release:
     name: Semantic release
