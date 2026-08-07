@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
+    "alembic==1.19.0",
     "fastapi==0.141.1",
     "psycopg[binary]==3.3.4",
     "pydantic-settings==2.14.2",
@@ -20,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 orchestwin-api = "orchestwin.api.server:main"
+orchestwin-migrate = "orchestwin.persistence.migrate:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/orchestwin"]
@@ -28,6 +30,7 @@ packages = ["src/orchestwin"]
 include = [
     "/LICENSE",
     "/README.md",
+    "/alembic.ini",
     "/pyproject.toml",
     "/src/orchestwin",
     "/src/test/python",
