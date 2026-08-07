@@ -13,10 +13,7 @@ afterEach(() => {
   document.documentElement.lang = "en";
 });
 
-async function mountApplication(
-  initialPath = "/",
-  initialLocale: SupportedLocale = "en",
-) {
+async function mountApplication(initialPath = "/", initialLocale: SupportedLocale = "en") {
   const router = createAppRouter(createMemoryHistory());
   const i18n = createAppI18n(initialLocale);
 
@@ -41,9 +38,7 @@ describe("App", () => {
   it("renders a localized keyboard-accessible application shell", async () => {
     const { wrapper } = await mountApplication();
 
-    expect(wrapper.get('[data-testid="skip-link"]').attributes("href")).toBe(
-      "#main-content",
-    );
+    expect(wrapper.get('[data-testid="skip-link"]').attributes("href")).toBe("#main-content");
     expect(wrapper.get('[data-testid="skip-link"]').text()).toBe("Skip to main content");
     expect(wrapper.get("nav").attributes("aria-label")).toBe("Primary navigation");
     expect(wrapper.get("main").attributes("tabindex")).toBe("-1");
@@ -76,18 +71,14 @@ describe("App", () => {
   it("navigates between localized foundation routes", async () => {
     const { router, wrapper } = await mountApplication();
 
-    expect(wrapper.get('[data-testid="overview-link"]').attributes("aria-current")).toBe(
-      "page",
-    );
+    expect(wrapper.get('[data-testid="overview-link"]').attributes("aria-current")).toBe("page");
 
     await wrapper.get('[data-testid="projects-link"]').trigger("click");
     await flushPromises();
 
     expect(router.currentRoute.value.name).toBe("projects");
     expect(wrapper.get("h1").text()).toBe("Projects");
-    expect(wrapper.get('[data-testid="projects-link"]').attributes("aria-current")).toBe(
-      "page",
-    );
+    expect(wrapper.get('[data-testid="projects-link"]').attributes("aria-current")).toBe("page");
   });
 
   it("switches the shell and active view to Italian without reloading", async () => {
