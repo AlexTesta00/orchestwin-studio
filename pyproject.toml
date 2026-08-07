@@ -12,6 +12,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
     "alembic==1.19.0",
+    "email-validator==2.3.0",
     "fastapi==0.141.1",
     "psycopg[binary]==3.3.4",
     "pydantic-settings==2.14.2",

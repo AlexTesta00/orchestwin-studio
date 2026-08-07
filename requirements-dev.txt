@@ -5,3 +5,4 @@ ruff==0.16.1
 uvicorn==0.52.1
 SQLAlchemy==2.0.51
 alembic==1.19.0
+email-validator==2.3.0
