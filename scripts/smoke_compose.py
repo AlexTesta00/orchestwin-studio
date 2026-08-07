@@ -244,11 +244,11 @@ def verify_http(environment: SmokeEnvironment) -> None:
 
 
 def verify_database(environment: SmokeEnvironment) -> None:
-    """Verify PostgreSQL with a deterministic query."""
+    """Verify PostgreSQL with a deterministic non-interactive query."""
     result = compose(
         environment,
         "exec",
-        "--no-tty",
+        "-T",
         "database",
         "psql",
         "--username",
