@@ -7,7 +7,16 @@ import {
 } from "vue-router";
 
 import HomeView from "@/views/HomeView.vue";
+import LoginView from "@/views/LoginView.vue";
 import ProjectsView from "@/views/ProjectsView.vue";
+import RegisterView from "@/views/RegisterView.vue";
+
+declare module "vue-router" {
+  interface RouteMeta {
+    requiresAuthentication?: boolean;
+    guestOnly?: boolean;
+  }
+}
 
 export const applicationRoutes = Object.freeze([
   {
@@ -16,9 +25,28 @@ export const applicationRoutes = Object.freeze([
     component: HomeView,
   },
   {
+    path: "/login",
+    name: "login",
+    component: LoginView,
+    meta: {
+      guestOnly: true,
+    },
+  },
+  {
+    path: "/register",
+    name: "register",
+    component: RegisterView,
+    meta: {
+      guestOnly: true,
+    },
+  },
+  {
     path: "/projects",
     name: "projects",
     component: ProjectsView,
+    meta: {
+      requiresAuthentication: true,
+    },
   },
 ] satisfies RouteRecordRaw[]);
 
