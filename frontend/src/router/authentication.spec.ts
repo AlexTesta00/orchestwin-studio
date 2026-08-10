@@ -21,11 +21,19 @@ const USER: UserResponse = {
 };
 
 class AnonymousApi implements AuthenticationApi {
-  public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
+  public async register(
+    input: AuthenticationInput,
+  ): Promise<AuthenticationResponse> {
+    void input;
+
     throw new Error("not used");
   }
 
-  public async login(input: AuthenticationInput): Promise<AuthenticationResponse> {
+  public async login(
+    input: AuthenticationInput,
+  ): Promise<AuthenticationResponse> {
+    void input;
+
     throw new Error("not used");
   }
 
@@ -38,6 +46,8 @@ class AnonymousApi implements AuthenticationApi {
   }
 
   public async me(accessToken: string): Promise<UserResponse> {
+    void accessToken;
+
     return USER;
   }
 }
@@ -48,7 +58,12 @@ describe("authentication router guard", () => {
     setActivePinia(pinia);
 
     const router = createAppRouter(createMemoryHistory());
-    installAuthenticationGuard(router, pinia, new AnonymousApi());
+
+    installAuthenticationGuard(
+      router,
+      pinia,
+      new AnonymousApi(),
+    );
 
     await router.push("/projects");
     await router.isReady();

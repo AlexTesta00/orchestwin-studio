@@ -10,7 +10,7 @@ import type {
   UserResponse,
 } from "./contracts";
 
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const DEFAULT_API_BASE_URL = "/api/v1";
 
 type FetchImplementation = typeof fetch;
 
@@ -48,6 +48,21 @@ export function resolveApiBaseUrl(
   configuredValue: string | undefined = import.meta.env.VITE_API_BASE_URL,
 ): string {
   const value = configuredValue?.trim() || DEFAULT_API_BASE_URL;
+
+  if (value.startsWith("//")) {
+    throw new Error("API base URL must not be protocol-relative");
+  }
+
+  if (value.startsWith("/")) {
+    const normalizedPath = value.replace(/\/+$/, "");
+
+    if (!normalizedPath) {
+      throw new Error("API base URL must not resolve to the application root");
+    }
+
+    return normalizedPath;
+  }
+
   const parsed = new URL(value);
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
@@ -65,7 +80,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     baseUrl: string = resolveApiBaseUrl(),
     fetchImplementation: FetchImplementation = fetch,
   ) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.baseUrl = resolveApiBaseUrl(baseUrl);
     this.fetchImplementation = fetchImplementation;
   }
 
@@ -101,7 +116,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public createProject(accessToken: string, input: ProjectCreateInput): Promise<ProjectResponse> {
+  public createProject(
+    accessToken: string,
+    input: ProjectCreateInput,
+  ): Promise<ProjectResponse> {
     return this.request<ProjectResponse>("/projects", {
       method: "POST",
       headers: this.authorization(accessToken),
@@ -115,7 +133,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
+  public getProject(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ProjectResponse> {
     return this.request<ProjectResponse>(`/projects/${projectId}`, {
       headers: this.authorization(accessToken),
     });
@@ -135,7 +156,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public async archiveProject(accessToken: string, projectId: string): Promise<void> {
+  public async archiveProject(
+    accessToken: string,
+    projectId: string,
+  ): Promise<void> {
     await this.request<void>(`/projects/${projectId}`, {
       method: "DELETE",
       headers: this.authorization(accessToken),
@@ -147,11 +171,14 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     projectId: string,
     input: ProjectBriefInput,
   ): Promise<ProjectBriefVersionResponse> {
-    return this.request<ProjectBriefVersionResponse>(`/projects/${projectId}/brief-versions`, {
-      method: "POST",
-      headers: this.authorization(accessToken),
-      body: JSON.stringify(input),
-    });
+    return this.request<ProjectBriefVersionResponse>(
+      `/projects/${projectId}/brief-versions`,
+      {
+        method: "POST",
+        headers: this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+    );
   }
 
   public currentBriefVersion(
@@ -197,7 +224,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     };
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<T> {
     const headers = new Headers(init.headers);
 
     headers.set("Accept", "application/json");
