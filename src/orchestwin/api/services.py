@@ -24,6 +24,13 @@ from orchestwin.persistence import (
     create_database_runtime,
     load_database_settings,
 )
+from orchestwin.projects.application import (
+    LocalProjectApplicationService,
+    ProjectApplicationService,
+)
+from orchestwin.projects.persistence import (
+    SqlAlchemyProjectUnitOfWorkFactory,
+)
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
 JWT_SECRET_ENVIRONMENT = "ORCHESTWIN_AUTH_JWT_SECRET"
@@ -34,6 +41,7 @@ class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
     identity_service: IdentityApplicationService | None = None
+    project_service: ProjectApplicationService | None = None
     database_runtime: DatabaseRuntime | None = None
 
     async def close(self) -> None:
@@ -43,7 +51,7 @@ class ApplicationRuntime:
 
 
 def create_default_runtime() -> ApplicationRuntime:
-    """Create identity services when all required settings exist."""
+    """Create persistence-backed services when configuration exists."""
     database_url = os.getenv(DATABASE_URL_ENVIRONMENT)
     jwt_secret = os.getenv(JWT_SECRET_ENVIRONMENT)
 
@@ -51,14 +59,21 @@ def create_default_runtime() -> ApplicationRuntime:
         return ApplicationRuntime()
 
     database_runtime = create_database_runtime(load_database_settings())
-    unit_of_work_factory = SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory)
+
     identity_service = LocalIdentityApplicationService(
-        unit_of_work_factory=(unit_of_work_factory),
+        unit_of_work_factory=(
+            SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory)
+        ),
         password_service=(Argon2PasswordService()),
         access_token_service=(JwtAccessTokenService(load_access_token_settings())),
     )
 
+    project_service = LocalProjectApplicationService(
+        unit_of_work_factory=(SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory))
+    )
+
     return ApplicationRuntime(
         identity_service=identity_service,
+        project_service=project_service,
         database_runtime=database_runtime,
     )

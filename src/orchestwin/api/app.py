@@ -14,6 +14,9 @@ from orchestwin.api.auth import (
     create_auth_router,
 )
 from orchestwin.api.health import create_health_router
+from orchestwin.api.projects import (
+    create_project_router,
+)
 from orchestwin.api.services import (
     ApplicationRuntime,
     create_default_runtime,
@@ -54,6 +57,7 @@ def create_app(
     )
 
     application.state.identity_service = resolved_runtime.identity_service
+    application.state.project_service = resolved_runtime.project_service
 
     application.add_middleware(
         CORSMiddleware,
@@ -78,6 +82,10 @@ def create_app(
     )
     application.include_router(
         create_auth_router(resolved_auth_settings),
+        prefix=resolved_settings.api_prefix,
+    )
+    application.include_router(
+        create_project_router(),
         prefix=resolved_settings.api_prefix,
     )
 
