@@ -1,6 +1,10 @@
 """SQLAlchemy adapters for Project Definition."""
 
+from orchestwin.projects.persistence.briefs import (
+    SqlAlchemyProjectBriefRepository,
+)
 from orchestwin.projects.persistence.models import (
+    ProjectBriefVersionRecord,
     ProjectRecord,
 )
 from orchestwin.projects.persistence.repositories import (
@@ -8,6 +12,8 @@ from orchestwin.projects.persistence.repositories import (
 )
 
 __all__ = [
+    "ProjectBriefVersionRecord",
     "ProjectRecord",
+    "SqlAlchemyProjectBriefRepository",
     "SqlAlchemyProjectRepository",
 ]
