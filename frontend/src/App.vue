@@ -14,11 +14,7 @@ const shellStore = useShellStore();
 const authStore = useAuthStore();
 
 const { isNavigationOpen } = storeToRefs(shellStore);
-const {
-  isAuthenticated,
-  status: authenticationStatus,
-  user,
-} = storeToRefs(authStore);
+const { isAuthenticated, status: authenticationStatus, user } = storeToRefs(authStore);
 
 const { t } = useI18n({
   useScope: "global",
@@ -55,7 +51,7 @@ async function logout(): Promise<void> {
 <template>
   <div class="min-h-screen bg-slate-50 text-slate-950">
     <a
-      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-lg bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-lg bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 focus:outline-none"
       data-testid="skip-link"
       href="#main-content"
     >
@@ -67,7 +63,7 @@ async function logout(): Promise<void> {
         class="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto] lg:px-8"
       >
         <RouterLink
-          class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
           to="/"
           :aria-label="t('app.homeAriaLabel')"
         >
@@ -75,7 +71,7 @@ async function logout(): Promise<void> {
         </RouterLink>
 
         <button
-          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 md:hidden"
+          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none md:hidden"
           type="button"
           aria-controls="primary-navigation"
           :aria-expanded="isNavigationOpen"
@@ -95,11 +91,7 @@ async function logout(): Promise<void> {
           :aria-label="t('navigation.label')"
           @click="shellStore.closeNavigation"
         >
-          <RouterLink
-            v-slot="{ href, navigate, isExactActive }"
-            custom
-            to="/"
-          >
+          <RouterLink v-slot="{ href, navigate, isExactActive }" custom to="/">
             <a
               :href="href"
               :class="navigationLinkClasses(isExactActive)"
@@ -148,7 +140,7 @@ async function logout(): Promise<void> {
 
           <button
             v-if="isAuthenticated"
-            class="rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+            class="rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
             type="button"
             :disabled="authenticationStatus === 'loading'"
             data-testid="logout-button"
@@ -158,11 +150,10 @@ async function logout(): Promise<void> {
           </button>
         </nav>
 
-        <div class="col-span-full flex items-center justify-between gap-4 md:col-span-1 md:justify-end">
-          <span
-            v-if="user"
-            class="hidden text-sm text-slate-600 lg:inline"
-          >
+        <div
+          class="col-span-full flex items-center justify-between gap-4 md:col-span-1 md:justify-end"
+        >
+          <span v-if="user" class="hidden text-sm text-slate-600 lg:inline">
             {{ user.email }}
           </span>
 

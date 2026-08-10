@@ -32,15 +32,11 @@ class FakeAuthenticationApi implements AuthenticationApi {
   public loginResult = authenticationResponse("login-token");
   public refreshResult = authenticationResponse("refresh-token");
 
-  public async register(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     return this.loginResult;
   }
 
-  public async login(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async login(input: AuthenticationInput): Promise<AuthenticationResponse> {
     return this.loginResult;
   }
 
@@ -83,11 +79,7 @@ describe("useAuthStore", () => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
 
-    const results = await Promise.all([
-      store.refresh(api),
-      store.refresh(api),
-      store.refresh(api),
-    ]);
+    const results = await Promise.all([store.refresh(api), store.refresh(api), store.refresh(api)]);
 
     expect(results).toEqual([true, true, true]);
     expect(api.refreshCalls).toBe(1);
@@ -118,10 +110,7 @@ describe("useAuthStore", () => {
     });
 
     expect(result).toBe("success");
-    expect(observedTokens).toEqual([
-      "expired-token",
-      "refresh-token",
-    ]);
+    expect(observedTokens).toEqual(["expired-token", "refresh-token"]);
     expect(api.refreshCalls).toBe(1);
   });
 });

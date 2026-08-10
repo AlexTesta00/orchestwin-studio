@@ -43,11 +43,7 @@ function submit(): void {
 </script>
 
 <template>
-  <form
-    class="grid gap-5"
-    novalidate
-    @submit.prevent="submit"
-  >
+  <form class="grid gap-5" novalidate @submit.prevent="submit">
     <div
       v-if="error"
       ref="errorSummary"
@@ -59,17 +55,14 @@ function submit(): void {
     </div>
 
     <div class="grid gap-2">
-      <label
-        class="text-sm font-bold text-slate-800"
-        for="authentication-email"
-      >
+      <label class="text-sm font-bold text-slate-800" for="authentication-email">
         {{ t("auth.email") }}
       </label>
 
       <input
         id="authentication-email"
         v-model="email"
-        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
         name="email"
         type="email"
         autocomplete="email"
@@ -78,17 +71,14 @@ function submit(): void {
     </div>
 
     <div class="grid gap-2">
-      <label
-        class="text-sm font-bold text-slate-800"
-        for="authentication-password"
-      >
+      <label class="text-sm font-bold text-slate-800" for="authentication-password">
         {{ t("auth.password") }}
       </label>
 
       <input
         id="authentication-password"
         v-model="password"
-        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
         name="password"
         type="password"
         :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
@@ -97,24 +87,17 @@ function submit(): void {
         required
       />
 
-      <p
-        v-if="mode === 'register'"
-        class="m-0 text-sm leading-6 text-slate-600"
-      >
+      <p v-if="mode === 'register'" class="m-0 text-sm leading-6 text-slate-600">
         {{ t("auth.passwordHint") }}
       </p>
     </div>
 
     <button
-      class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
       type="submit"
       :disabled="busy"
     >
-      {{
-        busy
-          ? t("auth.submitting")
-          : t(`auth.${mode}.submit`)
-      }}
+      {{ busy ? t("auth.submitting") : t(`auth.${mode}.submit`) }}
     </button>
   </form>
 </template>

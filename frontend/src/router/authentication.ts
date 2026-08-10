@@ -16,10 +16,7 @@ export function installAuthenticationGuard(
       await auth.bootstrap(api);
     }
 
-    if (
-      target.meta.requiresAuthentication === true &&
-      !auth.isAuthenticated
-    ) {
+    if (target.meta.requiresAuthentication === true && !auth.isAuthenticated) {
       return {
         name: "login",
         query: {
@@ -28,10 +25,7 @@ export function installAuthenticationGuard(
       };
     }
 
-    if (
-      target.meta.guestOnly === true &&
-      auth.isAuthenticated
-    ) {
+    if (target.meta.guestOnly === true && auth.isAuthenticated) {
       return {
         name: "projects",
       };

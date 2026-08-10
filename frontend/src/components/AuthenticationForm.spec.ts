@@ -21,9 +21,7 @@ describe("AuthenticationForm", () => {
     });
 
     await wrapper.get('input[name="email"]').setValue("owner@example.com");
-    await wrapper
-      .get('input[name="password"]')
-      .setValue("correct horse battery staple");
+    await wrapper.get('input[name="password"]').setValue("correct horse battery staple");
     await wrapper.get("form").trigger("submit");
 
     expect(wrapper.emitted("submit")).toEqual([
@@ -51,9 +49,7 @@ describe("AuthenticationForm", () => {
 
     const alert = wrapper.get('[role="alert"]');
 
-    expect(alert.text()).toBe(
-      "The email or password is not valid.",
-    );
+    expect(alert.text()).toBe("The email or password is not valid.");
     expect(alert.attributes("tabindex")).toBe("-1");
   });
 });
