@@ -21,15 +21,11 @@ const USER: UserResponse = {
 };
 
 class AnonymousApi implements AuthenticationApi {
-  public async register(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     throw new Error("not used");
   }
 
-  public async login(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async login(input: AuthenticationInput): Promise<AuthenticationResponse> {
     throw new Error("not used");
   }
 

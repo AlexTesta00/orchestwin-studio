@@ -1,16 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  ApiClient,
-  ApiError,
-  resolveApiBaseUrl,
-} from "./client";
+import { ApiClient, ApiError, resolveApiBaseUrl } from "./client";
 
 describe("ApiClient", () => {
   it("normalizes the configured API base URL", () => {
-    expect(resolveApiBaseUrl("http://localhost:8000/api/v1/")).toBe(
-      "http://localhost:8000/api/v1",
-    );
+    expect(resolveApiBaseUrl("http://localhost:8000/api/v1/")).toBe("http://localhost:8000/api/v1");
   });
 
   it("sends credentials and JSON for login", async () => {
@@ -35,10 +29,7 @@ describe("ApiClient", () => {
         },
       ),
     );
-    const client = new ApiClient(
-      "http://localhost:8000/api/v1",
-      fetchImplementation,
-    );
+    const client = new ApiClient("http://localhost:8000/api/v1", fetchImplementation);
 
     const response = await client.login({
       email: "owner@example.com",
@@ -68,10 +59,7 @@ describe("ApiClient", () => {
         },
       ),
     );
-    const client = new ApiClient(
-      "http://localhost:8000/api/v1",
-      fetchImplementation,
-    );
+    const client = new ApiClient("http://localhost:8000/api/v1", fetchImplementation);
 
     await expect(
       client.login({

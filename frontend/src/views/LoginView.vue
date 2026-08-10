@@ -17,54 +17,35 @@ const router = useRouter();
 const auth = useAuthStore();
 const { errorDetail, status } = storeToRefs(auth);
 
-const busy = computed(
-  () => status.value === "loading",
-);
+const busy = computed(() => status.value === "loading");
 
 function redirectTarget(): string {
   const target = route.query.redirect;
 
-  if (
-    typeof target === "string" &&
-    target.startsWith("/") &&
-    !target.startsWith("//")
-  ) {
+  if (typeof target === "string" && target.startsWith("/") && !target.startsWith("//")) {
     return target;
   }
 
   return "/projects";
 }
 
-async function login(
-  credentials: AuthenticationInput,
-): Promise<void> {
-  const succeeded = await auth.login(
-    apiClient,
-    credentials,
-  );
+async function login(credentials: AuthenticationInput): Promise<void> {
+  const succeeded = await auth.login(apiClient, credentials);
 
   if (succeeded) {
-    await router.replace(
-      redirectTarget()
-    );
+    await router.replace(redirectTarget());
   }
 }
 </script>
 
 <template>
-  <section
-    class="mx-auto grid max-w-lg gap-8"
-    aria-labelledby="login-title"
-  >
+  <section class="mx-auto grid max-w-lg gap-8" aria-labelledby="login-title">
     <header class="grid gap-3">
       <p class="m-0 text-sm font-black tracking-[0.12em] text-slate-600 uppercase">
         {{ t("auth.login.eyebrow") }}
       </p>
 
-      <h1
-        id="login-title"
-        class="m-0 text-4xl font-black tracking-tight text-slate-950"
-      >
+      <h1 id="login-title" class="m-0 text-4xl font-black tracking-tight text-slate-950">
         {{ t("auth.login.title") }}
       </h1>
 
@@ -74,12 +55,7 @@ async function login(
     </header>
 
     <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <AuthenticationForm
-        mode="login"
-        :busy="busy"
-        :error="errorDetail"
-        @submit="login"
-      />
+      <AuthenticationForm mode="login" :busy="busy" :error="errorDetail" @submit="login" />
     </div>
 
     <p class="m-0 text-center text-sm text-slate-600">

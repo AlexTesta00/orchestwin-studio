@@ -16,17 +16,10 @@ const router = useRouter();
 const auth = useAuthStore();
 const { errorDetail, status } = storeToRefs(auth);
 
-const busy = computed(
-  () => status.value === "loading",
-);
+const busy = computed(() => status.value === "loading");
 
-async function register(
-  credentials: AuthenticationInput,
-): Promise<void> {
-  const succeeded = await auth.register(
-    apiClient,
-    credentials,
-  );
+async function register(credentials: AuthenticationInput): Promise<void> {
+  const succeeded = await auth.register(apiClient, credentials);
 
   if (succeeded) {
     await router.replace({
@@ -37,19 +30,13 @@ async function register(
 </script>
 
 <template>
-  <section
-    class="mx-auto grid max-w-lg gap-8"
-    aria-labelledby="register-title"
-  >
+  <section class="mx-auto grid max-w-lg gap-8" aria-labelledby="register-title">
     <header class="grid gap-3">
       <p class="m-0 text-sm font-black tracking-[0.12em] text-slate-600 uppercase">
         {{ t("auth.register.eyebrow") }}
       </p>
 
-      <h1
-        id="register-title"
-        class="m-0 text-4xl font-black tracking-tight text-slate-950"
-      >
+      <h1 id="register-title" class="m-0 text-4xl font-black tracking-tight text-slate-950">
         {{ t("auth.register.title") }}
       </h1>
 
@@ -59,12 +46,7 @@ async function register(
     </header>
 
     <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <AuthenticationForm
-        mode="register"
-        :busy="busy"
-        :error="errorDetail"
-        @submit="register"
-      />
+      <AuthenticationForm mode="register" :busy="busy" :error="errorDetail" @submit="register" />
     </div>
 
     <p class="m-0 text-center text-sm text-slate-600">

@@ -2,6 +2,11 @@ import type {
   AuthenticationApi,
   AuthenticationInput,
   AuthenticationResponse,
+  ProjectApi,
+  ProjectBriefInput,
+  ProjectBriefVersionResponse,
+  ProjectCreateInput,
+  ProjectResponse,
   UserResponse,
 } from "./contracts";
 
@@ -52,7 +57,7 @@ export function resolveApiBaseUrl(
   return parsed.toString().replace(/\/+$/, "");
 }
 
-export class ApiClient implements AuthenticationApi {
+export class ApiClient implements AuthenticationApi, ProjectApi {
   private readonly baseUrl: string;
   private readonly fetchImplementation: FetchImplementation;
 
@@ -92,16 +97,107 @@ export class ApiClient implements AuthenticationApi {
 
   public me(accessToken: string): Promise<UserResponse> {
     return this.request<UserResponse>("/auth/me", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: this.authorization(accessToken),
     });
   }
 
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<T> {
+  public createProject(accessToken: string, input: ProjectCreateInput): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>("/projects", {
+      method: "POST",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify(input),
+    });
+  }
+
+  public listProjects(accessToken: string): Promise<readonly ProjectResponse[]> {
+    return this.request<readonly ProjectResponse[]>("/projects", {
+      headers: this.authorization(accessToken),
+    });
+  }
+
+  public getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+      headers: this.authorization(accessToken),
+    });
+  }
+
+  public renameProject(
+    accessToken: string,
+    projectId: string,
+    displayName: string,
+  ): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+      method: "PATCH",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify({
+        display_name: displayName,
+      }),
+    });
+  }
+
+  public async archiveProject(accessToken: string, projectId: string): Promise<void> {
+    await this.request<void>(`/projects/${projectId}`, {
+      method: "DELETE",
+      headers: this.authorization(accessToken),
+    });
+  }
+
+  public createBriefVersion(
+    accessToken: string,
+    projectId: string,
+    input: ProjectBriefInput,
+  ): Promise<ProjectBriefVersionResponse> {
+    return this.request<ProjectBriefVersionResponse>(`/projects/${projectId}/brief-versions`, {
+      method: "POST",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify(input),
+    });
+  }
+
+  public currentBriefVersion(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ProjectBriefVersionResponse> {
+    return this.request<ProjectBriefVersionResponse>(
+      `/projects/${projectId}/brief-versions/current`,
+      {
+        headers: this.authorization(accessToken),
+      },
+    );
+  }
+
+  public listBriefVersions(
+    accessToken: string,
+    projectId: string,
+  ): Promise<readonly ProjectBriefVersionResponse[]> {
+    return this.request<readonly ProjectBriefVersionResponse[]>(
+      `/projects/${projectId}/brief-versions`,
+      {
+        headers: this.authorization(accessToken),
+      },
+    );
+  }
+
+  public getBriefVersion(
+    accessToken: string,
+    projectId: string,
+    versionNumber: number,
+  ): Promise<ProjectBriefVersionResponse> {
+    return this.request<ProjectBriefVersionResponse>(
+      `/projects/${projectId}/brief-versions/${versionNumber}`,
+      {
+        headers: this.authorization(accessToken),
+      },
+    );
+  }
+
+  private authorization(accessToken: string): HeadersInit {
+    return {
+      Authorization: `Bearer ${accessToken}`,
+    };
+  }
+
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
 
     headers.set("Accept", "application/json");

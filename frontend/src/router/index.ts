@@ -8,6 +8,7 @@ import {
 
 import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
+import ProjectDetailView from "@/views/ProjectDetailView.vue";
 import ProjectsView from "@/views/ProjectsView.vue";
 import RegisterView from "@/views/RegisterView.vue";
 
@@ -44,6 +45,14 @@ export const applicationRoutes = Object.freeze([
     path: "/projects",
     name: "projects",
     component: ProjectsView,
+    meta: {
+      requiresAuthentication: true,
+    },
+  },
+  {
+    path: "/projects/:projectId",
+    name: "project-detail",
+    component: ProjectDetailView,
     meta: {
       requiresAuthentication: true,
     },

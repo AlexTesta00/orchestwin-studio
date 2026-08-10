@@ -15,11 +15,7 @@ const i18n = createAppI18n();
 
 document.documentElement.lang = defaultLocale;
 
-installAuthenticationGuard(
-  router,
-  pinia,
-  apiClient,
-);
+installAuthenticationGuard(router, pinia, apiClient);
 
 application.use(pinia);
 application.use(i18n);
