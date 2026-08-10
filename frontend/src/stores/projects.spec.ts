@@ -33,20 +33,14 @@ const PROJECT: ProjectResponse = {
   updated_at: "2026-08-10T12:00:00Z",
 };
 
-class FakeApplicationApi
-  implements AuthenticationApi, ProjectApi
-{
-  public async register(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+class FakeApplicationApi implements AuthenticationApi, ProjectApi {
+  public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
 
     throw new Error("not used");
   }
 
-  public async login(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async login(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
 
     throw new Error("not used");
@@ -79,20 +73,13 @@ class FakeApplicationApi
     };
   }
 
-  public async listProjects(
-    accessToken: string,
-  ): Promise<readonly ProjectResponse[]> {
+  public async listProjects(accessToken: string): Promise<readonly ProjectResponse[]> {
     void accessToken;
 
-    return [
-      PROJECT,
-    ];
+    return [PROJECT];
   }
 
-  public async getProject(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ProjectResponse> {
+  public async getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
     void accessToken;
     void projectId;
 
@@ -113,10 +100,7 @@ class FakeApplicationApi
     };
   }
 
-  public async archiveProject(
-    accessToken: string,
-    projectId: string,
-  ): Promise<void> {
+  public async archiveProject(accessToken: string, projectId: string): Promise<void> {
     void accessToken;
     void projectId;
 
@@ -140,12 +124,8 @@ class FakeApplicationApi
       created_at: "2026-08-10T12:05:00Z",
       brief: {
         ...input,
-        provided_fields: [
-          "name",
-        ],
-        missing_fields: [
-          "problem",
-        ],
+        provided_fields: ["name"],
+        missing_fields: ["problem"],
       },
     };
   }
@@ -154,28 +134,24 @@ class FakeApplicationApi
     accessToken: string,
     projectId: string,
   ): Promise<ProjectBriefVersionResponse> {
-    return this.createBriefVersion(
-      accessToken,
-      projectId,
-      {
-        name: "Project",
-        description: null,
-        problem: null,
-        goals: null,
-        target_users: null,
-        domain: null,
-        technical_constraints: null,
-        temporal_constraints: null,
-        budget: null,
-        functional_requirements: null,
-        non_functional_requirements: null,
-        risks: null,
-        stakeholders: null,
-        available_artifacts: null,
-        definition_of_done: null,
-        unknown_fields: [],
-      },
-    );
+    return this.createBriefVersion(accessToken, projectId, {
+      name: "Project",
+      description: null,
+      problem: null,
+      goals: null,
+      target_users: null,
+      domain: null,
+      technical_constraints: null,
+      temporal_constraints: null,
+      budget: null,
+      functional_requirements: null,
+      non_functional_requirements: null,
+      risks: null,
+      stakeholders: null,
+      available_artifacts: null,
+      definition_of_done: null,
+      unknown_fields: [],
+    });
   }
 
   public async listBriefVersions(
@@ -195,10 +171,7 @@ class FakeApplicationApi
   ): Promise<ProjectBriefVersionResponse> {
     void versionNumber;
 
-    return this.currentBriefVersion(
-      accessToken,
-      projectId,
-    );
+    return this.currentBriefVersion(accessToken, projectId);
   }
 }
 
@@ -219,15 +192,10 @@ describe("useProjectsStore", () => {
       expiresAt: "2026-08-10T12:15:00Z",
     });
 
-    const succeeded = await projects.loadProjects(
-      api,
-      auth,
-    );
+    const succeeded = await projects.loadProjects(api, auth);
 
     expect(succeeded).toBe(true);
-    expect(projects.projects).toEqual([
-      PROJECT,
-    ]);
+    expect(projects.projects).toEqual([PROJECT]);
   });
 
   it("creates a project and prepends it to the list", async () => {
@@ -242,20 +210,12 @@ describe("useProjectsStore", () => {
       expiresAt: "2026-08-10T12:15:00Z",
     });
 
-    const created = await projects.createProject(
-      api,
-      auth,
-      {
-        display_name: "New project",
-        mode: "BROWNFIELD_ASSESSMENT",
-      },
-    );
+    const created = await projects.createProject(api, auth, {
+      display_name: "New project",
+      mode: "BROWNFIELD_ASSESSMENT",
+    });
 
-    expect(created?.display_name).toBe(
-      "New project",
-    );
-    expect(projects.projects[0]?.mode).toBe(
-      "BROWNFIELD_ASSESSMENT",
-    );
+    expect(created?.display_name).toBe("New project");
+    expect(projects.projects[0]?.mode).toBe("BROWNFIELD_ASSESSMENT");
   });
 });

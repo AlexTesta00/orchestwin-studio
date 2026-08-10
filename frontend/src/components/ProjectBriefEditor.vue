@@ -194,6 +194,7 @@ function submit(): void {
           <input
             type="checkbox"
             :checked="isUnknown(field)"
+            :data-testid="`brief-${field}-unknown`"
             @change="onUnknownChange(field, $event)"
           />
 
@@ -232,6 +233,7 @@ function submit(): void {
           <input
             type="checkbox"
             :checked="isUnknown(field)"
+            :data-testid="`brief-${field}-unknown`"
             @change="onUnknownChange(field, $event)"
           />
 

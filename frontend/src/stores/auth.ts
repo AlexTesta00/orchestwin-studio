@@ -9,11 +9,7 @@ import type {
   UserResponse,
 } from "@/api/contracts";
 
-export type AuthenticationStatus =
-  | "idle"
-  | "loading"
-  | "authenticated"
-  | "anonymous";
+export type AuthenticationStatus = "idle" | "loading" | "authenticated" | "anonymous";
 
 type AuthorizedOperation<T> = (accessToken: string) => Promise<T>;
 
@@ -35,10 +31,7 @@ export const useAuthStore = defineStore("auth", () => {
   let refreshInFlight: Promise<boolean> | null = null;
 
   const isAuthenticated = computed(
-    () =>
-      status.value === "authenticated" &&
-      user.value !== null &&
-      accessToken.value !== null,
+    () => status.value === "authenticated" && user.value !== null && accessToken.value !== null,
   );
 
   function applyAuthentication(response: AuthenticationResponse): void {
@@ -56,10 +49,7 @@ export const useAuthStore = defineStore("auth", () => {
     status.value = "anonymous";
   }
 
-  async function register(
-    api: AuthenticationApi,
-    input: AuthenticationInput,
-  ): Promise<boolean> {
+  async function register(api: AuthenticationApi, input: AuthenticationInput): Promise<boolean> {
     status.value = "loading";
     errorDetail.value = null;
 
@@ -73,10 +63,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  async function login(
-    api: AuthenticationApi,
-    input: AuthenticationInput,
-  ): Promise<boolean> {
+  async function login(api: AuthenticationApi, input: AuthenticationInput): Promise<boolean> {
     status.value = "loading";
     errorDetail.value = null;
 
@@ -90,10 +77,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  async function refresh(
-    api: AuthenticationApi,
-    reportError = true,
-  ): Promise<boolean> {
+  async function refresh(api: AuthenticationApi, reportError = true): Promise<boolean> {
     if (refreshInFlight !== null) {
       return refreshInFlight;
     }

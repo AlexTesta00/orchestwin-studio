@@ -58,9 +58,7 @@ export function resolveApiBaseUrl(
     const normalizedPath = value.replace(/\/+$/, "");
 
     if (!normalizedPath) {
-      throw new Error(
-        "API base URL must not resolve to the application root",
-      );
+      throw new Error("API base URL must not resolve to the application root");
     }
 
     return normalizedPath;
@@ -92,18 +90,14 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     this.fetchImplementation = fetchImplementation.bind(globalThis);
   }
 
-  public register(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     return this.request<AuthenticationResponse>("/auth/register", {
       method: "POST",
       body: JSON.stringify(input),
     });
   }
 
-  public login(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public login(input: AuthenticationInput): Promise<AuthenticationResponse> {
     return this.request<AuthenticationResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
@@ -128,10 +122,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public createProject(
-    accessToken: string,
-    input: ProjectCreateInput,
-  ): Promise<ProjectResponse> {
+  public createProject(accessToken: string, input: ProjectCreateInput): Promise<ProjectResponse> {
     return this.request<ProjectResponse>("/projects", {
       method: "POST",
       headers: this.authorization(accessToken),
@@ -139,24 +130,16 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public listProjects(
-    accessToken: string,
-  ): Promise<readonly ProjectResponse[]> {
+  public listProjects(accessToken: string): Promise<readonly ProjectResponse[]> {
     return this.request<readonly ProjectResponse[]>("/projects", {
       headers: this.authorization(accessToken),
     });
   }
 
-  public getProject(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(
-      `/projects/${projectId}`,
-      {
-        headers: this.authorization(accessToken),
-      },
-    );
+  public getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+      headers: this.authorization(accessToken),
+    });
   }
 
   public renameProject(
@@ -164,29 +147,20 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     projectId: string,
     displayName: string,
   ): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(
-      `/projects/${projectId}`,
-      {
-        method: "PATCH",
-        headers: this.authorization(accessToken),
-        body: JSON.stringify({
-          display_name: displayName,
-        }),
-      },
-    );
+    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+      method: "PATCH",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify({
+        display_name: displayName,
+      }),
+    });
   }
 
-  public async archiveProject(
-    accessToken: string,
-    projectId: string,
-  ): Promise<void> {
-    await this.request<void>(
-      `/projects/${projectId}`,
-      {
-        method: "DELETE",
-        headers: this.authorization(accessToken),
-      },
-    );
+  public async archiveProject(accessToken: string, projectId: string): Promise<void> {
+    await this.request<void>(`/projects/${projectId}`, {
+      method: "DELETE",
+      headers: this.authorization(accessToken),
+    });
   }
 
   public createBriefVersion(
@@ -194,14 +168,11 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     projectId: string,
     input: ProjectBriefInput,
   ): Promise<ProjectBriefVersionResponse> {
-    return this.request<ProjectBriefVersionResponse>(
-      `/projects/${projectId}/brief-versions`,
-      {
-        method: "POST",
-        headers: this.authorization(accessToken),
-        body: JSON.stringify(input),
-      },
-    );
+    return this.request<ProjectBriefVersionResponse>(`/projects/${projectId}/brief-versions`, {
+      method: "POST",
+      headers: this.authorization(accessToken),
+      body: JSON.stringify(input),
+    });
   }
 
   public currentBriefVersion(
@@ -220,9 +191,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     accessToken: string,
     projectId: string,
   ): Promise<readonly ProjectBriefVersionResponse[]> {
-    return this.request<
-      readonly ProjectBriefVersionResponse[]
-    >(
+    return this.request<readonly ProjectBriefVersionResponse[]>(
       `/projects/${projectId}/brief-versions`,
       {
         headers: this.authorization(accessToken),
@@ -243,43 +212,29 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     );
   }
 
-  private authorization(
-    accessToken: string,
-  ): HeadersInit {
+  private authorization(accessToken: string): HeadersInit {
     return {
       Authorization: `Bearer ${accessToken}`,
     };
   }
 
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<T> {
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
 
     headers.set("Accept", "application/json");
 
     if (init.body !== undefined) {
-      headers.set(
-        "Content-Type",
-        "application/json",
-      );
+      headers.set("Content-Type", "application/json");
     }
 
-    const response = await this.fetchImplementation(
-      `${this.baseUrl}${path}`,
-      {
-        ...init,
-        headers,
-        credentials: "include",
-      },
-    );
+    const response = await this.fetchImplementation(`${this.baseUrl}${path}`, {
+      ...init,
+      headers,
+      credentials: "include",
+    });
 
     if (!response.ok) {
-      throw new ApiError(
-        response.status,
-        await errorDetail(response),
-      );
+      throw new ApiError(response.status, await errorDetail(response));
     }
 
     if (response.status === 204) {
