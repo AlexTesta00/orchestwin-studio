@@ -21,11 +21,9 @@ describe("ProjectBriefEditor", () => {
 
     await wrapper.get("#brief-name").setValue("Project");
 
-    const budgetCheckbox = wrapper
-      .get("#brief-budget")
-      .element.parentElement?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    await wrapper.get('[data-testid="brief-budget-unknown"]').setValue(true);
 
-    budgetCheckbox?.click();
+    expect(wrapper.get("#brief-budget").attributes("disabled")).toBeDefined();
 
     await wrapper.get("form").trigger("submit");
 

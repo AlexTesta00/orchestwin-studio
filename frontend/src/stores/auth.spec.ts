@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
 import type {
@@ -18,9 +18,7 @@ const USER: UserResponse = {
   created_at: "2026-08-10T12:00:00Z",
 };
 
-function authenticationResponse(
-  token: string,
-): AuthenticationResponse {
+function authenticationResponse(token: string): AuthenticationResponse {
   return {
     access_token: token,
     token_type: "bearer",
@@ -35,17 +33,13 @@ class FakeAuthenticationApi implements AuthenticationApi {
   public refreshResult = authenticationResponse("refresh-token");
   public refreshError: unknown | null = null;
 
-  public async register(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async register(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
 
     return this.loginResult;
   }
 
-  public async login(
-    input: AuthenticationInput,
-  ): Promise<AuthenticationResponse> {
+  public async login(input: AuthenticationInput): Promise<AuthenticationResponse> {
     void input;
 
     return this.loginResult;
@@ -75,11 +69,10 @@ class FakeAuthenticationApi implements AuthenticationApi {
 describe("useAuthStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    localStorage.clear();
-    sessionStorage.clear();
   });
 
   it("keeps the access token only in store memory", async () => {
+    const storageSetItem = vi.spyOn(window.Storage.prototype, "setItem");
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
 
@@ -91,19 +84,14 @@ describe("useAuthStore", () => {
     expect(succeeded).toBe(true);
     expect(store.isAuthenticated).toBe(true);
     expect(store.accessToken).toBe("login-token");
-    expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+    expect(storageSetItem).not.toHaveBeenCalled();
   });
 
   it("deduplicates concurrent refresh attempts", async () => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
 
-    const results = await Promise.all([
-      store.refresh(api),
-      store.refresh(api),
-      store.refresh(api),
-    ]);
+    const results = await Promise.all([store.refresh(api), store.refresh(api), store.refresh(api)]);
 
     expect(results).toEqual([true, true, true]);
     expect(api.refreshCalls).toBe(1);
@@ -114,10 +102,7 @@ describe("useAuthStore", () => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
 
-    api.refreshError = new ApiError(
-      401,
-      "invalid_refresh_token",
-    );
+    api.refreshError = new ApiError(401, "invalid_refresh_token");
 
     const succeeded = await store.bootstrap(api);
 
@@ -132,10 +117,7 @@ describe("useAuthStore", () => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
 
-    api.refreshError = new ApiError(
-      401,
-      "expired_refresh_token",
-    );
+    api.refreshError = new ApiError(401, "expired_refresh_token");
 
     const succeeded = await store.refresh(api);
 
@@ -157,27 +139,18 @@ describe("useAuthStore", () => {
 
     const observedTokens: string[] = [];
 
-    const result = await store.withAccessToken(
-      api,
-      async (token) => {
-        observedTokens.push(token);
+    const result = await store.withAccessToken(api, async (token) => {
+      observedTokens.push(token);
 
-        if (token === "expired-token") {
-          throw new ApiError(
-            401,
-            "invalid_authentication",
-          );
-        }
+      if (token === "expired-token") {
+        throw new ApiError(401, "invalid_authentication");
+      }
 
-        return "success";
-      },
-    );
+      return "success";
+    });
 
     expect(result).toBe("success");
-    expect(observedTokens).toEqual([
-      "expired-token",
-      "refresh-token",
-    ]);
+    expect(observedTokens).toEqual(["expired-token", "refresh-token"]);
     expect(api.refreshCalls).toBe(1);
   });
 });
