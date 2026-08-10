@@ -14,7 +14,10 @@ from orchestwin.identity.domain import (
 class UserRepository(Protocol):
     """Persistence operations required by identity use cases."""
 
-    async def add(self, user: UserAccount) -> UserAccount:
+    async def add(
+        self,
+        user: UserAccount,
+    ) -> UserAccount:
         """Persist a user account."""
 
     async def get_by_id(
@@ -28,3 +31,11 @@ class UserRepository(Protocol):
         email: NormalizedEmail,
     ) -> UserAccount | None:
         """Return an account by normalized email."""
+
+    async def update_password_hash(
+        self,
+        *,
+        user_id: UUID,
+        password_hash: str,
+    ) -> None:
+        """Replace a stored password hash after successful verification."""

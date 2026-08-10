@@ -1,4 +1,4 @@
-"""Rotating opaque refresh-token sessions."""
+"""Opaque refresh-token issuance, rotation, and revocation."""
 
 from __future__ import annotations
 
@@ -7,33 +7,27 @@ import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid4
 
 
-class RefreshTokenError(ValueError):
-    """Base error for invalid refresh-session operations."""
-
-
-class InvalidRefreshToken(RefreshTokenError):
-    """Raised when no session matches a refresh token."""
-
-
-class ExpiredRefreshToken(RefreshTokenError):
-    """Raised when a refresh token has expired."""
-
-
-class RefreshTokenReuseDetected(RefreshTokenError):
-    """Raised when a rotated or revoked token is presented again."""
-
-
 class SessionStateConflict(RuntimeError):
-    """Raised when a session changed concurrently."""
+    """Raised when a refresh session changes concurrently."""
+
+
+class RefreshRotationStatus(StrEnum):
+    """Stable outcomes of a refresh-token rotation attempt."""
+
+    ROTATED = "rotated"
+    INVALID = "invalid"
+    EXPIRED = "expired"
+    REUSE_DETECTED = "reuse_detected"
 
 
 @dataclass(frozen=True, slots=True)
 class RefreshSession:
-    """Persisted refresh-session state."""
+    """Persisted server-side state for one opaque refresh token."""
 
     id: UUID
     user_id: UUID
@@ -47,17 +41,80 @@ class RefreshSession:
     revoked_at: datetime | None = None
     revocation_reason: str | None = None
 
+    def __post_init__(self) -> None:
+        """Protect refresh-session invariants."""
+        if len(self.refresh_token_digest) != 64 or any(
+            character not in "0123456789abcdef" for character in self.refresh_token_digest
+        ):
+            raise ValueError("refresh-token digest must be a lowercase SHA-256 digest")
+
+        timestamps = (
+            self.expires_at,
+            self.created_at,
+            self.last_used_at,
+            self.rotated_at,
+            self.revoked_at,
+        )
+
+        if any(timestamp is not None and timestamp.tzinfo is None for timestamp in timestamps):
+            raise ValueError("refresh-session timestamps must be timezone-aware")
+
+        if self.expires_at <= self.created_at:
+            raise ValueError("refresh session must expire after creation")
+
+        if self.last_used_at < self.created_at:
+            raise ValueError("last-used timestamp must not precede creation")
+
+        rotation_is_complete = (
+            self.rotated_at is not None and self.replaced_by_session_id is not None
+        )
+        rotation_is_absent = self.rotated_at is None and self.replaced_by_session_id is None
+
+        if not (rotation_is_complete or rotation_is_absent):
+            raise ValueError("rotation timestamp and replacement identifier must be set together")
+
+        revocation_is_complete = self.revoked_at is not None and self.revocation_reason is not None
+        revocation_is_absent = self.revoked_at is None and self.revocation_reason is None
+
+        if not (revocation_is_complete or revocation_is_absent):
+            raise ValueError("revocation timestamp and reason must be set together")
+
 
 @dataclass(frozen=True, slots=True)
 class IssuedRefreshToken:
-    """One raw token returned to the authenticated client."""
+    """Raw refresh token returned once to the authenticated client."""
 
     token: str = field(repr=False)
     session: RefreshSession
 
+    def __post_init__(self) -> None:
+        """Reject an empty raw token."""
+        if not self.token:
+            raise ValueError("issued refresh token must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshRotationResult:
+    """Typed result that allows revocation mutations to commit."""
+
+    status: RefreshRotationStatus
+    issued_token: IssuedRefreshToken | None = None
+
+    def __post_init__(self) -> None:
+        """Associate an issued token only with successful rotation."""
+        succeeded = self.status is RefreshRotationStatus.ROTATED
+
+        if succeeded != (self.issued_token is not None):
+            raise ValueError("only a successful rotation may contain an issued token")
+
+    @property
+    def succeeded(self) -> bool:
+        """Return whether rotation produced a replacement token."""
+        return self.status is RefreshRotationStatus.ROTATED
+
 
 class RefreshSessionRepository(Protocol):
-    """Persistence operations required by refresh-token rotation."""
+    """Persistence operations required by refresh-token use cases."""
 
     async def add(
         self,
@@ -69,7 +126,7 @@ class RefreshSessionRepository(Protocol):
         self,
         digest: str,
     ) -> RefreshSession | None:
-        """Lock and return the session matching a digest."""
+        """Lock and return a session by digest."""
 
     async def mark_rotated(
         self,
@@ -87,7 +144,7 @@ class RefreshSessionRepository(Protocol):
         revoked_at: datetime,
         reason: str,
     ) -> None:
-        """Revoke one session."""
+        """Revoke one active session."""
 
     async def revoke_family(
         self,
@@ -95,11 +152,13 @@ class RefreshSessionRepository(Protocol):
         token_family_id: UUID,
         revoked_at: datetime,
         reason: str,
-    ) -> int:
-        """Revoke every active session in a token family."""
+    ) -> None:
+        """Revoke all active sessions in a token family."""
 
 
 Clock = Callable[[], datetime]
+TokenFactory = Callable[[], str]
+UuidFactory = Callable[[], UUID]
 
 
 def utc_now() -> datetime:
@@ -108,20 +167,20 @@ def utc_now() -> datetime:
 
 
 def generate_refresh_token() -> str:
-    """Generate a high-entropy URL-safe refresh token."""
+    """Generate a URL-safe token from 48 random bytes."""
     return secrets.token_urlsafe(48)
 
 
 def digest_refresh_token(token: str) -> str:
     """Create the irreversible lookup digest stored by the server."""
     if not token:
-        raise InvalidRefreshToken("refresh token is required")
+        raise ValueError("refresh token must not be empty")
 
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class RefreshSessionService:
-    """Issue, rotate, and revoke opaque refresh sessions."""
+    """Issue, rotate, and revoke opaque refresh-token sessions."""
 
     def __init__(
         self,
@@ -129,6 +188,8 @@ class RefreshSessionService:
         *,
         token_lifetime: timedelta = timedelta(days=30),
         clock: Clock = utc_now,
+        token_factory: TokenFactory = generate_refresh_token,
+        uuid_factory: UuidFactory = uuid4,
     ) -> None:
         if token_lifetime <= timedelta(0):
             raise ValueError("token lifetime must be positive")
@@ -136,29 +197,36 @@ class RefreshSessionService:
         self._repository = repository
         self._token_lifetime = token_lifetime
         self._clock = clock
+        self._token_factory = token_factory
+        self._uuid_factory = uuid_factory
 
     async def issue(
         self,
         *,
         user_id: UUID,
     ) -> IssuedRefreshToken:
-        """Create the first token in a new family."""
+        """Create the first refresh token in a new family."""
+        issued_at = self._current_time()
+
         return await self._create_and_persist(
             user_id=user_id,
-            token_family_id=uuid4(),
+            token_family_id=self._uuid_factory(),
+            issued_at=issued_at,
         )
 
     async def rotate(
         self,
         token: str,
-    ) -> IssuedRefreshToken:
-        """Replace one active refresh token with another."""
-        now = self._clock()
-        digest = digest_refresh_token(token)
-        current = await self._repository.get_by_digest_for_update(digest)
+    ) -> RefreshRotationResult:
+        """Rotate an active token and detect replay."""
+        if not token:
+            return RefreshRotationResult(status=RefreshRotationStatus.INVALID)
+
+        now = self._current_time()
+        current = await self._repository.get_by_digest_for_update(digest_refresh_token(token))
 
         if current is None:
-            raise InvalidRefreshToken("refresh token is invalid")
+            return RefreshRotationResult(status=RefreshRotationStatus.INVALID)
 
         if current.rotated_at is not None or current.revoked_at is not None:
             await self._repository.revoke_family(
@@ -166,7 +234,8 @@ class RefreshSessionService:
                 revoked_at=now,
                 reason="refresh_token_reuse",
             )
-            raise RefreshTokenReuseDetected("refresh token reuse detected")
+
+            return RefreshRotationResult(status=(RefreshRotationStatus.REUSE_DETECTED))
 
         if current.expires_at <= now:
             await self._repository.revoke_session(
@@ -174,11 +243,13 @@ class RefreshSessionService:
                 revoked_at=now,
                 reason="refresh_token_expired",
             )
-            raise ExpiredRefreshToken("refresh token has expired")
+
+            return RefreshRotationResult(status=RefreshRotationStatus.EXPIRED)
 
         replacement = await self._create_and_persist(
             user_id=current.user_id,
             token_family_id=current.token_family_id,
+            issued_at=now,
         )
 
         await self._repository.mark_rotated(
@@ -187,7 +258,10 @@ class RefreshSessionService:
             rotated_at=now,
         )
 
-        return replacement
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.ROTATED,
+            issued_token=replacement,
+        )
 
     async def revoke(
         self,
@@ -195,12 +269,14 @@ class RefreshSessionService:
         *,
         reason: str = "logout",
     ) -> bool:
-        """Revoke an active refresh session."""
-        now = self._clock()
-        digest = digest_refresh_token(token)
-        current = await self._repository.get_by_digest_for_update(digest)
+        """Revoke one currently active refresh session."""
+        if not token:
+            return False
 
-        if current is None or current.revoked_at is not None:
+        now = self._current_time()
+        current = await self._repository.get_by_digest_for_update(digest_refresh_token(token))
+
+        if current is None or current.rotated_at is not None or current.revoked_at is not None:
             return False
 
         await self._repository.revoke_session(
@@ -208,25 +284,39 @@ class RefreshSessionService:
             revoked_at=now,
             reason=reason,
         )
+
         return True
+
+    def _current_time(self) -> datetime:
+        """Return and validate the injected clock value."""
+        current = self._clock()
+
+        if current.tzinfo is None:
+            raise ValueError("refresh-session clock must be timezone-aware")
+
+        return current
 
     async def _create_and_persist(
         self,
         *,
         user_id: UUID,
         token_family_id: UUID,
+        issued_at: datetime,
     ) -> IssuedRefreshToken:
         """Generate and persist one refresh token."""
-        now = self._clock()
-        raw_token = generate_refresh_token()
+        raw_token = self._token_factory()
+
+        if not raw_token:
+            raise ValueError("refresh-token factory returned an empty token")
+
         session = RefreshSession(
-            id=uuid4(),
+            id=self._uuid_factory(),
             user_id=user_id,
             token_family_id=token_family_id,
             refresh_token_digest=(digest_refresh_token(raw_token)),
-            expires_at=now + self._token_lifetime,
-            created_at=now,
-            last_used_at=now,
+            expires_at=(issued_at + self._token_lifetime),
+            created_at=issued_at,
+            last_used_at=issued_at,
         )
 
         persisted = await self._repository.add(session)
