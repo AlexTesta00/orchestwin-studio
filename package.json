@@ -51,5 +51,8 @@
     "husky": "9.1.7",
     "renovate": "43.283.0",
     "semantic-release": "25.0.8"
+  },
+  "dependencies": {
+    "python": "^0.0.4"
   }
 }
