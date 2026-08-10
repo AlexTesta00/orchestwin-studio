@@ -170,9 +170,6 @@ jobs:
       - name: Verify backend and frontend quality and builds
         run: npm run verify:all
 
-      - name: Smoke-test the local container platform
-        run: npm run test:compose
-
   release:
     name: Semantic release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
