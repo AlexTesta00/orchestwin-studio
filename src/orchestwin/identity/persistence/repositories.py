@@ -22,7 +22,9 @@ from orchestwin.identity.sessions import (
 )
 
 
-def user_record_to_domain(record: UserRecord) -> UserAccount:
+def user_record_to_domain(
+    record: UserRecord,
+) -> UserAccount:
     """Translate a user record into an immutable domain value."""
     return UserAccount(
         id=record.id,
@@ -47,7 +49,7 @@ def session_record_to_domain(
         rotated_at=record.rotated_at,
         replaced_by_session_id=(record.replaced_by_session_id),
         revoked_at=record.revoked_at,
-        revocation_reason=record.revocation_reason,
+        revocation_reason=(record.revocation_reason),
         created_at=record.created_at,
         last_used_at=record.last_used_at,
     )
@@ -56,10 +58,16 @@ def session_record_to_domain(
 class SqlAlchemyUserRepository:
     """SQLAlchemy user repository bound to one transaction session."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
         self._session = session
 
-    async def add(self, user: UserAccount) -> UserAccount:
+    async def add(
+        self,
+        user: UserAccount,
+    ) -> UserAccount:
         """Add a new account to the current transaction."""
         record = UserRecord(
             id=user.id,
@@ -101,11 +109,28 @@ class SqlAlchemyUserRepository:
 
         return user_record_to_domain(record)
 
+    async def update_password_hash(
+        self,
+        *,
+        user_id: UUID,
+        password_hash: str,
+    ) -> None:
+        """Replace a hash after successful password verification."""
+        result = await self._session.execute(
+            update(UserRecord).where(UserRecord.id == user_id).values(password_hash=password_hash)
+        )
+
+        if result.rowcount != 1:
+            raise RuntimeError("user disappeared during password hash upgrade")
+
 
 class SqlAlchemyRefreshSessionRepository:
     """SQLAlchemy refresh-session repository."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
         self._session = session
 
     async def add(
@@ -116,7 +141,7 @@ class SqlAlchemyRefreshSessionRepository:
         record = AuthSessionRecord(
             id=session.id,
             user_id=session.user_id,
-            token_family_id=session.token_family_id,
+            token_family_id=(session.token_family_id),
             refresh_token_digest=(session.refresh_token_digest),
             expires_at=session.expires_at,
             rotated_at=session.rotated_at,
@@ -155,7 +180,7 @@ class SqlAlchemyRefreshSessionRepository:
         replacement_session_id: UUID,
         rotated_at: datetime,
     ) -> None:
-        """Atomically rotate an active session."""
+        """Atomically mark an active session as rotated."""
         result = await self._session.execute(
             update(AuthSessionRecord)
             .where(
@@ -180,11 +205,12 @@ class SqlAlchemyRefreshSessionRepository:
         revoked_at: datetime,
         reason: str,
     ) -> None:
-        """Revoke one active session."""
-        await self._session.execute(
+        """Atomically revoke one active session."""
+        result = await self._session.execute(
             update(AuthSessionRecord)
             .where(
                 AuthSessionRecord.id == session_id,
+                AuthSessionRecord.rotated_at.is_(None),
                 AuthSessionRecord.revoked_at.is_(None),
             )
             .values(
@@ -194,15 +220,18 @@ class SqlAlchemyRefreshSessionRepository:
             )
         )
 
+        if result.rowcount != 1:
+            raise SessionStateConflict("refresh session changed concurrently")
+
     async def revoke_family(
         self,
         *,
         token_family_id: UUID,
         revoked_at: datetime,
         reason: str,
-    ) -> int:
+    ) -> None:
         """Revoke every active session in one token family."""
-        result = await self._session.execute(
+        await self._session.execute(
             update(AuthSessionRecord)
             .where(
                 AuthSessionRecord.token_family_id == token_family_id,
@@ -214,5 +243,3 @@ class SqlAlchemyRefreshSessionRepository:
                 last_used_at=revoked_at,
             )
         )
-
-        return result.rowcount or 0
