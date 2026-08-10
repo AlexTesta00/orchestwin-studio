@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${ORCHESTWIN_POSTGRES_DB:-orchestwin}
       POSTGRES_USER: ${ORCHESTWIN_POSTGRES_USER:-orchestwin}
-      POSTGRES_PASSWORD: ${ORCHESTWIN_POSTGRES_PASSWORD:?Set ORCHESTWIN_POSTGRES_PASSWORD in compose.env}
+      POSTGRES_PASSWORD: ${ORCHESTWIN_POSTGRES_PASSWORD:?Set ORCHESTWIN_POSTGRES_PASSWORD}
     healthcheck:
       test:
         - CMD-SHELL
@@ -30,6 +30,37 @@ services:
     restart: unless-stopped
     stop_grace_period: 20s
 
+  migrations:
+    image: orchestwin-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint:
+      - orchestwin-migrate
+    command:
+      - upgrade
+      - head
+    environment:
+      ORCHESTWIN_DATABASE_URL: "postgresql+psycopg://${ORCHESTWIN_POSTGRES_USER:-orchestwin}:${ORCHESTWIN_POSTGRES_PASSWORD:?Set ORCHESTWIN_POSTGRES_PASSWORD}@database:5432/${ORCHESTWIN_POSTGRES_DB:-orchestwin}"
+      ORCHESTWIN_DATABASE_ECHO: "false"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - data
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 192m
+    cpus: 0.5
+    restart: "no"
+
   api:
     image: orchestwin-api:local
     build:
@@ -40,6 +71,23 @@ services:
       ORCHESTWIN_DEBUG: "false"
       ORCHESTWIN_LOG_LEVEL: INFO
       ORCHESTWIN_API_PREFIX: /api/v1
+      ORCHESTWIN_CORS_ALLOWED_ORIGINS: "[\"http://127.0.0.1:${ORCHESTWIN_FRONTEND_PORT:-8080}\"]"
+      ORCHESTWIN_CORS_ALLOW_CREDENTIALS: "true"
+      ORCHESTWIN_DATABASE_URL: "postgresql+psycopg://${ORCHESTWIN_POSTGRES_USER:-orchestwin}:${ORCHESTWIN_POSTGRES_PASSWORD:?Set ORCHESTWIN_POSTGRES_PASSWORD}@database:5432/${ORCHESTWIN_POSTGRES_DB:-orchestwin}"
+      ORCHESTWIN_DATABASE_ECHO: "false"
+      ORCHESTWIN_AUTH_JWT_SECRET: "${ORCHESTWIN_AUTH_JWT_SECRET:?Set ORCHESTWIN_AUTH_JWT_SECRET}"
+      ORCHESTWIN_AUTH_JWT_ISSUER: orchestwin-studio
+      ORCHESTWIN_AUTH_JWT_AUDIENCE: orchestwin-api
+      ORCHESTWIN_AUTH_ACCESS_TOKEN_LIFETIME_SECONDS: "900"
+      ORCHESTWIN_AUTH_ACCESS_TOKEN_LEEWAY_SECONDS: "5"
+      ORCHESTWIN_AUTH_REFRESH_COOKIE_NAME: orchestwin_refresh
+      ORCHESTWIN_AUTH_REFRESH_COOKIE_PATH: /api/v1/auth
+      ORCHESTWIN_AUTH_REFRESH_COOKIE_SECURE: "false"
+      ORCHESTWIN_AUTH_REFRESH_COOKIE_SAME_SITE: lax
+      ORCHESTWIN_AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS: "2592000"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:${ORCHESTWIN_API_PORT:-8000}:8000"
     networks:
