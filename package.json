@@ -15,7 +15,8 @@
     "start:api": "python -m orchestwin.api.server",
     "dev:frontend": "npm --prefix frontend run dev",
     "preview:frontend": "npm --prefix frontend run preview",
-    "test": "python -m pytest",
+    "test": "python -m pytest -m \"not integration\"",
+    "test:integration:python": "python -m pytest -m integration src/test/python/integration",
     "test:frontend": "npm --prefix frontend run test",
     "test:all": "npm run test && npm run test:frontend",
     "test:compose": "python scripts/smoke_compose.py",
@@ -51,8 +52,5 @@
     "husky": "9.1.7",
     "renovate": "43.283.0",
     "semantic-release": "25.0.8"
-  },
-  "dependencies": {
-    "python": "^0.0.4"
   }
 }
