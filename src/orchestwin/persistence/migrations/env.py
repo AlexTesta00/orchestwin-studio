@@ -20,6 +20,7 @@ from orchestwin.persistence.config import (
 )
 from orchestwin.persistence.orm import OrmBase
 from orchestwin.projects.persistence.models import (
+    ProjectBriefVersionRecord,
     ProjectRecord,
 )
 
@@ -35,6 +36,7 @@ _IMPORTED_MODELS = (
     UserRecord,
     AuthSessionRecord,
     ProjectRecord,
+    ProjectBriefVersionRecord,
 )
 
 target_metadata = OrmBase.metadata
