@@ -169,13 +169,40 @@ class SqlAlchemyProjectBriefRepository:
 
         return brief_record_to_domain(record)
 
+    async def get_owned_version(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        version_number: int,
+    ) -> ProjectBriefVersion | None:
+        """Return one immutable version for an active owned project."""
+        record = await self._session.scalar(
+            select(ProjectBriefVersionRecord)
+            .join(
+                ProjectRecord,
+                ProjectRecord.id == ProjectBriefVersionRecord.project_id,
+            )
+            .where(
+                ProjectRecord.id == project_id,
+                ProjectRecord.owner_user_id == owner_user_id,
+                ProjectRecord.archived_at.is_(None),
+                ProjectBriefVersionRecord.version_number == version_number,
+            )
+        )
+
+        if record is None:
+            return None
+
+        return brief_record_to_domain(record)
+
     async def list_owned_versions(
         self,
         *,
         project_id: UUID,
         owner_user_id: UUID,
     ) -> tuple[ProjectBriefVersion, ...]:
-        """Return the complete immutable history for an owned project."""
+        """Return the immutable history for an active owned project."""
         result = await self._session.scalars(
             select(ProjectBriefVersionRecord)
             .join(
@@ -185,6 +212,7 @@ class SqlAlchemyProjectBriefRepository:
             .where(
                 ProjectRecord.id == project_id,
                 ProjectRecord.owner_user_id == owner_user_id,
+                ProjectRecord.archived_at.is_(None),
             )
             .order_by(ProjectBriefVersionRecord.version_number)
         )

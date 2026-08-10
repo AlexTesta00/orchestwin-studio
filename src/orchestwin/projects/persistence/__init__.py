@@ -10,10 +10,16 @@ from orchestwin.projects.persistence.models import (
 from orchestwin.projects.persistence.repositories import (
     SqlAlchemyProjectRepository,
 )
+from orchestwin.projects.persistence.unit_of_work import (
+    SqlAlchemyProjectUnitOfWork,
+    SqlAlchemyProjectUnitOfWorkFactory,
+)
 
 __all__ = [
     "ProjectBriefVersionRecord",
     "ProjectRecord",
     "SqlAlchemyProjectBriefRepository",
     "SqlAlchemyProjectRepository",
+    "SqlAlchemyProjectUnitOfWork",
+    "SqlAlchemyProjectUnitOfWorkFactory",
 ]

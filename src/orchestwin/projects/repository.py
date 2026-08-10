@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
@@ -64,27 +65,22 @@ class BriefVersionCreationStatus(StrEnum):
     PROJECT_NOT_FOUND = "project_not_found"
 
 
+@dataclass(frozen=True, slots=True)
 class BriefVersionCreationResult:
     """Typed result for immutable brief-version creation."""
 
-    __slots__ = (
-        "status",
-        "version",
-    )
+    status: BriefVersionCreationStatus
+    version: ProjectBriefVersion | None = None
 
-    def __init__(
-        self,
-        *,
-        status: BriefVersionCreationStatus,
-        version: ProjectBriefVersion | None = None,
-    ) -> None:
-        has_version = version is not None
+    def __post_init__(self) -> None:
+        """Associate a version with every non-missing result."""
+        project_missing = self.status is BriefVersionCreationStatus.PROJECT_NOT_FOUND
 
-        if (status is BriefVersionCreationStatus.PROJECT_NOT_FOUND) == has_version:
-            raise ValueError("project-not-found must not contain a version")
-
-        self.status = status
-        self.version = version
+        if project_missing == (self.version is not None):
+            raise ValueError(
+                "project-not-found must not contain a version "
+                "and successful results must contain one"
+            )
 
     @property
     def created(self) -> bool:
@@ -112,6 +108,15 @@ class ProjectBriefRepository(Protocol):
         owner_user_id: UUID,
     ) -> ProjectBriefVersion | None:
         """Return the current brief version for an owned project."""
+
+    async def get_owned_version(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        version_number: int,
+    ) -> ProjectBriefVersion | None:
+        """Return one immutable version for an owned project."""
 
     async def list_owned_versions(
         self,
