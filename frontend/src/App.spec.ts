@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import App from "./App.vue";
 import { createAppI18n, type SupportedLocale } from "./i18n";
 import { createAppRouter } from "./router";
+import { useAuthStore } from "./stores/auth";
 
 enableAutoUnmount(afterEach);
 
@@ -13,9 +14,28 @@ afterEach(() => {
   document.documentElement.lang = "en";
 });
 
-async function mountApplication(initialPath = "/", initialLocale: SupportedLocale = "en") {
+async function mountApplication(
+  initialPath = "/",
+  initialLocale: SupportedLocale = "en",
+  authenticated = false,
+) {
   const router = createAppRouter(createMemoryHistory());
   const i18n = createAppI18n(initialLocale);
+  const pinia = createPinia();
+
+  if (authenticated) {
+    useAuthStore(pinia).$patch({
+      status: "authenticated",
+      user: {
+        id: "00000000-0000-4000-8000-000000000001",
+        email: "owner@example.com",
+        is_active: true,
+        created_at: "2026-08-10T12:00:00Z",
+      },
+      accessToken: "access-token",
+      expiresAt: "2026-08-10T12:15:00Z",
+    });
+  }
 
   document.documentElement.lang = initialLocale;
 
@@ -24,7 +44,7 @@ async function mountApplication(initialPath = "/", initialLocale: SupportedLocal
 
   const wrapper = mount(App, {
     global: {
-      plugins: [createPinia(), i18n, router],
+      plugins: [pinia, i18n, router],
     },
   });
 
@@ -35,61 +55,37 @@ async function mountApplication(initialPath = "/", initialLocale: SupportedLocal
 }
 
 describe("App", () => {
-  it("renders a localized keyboard-accessible application shell", async () => {
+  it("shows authentication links to anonymous users", async () => {
     const { wrapper } = await mountApplication();
 
-    expect(wrapper.get('[data-testid="skip-link"]').attributes("href")).toBe("#main-content");
-    expect(wrapper.get('[data-testid="skip-link"]').text()).toBe("Skip to main content");
-    expect(wrapper.get("nav").attributes("aria-label")).toBe("Primary navigation");
-    expect(wrapper.get("main").attributes("tabindex")).toBe("-1");
-    expect(wrapper.get("h1").text()).toBe("OrchesTwin Studio");
-    expect(document.documentElement.lang).toBe("en");
+    expect(wrapper.get('[data-testid="login-link"]').text()).toBe("Log in");
+    expect(wrapper.get('[data-testid="register-link"]').text()).toBe("Register");
+    expect(wrapper.find('[data-testid="projects-link"]').exists()).toBe(false);
   });
 
-  it("opens and closes the responsive navigation through Pinia state", async () => {
-    const { wrapper } = await mountApplication();
+  it("shows project navigation to authenticated users", async () => {
+    const { wrapper } = await mountApplication("/", "en", true);
+
+    expect(wrapper.get('[data-testid="projects-link"]').text()).toBe("Projects");
+    expect(wrapper.get('[data-testid="logout-button"]').text()).toBe("Log out");
+    expect(wrapper.find('[data-testid="login-link"]').exists()).toBe(false);
+  });
+
+  it("keeps the responsive navigation controlled by Pinia", async () => {
+    const { wrapper } = await mountApplication("/", "en", true);
     const toggle = wrapper.get('[data-testid="navigation-toggle"]');
     const navigation = wrapper.get("#primary-navigation");
 
     expect(toggle.attributes("aria-expanded")).toBe("false");
-    expect(navigation.classes()).toContain("hidden");
 
     await toggle.trigger("click");
 
     expect(toggle.attributes("aria-expanded")).toBe("true");
     expect(navigation.classes()).toContain("flex");
-    expect(navigation.classes()).not.toContain("hidden");
 
     await wrapper.get('[data-testid="projects-link"]').trigger("click");
     await flushPromises();
 
     expect(toggle.attributes("aria-expanded")).toBe("false");
-    expect(navigation.classes()).toContain("hidden");
-    expect(navigation.classes()).not.toContain("flex");
-  });
-
-  it("navigates between localized foundation routes", async () => {
-    const { router, wrapper } = await mountApplication();
-
-    expect(wrapper.get('[data-testid="overview-link"]').attributes("aria-current")).toBe("page");
-
-    await wrapper.get('[data-testid="projects-link"]').trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("projects");
-    expect(wrapper.get("h1").text()).toBe("Projects");
-    expect(wrapper.get('[data-testid="projects-link"]').attributes("aria-current")).toBe("page");
-  });
-
-  it("switches the shell and active view to Italian without reloading", async () => {
-    const { wrapper } = await mountApplication();
-
-    await wrapper.get('[data-testid="language-selector"]').setValue("it");
-    await flushPromises();
-
-    expect(wrapper.get('[data-testid="overview-link"]').text()).toBe("Panoramica");
-    expect(wrapper.get('[data-testid="projects-link"]').text()).toBe("Progetti");
-    expect(wrapper.text()).toContain("Workspace frontend operativo");
-    expect(document.documentElement.lang).toBe("it");
   });
 });

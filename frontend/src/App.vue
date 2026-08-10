@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import { storeToRefs } from "pinia";
 import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 
+import { apiClient } from "@/api/client";
 import LanguageSwitcher from "@/components/LanguageSwitcher.vue";
+import { useAuthStore } from "@/stores/auth";
 import { useShellStore } from "@/stores/shell";
 
+const router = useRouter();
 const shellStore = useShellStore();
+const authStore = useAuthStore();
+
 const { isNavigationOpen } = storeToRefs(shellStore);
+const {
+  isAuthenticated,
+  status: authenticationStatus,
+  user,
+} = storeToRefs(authStore);
+
 const { t } = useI18n({
   useScope: "global",
 });
@@ -30,12 +42,20 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
       : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
   ];
 }
+
+async function logout(): Promise<void> {
+  await authStore.logout(apiClient);
+  shellStore.closeNavigation();
+  await router.push({
+    name: "overview",
+  });
+}
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-50 text-slate-950">
     <a
-      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-lg bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 focus:outline-none"
+      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-lg bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
       data-testid="skip-link"
       href="#main-content"
     >
@@ -47,7 +67,7 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
         class="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto] lg:px-8"
       >
         <RouterLink
-          class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
+          class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
           to="/"
           :aria-label="t('app.homeAriaLabel')"
         >
@@ -55,7 +75,7 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
         </RouterLink>
 
         <button
-          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none md:hidden"
+          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 md:hidden"
           type="button"
           aria-controls="primary-navigation"
           :aria-expanded="isNavigationOpen"
@@ -75,7 +95,11 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
           :aria-label="t('navigation.label')"
           @click="shellStore.closeNavigation"
         >
-          <RouterLink v-slot="{ href, navigate, isExactActive }" custom to="/">
+          <RouterLink
+            v-slot="{ href, navigate, isExactActive }"
+            custom
+            to="/"
+          >
             <a
               :href="href"
               :class="navigationLinkClasses(isExactActive)"
@@ -87,7 +111,12 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
             </a>
           </RouterLink>
 
-          <RouterLink v-slot="{ href, navigate, isExactActive }" custom to="/projects">
+          <RouterLink
+            v-if="isAuthenticated"
+            v-slot="{ href, navigate, isExactActive }"
+            custom
+            to="/projects"
+          >
             <a
               :href="href"
               :class="navigationLinkClasses(isExactActive)"
@@ -98,9 +127,47 @@ function navigationLinkClasses(isExactActive: boolean): string[] {
               {{ t("navigation.projects") }}
             </a>
           </RouterLink>
+
+          <RouterLink
+            v-if="!isAuthenticated"
+            :class="navigationLinkClasses(false)"
+            to="/login"
+            data-testid="login-link"
+          >
+            {{ t("navigation.login") }}
+          </RouterLink>
+
+          <RouterLink
+            v-if="!isAuthenticated"
+            :class="navigationLinkClasses(false)"
+            to="/register"
+            data-testid="register-link"
+          >
+            {{ t("navigation.register") }}
+          </RouterLink>
+
+          <button
+            v-if="isAuthenticated"
+            class="rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+            type="button"
+            :disabled="authenticationStatus === 'loading'"
+            data-testid="logout-button"
+            @click="logout"
+          >
+            {{ t("navigation.logout") }}
+          </button>
         </nav>
 
-        <LanguageSwitcher />
+        <div class="col-span-full flex items-center justify-between gap-4 md:col-span-1 md:justify-end">
+          <span
+            v-if="user"
+            class="hidden text-sm text-slate-600 lg:inline"
+          >
+            {{ user.email }}
+          </span>
+
+          <LanguageSwitcher />
+        </div>
       </div>
     </header>
 
