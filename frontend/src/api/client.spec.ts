@@ -1,10 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiClient, ApiError, resolveApiBaseUrl } from "./client";
+import { ApiClient, resolveApiBaseUrl } from "./client";
 
 describe("ApiClient", () => {
-  it("normalizes the configured API base URL", () => {
-    expect(resolveApiBaseUrl("http://localhost:8000/api/v1/")).toBe("http://localhost:8000/api/v1");
+  it("uses a same-origin API path by default", () => {
+    expect(resolveApiBaseUrl("")).toBe("/api/v1");
+  });
+
+  it("normalizes a relative API base URL", () => {
+    expect(resolveApiBaseUrl("/api/v1/")).toBe("/api/v1");
+  });
+
+  it("normalizes an absolute API base URL", () => {
+    expect(resolveApiBaseUrl("http://localhost:8000/api/v1/")).toBe(
+      "http://localhost:8000/api/v1",
+    );
+  });
+
+  it("rejects protocol-relative API URLs", () => {
+    expect(() => resolveApiBaseUrl("//example.test/api/v1")).toThrow(
+      "API base URL must not be protocol-relative",
+    );
   });
 
   it("sends credentials and JSON for login", async () => {
@@ -29,7 +45,7 @@ describe("ApiClient", () => {
         },
       ),
     );
-    const client = new ApiClient("http://localhost:8000/api/v1", fetchImplementation);
+    const client = new ApiClient("/api/v1", fetchImplementation);
 
     const response = await client.login({
       email: "owner@example.com",
@@ -39,8 +55,9 @@ describe("ApiClient", () => {
     expect(response.access_token).toBe("access-token");
     expect(fetchImplementation).toHaveBeenCalledOnce();
 
-    const [, request] = fetchImplementation.mock.calls[0] ?? [];
+    const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
 
+    expect(requestUrl).toBe("/api/v1/auth/login");
     expect(request?.credentials).toBe("include");
     expect(request?.method).toBe("POST");
   });
@@ -59,18 +76,18 @@ describe("ApiClient", () => {
         },
       ),
     );
-    const client = new ApiClient("http://localhost:8000/api/v1", fetchImplementation);
+    const client = new ApiClient("/api/v1", fetchImplementation);
 
     await expect(
       client.login({
         email: "owner@example.com",
         password: "incorrect horse battery staple",
       }),
-    ).rejects.toEqual(
-      expect.objectContaining<ApiError>({
-        status: 401,
-        detail: "invalid_authentication",
-      }),
-    );
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      message: "invalid_authentication",
+      status: 401,
+      detail: "invalid_authentication",
+    });
   });
 });
