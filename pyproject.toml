@@ -17,6 +17,7 @@ dependencies = [
     "psycopg[binary]==3.3.4",
     "pwdlib[argon2]==0.3.0",
     "pydantic-settings==2.14.2",
+    "pyjwt==2.13.0",
     "sqlalchemy[asyncio]==2.0.51",
     "uvicorn==0.52.1",
 ]
