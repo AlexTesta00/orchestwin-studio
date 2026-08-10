@@ -7,10 +7,21 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import (
+    async_engine_from_config,
+)
 
-from orchestwin.identity.persistence.models import UserRecord
-from orchestwin.persistence.config import load_database_settings
+from orchestwin.identity.persistence.models import (
+    AuthSessionRecord,
+    UserRecord,
+)
+from orchestwin.persistence.config import (
+    load_database_settings,
+)
+from orchestwin.persistence.orm import OrmBase
+from orchestwin.projects.persistence.models import (
+    ProjectRecord,
+)
 
 configuration = context.config
 
@@ -20,7 +31,13 @@ if configuration.config_file_name is not None:
         disable_existing_loggers=False,
     )
 
-target_metadata = UserRecord.metadata
+_IMPORTED_MODELS = (
+    UserRecord,
+    AuthSessionRecord,
+    ProjectRecord,
+)
+
+target_metadata = OrmBase.metadata
 
 
 def database_url() -> str:
@@ -39,7 +56,9 @@ def run_migrations_offline() -> None:
         url=database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+        dialect_opts={
+            "paramstyle": "named",
+        },
         compare_type=True,
     )
 
@@ -47,8 +66,10 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def configure_connection(connection: object) -> None:
-    """Configure and run migrations on a synchronous Alembic connection."""
+def configure_connection(
+    connection: object,
+) -> None:
+    """Configure and run migrations on a synchronous connection."""
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
