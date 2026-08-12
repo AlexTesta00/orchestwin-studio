@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from alembic.script import ScriptDirectory
 from pydantic import SecretStr
 from sqlalchemy import text, update
 from sqlalchemy.exc import DBAPIError
@@ -26,6 +27,9 @@ from orchestwin.identity.tokens import (
 from orchestwin.persistence import (
     create_database_runtime,
     load_database_settings,
+)
+from orchestwin.persistence.migrate import (
+    create_alembic_config,
 )
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
@@ -51,16 +55,26 @@ pytestmark = pytest.mark.integration
 async def truncate_application_tables(
     runtime,
 ) -> None:
-    """Reset mutable Sprint 02 data without removing migrations."""
+    """Reset mutable application data without removing migrations."""
     async with runtime.engine.begin() as connection:
         await connection.execute(
-            text("TRUNCATE TABLE project_brief_versions, projects, auth_sessions, users CASCADE")
+            text(
+                "TRUNCATE TABLE "
+                "brief_assumptions, "
+                "clarification_rounds, "
+                "project_brief_versions, "
+                "projects, "
+                "auth_sessions, "
+                "users "
+                "CASCADE"
+            )
         )
 
 
 async def run_integration_scenario() -> None:
     """Exercise identity, ownership, versioning, and DB immutability."""
-    runtime = create_database_runtime(load_database_settings(env_file=None))
+    database_settings = load_database_settings(env_file=None)
+    runtime = create_database_runtime(database_settings)
 
     try:
         await truncate_application_tables(runtime)
@@ -86,11 +100,11 @@ async def run_integration_scenario() -> None:
 
         owner_result = await identity.register(
             email="owner@example.com",
-            password="correct horse battery staple",
+            password=("correct horse battery staple"),
         )
         other_result = await identity.register(
             email="other@example.com",
-            password="another correct battery staple",
+            password=("another correct battery staple"),
         )
 
         assert owner_result.status is (AuthenticationStatus.AUTHENTICATED)
@@ -164,12 +178,17 @@ async def run_integration_scenario() -> None:
         async with runtime.engine.connect() as connection:
             revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
 
-        assert revision == ("0005_project_brief_versions")
+        scripts = ScriptDirectory.from_config(
+            create_alembic_config(database_settings.url.get_secret_value())
+        )
+        expected_head = scripts.get_current_head()
+
+        assert revision == expected_head
     finally:
         await truncate_application_tables(runtime)
         await runtime.dispose()
 
 
 def test_postgresql_identity_and_projects_main_path() -> None:
-    """Verify the Sprint 02 persistence path on PostgreSQL."""
+    """Verify the persistence path on PostgreSQL."""
     asyncio.run(run_integration_scenario())
