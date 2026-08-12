@@ -41,8 +41,9 @@ from orchestwin.identity.tokens import (
     JwtAccessTokenService,
     load_access_token_settings,
 )
-from orchestwin.models.fake_team_proposals import (
-    FakeDeterministicTeamProposalAdapter,
+from orchestwin.models.runtime import (
+    create_team_proposal_port,
+    load_team_proposal_runtime_settings,
 )
 from orchestwin.persistence import (
     DatabaseRuntime,
@@ -162,6 +163,7 @@ def create_default_runtime() -> ApplicationRuntime:
     if not database_url or not jwt_secret:
         return ApplicationRuntime()
 
+    team_proposal_port = create_team_proposal_port(load_team_proposal_runtime_settings())
     database_runtime = create_database_runtime(load_database_settings())
 
     identity_service = LocalIdentityApplicationService(
@@ -189,7 +191,7 @@ def create_default_runtime() -> ApplicationRuntime:
         unit_of_work_factory=(
             SqlAlchemyTeamProposalUnitOfWorkFactory(database_runtime.session_factory)
         ),
-        proposal_port=(FakeDeterministicTeamProposalAdapter()),
+        proposal_port=team_proposal_port,
     )
     agent_team_service = LocalAgentTeamApprovalService(
         unit_of_work_factory=(
@@ -200,9 +202,9 @@ def create_default_runtime() -> ApplicationRuntime:
     return ApplicationRuntime(
         identity_service=identity_service,
         project_service=project_service,
-        clarification_service=clarification_service,
-        brief_gate_service=brief_gate_service,
+        clarification_service=(clarification_service),
+        brief_gate_service=(brief_gate_service),
         database_runtime=database_runtime,
         team_proposal_service=(team_proposal_service),
-        agent_team_service=agent_team_service,
+        agent_team_service=(agent_team_service),
     )
