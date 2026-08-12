@@ -24,6 +24,9 @@ from orchestwin.api.services import (
     ApplicationRuntime,
     create_default_runtime,
 )
+from orchestwin.api.teams import (
+    create_team_router,
+)
 from orchestwin.config import (
     ApplicationSettings,
     load_settings,
@@ -46,6 +49,8 @@ def create_app(
         application: FastAPI,
     ) -> AsyncIterator[None]:
         """Own and dispose process-level runtime resources."""
+        del application
+
         yield
         await resolved_runtime.close()
 
@@ -63,6 +68,8 @@ def create_app(
     application.state.project_service = resolved_runtime.project_service
     application.state.clarification_service = resolved_runtime.clarification_service
     application.state.brief_gate_service = resolved_runtime.brief_gate_service
+    application.state.team_proposal_service = resolved_runtime.team_proposal_service
+    application.state.agent_team_service = resolved_runtime.agent_team_service
 
     application.add_middleware(
         CORSMiddleware,
@@ -95,6 +102,10 @@ def create_app(
     )
     application.include_router(
         create_clarification_router(),
+        prefix=resolved_settings.api_prefix,
+    )
+    application.include_router(
+        create_team_router(),
         prefix=resolved_settings.api_prefix,
     )
 
