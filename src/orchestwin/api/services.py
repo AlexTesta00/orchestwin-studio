@@ -3,8 +3,30 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Protocol
+from uuid import UUID
 
+from orchestwin.agents.catalog import (
+    AgentIdentifier,
+)
+from orchestwin.agents.persistence import (
+    SqlAlchemyAgentTeamUnitOfWorkFactory,
+    SqlAlchemyTeamProposalUnitOfWorkFactory,
+)
+from orchestwin.agents.proposals import (
+    LocalTeamProposalApplicationService,
+    TeamProposalApplicationService,
+)
+from orchestwin.agents.team_gate import (
+    AgentTeamGateDecisionResult,
+    AgentTeamGateSubmissionResult,
+    LocalAgentTeamApprovalService,
+    OwnerAgentRationale,
+    ProjectWorkflowReadiness,
+    TeamEditResult,
+)
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -18,6 +40,9 @@ from orchestwin.identity.persistence import (
 from orchestwin.identity.tokens import (
     JwtAccessTokenService,
     load_access_token_settings,
+)
+from orchestwin.models.fake_team_proposals import (
+    FakeDeterministicTeamProposalAdapter,
 )
 from orchestwin.persistence import (
     DatabaseRuntime,
@@ -41,9 +66,74 @@ from orchestwin.projects.persistence import (
     SqlAlchemyProjectClarificationUnitOfWorkFactory,
     SqlAlchemyProjectUnitOfWorkFactory,
 )
+from orchestwin.workflow.gates import (
+    HumanGate,
+    HumanGateAction,
+    HumanGateEvent,
+)
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
 JWT_SECRET_ENVIRONMENT = "ORCHESTWIN_AUTH_JWT_SECRET"
+
+
+class AgentTeamApprovalService(Protocol):
+    """Use cases exposed to the Agent Team API adapter."""
+
+    async def edit_current(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        selected_agent_ids: Iterable[AgentIdentifier],
+        owner_rationales: Iterable[OwnerAgentRationale] = (),
+    ) -> TeamEditResult:
+        """Create or reuse an owner-edited team version."""
+
+    async def submit_gate(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+    ) -> AgentTeamGateSubmissionResult:
+        """Submit the current team proposal to Gate 2."""
+
+    async def decide_gate(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        action: HumanGateAction,
+        reason: str | None = None,
+    ) -> AgentTeamGateDecisionResult:
+        """Apply one owner decision to Gate 2."""
+
+    async def readiness(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+    ) -> ProjectWorkflowReadiness:
+        """Return the derived project readiness."""
+
+    async def current_gate(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+    ) -> HumanGate | None:
+        """Return the current owner-scoped Gate 2."""
+
+    async def gate_events(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        gate_id: UUID,
+    ) -> tuple[
+        HumanGateEvent,
+        ...,
+    ]:
+        """Return the Gate 2 append-only event history."""
 
 
 @dataclass(slots=True)
@@ -55,6 +145,8 @@ class ApplicationRuntime:
     clarification_service: ProjectClarificationApplicationService | None = None
     brief_gate_service: ProjectBriefGateService | None = None
     database_runtime: DatabaseRuntime | None = None
+    team_proposal_service: TeamProposalApplicationService | None = None
+    agent_team_service: AgentTeamApprovalService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
@@ -93,6 +185,17 @@ def create_default_runtime() -> ApplicationRuntime:
             SqlAlchemyProjectBriefGateUnitOfWorkFactory(database_runtime.session_factory)
         )
     )
+    team_proposal_service = LocalTeamProposalApplicationService(
+        unit_of_work_factory=(
+            SqlAlchemyTeamProposalUnitOfWorkFactory(database_runtime.session_factory)
+        ),
+        proposal_port=(FakeDeterministicTeamProposalAdapter()),
+    )
+    agent_team_service = LocalAgentTeamApprovalService(
+        unit_of_work_factory=(
+            SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
+        )
+    )
 
     return ApplicationRuntime(
         identity_service=identity_service,
@@ -100,4 +203,6 @@ def create_default_runtime() -> ApplicationRuntime:
         clarification_service=clarification_service,
         brief_gate_service=brief_gate_service,
         database_runtime=database_runtime,
+        team_proposal_service=(team_proposal_service),
+        agent_team_service=agent_team_service,
     )
