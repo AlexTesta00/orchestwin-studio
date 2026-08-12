@@ -1,5 +1,10 @@
 """SQLAlchemy adapters for Project Definition."""
 
+from orchestwin.projects.persistence.brief_gate import (
+    SqlAlchemyCurrentProjectBriefRepository,
+    SqlAlchemyProjectBriefGateUnitOfWork,
+    SqlAlchemyProjectBriefGateUnitOfWorkFactory,
+)
 from orchestwin.projects.persistence.briefs import (
     SqlAlchemyProjectBriefRepository,
 )
@@ -28,6 +33,9 @@ __all__ = [
     "ProjectRecord",
     "SqlAlchemyBriefAssumptionRepository",
     "SqlAlchemyClarificationRoundRepository",
+    "SqlAlchemyCurrentProjectBriefRepository",
+    "SqlAlchemyProjectBriefGateUnitOfWork",
+    "SqlAlchemyProjectBriefGateUnitOfWorkFactory",
     "SqlAlchemyProjectBriefRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyProjectUnitOfWork",

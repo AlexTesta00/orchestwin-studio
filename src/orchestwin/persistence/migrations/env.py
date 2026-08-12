@@ -25,6 +25,10 @@ from orchestwin.projects.persistence.models import (
     ProjectBriefVersionRecord,
     ProjectRecord,
 )
+from orchestwin.workflow.persistence.models import (
+    HumanGateEventRecord,
+    HumanGateRecord,
+)
 
 configuration = context.config
 
@@ -41,6 +45,8 @@ _IMPORTED_MODELS = (
     ProjectBriefVersionRecord,
     ClarificationRoundRecord,
     BriefAssumptionRecord,
+    HumanGateRecord,
+    HumanGateEventRecord,
 )
 
 target_metadata = OrmBase.metadata
