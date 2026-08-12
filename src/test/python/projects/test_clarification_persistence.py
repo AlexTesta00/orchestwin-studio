@@ -200,11 +200,11 @@ def test_migration_creates_rounds_assumptions_and_open_round_index() -> None:
     assert "database-secret-must-not-leak-8472" not in generated_sql
 
 
-def test_clarification_revision_follows_brief_versions() -> None:
+def test_clarification_revision_follows_version_capacity() -> None:
     """Keep clarification persistence attached to immutable briefs."""
     scripts = ScriptDirectory.from_config(create_alembic_config(TEST_DATABASE_URL))
     revision = scripts.get_revision("0006_clarification_rounds_assumptions")
 
     assert revision is not None
-    assert revision.down_revision == ("0005_project_brief_versions")
+    assert revision.down_revision == ("0005a_expand_alembic_version")
     assert len(scripts.get_heads()) == 1
