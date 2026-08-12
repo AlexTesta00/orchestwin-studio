@@ -28,7 +28,17 @@ from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
 )
+from orchestwin.projects.brief_gate import (
+    LocalProjectBriefGateService,
+    ProjectBriefGateService,
+)
+from orchestwin.projects.clarification_application import (
+    LocalProjectClarificationApplicationService,
+    ProjectClarificationApplicationService,
+)
 from orchestwin.projects.persistence import (
+    SqlAlchemyProjectBriefGateUnitOfWorkFactory,
+    SqlAlchemyProjectClarificationUnitOfWorkFactory,
     SqlAlchemyProjectUnitOfWorkFactory,
 )
 
@@ -42,6 +52,8 @@ class ApplicationRuntime:
 
     identity_service: IdentityApplicationService | None = None
     project_service: ProjectApplicationService | None = None
+    clarification_service: ProjectClarificationApplicationService | None = None
+    brief_gate_service: ProjectBriefGateService | None = None
     database_runtime: DatabaseRuntime | None = None
 
     async def close(self) -> None:
@@ -71,9 +83,21 @@ def create_default_runtime() -> ApplicationRuntime:
     project_service = LocalProjectApplicationService(
         unit_of_work_factory=(SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory))
     )
+    clarification_service = LocalProjectClarificationApplicationService(
+        unit_of_work_factory=(
+            SqlAlchemyProjectClarificationUnitOfWorkFactory(database_runtime.session_factory)
+        )
+    )
+    brief_gate_service = LocalProjectBriefGateService(
+        unit_of_work_factory=(
+            SqlAlchemyProjectBriefGateUnitOfWorkFactory(database_runtime.session_factory)
+        )
+    )
 
     return ApplicationRuntime(
         identity_service=identity_service,
         project_service=project_service,
+        clarification_service=clarification_service,
+        brief_gate_service=brief_gate_service,
         database_runtime=database_runtime,
     )
