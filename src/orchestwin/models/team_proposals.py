@@ -74,6 +74,7 @@ class TeamProposalMemberSource(StrEnum):
 
     DETERMINISTIC_MANDATORY = "DETERMINISTIC_MANDATORY"
     PROPOSER_SUGGESTED = "PROPOSER_SUGGESTED"
+    OWNER_ADDED = "OWNER_ADDED"
 
 
 class TeamProposalJustificationKind(StrEnum):
@@ -81,6 +82,7 @@ class TeamProposalJustificationKind(StrEnum):
 
     DETERMINISTIC_RULE = "DETERMINISTIC_RULE"
     PROPOSER_RATIONALE = "PROPOSER_RATIONALE"
+    OWNER_RATIONALE = "OWNER_RATIONALE"
 
 
 class TeamProposalGenerationStatus(StrEnum):
@@ -146,7 +148,7 @@ class TeamProposalJustification:
             return
 
         if self.statement is None:
-            raise ValueError("proposer rationale is required for a suggested role")
+            raise ValueError("a suggested or owner-added role requires a rationale")
 
         normalized_statement = " ".join(self.statement.split())
 
@@ -187,11 +189,20 @@ class ProposedTeamMember:
 
             return
 
-        if not any(
-            justification.kind is TeamProposalJustificationKind.PROPOSER_RATIONALE
-            for justification in self.justifications
-        ):
-            raise ValueError("a proposer-suggested member requires a structured rationale")
+        required_kind = (
+            TeamProposalJustificationKind.PROPOSER_RATIONALE
+            if (self.source is TeamProposalMemberSource.PROPOSER_SUGGESTED)
+            else TeamProposalJustificationKind.OWNER_RATIONALE
+        )
+
+        if not any(justification.kind is required_kind for justification in self.justifications):
+            source_label = (
+                "proposer-suggested"
+                if (self.source is TeamProposalMemberSource.PROPOSER_SUGGESTED)
+                else "owner-added"
+            )
+
+            raise ValueError(f"a {source_label} member requires a structured rationale")
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,8 +333,11 @@ class AgentTeamProposal:
 
                 continue
 
-            if member.source is not TeamProposalMemberSource.PROPOSER_SUGGESTED:
-                raise ValueError("optional roles must be marked as proposer-suggested")
+            if member.source not in {
+                TeamProposalMemberSource.PROPOSER_SUGGESTED,
+                TeamProposalMemberSource.OWNER_ADDED,
+            }:
+                raise ValueError("optional roles must preserve a proposer or owner source")
 
     @property
     def selected_agent_ids(
@@ -352,6 +366,17 @@ class AgentTeamProposal:
             member.agent_id
             for member in self.members
             if (member.source is TeamProposalMemberSource.PROPOSER_SUGGESTED)
+        )
+
+    @property
+    def owner_added_agent_ids(
+        self,
+    ) -> tuple[AgentIdentifier, ...]:
+        """Return optional roles explicitly added by the owner."""
+        return tuple(
+            member.agent_id
+            for member in self.members
+            if (member.source is TeamProposalMemberSource.OWNER_ADDED)
         )
 
     def member_for(
