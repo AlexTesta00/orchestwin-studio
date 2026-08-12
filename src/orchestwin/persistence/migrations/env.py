@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import (
     async_engine_from_config,
 )
 
+from orchestwin.agents.persistence.models import (
+    TeamProposalVersionRecord,
+)
 from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
     UserRecord,
@@ -18,7 +21,9 @@ from orchestwin.identity.persistence.models import (
 from orchestwin.persistence.config import (
     load_database_settings,
 )
-from orchestwin.persistence.orm import OrmBase
+from orchestwin.persistence.orm import (
+    OrmBase,
+)
 from orchestwin.projects.persistence.models import (
     BriefAssumptionRecord,
     ClarificationRoundRecord,
@@ -47,6 +52,7 @@ _IMPORTED_MODELS = (
     BriefAssumptionRecord,
     HumanGateRecord,
     HumanGateEventRecord,
+    TeamProposalVersionRecord,
 )
 
 target_metadata = OrmBase.metadata
