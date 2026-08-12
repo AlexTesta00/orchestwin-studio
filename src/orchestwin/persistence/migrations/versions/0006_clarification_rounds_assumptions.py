@@ -1,7 +1,7 @@
 """Create clarification rounds and Project Brief assumptions.
 
 Revision ID: 0006_clarification_rounds_assumptions
-Revises: 0005_project_brief_versions
+Revises: 0005a_expand_alembic_version
 Create Date: 2026-08-12
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0006_clarification_rounds_assumptions"
-down_revision: str | Sequence[str] | None = "0005_project_brief_versions"
+down_revision: str | Sequence[str] | None = "0005a_expand_alembic_version"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
