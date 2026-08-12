@@ -3,7 +3,13 @@
 from orchestwin.projects.persistence.briefs import (
     SqlAlchemyProjectBriefRepository,
 )
+from orchestwin.projects.persistence.clarification import (
+    SqlAlchemyBriefAssumptionRepository,
+    SqlAlchemyClarificationRoundRepository,
+)
 from orchestwin.projects.persistence.models import (
+    BriefAssumptionRecord,
+    ClarificationRoundRecord,
     ProjectBriefVersionRecord,
     ProjectRecord,
 )
@@ -16,8 +22,12 @@ from orchestwin.projects.persistence.unit_of_work import (
 )
 
 __all__ = [
+    "BriefAssumptionRecord",
+    "ClarificationRoundRecord",
     "ProjectBriefVersionRecord",
     "ProjectRecord",
+    "SqlAlchemyBriefAssumptionRepository",
+    "SqlAlchemyClarificationRoundRepository",
     "SqlAlchemyProjectBriefRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyProjectUnitOfWork",
