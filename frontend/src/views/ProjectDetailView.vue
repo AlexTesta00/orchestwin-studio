@@ -23,6 +23,7 @@ import type {
 } from "@/api/contracts";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
+import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import {
   useAuthStore,
 } from "@/stores/auth";
@@ -401,7 +402,17 @@ onMounted(loadProject);
           `${projectId}:${
             currentBrief?.version_number ??
             0
-          }`
+          }:clarification`
+        "
+        :project-id="projectId"
+      />
+
+      <ProjectTeamSelectionFlow
+        :key="
+          `${projectId}:${
+            currentBrief?.version_number ??
+            0
+          }:team`
         "
         :project-id="projectId"
       />
