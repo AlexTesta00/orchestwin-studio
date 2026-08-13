@@ -10,6 +10,18 @@ import type {
   UserResponse,
 } from "./contracts";
 import type {
+  AgentCatalogResponse,
+  AgentTeamApi,
+  AgentTeamGateDecisionAction,
+  AgentTeamGateDecisionResponse,
+  AgentTeamGateSubmissionResponse,
+  ProjectReadinessResponse,
+  TeamEditResponse,
+  TeamProposalEditInput,
+  TeamProposalGenerationResponse,
+  TeamProposalVersionResponse,
+} from "./team-contracts";
+import type {
   BriefAssumptionCreateInput,
   BriefAssumptionCreationResponse,
   BriefAssumptionDecisionResponse,
@@ -125,7 +137,8 @@ export class ApiClient
   implements
     AuthenticationApi,
     ProjectApi,
-    ProjectWorkflowApi
+    ProjectWorkflowApi,
+    AgentTeamApi
 {
   private readonly baseUrl: string;
   private readonly fetchImplementation:
@@ -529,6 +542,160 @@ export class ApiClient
         }),
       },
       [409],
+    );
+  }
+
+  public getAgentCatalog(
+    accessToken: string,
+  ): Promise<AgentCatalogResponse> {
+    return this.request<AgentCatalogResponse>(
+      "/agent-catalog",
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public generateProjectTeamProposal(
+    accessToken: string,
+    projectId: string,
+  ): Promise<TeamProposalGenerationResponse> {
+    return this.request<TeamProposalGenerationResponse>(
+      `/projects/${projectId}/team-proposals`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+      },
+      [409],
+    );
+  }
+
+  public listProjectTeamProposals(
+    accessToken: string,
+    projectId: string,
+  ): Promise<
+    readonly TeamProposalVersionResponse[]
+  > {
+    return this.request<
+      readonly TeamProposalVersionResponse[]
+    >(
+      `/projects/${projectId}/team-proposals`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public getCurrentProjectTeamProposal(
+    accessToken: string,
+    projectId: string,
+  ): Promise<TeamProposalVersionResponse> {
+    return this.request<TeamProposalVersionResponse>(
+      `/projects/${projectId}/team-proposals/current`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public editCurrentProjectTeamProposal(
+    accessToken: string,
+    projectId: string,
+    input: TeamProposalEditInput,
+  ): Promise<TeamEditResponse> {
+    return this.request<TeamEditResponse>(
+      `/projects/${projectId}/team-proposals/current`,
+      {
+        method: "PATCH",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+      [409, 422],
+    );
+  }
+
+  public submitAgentTeamGate(
+    accessToken: string,
+    projectId: string,
+  ): Promise<AgentTeamGateSubmissionResponse> {
+    return this.request<AgentTeamGateSubmissionResponse>(
+      `/projects/${projectId}/gates/agent-team/submit`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+      },
+      [409],
+    );
+  }
+
+  public getCurrentAgentTeamGate(
+    accessToken: string,
+    projectId: string,
+  ): Promise<HumanGateResponse> {
+    return this.request<HumanGateResponse>(
+      `/projects/${projectId}/gates/agent-team/current`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public listAgentTeamGateEvents(
+    accessToken: string,
+    projectId: string,
+    gateId: string,
+  ): Promise<
+    readonly HumanGateEventResponse[]
+  > {
+    return this.request<
+      readonly HumanGateEventResponse[]
+    >(
+      `/projects/${projectId}/gates/agent-team/${gateId}/events`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public decideAgentTeamGate(
+    accessToken: string,
+    projectId: string,
+    action: AgentTeamGateDecisionAction,
+    reason: string | null = null,
+  ): Promise<AgentTeamGateDecisionResponse> {
+    return this.request<AgentTeamGateDecisionResponse>(
+      `/projects/${projectId}/gates/agent-team/decisions`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          action,
+          reason,
+        }),
+      },
+      [409],
+    );
+  }
+
+  public getProjectWorkflowReadiness(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ProjectReadinessResponse> {
+    return this.request<ProjectReadinessResponse>(
+      `/projects/${projectId}/readiness`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
     );
   }
 
