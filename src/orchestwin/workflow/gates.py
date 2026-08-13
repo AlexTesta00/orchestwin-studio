@@ -13,10 +13,11 @@ MAX_GATE_REASON_LENGTH: Final = 2000
 
 
 class HumanGateType(StrEnum):
-    """Human gates supported by the initial governed workflow."""
+    """Human gates supported by the governed workflow."""
 
     PROJECT_BRIEF = "PROJECT_BRIEF"
     AGENT_TEAM = "AGENT_TEAM"
+    USER_MODELING = "USER_MODELING"
 
 
 class HumanGateStatus(StrEnum):
@@ -452,7 +453,7 @@ def _target_status(
         if target is None:
             return None
 
-        resume_status = HumanGateStatus.DRAFT if action is HumanGateAction.PAUSE else None
+        resume_status = HumanGateStatus.DRAFT if (action is HumanGateAction.PAUSE) else None
 
         return (
             target,
@@ -463,7 +464,7 @@ def _target_status(
         if action is HumanGateAction.REQUEST_REVISION:
             target = (
                 HumanGateStatus.PAUSED_NEEDS_HUMAN
-                if gate.iteration >= gate.max_iterations
+                if (gate.iteration >= gate.max_iterations)
                 else HumanGateStatus.REVISION_REQUESTED
             )
 
@@ -485,7 +486,7 @@ def _target_status(
             return None
 
         resume_status = (
-            HumanGateStatus.PENDING_APPROVAL if action is HumanGateAction.PAUSE else None
+            HumanGateStatus.PENDING_APPROVAL if (action is HumanGateAction.PAUSE) else None
         )
 
         return (
