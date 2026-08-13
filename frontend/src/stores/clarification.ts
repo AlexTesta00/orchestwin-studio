@@ -1,13 +1,7 @@
-import {
-  ref,
-} from "vue";
-import {
-  defineStore,
-} from "pinia";
+import { ref } from "vue";
+import { defineStore } from "pinia";
 
-import {
-  ApiError,
-} from "@/api/client";
+import { ApiError } from "@/api/client";
 import type {
   BriefAssumptionCreateInput,
   BriefAssumptionCreationResponse,
@@ -26,16 +20,10 @@ import type {
 } from "@/api/workflow-contracts";
 
 export interface AuthorizedRequest {
-  <T>(
-    operation: (
-      accessToken: string,
-    ) => Promise<T>,
-  ): Promise<T>;
+  <T>(operation: (accessToken: string) => Promise<T>): Promise<T>;
 }
 
-function errorCode(
-  error: unknown,
-): string {
+function errorCode(error: unknown): string {
   if (error instanceof ApiError) {
     return error.detail;
   }
@@ -43,16 +31,11 @@ function errorCode(
   return "unexpected_error";
 }
 
-async function optionalResource<T>(
-  operation: () => Promise<T>,
-): Promise<T | null> {
+async function optionalResource<T>(operation: () => Promise<T>): Promise<T | null> {
   try {
     return await operation();
   } catch (error: unknown) {
-    if (
-      error instanceof ApiError &&
-      error.status === 404
-    ) {
+    if (error instanceof ApiError && error.status === 404) {
       return null;
     }
 
@@ -60,458 +43,276 @@ async function optionalResource<T>(
   }
 }
 
-export const useClarificationStore =
-  defineStore(
-    "clarification",
-    () => {
-      const projectId =
-        ref<string | null>(null);
-      const currentRound =
-        ref<ClarificationRoundResponse | null>(
-          null,
-        );
-      const roundHistory =
-        ref<
-          readonly ClarificationRoundResponse[]
-        >([]);
-      const assumptions =
-        ref<
-          readonly BriefAssumptionResponse[]
-        >([]);
-      const gate =
-        ref<HumanGateResponse | null>(
-          null,
-        );
-      const gateEvents =
-        ref<
-          readonly HumanGateEventResponse[]
-        >([]);
+export const useClarificationStore = defineStore("clarification", () => {
+  const projectId = ref<string | null>(null);
+  const currentRound = ref<ClarificationRoundResponse | null>(null);
+  const roundHistory = ref<readonly ClarificationRoundResponse[]>([]);
+  const assumptions = ref<readonly BriefAssumptionResponse[]>([]);
+  const gate = ref<HumanGateResponse | null>(null);
+  const gateEvents = ref<readonly HumanGateEventResponse[]>([]);
 
-      const lastRoundStart =
-        ref<ClarificationRoundStartResponse | null>(
-          null,
-        );
-      const lastRoundAnswer =
-        ref<ClarificationRoundAnswerResponse | null>(
-          null,
-        );
-      const lastAssumptionCreation =
-        ref<BriefAssumptionCreationResponse | null>(
-          null,
-        );
-      const lastAssumptionDecision =
-        ref<BriefAssumptionDecisionResponse | null>(
-          null,
-        );
-      const lastGateSubmission =
-        ref<ProjectBriefGateSubmissionResponse | null>(
-          null,
-        );
-      const lastGateDecision =
-        ref<ProjectBriefGateDecisionResponse | null>(
-          null,
-        );
+  const lastRoundStart = ref<ClarificationRoundStartResponse | null>(null);
+  const lastRoundAnswer = ref<ClarificationRoundAnswerResponse | null>(null);
+  const lastAssumptionCreation = ref<BriefAssumptionCreationResponse | null>(null);
+  const lastAssumptionDecision = ref<BriefAssumptionDecisionResponse | null>(null);
+  const lastGateSubmission = ref<ProjectBriefGateSubmissionResponse | null>(null);
+  const lastGateDecision = ref<ProjectBriefGateDecisionResponse | null>(null);
 
-      const busy = ref(false);
-      const errorDetail =
-        ref<string | null>(null);
+  const busy = ref(false);
+  const errorDetail = ref<string | null>(null);
 
-      function reset(): void {
-        projectId.value = null;
-        currentRound.value = null;
-        roundHistory.value = [];
-        assumptions.value = [];
-        gate.value = null;
-        gateEvents.value = [];
+  function reset(): void {
+    projectId.value = null;
+    currentRound.value = null;
+    roundHistory.value = [];
+    assumptions.value = [];
+    gate.value = null;
+    gateEvents.value = [];
 
-        lastRoundStart.value = null;
-        lastRoundAnswer.value = null;
-        lastAssumptionCreation.value =
-          null;
-        lastAssumptionDecision.value =
-          null;
-        lastGateSubmission.value = null;
-        lastGateDecision.value = null;
+    lastRoundStart.value = null;
+    lastRoundAnswer.value = null;
+    lastAssumptionCreation.value = null;
+    lastAssumptionDecision.value = null;
+    lastGateSubmission.value = null;
+    lastGateDecision.value = null;
 
-        busy.value = false;
-        errorDetail.value = null;
-      }
+    busy.value = false;
+    errorDetail.value = null;
+  }
 
-      async function refreshState(
-        targetProjectId: string,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<void> {
-        const [
-          historyResult,
-          assumptionsResult,
-          roundResult,
-          gateResult,
-        ] = await Promise.all([
-          authorize((accessToken) =>
-            api.listProjectClarificationRounds(
-              accessToken,
-              targetProjectId,
-            ),
-          ),
-          authorize((accessToken) =>
-            api.listProjectBriefAssumptions(
-              accessToken,
-              targetProjectId,
-            ),
-          ),
-          optionalResource(() =>
-            authorize((accessToken) =>
-              api.getCurrentProjectClarificationRound(
-                accessToken,
-                targetProjectId,
-              ),
-            ),
-          ),
-          optionalResource(() =>
-            authorize((accessToken) =>
-              api.getCurrentProjectBriefGate(
-                accessToken,
-                targetProjectId,
-              ),
-            ),
-          ),
-        ]);
+  async function refreshState(
+    targetProjectId: string,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<void> {
+    const [historyResult, assumptionsResult, roundResult, gateResult] = await Promise.all([
+      authorize((accessToken) => api.listProjectClarificationRounds(accessToken, targetProjectId)),
+      authorize((accessToken) => api.listProjectBriefAssumptions(accessToken, targetProjectId)),
+      optionalResource(() =>
+        authorize((accessToken) =>
+          api.getCurrentProjectClarificationRound(accessToken, targetProjectId),
+        ),
+      ),
+      optionalResource(() =>
+        authorize((accessToken) => api.getCurrentProjectBriefGate(accessToken, targetProjectId)),
+      ),
+    ]);
 
-        roundHistory.value =
-          historyResult;
-        assumptions.value =
-          assumptionsResult;
-        currentRound.value =
-          roundResult;
-        gate.value = gateResult;
+    roundHistory.value = historyResult;
+    assumptions.value = assumptionsResult;
+    currentRound.value = roundResult;
+    gate.value = gateResult;
 
-        gateEvents.value =
-          gateResult === null
-            ? []
-            : await authorize(
-                (accessToken) =>
-                  api.listProjectBriefGateEvents(
-                    accessToken,
-                    targetProjectId,
-                    gateResult.id,
-                  ),
-              );
-      }
-
-      async function perform<T>(
-        operation: () => Promise<T>,
-      ): Promise<T | null> {
-        busy.value = true;
-        errorDetail.value = null;
-
-        try {
-          return await operation();
-        } catch (error: unknown) {
-          errorDetail.value =
-            errorCode(error);
-
-          return null;
-        } finally {
-          busy.value = false;
-        }
-      }
-
-      async function load(
-        targetProjectId: string,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<boolean> {
-        if (
-          projectId.value !==
-          targetProjectId
-        ) {
-          reset();
-          projectId.value =
-            targetProjectId;
-        }
-
-        const result = await perform(
-          async () => {
-            await refreshState(
-              targetProjectId,
-              api,
-              authorize,
-            );
-
-            return true;
-          },
-        );
-
-        return result ?? false;
-      }
-
-      async function startRound(
-        targetProjectId: string,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        ClarificationRoundStartResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.startProjectClarificationRound(
-                  accessToken,
-                  targetProjectId,
-                ),
-            );
-
-          lastRoundStart.value =
-            result;
-
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
+    gateEvents.value =
+      gateResult === null
+        ? []
+        : await authorize((accessToken) =>
+            api.listProjectBriefGateEvents(accessToken, targetProjectId, gateResult.id),
           );
+  }
 
-          return result;
-        });
-      }
+  async function perform<T>(operation: () => Promise<T>): Promise<T | null> {
+    busy.value = true;
+    errorDetail.value = null;
 
-      async function answerRound(
-        targetProjectId: string,
-        answers:
-          readonly ClarificationAnswerInput[],
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        ClarificationRoundAnswerResponse | null
-      > {
-        const round =
-          currentRound.value;
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      errorDetail.value = errorCode(error);
 
-        if (round === null) {
-          errorDetail.value =
-            "clarification_round_not_found";
+      return null;
+    } finally {
+      busy.value = false;
+    }
+  }
 
-          return null;
-        }
+  async function load(
+    targetProjectId: string,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<boolean> {
+    if (projectId.value !== targetProjectId) {
+      reset();
+      projectId.value = targetProjectId;
+    }
 
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.answerProjectClarificationRound(
-                  accessToken,
-                  targetProjectId,
-                  round.id,
-                  answers,
-                ),
-            );
+    const result = await perform(async () => {
+      await refreshState(targetProjectId, api, authorize);
 
-          lastRoundAnswer.value =
-            result;
+      return true;
+    });
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+    return result ?? false;
+  }
 
-          return result;
-        });
-      }
+  async function startRound(
+    targetProjectId: string,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<ClarificationRoundStartResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.startProjectClarificationRound(accessToken, targetProjectId),
+      );
 
-      async function createAssumption(
-        targetProjectId: string,
-        input: BriefAssumptionCreateInput,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        BriefAssumptionCreationResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.createProjectBriefAssumption(
-                  accessToken,
-                  targetProjectId,
-                  input,
-                ),
-            );
+      lastRoundStart.value = result;
 
-          lastAssumptionCreation.value =
-            result;
+      await refreshState(targetProjectId, api, authorize);
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+      return result;
+    });
+  }
 
-          return result;
-        });
-      }
+  async function answerRound(
+    targetProjectId: string,
+    answers: readonly ClarificationAnswerInput[],
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<ClarificationRoundAnswerResponse | null> {
+    const round = currentRound.value;
 
-      async function acceptAssumption(
-        targetProjectId: string,
-        assumptionId: string,
-        reason: string | null,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        BriefAssumptionDecisionResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.acceptProjectBriefAssumption(
-                  accessToken,
-                  targetProjectId,
-                  assumptionId,
-                  reason,
-                ),
-            );
+    if (round === null) {
+      errorDetail.value = "clarification_round_not_found";
 
-          lastAssumptionDecision.value =
-            result;
+      return null;
+    }
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.answerProjectClarificationRound(accessToken, targetProjectId, round.id, answers),
+      );
 
-          return result;
-        });
-      }
+      lastRoundAnswer.value = result;
 
-      async function rejectAssumption(
-        targetProjectId: string,
-        assumptionId: string,
-        reason: string,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        BriefAssumptionDecisionResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.rejectProjectBriefAssumption(
-                  accessToken,
-                  targetProjectId,
-                  assumptionId,
-                  reason,
-                ),
-            );
+      await refreshState(targetProjectId, api, authorize);
 
-          lastAssumptionDecision.value =
-            result;
+      return result;
+    });
+  }
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+  async function createAssumption(
+    targetProjectId: string,
+    input: BriefAssumptionCreateInput,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<BriefAssumptionCreationResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.createProjectBriefAssumption(accessToken, targetProjectId, input),
+      );
 
-          return result;
-        });
-      }
+      lastAssumptionCreation.value = result;
 
-      async function submitGate(
-        targetProjectId: string,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        ProjectBriefGateSubmissionResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.submitProjectBriefGate(
-                  accessToken,
-                  targetProjectId,
-                ),
-            );
+      await refreshState(targetProjectId, api, authorize);
 
-          lastGateSubmission.value =
-            result;
+      return result;
+    });
+  }
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+  async function acceptAssumption(
+    targetProjectId: string,
+    assumptionId: string,
+    reason: string | null,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<BriefAssumptionDecisionResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.acceptProjectBriefAssumption(accessToken, targetProjectId, assumptionId, reason),
+      );
 
-          return result;
-        });
-      }
+      lastAssumptionDecision.value = result;
 
-      async function decideGate(
-        targetProjectId: string,
-        action:
-          ProjectBriefGateDecisionAction,
-        reason: string | null,
-        api: ProjectWorkflowApi,
-        authorize: AuthorizedRequest,
-      ): Promise<
-        ProjectBriefGateDecisionResponse | null
-      > {
-        return perform(async () => {
-          const result =
-            await authorize(
-              (accessToken) =>
-                api.decideProjectBriefGate(
-                  accessToken,
-                  targetProjectId,
-                  action,
-                  reason,
-                ),
-            );
+      await refreshState(targetProjectId, api, authorize);
 
-          lastGateDecision.value =
-            result;
+      return result;
+    });
+  }
 
-          await refreshState(
-            targetProjectId,
-            api,
-            authorize,
-          );
+  async function rejectAssumption(
+    targetProjectId: string,
+    assumptionId: string,
+    reason: string,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<BriefAssumptionDecisionResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.rejectProjectBriefAssumption(accessToken, targetProjectId, assumptionId, reason),
+      );
 
-          return result;
-        });
-      }
+      lastAssumptionDecision.value = result;
 
-      return {
-        projectId,
-        currentRound,
-        roundHistory,
-        assumptions,
-        gate,
-        gateEvents,
+      await refreshState(targetProjectId, api, authorize);
 
-        lastRoundStart,
-        lastRoundAnswer,
-        lastAssumptionCreation,
-        lastAssumptionDecision,
-        lastGateSubmission,
-        lastGateDecision,
+      return result;
+    });
+  }
 
-        busy,
-        errorDetail,
+  async function submitGate(
+    targetProjectId: string,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<ProjectBriefGateSubmissionResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.submitProjectBriefGate(accessToken, targetProjectId),
+      );
 
-        reset,
-        load,
-        startRound,
-        answerRound,
-        createAssumption,
-        acceptAssumption,
-        rejectAssumption,
-        submitGate,
-        decideGate,
-      };
-    },
-  );
+      lastGateSubmission.value = result;
+
+      await refreshState(targetProjectId, api, authorize);
+
+      return result;
+    });
+  }
+
+  async function decideGate(
+    targetProjectId: string,
+    action: ProjectBriefGateDecisionAction,
+    reason: string | null,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<ProjectBriefGateDecisionResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.decideProjectBriefGate(accessToken, targetProjectId, action, reason),
+      );
+
+      lastGateDecision.value = result;
+
+      await refreshState(targetProjectId, api, authorize);
+
+      return result;
+    });
+  }
+
+  return {
+    projectId,
+    currentRound,
+    roundHistory,
+    assumptions,
+    gate,
+    gateEvents,
+
+    lastRoundStart,
+    lastRoundAnswer,
+    lastAssumptionCreation,
+    lastAssumptionDecision,
+    lastGateSubmission,
+    lastGateDecision,
+
+    busy,
+    errorDetail,
+
+    reset,
+    load,
+    startRound,
+    answerRound,
+    createAssumption,
+    acceptAssumption,
+    rejectAssumption,
+    submitGate,
+    decideGate,
+  };
+});

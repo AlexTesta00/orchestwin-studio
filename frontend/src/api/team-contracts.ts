@@ -1,6 +1,4 @@
-import type {
-  ProjectMode,
-} from "./contracts";
+import type { ProjectMode } from "./contracts";
 import type {
   BriefField,
   HumanGateAction,
@@ -29,16 +27,11 @@ export const AGENT_IDENTIFIERS = [
   "INTEGRATION_ENGINEER",
 ] as const;
 
-export type AgentIdentifier =
-  (typeof AGENT_IDENTIFIERS)[number];
+export type AgentIdentifier = (typeof AGENT_IDENTIFIERS)[number];
 
-export type AgentCatalogKind =
-  | "PLATFORM_COMPONENT"
-  | "SPECIALIST";
+export type AgentCatalogKind = "PLATFORM_COMPONENT" | "SPECIALIST";
 
-export type AgentSelectionPolicy =
-  | "ALWAYS_PRESENT"
-  | "OWNER_SELECTABLE";
+export type AgentSelectionPolicy = "ALWAYS_PRESENT" | "OWNER_SELECTABLE";
 
 export type AgentCapability =
   | "WORKFLOW_ORCHESTRATION"
@@ -71,10 +64,8 @@ export interface AgentCatalogEntryResponse {
   readonly catalog_version: number;
   readonly kind: AgentCatalogKind;
   readonly selection_policy: AgentSelectionPolicy;
-  readonly capabilities:
-    readonly AgentCapability[];
-  readonly supported_project_modes:
-    readonly ProjectMode[];
+  readonly capabilities: readonly AgentCapability[];
+  readonly supported_project_modes: readonly ProjectMode[];
   readonly name_key: string;
   readonly description_key: string;
   readonly is_always_present: boolean;
@@ -83,15 +74,10 @@ export interface AgentCatalogEntryResponse {
 export interface AgentCatalogResponse {
   readonly catalog_version: number;
   readonly content_hash: string;
-  readonly agents:
-    readonly AgentCatalogEntryResponse[];
+  readonly agents: readonly AgentCatalogEntryResponse[];
 }
 
-export type TeamRoleConstraintKind =
-  | "MANDATORY"
-  | "OPTIONAL"
-  | "IMPOSSIBLE"
-  | "CONFLICT";
+export type TeamRoleConstraintKind = "MANDATORY" | "OPTIONAL" | "IMPOSSIBLE" | "CONFLICT";
 
 export type TeamSelectionReasonCode =
   | "CATALOG_ALWAYS_PRESENT"
@@ -124,41 +110,30 @@ export interface TeamRoleConstraintResponse {
   readonly agent_id: AgentIdentifier;
   readonly kind: TeamRoleConstraintKind;
   readonly owner_editable: boolean;
-  readonly reasons:
-    readonly TeamSelectionReasonResponse[];
+  readonly reasons: readonly TeamSelectionReasonResponse[];
 }
 
-export type TeamSelectionIssueCode =
-  "CONTRADICTORY_ROLE_SIGNALS";
+export type TeamSelectionIssueCode = "CONTRADICTORY_ROLE_SIGNALS";
 
 export interface TeamSelectionIssueResponse {
   readonly code: TeamSelectionIssueCode;
   readonly agent_id: AgentIdentifier;
-  readonly mandatory_reasons:
-    readonly TeamSelectionReasonResponse[];
-  readonly impossible_reasons:
-    readonly TeamSelectionReasonResponse[];
+  readonly mandatory_reasons: readonly TeamSelectionReasonResponse[];
+  readonly impossible_reasons: readonly TeamSelectionReasonResponse[];
 }
 
-export type TeamProposalProviderKind =
-  | "FAKE_DETERMINISTIC"
-  | "MODEL_ADAPTER";
+export type TeamProposalProviderKind = "FAKE_DETERMINISTIC" | "MODEL_ADAPTER";
 
 export type TeamProposalMemberSource =
-  | "DETERMINISTIC_MANDATORY"
-  | "PROPOSER_SUGGESTED"
-  | "OWNER_ADDED";
+  "DETERMINISTIC_MANDATORY" | "PROPOSER_SUGGESTED" | "OWNER_ADDED";
 
 export type TeamProposalJustificationKind =
-  | "DETERMINISTIC_RULE"
-  | "PROPOSER_RATIONALE"
-  | "OWNER_RATIONALE";
+  "DETERMINISTIC_RULE" | "PROPOSER_RATIONALE" | "OWNER_RATIONALE";
 
 export interface TeamProposalJustificationResponse {
   readonly kind: TeamProposalJustificationKind;
   readonly code: string;
-  readonly evidence_fields:
-    readonly BriefField[];
+  readonly evidence_fields: readonly BriefField[];
   readonly evidence_terms: readonly string[];
   readonly statement: string | null;
 }
@@ -166,22 +141,17 @@ export interface TeamProposalJustificationResponse {
 export interface ProposedTeamMemberResponse {
   readonly agent_id: AgentIdentifier;
   readonly source: TeamProposalMemberSource;
-  readonly justifications:
-    readonly TeamProposalJustificationResponse[];
+  readonly justifications: readonly TeamProposalJustificationResponse[];
 }
 
-export type TeamProposalRevisionKind =
-  | "PROPOSER_GENERATED"
-  | "OWNER_EDITED";
+export type TeamProposalRevisionKind = "PROPOSER_GENERATED" | "OWNER_EDITED";
 
 export interface TeamProposalVersionResponse {
   readonly id: string;
   readonly project_id: string;
   readonly version_number: number;
   readonly revision_kind: TeamProposalRevisionKind;
-  readonly based_on_version_number:
-    | number
-    | null;
+  readonly based_on_version_number: number | null;
 
   readonly schema_version: number;
   readonly provider_kind: TeamProposalProviderKind;
@@ -198,14 +168,10 @@ export interface TeamProposalVersionResponse {
   readonly constraints_content_hash: string;
   readonly content_hash: string;
 
-  readonly selected_agent_ids:
-    readonly AgentIdentifier[];
-  readonly role_constraints:
-    readonly TeamRoleConstraintResponse[];
-  readonly constraint_issues:
-    readonly TeamSelectionIssueResponse[];
-  readonly members:
-    readonly ProposedTeamMemberResponse[];
+  readonly selected_agent_ids: readonly AgentIdentifier[];
+  readonly role_constraints: readonly TeamRoleConstraintResponse[];
+  readonly constraint_issues: readonly TeamSelectionIssueResponse[];
+  readonly members: readonly ProposedTeamMemberResponse[];
 
   readonly created_by_user_id: string;
   readonly created_at: string;
@@ -223,11 +189,8 @@ export type TeamProposalApplicationStatus =
 
 export interface TeamProposalGenerationResponse {
   readonly status: TeamProposalApplicationStatus;
-  readonly version:
-    | TeamProposalVersionResponse
-    | null;
-  readonly issues:
-    readonly TeamSelectionIssueResponse[];
+  readonly version: TeamProposalVersionResponse | null;
+  readonly issues: readonly TeamSelectionIssueResponse[];
 }
 
 export interface OwnerAgentRationaleInput {
@@ -236,10 +199,8 @@ export interface OwnerAgentRationaleInput {
 }
 
 export interface TeamProposalEditInput {
-  readonly selected_agent_ids:
-    readonly AgentIdentifier[];
-  readonly owner_rationales:
-    readonly OwnerAgentRationaleInput[];
+  readonly selected_agent_ids: readonly AgentIdentifier[];
+  readonly owner_rationales: readonly OwnerAgentRationaleInput[];
 }
 
 export type TeamEditIssueCode =
@@ -268,13 +229,9 @@ export type TeamEditStatus =
 
 export interface TeamEditResponse {
   readonly status: TeamEditStatus;
-  readonly version:
-    | TeamProposalVersionResponse
-    | null;
-  readonly issues:
-    readonly TeamEditIssueResponse[];
-  readonly events:
-    readonly HumanGateEventResponse[];
+  readonly version: TeamProposalVersionResponse | null;
+  readonly issues: readonly TeamEditIssueResponse[];
+  readonly events: readonly HumanGateEventResponse[];
 }
 
 export type AgentTeamGateSubmissionStatus =
@@ -294,13 +251,11 @@ export type AgentTeamGateSubmissionStatus =
 export interface AgentTeamGateSubmissionResponse {
   readonly status: AgentTeamGateSubmissionStatus;
   readonly gate: HumanGateResponse | null;
-  readonly events:
-    readonly HumanGateEventResponse[];
+  readonly events: readonly HumanGateEventResponse[];
   readonly issue: HumanGateIssueCode | null;
 }
 
-export type AgentTeamGateDecisionAction =
-  Exclude<HumanGateAction, "SUBMIT">;
+export type AgentTeamGateDecisionAction = Exclude<HumanGateAction, "SUBMIT">;
 
 export type AgentTeamGateDecisionStatus =
   | "APPLIED"
@@ -332,9 +287,7 @@ export interface ProjectReadinessResponse {
 }
 
 export interface AgentTeamApi {
-  getAgentCatalog(
-    accessToken: string,
-  ): Promise<AgentCatalogResponse>;
+  getAgentCatalog(accessToken: string): Promise<AgentCatalogResponse>;
 
   generateProjectTeamProposal(
     accessToken: string,
@@ -344,9 +297,7 @@ export interface AgentTeamApi {
   listProjectTeamProposals(
     accessToken: string,
     projectId: string,
-  ): Promise<
-    readonly TeamProposalVersionResponse[]
-  >;
+  ): Promise<readonly TeamProposalVersionResponse[]>;
 
   getCurrentProjectTeamProposal(
     accessToken: string,
@@ -364,18 +315,13 @@ export interface AgentTeamApi {
     projectId: string,
   ): Promise<AgentTeamGateSubmissionResponse>;
 
-  getCurrentAgentTeamGate(
-    accessToken: string,
-    projectId: string,
-  ): Promise<HumanGateResponse>;
+  getCurrentAgentTeamGate(accessToken: string, projectId: string): Promise<HumanGateResponse>;
 
   listAgentTeamGateEvents(
     accessToken: string,
     projectId: string,
     gateId: string,
-  ): Promise<
-    readonly HumanGateEventResponse[]
-  >;
+  ): Promise<readonly HumanGateEventResponse[]>;
 
   decideAgentTeamGate(
     accessToken: string,

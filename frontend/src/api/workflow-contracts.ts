@@ -1,6 +1,4 @@
-import type {
-  ProjectBriefVersionResponse,
-} from "./contracts";
+import type { ProjectBriefVersionResponse } from "./contracts";
 
 export const BRIEF_FIELDS = [
   "name",
@@ -20,21 +18,13 @@ export const BRIEF_FIELDS = [
   "definition_of_done",
 ] as const;
 
-export type BriefField =
-  (typeof BRIEF_FIELDS)[number];
+export type BriefField = (typeof BRIEF_FIELDS)[number];
 
-export type ClarificationAnswerType =
-  | "text"
-  | "item_list";
+export type ClarificationAnswerType = "text" | "item_list";
 
-export type ClarificationAnswerKind =
-  | "text"
-  | "item_list"
-  | "unknown";
+export type ClarificationAnswerKind = "text" | "item_list" | "unknown";
 
-export type ClarificationRoundStatus =
-  | "OPEN"
-  | "ANSWERED";
+export type ClarificationRoundStatus = "OPEN" | "ANSWERED";
 
 export interface ClarificationQuestionResponse {
   readonly question_id: string;
@@ -53,23 +43,16 @@ export interface ClarificationRoundResponse {
   readonly source_brief_version_number: number;
   readonly round_number: number;
   readonly catalog_version: number;
-  readonly questions:
-    readonly ClarificationQuestionResponse[];
+  readonly questions: readonly ClarificationQuestionResponse[];
   readonly status: ClarificationRoundStatus;
   readonly created_by_user_id: string;
   readonly created_at: string;
   readonly answered_at: string | null;
-  readonly resulting_brief_version_number:
-    | number
-    | null;
+  readonly resulting_brief_version_number: number | null;
 }
 
 export type ClarificationRoundStartStatus =
-  | "STARTED"
-  | "OPEN_ROUND_EXISTS"
-  | "BRIEF_NOT_FOUND"
-  | "BRIEF_COMPLETE"
-  | "LIMIT_REACHED";
+  "STARTED" | "OPEN_ROUND_EXISTS" | "BRIEF_NOT_FOUND" | "BRIEF_COMPLETE" | "LIMIT_REACHED";
 
 export interface ClarificationRoundStartResponse {
   readonly status: ClarificationRoundStartStatus;
@@ -98,9 +81,7 @@ export interface ClarificationAnswerIssueResponse {
 }
 
 export type ClarificationNextStep =
-  | "CLARIFICATION_REQUIRED"
-  | "BRIEF_READY_FOR_APPROVAL"
-  | "PAUSED_NEEDS_HUMAN";
+  "CLARIFICATION_REQUIRED" | "BRIEF_READY_FOR_APPROVAL" | "PAUSED_NEEDS_HUMAN";
 
 export type ClarificationRoundAnswerStatus =
   | "APPLIED"
@@ -114,25 +95,15 @@ export type ClarificationRoundAnswerStatus =
 export interface ClarificationRoundAnswerResponse {
   readonly status: ClarificationRoundAnswerStatus;
   readonly round: ClarificationRoundResponse | null;
-  readonly brief_version:
-    | ProjectBriefVersionResponse
-    | null;
+  readonly brief_version: ProjectBriefVersionResponse | null;
   readonly next_step: ClarificationNextStep | null;
-  readonly issues:
-    readonly ClarificationAnswerIssueResponse[];
-  readonly invalid_question_ids:
-    readonly string[];
+  readonly issues: readonly ClarificationAnswerIssueResponse[];
+  readonly invalid_question_ids: readonly string[];
 }
 
-export type BriefAssumptionSource =
-  | "OWNER_PROVIDED"
-  | "MODEL_PROPOSED"
-  | "DETERMINISTIC_RULE";
+export type BriefAssumptionSource = "OWNER_PROVIDED" | "MODEL_PROPOSED" | "DETERMINISTIC_RULE";
 
-export type BriefAssumptionStatus =
-  | "PROPOSED"
-  | "ACCEPTED"
-  | "REJECTED";
+export type BriefAssumptionStatus = "PROPOSED" | "ACCEPTED" | "REJECTED";
 
 export interface BriefAssumptionResponse {
   readonly id: string;
@@ -155,15 +126,11 @@ export interface BriefAssumptionCreateInput {
 }
 
 export type BriefAssumptionCreationStatus =
-  | "CREATED"
-  | "BRIEF_NOT_FOUND"
-  | "FIELD_ALREADY_PROVIDED";
+  "CREATED" | "BRIEF_NOT_FOUND" | "FIELD_ALREADY_PROVIDED";
 
 export interface BriefAssumptionCreationResponse {
   readonly status: BriefAssumptionCreationStatus;
-  readonly assumption:
-    | BriefAssumptionResponse
-    | null;
+  readonly assumption: BriefAssumptionResponse | null;
 }
 
 export type BriefAssumptionDecisionStatus =
@@ -177,17 +144,11 @@ export type BriefAssumptionDecisionStatus =
 
 export interface BriefAssumptionDecisionResponse {
   readonly status: BriefAssumptionDecisionStatus;
-  readonly assumption:
-    | BriefAssumptionResponse
-    | null;
-  readonly brief_version:
-    | ProjectBriefVersionResponse
-    | null;
+  readonly assumption: BriefAssumptionResponse | null;
+  readonly brief_version: ProjectBriefVersionResponse | null;
 }
 
-export type HumanGateType =
-  | "PROJECT_BRIEF"
-  | "AGENT_TEAM";
+export type HumanGateType = "PROJECT_BRIEF" | "AGENT_TEAM";
 
 export type HumanGateStatus =
   | "DRAFT"
@@ -201,16 +162,9 @@ export type HumanGateStatus =
   | "PAUSED_NEEDS_HUMAN";
 
 export type HumanGateAction =
-  | "SUBMIT"
-  | "APPROVE"
-  | "REJECT"
-  | "REQUEST_REVISION"
-  | "PAUSE"
-  | "RESUME"
-  | "CANCEL";
+  "SUBMIT" | "APPROVE" | "REJECT" | "REQUEST_REVISION" | "PAUSE" | "RESUME" | "CANCEL";
 
-export type ProjectBriefGateDecisionAction =
-  Exclude<HumanGateAction, "SUBMIT">;
+export type ProjectBriefGateDecisionAction = Exclude<HumanGateAction, "SUBMIT">;
 
 export type HumanGateEventKind =
   | "SUBMIT"
@@ -287,11 +241,7 @@ export interface ProjectBriefGateSubmissionResponse {
 }
 
 export type ProjectBriefGateDecisionStatus =
-  | "APPLIED"
-  | "GATE_NOT_FOUND"
-  | "BRIEF_NOT_FOUND"
-  | "ARTIFACT_STALE"
-  | "REJECTED";
+  "APPLIED" | "GATE_NOT_FOUND" | "BRIEF_NOT_FOUND" | "ARTIFACT_STALE" | "REJECTED";
 
 export interface ProjectBriefGateDecisionResponse {
   readonly status: ProjectBriefGateDecisionStatus;
@@ -309,9 +259,7 @@ export interface ProjectWorkflowApi {
   listProjectClarificationRounds(
     accessToken: string,
     projectId: string,
-  ): Promise<
-    readonly ClarificationRoundResponse[]
-  >;
+  ): Promise<readonly ClarificationRoundResponse[]>;
 
   getCurrentProjectClarificationRound(
     accessToken: string,
@@ -328,9 +276,7 @@ export interface ProjectWorkflowApi {
   listProjectBriefAssumptions(
     accessToken: string,
     projectId: string,
-  ): Promise<
-    readonly BriefAssumptionResponse[]
-  >;
+  ): Promise<readonly BriefAssumptionResponse[]>;
 
   createProjectBriefAssumption(
     accessToken: string,
@@ -357,18 +303,13 @@ export interface ProjectWorkflowApi {
     projectId: string,
   ): Promise<ProjectBriefGateSubmissionResponse>;
 
-  getCurrentProjectBriefGate(
-    accessToken: string,
-    projectId: string,
-  ): Promise<HumanGateResponse>;
+  getCurrentProjectBriefGate(accessToken: string, projectId: string): Promise<HumanGateResponse>;
 
   listProjectBriefGateEvents(
     accessToken: string,
     projectId: string,
     gateId: string,
-  ): Promise<
-    readonly HumanGateEventResponse[]
-  >;
+  ): Promise<readonly HumanGateEventResponse[]>;
 
   decideProjectBriefGate(
     accessToken: string,
