@@ -1,34 +1,15 @@
-import {
-  createPinia,
-  setActivePinia,
-} from "pinia";
-import {
-  enableAutoUnmount,
-  flushPromises,
-  mount,
-} from "@vue/test-utils";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  ApiError,
-} from "@/api/client";
+import { ApiError } from "@/api/client";
 import type {
   ClarificationAnswerInput,
   ClarificationRoundResponse,
   ProjectWorkflowApi,
 } from "@/api/workflow-contracts";
-import {
-  createAppI18n,
-} from "@/i18n";
-import type {
-  AuthorizedRequest,
-} from "@/stores/clarification";
+import { createAppI18n } from "@/i18n";
+import type { AuthorizedRequest } from "@/stores/clarification";
 
 import ProjectClarificationFlow from "./ProjectClarificationFlow.vue";
 
@@ -44,46 +25,36 @@ const ROUND: ClarificationRoundResponse = {
   catalog_version: 1,
   questions: [
     {
-      question_id:
-        "project-brief.description.v1",
+      question_id: "project-brief.description.v1",
       catalog_version: 1,
       field: "description",
       answer_type: "text",
       priority: 2,
-      prompt_key:
-        "clarification.questions.description.prompt",
-      hint_key:
-        "clarification.questions.description.hint",
+      prompt_key: "clarification.questions.description.prompt",
+      hint_key: "clarification.questions.description.hint",
       unknown_allowed: true,
     },
   ],
   status: "OPEN",
   created_by_user_id: "owner-id",
-  created_at:
-    "2026-08-12T12:00:00Z",
+  created_at: "2026-08-12T12:00:00Z",
   answered_at: null,
-  resulting_brief_version_number:
-    null,
+  resulting_brief_version_number: null,
 };
 
 describe("ProjectClarificationFlow", () => {
   beforeEach(() => {
-    setActivePinia(
-      createPinia(),
-    );
+    setActivePinia(createPinia());
   });
 
   it("submits a typed clarification answer", async () => {
     let currentRoundAvailable = true;
-    let submittedAnswers:
-      readonly ClarificationAnswerInput[] =
-      [];
+    let submittedAnswers: readonly ClarificationAnswerInput[] = [];
 
     const api: ProjectWorkflowApi = {
       async startProjectClarificationRound() {
         return {
-          status:
-            "OPEN_ROUND_EXISTS",
+          status: "OPEN_ROUND_EXISTS",
           round: ROUND,
         };
       },
@@ -94,21 +65,13 @@ describe("ProjectClarificationFlow", () => {
 
       async getCurrentProjectClarificationRound() {
         if (!currentRoundAvailable) {
-          throw new ApiError(
-            404,
-            "clarification_round_not_found",
-          );
+          throw new ApiError(404, "clarification_round_not_found");
         }
 
         return ROUND;
       },
 
-      async answerProjectClarificationRound(
-        _accessToken,
-        _projectId,
-        _roundId,
-        answers,
-      ) {
+      async answerProjectClarificationRound(_accessToken, _projectId, _roundId, answers) {
         submittedAnswers = answers;
         currentRoundAvailable = false;
 
@@ -117,14 +80,11 @@ describe("ProjectClarificationFlow", () => {
           round: {
             ...ROUND,
             status: "ANSWERED",
-            answered_at:
-              "2026-08-12T12:05:00Z",
-            resulting_brief_version_number:
-              2,
+            answered_at: "2026-08-12T12:05:00Z",
+            resulting_brief_version_number: 2,
           },
           brief_version: null,
-          next_step:
-            "CLARIFICATION_REQUIRED",
+          next_step: "CLARIFICATION_REQUIRED",
           issues: [],
           invalid_question_ids: [],
         };
@@ -162,18 +122,13 @@ describe("ProjectClarificationFlow", () => {
           status: "BRIEF_INCOMPLETE",
           gate: null,
           events: [],
-          missing_fields: [
-            "problem",
-          ],
+          missing_fields: ["problem"],
           issue: null,
         };
       },
 
       async getCurrentProjectBriefGate() {
-        throw new ApiError(
-          404,
-          "project_brief_gate_not_found",
-        );
+        throw new ApiError(404, "project_brief_gate_not_found");
       },
 
       async listProjectBriefGateEvents() {
@@ -190,61 +145,39 @@ describe("ProjectClarificationFlow", () => {
       },
     };
 
-    const authorize: AuthorizedRequest =
-      <T>(
-        operation: (
-          accessToken: string,
-        ) => Promise<T>,
-      ): Promise<T> =>
-        operation("access-token");
+    const authorize: AuthorizedRequest = <T>(
+      operation: (accessToken: string) => Promise<T>,
+    ): Promise<T> => operation("access-token");
 
-    const wrapper = mount(
-      ProjectClarificationFlow,
-      {
-        props: {
-          projectId: PROJECT_ID,
-          api,
-          authorize,
-        },
-        global: {
-          plugins: [
-            createPinia(),
-            createAppI18n(),
-          ],
-        },
+    const wrapper = mount(ProjectClarificationFlow, {
+      props: {
+        projectId: PROJECT_ID,
+        api,
+        authorize,
       },
-    );
+      global: {
+        plugins: [createPinia(), createAppI18n()],
+      },
+    });
 
     await flushPromises();
 
     await wrapper
-      .get(
-        '[data-testid="question-description-text"]',
-      )
-      .setValue(
-        "A clarified description.",
-      );
+      .get('[data-testid="question-description-text"]')
+      .setValue("A clarified description.");
 
-    await wrapper
-      .get(
-        '[data-testid="clarification-answer-form"]',
-      )
-      .trigger("submit");
+    await wrapper.get('[data-testid="clarification-answer-form"]').trigger("submit");
 
     await flushPromises();
 
     expect(submittedAnswers).toEqual([
       {
-        question_id:
-          "project-brief.description.v1",
+        question_id: "project-brief.description.v1",
         kind: "text",
-        text_value:
-          "A clarified description.",
+        text_value: "A clarified description.",
       },
     ]);
 
-    expect(wrapper.text()).toContain(
-      "Another clarification round is required",
-    );
+    expect(wrapper.text()).toContain("Another clarification round is required");
   });
 });
