@@ -6,9 +6,7 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.twins.persistence.repositories import (
     PersonaVersionRepository,
@@ -18,6 +16,10 @@ from orchestwin.twins.persistence.repositories import (
     UserModelingSnapshotRepository,
     UserTwinVersionRepository,
 )
+from orchestwin.twins.revision_persistence import (
+    SqlAlchemyUserTwinProfileDiffRepository,
+    UserTwinProfileDiffRepository,
+)
 
 
 class UserModelingUnitOfWork(Protocol):
@@ -26,6 +28,7 @@ class UserModelingUnitOfWork(Protocol):
     personas: PersonaVersionRepository
     twins: UserTwinVersionRepository
     snapshots: UserModelingSnapshotRepository
+    diffs: UserTwinProfileDiffRepository
 
     async def __aenter__(
         self,
@@ -40,14 +43,10 @@ class UserModelingUnitOfWork(Protocol):
     ) -> None:
         """Leave the transactional boundary."""
 
-    async def commit(
-        self,
-    ) -> None:
+    async def commit(self) -> None:
         """Commit all persistence changes."""
 
-    async def rollback(
-        self,
-    ) -> None:
+    async def rollback(self) -> None:
         """Rollback all persistence changes."""
 
 
@@ -66,15 +65,19 @@ class SqlAlchemyUserModelingUnitOfWork:
 
         self.personas = SqlAlchemyPersonaVersionRepository(
             session,
-            owner_user_id=(owner_user_id),
+            owner_user_id=owner_user_id,
         )
         self.twins = SqlAlchemyUserTwinVersionRepository(
             session,
-            owner_user_id=(owner_user_id),
+            owner_user_id=owner_user_id,
         )
         self.snapshots = SqlAlchemyUserModelingSnapshotRepository(
             session,
-            owner_user_id=(owner_user_id),
+            owner_user_id=owner_user_id,
+        )
+        self.diffs = SqlAlchemyUserTwinProfileDiffRepository(
+            session,
+            owner_user_id=owner_user_id,
         )
 
     async def __aenter__(
@@ -82,7 +85,6 @@ class SqlAlchemyUserModelingUnitOfWork:
     ) -> SqlAlchemyUserModelingUnitOfWork:
         """Return this transactional boundary."""
         self._completed = False
-
         return self
 
     async def __aexit__(
@@ -99,16 +101,12 @@ class SqlAlchemyUserModelingUnitOfWork:
         if not self._completed:
             await self.rollback()
 
-    async def commit(
-        self,
-    ) -> None:
+    async def commit(self) -> None:
         """Commit the shared SQLAlchemy transaction."""
         await self._session.commit()
         self._completed = True
 
-    async def rollback(
-        self,
-    ) -> None:
+    async def rollback(self) -> None:
         """Rollback the shared SQLAlchemy transaction."""
         await self._session.rollback()
         self._completed = True
