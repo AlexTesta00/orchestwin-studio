@@ -9,20 +9,47 @@ import type {
   ProjectResponse,
   UserResponse,
 } from "./contracts";
+import type {
+  BriefAssumptionCreateInput,
+  BriefAssumptionCreationResponse,
+  BriefAssumptionDecisionResponse,
+  BriefAssumptionResponse,
+  ClarificationAnswerInput,
+  ClarificationRoundAnswerResponse,
+  ClarificationRoundResponse,
+  ClarificationRoundStartResponse,
+  HumanGateEventResponse,
+  HumanGateResponse,
+  ProjectBriefGateDecisionAction,
+  ProjectBriefGateDecisionResponse,
+  ProjectBriefGateSubmissionResponse,
+  ProjectWorkflowApi,
+} from "./workflow-contracts";
 
 const DEFAULT_API_BASE_URL = "/api/v1";
 
 type FetchImplementation = typeof fetch;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null
+  );
 }
 
-async function errorDetail(response: Response): Promise<string> {
+async function errorDetail(
+  response: Response,
+): Promise<string> {
   try {
-    const payload: unknown = await response.json();
+    const payload: unknown =
+      await response.json();
 
-    if (isRecord(payload) && typeof payload.detail === "string") {
+    if (
+      isRecord(payload) &&
+      typeof payload.detail === "string"
+    ) {
       return payload.detail;
     }
   } catch {
@@ -36,7 +63,10 @@ export class ApiError extends Error {
   public readonly status: number;
   public readonly detail: string;
 
-  public constructor(status: number, detail: string) {
+  public constructor(
+    status: number,
+    detail: string,
+  ) {
     super(detail);
 
     this.name = "ApiError";
@@ -46,19 +76,29 @@ export class ApiError extends Error {
 }
 
 export function resolveApiBaseUrl(
-  configuredValue: string | undefined = import.meta.env.VITE_API_BASE_URL,
+  configuredValue:
+    | string
+    | undefined = import.meta.env
+      .VITE_API_BASE_URL,
 ): string {
-  const value = configuredValue?.trim() || DEFAULT_API_BASE_URL;
+  const value =
+    configuredValue?.trim() ||
+    DEFAULT_API_BASE_URL;
 
   if (value.startsWith("//")) {
-    throw new Error("API base URL must not be protocol-relative");
+    throw new Error(
+      "API base URL must not be protocol-relative",
+    );
   }
 
   if (value.startsWith("/")) {
-    const normalizedPath = value.replace(/\/+$/, "");
+    const normalizedPath =
+      value.replace(/\/+$/, "");
 
     if (!normalizedPath) {
-      throw new Error("API base URL must not resolve to the application root");
+      throw new Error(
+        "API base URL must not resolve to the application root",
+      );
     }
 
     return normalizedPath;
@@ -66,48 +106,74 @@ export function resolveApiBaseUrl(
 
   const parsed = new URL(value);
 
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("API base URL must use HTTP or HTTPS");
+  if (
+    !["http:", "https:"].includes(
+      parsed.protocol,
+    )
+  ) {
+    throw new Error(
+      "API base URL must use HTTP or HTTPS",
+    );
   }
 
-  return parsed.toString().replace(/\/+$/, "");
+  return parsed
+    .toString()
+    .replace(/\/+$/, "");
 }
 
-export class ApiClient implements AuthenticationApi, ProjectApi {
+export class ApiClient
+  implements
+    AuthenticationApi,
+    ProjectApi,
+    ProjectWorkflowApi
+{
   private readonly baseUrl: string;
-  private readonly fetchImplementation: FetchImplementation;
+  private readonly fetchImplementation:
+    FetchImplementation;
 
   public constructor(
     baseUrl: string = resolveApiBaseUrl(),
-    fetchImplementation: FetchImplementation = fetch,
+    fetchImplementation:
+      FetchImplementation = fetch,
   ) {
-    this.baseUrl = resolveApiBaseUrl(baseUrl);
+    this.baseUrl =
+      resolveApiBaseUrl(baseUrl);
 
-    /*
-     * Browser fetch belongs to WindowOrWorkerGlobalScope.
-     * Binding it prevents ApiClient from becoming its invocation receiver.
-     */
-    this.fetchImplementation = fetchImplementation.bind(globalThis);
+    this.fetchImplementation =
+      fetchImplementation.bind(globalThis);
   }
 
-  public register(input: AuthenticationInput): Promise<AuthenticationResponse> {
-    return this.request<AuthenticationResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+  public register(
+    input: AuthenticationInput,
+  ): Promise<AuthenticationResponse> {
+    return this.request<AuthenticationResponse>(
+      "/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
   }
 
-  public login(input: AuthenticationInput): Promise<AuthenticationResponse> {
-    return this.request<AuthenticationResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+  public login(
+    input: AuthenticationInput,
+  ): Promise<AuthenticationResponse> {
+    return this.request<AuthenticationResponse>(
+      "/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
   }
 
   public refresh(): Promise<AuthenticationResponse> {
-    return this.request<AuthenticationResponse>("/auth/refresh", {
-      method: "POST",
-    });
+    return this.request<AuthenticationResponse>(
+      "/auth/refresh",
+      {
+        method: "POST",
+      },
+    );
   }
 
   public async logout(): Promise<void> {
@@ -116,30 +182,55 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     });
   }
 
-  public me(accessToken: string): Promise<UserResponse> {
-    return this.request<UserResponse>("/auth/me", {
-      headers: this.authorization(accessToken),
+  public me(
+    accessToken: string,
+  ): Promise<UserResponse> {
+    return this.request<UserResponse>(
+      "/auth/me",
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public createProject(
+    accessToken: string,
+    input: ProjectCreateInput,
+  ): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>(
+      "/projects",
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+    );
+  }
+
+  public listProjects(
+    accessToken: string,
+  ): Promise<readonly ProjectResponse[]> {
+    return this.request<
+      readonly ProjectResponse[]
+    >("/projects", {
+      headers:
+        this.authorization(accessToken),
     });
   }
 
-  public createProject(accessToken: string, input: ProjectCreateInput): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>("/projects", {
-      method: "POST",
-      headers: this.authorization(accessToken),
-      body: JSON.stringify(input),
-    });
-  }
-
-  public listProjects(accessToken: string): Promise<readonly ProjectResponse[]> {
-    return this.request<readonly ProjectResponse[]>("/projects", {
-      headers: this.authorization(accessToken),
-    });
-  }
-
-  public getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(`/projects/${projectId}`, {
-      headers: this.authorization(accessToken),
-    });
+  public getProject(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ProjectResponse> {
+    return this.request<ProjectResponse>(
+      `/projects/${projectId}`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
   }
 
   public renameProject(
@@ -147,20 +238,31 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     projectId: string,
     displayName: string,
   ): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(`/projects/${projectId}`, {
-      method: "PATCH",
-      headers: this.authorization(accessToken),
-      body: JSON.stringify({
-        display_name: displayName,
-      }),
-    });
+    return this.request<ProjectResponse>(
+      `/projects/${projectId}`,
+      {
+        method: "PATCH",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          display_name: displayName,
+        }),
+      },
+    );
   }
 
-  public async archiveProject(accessToken: string, projectId: string): Promise<void> {
-    await this.request<void>(`/projects/${projectId}`, {
-      method: "DELETE",
-      headers: this.authorization(accessToken),
-    });
+  public async archiveProject(
+    accessToken: string,
+    projectId: string,
+  ): Promise<void> {
+    await this.request<void>(
+      `/projects/${projectId}`,
+      {
+        method: "DELETE",
+        headers:
+          this.authorization(accessToken),
+      },
+    );
   }
 
   public createBriefVersion(
@@ -168,11 +270,15 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     projectId: string,
     input: ProjectBriefInput,
   ): Promise<ProjectBriefVersionResponse> {
-    return this.request<ProjectBriefVersionResponse>(`/projects/${projectId}/brief-versions`, {
-      method: "POST",
-      headers: this.authorization(accessToken),
-      body: JSON.stringify(input),
-    });
+    return this.request<ProjectBriefVersionResponse>(
+      `/projects/${projectId}/brief-versions`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+    );
   }
 
   public currentBriefVersion(
@@ -182,7 +288,8 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     return this.request<ProjectBriefVersionResponse>(
       `/projects/${projectId}/brief-versions/current`,
       {
-        headers: this.authorization(accessToken),
+        headers:
+          this.authorization(accessToken),
       },
     );
   }
@@ -190,11 +297,16 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
   public listBriefVersions(
     accessToken: string,
     projectId: string,
-  ): Promise<readonly ProjectBriefVersionResponse[]> {
-    return this.request<readonly ProjectBriefVersionResponse[]>(
+  ): Promise<
+    readonly ProjectBriefVersionResponse[]
+  > {
+    return this.request<
+      readonly ProjectBriefVersionResponse[]
+    >(
       `/projects/${projectId}/brief-versions`,
       {
-        headers: this.authorization(accessToken),
+        headers:
+          this.authorization(accessToken),
       },
     );
   }
@@ -207,34 +319,269 @@ export class ApiClient implements AuthenticationApi, ProjectApi {
     return this.request<ProjectBriefVersionResponse>(
       `/projects/${projectId}/brief-versions/${versionNumber}`,
       {
-        headers: this.authorization(accessToken),
+        headers:
+          this.authorization(accessToken),
       },
     );
   }
 
-  private authorization(accessToken: string): HeadersInit {
+  public startProjectClarificationRound(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ClarificationRoundStartResponse> {
+    return this.request<ClarificationRoundStartResponse>(
+      `/projects/${projectId}/clarification-rounds`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+      },
+      [409],
+    );
+  }
+
+  public listProjectClarificationRounds(
+    accessToken: string,
+    projectId: string,
+  ): Promise<
+    readonly ClarificationRoundResponse[]
+  > {
+    return this.request<
+      readonly ClarificationRoundResponse[]
+    >(
+      `/projects/${projectId}/clarification-rounds`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public getCurrentProjectClarificationRound(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ClarificationRoundResponse> {
+    return this.request<ClarificationRoundResponse>(
+      `/projects/${projectId}/clarification-rounds/current`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public answerProjectClarificationRound(
+    accessToken: string,
+    projectId: string,
+    roundId: string,
+    answers:
+      readonly ClarificationAnswerInput[],
+  ): Promise<ClarificationRoundAnswerResponse> {
+    return this.request<ClarificationRoundAnswerResponse>(
+      `/projects/${projectId}/clarification-rounds/${roundId}/answers`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          answers,
+        }),
+      },
+      [409, 422],
+    );
+  }
+
+  public listProjectBriefAssumptions(
+    accessToken: string,
+    projectId: string,
+  ): Promise<
+    readonly BriefAssumptionResponse[]
+  > {
+    return this.request<
+      readonly BriefAssumptionResponse[]
+    >(
+      `/projects/${projectId}/brief-assumptions`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public createProjectBriefAssumption(
+    accessToken: string,
+    projectId: string,
+    input: BriefAssumptionCreateInput,
+  ): Promise<BriefAssumptionCreationResponse> {
+    return this.request<BriefAssumptionCreationResponse>(
+      `/projects/${projectId}/brief-assumptions`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+      [409],
+    );
+  }
+
+  public acceptProjectBriefAssumption(
+    accessToken: string,
+    projectId: string,
+    assumptionId: string,
+    reason: string | null = null,
+  ): Promise<BriefAssumptionDecisionResponse> {
+    return this.request<BriefAssumptionDecisionResponse>(
+      `/projects/${projectId}/brief-assumptions/${assumptionId}/accept`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          reason,
+        }),
+      },
+      [409],
+    );
+  }
+
+  public rejectProjectBriefAssumption(
+    accessToken: string,
+    projectId: string,
+    assumptionId: string,
+    reason: string,
+  ): Promise<BriefAssumptionDecisionResponse> {
+    return this.request<BriefAssumptionDecisionResponse>(
+      `/projects/${projectId}/brief-assumptions/${assumptionId}/reject`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          reason,
+        }),
+      },
+      [409],
+    );
+  }
+
+  public submitProjectBriefGate(
+    accessToken: string,
+    projectId: string,
+  ): Promise<ProjectBriefGateSubmissionResponse> {
+    return this.request<ProjectBriefGateSubmissionResponse>(
+      `/projects/${projectId}/gates/project-brief/submit`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+      },
+      [409],
+    );
+  }
+
+  public getCurrentProjectBriefGate(
+    accessToken: string,
+    projectId: string,
+  ): Promise<HumanGateResponse> {
+    return this.request<HumanGateResponse>(
+      `/projects/${projectId}/gates/project-brief/current`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public listProjectBriefGateEvents(
+    accessToken: string,
+    projectId: string,
+    gateId: string,
+  ): Promise<
+    readonly HumanGateEventResponse[]
+  > {
+    return this.request<
+      readonly HumanGateEventResponse[]
+    >(
+      `/projects/${projectId}/gates/project-brief/${gateId}/events`,
+      {
+        headers:
+          this.authorization(accessToken),
+      },
+    );
+  }
+
+  public decideProjectBriefGate(
+    accessToken: string,
+    projectId: string,
+    action: ProjectBriefGateDecisionAction,
+    reason: string | null = null,
+  ): Promise<ProjectBriefGateDecisionResponse> {
+    return this.request<ProjectBriefGateDecisionResponse>(
+      `/projects/${projectId}/gates/project-brief/decisions`,
+      {
+        method: "POST",
+        headers:
+          this.authorization(accessToken),
+        body: JSON.stringify({
+          action,
+          reason,
+        }),
+      },
+      [409],
+    );
+  }
+
+  private authorization(
+    accessToken: string,
+  ): HeadersInit {
     return {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization:
+        `Bearer ${accessToken}`,
     };
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const headers = new Headers(init.headers);
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+    acceptedStatuses:
+      readonly number[] = [],
+  ): Promise<T> {
+    const headers =
+      new Headers(init.headers);
 
-    headers.set("Accept", "application/json");
+    headers.set(
+      "Accept",
+      "application/json",
+    );
 
     if (init.body !== undefined) {
-      headers.set("Content-Type", "application/json");
+      headers.set(
+        "Content-Type",
+        "application/json",
+      );
     }
 
-    const response = await this.fetchImplementation(`${this.baseUrl}${path}`, {
-      ...init,
-      headers,
-      credentials: "include",
-    });
+    const response =
+      await this.fetchImplementation(
+        `${this.baseUrl}${path}`,
+        {
+          ...init,
+          headers,
+          credentials: "include",
+        },
+      );
 
-    if (!response.ok) {
-      throw new ApiError(response.status, await errorDetail(response));
+    if (
+      !response.ok &&
+      !acceptedStatuses.includes(
+        response.status,
+      )
+    ) {
+      throw new ApiError(
+        response.status,
+        await errorDetail(response),
+      );
     }
 
     if (response.status === 204) {
