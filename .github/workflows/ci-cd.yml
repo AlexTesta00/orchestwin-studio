@@ -18,8 +18,17 @@ concurrency:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+          - windows-2025
 
     env:
       ORCHESTWIN_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
@@ -29,21 +38,6 @@ jobs:
       ORCHESTWIN_AUTH_JWT_AUDIENCE: orchestwin-api
       ORCHESTWIN_CORS_ALLOWED_ORIGINS: '["http://127.0.0.1:5173"]'
       ORCHESTWIN_CORS_ALLOW_CREDENTIALS: "true"
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: orchestwin
-          POSTGRES_USER: orchestwin
-          POSTGRES_PASSWORD: ci-postgres-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready --username orchestwin --dbname orchestwin"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 12
 
     steps:
       - name: Check out repository
@@ -67,22 +61,28 @@ jobs:
             pyproject.toml
             requirements-dev.txt
 
+      - name: Set up PostgreSQL
+        uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          postgres-version: "18"
+          username: orchestwin
+          password: ci-postgres-password
+          database: orchestwin
+          port: "5432"
+
       - name: Show test environment
         run: |
           node --version
           npm --version
           python --version
           python -m pip --version
+          psql --version
 
       - name: Install frontend dependencies
         run: npm run install:frontend
 
       - name: Install backend and test dependencies
-        run: |
-          python -m pip install \
-            --disable-pip-version-check \
-            --editable . \
-            --requirement requirements-dev.txt
+        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
 
       - name: Verify Python dependencies
         run: python -m pip check
@@ -106,11 +106,20 @@ jobs:
           PYTHONWARNINGS: error
         run: npm run test:integration:python
 
+
   build:
-    name: Build
+    name: Build (${{ matrix.os }})
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+          - windows-2025
 
     env:
       HUSKY: 0
@@ -145,8 +154,6 @@ jobs:
           npm --version
           python --version
           python -m pip --version
-          docker --version
-          docker compose version
 
       - name: Install repository tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -155,11 +162,7 @@ jobs:
         run: npm run install:frontend
 
       - name: Install backend and build dependencies
-        run: |
-          python -m pip install \
-            --disable-pip-version-check \
-            --editable . \
-            --requirement requirements-dev.txt
+        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
 
       - name: Verify Python dependencies
         run: python -m pip check
