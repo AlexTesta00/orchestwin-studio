@@ -118,7 +118,10 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations using the async SQLAlchemy engine."""
-    asyncio.run(run_async_migrations())
+    asyncio.run(
+        run_async_migrations(),
+        loop_factory=asyncio.SelectorEventLoop,
+    )
 
 
 if context.is_offline_mode():

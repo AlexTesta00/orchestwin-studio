@@ -191,4 +191,7 @@ async def run_integration_scenario() -> None:
 
 def test_postgresql_identity_and_projects_main_path() -> None:
     """Verify the persistence path on PostgreSQL."""
-    asyncio.run(run_integration_scenario())
+    asyncio.run(
+        run_integration_scenario(),
+        loop_factory=asyncio.SelectorEventLoop,
+    )
