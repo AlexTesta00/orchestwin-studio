@@ -2,6 +2,8 @@
 import { computed, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
+import RequirementsTraceabilityView from "./RequirementsTraceabilityView.vue";
+import RequirementsVersionComparison from "./RequirementsVersionComparison.vue";
 import { requirementsApi, type RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useRequirementsStore } from "../stores/requirements";
@@ -9,10 +11,12 @@ import type {
   RequirementKind,
   RequirementPayload,
   RequirementPriority,
+  RequirementSourcePayload,
   RequirementsArtifactEnvelope,
   RequirementsGateDecisionAction,
   RequirementsSpecificationDiffPayload,
   RequirementsSpecificationPayload,
+  UserTwinVersionReferencePayload,
 } from "../types/requirements";
 
 type Locale = "en" | "it";
@@ -168,7 +172,9 @@ const messages = {
 const copy = computed(() => messages[props.locale]);
 const api = computed(() => props.api ?? requirementsApi);
 const current = computed(() => store.current);
-const specification = computed(() => store.current?.specification ?? null);
+const specification = computed<RequirementsSpecificationPayload | null>(
+  () => store.current?.specification ?? null,
+);
 const diffs = computed(() => store.diffHistory);
 const gateTargetsCurrent = computed(() => {
   if (store.gate === null || store.current === null) {
@@ -260,7 +266,7 @@ function proposedSpecification(): RequirementsSpecificationPayload | null {
 
   return {
     ...value,
-    requirements: value.requirements.map((requirement) =>
+    requirements: value.requirements.map((requirement: RequirementPayload): RequirementPayload =>
       requirement.id === requirementId
         ? {
             ...requirement,
@@ -289,6 +295,22 @@ async function submitRevision(): Promise<void> {
   if (applied) {
     cancelEdit();
   }
+}
+
+function formatRequirementSources(requirement: RequirementPayload): string {
+  return requirement.sources
+    .map((source: RequirementSourcePayload) => source.locator ?? source.source_id)
+    .join(", ");
+}
+
+function formatRequirementTwins(requirement: RequirementPayload): string {
+  if (requirement.user_twin_references.length === 0) {
+    return copy.value.none;
+  }
+
+  return requirement.user_twin_references
+    .map((twin: UserTwinVersionReferencePayload) => twin.name)
+    .join(", ");
 }
 
 function diffReason(diffId: string): string {
@@ -477,17 +499,11 @@ watch(
             </div>
             <p class="m-0 text-xs text-slate-500">
               {{ copy.sources }}:
-              {{
-                requirement.sources.map((source) => source.locator ?? source.source_id).join(", ")
-              }}
+              {{ formatRequirementSources(requirement) }}
             </p>
             <p class="m-0 text-xs text-slate-500">
               {{ copy.twins }}:
-              {{
-                requirement.user_twin_references.length === 0
-                  ? copy.none
-                  : requirement.user_twin_references.map((twin) => twin.name).join(", ")
-              }}
+              {{ formatRequirementTwins(requirement) }}
             </p>
           </article>
         </section>
@@ -687,6 +703,15 @@ watch(
           </div>
         </article>
       </section>
+
+      <RequirementsVersionComparison :versions="store.history" :locale="locale" />
+
+      <RequirementsTraceabilityView
+        v-if="store.traceability !== null && store.coverage !== null"
+        :traceability="store.traceability"
+        :coverage="store.coverage"
+        :locale="locale"
+      />
 
       <section class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 class="text-xl font-black text-slate-950">{{ copy.gate }}</h3>
