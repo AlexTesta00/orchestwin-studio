@@ -1,0 +1,75 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":disableDependencyDashboard"
+  ],
+  "baseBranchPatterns": ["develop"],
+  "timezone": "Europe/Rome",
+  "schedule": ["before 6am on monday"],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "ignoreTests": false,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": false,
+    "labels": ["security"],
+    "vulnerabilityFixStrategy": "lowest"
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "description": "Create npm PRs only after minimum release age checks pass",
+      "matchDatasources": ["npm"],
+      "prCreation": "not-pending"
+    },
+    {
+      "description": "Group non-major development tooling updates",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "development tooling"
+    },
+    {
+      "description": "Use the CI scope for GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "semanticCommitType": "ci",
+      "semanticCommitScope": "ci"
+    },
+    {
+      "description": "Use the repository scope for Python dependency updates",
+      "matchManagers": ["pip_requirements", "poetry"],
+      "semanticCommitScope": "repo"
+    },
+    {
+      "description": "Automerge pin and digest updates after CI passes",
+      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Automerge stable minor and patch updates after CI passes",
+      "matchCurrentVersion": "!/^0\\./",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Never automerge 0.x dependency version updates",
+      "matchCurrentVersion": "/^0\\./",
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": false
+    },
+    {
+      "description": "Never automerge major dependency updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
+}
