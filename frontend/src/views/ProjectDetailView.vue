@@ -11,6 +11,7 @@ import type {
 } from "@/api/contracts";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
+import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -109,7 +110,6 @@ async function loadProject(): Promise<void> {
 
     project.value = projectResult;
     briefHistory.value = [...versions];
-
     currentBrief.value = versions.length > 0 ? (versions[versions.length - 1] ?? null) : null;
   } catch (error: unknown) {
     errorDetail.value = errorCode(error, "project_load_failed");
@@ -259,6 +259,12 @@ onMounted(loadProject);
       <ProjectTeamSelectionFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:team`"
         :project-id="projectId"
+      />
+
+      <ProjectRequirementsFlow
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:requirements`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
       />
     </template>
   </main>
