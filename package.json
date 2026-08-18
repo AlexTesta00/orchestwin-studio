@@ -19,6 +19,8 @@
     "test:integration:python": "python -m pytest -m integration src/test/python/integration",
     "test:frontend": "npm --prefix frontend run test",
     "test:all": "npm run test && npm run test:frontend",
+    "test:coverage:python": "python -m pytest -m \"not integration\" --cov=orchestwin --cov-branch --cov-report=",
+    "test:coverage:integration:python": "python -m pytest -m integration src/test/python/integration --cov=orchestwin --cov-branch --cov-append --cov-report=term-missing --cov-report=xml:coverage.xml",
     "test:compose": "python scripts/smoke_compose.py",
     "type-check:frontend": "npm --prefix frontend run type-check",
     "lint:python": "python -m ruff check .",
