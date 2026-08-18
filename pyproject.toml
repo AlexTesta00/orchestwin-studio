@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchestwin-studio"
+version = "0.0.0"
+description = "Human-governed multi-agent platform for end-to-end Agentic UCD workflows."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = [
+    "alembic==1.19.0",
+    "email-validator==2.3.0",
+    "fastapi==0.141.1",
+    "psycopg[binary]==3.3.4",
+    "pwdlib[argon2]==0.3.0",
+    "pydantic-settings==2.14.2",
+    "pyjwt==2.13.0",
+    "sqlalchemy[asyncio]==2.0.51",
+    "uvicorn==0.52.1",
+]
+
+[project.scripts]
+orchestwin-api = "orchestwin.api.server:main"
+orchestwin-migrate = "orchestwin.persistence.migrate:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orchestwin"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/LICENSE",
+    "/README.md",
+    "/alembic.ini",
+    "/pyproject.toml",
+    "/src/orchestwin",
+    "/src/test/python",
+]
+
+[tool.pytest.ini_options]
+minversion = "9.1"
+testpaths = ["src/test/python"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: requires a migrated PostgreSQL database",
+]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "frontend",
+    "node_modules",
+]
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "RUF",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true

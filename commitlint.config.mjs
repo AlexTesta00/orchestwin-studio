@@ -1,0 +1,56 @@
+const allowedTypes = [
+  "build",
+  "chore",
+  "ci",
+  "docs",
+  "feat",
+  "fix",
+  "perf",
+  "refactor",
+  "revert",
+  "security",
+  "test",
+];
+
+const allowedScopes = [
+  "repo",
+  "deps",
+  "domain",
+  "identity",
+  "projects",
+  "agents",
+  "twins",
+  "workflow",
+  "artifacts",
+  "sandbox",
+  "models",
+  "rag",
+  "training",
+  "evaluation",
+  "api",
+  "frontend",
+  "android",
+  "flutter",
+  "observability",
+  "security",
+  "docs",
+  "infra",
+  "ci",
+];
+
+export default {
+  extends: ["@commitlint/config-conventional"],
+  rules: {
+    "header-max-length": [2, "always", 100],
+    "scope-empty": [2, "never"],
+    "scope-enum": [2, "always", allowedScopes],
+    "subject-case": [
+      2,
+      "never",
+      ["sentence-case", "start-case", "pascal-case", "upper-case"],
+    ],
+    "subject-empty": [2, "never"],
+    "subject-full-stop": [2, "never", "."],
+    "type-enum": [2, "always", allowedTypes],
+  },
+};

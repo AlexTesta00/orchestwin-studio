@@ -1,0 +1,211 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "sprint/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+          - windows-2025
+
+    env:
+      ORCHESTWIN_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
+      ORCHESTWIN_DATABASE_ECHO: "false"
+      ORCHESTWIN_AUTH_JWT_SECRET: ci-jwt-secret-with-more-than-32-characters
+      ORCHESTWIN_AUTH_JWT_ISSUER: orchestwin-studio
+      ORCHESTWIN_AUTH_JWT_AUDIENCE: orchestwin-api
+      ORCHESTWIN_CORS_ALLOWED_ORIGINS: '["http://127.0.0.1:5173"]'
+      ORCHESTWIN_CORS_ALLOW_CREDENTIALS: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Set up PostgreSQL
+        uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          postgres-version: "18"
+          username: orchestwin
+          password: ci-postgres-password
+          database: orchestwin
+          port: "5432"
+
+      - name: Show test environment
+        run: |
+          node --version
+          npm --version
+          python --version
+          python -m pip --version
+          psql --version
+
+      - name: Install frontend dependencies
+        run: npm run install:frontend
+
+      - name: Install backend and test dependencies
+        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
+
+      - name: Verify Python dependencies
+        run: python -m pip check
+
+      - name: Verify frontend dependencies
+        run: npm --prefix frontend ls --depth=0
+
+      - name: Run ordinary backend and frontend tests
+        env:
+          PYTHONWARNINGS: error
+        run: npm run test:all
+
+      - name: Upgrade PostgreSQL to Alembic head
+        run: orchestwin-migrate upgrade head
+
+      - name: Show current database revision
+        run: orchestwin-migrate current
+
+      - name: Run PostgreSQL integration tests
+        env:
+          PYTHONWARNINGS: error
+        run: npm run test:integration:python
+
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+          - windows-2025
+
+    env:
+      HUSKY: 0
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Show build environment
+        run: |
+          node --version
+          npm --version
+          python --version
+          python -m pip --version
+
+      - name: Install repository tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install frontend dependencies
+        run: npm run install:frontend
+
+      - name: Install backend and build dependencies
+        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
+
+      - name: Verify Python dependencies
+        run: python -m pip check
+
+      - name: Verify frontend dependencies
+        run: npm --prefix frontend ls --depth=0
+
+      - name: Verify backend and frontend quality and builds
+        run: npm run verify:all
+
+  release:
+    name: Semantic release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - test
+      - build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    env:
+      HUSKY: 0
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install release tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Create Git tag and GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release
