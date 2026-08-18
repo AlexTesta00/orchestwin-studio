@@ -9,28 +9,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from orchestwin import __version__
-from orchestwin.api.auth import (
-    AuthApiSettings,
-    create_auth_router,
-)
-from orchestwin.api.clarification import (
-    create_clarification_router,
-)
+from orchestwin.api.auth import AuthApiSettings, create_auth_router
+from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.health import create_health_router
-from orchestwin.api.projects import (
-    create_project_router,
-)
-from orchestwin.api.services import (
-    ApplicationRuntime,
-    create_default_runtime,
-)
-from orchestwin.api.teams import (
-    create_team_router,
-)
-from orchestwin.config import (
-    ApplicationSettings,
-    load_settings,
-)
+from orchestwin.api.projects import create_project_router
+from orchestwin.api.requirements import create_requirements_router
+from orchestwin.api.services import ApplicationRuntime, create_default_runtime
+from orchestwin.api.teams import create_team_router
+from orchestwin.config import ApplicationSettings, load_settings
 
 
 def create_app(
@@ -58,8 +44,8 @@ def create_app(
         title=resolved_settings.application_name,
         version=__version__,
         debug=resolved_settings.debug,
-        docs_url=(f"{resolved_settings.api_prefix}/docs"),
-        openapi_url=(f"{resolved_settings.api_prefix}/openapi.json"),
+        docs_url=f"{resolved_settings.api_prefix}/docs",
+        openapi_url=f"{resolved_settings.api_prefix}/openapi.json",
         redoc_url=None,
         lifespan=lifespan,
     )
@@ -70,11 +56,17 @@ def create_app(
     application.state.brief_gate_service = resolved_runtime.brief_gate_service
     application.state.team_proposal_service = resolved_runtime.team_proposal_service
     application.state.agent_team_service = resolved_runtime.agent_team_service
+    application.state.requirements_generation_service = (
+        resolved_runtime.requirements_generation_service
+    )
+    application.state.requirements_revision_service = resolved_runtime.requirements_revision_service
+    application.state.requirements_query_service = resolved_runtime.requirements_query_service
+    application.state.requirements_gate_service = resolved_runtime.requirements_gate_service
 
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(resolved_settings.cors_allowed_origins),
-        allow_credentials=(resolved_settings.cors_allow_credentials),
+        allow_credentials=resolved_settings.cors_allow_credentials,
         allow_methods=[
             "GET",
             "POST",
@@ -88,25 +80,17 @@ def create_app(
         ],
     )
 
-    application.include_router(
+    for router in (
         create_health_router(),
-        prefix=resolved_settings.api_prefix,
-    )
-    application.include_router(
         create_auth_router(resolved_auth_settings),
-        prefix=resolved_settings.api_prefix,
-    )
-    application.include_router(
         create_project_router(),
-        prefix=resolved_settings.api_prefix,
-    )
-    application.include_router(
         create_clarification_router(),
-        prefix=resolved_settings.api_prefix,
-    )
-    application.include_router(
         create_team_router(),
-        prefix=resolved_settings.api_prefix,
-    )
+        create_requirements_router(),
+    ):
+        application.include_router(
+            router,
+            prefix=resolved_settings.api_prefix,
+        )
 
     return application

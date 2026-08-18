@@ -8,9 +8,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from orchestwin.agents.catalog import (
-    AgentIdentifier,
-)
+from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.persistence import (
     SqlAlchemyAgentTeamUnitOfWorkFactory,
     SqlAlchemyTeamProposalUnitOfWorkFactory,
@@ -31,12 +29,8 @@ from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
 )
-from orchestwin.identity.passwords import (
-    Argon2PasswordService,
-)
-from orchestwin.identity.persistence import (
-    SqlAlchemyIdentityUnitOfWorkFactory,
-)
+from orchestwin.identity.passwords import Argon2PasswordService
+from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
 from orchestwin.identity.tokens import (
     JwtAccessTokenService,
     load_access_token_settings,
@@ -67,11 +61,18 @@ from orchestwin.projects.persistence import (
     SqlAlchemyProjectClarificationUnitOfWorkFactory,
     SqlAlchemyProjectUnitOfWorkFactory,
 )
-from orchestwin.workflow.gates import (
-    HumanGate,
-    HumanGateAction,
-    HumanGateEvent,
+from orchestwin.projects.requirements_application import (
+    LocalRequirementsGenerationService,
 )
+from orchestwin.projects.requirements_gate import LocalRequirementsGateService
+from orchestwin.projects.requirements_revision_application import (
+    LocalRequirementsRevisionService,
+)
+from orchestwin.projects.requirements_runtime import (
+    SqlAlchemyRequirementsQueryService,
+    build_requirements_services,
+)
+from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
 JWT_SECRET_ENVIRONMENT = "ORCHESTWIN_AUTH_JWT_SECRET"
@@ -130,10 +131,7 @@ class AgentTeamApprovalService(Protocol):
         project_id: UUID,
         owner_user_id: UUID,
         gate_id: UUID,
-    ) -> tuple[
-        HumanGateEvent,
-        ...,
-    ]:
+    ) -> tuple[HumanGateEvent, ...]:
         """Return the Gate 2 append-only event history."""
 
 
@@ -148,6 +146,10 @@ class ApplicationRuntime:
     database_runtime: DatabaseRuntime | None = None
     team_proposal_service: TeamProposalApplicationService | None = None
     agent_team_service: AgentTeamApprovalService | None = None
+    requirements_generation_service: LocalRequirementsGenerationService | None = None
+    requirements_revision_service: LocalRequirementsRevisionService | None = None
+    requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
+    requirements_gate_service: LocalRequirementsGateService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
@@ -167,44 +169,44 @@ def create_default_runtime() -> ApplicationRuntime:
     database_runtime = create_database_runtime(load_database_settings())
 
     identity_service = LocalIdentityApplicationService(
-        unit_of_work_factory=(
-            SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory)
-        ),
-        password_service=(Argon2PasswordService()),
-        access_token_service=(JwtAccessTokenService(load_access_token_settings())),
+        unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory),
+        password_service=Argon2PasswordService(),
+        access_token_service=JwtAccessTokenService(load_access_token_settings()),
     )
-
     project_service = LocalProjectApplicationService(
-        unit_of_work_factory=(SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory))
+        unit_of_work_factory=SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory)
     )
     clarification_service = LocalProjectClarificationApplicationService(
-        unit_of_work_factory=(
-            SqlAlchemyProjectClarificationUnitOfWorkFactory(database_runtime.session_factory)
+        unit_of_work_factory=SqlAlchemyProjectClarificationUnitOfWorkFactory(
+            database_runtime.session_factory
         )
     )
     brief_gate_service = LocalProjectBriefGateService(
-        unit_of_work_factory=(
-            SqlAlchemyProjectBriefGateUnitOfWorkFactory(database_runtime.session_factory)
+        unit_of_work_factory=SqlAlchemyProjectBriefGateUnitOfWorkFactory(
+            database_runtime.session_factory
         )
     )
     team_proposal_service = LocalTeamProposalApplicationService(
-        unit_of_work_factory=(
-            SqlAlchemyTeamProposalUnitOfWorkFactory(database_runtime.session_factory)
+        unit_of_work_factory=SqlAlchemyTeamProposalUnitOfWorkFactory(
+            database_runtime.session_factory
         ),
         proposal_port=team_proposal_port,
     )
     agent_team_service = LocalAgentTeamApprovalService(
-        unit_of_work_factory=(
-            SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
-        )
+        unit_of_work_factory=SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
     )
+    requirements = build_requirements_services(database_runtime.session_factory)
 
     return ApplicationRuntime(
         identity_service=identity_service,
         project_service=project_service,
-        clarification_service=(clarification_service),
-        brief_gate_service=(brief_gate_service),
+        clarification_service=clarification_service,
+        brief_gate_service=brief_gate_service,
         database_runtime=database_runtime,
-        team_proposal_service=(team_proposal_service),
-        agent_team_service=(agent_team_service),
+        team_proposal_service=team_proposal_service,
+        agent_team_service=agent_team_service,
+        requirements_generation_service=requirements.generation,
+        requirements_revision_service=requirements.revisions,
+        requirements_query_service=requirements.queries,
+        requirements_gate_service=requirements.gate,
     )
