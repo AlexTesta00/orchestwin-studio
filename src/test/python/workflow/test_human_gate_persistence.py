@@ -116,11 +116,25 @@ def test_latest_gate_query_is_owner_scoped() -> None:
     assert "ORDER BY human_gates.iteration DESC" in sql
 
 
-def test_repository_adds_gate_and_first_event() -> None:
-    """Persist gate state and its first append-only event."""
+def test_repository_adds_gate_before_first_event() -> None:
+    """Persist the parent gate before its foreign-key audit event."""
     gate, event = submitted_gate()
+
+    operations: list[object] = []
+
     session = Mock(spec=AsyncSession)
-    session.flush = AsyncMock()
+
+    def record_add(
+        record: object,
+    ) -> None:
+        operations.append(type(record))
+
+    async def record_flush() -> None:
+        operations.append("flush")
+
+    session.add.side_effect = record_add
+    session.flush = AsyncMock(side_effect=record_flush)
+
     repository = SqlAlchemyHumanGateRepository(session)
 
     persisted = asyncio.run(
@@ -130,25 +144,17 @@ def test_repository_adds_gate_and_first_event() -> None:
         )
     )
 
+    assert operations == [
+        HumanGateRecord,
+        "flush",
+        HumanGateEventRecord,
+        "flush",
+    ]
+
     assert session.add.call_count == 2
-    session.flush.assert_awaited_once()
 
-    records = [call.args[0] for call in (session.add.call_args_list)]
+    assert session.flush.await_count == 2
 
-    assert any(
-        isinstance(
-            record,
-            HumanGateRecord,
-        )
-        for record in records
-    )
-    assert any(
-        isinstance(
-            record,
-            HumanGateEventRecord,
-        )
-        for record in records
-    )
     assert persisted == gate
 
 
