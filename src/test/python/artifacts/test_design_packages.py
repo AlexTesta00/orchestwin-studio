@@ -6,12 +6,12 @@ from dataclasses import replace
 
 import pytest
 
-from orchestwin.artifacts.references import (
-    ArtifactKind,
-)
-from test.python.artifacts.design_packages import (
+from orchestwin.artifacts.design_packages import (
     DesignPackageVersion,
     create_design_grounding,
+)
+from orchestwin.artifacts.references import (
+    ArtifactKind,
 )
 
 from .design_fixtures import (

@@ -11,6 +11,12 @@ from orchestwin.artifacts.design import (
     create_design_workflow,
     create_synthetic_design_critique,
 )
+from orchestwin.artifacts.design_packages import (
+    DesignPackageVersion,
+    create_design_concern,
+    create_design_exploration_package,
+    create_design_grounding,
+)
 from orchestwin.artifacts.prototypes import (
     PrototypeElementKind,
     PrototypeScreenState,
@@ -49,12 +55,6 @@ from orchestwin.twins.epistemics import (
     EvidenceReference,
     EvidenceSourceKind,
     ObservationProvenance,
-)
-from test.python.artifacts.design_packages import (
-    DesignPackageVersion,
-    create_design_concern,
-    create_design_exploration_package,
-    create_design_grounding,
 )
 
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000000001")
