@@ -24,6 +24,7 @@
     "test:compose": "python scripts/smoke_compose.py",
     "type-check:frontend": "npm --prefix frontend run type-check",
     "lint:python": "python -m ruff check .",
+    "lint:fix:python": "python -m ruff check . --fix",
     "lint:frontend": "npm --prefix frontend run lint",
     "format:python": "python -m ruff format .",
     "format:python:check": "python -m ruff format --check .",
