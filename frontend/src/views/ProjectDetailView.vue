@@ -10,6 +10,7 @@ import type {
   ProjectResponse,
 } from "@/api/contracts";
 import ProjectArchitectureFlow from "@/components/ProjectArchitectureFlow.vue";
+import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
@@ -277,6 +278,12 @@ onMounted(loadProject);
 
       <ProjectArchitectureFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectArtifactGraph
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
