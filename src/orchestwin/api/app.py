@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from orchestwin import __version__
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
 from orchestwin.api.clarification import create_clarification_router
+from orchestwin.api.design import create_design_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.requirements import create_requirements_router
@@ -62,6 +63,10 @@ def create_app(
     application.state.requirements_revision_service = resolved_runtime.requirements_revision_service
     application.state.requirements_query_service = resolved_runtime.requirements_query_service
     application.state.requirements_gate_service = resolved_runtime.requirements_gate_service
+    application.state.design_generation_service = resolved_runtime.design_generation_service
+    application.state.design_revision_service = resolved_runtime.design_revision_service
+    application.state.design_query_service = resolved_runtime.design_query_service
+    application.state.design_gate_service = resolved_runtime.design_gate_service
 
     application.add_middleware(
         CORSMiddleware,
@@ -87,6 +92,7 @@ def create_app(
         create_clarification_router(),
         create_team_router(),
         create_requirements_router(),
+        create_design_router(),
     ):
         application.include_router(
             router,

@@ -25,6 +25,12 @@ from orchestwin.agents.team_gate import (
     ProjectWorkflowReadiness,
     TeamEditResult,
 )
+from orchestwin.api.design import (
+    DesignGateService,
+    DesignGenerationService,
+    DesignQueryService,
+    DesignRevisionService,
+)
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -150,6 +156,10 @@ class ApplicationRuntime:
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
     requirements_gate_service: LocalRequirementsGateService | None = None
+    design_generation_service: DesignGenerationService | None = None
+    design_revision_service: DesignRevisionService | None = None
+    design_query_service: DesignQueryService | None = None
+    design_gate_service: DesignGateService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
