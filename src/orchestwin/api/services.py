@@ -62,6 +62,7 @@ from orchestwin.projects.clarification_application import (
     LocalProjectClarificationApplicationService,
     ProjectClarificationApplicationService,
 )
+from orchestwin.projects.design_runtime import build_design_services
 from orchestwin.projects.persistence import (
     SqlAlchemyProjectBriefGateUnitOfWorkFactory,
     SqlAlchemyProjectClarificationUnitOfWorkFactory,
@@ -206,6 +207,7 @@ def create_default_runtime() -> ApplicationRuntime:
         unit_of_work_factory=SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
     )
     requirements = build_requirements_services(database_runtime.session_factory)
+    design = build_design_services(database_runtime.session_factory)
 
     return ApplicationRuntime(
         identity_service=identity_service,
@@ -219,4 +221,8 @@ def create_default_runtime() -> ApplicationRuntime:
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,
         requirements_gate_service=requirements.gate,
+        design_generation_service=design.generation,
+        design_revision_service=design.revisions,
+        design_query_service=design.queries,
+        design_gate_service=design.gate,
     )
