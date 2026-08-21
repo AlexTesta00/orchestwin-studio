@@ -11,6 +11,7 @@ import type {
 } from "@/api/contracts";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
+import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import { useAuthStore } from "@/stores/auth";
@@ -263,6 +264,12 @@ onMounted(loadProject);
 
       <ProjectRequirementsFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:requirements`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectDesignFlow
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:design`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
