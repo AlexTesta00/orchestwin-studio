@@ -60,6 +60,7 @@ from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
 )
+from orchestwin.projects.architecture_runtime import build_architecture_services
 from orchestwin.projects.brief_gate import (
     LocalProjectBriefGateService,
     ProjectBriefGateService,
@@ -218,6 +219,7 @@ def create_default_runtime() -> ApplicationRuntime:
     )
     requirements = build_requirements_services(database_runtime.session_factory)
     design = build_design_services(database_runtime.session_factory)
+    architecture = build_architecture_services(database_runtime.session_factory)
 
     return ApplicationRuntime(
         identity_service=identity_service,
@@ -235,4 +237,8 @@ def create_default_runtime() -> ApplicationRuntime:
         design_revision_service=design.revisions,
         design_query_service=design.queries,
         design_gate_service=design.gate,
+        architecture_generation_service=architecture.generation,
+        architecture_revision_service=architecture.revisions,
+        architecture_query_service=architecture.queries,
+        architecture_gate_service=architecture.gate,
     )
