@@ -31,12 +31,14 @@ from orchestwin.api.architecture import (
     ArchitectureQueryService,
     ArchitectureRevisionService,
 )
+from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.design import (
     DesignGateService,
     DesignGenerationService,
     DesignQueryService,
     DesignRevisionService,
 )
+from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -172,6 +174,7 @@ class ApplicationRuntime:
     architecture_revision_service: ArchitectureRevisionService | None = None
     architecture_query_service: ArchitectureQueryService | None = None
     architecture_gate_service: ArchitectureGateService | None = None
+    artifact_graph_query_service: ArtifactGraphQueryService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
@@ -241,4 +244,7 @@ def create_default_runtime() -> ApplicationRuntime:
         architecture_revision_service=architecture.revisions,
         architecture_query_service=architecture.queries,
         architecture_gate_service=architecture.gate,
+        artifact_graph_query_service=SqlAlchemyArtifactGraphQueryService(
+            database_runtime.session_factory
+        ),
     )

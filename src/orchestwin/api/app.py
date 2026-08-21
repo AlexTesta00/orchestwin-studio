@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from orchestwin import __version__
 from orchestwin.api.architecture import create_architecture_router
+from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
@@ -74,6 +75,7 @@ def create_app(
     application.state.architecture_revision_service = resolved_runtime.architecture_revision_service
     application.state.architecture_query_service = resolved_runtime.architecture_query_service
     application.state.architecture_gate_service = resolved_runtime.architecture_gate_service
+    application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
 
     application.add_middleware(
         CORSMiddleware,
@@ -101,6 +103,7 @@ def create_app(
         create_requirements_router(),
         create_design_router(),
         create_architecture_router(),
+        create_artifact_graph_router(),
     ):
         application.include_router(
             router,
