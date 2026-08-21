@@ -213,19 +213,23 @@ class SqlAlchemyHumanGateRepository:
         gate: HumanGate,
         event: HumanGateEvent,
     ) -> HumanGate:
-        """Insert a submitted gate and its first audit event."""
+        """Insert a submitted gate before its first audit event."""
         self._validate_event(
             gate=gate,
             event=event,
         )
 
-        record = gate_to_record(gate)
+        gate_record = gate_to_record(gate)
+        event_record = event_to_record(event)
 
-        self._session.add(record)
-        self._session.add(event_to_record(event))
+        self._session.add(gate_record)
+
         await self._session.flush()
 
-        return gate_record_to_domain(record)
+        self._session.add(event_record)
+        await self._session.flush()
+
+        return gate_record_to_domain(gate_record)
 
     async def get_latest_owned_for_update(
         self,

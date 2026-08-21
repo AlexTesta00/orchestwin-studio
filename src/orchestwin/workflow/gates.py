@@ -1,5 +1,3 @@
-"""Pure state transitions for owner-controlled human approval gates."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -18,6 +16,9 @@ class HumanGateType(StrEnum):
     PROJECT_BRIEF = "PROJECT_BRIEF"
     AGENT_TEAM = "AGENT_TEAM"
     USER_MODELING = "USER_MODELING"
+    REQUIREMENTS = "REQUIREMENTS"
+    DESIGN = "DESIGN"
+    ARCHITECTURE = "ARCHITECTURE"
 
 
 class HumanGateStatus(StrEnum):
@@ -244,7 +245,7 @@ def create_human_gate(
     gate_type: HumanGateType,
     artifact: GateArtifactReference,
     iteration: int = 1,
-    max_iterations: int = (DEFAULT_GATE_ITERATION_LIMIT),
+    max_iterations: int = DEFAULT_GATE_ITERATION_LIMIT,
     gate_id: UUID | None = None,
     created_at: datetime | None = None,
 ) -> HumanGate:
@@ -353,7 +354,7 @@ def transition_human_gate(
     )
 
     return HumanGateTransitionResult(
-        status=(HumanGateTransitionStatus.APPLIED),
+        status=HumanGateTransitionStatus.APPLIED,
         gate=updated_gate,
         event=event,
     )
@@ -392,7 +393,7 @@ def mark_human_gate_stale(
 
     if current_artifact == gate.artifact or gate.status is HumanGateStatus.STALE:
         return HumanGateTransitionResult(
-            status=(HumanGateTransitionStatus.NO_CHANGE),
+            status=HumanGateTransitionStatus.NO_CHANGE,
             gate=gate,
         )
 
@@ -416,15 +417,15 @@ def mark_human_gate_stale(
         id=event_id or uuid4(),
         gate_id=gate.id,
         sequence_number=sequence_number,
-        kind=(HumanGateEventKind.ARTIFACT_SUPERSEDED),
+        kind=HumanGateEventKind.ARTIFACT_SUPERSEDED,
         previous_status=gate.status,
-        resulting_status=(HumanGateStatus.STALE),
+        resulting_status=HumanGateStatus.STALE,
         artifact=current_artifact,
         occurred_at=timestamp,
     )
 
     return HumanGateTransitionResult(
-        status=(HumanGateTransitionStatus.APPLIED),
+        status=HumanGateTransitionStatus.APPLIED,
         gate=updated_gate,
         event=event,
     )
@@ -433,19 +434,13 @@ def mark_human_gate_stale(
 def _target_status(
     gate: HumanGate,
     action: HumanGateAction,
-) -> (
-    tuple[
-        HumanGateStatus,
-        HumanGateStatus | None,
-    ]
-    | None
-):
+) -> tuple[HumanGateStatus, HumanGateStatus | None] | None:
     """Return the target and optional resume state."""
     if gate.status is HumanGateStatus.DRAFT:
         targets = {
-            HumanGateAction.SUBMIT: (HumanGateStatus.PENDING_APPROVAL),
-            HumanGateAction.PAUSE: (HumanGateStatus.PAUSED),
-            HumanGateAction.CANCEL: (HumanGateStatus.CANCELLED),
+            HumanGateAction.SUBMIT: HumanGateStatus.PENDING_APPROVAL,
+            HumanGateAction.PAUSE: HumanGateStatus.PAUSED,
+            HumanGateAction.CANCEL: HumanGateStatus.CANCELLED,
         }
 
         target = targets.get(action)
@@ -453,7 +448,7 @@ def _target_status(
         if target is None:
             return None
 
-        resume_status = HumanGateStatus.DRAFT if (action is HumanGateAction.PAUSE) else None
+        resume_status = HumanGateStatus.DRAFT if action is HumanGateAction.PAUSE else None
 
         return (
             target,
@@ -464,7 +459,7 @@ def _target_status(
         if action is HumanGateAction.REQUEST_REVISION:
             target = (
                 HumanGateStatus.PAUSED_NEEDS_HUMAN
-                if (gate.iteration >= gate.max_iterations)
+                if gate.iteration >= gate.max_iterations
                 else HumanGateStatus.REVISION_REQUESTED
             )
 
@@ -474,10 +469,10 @@ def _target_status(
             )
 
         targets = {
-            HumanGateAction.APPROVE: (HumanGateStatus.APPROVED),
-            HumanGateAction.REJECT: (HumanGateStatus.REJECTED),
-            HumanGateAction.PAUSE: (HumanGateStatus.PAUSED),
-            HumanGateAction.CANCEL: (HumanGateStatus.CANCELLED),
+            HumanGateAction.APPROVE: HumanGateStatus.APPROVED,
+            HumanGateAction.REJECT: HumanGateStatus.REJECTED,
+            HumanGateAction.PAUSE: HumanGateStatus.PAUSED,
+            HumanGateAction.CANCEL: HumanGateStatus.CANCELLED,
         }
 
         target = targets.get(action)
@@ -486,7 +481,7 @@ def _target_status(
             return None
 
         resume_status = (
-            HumanGateStatus.PENDING_APPROVAL if (action is HumanGateAction.PAUSE) else None
+            HumanGateStatus.PENDING_APPROVAL if action is HumanGateAction.PAUSE else None
         )
 
         return (
@@ -544,10 +539,7 @@ def _operation_issue(
 
 def _normalize_reason(
     reason: str | None,
-) -> tuple[
-    str | None,
-    HumanGateIssueCode | None,
-]:
+) -> tuple[str | None, HumanGateIssueCode | None]:
     """Normalize an optional owner rationale."""
     if reason is None:
         return (
@@ -581,7 +573,7 @@ def _rejected(
 ) -> HumanGateTransitionResult:
     """Return a typed rejection without mutating the gate."""
     return HumanGateTransitionResult(
-        status=(HumanGateTransitionStatus.REJECTED),
+        status=HumanGateTransitionStatus.REJECTED,
         gate=gate,
         issue=issue,
     )

@@ -8,3 +8,4 @@ alembic==1.19.0
 email-validator==2.3.0
 pwdlib[argon2]==0.3.0
 pyjwt==2.13.0
+pytest-cov==7.1.0
