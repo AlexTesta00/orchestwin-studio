@@ -18,6 +18,7 @@ class HumanGateType(StrEnum):
     USER_MODELING = "USER_MODELING"
     REQUIREMENTS = "REQUIREMENTS"
     DESIGN = "DESIGN"
+    ARCHITECTURE = "ARCHITECTURE"
 
 
 class HumanGateStatus(StrEnum):
