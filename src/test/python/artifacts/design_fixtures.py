@@ -5,6 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from orchestwin.agents.catalog import (
+    AGENT_CATALOG_CONTENT_HASH,
+    AGENT_CATALOG_VERSION,
+)
 from orchestwin.artifacts.design import (
     DesignApproach,
     create_design_alternative,
@@ -165,8 +169,8 @@ def requirements_version() -> RequirementsSpecificationVersion:
             RequirementsContextKind.USER_MODELING,
             13,
         ),
-        catalog_version=1,
-        catalog_content_hash="c" * 64,
+        catalog_version=AGENT_CATALOG_VERSION,
+        catalog_content_hash=AGENT_CATALOG_CONTENT_HASH,
         user_twin_references=(twin_reference(),),
         requirements=(requirement,),
         user_stories=(story,),
