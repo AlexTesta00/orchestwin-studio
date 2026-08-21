@@ -9,6 +9,7 @@ import type {
   ProjectBriefVersionResponse,
   ProjectResponse,
 } from "@/api/contracts";
+import ProjectArchitectureFlow from "@/components/ProjectArchitectureFlow.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
@@ -270,6 +271,12 @@ onMounted(loadProject);
 
       <ProjectDesignFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:design`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectArchitectureFlow
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
