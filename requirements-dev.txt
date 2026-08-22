@@ -5,6 +5,8 @@ ruff==0.16.4
 uvicorn==0.52.1
 SQLAlchemy==2.0.52
 alembic==1.19.0
+SQLAlchemy==2.0.51
+alembic==1.19.1
 email-validator==2.3.0
 pwdlib[argon2]==0.3.1
 pyjwt==2.13.0
