@@ -19,7 +19,7 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "pyjwt==2.13.0",
     "sqlalchemy[asyncio]==2.0.51",
-    "uvicorn==0.52.1",
+    "uvicorn==0.52.4",
 ]
 
 [project.scripts]
