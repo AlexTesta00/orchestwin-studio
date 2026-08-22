@@ -6,14 +6,16 @@
   ],
   "baseBranchPatterns": ["develop"],
   "timezone": "Europe/Rome",
-  "schedule": ["before 6am on monday"],
+  "schedule": ["* 0-5 * * 1"],
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
   "automergeType": "pr",
+  "automergeStrategy": "rebase",
   "platformAutomerge": true,
+  "rebaseWhen": "behind-base-branch",
   "ignoreTests": false,
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -23,7 +25,7 @@
   },
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 6am on monday"],
+    "schedule": ["* 0-5 * * 1"],
     "automerge": true
   },
   "packageRules": [
