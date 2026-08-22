@@ -41,7 +41,7 @@
     "check": "npm run quality && npm run test && npm run bundle"
   },
   "dependencies": {
-    "pinia": "4.0.2",
+    "pinia": "4.0.3",
     "vue": "3.5.40",
     "vue-i18n": "11.4.8",
     "vue-router": "5.2.0"
