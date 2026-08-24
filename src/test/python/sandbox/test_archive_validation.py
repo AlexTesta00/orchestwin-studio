@@ -58,8 +58,7 @@ def test_valid_archive_is_normalized_hashed_and_canonically_ordered(tmp_path: Pa
         "src/app.py",
     )
     dispositions = {
-        entry.normalized_path: (entry.disposition, entry.ignore_reason)
-        for entry in report.entries
+        entry.normalized_path: (entry.disposition, entry.ignore_reason) for entry in report.entries
     }
     assert dispositions["src/app.py"] == (SourceArchiveEntryDisposition.INCLUDE, None)
     assert dispositions["assets/logo.png"] == (
@@ -86,9 +85,7 @@ def test_missing_non_zip_and_oversized_archives_are_rejected(tmp_path: Path) -> 
         DEFAULT_SOURCE_ARCHIVE_POLICY,
         maximum_archive_size_bytes=8,
     )
-    assert issue_codes(invalid, policy=small_policy) == {
-        SourceArchiveIssueCode.ARCHIVE_TOO_LARGE
-    }
+    assert issue_codes(invalid, policy=small_policy) == {SourceArchiveIssueCode.ARCHIVE_TOO_LARGE}
 
 
 def test_traversal_absolute_drive_unc_and_reserved_paths_are_rejected(tmp_path: Path) -> None:
@@ -225,9 +222,7 @@ def test_entry_count_limit_is_enforced(tmp_path: Path) -> None:
         maximum_entries=1,
     )
 
-    assert issue_codes(archive_path, policy=policy) == {
-        SourceArchiveIssueCode.TOO_MANY_ENTRIES
-    }
+    assert issue_codes(archive_path, policy=policy) == {SourceArchiveIssueCode.TOO_MANY_ENTRIES}
 
 
 def test_active_secrets_are_rejected_but_environment_templates_are_allowed(
