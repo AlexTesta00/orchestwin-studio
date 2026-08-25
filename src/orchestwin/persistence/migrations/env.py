@@ -24,6 +24,9 @@ from orchestwin.persistence.config import (
 from orchestwin.persistence.orm import (
     OrmBase,
 )
+from orchestwin.projects.brownfield_persistence import (
+    BROWNFIELD_INTAKE_VERSIONS,
+)
 from orchestwin.projects.persistence.models import (
     BriefAssumptionRecord,
     ClarificationRoundRecord,
@@ -53,6 +56,7 @@ _IMPORTED_MODELS = (
     HumanGateRecord,
     HumanGateEventRecord,
     TeamProposalVersionRecord,
+    BROWNFIELD_INTAKE_VERSIONS,
 )
 
 target_metadata = OrmBase.metadata
