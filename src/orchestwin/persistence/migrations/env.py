@@ -33,6 +33,10 @@ from orchestwin.projects.persistence.models import (
     ProjectBriefVersionRecord,
     ProjectRecord,
 )
+from orchestwin.sandbox.run_persistence import (
+    SANDBOX_COMMAND_RESULTS,
+    SANDBOX_RUNS,
+)
 from orchestwin.workflow.persistence.models import (
     HumanGateEventRecord,
     HumanGateRecord,
@@ -57,6 +61,8 @@ _IMPORTED_MODELS = (
     HumanGateEventRecord,
     TeamProposalVersionRecord,
     BROWNFIELD_INTAKE_VERSIONS,
+    SANDBOX_RUNS,
+    SANDBOX_COMMAND_RESULTS,
 )
 
 target_metadata = OrmBase.metadata
