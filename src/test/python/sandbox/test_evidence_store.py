@@ -76,15 +76,21 @@ def test_filesystem_store_rejects_invalid_keys_and_non_bytes(tmp_path: Path) -> 
         )
 
 
-def test_filesystem_store_does_not_follow_a_symlink_root(tmp_path: Path) -> None:
-    """Refuse storage redirection outside the configured evidence root."""
+def test_filesystem_store_does_not_follow_a_symlink_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refuse storage redirection without requiring host symlink privileges."""
     destination = tmp_path / "destination"
     destination.mkdir()
     root = tmp_path / "evidence"
-    try:
-        root.symlink_to(destination, target_is_directory=True)
-    except OSError:
-        pytest.skip("symlink creation is unavailable on this host")
+    path_type = type(root)
+    original_is_symlink = path_type.is_symlink
+
+    def report_configured_root_as_symlink(path: Path) -> bool:
+        return path == root or original_is_symlink(path)
+
+    monkeypatch.setattr(path_type, "is_symlink", report_configured_root_as_symlink)
 
     store = FileSystemSandboxEvidenceStore(root)
     with pytest.raises(OSError, match="prepared safely"):
@@ -96,3 +102,4 @@ def test_filesystem_store_does_not_follow_a_symlink_root(tmp_path: Path) -> None
         )
 
     assert list(destination.iterdir()) == []
+    assert not root.exists()
