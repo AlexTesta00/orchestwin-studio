@@ -539,3 +539,273 @@ def _validate_workspace_path(value: str) -> None:
         raise ValueError("destructive workspace path must stay inside the workspace")
     if PurePosixPath(value).as_posix() != value:
         raise ValueError("destructive workspace path must be canonical")
+
+
+def high_impact_request_from_snapshot(
+    snapshot: object,
+) -> HighImpactExecutionRequest:
+    """Rebuild one validated high-impact request from canonical persisted data."""
+    payload = _snapshot_mapping(snapshot, label="high-impact request snapshot")
+    profile_payload = _snapshot_mapping(
+        payload.get("profile_reference"),
+        label="high-impact profile reference",
+    )
+    command_payload_value = payload.get("command_plan")
+    if command_payload_value is None:
+        command_plan_id = None
+        command_plan_content_hash = None
+    else:
+        command_payload = _snapshot_mapping(
+            command_payload_value,
+            label="high-impact command plan",
+        )
+        command_plan_id = _snapshot_string(
+            command_payload.get("plan_id"),
+            label="high-impact command plan ID",
+        )
+        command_plan_content_hash = _snapshot_string(
+            command_payload.get("content_hash"),
+            label="high-impact command plan hash",
+        )
+
+    image_value = payload.get("image_reference")
+    image_reference = (
+        None
+        if image_value is None
+        else ContainerImageReference(
+            _snapshot_string(image_value, label="high-impact image reference")
+        )
+    )
+    resource_payload = _snapshot_mapping(
+        payload.get("resources"),
+        label="high-impact resources",
+    )
+    return HighImpactExecutionRequest(
+        project_id=UUID(
+            _snapshot_string(payload.get("project_id"), label="high-impact project ID")
+        ),
+        operation_kind=HighImpactOperationKind(
+            _snapshot_string(
+                payload.get("operation_kind"),
+                label="high-impact operation kind",
+            )
+        ),
+        summary=_snapshot_string(payload.get("summary"), label="high-impact summary"),
+        profile_reference=ExecutionProfileReference(
+            profile_id=_snapshot_string(
+                profile_payload.get("profile_id"),
+                label="high-impact profile ID",
+            ),
+            profile_version=_snapshot_string(
+                profile_payload.get("profile_version"),
+                label="high-impact profile version",
+            ),
+            content_hash=_snapshot_string(
+                profile_payload.get("content_hash"),
+                label="high-impact profile hash",
+            ),
+        ),
+        capability_status=ExecutionCapabilityStatus(
+            _snapshot_string(
+                payload.get("capability_status"),
+                label="high-impact capability status",
+            )
+        ),
+        command_plan_id=command_plan_id,
+        command_plan_content_hash=command_plan_content_hash,
+        image_reference=image_reference,
+        network_mode=CommandNetworkMode(
+            _snapshot_string(
+                payload.get("network_mode"),
+                label="high-impact network mode",
+            )
+        ),
+        secret_reference_ids=_snapshot_string_tuple(
+            payload.get("secret_reference_ids"),
+            label="high-impact secret references",
+        ),
+        resources=SandboxResourceLimits(
+            cpu_count=_snapshot_number(
+                resource_payload.get("cpu_count"),
+                label="high-impact CPU count",
+            ),
+            memory_mib=_snapshot_integer(
+                resource_payload.get("memory_mib"),
+                label="high-impact memory limit",
+            ),
+            pids_limit=_snapshot_integer(
+                resource_payload.get("pids_limit"),
+                label="high-impact PID limit",
+            ),
+            writable_tmpfs_mib=_snapshot_integer(
+                resource_payload.get("writable_tmpfs_mib"),
+                label="high-impact tmpfs limit",
+            ),
+        ),
+        destructive_workspace_paths=_snapshot_string_tuple(
+            payload.get("destructive_workspace_paths"),
+            label="high-impact destructive paths",
+        ),
+        requests_privileged_container=_snapshot_boolean(
+            payload.get("requests_privileged_container"),
+            label="high-impact privileged marker",
+        ),
+        requests_docker_socket_mount=_snapshot_boolean(
+            payload.get("requests_docker_socket_mount"),
+            label="high-impact Docker socket marker",
+        ),
+        requests_host_filesystem_mount=_snapshot_boolean(
+            payload.get("requests_host_filesystem_mount"),
+            label="high-impact host mount marker",
+        ),
+        requests_arbitrary_host_command=_snapshot_boolean(
+            payload.get("requests_arbitrary_host_command"),
+            label="high-impact host command marker",
+        ),
+        schema_version=_snapshot_integer(
+            payload.get("schema_version"),
+            label="high-impact request schema version",
+        ),
+    )
+
+
+def high_impact_version_from_snapshot(
+    snapshot: object,
+) -> HighImpactOperationRequestVersion:
+    """Rebuild one immutable high-impact request version from persisted data."""
+    payload = _snapshot_mapping(snapshot, label="high-impact version snapshot")
+    based_on_value = payload.get("based_on_version_number")
+    based_on = (
+        None
+        if based_on_value is None
+        else _snapshot_integer(based_on_value, label="high-impact base version")
+    )
+    created_at = datetime.fromisoformat(
+        _snapshot_string(payload.get("created_at"), label="high-impact creation time")
+    )
+    return HighImpactOperationRequestVersion(
+        id=UUID(_snapshot_string(payload.get("id"), label="high-impact request ID")),
+        project_id=UUID(
+            _snapshot_string(payload.get("project_id"), label="high-impact project ID")
+        ),
+        version_number=_snapshot_integer(
+            payload.get("version_number"),
+            label="high-impact version number",
+        ),
+        based_on_version_number=based_on,
+        request=high_impact_request_from_snapshot(payload.get("request")),
+        content_hash=_snapshot_string(
+            payload.get("content_hash"),
+            label="high-impact version hash",
+        ),
+        created_by_user_id=UUID(
+            _snapshot_string(
+                payload.get("created_by_user_id"),
+                label="high-impact creator ID",
+            )
+        ),
+        created_at=created_at,
+    )
+
+
+def high_impact_classification_from_snapshot(
+    snapshot: object,
+) -> HighImpactClassificationResult:
+    """Rebuild one deterministic classification from persisted data."""
+    payload = _snapshot_mapping(snapshot, label="high-impact classification snapshot")
+    reference_payload = _snapshot_mapping(
+        payload.get("request_reference"),
+        label="high-impact classification reference",
+    )
+    reason_values = payload.get("reasons")
+    if not isinstance(reason_values, list):
+        raise TypeError("high-impact classification reasons must be a list")
+    reasons = tuple(
+        HighImpactClassificationReason(
+            code=HighImpactReasonCode(
+                _snapshot_string(
+                    reason_payload.get("code"),
+                    label="high-impact reason code",
+                )
+            ),
+            message=_snapshot_string(
+                reason_payload.get("message"),
+                label="high-impact reason message",
+            ),
+        )
+        for item in reason_values
+        for reason_payload in [_snapshot_mapping(item, label="high-impact classification reason")]
+    )
+    return HighImpactClassificationResult(
+        request_reference=HighImpactOperationReference(
+            request_id=UUID(
+                _snapshot_string(
+                    reference_payload.get("request_id"),
+                    label="high-impact request ID",
+                )
+            ),
+            project_id=UUID(
+                _snapshot_string(
+                    reference_payload.get("project_id"),
+                    label="high-impact project ID",
+                )
+            ),
+            version_number=_snapshot_integer(
+                reference_payload.get("version_number"),
+                label="high-impact reference version",
+            ),
+            content_hash=_snapshot_string(
+                reference_payload.get("content_hash"),
+                label="high-impact reference hash",
+            ),
+        ),
+        policy_content_hash=_snapshot_string(
+            payload.get("policy_content_hash"),
+            label="high-impact policy hash",
+        ),
+        classification=HighImpactClassification(
+            _snapshot_string(
+                payload.get("classification"),
+                label="high-impact classification",
+            )
+        ),
+        reasons=reasons,
+    )
+
+
+def _snapshot_mapping(value: object, *, label: str) -> dict[str, object]:
+    from collections.abc import Mapping
+
+    if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
+        raise TypeError(f"{label} must be an object")
+    return {str(key): item for key, item in value.items()}
+
+
+def _snapshot_string(value: object, *, label: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{label} must be text")
+    return value
+
+
+def _snapshot_integer(value: object, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{label} must be an integer")
+    return value
+
+
+def _snapshot_number(value: object, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{label} must be numeric")
+    return float(value)
+
+
+def _snapshot_boolean(value: object, *, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{label} must be boolean")
+    return value
+
+
+def _snapshot_string_tuple(value: object, *, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise TypeError(f"{label} must be a list of strings")
+    return tuple(value)

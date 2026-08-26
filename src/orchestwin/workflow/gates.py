@@ -19,6 +19,7 @@ class HumanGateType(StrEnum):
     REQUIREMENTS = "REQUIREMENTS"
     DESIGN = "DESIGN"
     ARCHITECTURE = "ARCHITECTURE"
+    HIGH_IMPACT_OPERATION = "HIGH_IMPACT_OPERATION"
 
 
 class HumanGateStatus(StrEnum):
