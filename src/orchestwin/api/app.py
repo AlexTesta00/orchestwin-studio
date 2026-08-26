@@ -12,6 +12,7 @@ from orchestwin import __version__
 from orchestwin.api.architecture import create_architecture_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
+from orchestwin.api.brownfield import create_brownfield_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.health import create_health_router
@@ -76,6 +77,7 @@ def create_app(
     application.state.architecture_query_service = resolved_runtime.architecture_query_service
     application.state.architecture_gate_service = resolved_runtime.architecture_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
+    application.state.brownfield_service = resolved_runtime.brownfield_service
 
     application.add_middleware(
         CORSMiddleware,
@@ -104,6 +106,7 @@ def create_app(
         create_design_router(),
         create_architecture_router(),
         create_artifact_graph_router(),
+        create_brownfield_router(),
     ):
         application.include_router(
             router,
