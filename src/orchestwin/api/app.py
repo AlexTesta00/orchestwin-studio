@@ -32,7 +32,7 @@ def create_app(
 ) -> FastAPI:
     """Assemble a FastAPI application from explicit adapters."""
     resolved_settings = settings if settings is not None else load_settings()
-    resolved_runtime = runtime if runtime is not None else create_default_runtime()
+    resolved_runtime = runtime if runtime is not None else create_default_runtime(resolved_settings)
     resolved_auth_settings = auth_settings if auth_settings is not None else AuthApiSettings()
 
     @asynccontextmanager
@@ -81,6 +81,9 @@ def create_app(
     application.state.brownfield_service = resolved_runtime.brownfield_service
     application.state.execution_query_service = resolved_runtime.execution_query_service
     application.state.high_impact_service = resolved_runtime.high_impact_service
+    application.state.source_archive_maximum_upload_bytes = (
+        resolved_settings.source_archive_maximum_upload_bytes
+    )
 
     application.add_middleware(
         CORSMiddleware,

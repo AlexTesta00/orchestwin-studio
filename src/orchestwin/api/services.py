@@ -43,7 +43,9 @@ from orchestwin.api.execution import (
     ExecutionQueryApiService,
     HighImpactApprovalApiService,
 )
+from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
+from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -190,8 +192,11 @@ class ApplicationRuntime:
             await self.database_runtime.dispose()
 
 
-def create_default_runtime() -> ApplicationRuntime:
+def create_default_runtime(
+    settings: ApplicationSettings | None = None,
+) -> ApplicationRuntime:
     """Create persistence-backed services when configuration exists."""
+    resolved_settings = settings if settings is not None else load_settings()
     database_url = os.getenv(DATABASE_URL_ENVIRONMENT)
     jwt_secret = os.getenv(JWT_SECRET_ENVIRONMENT)
 
@@ -231,6 +236,10 @@ def create_default_runtime() -> ApplicationRuntime:
     requirements = build_requirements_services(database_runtime.session_factory)
     design = build_design_services(database_runtime.session_factory)
     architecture = build_architecture_services(database_runtime.session_factory)
+    sprint07 = build_sprint07_services(
+        resolved_settings,
+        database_runtime.session_factory,
+    )
 
     return ApplicationRuntime(
         identity_service=identity_service,
@@ -255,4 +264,7 @@ def create_default_runtime() -> ApplicationRuntime:
         artifact_graph_query_service=SqlAlchemyArtifactGraphQueryService(
             database_runtime.session_factory
         ),
+        brownfield_service=sprint07.brownfield,
+        execution_query_service=sprint07.execution_queries,
+        high_impact_service=sprint07.high_impact,
     )
