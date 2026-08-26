@@ -39,6 +39,10 @@ from orchestwin.api.design import (
     DesignQueryService,
     DesignRevisionService,
 )
+from orchestwin.api.execution import (
+    ExecutionQueryApiService,
+    HighImpactApprovalApiService,
+)
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.identity.application import (
     IdentityApplicationService,
@@ -177,6 +181,8 @@ class ApplicationRuntime:
     architecture_gate_service: ArchitectureGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
     brownfield_service: BrownfieldApiService | None = None
+    execution_query_service: ExecutionQueryApiService | None = None
+    high_impact_service: HighImpactApprovalApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
