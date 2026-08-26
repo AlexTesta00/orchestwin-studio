@@ -32,6 +32,7 @@ from orchestwin.api.architecture import (
     ArchitectureRevisionService,
 )
 from orchestwin.api.artifacts import ArtifactGraphQueryService
+from orchestwin.api.brownfield import BrownfieldApiService
 from orchestwin.api.design import (
     DesignGateService,
     DesignGenerationService,
@@ -175,6 +176,7 @@ class ApplicationRuntime:
     architecture_query_service: ArchitectureQueryService | None = None
     architecture_gate_service: ArchitectureGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
+    brownfield_service: BrownfieldApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
