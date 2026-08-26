@@ -148,6 +148,20 @@ def brownfield_service_dependency(request: Request) -> BrownfieldApiService:
     return service
 
 
+def maximum_upload_bytes_dependency(request: Request) -> int:
+    value = getattr(
+        request.app.state,
+        "source_archive_maximum_upload_bytes",
+        DEFAULT_MAXIMUM_UPLOAD_BYTES,
+    )
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "SOURCE_ARCHIVE_UPLOAD_POLICY_UNAVAILABLE"},
+        )
+    return value
+
+
 def create_brownfield_router() -> APIRouter:
     router = APIRouter(prefix=BROWNFIELD_API_PREFIX, tags=["brownfield"])
 
@@ -162,6 +176,7 @@ def create_brownfield_router() -> APIRouter:
         archive: Annotated[UploadFile, File(description="A validated source ZIP")],
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[BrownfieldApiService, Depends(brownfield_service_dependency)],
+        maximum_upload_bytes: Annotated[int, Depends(maximum_upload_bytes_dependency)],
         requested_target: Annotated[ExecutionTarget | None, Query()] = None,
         available_runner: Annotated[list[str] | None, Query()] = None,
     ) -> BrownfieldIntakeSummaryResponse:
@@ -173,7 +188,7 @@ def create_brownfield_router() -> APIRouter:
             )
         temporary_path = await _persist_bounded_upload(
             archive,
-            maximum_bytes=DEFAULT_MAXIMUM_UPLOAD_BYTES,
+            maximum_bytes=maximum_upload_bytes,
         )
         try:
             result = await service.ingest(
