@@ -12,6 +12,7 @@ import type {
 import ProjectArchitectureFlow from "@/components/ProjectArchitectureFlow.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
+import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlow.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
@@ -253,6 +254,13 @@ onMounted(loadProject);
           {{ t("detail.noVersions") }}
         </p>
       </section>
+
+      <ProjectBrownfieldSourceFlow
+        v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
+        :key="`${projectId}:brownfield-source`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
 
       <ProjectClarificationFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
