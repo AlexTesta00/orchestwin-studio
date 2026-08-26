@@ -19,7 +19,7 @@ import type {
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type ExecutionOperation =
-  "load" | "upload" | "create-high-impact" | "submit-gate" | "decide-gate";
+  "load" | "load-inventory" | "upload" | "create-high-impact" | "submit-gate" | "decide-gate";
 
 export interface ExecutionStoreError {
   message: string;
@@ -45,6 +45,7 @@ interface ExecutionState {
 function emptyPending(): Record<ExecutionOperation, boolean> {
   return {
     load: false,
+    "load-inventory": false,
     upload: false,
     "create-high-impact": false,
     "submit-gate": false,
@@ -198,6 +199,34 @@ export const useExecutionStore = defineStore("execution", {
         throw error;
       } finally {
         this.finish("load", projectId, epoch);
+      }
+    },
+
+    async loadInventory(
+      projectId: string,
+      intakeId: string,
+      authorize: AuthorizedRequest,
+      api: ExecutionApi = executionApi,
+    ): Promise<BrownfieldInventoryPayload> {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.begin("load-inventory");
+
+      try {
+        const inventory = await authorize((token) =>
+          api.sourceInventory(projectId, intakeId, token),
+        );
+
+        if (this.isCurrent(projectId, epoch)) {
+          this.inventory = inventory;
+        }
+
+        return inventory;
+      } catch (error) {
+        this.capture(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.finish("load-inventory", projectId, epoch);
       }
     },
 
