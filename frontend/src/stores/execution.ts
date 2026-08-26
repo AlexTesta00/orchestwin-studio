@@ -12,6 +12,7 @@ import type {
   HighImpactOperationPayload,
   HighImpactReadinessPayload,
   HumanGateEventPayload,
+  SandboxLogsPayload,
   SandboxRunPayload,
   SourceArchiveUploadOptions,
 } from "../types/execution";
@@ -19,7 +20,14 @@ import type {
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type ExecutionOperation =
-  "load" | "load-inventory" | "upload" | "create-high-impact" | "submit-gate" | "decide-gate";
+  | "load"
+  | "load-inventory"
+  | "load-sandbox-evidence"
+  | "load-high-impact-review"
+  | "upload"
+  | "create-high-impact"
+  | "submit-gate"
+  | "decide-gate";
 
 export interface ExecutionStoreError {
   message: string;
@@ -35,6 +43,7 @@ interface ExecutionState {
   capability: BrownfieldCapabilityPayload | null;
   profiles: ExecutionProfilePayload[];
   sandboxRuns: SandboxRunPayload[];
+  sandboxLogs: SandboxLogsPayload | null;
   highImpactOperations: HighImpactOperationPayload[];
   highImpactReadiness: HighImpactReadinessPayload | null;
   highImpactEvents: HumanGateEventPayload[];
@@ -46,6 +55,8 @@ function emptyPending(): Record<ExecutionOperation, boolean> {
   return {
     load: false,
     "load-inventory": false,
+    "load-sandbox-evidence": false,
+    "load-high-impact-review": false,
     upload: false,
     "create-high-impact": false,
     "submit-gate": false,
@@ -101,6 +112,7 @@ export const useExecutionStore = defineStore("execution", {
     capability: null,
     profiles: [],
     sandboxRuns: [],
+    sandboxLogs: null,
     highImpactOperations: [],
     highImpactReadiness: null,
     highImpactEvents: [],
@@ -138,6 +150,7 @@ export const useExecutionStore = defineStore("execution", {
       this.inventory = null;
       this.capability = null;
       this.sandboxRuns = [];
+      this.sandboxLogs = null;
       this.highImpactOperations = [];
       this.highImpactReadiness = null;
       this.highImpactEvents = [];
@@ -263,6 +276,76 @@ export const useExecutionStore = defineStore("execution", {
         throw error;
       } finally {
         this.finish("upload", projectId, epoch);
+      }
+    },
+
+    async loadSandboxEvidence(
+      projectId: string,
+      runId: string,
+      authorize: AuthorizedRequest,
+      api: ExecutionApi = executionApi,
+    ): Promise<SandboxRunPayload> {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.begin("load-sandbox-evidence");
+
+      try {
+        const [run, logs] = await Promise.all([
+          authorize((token) => api.sandboxRun(runId, token)),
+          authorize((token) => api.sandboxLogs(runId, token)),
+        ]);
+
+        if (this.isCurrent(projectId, epoch)) {
+          const existing = this.sandboxRuns.filter((item) => item.run_id !== run.run_id);
+          this.sandboxRuns = [...existing, run].sort((left, right) =>
+            left.recorded_at.localeCompare(right.recorded_at),
+          );
+          this.sandboxLogs = logs;
+        }
+
+        return run;
+      } catch (error) {
+        this.capture(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.finish("load-sandbox-evidence", projectId, epoch);
+      }
+    },
+
+    async loadHighImpactReview(
+      projectId: string,
+      requestId: string,
+      authorize: AuthorizedRequest,
+      api: ExecutionApi = executionApi,
+    ): Promise<HighImpactReadinessPayload> {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.begin("load-high-impact-review");
+
+      try {
+        const [readiness, events] = await Promise.all([
+          authorize((token) => api.highImpactReadiness(projectId, requestId, token)),
+          authorize((token) => api.highImpactEvents(projectId, requestId, token)).catch(
+            (error: unknown) => {
+              if (error instanceof ExecutionApiError && error.status === 404) {
+                return [];
+              }
+              throw error;
+            },
+          ),
+        ]);
+
+        if (this.isCurrent(projectId, epoch)) {
+          this.highImpactReadiness = readiness;
+          this.highImpactEvents = [...events];
+        }
+
+        return readiness;
+      } catch (error) {
+        this.capture(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.finish("load-high-impact-review", projectId, epoch);
       }
     },
 

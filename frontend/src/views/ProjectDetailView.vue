@@ -16,6 +16,7 @@ import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlo
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
+import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -258,6 +259,13 @@ onMounted(loadProject);
       <ProjectBrownfieldSourceFlow
         v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
         :key="`${projectId}:brownfield-source`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectSandboxGovernanceFlow
+        v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
+        :key="`${projectId}:sandbox-governance`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
