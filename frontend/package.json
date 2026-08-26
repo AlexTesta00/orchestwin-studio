@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Vue frontend for OrchesTwin Studio.",
   "license": "Apache-2.0",
-  "packageManager": "npm@11.18.0",
+  "packageManager": "npm@12.0.2",
   "engines": {
     "node": "26.6.0",
-    "npm": ">=11.18.0 <12"
+    "npm": ">=11.18.0 <13"
   },
   "devEngines": {
     "runtime": {
@@ -41,31 +41,31 @@
     "check": "npm run quality && npm run test && npm run bundle"
   },
   "dependencies": {
-    "pinia": "4.0.2",
-    "vue": "3.5.40",
-    "vue-i18n": "11.4.8",
+    "pinia": "4.0.3",
+    "vue": "3.5.41",
+    "vue-i18n": "11.4.9",
     "vue-router": "5.2.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "4.3.3",
-    "@tsconfig/node24": "24.0.4",
+    "@tsconfig/node24": "24.0.5",
     "@types/node": "24.13.3",
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/test-utils": "2.4.11",
     "@vue/tsconfig": "0.9.1",
-    "eslint": "10.8.0",
+    "eslint": "10.8.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-vue": "10.10.0",
-    "globals": "17.9.0",
-    "jsdom": "29.1.1",
+    "globals": "17.11.0",
+    "jsdom": "30.0.1",
     "prettier": "3.9.6",
     "prettier-plugin-tailwindcss": "0.8.1",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.66.0",
-    "vite": "8.1.5",
-    "vitest": "4.1.10",
-    "vue-tsc": "3.3.7"
+    "typescript-eslint": "8.67.0",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "vue-tsc": "3.3.10"
   }
 }

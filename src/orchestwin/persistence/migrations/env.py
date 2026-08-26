@@ -24,11 +24,21 @@ from orchestwin.persistence.config import (
 from orchestwin.persistence.orm import (
     OrmBase,
 )
+from orchestwin.projects.brownfield_persistence import (
+    BROWNFIELD_INTAKE_VERSIONS,
+)
 from orchestwin.projects.persistence.models import (
     BriefAssumptionRecord,
     ClarificationRoundRecord,
     ProjectBriefVersionRecord,
     ProjectRecord,
+)
+from orchestwin.sandbox.run_persistence import (
+    SANDBOX_COMMAND_RESULTS,
+    SANDBOX_RUNS,
+)
+from orchestwin.workflow.high_impact_persistence import (
+    HIGH_IMPACT_OPERATION_VERSIONS,
 )
 from orchestwin.workflow.persistence.models import (
     HumanGateEventRecord,
@@ -53,6 +63,10 @@ _IMPORTED_MODELS = (
     HumanGateRecord,
     HumanGateEventRecord,
     TeamProposalVersionRecord,
+    BROWNFIELD_INTAKE_VERSIONS,
+    SANDBOX_RUNS,
+    SANDBOX_COMMAND_RESULTS,
+    HIGH_IMPACT_OPERATION_VERSIONS,
 )
 
 target_metadata = OrmBase.metadata

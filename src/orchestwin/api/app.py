@@ -12,8 +12,10 @@ from orchestwin import __version__
 from orchestwin.api.architecture import create_architecture_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
+from orchestwin.api.brownfield import create_brownfield_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
+from orchestwin.api.execution import create_execution_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.requirements import create_requirements_router
@@ -30,7 +32,7 @@ def create_app(
 ) -> FastAPI:
     """Assemble a FastAPI application from explicit adapters."""
     resolved_settings = settings if settings is not None else load_settings()
-    resolved_runtime = runtime if runtime is not None else create_default_runtime()
+    resolved_runtime = runtime if runtime is not None else create_default_runtime(resolved_settings)
     resolved_auth_settings = auth_settings if auth_settings is not None else AuthApiSettings()
 
     @asynccontextmanager
@@ -76,6 +78,12 @@ def create_app(
     application.state.architecture_query_service = resolved_runtime.architecture_query_service
     application.state.architecture_gate_service = resolved_runtime.architecture_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
+    application.state.brownfield_service = resolved_runtime.brownfield_service
+    application.state.execution_query_service = resolved_runtime.execution_query_service
+    application.state.high_impact_service = resolved_runtime.high_impact_service
+    application.state.source_archive_maximum_upload_bytes = (
+        resolved_settings.source_archive_maximum_upload_bytes
+    )
 
     application.add_middleware(
         CORSMiddleware,
@@ -104,6 +112,8 @@ def create_app(
         create_design_router(),
         create_architecture_router(),
         create_artifact_graph_router(),
+        create_brownfield_router(),
+        create_execution_router(),
     ):
         application.include_router(
             router,

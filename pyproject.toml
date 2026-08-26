@@ -11,15 +11,16 @@ requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
-    "alembic==1.19.0",
+    "alembic==1.19.1",
     "email-validator==2.3.0",
     "fastapi==0.141.1",
     "psycopg[binary]==3.3.4",
-    "pwdlib[argon2]==0.3.0",
-    "pydantic-settings==2.14.2",
+    "pwdlib[argon2]==0.3.1",
+    "pydantic-settings==2.15.0",
+    "python-multipart==0.0.29",
     "pyjwt==2.13.0",
-    "sqlalchemy[asyncio]==2.0.51",
-    "uvicorn==0.52.1",
+    "sqlalchemy[asyncio]==2.0.52",
+    "uvicorn==0.52.4",
 ]
 
 [project.scripts]
