@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "base_images": [
+    {
+      "image_id": "composer-2.10.2",
+      "reference": "docker.io/library/composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040",
+      "platform_scope": "multi-arch-index",
+      "source": "https://github.com/docker-library/repo-info/blob/c5d08dfb4f86ca653d3aa723522323933b1aeda8/repos/composer/remote/2.10.2.md",
+      "retrieved_at": "2026-08-26"
+    },
+    {
+      "image_id": "node-26.7.0-bookworm-slim",
+      "reference": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+      "platform_scope": "multi-arch-index",
+      "source": "https://github.com/docker-library/repo-info/blob/c5d08dfb4f86ca653d3aa723522323933b1aeda8/repos/node/remote/26.7.0-bookworm-slim.md",
+      "retrieved_at": "2026-08-26"
+    },
+    {
+      "image_id": "php-8.4.24-cli-bookworm",
+      "reference": "docker.io/library/php:8.4.24-cli-bookworm@sha256:6003a0607eea6dc61d04723d3e60347c8481ffb2f09dbf85bf427b9ce0c25629",
+      "platform_scope": "multi-arch-index",
+      "source": "https://github.com/docker-library/repo-info/blob/c5d08dfb4f86ca653d3aa723522323933b1aeda8/repos/php/remote/8.4.24-cli-bookworm.md",
+      "retrieved_at": "2026-08-26"
+    },
+    {
+      "image_id": "playwright-1.62.1-noble",
+      "reference": "mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e",
+      "platform_scope": "linux-amd64",
+      "source": "https://mcr.microsoft.com/v2/playwright/manifests/v1.62.1-noble",
+      "retrieved_at": "2026-08-26"
+    }
+  ],
+  "runners": [
+    {
+      "runner_id": "web.browser",
+      "kind": "BROWSER",
+      "version": "1.0.0",
+      "dockerfile_path": "infra/web-runners/Dockerfile.browser",
+      "base_image_ids": [
+        "playwright-1.62.1-noble"
+      ],
+      "output_repository": "orchestwin/web-browser-runner",
+      "capability_status": "DESIGN_ONLY_LEVEL_C",
+      "built_image_reference": null
+    },
+    {
+      "runner_id": "web.node",
+      "kind": "NODE",
+      "version": "1.0.0",
+      "dockerfile_path": "infra/web-runners/Dockerfile.node",
+      "base_image_ids": [
+        "node-26.7.0-bookworm-slim"
+      ],
+      "output_repository": "orchestwin/web-node-runner",
+      "capability_status": "DESIGN_ONLY_LEVEL_C",
+      "built_image_reference": null
+    },
+    {
+      "runner_id": "web.php",
+      "kind": "PHP",
+      "version": "1.0.0",
+      "dockerfile_path": "infra/web-runners/Dockerfile.php",
+      "base_image_ids": [
+        "composer-2.10.2",
+        "php-8.4.24-cli-bookworm"
+      ],
+      "output_repository": "orchestwin/web-php-runner",
+      "capability_status": "DESIGN_ONLY_LEVEL_C",
+      "built_image_reference": null
+    }
+  ]
+}
