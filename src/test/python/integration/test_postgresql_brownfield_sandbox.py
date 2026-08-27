@@ -380,8 +380,12 @@ async def run_integration_scenario(tmp_path: Path) -> None:
         scripts = ScriptDirectory.from_config(
             create_alembic_config(database_settings.url.get_secret_value())
         )
-        assert scripts.get_current_head() == "0019_high_impact_gate_type"
-        assert revision == scripts.get_current_head()
+        current_head = scripts.get_current_head()
+        assert current_head is not None
+        assert revision == current_head
+        assert "0019_high_impact_gate_type" in {
+            script.revision for script in scripts.walk_revisions(base="base", head=current_head)
+        }
     finally:
         await truncate_application_data(runtime)
         await runtime.dispose()
