@@ -22,6 +22,8 @@
     "test:coverage:python": "python -m pytest -m \"not integration\" --cov=orchestwin --cov-branch --cov-report=",
     "test:coverage:integration:python": "python -m pytest -m integration src/test/python/integration --cov=orchestwin --cov-branch --cov-append --cov-report=term-missing --cov-report=xml:coverage.xml",
     "test:compose": "python scripts/smoke_compose.py",
+    "test:web-fixtures": "python -m pytest -q src/test/python/web_execution/test_profile_fixture_matrix.py",
+    "verify:web-runners": "python scripts/verify_web_runner_manifest.py",
     "type-check:frontend": "npm --prefix frontend run type-check",
     "lint:python": "python -m ruff check .",
     "lint:fix:python": "python -m ruff check . --fix",
