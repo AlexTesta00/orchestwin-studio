@@ -117,11 +117,11 @@ def source_revision(
                 kind=(
                     WebSourceProvenanceKind.SOURCE_PLAN
                     if version_number == 1
-                    else WebSourceProvenanceKind.REPAIR_PROPOSAL
+                    else WebSourceProvenanceKind.FAILURE_SIGNATURE
                 ),
                 reference_id=f"integration:web-source:v{version_number}",
                 version_number=version_number,
-                content_hash="a" * 64,
+                content_hash=("a" * 64 if version_number == 1 else FAILURE_SIGNATURE),
             ),
         ),
         related_failure_signature=(None if version_number == 1 else FAILURE_SIGNATURE),
@@ -374,8 +374,12 @@ async def run_integration_scenario() -> None:
         scripts = ScriptDirectory.from_config(
             create_alembic_config(database_settings.url.get_secret_value())
         )
-        assert scripts.get_current_head() == "0021_web_execution_attempts"
-        assert revision == scripts.get_current_head()
+        current_head = scripts.get_current_head()
+        assert current_head is not None
+        assert revision == current_head
+        assert "0021_web_execution_attempts" in {
+            script.revision for script in scripts.walk_revisions(base="base", head=current_head)
+        }
     finally:
         await truncate_application_data(runtime)
         await runtime.dispose()
