@@ -1,0 +1,8 @@
+FROM docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32
+
+COPY --chown=node:node infra/web-runners/bin/static-server.mjs /opt/orchestwin/bin/static-server.mjs
+
+USER node
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["node", "--version"]
