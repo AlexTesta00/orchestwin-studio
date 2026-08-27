@@ -34,6 +34,7 @@ from orchestwin.web_execution.runtime_evidence import WebHealthCheckSpec
 from orchestwin.web_execution.targets import (
     WebTargetSelection,
     WebValidationScope,
+    promote_web_validation_scope,
     web_scope_for,
 )
 
@@ -96,6 +97,7 @@ class WebProfileValidation:
     profile_version: str
     validation_scope_hash: str
     capability_status: ExecutionCapabilityStatus
+    validation_evidence_refs: tuple[str, ...]
     inventory_content_hash: str
     selection: WebTargetSelection
     lock_report_content_hash: str
@@ -103,7 +105,16 @@ class WebProfileValidation:
     issues: tuple[WebProfileIssue, ...]
 
     def __post_init__(self) -> None:
-        scope = web_scope_for(self.target)
+        baseline_scope = web_scope_for(self.target)
+        if self.capability_status is ExecutionCapabilityStatus.VALIDATED_LEVEL_D:
+            scope = promote_web_validation_scope(
+                baseline_scope,
+                validation_evidence_refs=self.validation_evidence_refs,
+            )
+        else:
+            scope = baseline_scope
+            if self.validation_evidence_refs:
+                raise ValueError("non-validated Web profile validation cannot claim evidence")
         if self.status is WebProfileValidationStatus.READY_FOR_VALIDATION:
             self.selection.validate_against(scope)
         if self.profile_id != scope.profile_id or self.profile_version != scope.profile_version:
@@ -153,6 +164,7 @@ class WebProfileValidation:
             "profile_version": self.profile_version,
             "validation_scope_hash": self.validation_scope_hash,
             "capability_status": self.capability_status.value,
+            "validation_evidence_refs": list(self.validation_evidence_refs),
             "inventory_content_hash": self.inventory_content_hash,
             "selection": self.selection.to_snapshot(),
             "lock_report_content_hash": self.lock_report_content_hash,
@@ -362,6 +374,7 @@ def create_profile_validation(
         profile_version=scope.profile_version,
         validation_scope_hash=scope.content_hash,
         capability_status=scope.capability_status,
+        validation_evidence_refs=scope.validation_evidence_refs,
         inventory_content_hash=snapshot.inventory_content_hash,
         selection=selection,
         lock_report_content_hash=lock_report.content_hash,

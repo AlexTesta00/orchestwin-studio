@@ -344,6 +344,30 @@ def create_sprint08_web_validation_scopes() -> Mapping[ExecutionTarget, WebValid
     return MappingProxyType(scopes)
 
 
+def promote_web_validation_scope(
+    scope: WebValidationScope,
+    *,
+    validation_evidence_refs: tuple[str, ...],
+) -> WebValidationScope:
+    """Create an exact Level D scope only from canonical recorded evidence references."""
+    if scope.capability_status is not ExecutionCapabilityStatus.DESIGN_ONLY_LEVEL_C:
+        raise ValueError("only a design-only baseline Web scope can be promoted")
+    return WebValidationScope(
+        target=scope.target,
+        profile_id=scope.profile_id,
+        profile_version=scope.profile_version,
+        capability_status=ExecutionCapabilityStatus.VALIDATED_LEVEL_D,
+        language_configurations=scope.language_configurations,
+        layout=scope.layout,
+        package_managers=scope.package_managers,
+        runtime_kind=scope.runtime_kind,
+        required_roots=scope.required_roots,
+        excluded_frameworks=scope.excluded_frameworks,
+        requires_browser_evidence=scope.requires_browser_evidence,
+        validation_evidence_refs=tuple(sorted(set(validation_evidence_refs))),
+    )
+
+
 def web_scope_for(target: ExecutionTarget) -> WebValidationScope:
     """Resolve one Sprint 08 scope without silently accepting another target."""
     try:
