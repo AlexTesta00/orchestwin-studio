@@ -18,6 +18,7 @@ import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
+import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
@@ -294,6 +295,12 @@ onMounted(loadProject);
 
       <ProjectArchitectureFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectWebSourceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
