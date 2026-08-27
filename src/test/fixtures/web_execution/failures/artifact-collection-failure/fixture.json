@@ -1,0 +1,6 @@
+{
+  "fixture_id": "artifact-collection-failure",
+  "target": "WEB_STATIC",
+  "expected_failure_category": "ARTIFACT_COLLECTION",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

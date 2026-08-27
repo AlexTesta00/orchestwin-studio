@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "valid_fixtures": [
+    {
+      "id": "web-static-js-valid",
+      "target": "WEB_STATIC",
+      "frontend": "STATIC_ASSETS",
+      "backend": null
+    },
+    {
+      "id": "web-vue-js-valid",
+      "target": "WEB_VUE",
+      "frontend": "JAVASCRIPT",
+      "backend": null
+    },
+    {
+      "id": "web-vue-ts-valid",
+      "target": "WEB_VUE",
+      "frontend": "TYPESCRIPT",
+      "backend": null
+    },
+    {
+      "id": "web-express-js-valid",
+      "target": "WEB_NODE_EXPRESS",
+      "frontend": null,
+      "backend": "JAVASCRIPT"
+    },
+    {
+      "id": "web-express-ts-valid",
+      "target": "WEB_NODE_EXPRESS",
+      "frontend": null,
+      "backend": "TYPESCRIPT"
+    },
+    {
+      "id": "web-php-valid",
+      "target": "WEB_PHP",
+      "frontend": null,
+      "backend": "PHP"
+    },
+    {
+      "id": "web-vue-node-js-valid",
+      "target": "WEB_VUE_NODE",
+      "frontend": "JAVASCRIPT",
+      "backend": "JAVASCRIPT"
+    },
+    {
+      "id": "web-vue-node-ts-valid",
+      "target": "WEB_VUE_NODE",
+      "frontend": "TYPESCRIPT",
+      "backend": "TYPESCRIPT"
+    }
+  ],
+  "failure_fixtures": [
+    {
+      "id": "missing-lockfile",
+      "category": "DEPENDENCY_INSTALL",
+      "target": "WEB_VUE"
+    },
+    {
+      "id": "multiple-lockfiles",
+      "category": "DEPENDENCY_INSTALL",
+      "target": "WEB_VUE"
+    },
+    {
+      "id": "dependency-install-failure",
+      "category": "DEPENDENCY_INSTALL",
+      "target": "WEB_VUE"
+    },
+    {
+      "id": "typescript-compilation-failure",
+      "category": "BUILD",
+      "target": "WEB_VUE"
+    },
+    {
+      "id": "javascript-unit-test-failure",
+      "category": "TEST",
+      "target": "WEB_VUE"
+    },
+    {
+      "id": "express-integration-test-failure",
+      "category": "TEST",
+      "target": "WEB_NODE_EXPRESS"
+    },
+    {
+      "id": "php-lint-failure",
+      "category": "STATIC_CHECK",
+      "target": "WEB_PHP"
+    },
+    {
+      "id": "phpunit-failure",
+      "category": "TEST",
+      "target": "WEB_PHP"
+    },
+    {
+      "id": "runtime-startup-failure",
+      "category": "RUNTIME",
+      "target": "WEB_NODE_EXPRESS"
+    },
+    {
+      "id": "health-check-failure",
+      "category": "HEALTH_CHECK",
+      "target": "WEB_NODE_EXPRESS"
+    },
+    {
+      "id": "browser-navigation-failure",
+      "category": "BROWSER",
+      "target": "WEB_STATIC"
+    },
+    {
+      "id": "axe-accessibility-finding",
+      "category": "BROWSER",
+      "target": "WEB_STATIC"
+    },
+    {
+      "id": "timeout",
+      "category": "TIMEOUT",
+      "target": "WEB_VUE_NODE"
+    },
+    {
+      "id": "artifact-collection-failure",
+      "category": "ARTIFACT_COLLECTION",
+      "target": "WEB_STATIC"
+    },
+    {
+      "id": "network-policy-violation",
+      "category": "POLICY",
+      "target": "WEB_VUE"
+    }
+  ],
+  "repair_fixtures": [
+    {
+      "target": "WEB_STATIC",
+      "failure": "browser-navigation-failure",
+      "path": "index.html"
+    },
+    {
+      "target": "WEB_VUE",
+      "failure": "typescript-compilation-failure",
+      "path": "src/main.ts"
+    },
+    {
+      "target": "WEB_NODE_EXPRESS",
+      "failure": "express-integration-test-failure",
+      "path": "tests/health.test.js"
+    },
+    {
+      "target": "WEB_PHP",
+      "failure": "php-lint-failure",
+      "path": "public/index.php"
+    },
+    {
+      "target": "WEB_VUE_NODE",
+      "failure": "health-check-failure",
+      "path": "backend/src/server.ts"
+    }
+  ],
+  "capability_status_before_recorded_validation": "DESIGN_ONLY_LEVEL_C"
+}

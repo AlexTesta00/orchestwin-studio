@@ -1,0 +1,6 @@
+{
+  "fixture_id": "express-integration-test-failure",
+  "target": "WEB_NODE_EXPRESS",
+  "expected_failure_category": "TEST",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

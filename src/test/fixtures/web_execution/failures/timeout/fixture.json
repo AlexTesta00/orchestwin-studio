@@ -1,0 +1,6 @@
+{
+  "fixture_id": "timeout",
+  "target": "WEB_VUE_NODE",
+  "expected_failure_category": "TIMEOUT",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

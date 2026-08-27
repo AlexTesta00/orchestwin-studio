@@ -1,0 +1,12 @@
+{
+  "target": "WEB_STATIC",
+  "initial_failure_fixture": "browser-navigation-failure",
+  "repair_operation": "REPLACE",
+  "repair_path": "index.html",
+  "expected_terminal_status": "PASSED",
+  "required_evidence": [
+    "failure_signature",
+    "source_revision_n_plus_1",
+    "successful_rerun"
+  ]
+}
