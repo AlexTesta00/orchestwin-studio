@@ -12,6 +12,12 @@ from orchestwin.web_execution.express_profile import WebNodeExpressExecutionProf
 from orchestwin.web_execution.php_profile import WebPhpExecutionProfile
 from orchestwin.web_execution.profile_contracts import WebExecutionProfile
 from orchestwin.web_execution.static_profile import WebStaticExecutionProfile
+from orchestwin.web_execution.validation_evidence import (
+    WebProfilePromotionDecision,
+    WebProfileValidationEvidenceCatalog,
+    evaluate_web_profile_promotion,
+    promote_web_profile_if_eligible,
+)
 from orchestwin.web_execution.vue_node_profile import WebVueNodeExecutionProfile
 from orchestwin.web_execution.vue_profile import WebVueExecutionProfile
 
@@ -68,15 +74,41 @@ class WebExecutionProfileRegistry:
         }
 
 
-def create_sprint08_web_profile_registry() -> WebExecutionProfileRegistry:
-    """Create all five profile implementations while preserving Level C claims."""
-    return create_web_execution_profile_registry(
-        (
-            WebNodeExpressExecutionProfile(),
-            WebPhpExecutionProfile(),
-            WebStaticExecutionProfile(),
-            WebVueExecutionProfile(),
-            WebVueNodeExecutionProfile(),
+def create_sprint08_web_profile_registry(
+    *,
+    evidence_catalog: WebProfileValidationEvidenceCatalog | None = None,
+) -> WebExecutionProfileRegistry:
+    """Create five profiles and promote only versions with complete recorded evidence."""
+    profiles: tuple[WebExecutionProfile, ...] = (
+        WebNodeExpressExecutionProfile(),
+        WebPhpExecutionProfile(),
+        WebStaticExecutionProfile(),
+        WebVueExecutionProfile(),
+        WebVueNodeExecutionProfile(),
+    )
+    if evidence_catalog is not None:
+        profiles = tuple(
+            promote_web_profile_if_eligible(profile, catalog=evidence_catalog)
+            for profile in profiles
+        )
+    return create_web_execution_profile_registry(profiles)
+
+
+def evaluate_sprint08_web_profile_promotions(
+    evidence_catalog: WebProfileValidationEvidenceCatalog,
+) -> tuple[WebProfilePromotionDecision, ...]:
+    """Return one inspectable evidence decision for every public Sprint 08 target."""
+    registry = create_sprint08_web_profile_registry()
+    return tuple(
+        sorted(
+            (
+                evaluate_web_profile_promotion(
+                    profile.scope,
+                    catalog=evidence_catalog,
+                )
+                for profile in registry.profiles
+            ),
+            key=lambda decision: (decision.profile_id, decision.profile_version),
         )
     )
 
