@@ -1,0 +1,12 @@
+{
+  "target": "WEB_NODE_EXPRESS",
+  "initial_failure_fixture": "express-integration-test-failure",
+  "repair_operation": "REPLACE",
+  "repair_path": "tests/health.test.js",
+  "expected_terminal_status": "PASSED",
+  "required_evidence": [
+    "failure_signature",
+    "source_revision_n_plus_1",
+    "successful_rerun"
+  ]
+}

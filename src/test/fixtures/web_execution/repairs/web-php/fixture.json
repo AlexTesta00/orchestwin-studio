@@ -1,0 +1,12 @@
+{
+  "target": "WEB_PHP",
+  "initial_failure_fixture": "php-lint-failure",
+  "repair_operation": "REPLACE",
+  "repair_path": "public/index.php",
+  "expected_terminal_status": "PASSED",
+  "required_evidence": [
+    "failure_signature",
+    "source_revision_n_plus_1",
+    "successful_rerun"
+  ]
+}

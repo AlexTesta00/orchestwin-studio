@@ -1,0 +1,12 @@
+{
+  "target": "WEB_VUE_NODE",
+  "initial_failure_fixture": "health-check-failure",
+  "repair_operation": "REPLACE",
+  "repair_path": "backend/src/server.ts",
+  "expected_terminal_status": "PASSED",
+  "required_evidence": [
+    "failure_signature",
+    "source_revision_n_plus_1",
+    "successful_rerun"
+  ]
+}

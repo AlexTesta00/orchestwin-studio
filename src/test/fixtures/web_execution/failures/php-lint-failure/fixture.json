@@ -1,0 +1,6 @@
+{
+  "fixture_id": "php-lint-failure",
+  "target": "WEB_PHP",
+  "expected_failure_category": "STATIC_CHECK",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}
