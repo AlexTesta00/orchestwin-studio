@@ -18,6 +18,7 @@ import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
+import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
 import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import { useAuthStore } from "@/stores/auth";
 
@@ -301,6 +302,12 @@ onMounted(loadProject);
 
       <ProjectWebSourceReview
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectWebEvidenceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
