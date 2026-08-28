@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
@@ -240,6 +240,27 @@ def create_sprint09_jvm_validation_scopes() -> Mapping[ExecutionTarget, JvmValid
         ),
     }
     return MappingProxyType(scopes)
+
+
+def promote_jvm_validation_scope(
+    scope: JvmValidationScope,
+    *,
+    validation_evidence_refs: tuple[str, ...],
+) -> JvmValidationScope:
+    """Promote one exact baseline only from canonical durable evidence references."""
+    if scope.capability_status is not ExecutionCapabilityStatus.DESIGN_ONLY_LEVEL_C:
+        raise ValueError("only a design-only baseline JVM scope can be promoted")
+    _require_canonical_text(
+        validation_evidence_refs,
+        label="validation evidence references",
+    )
+    if not validation_evidence_refs:
+        raise ValueError("JVM scope promotion requires durable evidence references")
+    return replace(
+        scope,
+        capability_status=ExecutionCapabilityStatus.VALIDATED_LEVEL_D,
+        validation_evidence_refs=validation_evidence_refs,
+    )
 
 
 def jvm_scope_for(target: ExecutionTarget) -> JvmValidationScope:
