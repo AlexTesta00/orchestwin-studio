@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "jvm-kotlin-calculator",
+  "target": "JVM_KOTLIN",
+  "profile_id": "jvm.kotlin-gradle",
+  "role": "FORMAL_CASE_A",
+  "build_system": "GRADLE_KOTLIN_DSL",
+  "entrypoint": "org.orchestwin.calculator.MainKt",
+  "expected_output": "42",
+  "source_content_hash": "d7dfe24df68aaa09b576f41928122c637d08a2ba823a89cf7d99a541a59b703b",
+  "execution_attested": false,
+  "attestation_boundary": "SOURCE_CONTRACT_ONLY",
+  "launcher_complete": false,
+  "dependency_verification_complete": false
+}

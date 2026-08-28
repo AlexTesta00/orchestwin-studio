@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "jvm-java-greeting",
+  "target": "JVM_JAVA",
+  "profile_id": "jvm.java-gradle",
+  "role": "TECHNICAL_FIXTURE",
+  "build_system": "GRADLE_KOTLIN_DSL",
+  "entrypoint": "org.orchestwin.greeting.Main",
+  "expected_output": "Hello, JVM!",
+  "source_content_hash": "f58bf0eefa50490b323ad0fb44f9d757a0e6afe878e65a514c0fa22ae3d98faa",
+  "execution_attested": false,
+  "attestation_boundary": "SOURCE_CONTRACT_ONLY",
+  "launcher_complete": false,
+  "dependency_verification_complete": false
+}
