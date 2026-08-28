@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "formal_case": "jvm-kotlin-calculator",
+  "fixtures": [
+    "jvm-java-greeting",
+    "jvm-kotlin-calculator",
+    "jvm-scala-greeting"
+  ],
+  "repairs": [
+    "repairs/kotlin-calculator/repair.json"
+  ],
+  "capability_status": "DESIGN_ONLY_LEVEL_C",
+  "execution_attested": false,
+  "runner_build_attested": false,
+  "fixture_execution_attested": false
+}

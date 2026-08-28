@@ -1,0 +1,6 @@
+{
+  "fixture_id": "browser-navigation-failure",
+  "target": "WEB_STATIC",
+  "expected_failure_category": "BROWSER",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

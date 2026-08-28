@@ -1,0 +1,6 @@
+{
+  "fixture_id": "phpunit-failure",
+  "target": "WEB_PHP",
+  "expected_failure_category": "TEST",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

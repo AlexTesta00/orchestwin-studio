@@ -1,0 +1,6 @@
+{
+  "fixture_id": "dependency-install-failure",
+  "target": "WEB_VUE",
+  "expected_failure_category": "DEPENDENCY_INSTALL",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

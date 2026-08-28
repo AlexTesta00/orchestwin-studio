@@ -1,0 +1,6 @@
+{
+  "fixture_id": "network-policy-violation",
+  "target": "WEB_VUE",
+  "expected_failure_category": "POLICY",
+  "claim_boundary": "Deterministic failure fixture; not Level D validation evidence by itself."
+}

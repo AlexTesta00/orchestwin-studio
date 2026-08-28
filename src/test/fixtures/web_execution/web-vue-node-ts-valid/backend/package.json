@@ -1,0 +1,17 @@
+{
+  "name": "orchestwin-fixture",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "express": "5.0.0"
+  },
+  "devDependencies": {
+    "vitest": "3.0.0",
+    "typescript": "5.8.0"
+  },
+  "scripts": {
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "build": "tsc"
+  }
+}

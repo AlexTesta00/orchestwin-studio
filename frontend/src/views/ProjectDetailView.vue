@@ -16,8 +16,12 @@ import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlo
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
+import ProjectJvmEvidenceReview from "@/components/ProjectJvmEvidenceReview.vue";
+import ProjectJvmSourceReview from "@/components/ProjectJvmSourceReview.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
+import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
+import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
@@ -294,6 +298,30 @@ onMounted(loadProject);
 
       <ProjectArchitectureFlow
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectJvmSourceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectJvmEvidenceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectWebSourceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectWebEvidenceReview
+        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />

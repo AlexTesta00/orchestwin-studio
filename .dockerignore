@@ -7,3 +7,9 @@
 !src/
 !src/orchestwin/
 !src/orchestwin/**
+
+!infra/
+!infra/web-runners/
+!infra/web-runners/**
+!infra/jvm-runners/
+!infra/jvm-runners/**

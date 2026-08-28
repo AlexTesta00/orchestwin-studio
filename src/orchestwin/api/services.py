@@ -43,7 +43,9 @@ from orchestwin.api.execution import (
     ExecutionQueryApiService,
     HighImpactApprovalApiService,
 )
+from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.sprint07_runtime import build_sprint07_services
+from orchestwin.api.web_execution import WebExecutionApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.identity.application import (
@@ -185,6 +187,8 @@ class ApplicationRuntime:
     brownfield_service: BrownfieldApiService | None = None
     execution_query_service: ExecutionQueryApiService | None = None
     high_impact_service: HighImpactApprovalApiService | None = None
+    web_execution_api_service: WebExecutionApiService | None = None
+    jvm_execution_api_service: JvmExecutionApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""

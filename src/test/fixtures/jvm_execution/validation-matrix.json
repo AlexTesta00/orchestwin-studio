@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "formal_case": {
+    "fixture_id": "jvm-kotlin-calculator",
+    "target": "JVM_KOTLIN",
+    "role": "FORMAL_CASE_A"
+  },
+  "technical_fixtures": [
+    {
+      "fixture_id": "jvm-java-greeting",
+      "target": "JVM_JAVA",
+      "role": "TECHNICAL_FIXTURE"
+    },
+    {
+      "fixture_id": "jvm-scala-greeting",
+      "target": "JVM_SCALA",
+      "role": "TECHNICAL_FIXTURE"
+    }
+  ],
+  "validated_project_shapes": {
+    "JVM_JAVA": {
+      "build_system": "GRADLE_KOTLIN_DSL",
+      "jdk_major": 21,
+      "language_version": "21",
+      "runner_id": "jvm.gradle"
+    },
+    "JVM_KOTLIN": {
+      "build_system": "GRADLE_KOTLIN_DSL",
+      "jdk_major": 21,
+      "language_version": "2.4.10",
+      "runner_id": "jvm.gradle"
+    },
+    "JVM_SCALA": {
+      "build_system": "SBT",
+      "jdk_major": 21,
+      "language_version": "3.3.8",
+      "runner_id": "jvm.sbt"
+    }
+  },
+  "required_scenarios": [
+    "valid-profile-contract",
+    "compile-failure",
+    "unit-test-failure",
+    "runtime-failure",
+    "timeout",
+    "resource-limit",
+    "artifact-inventory",
+    "repair-rerun",
+    "unsupported-build-system",
+    "mixed-language-conflict",
+    "mobile-target-rejection"
+  ],
+  "failure_categories": [
+    "VALIDATION",
+    "DEPENDENCY_INSTALL",
+    "STATIC_CHECK",
+    "BUILD",
+    "TEST",
+    "RUNTIME",
+    "ARTIFACT_COLLECTION",
+    "TIMEOUT",
+    "RESOURCE_LIMIT",
+    "CANCELLED",
+    "POLICY"
+  ],
+  "capability_status_without_complete_evidence": "DESIGN_ONLY_LEVEL_C",
+  "runner_build_attested": false,
+  "fixture_execution_attested": false,
+  "general_llm_generation_attested": false,
+  "mobile_target_material_present": false
+}

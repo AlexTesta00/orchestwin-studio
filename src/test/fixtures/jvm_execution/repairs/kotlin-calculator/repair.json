@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "repair_id": "jvm-kotlin-calculator-unresolved-reference",
+  "fixture_id": "jvm-kotlin-calculator",
+  "failure_code": "KOTLIN_UNRESOLVED_REFERENCE",
+  "normalized_path": "src/main/kotlin/org/orchestwin/calculator/Calculator.kt",
+  "expected_output": "42",
+  "execution_attested": false
+}
