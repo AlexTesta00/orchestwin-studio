@@ -70,7 +70,7 @@ def test_detects_single_module_kotlin_gradle_project() -> None:
 def test_detects_single_project_scala_sbt_project() -> None:
     files = {
         "build.sbt": 'scalaVersion := "3.3.8"',
-        "project/build.properties": "sbt.version=1.13.0",
+        "project/build.properties": "sbt.version=1.12.14",
         "src/main/scala/example/Main.scala": "object Main",
     }
 
