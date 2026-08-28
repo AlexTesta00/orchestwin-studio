@@ -1,0 +1,6 @@
+FROM docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28
+
+USER gradle
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["gradle", "--version"]
