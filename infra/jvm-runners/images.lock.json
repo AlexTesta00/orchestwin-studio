@@ -39,7 +39,15 @@
       ],
       "output_repository": "orchestwin/jvm-sbt-runner",
       "capability_status": "DESIGN_ONLY_LEVEL_C",
-      "built_image_reference": null
+      "built_image_reference": null,
+      "sbt_distribution_version": "1.12.14"
     }
-  ]
+  ],
+  "sbt_distribution": {
+    "version": "1.12.14",
+    "url": "https://github.com/sbt/sbt/releases/download/v1.12.14/sbt-1.12.14.tgz",
+    "sha256": "cd17daae220ff264faa4251334522444518584f0eb2ee82da01523a9b9002b7e",
+    "source": "sbt/sbt official GitHub release asset metadata",
+    "retrieved_at": "2026-08-28"
+  }
 }

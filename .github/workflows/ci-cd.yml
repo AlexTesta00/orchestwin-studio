@@ -189,6 +189,55 @@ jobs:
           docker image inspect --format '{{.Id}}' orchestwin/web-browser-runner:ci
           docker image inspect --format '{{.Id}}' orchestwin/web-php-runner:ci
 
+  verify-jvm-runners:
+    name: Verify JVM runners and fixture contracts
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    env:
+      HUSKY: 0
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Install backend and test dependencies
+        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
+
+      - name: Validate pinned JVM runner and tool-distribution manifest
+        run: npm run verify:jvm-runners
+
+      - name: Validate repository-owned JVM fixture contracts
+        run: npm run verify:jvm-execution-contracts
+
+      - name: Verify complete JVM fixture matrix
+        run: npm run test:jvm-fixtures
+
+      - name: Build controlled JVM runner images
+        run: |
+          docker build --pull --file infra/jvm-runners/Dockerfile.gradle --tag orchestwin/jvm-gradle-runner:ci .
+          docker build --pull --file infra/jvm-runners/Dockerfile.sbt --tag orchestwin/jvm-sbt-runner:ci .
+
+      - name: Smoke test non-root runner images without network
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 768m orchestwin/jvm-gradle-runner:ci gradle --version
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 768m orchestwin/jvm-sbt-runner:ci sbt --script-version
+
+      - name: Record local JVM runner image identities
+        run: |
+          docker image inspect --format '{{.Id}}' orchestwin/jvm-gradle-runner:ci
+          docker image inspect --format '{{.Id}}' orchestwin/jvm-sbt-runner:ci
+
   build:
     name: Build (${{ matrix.os }})
     needs: test
@@ -261,6 +310,7 @@ jobs:
     needs:
       - test
       - web-execution
+      - verify-jvm-runners
       - build
     runs-on: ubuntu-latest
 

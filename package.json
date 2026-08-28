@@ -23,7 +23,9 @@
     "test:coverage:integration:python": "python -m pytest -m integration src/test/python/integration --cov=orchestwin --cov-branch --cov-append --cov-report=term-missing --cov-report=xml:coverage.xml",
     "test:compose": "python scripts/smoke_compose.py",
     "test:web-fixtures": "python -m pytest -q src/test/python/web_execution/test_profile_fixture_matrix.py",
+    "test:jvm-fixtures": "python -m pytest -q src/test/python/jvm_execution/test_generation_fixtures.py src/test/python/jvm_execution/test_complete_fixture_matrix.py src/test/python/jvm_execution/test_ci_contracts.py",
     "verify:web-runners": "python scripts/verify_web_runner_manifest.py",
+    "verify:jvm-runners": "python scripts/verify_jvm_runner_manifest.py",
     "type-check:frontend": "npm --prefix frontend run type-check",
     "lint:python": "python -m ruff check .",
     "lint:fix:python": "python -m ruff check . --fix",
@@ -46,7 +48,8 @@
     "verify:all": "npm run build && npm run verify:frontend",
     "check": "npm run test && npm run build",
     "check:all": "npm run check && npm run check:frontend",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "verify:jvm-execution-contracts": "python scripts/verify_jvm_execution_contracts.py --repository-root ."
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.2",
