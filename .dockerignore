@@ -11,3 +11,5 @@
 !infra/
 !infra/web-runners/
 !infra/web-runners/**
+!infra/jvm-runners/
+!infra/jvm-runners/**

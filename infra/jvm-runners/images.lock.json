@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "base_images": [
+    {
+      "image_id": "eclipse-temurin-21-jdk-noble",
+      "reference": "docker.io/library/eclipse-temurin:21-jdk-noble@sha256:35685c7e23352983a48882d97cd9875f5284c228db71d1e2476e5e6c1bab1080",
+      "platform_scope": "multi-arch-index",
+      "source": "docker-library/eclipse-temurin official image metadata",
+      "retrieved_at": "2026-08-28"
+    },
+    {
+      "image_id": "gradle-9.5.0-jdk21-noble",
+      "reference": "docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28",
+      "platform_scope": "multi-arch-index",
+      "source": "docker-library/gradle official image metadata",
+      "retrieved_at": "2026-08-28"
+    }
+  ],
+  "runners": [
+    {
+      "runner_id": "jvm.gradle",
+      "kind": "GRADLE",
+      "version": "1.0.0",
+      "dockerfile_path": "infra/jvm-runners/Dockerfile.gradle",
+      "base_image_ids": [
+        "gradle-9.5.0-jdk21-noble"
+      ],
+      "output_repository": "orchestwin/jvm-gradle-runner",
+      "capability_status": "DESIGN_ONLY_LEVEL_C",
+      "built_image_reference": null
+    },
+    {
+      "runner_id": "jvm.sbt",
+      "kind": "SBT",
+      "version": "1.0.0",
+      "dockerfile_path": "infra/jvm-runners/Dockerfile.sbt",
+      "base_image_ids": [
+        "eclipse-temurin-21-jdk-noble"
+      ],
+      "output_repository": "orchestwin/jvm-sbt-runner",
+      "capability_status": "DESIGN_ONLY_LEVEL_C",
+      "built_image_reference": null
+    }
+  ]
+}
