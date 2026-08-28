@@ -1,4 +1,4 @@
-FROM docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28
+FROM docker.io/library/gradle:9.7.1-jdk21-noble@sha256:153b5cbc7fa81767329b52f741ac63027710fed12624a0014ad1849d6a02f755
 
 USER gradle
 WORKDIR /workspace
