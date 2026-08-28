@@ -1,4 +1,4 @@
-FROM docker.io/library/eclipse-temurin:21-jdk-noble@sha256:35685c7e23352983a48882d97cd9875f5284c228db71d1e2476e5e6c1bab1080
+FROM docker.io/library/eclipse-temurin:26-jdk-noble@sha256:091b6640864939942cd9d7ddd16576f31112d5a56a595b566ce561d1c0e07c6b
 
 ARG SBT_VERSION=1.12.14
 ARG SBT_SHA256=cd17daae220ff264faa4251334522444518584f0eb2ee82da01523a9b9002b7e
