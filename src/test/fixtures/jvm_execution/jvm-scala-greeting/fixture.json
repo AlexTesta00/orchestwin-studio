@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "jvm-scala-greeting",
+  "target": "JVM_SCALA",
+  "profile_id": "jvm.scala-sbt",
+  "role": "TECHNICAL_FIXTURE",
+  "build_system": "SBT",
+  "entrypoint": "org.orchestwin.greeting.Main",
+  "expected_output": "Hello, JVM!",
+  "source_content_hash": "d8908989747b5009366f8d6015435830400f95472bb5ca2643c0006e83f02f70",
+  "execution_attested": false,
+  "attestation_boundary": "SOURCE_CONTRACT_ONLY",
+  "launcher_complete": true,
+  "dependency_verification_complete": false
+}
