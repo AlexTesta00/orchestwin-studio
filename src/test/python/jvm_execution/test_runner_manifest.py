@@ -30,6 +30,11 @@ def test_validator_rejects_unpinned_promoted_and_root_runner(tmp_path: Path) -> 
         json.dumps(
             {
                 "schema_version": 1,
+                "sbt_distribution": {
+                    "version": "1.12.14",
+                    "url": "https://example.invalid/sbt.tgz",
+                    "sha256": "not-a-digest",
+                },
                 "base_images": [{"image_id": "gradle", "reference": "gradle:latest"}],
                 "runners": [
                     {
@@ -52,3 +57,5 @@ def test_validator_rejects_unpinned_promoted_and_root_runner(tmp_path: Path) -> 
     assert any("must remain DESIGN_ONLY_LEVEL_C" in error for error in result.errors)
     assert any("fabricated built image" in error for error in result.errors)
     assert any("non-root final USER" in error for error in result.errors)
+    assert any("sbt distribution URL" in error for error in result.errors)
+    assert any("sbt distribution requires a lowercase SHA-256" in error for error in result.errors)

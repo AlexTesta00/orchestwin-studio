@@ -12,6 +12,11 @@ from typing import Final
 _DIGEST_REFERENCE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
 _FROM_REFERENCE: Final = re.compile(r"^FROM\s+([^\s]+)(?:\s+AS\s+\S+)?$", re.IGNORECASE)
 _ALLOWED_CAPABILITY: Final = "DESIGN_ONLY_LEVEL_C"
+_SBT_RELEASE_URL: Final = re.compile(
+    r"^https://github\.com/sbt/sbt/releases/download/v(?P<version>[0-9.]+)/"
+    r"sbt-(?P=version)\.tgz$"
+)
+_SHA256: Final = re.compile(r"^[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +48,27 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
 
     if payload.get("schema_version") != 1:
         errors.append("JVM runner manifest schema_version must equal 1.")
+    sbt_distribution = payload.get("sbt_distribution")
+    sbt_version: str | None = None
+    sbt_sha256: str | None = None
+    if not isinstance(sbt_distribution, dict):
+        errors.append("JVM runner manifest requires an sbt_distribution object.")
+    else:
+        version = sbt_distribution.get("version")
+        url = sbt_distribution.get("url")
+        checksum = sbt_distribution.get("sha256")
+        if not isinstance(version, str) or not version:
+            errors.append("JVM sbt distribution requires a normalized version.")
+        elif not isinstance(url, str) or (match := _SBT_RELEASE_URL.fullmatch(url)) is None:
+            errors.append("JVM sbt distribution URL must be an official versioned release asset.")
+        elif match.group("version") != version:
+            errors.append("JVM sbt distribution URL and version differ.")
+        else:
+            sbt_version = version
+        if not isinstance(checksum, str) or _SHA256.fullmatch(checksum) is None:
+            errors.append("JVM sbt distribution requires a lowercase SHA-256 checksum.")
+        else:
+            sbt_sha256 = checksum
     base_images = payload.get("base_images")
     runners = payload.get("runners")
     if not isinstance(base_images, list) or not isinstance(runners, list):
@@ -121,6 +147,17 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
             )
         if not _has_non_root_final_user(dockerfile):
             errors.append(f"Runner {runner_id} must declare a non-root final USER.")
+        if runner_id == "jvm.sbt":
+            declared_version = runner.get("sbt_distribution_version")
+            dockerfile_text = dockerfile.read_text(encoding="utf-8")
+            if declared_version != sbt_version:
+                errors.append(
+                    "Runner jvm.sbt must reference the manifest sbt distribution version."
+                )
+            if sbt_version is not None and f"ARG SBT_VERSION={sbt_version}" not in dockerfile_text:
+                errors.append("Runner jvm.sbt Dockerfile does not pin the manifest sbt version.")
+            if sbt_sha256 is not None and f"ARG SBT_SHA256={sbt_sha256}" not in dockerfile_text:
+                errors.append("Runner jvm.sbt Dockerfile does not pin the manifest sbt checksum.")
 
     unused = set(image_references) - referenced_base_images
     if unused:
