@@ -473,3 +473,9 @@ compose.env
 .metals/
 .scala-build/
 .vscode/*
+
+/src/test/fixtures/jvm_execution/**/.gradle/
+/src/test/fixtures/jvm_execution/**/.bsp/
+/src/test/fixtures/jvm_execution/**/.metals/
+/src/test/fixtures/jvm_execution/**/.scala-build/
+/src/test/fixtures/jvm_execution/**/bin/
