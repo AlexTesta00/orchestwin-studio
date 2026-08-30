@@ -14,6 +14,10 @@ from sqlalchemy.ext.asyncio import (
 from orchestwin.agents.persistence.models import (
     TeamProposalVersionRecord,
 )
+from orchestwin.evaluation.persistence import (
+    EvaluationRunRecord,
+    SyntheticFindingRecord,
+)
 from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
     UserRecord,
@@ -77,6 +81,8 @@ _IMPORTED_MODELS = (
     LangGraphCheckpointRecord,
     LangGraphWriteRecord,
     TeamProposalVersionRecord,
+    EvaluationRunRecord,
+    SyntheticFindingRecord,
     BROWNFIELD_INTAKE_VERSIONS,
     SANDBOX_RUNS,
     SANDBOX_COMMAND_RESULTS,
