@@ -163,8 +163,6 @@ def create_workflow_checkpoint(
     checkpointed_run = replace(
         run,
         checkpoint_sequence=sequence_number,
-        state_version=run.state_version + 1,
-        updated_at=created_at,
     )
     run_payload = checkpointed_run.to_snapshot()
     state_json = _canonical_json(run_payload)
@@ -345,6 +343,25 @@ def workflow_run_from_snapshot(snapshot: Mapping[str, object]) -> WorkflowRun:
             else WorkflowRunStatus(_string(snapshot["resume_status"], "resume status"))
         ),
     )
+
+
+def serialize_workflow_run(run: WorkflowRun) -> str:
+    """Return one canonical JSON representation for persistence and hashing."""
+    return _canonical_json(run.to_snapshot())
+
+
+def workflow_run_content_hash(run: WorkflowRun) -> str:
+    """Return the SHA-256 identity of the canonical workflow-run snapshot."""
+    return _sha256_text(serialize_workflow_run(run))
+
+
+def deserialize_workflow_run(payload_json: str) -> WorkflowRun:
+    """Restore a run only from canonical, schema-compatible JSON."""
+    payload = json.loads(payload_json)
+    mapping = _mapping(payload, "workflow run payload")
+    if _canonical_json(mapping) != payload_json:
+        raise ValueError("workflow run payload is not canonical")
+    return workflow_run_from_snapshot(mapping)
 
 
 def _decode_checkpoint_payload(checkpoint: WorkflowCheckpoint) -> WorkflowRun:
