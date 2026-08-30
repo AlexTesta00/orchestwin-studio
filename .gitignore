@@ -461,3 +461,15 @@ pyrightconfig.json
 docs/_book
 
 compose.env
+
+# Local Gradle state
+.gradle/
+
+# Generated output inside JVM fixtures
+/src/test/fixtures/jvm_execution/**/bin/
+
+### Scala / Metals / BSP local state ###
+.bsp/
+.metals/
+.scala-build/
+.vscode/*
