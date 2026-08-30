@@ -17,6 +17,7 @@ from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.execution import create_execution_router
 from orchestwin.api.health import create_health_router
+from orchestwin.api.jvm_execution import create_jvm_execution_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
@@ -83,6 +84,7 @@ def create_app(
     application.state.execution_query_service = resolved_runtime.execution_query_service
     application.state.high_impact_service = resolved_runtime.high_impact_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
+    application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
     application.state.source_archive_maximum_upload_bytes = (
         resolved_settings.source_archive_maximum_upload_bytes
     )
@@ -117,6 +119,7 @@ def create_app(
         create_brownfield_router(),
         create_execution_router(),
         create_web_execution_router(),
+        create_jvm_execution_router(),
     ):
         application.include_router(
             router,
