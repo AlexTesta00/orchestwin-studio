@@ -137,6 +137,15 @@ class WorkflowCapabilityState:
     owner_decision_required: bool = False
 
     def __post_init__(self) -> None:
+        if isinstance(self.unsupported_requirements, list):
+            object.__setattr__(
+                self,
+                "unsupported_requirements",
+                tuple(self.unsupported_requirements),
+            )
+        elif not isinstance(self.unsupported_requirements, tuple):
+            raise ValueError("unsupported capability requirements must be an immutable sequence")
+
         if (self.selected_profile is None) != (self.capability_status is None):
             raise ValueError("workflow capability profile and status must be supplied together")
 
@@ -216,6 +225,11 @@ class WorkflowIterationCounters:
     failure_counters: tuple[WorkflowFailureCounter, ...] = ()
 
     def __post_init__(self) -> None:
+        if isinstance(self.failure_counters, list):
+            object.__setattr__(self, "failure_counters", tuple(self.failure_counters))
+        elif not isinstance(self.failure_counters, tuple):
+            raise ValueError("workflow failure counters must be an immutable sequence")
+
         values = (
             self.clarification_count,
             self.requirements_revision_count,
@@ -376,6 +390,20 @@ class WorkflowRun:
     resume_status: WorkflowRunStatus | None = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.artifact_references, list):
+            object.__setattr__(
+                self,
+                "artifact_references",
+                tuple(self.artifact_references),
+            )
+        elif not isinstance(self.artifact_references, tuple):
+            raise ValueError("workflow artifact references must be an immutable sequence")
+
+        if isinstance(self.blocking_issues, list):
+            object.__setattr__(self, "blocking_issues", tuple(self.blocking_issues))
+        elif not isinstance(self.blocking_issues, tuple):
+            raise ValueError("workflow blocking issues must be an immutable sequence")
+
         validate_positive_integer(self.state_version, label="workflow run state version")
         if self.checkpoint_sequence < 0:
             raise ValueError("workflow checkpoint sequence must not be negative")
