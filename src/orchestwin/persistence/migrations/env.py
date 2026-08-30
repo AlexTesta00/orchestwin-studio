@@ -37,6 +37,7 @@ from orchestwin.sandbox.run_persistence import (
     SANDBOX_COMMAND_RESULTS,
     SANDBOX_RUNS,
 )
+from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.high_impact_persistence import (
     HIGH_IMPACT_OPERATION_VERSIONS,
 )
@@ -72,6 +73,7 @@ _IMPORTED_MODELS = (
     HumanGateEventRecord,
     WorkflowRunRecord,
     WorkflowCheckpointRecord,
+    WorkflowEventRecord,
     LangGraphCheckpointRecord,
     LangGraphWriteRecord,
     TeamProposalVersionRecord,
