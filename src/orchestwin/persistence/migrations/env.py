@@ -40,9 +40,17 @@ from orchestwin.sandbox.run_persistence import (
 from orchestwin.workflow.high_impact_persistence import (
     HIGH_IMPACT_OPERATION_VERSIONS,
 )
+from orchestwin.workflow.langgraph_persistence import (
+    LangGraphCheckpointRecord,
+    LangGraphWriteRecord,
+)
 from orchestwin.workflow.persistence.models import (
     HumanGateEventRecord,
     HumanGateRecord,
+)
+from orchestwin.workflow.run_persistence import (
+    WorkflowCheckpointRecord,
+    WorkflowRunRecord,
 )
 
 configuration = context.config
@@ -62,6 +70,10 @@ _IMPORTED_MODELS = (
     BriefAssumptionRecord,
     HumanGateRecord,
     HumanGateEventRecord,
+    WorkflowRunRecord,
+    WorkflowCheckpointRecord,
+    LangGraphCheckpointRecord,
+    LangGraphWriteRecord,
     TeamProposalVersionRecord,
     BROWNFIELD_INTAKE_VERSIONS,
     SANDBOX_RUNS,
