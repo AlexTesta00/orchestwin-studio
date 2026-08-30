@@ -295,7 +295,7 @@ class InMemoryLangGraphCheckpointStore:
         replace_existing: bool,
     ) -> None:
         existing = self._writes.get(write.identity)
-        if existing is not None and (existing != write or not replace_existing):
+        if existing is not None and (existing == write or not replace_existing):
             return
         self._writes[write.identity] = write
 
@@ -841,8 +841,8 @@ def _validate_serialized_value(value_type: str, value_blob: bytes, *, label: str
         label=f"{label} type",
         maximum_length=64,
     )
-    if not isinstance(value_blob, bytes) or not value_blob:
-        raise ValueError(f"{label} blob must contain bytes")
+    if not isinstance(value_blob, bytes):
+        raise ValueError(f"{label} blob must be bytes")
 
 
 def _checkpoint_record_to_stored(

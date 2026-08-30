@@ -112,6 +112,40 @@ def test_async_checkpointer_round_trips_lineage_metadata_and_pending_writes() ->
     asyncio.run(scenario())
 
 
+def test_async_checkpointer_round_trips_null_and_empty_binary_writes() -> None:
+    async def scenario() -> None:
+        store = InMemoryLangGraphCheckpointStore()
+        saver = checkpointer(store)
+        root_config = {
+            "configurable": {
+                "thread_id": str(RUN_ID),
+                "checkpoint_ns": "",
+            }
+        }
+        saved_config = await saver.aput(
+            root_config,
+            graph_checkpoint("00000000-0000-6000-8000-000000000010", value=10),
+            {"source": "input", "step": -1},
+            {"value": 10},
+        )
+
+        await saver.aput_writes(
+            saved_config,
+            (("optional", None), ("empty-binary", b"")),
+            task_id="task-empty-values",
+            task_path="wait_for_human",
+        )
+
+        restored = await saver.aget_tuple(saved_config)
+        assert restored is not None
+        assert restored.pending_writes == [
+            ("task-empty-values", "optional", None),
+            ("task-empty-values", "empty-binary", b""),
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_checkpointer_rejects_cross_run_thread_ids() -> None:
     async def scenario() -> None:
         saver = checkpointer(InMemoryLangGraphCheckpointStore())
