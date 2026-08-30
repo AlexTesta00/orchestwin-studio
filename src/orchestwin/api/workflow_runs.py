@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from orchestwin.api.auth import current_user_dependency
@@ -98,6 +101,15 @@ class WorkflowRunApiService(Protocol):
         *,
         owner_user_id: UUID,
         run_id: UUID,
+    ) -> tuple[dict[str, JsonValue], ...]: ...
+
+    async def events(
+        self,
+        *,
+        owner_user_id: UUID,
+        run_id: UUID,
+        after_sequence: int,
+        limit: int,
     ) -> tuple[dict[str, JsonValue], ...]: ...
 
     async def apply_lifecycle_command(
@@ -258,6 +270,48 @@ def create_workflow_run_router() -> APIRouter:
             items=await service.checkpoints(owner_user_id=user.id, run_id=run_id)
         )
 
+    @router.get(
+        "/runs/{run_id}/events",
+        response_class=StreamingResponse,
+        operation_id="streamWorkflowRunEvents",
+        responses={
+            200: {
+                "content": {"text/event-stream": {}},
+                "description": "Replayable ordered workflow events.",
+            }
+        },
+    )
+    async def stream_events(
+        run_id: UUID,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            WorkflowRunApiService,
+            Depends(workflow_run_api_service_dependency),
+        ],
+        after_sequence: Annotated[int | None, Query(ge=0)] = None,
+        last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    ) -> StreamingResponse:
+        if await service.run(owner_user_id=user.id, run_id=run_id) is None:
+            raise _not_found()
+        cursor = _event_cursor(
+            after_sequence=after_sequence,
+            last_event_id=last_event_id,
+        )
+        events = await service.events(
+            owner_user_id=user.id,
+            run_id=run_id,
+            after_sequence=cursor,
+            limit=500,
+        )
+        return StreamingResponse(
+            _event_stream(events),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     _add_lifecycle_route(router, "/runs/{run_id}/pause", WorkflowLifecycleCommandKind.PAUSE)
     _add_lifecycle_route(router, "/runs/{run_id}/resume", WorkflowLifecycleCommandKind.RESUME)
     _add_lifecycle_route(router, "/runs/{run_id}/cancel", WorkflowLifecycleCommandKind.CANCEL)
@@ -339,3 +393,55 @@ def _command_response(result: WorkflowRunApiCommandResult) -> WorkflowCommandRes
         status_code=status_code,
         detail={"status": result.status.value, "message": result.message},
     )
+
+
+def _event_cursor(
+    *,
+    after_sequence: int | None,
+    last_event_id: str | None,
+) -> int:
+    header_cursor: int | None = None
+    if last_event_id is not None:
+        normalized = last_event_id.strip()
+        try:
+            header_cursor = int(normalized)
+        except ValueError as error:
+            raise _invalid_event_cursor() from error
+        if header_cursor < 0 or normalized != str(header_cursor):
+            raise _invalid_event_cursor()
+    if (
+        after_sequence is not None
+        and header_cursor is not None
+        and (after_sequence != header_cursor)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "WORKFLOW_EVENT_CURSOR_CONFLICT"},
+        )
+    return after_sequence if after_sequence is not None else (header_cursor or 0)
+
+
+def _invalid_event_cursor() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"code": "WORKFLOW_EVENT_CURSOR_INVALID"},
+    )
+
+
+async def _event_stream(
+    events: tuple[dict[str, JsonValue], ...],
+) -> AsyncIterator[str]:
+    for event in events:
+        sequence = event.get("sequence_number")
+        event_type = event.get("event_type")
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
+            raise ValueError("workflow SSE event requires a positive sequence number")
+        if not isinstance(event_type, str) or not event_type:
+            raise ValueError("workflow SSE event requires an event type")
+        data = json.dumps(
+            event,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        yield f"id: {sequence}\nevent: {event_type}\ndata: {data}\n\n"
