@@ -300,11 +300,15 @@ async def _run_finalization_scenario() -> None:
             database_revision = await connection.scalar(
                 text("SELECT version_num FROM alembic_version")
             )
+
         scripts = ScriptDirectory.from_config(
             create_alembic_config(settings.url.get_secret_value())
         )
-        assert scripts.get_current_head() == "0028_export_bundles"
-        assert database_revision == "0028_export_bundles"
+
+        current_head = scripts.get_current_head()
+
+        assert current_head is not None
+        assert database_revision == current_head
     finally:
         await _truncate_application_data(runtime)
         await runtime.dispose()
