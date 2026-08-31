@@ -55,6 +55,12 @@ addopts = [
     "no:langsmith_plugin",
     "-ra",
 ]
+filterwarnings = [
+    "error",
+    # Temporary Python 3.14 compatibility exception. LangSmith 0.11.2 still
+    # calls asyncio.iscoroutinefunction while importing its runtime client.
+    'ignore:.*asyncio\.iscoroutinefunction.*Python 3\.16.*:DeprecationWarning:langsmith\..*',
+]
 
 [tool.ruff]
 target-version = "py312"
