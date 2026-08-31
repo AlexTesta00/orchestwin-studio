@@ -42,6 +42,7 @@ from orchestwin.sandbox.run_persistence import (
     SANDBOX_RUNS,
 )
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
+from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
     HIGH_IMPACT_OPERATION_VERSIONS,
 )
@@ -83,6 +84,7 @@ _IMPORTED_MODELS = (
     TeamProposalVersionRecord,
     EvaluationRunRecord,
     SyntheticFindingRecord,
+    FinalReviewRecord,
     BROWNFIELD_INTAKE_VERSIONS,
     SANDBOX_RUNS,
     SANDBOX_COMMAND_RESULTS,

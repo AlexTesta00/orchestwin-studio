@@ -20,6 +20,7 @@ class HumanGateType(StrEnum):
     DESIGN = "DESIGN"
     ARCHITECTURE = "ARCHITECTURE"
     HIGH_IMPACT_OPERATION = "HIGH_IMPACT_OPERATION"
+    FINAL_OUTPUT = "FINAL_OUTPUT"
 
 
 class HumanGateStatus(StrEnum):
