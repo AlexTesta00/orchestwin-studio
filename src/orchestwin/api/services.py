@@ -43,6 +43,7 @@ from orchestwin.api.execution import (
     ExecutionQueryApiService,
     HighImpactApprovalApiService,
 )
+from orchestwin.api.finalization import FinalizationApiService
 from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.web_execution import WebExecutionApiService
@@ -191,6 +192,7 @@ class ApplicationRuntime:
     web_execution_api_service: WebExecutionApiService | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
+    finalization_api_service: FinalizationApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
