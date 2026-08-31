@@ -21,7 +21,7 @@ from langgraph.checkpoint.base import (
     get_checkpoint_metadata,
 )
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestwin.workflow.langgraph_persistence import (
     LangGraphCheckpointRecord,
@@ -312,6 +312,7 @@ class InMemoryLangGraphCheckpointStore:
         ]
         for key in checkpoint_keys:
             del self._checkpoints[key]
+
         write_keys = [
             key
             for key, write in self._writes.items()
@@ -324,11 +325,14 @@ class InMemoryLangGraphCheckpointStore:
 
 
 class SqlAlchemyLangGraphCheckpointStore:
-    """PostgreSQL serialized graph store bound to one application transaction."""
+    """PostgreSQL graph store owning short-lived persistence transactions."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-        self._session_lock = asyncio.Lock()
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
+        self._session_factory = session_factory
+        self._operation_lock = asyncio.Lock()
 
     async def get_checkpoint(
         self,
@@ -339,8 +343,9 @@ class SqlAlchemyLangGraphCheckpointStore:
         checkpoint_namespace: str,
         checkpoint_id: str | None,
     ) -> StoredLangGraphCheckpoint | None:
-        async with self._session_lock:
-            return await self._get_checkpoint_unlocked(
+        async with self._operation_lock, self._session_factory() as session:
+            return await self._get_checkpoint(
+                session,
                 run_id=run_id,
                 project_id=project_id,
                 owner_user_id=owner_user_id,
@@ -348,8 +353,9 @@ class SqlAlchemyLangGraphCheckpointStore:
                 checkpoint_id=checkpoint_id,
             )
 
-    async def _get_checkpoint_unlocked(
+    async def _get_checkpoint(
         self,
+        session: AsyncSession,
         *,
         run_id: UUID,
         project_id: UUID,
@@ -363,11 +369,13 @@ class SqlAlchemyLangGraphCheckpointStore:
             LangGraphCheckpointRecord.owner_user_id == owner_user_id,
             LangGraphCheckpointRecord.checkpoint_namespace == checkpoint_namespace,
         )
+
         if checkpoint_id is None:
             statement = statement.order_by(LangGraphCheckpointRecord.checkpoint_id.desc()).limit(1)
         else:
             statement = statement.where(LangGraphCheckpointRecord.checkpoint_id == checkpoint_id)
-        record = await self._session.scalar(statement)
+
+        record = await session.scalar(statement)
         return None if record is None else _checkpoint_record_to_stored(record)
 
     async def list_checkpoints(
@@ -378,41 +386,50 @@ class SqlAlchemyLangGraphCheckpointStore:
         owner_user_id: UUID,
         checkpoint_namespace: str | None,
     ) -> tuple[StoredLangGraphCheckpoint, ...]:
-        async with self._session_lock:
+        async with self._operation_lock, self._session_factory() as session:
             statement = select(LangGraphCheckpointRecord).where(
                 LangGraphCheckpointRecord.run_id == run_id,
                 LangGraphCheckpointRecord.project_id == project_id,
                 LangGraphCheckpointRecord.owner_user_id == owner_user_id,
             )
+
             if checkpoint_namespace is not None:
                 statement = statement.where(
                     LangGraphCheckpointRecord.checkpoint_namespace == checkpoint_namespace
                 )
-            records = await self._session.scalars(
+
+            records = await session.scalars(
                 statement.order_by(
                     LangGraphCheckpointRecord.checkpoint_namespace.desc(),
                     LangGraphCheckpointRecord.checkpoint_id.desc(),
                 )
             )
+
             return tuple(_checkpoint_record_to_stored(record) for record in records.all())
 
-    async def put_checkpoint(self, checkpoint: StoredLangGraphCheckpoint) -> None:
-        async with self._session_lock:
-            existing = await self._get_checkpoint_unlocked(
+    async def put_checkpoint(
+        self,
+        checkpoint: StoredLangGraphCheckpoint,
+    ) -> None:
+        async with self._operation_lock, self._session_factory.begin() as session:
+            existing = await self._get_checkpoint(
+                session,
                 run_id=checkpoint.run_id,
                 project_id=checkpoint.project_id,
                 owner_user_id=checkpoint.owner_user_id,
                 checkpoint_namespace=checkpoint.checkpoint_namespace,
                 checkpoint_id=checkpoint.checkpoint_id,
             )
+
             if existing is not None:
                 if existing != checkpoint:
                     raise ValueError(
                         "LangGraph checkpoint identity already contains different data"
                     )
                 return
-            self._session.add(_stored_checkpoint_to_record(checkpoint))
-            await self._session.flush()
+
+            session.add(_stored_checkpoint_to_record(checkpoint))
+            await session.flush()
 
     async def list_writes(
         self,
@@ -423,8 +440,8 @@ class SqlAlchemyLangGraphCheckpointStore:
         checkpoint_namespace: str,
         checkpoint_id: str,
     ) -> tuple[StoredLangGraphWrite, ...]:
-        async with self._session_lock:
-            records = await self._session.scalars(
+        async with self._operation_lock, self._session_factory() as session:
+            records = await session.scalars(
                 select(LangGraphWriteRecord)
                 .where(
                     LangGraphWriteRecord.run_id == run_id,
@@ -438,6 +455,7 @@ class SqlAlchemyLangGraphCheckpointStore:
                     LangGraphWriteRecord.write_index,
                 )
             )
+
             return tuple(_write_record_to_stored(record) for record in records.all())
 
     async def put_write(
@@ -446,8 +464,8 @@ class SqlAlchemyLangGraphCheckpointStore:
         *,
         replace_existing: bool,
     ) -> None:
-        async with self._session_lock:
-            record = await self._session.scalar(
+        async with self._operation_lock, self._session_factory.begin() as session:
+            record = await session.scalar(
                 select(LangGraphWriteRecord).where(
                     LangGraphWriteRecord.run_id == write.run_id,
                     LangGraphWriteRecord.checkpoint_namespace == write.checkpoint_namespace,
@@ -458,17 +476,21 @@ class SqlAlchemyLangGraphCheckpointStore:
                     LangGraphWriteRecord.owner_user_id == write.owner_user_id,
                 )
             )
+
             if record is not None:
                 existing = _write_record_to_stored(record)
+
                 if existing == write or not replace_existing:
                     return
+
                 record.task_path = write.task_path
                 record.channel = write.channel
                 record.value_type = write.value_type
                 record.value_blob = write.value_blob
             else:
-                self._session.add(_stored_write_to_record(write))
-            await self._session.flush()
+                session.add(_stored_write_to_record(write))
+
+            await session.flush()
 
     async def delete_run(
         self,
@@ -477,22 +499,24 @@ class SqlAlchemyLangGraphCheckpointStore:
         project_id: UUID,
         owner_user_id: UUID,
     ) -> None:
-        async with self._session_lock:
-            await self._session.execute(
+        async with self._operation_lock, self._session_factory.begin() as session:
+            await session.execute(
                 delete(LangGraphWriteRecord).where(
                     LangGraphWriteRecord.run_id == run_id,
                     LangGraphWriteRecord.project_id == project_id,
                     LangGraphWriteRecord.owner_user_id == owner_user_id,
                 )
             )
-            await self._session.execute(
+
+            await session.execute(
                 delete(LangGraphCheckpointRecord).where(
                     LangGraphCheckpointRecord.run_id == run_id,
                     LangGraphCheckpointRecord.project_id == project_id,
                     LangGraphCheckpointRecord.owner_user_id == owner_user_id,
                 )
             )
-            await self._session.flush()
+
+            await session.flush()
 
 
 class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
@@ -510,22 +534,26 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
         authoritative_checkpoint_id: str | None = None,
     ) -> None:
         super().__init__(serde=serde)
+
         if (authoritative_run is None) != (authoritative_checkpoint_id is None):
             raise ValueError(
                 "authoritative workflow run and graph checkpoint id must be supplied together"
             )
+
         if authoritative_run is not None and (
             authoritative_run.id != run_id
             or authoritative_run.project_id != project_id
             or authoritative_run.owner_user_id != owner_user_id
         ):
             raise ValueError("authoritative workflow run does not match checkpointer scope")
+
         if authoritative_checkpoint_id is not None:
             _validate_bounded_text(
                 authoritative_checkpoint_id,
                 label="authoritative LangGraph checkpoint id",
                 maximum_length=_MAX_CHECKPOINT_ID_LENGTH,
             )
+
         self._store = store
         self._run_id = run_id
         self._project_id = project_id
@@ -533,10 +561,14 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
         self._authoritative_run = authoritative_run
         self._authoritative_checkpoint_id = authoritative_checkpoint_id
 
-    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
+    async def aget_tuple(
+        self,
+        config: RunnableConfig,
+    ) -> CheckpointTuple | None:
         configurable = self._validated_configurable(config)
         namespace = _checkpoint_namespace(configurable)
         requested_id = _optional_text(configurable.get("checkpoint_id"))
+
         stored = await self._store.get_checkpoint(
             run_id=self._run_id,
             project_id=self._project_id,
@@ -544,8 +576,10 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
             checkpoint_namespace=namespace,
             checkpoint_id=requested_id,
         )
+
         if stored is None:
             return None
+
         writes = await self._store.list_writes(
             run_id=self._run_id,
             project_id=self._project_id,
@@ -553,10 +587,12 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
             checkpoint_namespace=stored.checkpoint_namespace,
             checkpoint_id=stored.checkpoint_id,
         )
+
         checkpoint = cast(
             Checkpoint,
             self.serde.loads_typed((stored.checkpoint_type, stored.checkpoint_blob)),
         )
+
         if (
             self._authoritative_run is not None
             and stored.checkpoint_id == self._authoritative_checkpoint_id
@@ -565,10 +601,12 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
                 checkpoint,
                 authoritative_run=self._authoritative_run,
             )
+
         metadata = cast(
             CheckpointMetadata,
             self.serde.loads_typed((stored.metadata_type, stored.metadata_blob)),
         )
+
         return CheckpointTuple(
             config=_checkpoint_config(
                 self._run_id,
@@ -606,18 +644,24 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
     ) -> AsyncIterator[CheckpointTuple]:
         if limit is not None and limit <= 0:
             return
+
         namespace: str | None = None
         requested_id: str | None = None
+
         if config is not None:
             configurable = self._validated_configurable(config)
             namespace = _checkpoint_namespace(configurable)
             requested_id = _optional_text(configurable.get("checkpoint_id"))
+
         before_id: str | None = None
+
         if before is not None:
             before_configurable = self._validated_configurable(before)
             before_namespace = _checkpoint_namespace(before_configurable)
+
             if namespace is not None and before_namespace != namespace:
                 raise ValueError("LangGraph before cursor namespace does not match")
+
             namespace = before_namespace
             before_id = get_checkpoint_id(before)
 
@@ -627,12 +671,16 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
             owner_user_id=self._owner_user_id,
             checkpoint_namespace=namespace,
         )
+
         yielded = 0
+
         for stored in stored_checkpoints:
             if requested_id is not None and stored.checkpoint_id != requested_id:
                 continue
+
             if before_id is not None and stored.checkpoint_id >= before_id:
                 continue
+
             item = await self.aget_tuple(
                 _checkpoint_config(
                     self._run_id,
@@ -640,12 +688,16 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
                     stored.checkpoint_id,
                 )
             )
+
             if item is None:
                 continue
+
             if filter and not all(item.metadata.get(key) == value for key, value in filter.items()):
                 continue
+
             yield item
             yielded += 1
+
             if limit is not None and yielded >= limit:
                 return
 
@@ -657,19 +709,27 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         del new_versions
+
         configurable = self._validated_configurable(config)
         namespace = _checkpoint_namespace(configurable)
-        checkpoint_id = _required_text(checkpoint.get("id"), label="LangGraph checkpoint id")
+
+        checkpoint_id = _required_text(
+            checkpoint.get("id"),
+            label="LangGraph checkpoint id",
+        )
         _validate_bounded_text(
             checkpoint_id,
             label="LangGraph checkpoint id",
             maximum_length=_MAX_CHECKPOINT_ID_LENGTH,
         )
+
         parent_id = _optional_text(configurable.get("checkpoint_id"))
+
         checkpoint_type, checkpoint_blob = self.serde.dumps_typed(checkpoint)
         metadata_type, metadata_blob = self.serde.dumps_typed(
             get_checkpoint_metadata(config, metadata)
         )
+
         await self._store.put_checkpoint(
             StoredLangGraphCheckpoint(
                 run_id=self._run_id,
@@ -684,7 +744,12 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
                 metadata_blob=metadata_blob,
             )
         )
-        return _checkpoint_config(self._run_id, namespace, checkpoint_id)
+
+        return _checkpoint_config(
+            self._run_id,
+            namespace,
+            checkpoint_id,
+        )
 
     async def aput_writes(
         self,
@@ -695,10 +760,12 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
     ) -> None:
         configurable = self._validated_configurable(config)
         namespace = _checkpoint_namespace(configurable)
+
         checkpoint_id = _required_text(
             configurable.get("checkpoint_id"),
             label="LangGraph pending-write checkpoint id",
         )
+
         _validate_bounded_text(
             checkpoint_id,
             label="LangGraph pending-write checkpoint id",
@@ -722,8 +789,10 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
                 label="LangGraph write channel",
                 maximum_length=_MAX_CHANNEL_LENGTH,
             )
+
             write_index = WRITES_IDX_MAP.get(channel, index)
             value_type, value_blob = self.serde.dumps_typed(value)
+
             await self._store.put_write(
                 StoredLangGraphWrite(
                     run_id=self._run_id,
@@ -741,22 +810,40 @@ class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
                 replace_existing=write_index < 0,
             )
 
-    async def adelete_thread(self, thread_id: str) -> None:
+    async def adelete_thread(
+        self,
+        thread_id: str,
+    ) -> None:
         self._validate_thread_id(thread_id)
+
         await self._store.delete_run(
             run_id=self._run_id,
             project_id=self._project_id,
             owner_user_id=self._owner_user_id,
         )
 
-    def _validated_configurable(self, config: RunnableConfig) -> Mapping[str, Any]:
+    def _validated_configurable(
+        self,
+        config: RunnableConfig,
+    ) -> Mapping[str, Any]:
         configurable = config.get("configurable")
+
         if not isinstance(configurable, Mapping):
             raise ValueError("LangGraph checkpoint config requires configurable values")
-        self._validate_thread_id(_required_text(configurable.get("thread_id"), label="thread id"))
+
+        self._validate_thread_id(
+            _required_text(
+                configurable.get("thread_id"),
+                label="thread id",
+            )
+        )
+
         return configurable
 
-    def _validate_thread_id(self, thread_id: str) -> None:
+    def _validate_thread_id(
+        self,
+        thread_id: str,
+    ) -> None:
         if thread_id != str(self._run_id):
             raise ValueError("LangGraph thread id does not match the bound workflow run")
 
@@ -768,11 +855,15 @@ def reconcile_checkpoint_with_authoritative_run(
 ) -> Checkpoint:
     """Overlay only checkpoint-sequence persistence metadata on a matching graph run."""
     channel_values = checkpoint.get("channel_values")
+
     if not isinstance(channel_values, dict):
         raise ValueError("LangGraph checkpoint channel values are invalid")
+
     graph_run = channel_values.get("run")
+
     if not isinstance(graph_run, WorkflowRun):
         raise ValueError("LangGraph checkpoint does not contain a typed workflow run")
+
     if (
         graph_run.id != authoritative_run.id
         or graph_run.project_id != authoritative_run.project_id
@@ -783,6 +874,7 @@ def reconcile_checkpoint_with_authoritative_run(
     if graph_run != authoritative_run:
         if authoritative_run.checkpoint_sequence != graph_run.checkpoint_sequence + 1:
             raise ValueError("application and LangGraph checkpoint sequences are incompatible")
+
         if (
             replace(
                 authoritative_run,
@@ -818,30 +910,44 @@ def _checkpoint_config(
     }
 
 
-def _checkpoint_namespace(configurable: Mapping[str, Any]) -> str:
+def _checkpoint_namespace(
+    configurable: Mapping[str, Any],
+) -> str:
     value = configurable.get("checkpoint_ns", "")
+
     if not isinstance(value, str):
         raise ValueError("LangGraph checkpoint namespace must be a string")
+
     _validate_bounded_text(
         value,
         label="LangGraph checkpoint namespace",
         maximum_length=_MAX_CHECKPOINT_NAMESPACE_LENGTH,
         allow_empty=True,
     )
+
     return value
 
 
-def _required_text(value: object, *, label: str) -> str:
+def _required_text(
+    value: object,
+    *,
+    label: str,
+) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{label} must be a non-empty string")
+
     return value
 
 
-def _optional_text(value: object) -> str | None:
+def _optional_text(
+    value: object,
+) -> str | None:
     if value is None:
         return None
+
     if not isinstance(value, str) or not value:
         raise ValueError("optional LangGraph identifier must be a non-empty string")
+
     return value
 
 
@@ -854,10 +960,13 @@ def _validate_bounded_text(
 ) -> None:
     if not isinstance(value, str):
         raise ValueError(f"{label} must be a string")
+
     if not allow_empty and not value:
         raise ValueError(f"{label} must not be empty")
+
     if len(value) > maximum_length:
         raise ValueError(f"{label} exceeds its maximum length")
+
     if value != value.strip():
         raise ValueError(f"{label} must be normalized")
 
@@ -873,6 +982,7 @@ def _validate_serialized_value(
         label=f"{label} type",
         maximum_length=64,
     )
+
     if not isinstance(value_blob, bytes):
         raise ValueError(f"{label} blob must be bytes")
 
@@ -929,7 +1039,9 @@ def _write_record_to_stored(
     )
 
 
-def _stored_write_to_record(write: StoredLangGraphWrite) -> LangGraphWriteRecord:
+def _stored_write_to_record(
+    write: StoredLangGraphWrite,
+) -> LangGraphWriteRecord:
     return LangGraphWriteRecord(
         run_id=write.run_id,
         project_id=write.project_id,
