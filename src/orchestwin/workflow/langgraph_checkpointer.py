@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Protocol, cast
@@ -327,8 +328,27 @@ class SqlAlchemyLangGraphCheckpointStore:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._session_lock = asyncio.Lock()
 
     async def get_checkpoint(
+        self,
+        *,
+        run_id: UUID,
+        project_id: UUID,
+        owner_user_id: UUID,
+        checkpoint_namespace: str,
+        checkpoint_id: str | None,
+    ) -> StoredLangGraphCheckpoint | None:
+        async with self._session_lock:
+            return await self._get_checkpoint_unlocked(
+                run_id=run_id,
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+                checkpoint_namespace=checkpoint_namespace,
+                checkpoint_id=checkpoint_id,
+            )
+
+    async def _get_checkpoint_unlocked(
         self,
         *,
         run_id: UUID,
@@ -358,37 +378,41 @@ class SqlAlchemyLangGraphCheckpointStore:
         owner_user_id: UUID,
         checkpoint_namespace: str | None,
     ) -> tuple[StoredLangGraphCheckpoint, ...]:
-        statement = select(LangGraphCheckpointRecord).where(
-            LangGraphCheckpointRecord.run_id == run_id,
-            LangGraphCheckpointRecord.project_id == project_id,
-            LangGraphCheckpointRecord.owner_user_id == owner_user_id,
-        )
-        if checkpoint_namespace is not None:
-            statement = statement.where(
-                LangGraphCheckpointRecord.checkpoint_namespace == checkpoint_namespace
+        async with self._session_lock:
+            statement = select(LangGraphCheckpointRecord).where(
+                LangGraphCheckpointRecord.run_id == run_id,
+                LangGraphCheckpointRecord.project_id == project_id,
+                LangGraphCheckpointRecord.owner_user_id == owner_user_id,
             )
-        records = await self._session.scalars(
-            statement.order_by(
-                LangGraphCheckpointRecord.checkpoint_namespace.desc(),
-                LangGraphCheckpointRecord.checkpoint_id.desc(),
+            if checkpoint_namespace is not None:
+                statement = statement.where(
+                    LangGraphCheckpointRecord.checkpoint_namespace == checkpoint_namespace
+                )
+            records = await self._session.scalars(
+                statement.order_by(
+                    LangGraphCheckpointRecord.checkpoint_namespace.desc(),
+                    LangGraphCheckpointRecord.checkpoint_id.desc(),
+                )
             )
-        )
-        return tuple(_checkpoint_record_to_stored(record) for record in records.all())
+            return tuple(_checkpoint_record_to_stored(record) for record in records.all())
 
     async def put_checkpoint(self, checkpoint: StoredLangGraphCheckpoint) -> None:
-        existing = await self.get_checkpoint(
-            run_id=checkpoint.run_id,
-            project_id=checkpoint.project_id,
-            owner_user_id=checkpoint.owner_user_id,
-            checkpoint_namespace=checkpoint.checkpoint_namespace,
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-        if existing is not None:
-            if existing != checkpoint:
-                raise ValueError("LangGraph checkpoint identity already contains different data")
-            return
-        self._session.add(_stored_checkpoint_to_record(checkpoint))
-        await self._session.flush()
+        async with self._session_lock:
+            existing = await self._get_checkpoint_unlocked(
+                run_id=checkpoint.run_id,
+                project_id=checkpoint.project_id,
+                owner_user_id=checkpoint.owner_user_id,
+                checkpoint_namespace=checkpoint.checkpoint_namespace,
+                checkpoint_id=checkpoint.checkpoint_id,
+            )
+            if existing is not None:
+                if existing != checkpoint:
+                    raise ValueError(
+                        "LangGraph checkpoint identity already contains different data"
+                    )
+                return
+            self._session.add(_stored_checkpoint_to_record(checkpoint))
+            await self._session.flush()
 
     async def list_writes(
         self,
@@ -399,21 +423,22 @@ class SqlAlchemyLangGraphCheckpointStore:
         checkpoint_namespace: str,
         checkpoint_id: str,
     ) -> tuple[StoredLangGraphWrite, ...]:
-        records = await self._session.scalars(
-            select(LangGraphWriteRecord)
-            .where(
-                LangGraphWriteRecord.run_id == run_id,
-                LangGraphWriteRecord.project_id == project_id,
-                LangGraphWriteRecord.owner_user_id == owner_user_id,
-                LangGraphWriteRecord.checkpoint_namespace == checkpoint_namespace,
-                LangGraphWriteRecord.checkpoint_id == checkpoint_id,
+        async with self._session_lock:
+            records = await self._session.scalars(
+                select(LangGraphWriteRecord)
+                .where(
+                    LangGraphWriteRecord.run_id == run_id,
+                    LangGraphWriteRecord.project_id == project_id,
+                    LangGraphWriteRecord.owner_user_id == owner_user_id,
+                    LangGraphWriteRecord.checkpoint_namespace == checkpoint_namespace,
+                    LangGraphWriteRecord.checkpoint_id == checkpoint_id,
+                )
+                .order_by(
+                    LangGraphWriteRecord.task_id,
+                    LangGraphWriteRecord.write_index,
+                )
             )
-            .order_by(
-                LangGraphWriteRecord.task_id,
-                LangGraphWriteRecord.write_index,
-            )
-        )
-        return tuple(_write_record_to_stored(record) for record in records.all())
+            return tuple(_write_record_to_stored(record) for record in records.all())
 
     async def put_write(
         self,
@@ -421,28 +446,29 @@ class SqlAlchemyLangGraphCheckpointStore:
         *,
         replace_existing: bool,
     ) -> None:
-        record = await self._session.scalar(
-            select(LangGraphWriteRecord).where(
-                LangGraphWriteRecord.run_id == write.run_id,
-                LangGraphWriteRecord.checkpoint_namespace == write.checkpoint_namespace,
-                LangGraphWriteRecord.checkpoint_id == write.checkpoint_id,
-                LangGraphWriteRecord.task_id == write.task_id,
-                LangGraphWriteRecord.write_index == write.write_index,
-                LangGraphWriteRecord.project_id == write.project_id,
-                LangGraphWriteRecord.owner_user_id == write.owner_user_id,
+        async with self._session_lock:
+            record = await self._session.scalar(
+                select(LangGraphWriteRecord).where(
+                    LangGraphWriteRecord.run_id == write.run_id,
+                    LangGraphWriteRecord.checkpoint_namespace == write.checkpoint_namespace,
+                    LangGraphWriteRecord.checkpoint_id == write.checkpoint_id,
+                    LangGraphWriteRecord.task_id == write.task_id,
+                    LangGraphWriteRecord.write_index == write.write_index,
+                    LangGraphWriteRecord.project_id == write.project_id,
+                    LangGraphWriteRecord.owner_user_id == write.owner_user_id,
+                )
             )
-        )
-        if record is not None:
-            existing = _write_record_to_stored(record)
-            if existing == write or not replace_existing:
-                return
-            record.task_path = write.task_path
-            record.channel = write.channel
-            record.value_type = write.value_type
-            record.value_blob = write.value_blob
-        else:
-            self._session.add(_stored_write_to_record(write))
-        await self._session.flush()
+            if record is not None:
+                existing = _write_record_to_stored(record)
+                if existing == write or not replace_existing:
+                    return
+                record.task_path = write.task_path
+                record.channel = write.channel
+                record.value_type = write.value_type
+                record.value_blob = write.value_blob
+            else:
+                self._session.add(_stored_write_to_record(write))
+            await self._session.flush()
 
     async def delete_run(
         self,
@@ -451,21 +477,22 @@ class SqlAlchemyLangGraphCheckpointStore:
         project_id: UUID,
         owner_user_id: UUID,
     ) -> None:
-        await self._session.execute(
-            delete(LangGraphWriteRecord).where(
-                LangGraphWriteRecord.run_id == run_id,
-                LangGraphWriteRecord.project_id == project_id,
-                LangGraphWriteRecord.owner_user_id == owner_user_id,
+        async with self._session_lock:
+            await self._session.execute(
+                delete(LangGraphWriteRecord).where(
+                    LangGraphWriteRecord.run_id == run_id,
+                    LangGraphWriteRecord.project_id == project_id,
+                    LangGraphWriteRecord.owner_user_id == owner_user_id,
+                )
             )
-        )
-        await self._session.execute(
-            delete(LangGraphCheckpointRecord).where(
-                LangGraphCheckpointRecord.run_id == run_id,
-                LangGraphCheckpointRecord.project_id == project_id,
-                LangGraphCheckpointRecord.owner_user_id == owner_user_id,
+            await self._session.execute(
+                delete(LangGraphCheckpointRecord).where(
+                    LangGraphCheckpointRecord.run_id == run_id,
+                    LangGraphCheckpointRecord.project_id == project_id,
+                    LangGraphCheckpointRecord.owner_user_id == owner_user_id,
+                )
             )
-        )
-        await self._session.flush()
+            await self._session.flush()
 
 
 class RunScopedLangGraphCheckpointer(BaseCheckpointSaver[str]):
@@ -835,7 +862,12 @@ def _validate_bounded_text(
         raise ValueError(f"{label} must be normalized")
 
 
-def _validate_serialized_value(value_type: str, value_blob: bytes, *, label: str) -> None:
+def _validate_serialized_value(
+    value_type: str,
+    value_blob: bytes,
+    *,
+    label: str,
+) -> None:
     _validate_bounded_text(
         value_type,
         label=f"{label} type",
@@ -879,7 +911,9 @@ def _stored_checkpoint_to_record(
     )
 
 
-def _write_record_to_stored(record: LangGraphWriteRecord) -> StoredLangGraphWrite:
+def _write_record_to_stored(
+    record: LangGraphWriteRecord,
+) -> StoredLangGraphWrite:
     return StoredLangGraphWrite(
         run_id=record.run_id,
         project_id=record.project_id,
