@@ -65,6 +65,17 @@ from orchestwin.training.scenarios import (
     create_scenario_generation_plans,
     default_scenario_families,
 )
+from orchestwin.training.splitting import (
+    DatasetLeakageCode,
+    DatasetLeakageIssue,
+    DatasetSplit,
+    DatasetSplitAssignment,
+    DatasetSplitExclusionReason,
+    DatasetSplitPolicy,
+    DatasetSplitResult,
+    default_dataset_split_policy,
+    split_dataset_examples,
+)
 
 __all__ = [
     "DatasetArtifactSnapshot",
@@ -137,4 +148,16 @@ __all__ += [
     "dataset_training_tokens",
     "deduplicate_dataset_examples",
     "default_dataset_deduplication_policy",
+]
+
+__all__ += [
+    "DatasetLeakageCode",
+    "DatasetLeakageIssue",
+    "DatasetSplit",
+    "DatasetSplitAssignment",
+    "DatasetSplitExclusionReason",
+    "DatasetSplitPolicy",
+    "DatasetSplitResult",
+    "default_dataset_split_policy",
+    "split_dataset_examples",
 ]
