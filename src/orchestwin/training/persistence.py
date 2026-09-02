@@ -391,10 +391,15 @@ class SqlAlchemyTrainingDatasetRepository:
                 )
             return TrainingDatasetStoreResult(TrainingDatasetStoreStatus.CONTENT_CONFLICT, None)
 
+        dataset_record = dataset_manifest_to_record(manifest, quality_report)
+        quality_report_record = dataset_quality_report_to_record(quality_report)
+
         try:
             async with self._session.begin_nested():
-                self._session.add(dataset_manifest_to_record(manifest, quality_report))
-                self._session.add(dataset_quality_report_to_record(quality_report))
+                self._session.add(dataset_record)
+                # PostgreSQL must observe the dataset row before its composite-FK child.
+                await self._session.flush()
+                self._session.add(quality_report_record)
                 await self._session.flush()
         except IntegrityError:
             return TrainingDatasetStoreResult(TrainingDatasetStoreStatus.CONTENT_CONFLICT, None)
