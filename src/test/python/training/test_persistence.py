@@ -20,6 +20,7 @@ from orchestwin.training.filtering import (
 )
 from orchestwin.training.persistence import (
     InMemoryTrainingDatasetRepository,
+    SqlAlchemyTrainingDatasetRepository,
     TrainingDatasetStoreStatus,
     create_dataset_quality_report,
 )
@@ -29,6 +30,32 @@ OWNER_ID = UUID("00000000-0000-4000-8000-000000119001")
 DATASET_ID = UUID("00000000-0000-4000-8000-000000119002")
 REPORT_ID = UUID("00000000-0000-4000-8000-000000119003")
 CREATED_AT = datetime(2026, 10, 13, 11, 0, tzinfo=UTC)
+
+
+class _RecordingNestedTransaction:
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, *_args: object) -> bool:
+        return False
+
+
+class _RecordingAsyncSession:
+    def __init__(self) -> None:
+        self._scalar_results: list[UUID | None] = [OWNER_ID, None]
+        self.write_operations: list[tuple[str, str | None]] = []
+
+    async def scalar(self, _statement: object) -> UUID | None:
+        return self._scalar_results.pop(0)
+
+    def begin_nested(self) -> _RecordingNestedTransaction:
+        return _RecordingNestedTransaction()
+
+    def add(self, record: object) -> None:
+        self.write_operations.append(("add", type(record).__name__))
+
+    async def flush(self) -> None:
+        self.write_operations.append(("flush", None))
 
 
 def _build(
@@ -135,3 +162,24 @@ def test_repository_rejects_missing_owner_and_quality_scope_mismatch(
         asyncio.run(other_owner.append(manifest, quality)).status
         is TrainingDatasetStoreStatus.QUALITY_REPORT_MISMATCH
     )
+
+
+def test_sqlalchemy_repository_flushes_dataset_before_quality_report(
+    example_factory: Callable[..., EvaluatorDatasetExample],
+) -> None:
+    manifest, quality = _build(example_factory)
+    session = _RecordingAsyncSession()
+    repository = SqlAlchemyTrainingDatasetRepository(
+        session,
+        owner_user_id=OWNER_ID,
+    )
+
+    result = asyncio.run(repository.append(manifest, quality))
+
+    assert result.status is TrainingDatasetStoreStatus.CREATED
+    assert session.write_operations == [
+        ("add", "TrainingDatasetVersionRecord"),
+        ("flush", None),
+        ("add", "TrainingDatasetQualityReportRecord"),
+        ("flush", None),
+    ]
