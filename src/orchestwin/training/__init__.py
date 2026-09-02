@@ -27,6 +27,16 @@ from orchestwin.training.dataset_validation import (
     DatasetValidationReport,
     validate_dataset_example,
 )
+from orchestwin.training.generation import (
+    DatasetExampleGenerator,
+    DatasetGenerationFailure,
+    DatasetGenerationFailureKind,
+    DatasetGenerationMetadata,
+    DatasetGenerationRequest,
+    DatasetGenerationResult,
+    DatasetGenerationUsage,
+    DeterministicDatasetExampleGenerator,
+)
 
 __all__ = [
     "DatasetArtifactSnapshot",
@@ -56,4 +66,16 @@ __all__ += [
     "DatasetManifestEntry",
     "DatasetManifestReference",
     "build_dataset_manifest",
+]
+
+
+__all__ += [
+    "DatasetExampleGenerator",
+    "DatasetGenerationFailure",
+    "DatasetGenerationFailureKind",
+    "DatasetGenerationMetadata",
+    "DatasetGenerationRequest",
+    "DatasetGenerationResult",
+    "DatasetGenerationUsage",
+    "DeterministicDatasetExampleGenerator",
 ]
