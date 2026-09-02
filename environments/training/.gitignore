@@ -1,0 +1,9 @@
+.venv/
+.cache/
+artifacts/
+checkpoints/
+outputs/
+*.safetensors
+*.gguf
+*.pt
+*.pth

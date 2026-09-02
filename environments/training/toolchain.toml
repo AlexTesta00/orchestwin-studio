@@ -1,0 +1,22 @@
+schema_version = 1
+environment_id = "orchestwin-unsloth-wsl2-v1"
+target_os = "linux"
+requires_wsl2 = true
+python_version = "3.13"
+uv_version = "0.12.3"
+lockfile = "uv.lock"
+
+[network]
+default = "disabled"
+authorization_environment_variable = "ORCHESTWIN_TRAINING_ALLOW_NETWORK"
+authorized_value = "1"
+
+[evidence]
+environment_record = "artifacts/environment.json"
+package_lock_digest_required = true
+gpu_measurement_required = true
+
+[repository]
+commit_model_weights = false
+commit_checkpoints = false
+commit_adapter_weights = false
