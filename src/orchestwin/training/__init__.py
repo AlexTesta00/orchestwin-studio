@@ -29,3 +29,17 @@ __all__ = [
     "ExpectedUserTwinEvaluation",
     "create_evaluator_dataset_example",
 ]
+
+from orchestwin.training.dataset_validation import (
+    DatasetValidationCode,
+    DatasetValidationIssue,
+    DatasetValidationReport,
+    validate_dataset_example,
+)
+
+__all__ += [
+    "DatasetValidationCode",
+    "DatasetValidationIssue",
+    "DatasetValidationReport",
+    "validate_dataset_example",
+]
