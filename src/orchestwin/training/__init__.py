@@ -27,6 +27,16 @@ from orchestwin.training.dataset_validation import (
     DatasetValidationReport,
     validate_dataset_example,
 )
+from orchestwin.training.deduplication import (
+    DatasetDeduplicationDecision,
+    DatasetDeduplicationPolicy,
+    DatasetDeduplicationResult,
+    DatasetDuplicateKind,
+    dataset_training_payload_hash,
+    dataset_training_tokens,
+    deduplicate_dataset_examples,
+    default_dataset_deduplication_policy,
+)
 from orchestwin.training.filtering import (
     DatasetCandidate,
     DatasetCandidateDecision,
@@ -116,4 +126,15 @@ __all__ += [
     "DatasetFilteringResult",
     "default_dataset_filtering_policy",
     "filter_dataset_candidates",
+]
+
+__all__ += [
+    "DatasetDeduplicationDecision",
+    "DatasetDeduplicationPolicy",
+    "DatasetDeduplicationResult",
+    "DatasetDuplicateKind",
+    "dataset_training_payload_hash",
+    "dataset_training_tokens",
+    "deduplicate_dataset_examples",
+    "default_dataset_deduplication_policy",
 ]
