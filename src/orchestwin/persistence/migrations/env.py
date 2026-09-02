@@ -42,6 +42,10 @@ from orchestwin.sandbox.run_persistence import (
     SANDBOX_COMMAND_RESULTS,
     SANDBOX_RUNS,
 )
+from orchestwin.training.persistence import (
+    TrainingDatasetQualityReportRecord,
+    TrainingDatasetVersionRecord,
+)
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
@@ -86,6 +90,8 @@ _IMPORTED_MODELS = (
     ExportBundleRecord,
     EvaluationRunRecord,
     SyntheticFindingRecord,
+    TrainingDatasetVersionRecord,
+    TrainingDatasetQualityReportRecord,
     FinalReviewRecord,
     BROWNFIELD_INTAKE_VERSIONS,
     SANDBOX_RUNS,

@@ -57,6 +57,18 @@ from orchestwin.training.generation import (
     DatasetGenerationUsage,
     DeterministicDatasetExampleGenerator,
 )
+from orchestwin.training.persistence import (
+    DatasetBuildQualityReport,
+    InMemoryTrainingDatasetRepository,
+    SqlAlchemyTrainingDatasetRepository,
+    StoredTrainingDatasetVersion,
+    TrainingDatasetQualityReportRecord,
+    TrainingDatasetRepository,
+    TrainingDatasetStoreResult,
+    TrainingDatasetStoreStatus,
+    TrainingDatasetVersionRecord,
+    create_dataset_quality_report,
+)
 from orchestwin.training.scenarios import (
     DatasetTargetPlatform,
     ScenarioFamily,
@@ -160,4 +172,17 @@ __all__ += [
     "DatasetSplitResult",
     "default_dataset_split_policy",
     "split_dataset_examples",
+]
+
+__all__ += [
+    "DatasetBuildQualityReport",
+    "InMemoryTrainingDatasetRepository",
+    "SqlAlchemyTrainingDatasetRepository",
+    "StoredTrainingDatasetVersion",
+    "TrainingDatasetQualityReportRecord",
+    "TrainingDatasetRepository",
+    "TrainingDatasetStoreResult",
+    "TrainingDatasetStoreStatus",
+    "TrainingDatasetVersionRecord",
+    "create_dataset_quality_report",
 ]
