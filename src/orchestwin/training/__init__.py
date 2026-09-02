@@ -27,6 +27,16 @@ from orchestwin.training.dataset_validation import (
     DatasetValidationReport,
     validate_dataset_example,
 )
+from orchestwin.training.filtering import (
+    DatasetCandidate,
+    DatasetCandidateDecision,
+    DatasetCandidateDecisionStatus,
+    DatasetCandidateRejectionCode,
+    DatasetFilteringPolicy,
+    DatasetFilteringResult,
+    default_dataset_filtering_policy,
+    filter_dataset_candidates,
+)
 from orchestwin.training.generation import (
     DatasetExampleGenerator,
     DatasetGenerationFailure,
@@ -95,4 +105,15 @@ __all__ += [
     "ScenarioRiskDimension",
     "create_scenario_generation_plans",
     "default_scenario_families",
+]
+
+__all__ += [
+    "DatasetCandidate",
+    "DatasetCandidateDecision",
+    "DatasetCandidateDecisionStatus",
+    "DatasetCandidateRejectionCode",
+    "DatasetFilteringPolicy",
+    "DatasetFilteringResult",
+    "default_dataset_filtering_policy",
+    "filter_dataset_candidates",
 ]
