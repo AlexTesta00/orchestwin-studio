@@ -37,6 +37,14 @@ from orchestwin.training.generation import (
     DatasetGenerationUsage,
     DeterministicDatasetExampleGenerator,
 )
+from orchestwin.training.scenarios import (
+    DatasetTargetPlatform,
+    ScenarioFamily,
+    ScenarioGenerationPlan,
+    ScenarioRiskDimension,
+    create_scenario_generation_plans,
+    default_scenario_families,
+)
 
 __all__ = [
     "DatasetArtifactSnapshot",
@@ -78,4 +86,13 @@ __all__ += [
     "DatasetGenerationResult",
     "DatasetGenerationUsage",
     "DeterministicDatasetExampleGenerator",
+]
+
+__all__ += [
+    "DatasetTargetPlatform",
+    "ScenarioFamily",
+    "ScenarioGenerationPlan",
+    "ScenarioRiskDimension",
+    "create_scenario_generation_plans",
+    "default_scenario_families",
 ]
