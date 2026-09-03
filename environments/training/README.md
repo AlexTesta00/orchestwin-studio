@@ -12,7 +12,7 @@ Python environment and the default cross-platform CI matrix.
 | `uv` | `0.12.3` |
 | `unsloth` | `2026.8.22` |
 | `unsloth-zoo` | `2026.8.16` |
-| `trl` | `1.12.0` |
+| `trl` | `0.24.0` |
 
 The three Python packages above are exact direct inputs. The complete transitive resolution is
 represented by `uv.lock`, which must be generated and checked on the authorized WSL2 target.
