@@ -9,8 +9,10 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
+import sysconfig
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -68,6 +70,71 @@ def _run(command: tuple[str, ...]) -> dict[str, object]:
     return {"status": "OBSERVED", "value": stdout, "detail": None}
 
 
+def _first_non_empty_line(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return next((line.strip() for line in value.splitlines() if line.strip()), None)
+
+
+def _command_record(executable: str) -> dict[str, object]:
+    executable_path = shutil.which(executable)
+    if executable_path is None:
+        return {
+            "status": "NOT_AVAILABLE",
+            "executable": executable,
+            "path": None,
+            "version": None,
+            "detail": "command not found",
+        }
+    observed = _run((executable_path, "--version"))
+    return {
+        "status": observed["status"],
+        "executable": executable,
+        "path": executable_path,
+        "version": _first_non_empty_line(observed["value"]),
+        "detail": observed["detail"],
+    }
+
+
+def _python_header_record() -> dict[str, object]:
+    include_directory = Path(sysconfig.get_paths()["include"]).resolve()
+    python_header = include_directory / "Python.h"
+    exists = python_header.is_file()
+    return {
+        "status": "OBSERVED" if exists else "NOT_AVAILABLE",
+        "path": str(python_header),
+        "detail": None if exists else "Python.h was not found",
+    }
+
+
+def _build_toolchain_record() -> dict[str, object]:
+    components = {
+        "c_compiler": _command_record("gcc"),
+        "cxx_compiler": _command_record("g++"),
+        "build_tool": _command_record("make"),
+        "python_header": _python_header_record(),
+    }
+    incomplete = tuple(
+        sorted(name for name, component in components.items() if component["status"] != "OBSERVED")
+    )
+    statuses = {component["status"] for component in components.values()}
+    if not incomplete:
+        status = "OBSERVED"
+        detail = None
+    elif "COMMAND_FAILED" in statuses:
+        status = "COMMAND_FAILED"
+        detail = f"Unavailable or failing components: {', '.join(incomplete)}"
+    else:
+        status = "NOT_AVAILABLE"
+        detail = f"Unavailable components: {', '.join(incomplete)}"
+    return {
+        "status": status,
+        "package_hint": "build-essential",
+        "components": components,
+        "detail": detail,
+    }
+
+
 def _parse_cuda_visible_version(output: str) -> str | None:
     match = _CUDA_VISIBLE_VERSION_PATTERN.search(output)
     return None if match is None else match.group(1)
@@ -121,6 +188,7 @@ def _sha256(path: Path) -> str | None:
 
 def build_environment_record(environment_dir: Path) -> dict[str, object]:
     packages = _package_versions()
+    build_toolchain = _build_toolchain_record()
     gpu = _gpu_record()
     uv = _run(("uv", "--version"))
     lock_sha256 = _sha256(environment_dir / "uv.lock")
@@ -134,6 +202,7 @@ def build_environment_record(environment_dir: Path) -> dict[str, object]:
             is_wsl,
             lock_sha256 is not None,
             uv["status"] == "OBSERVED",
+            build_toolchain["status"] == "OBSERVED",
             gpu["status"] == "OBSERVED",
             gpu["cuda_visible_version"] is not None,
             all(value is not None for value in packages.values()),
@@ -154,6 +223,7 @@ def build_environment_record(environment_dir: Path) -> dict[str, object]:
             "distribution": wsl_distribution,
         },
         "uv": uv,
+        "build_toolchain": build_toolchain,
         "gpu": gpu,
         "packages": packages,
         "uv_lock_sha256": lock_sha256,

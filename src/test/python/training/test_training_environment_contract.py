@@ -27,6 +27,12 @@ def test_training_dependencies_and_toolchain_are_exactly_pinned() -> None:
     assert toolchain["python_version"] == "3.13"
     assert toolchain["uv_version"] == "0.12.3"
     assert toolchain["lockfile"] == "uv.lock"
+    assert toolchain["system_toolchain"] == {
+        "ubuntu_package": "build-essential",
+        "required_commands": ["gcc", "g++", "make"],
+        "required_python_header": "Python.h",
+    }
+    assert toolchain["evidence"]["build_toolchain_measurement_required"] is True
     assert (ENVIRONMENT_ROOT / ".python-version").read_text().strip() == "3.13"
 
 
@@ -46,9 +52,13 @@ def test_bootstrap_requires_wsl_exact_tools_and_explicit_network_gate() -> None:
     assert "WSL_DISTRO_NAME" in script
     assert 'REQUIRED_PYTHON_MINOR="3.13"' in script
     assert 'REQUIRED_UV_VERSION="0.12.3"' in script
+    assert 'SYSTEM_PACKAGE_HINT="build-essential"' in script
+    assert 'REQUIRED_BUILD_COMMANDS=("gcc" "g++" "make")' in script
+    assert "Python.h" in script
     assert "ORCHESTWIN_TRAINING_ALLOW_NETWORK" in script
     assert "uv sync --frozen --no-dev" in script
     assert "download model weights" in script
+    assert "sudo apt install" in script
     assert "curl " not in script
     assert "wget " not in script
     assert "git clone" not in script
@@ -61,14 +71,23 @@ def test_environment_capture_is_stdlib_only_and_records_missing_evidence() -> No
     py_compile.compile(str(capture_script), doraise=True)
     assert "uv_lock_sha256" in source
     assert '"complete": complete' in source
+    assert '"build_toolchain": build_toolchain' in source
     assert "nvidia-smi" in source
     assert "PackageNotFoundError" in source
     assert "subprocess.run" in source
+    assert "sysconfig.get_paths" in source
     assert "shell=True" not in source
 
 
-def test_large_training_outputs_are_excluded_but_lock_decision_stays_visible() -> None:
+def test_generated_training_outputs_and_compilation_caches_are_excluded() -> None:
     ignored = set((ENVIRONMENT_ROOT / ".gitignore").read_text().splitlines())
 
-    assert {".venv/", "artifacts/", "checkpoints/", "*.safetensors", "*.gguf"}.issubset(ignored)
+    assert {
+        ".venv/",
+        "artifacts/",
+        "checkpoints/",
+        "unsloth_compiled_cache/",
+        "*.safetensors",
+        "*.gguf",
+    }.issubset(ignored)
     assert "uv.lock" not in ignored
