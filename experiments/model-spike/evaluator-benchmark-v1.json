@@ -1,0 +1,638 @@
+{
+  "content_hash": "53b30e2961d56d6b35543566490461d83108102af6700e2655be0d98548e6795",
+  "frozen_at": "2026-09-03T16:00:00+00:00",
+  "metrics": [
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "abstention_accuracy",
+      "ranking_weight": 2,
+      "threshold": 1.0
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "adapter_export_load",
+      "ranking_weight": 2,
+      "threshold": 1.0
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "context_reference_recall",
+      "ranking_weight": 2,
+      "threshold": 0.5
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "criterion_agreement",
+      "ranking_weight": 1,
+      "threshold": null
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "evidence_reference_precision",
+      "ranking_weight": 2,
+      "threshold": 1.0
+    },
+    {
+      "direction": "MINIMIZE",
+      "metric_id": "latency_milliseconds",
+      "ranking_weight": 1,
+      "threshold": null
+    },
+    {
+      "direction": "MINIMIZE",
+      "metric_id": "peak_gpu_memory_mb",
+      "ranking_weight": 1,
+      "threshold": null
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "role_adherence",
+      "ranking_weight": 2,
+      "threshold": 0.5
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "schema_valid_rate",
+      "ranking_weight": 2,
+      "threshold": 1.0
+    },
+    {
+      "direction": "MAXIMIZE",
+      "metric_id": "severity_agreement",
+      "ranking_weight": 1,
+      "threshold": null
+    },
+    {
+      "direction": "MINIMIZE",
+      "metric_id": "unsupported_claim_rate",
+      "ranking_weight": 2,
+      "threshold": 0.0
+    }
+  ],
+  "schema_version": 1,
+  "source_manifest_sha256": "6303aa03dbf462be1aa96e49c3fe2158c804ec1879bce83930fef5c80ea2cfbc",
+  "suite_id": "evaluator-benchmark-protocol-v1",
+  "tasks": [
+    {
+      "artifact_summary": "The form shows a generic error banner at the top, does not identify the invalid priority field, and moves keyboard focus away from that field.",
+      "category": "SCHEMA_AND_PROVENANCE",
+      "content_hash": "22b23c7792c9ac9650aee8f37d33775d2d837b66303800a4926cd37bd63846b3",
+      "evidence": [
+        {
+          "reference_id": "REQ-EN-001-A",
+          "text": "Validation errors must appear beside the affected field and explain the accepted value."
+        },
+        {
+          "reference_id": "UT-EN-001-A",
+          "text": "The shift coordinator needs concise recovery instructions during time-critical dispatching."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-EN-001-A",
+          "UT-EN-001-A"
+        ],
+        "expected_criteria": [
+          "actionability"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "real users will",
+          "usability testing proves"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-EN-001-A",
+          "UT-EN-001-A"
+        ],
+        "required_role_terms": [
+          "coordinator",
+          "dispatch"
+        ],
+        "should_abstain": false
+      },
+      "language": "en",
+      "profile_summary": "Distribution-center shift coordinator experienced in dispatching, working under time pressure, and needing concise recovery guidance.",
+      "scenario": "During the evening dispatch peak, the coordinator corrects an invalid shipment priority before releasing a route.",
+      "schema_version": 1,
+      "target_task": "Correct the invalid priority without losing the other dispatch values.",
+      "task_id": "bench-en-001",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "The preference screen enables all reminders by default and labels the setting Recommended for volunteers.",
+      "category": "UNSUPPORTED_CLAIM",
+      "content_hash": "bd3fe4123409b8378fc3038492e943c58d117ad23c3b92e46c76a8326dbc1c4e",
+      "evidence": [
+        {
+          "reference_id": "ASSUMPTION-EN-002",
+          "text": "The owner assumes volunteers prefer automatic reminders; this assumption has not been validated."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "ASSUMPTION-EN-002"
+        ],
+        "expected_criteria": [
+          "trust"
+        ],
+        "expected_severities": [
+          "observation"
+        ],
+        "forbidden_claim_fragments": [
+          "all volunteers prefer",
+          "empirical evidence shows",
+          "real users will"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "ASSUMPTION-EN-002"
+        ],
+        "required_role_terms": [
+          "administrator",
+          "volunteer"
+        ],
+        "should_abstain": false
+      },
+      "language": "en",
+      "profile_summary": "Volunteer-program administrator represented by an owner-approved proto profile; no target-user study has been supplied.",
+      "scenario": "The administrator reviews whether automatic reminders should be enabled by default.",
+      "schema_version": 1,
+      "target_task": "Assess the default reminder choice without converting assumptions into user evidence.",
+      "task_id": "bench-en-002",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "Only a textual requirement is available; no DOM snapshot, accessibility tree, screen recording, focus trace, or runnable artifact was supplied.",
+      "category": "ABSTENTION",
+      "content_hash": "cd12adcb28c36cab0efe3de292b6c9f0bc1d498b85c5af61f7619493308d4878",
+      "evidence": [
+        {
+          "reference_id": "EVIDENCE-GAP-EN-003",
+          "text": "No observed focus trace or interface structure is available for this interaction."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "EVIDENCE-GAP-EN-003"
+        ],
+        "expected_criteria": [],
+        "expected_severities": [],
+        "forbidden_claim_fragments": [
+          "focus returns correctly",
+          "passes accessibility"
+        ],
+        "maximum_findings": 0,
+        "minimum_findings": 0,
+        "required_evidence_refs": [],
+        "required_role_terms": [],
+        "should_abstain": true
+      },
+      "language": "en",
+      "profile_summary": "Remote-support technician who uses keyboard navigation and a screen reader while handling concurrent customer sessions.",
+      "scenario": "The technician closes a modal and must continue in the underlying support form.",
+      "schema_version": 1,
+      "target_task": "Determine whether keyboard focus returns to the control that opened the modal.",
+      "task_id": "bench-en-003",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "The submit target is 32 by 32 CSS pixels, failed uploads retry silently, and the screen provides no queued-or-offline state.",
+      "category": "ROLE_ADHERENCE",
+      "content_hash": "cc8d2e113cc338aa16d283f21f6306042a0a7fa53660e434d5461b1ca4052eb7",
+      "evidence": [
+        {
+          "reference_id": "REQ-EN-004-A",
+          "text": "The interface must expose whether a work order is queued locally or synchronized."
+        },
+        {
+          "reference_id": "UT-EN-004-A",
+          "text": "Protective gloves require large touch targets and make precise tapping difficult."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-EN-004-A",
+          "UT-EN-004-A"
+        ],
+        "expected_criteria": [
+          "accessibility",
+          "trust"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "all technicians",
+          "real users will"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-EN-004-A",
+          "UT-EN-004-A"
+        ],
+        "required_role_terms": [
+          "field technician",
+          "gloves",
+          "offline"
+        ],
+        "should_abstain": false
+      },
+      "language": "en",
+      "profile_summary": "Field maintenance technician wearing protective gloves outdoors, often working with intermittent connectivity and needing explicit offline confirmation.",
+      "scenario": "The field technician attaches a photo and closes a work order beside the asset.",
+      "schema_version": 1,
+      "target_task": "Submit the work order reliably without repeating the inspection.",
+      "task_id": "bench-en-004",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "The warning says Something went wrong, hides the existing order details, and still allows the clerk to submit the duplicate request.",
+      "category": "CRITERION_AND_SEVERITY",
+      "content_hash": "851fe4b6fb477ece783f0a53561e69c980f016d67a53d31cbc59bd80f7fb47f3",
+      "evidence": [
+        {
+          "reference_id": "REQ-EN-005-A",
+          "text": "Duplicate restock orders must be blocked before submission."
+        },
+        {
+          "reference_id": "UT-EN-005-A",
+          "text": "The inventory clerk needs the item and existing-order identifiers before deciding."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-EN-005-A",
+          "UT-EN-005-A"
+        ],
+        "expected_criteria": [
+          "task_alignment"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "real users will"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-EN-005-A",
+          "UT-EN-005-A"
+        ],
+        "required_role_terms": [
+          "inventory clerk",
+          "restock"
+        ],
+        "should_abstain": false
+      },
+      "language": "en",
+      "profile_summary": "Community-pharmacy inventory clerk responsible for avoiding duplicate restock orders during a busy receiving shift.",
+      "scenario": "The clerk reviews a warning before confirming a restock request.",
+      "schema_version": 1,
+      "target_task": "Recognize a duplicate request and stop it before submission.",
+      "task_id": "bench-en-005",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "The table is sorted alphabetically, places the critical shortage below the fold, and recommends sending 40 units to Site B without explaining the priority.",
+      "category": "CONTEXT_HANDLING",
+      "content_hash": "77ef49d9315f08efa9eafdd623d6c90fefeb663bfaf118f1e291624e5cfc29d9",
+      "evidence": [
+        {
+          "reference_id": "CTX-EN-006-Z",
+          "text": "The approved visual theme uses neutral surface colors for ordinary table rows."
+        },
+        {
+          "reference_id": "REQ-EN-006-A",
+          "text": "Supply priority must be ordered by estimated hours remaining before shortage."
+        },
+        {
+          "reference_id": "UT-EN-006-A",
+          "text": "The shelter coordinator needs the rationale and affected sites before authorizing dispatch."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "CTX-EN-006-Z",
+          "REQ-EN-006-A",
+          "UT-EN-006-A"
+        ],
+        "expected_criteria": [
+          "actionability",
+          "trust"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "real users will"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-EN-006-A",
+          "UT-EN-006-A"
+        ],
+        "required_role_terms": [
+          "coordinator",
+          "shelter"
+        ],
+        "should_abstain": false
+      },
+      "language": "en",
+      "profile_summary": "Emergency-shelter logistics coordinator allocating limited supplies under time pressure and needing an explainable priority rationale.",
+      "scenario": "The coordinator distributes drinking water across three shelters after a disruption.",
+      "schema_version": 1,
+      "target_task": "Identify the most urgent shortage and justify the allocation before dispatch.",
+      "task_id": "bench-en-006",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "Il modulo mostra un errore generico in alto, non identifica il campo della priorità e sposta il focus da tastiera lontano dal campo errato.",
+      "category": "SCHEMA_AND_PROVENANCE",
+      "content_hash": "b9783dfb9a39fd35bf61e02a0232bd9fe62e3150c56cbd47b9bd7bef6a019bf9",
+      "evidence": [
+        {
+          "reference_id": "REQ-IT-001-A",
+          "text": "Gli errori di validazione devono comparire accanto al campo e spiegare il valore ammesso."
+        },
+        {
+          "reference_id": "UT-IT-001-A",
+          "text": "La responsabile dei turni necessita di istruzioni concise durante le spedizioni urgenti."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-IT-001-A",
+          "UT-IT-001-A"
+        ],
+        "expected_criteria": [
+          "actionability"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "gli utenti reali faranno",
+          "un test di usabilità dimostra"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-IT-001-A",
+          "UT-IT-001-A"
+        ],
+        "required_role_terms": [
+          "distribuzione",
+          "responsabile dei turni"
+        ],
+        "should_abstain": false
+      },
+      "language": "it",
+      "profile_summary": "Responsabile dei turni di un centro di distribuzione, esperta nelle spedizioni, sotto pressione e bisognosa di istruzioni di recupero concise.",
+      "scenario": "Durante il picco serale, la responsabile corregge una priorità di spedizione non valida prima di autorizzare un percorso.",
+      "schema_version": 1,
+      "target_task": "Correggere la priorità senza perdere gli altri valori della spedizione.",
+      "task_id": "bench-it-001",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "La schermata seleziona automaticamente i messaggi istantanei e li presenta come canale preferito dai membri.",
+      "category": "UNSUPPORTED_CLAIM",
+      "content_hash": "c7f57e95eb213e7d96bbafbd413a195f68b35524f7e26c53197cf8e644428bb0",
+      "evidence": [
+        {
+          "reference_id": "ASSUMPTION-IT-002",
+          "text": "Il proprietario presume che i membri preferiscano i messaggi istantanei; la supposizione non è validata."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "ASSUMPTION-IT-002"
+        ],
+        "expected_criteria": [
+          "trust"
+        ],
+        "expected_severities": [
+          "observation"
+        ],
+        "forbidden_claim_fragments": [
+          "gli utenti reali",
+          "tutti i membri preferiscono",
+          "è dimostrato empiricamente"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "ASSUMPTION-IT-002"
+        ],
+        "required_role_terms": [
+          "coordinatrice",
+          "membri"
+        ],
+        "should_abstain": false
+      },
+      "language": "it",
+      "profile_summary": "Coordinatrice di una associazione culturale rappresentata da un proto-profilo approvato dal proprietario, senza ricerca con utenti target.",
+      "scenario": "La coordinatrice valuta quale canale usare come impostazione predefinita per gli avvisi.",
+      "schema_version": 1,
+      "target_task": "Valutare la scelta senza trasformare una supposizione in evidenza sugli utenti.",
+      "task_id": "bench-it-002",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "È disponibile soltanto il requisito di conservazione; mancano applicazione eseguibile, log, stato persistito e prova di ripristino.",
+      "category": "ABSTENTION",
+      "content_hash": "491628618a6094f109957afb87bf51928cca0cada642e69d0b4928c2f94ef0ca",
+      "evidence": [
+        {
+          "reference_id": "EVIDENCE-GAP-IT-003",
+          "text": "Non è disponibile alcuna evidenza osservata sul salvataggio o sul ripristino della pratica."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "EVIDENCE-GAP-IT-003"
+        ],
+        "expected_criteria": [],
+        "expected_severities": [],
+        "forbidden_claim_fragments": [
+          "i dati vengono recuperati",
+          "il ripristino funziona"
+        ],
+        "maximum_findings": 0,
+        "minimum_findings": 0,
+        "required_evidence_refs": [],
+        "required_role_terms": [],
+        "should_abstain": true
+      },
+      "language": "it",
+      "profile_summary": "Operatore di sportello che usa prevalentemente la tastiera e gestisce più pratiche in parallelo durante gli orari di punta.",
+      "scenario": "Dopo una scadenza della sessione, l’operatore tenta di riprendere una pratica non inviata.",
+      "schema_version": 1,
+      "target_task": "Determinare se i dati inseriti vengono recuperati dopo il nuovo accesso.",
+      "task_id": "bench-it-003",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "I pulsanti principali sono piccoli, la sincronizzazione fallita viene ritentata senza messaggi e non è mostrato alcuno stato offline o in coda.",
+      "category": "ROLE_ADHERENCE",
+      "content_hash": "135cded6f7fc8f0ff196c18dbf88d0d561cb0adc557350e9ae91f63e2b4f8434",
+      "evidence": [
+        {
+          "reference_id": "REQ-IT-004-A",
+          "text": "L’interfaccia deve mostrare se il controllo è salvato localmente o sincronizzato."
+        },
+        {
+          "reference_id": "UT-IT-004-A",
+          "text": "I guanti protettivi rendono difficili i tocchi precisi e richiedono bersagli ampi."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-IT-004-A",
+          "UT-IT-004-A"
+        ],
+        "expected_criteria": [
+          "accessibility",
+          "trust"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "gli utenti reali faranno",
+          "tutte le tecniche"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-IT-004-A",
+          "UT-IT-004-A"
+        ],
+        "required_role_terms": [
+          "guanti",
+          "offline",
+          "tecnica"
+        ],
+        "should_abstain": false
+      },
+      "language": "it",
+      "profile_summary": "Tecnica di manutenzione ferroviaria con guanti protettivi, rumore elevato e connettività intermittente, bisognosa di conferma offline esplicita.",
+      "scenario": "La tecnica registra un controllo accanto al veicolo e invia fotografie e misure.",
+      "schema_version": 1,
+      "target_task": "Concludere il controllo senza ripetere il rilievo in caso di assenza di rete.",
+      "task_id": "bench-it-004",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "Il sistema mostra soltanto Operazione non riuscita, cancella la selezione corrente e non spiega la prenotazione che impedisce il rinnovo.",
+      "category": "CRITERION_AND_SEVERITY",
+      "content_hash": "d0f0bd0ef3f92be9458ee09fa3d27fbcc1a91e07972588056d016ed2e6ea8cb5",
+      "evidence": [
+        {
+          "reference_id": "REQ-IT-005-A",
+          "text": "Quando un rinnovo è bloccato, il motivo e la possibile azione successiva devono essere visibili."
+        },
+        {
+          "reference_id": "UT-IT-005-A",
+          "text": "La bibliotecaria deve gestire molte richieste senza ricostruire la selezione persa."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "REQ-IT-005-A",
+          "UT-IT-005-A"
+        ],
+        "expected_criteria": [
+          "actionability"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "gli utenti reali faranno"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-IT-005-A",
+          "UT-IT-005-A"
+        ],
+        "required_role_terms": [
+          "bibliotecaria",
+          "rinnovo"
+        ],
+        "should_abstain": false
+      },
+      "language": "it",
+      "profile_summary": "Bibliotecaria addetta ai prestiti che deve rinnovare rapidamente più opere e capire quali vincoli bloccano una operazione.",
+      "scenario": "La bibliotecaria tenta di rinnovare un prestito già prenotato da un’altra persona.",
+      "schema_version": 1,
+      "target_task": "Capire perché il rinnovo è bloccato e indicare il passo successivo corretto.",
+      "task_id": "bench-it-005",
+      "version_number": 1
+    },
+    {
+      "artifact_summary": "La tabella è ordinata alfabeticamente, nasconde sotto la piega l’area critica e raccomanda Area B senza spiegare il criterio di priorità.",
+      "category": "CONTEXT_HANDLING",
+      "content_hash": "d4c99ef3b024370aa5fbf53ddcb79863232e31633c4a3deab7dab117d01c2307",
+      "evidence": [
+        {
+          "reference_id": "CTX-IT-006-Z",
+          "text": "Il tema grafico approvato usa colori neutri per le righe ordinarie della tabella."
+        },
+        {
+          "reference_id": "REQ-IT-006-A",
+          "text": "La priorità deve essere ordinata per ore residue di autonomia energetica."
+        },
+        {
+          "reference_id": "UT-IT-006-A",
+          "text": "La coordinatrice necessita della motivazione e delle aree coinvolte prima di autorizzare l’invio."
+        }
+      ],
+      "expected": {
+        "allowed_evidence_refs": [
+          "CTX-IT-006-Z",
+          "REQ-IT-006-A",
+          "UT-IT-006-A"
+        ],
+        "expected_criteria": [
+          "actionability",
+          "trust"
+        ],
+        "expected_severities": [
+          "major"
+        ],
+        "forbidden_claim_fragments": [
+          "gli utenti reali faranno"
+        ],
+        "maximum_findings": 2,
+        "minimum_findings": 1,
+        "required_evidence_refs": [
+          "REQ-IT-006-A",
+          "UT-IT-006-A"
+        ],
+        "required_role_terms": [
+          "coordinatrice",
+          "protezione civile"
+        ],
+        "should_abstain": false
+      },
+      "language": "it",
+      "profile_summary": "Coordinatrice logistica della protezione civile che assegna risorse limitate sotto pressione e deve motivare le priorità operative.",
+      "scenario": "La coordinatrice distribuisce generatori tra tre aree dopo una interruzione prolungata.",
+      "schema_version": 1,
+      "target_task": "Individuare l’area più urgente e giustificare l’assegnazione prima della partenza.",
+      "task_id": "bench-it-006",
+      "version_number": 1
+    }
+  ],
+  "version_number": 1
+}
