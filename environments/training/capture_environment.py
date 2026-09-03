@@ -28,7 +28,9 @@ _PACKAGE_NAMES: Final = (
     "xformers",
 )
 _COMMAND_TIMEOUT_SECONDS: Final = 15
-_CUDA_PATTERN: Final = re.compile(r"CUDA Version:\s*([^|\s]+)")
+_CUDA_VISIBLE_VERSION_PATTERN: Final = re.compile(
+    r"\bCUDA(?: UMD)? Version:\s*([0-9]+(?:\.[0-9]+)*)"
+)
 
 
 def _package_versions() -> dict[str, str | None]:
@@ -66,6 +68,11 @@ def _run(command: tuple[str, ...]) -> dict[str, object]:
     return {"status": "OBSERVED", "value": stdout, "detail": None}
 
 
+def _parse_cuda_visible_version(output: str) -> str | None:
+    match = _CUDA_VISIBLE_VERSION_PATTERN.search(output)
+    return None if match is None else match.group(1)
+
+
 def _gpu_record() -> dict[str, object]:
     query = _run(
         (
@@ -98,9 +105,7 @@ def _gpu_record() -> dict[str, object]:
                 values["detail"] = "GPU memory was not numeric"
             values["driver_version"] = fields[2]
     if header["status"] == "OBSERVED" and isinstance(header["value"], str):
-        match = _CUDA_PATTERN.search(header["value"])
-        if match is not None:
-            values["cuda_visible_version"] = match.group(1)
+        values["cuda_visible_version"] = _parse_cuda_visible_version(header["value"])
     return values
 
 
