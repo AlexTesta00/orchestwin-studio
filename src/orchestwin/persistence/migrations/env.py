@@ -46,6 +46,10 @@ from orchestwin.training.persistence import (
     TrainingDatasetQualityReportRecord,
     TrainingDatasetVersionRecord,
 )
+from orchestwin.training.training_run_persistence import (
+    TrainingRunCheckpointRecord,
+    TrainingRunRecord,
+)
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
@@ -92,6 +96,8 @@ _IMPORTED_MODELS = (
     SyntheticFindingRecord,
     TrainingDatasetVersionRecord,
     TrainingDatasetQualityReportRecord,
+    TrainingRunRecord,
+    TrainingRunCheckpointRecord,
     FinalReviewRecord,
     BROWNFIELD_INTAKE_VERSIONS,
     SANDBOX_RUNS,
