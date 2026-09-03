@@ -236,12 +236,54 @@ class ContentAddressedAdapterRegistry:
             manifest_path,
         )
 
+    def history_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+    ) -> tuple[AdapterArtifactManifest, ...]:
+        """Return verified manifests without disclosing other owners' adapters."""
+        manifest_root = self._root / "manifests"
+        if not manifest_root.exists():
+            return ()
+        if manifest_root.is_symlink() or not manifest_root.is_dir():
+            raise ValueError("adapter manifest root must be a regular directory")
+        manifests: list[AdapterArtifactManifest] = []
+        for path in sorted(manifest_root.glob("*.json"), key=lambda item: item.name):
+            manifest = load_adapter_artifact_manifest(path)
+            self._verify_registered_manifest(manifest)
+            if manifest.owner_user_id == owner_user_id:
+                manifests.append(manifest)
+        return tuple(
+            sorted(
+                manifests,
+                key=lambda item: (item.created_at, item.adapter_id.hex),
+            )
+        )
+
+    def get_owned(
+        self,
+        *,
+        owner_user_id: UUID,
+        adapter_id: UUID,
+    ) -> AdapterArtifactManifest | None:
+        """Return one exact owner-scoped adapter manifest after byte verification."""
+        for manifest in self.history_for_owner(owner_user_id=owner_user_id):
+            if manifest.adapter_id == adapter_id:
+                return manifest
+        return None
+
     def _prepare_root(self) -> None:
         if self._root.is_symlink():
             raise ValueError("adapter registry root must not be a symbolic link")
         self._root.mkdir(parents=True, exist_ok=True)
         if not self._root.is_dir():
             raise ValueError("adapter registry root must be a directory")
+
+    def _verify_registered_manifest(self, manifest: AdapterArtifactManifest) -> None:
+        artifact_directory = self._root / manifest.storage_key
+        files, digest = inspect_adapter_directory(artifact_directory)
+        if files != manifest.files or digest != manifest.adapter_sha256:
+            raise ValueError("registered adapter content does not match its manifest")
 
     @staticmethod
     def _write_or_verify_manifest(
@@ -259,6 +301,69 @@ class ContentAddressedAdapterRegistry:
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(content, encoding="utf-8")
         os.replace(temporary, path)
+
+
+def load_adapter_artifact_manifest(path: Path) -> AdapterArtifactManifest:
+    """Load one canonical manifest and reconstruct its validated domain value."""
+    manifest_path = Path(path)
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("adapter manifest must be a regular file")
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("adapter manifest must contain valid JSON") from error
+    if not isinstance(raw, dict):
+        raise ValueError("adapter manifest must contain a JSON object")
+    return adapter_artifact_manifest_from_snapshot(raw)
+
+
+def adapter_artifact_manifest_from_snapshot(
+    snapshot: dict[str, object],
+) -> AdapterArtifactManifest:
+    """Rebuild a manifest while reapplying all identity and integrity rules."""
+    dataset = _required_mapping(snapshot, "dataset_reference")
+    files_raw = _required_list(snapshot, "files")
+    files = tuple(
+        AdapterArtifactFile(
+            relative_path=_required_string(item, "relative_path"),
+            size_bytes=_required_integer(item, "size_bytes"),
+            sha256_digest=_required_string(item, "sha256_digest"),
+        )
+        for item in (_require_mapping(value, label="adapter manifest file") for value in files_raw)
+    )
+    try:
+        created_at = datetime.fromisoformat(_required_string(snapshot, "created_at"))
+        manifest = AdapterArtifactManifest(
+            adapter_id=UUID(_required_string(snapshot, "adapter_id")),
+            owner_user_id=UUID(_required_string(snapshot, "owner_user_id")),
+            training_run_id=UUID(_required_string(snapshot, "training_run_id")),
+            base_model_repository=_required_string(snapshot, "base_model_repository"),
+            base_model_revision=_required_string(snapshot, "base_model_revision"),
+            tokenizer_repository=_required_string(snapshot, "tokenizer_repository"),
+            tokenizer_revision=_required_string(snapshot, "tokenizer_revision"),
+            dataset_reference=DatasetManifestReference(
+                dataset_id=UUID(_required_string(dataset, "dataset_id")),
+                version_number=_required_integer(dataset, "version_number"),
+                content_hash=_required_string(dataset, "content_hash"),
+            ),
+            training_configuration_sha256=_required_string(
+                snapshot,
+                "training_configuration_sha256",
+            ),
+            adapter_sha256=_required_string(snapshot, "adapter_sha256"),
+            license_spdx=_required_string(snapshot, "license_spdx"),
+            storage_key=_required_string(snapshot, "storage_key"),
+            files=files,
+            total_size_bytes=_required_integer(snapshot, "total_size_bytes"),
+            created_at=created_at,
+            content_hash=_required_string(snapshot, "content_hash"),
+            schema_version=_required_integer(snapshot, "schema_version"),
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError("adapter manifest snapshot is invalid") from error
+    if canonical_json(manifest.to_snapshot()) != canonical_json(snapshot):
+        raise ValueError("adapter manifest snapshot contains unsupported or missing fields")
+    return manifest
 
 
 def create_adapter_artifact_manifest(
@@ -494,3 +599,34 @@ def _validate_relative_path(value: str, *, label: str) -> None:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ValueError(f"{label} must remain relative and traversal-free")
+
+
+def _require_mapping(value: object, *, label: str) -> dict[str, object]:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _required_mapping(values: dict[str, object], key: str) -> dict[str, object]:
+    return _require_mapping(values.get(key), label=key)
+
+
+def _required_list(values: dict[str, object], key: str) -> list[object]:
+    value = values.get(key)
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be an array")
+    return value
+
+
+def _required_string(values: dict[str, object], key: str) -> str:
+    value = values.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"{key} must be a string")
+    return value
+
+
+def _required_integer(values: dict[str, object], key: str) -> int:
+    value = values.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    return value

@@ -282,3 +282,34 @@ def test_manifest_rejects_training_configuration_identity_drift(tmp_path: Path) 
             adapter_sha256=digest,
             created_at=NOW,
         )
+
+
+def test_registry_queries_are_owner_scoped_and_revalidate_stored_bytes(tmp_path: Path) -> None:
+    source = _source(tmp_path)
+    files, digest = inspect_adapter_directory(source)
+    configuration = _configuration()
+    manifest = create_adapter_artifact_manifest(
+        adapter_id=ADAPTER_ID,
+        outcome=_outcome(configuration, digest),
+        configuration=configuration,
+        license_spdx="Apache-2.0",
+        files=files,
+        adapter_sha256=digest,
+        created_at=NOW,
+    )
+    registry = ContentAddressedAdapterRegistry(tmp_path / "registry")
+    registered = registry.register(source_directory=source, manifest=manifest)
+
+    assert registry.history_for_owner(owner_user_id=OWNER_ID) == (manifest,)
+    assert registry.get_owned(owner_user_id=OWNER_ID, adapter_id=ADAPTER_ID) == manifest
+    assert (
+        registry.get_owned(
+            owner_user_id=UUID("00000000-0000-4000-8000-000000125999"),
+            adapter_id=ADAPTER_ID,
+        )
+        is None
+    )
+
+    (registered.artifact_directory / "adapter_model.safetensors").write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="does not match"):
+        registry.history_for_owner(owner_user_id=OWNER_ID)
