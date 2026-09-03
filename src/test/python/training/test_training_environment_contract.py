@@ -20,7 +20,7 @@ def test_training_dependencies_and_toolchain_are_exactly_pinned() -> None:
 
     assert project["project"]["requires-python"] == ">=3.13,<3.14"
     assert project["project"]["dependencies"] == [
-        "trl==1.12.0",
+        "trl==0.24.0",
         "unsloth==2026.8.22",
         "unsloth-zoo==2026.8.16",
     ]
