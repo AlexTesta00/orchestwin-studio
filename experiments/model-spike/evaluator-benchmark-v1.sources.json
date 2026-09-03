@@ -1,0 +1,37 @@
+{
+  "manifest_id": "evaluator-benchmark-protocol-sources-v1",
+  "methodological_boundaries": [
+    "Benchmark outputs are simulated feedback and design hypotheses, not empirical evidence.",
+    "A model must use only supplied evidence references and must not invent empirical support.",
+    "A model must abstain when artifact or evidence information is insufficient.",
+    "A model must evaluate from the represented role rather than as a generic UX expert.",
+    "The suite excludes the calculator, hotel, and weather formal evaluation cases."
+  ],
+  "schema_version": 1,
+  "sources": [
+    {
+      "reference": "_GoodIt2026__LLM_driven_HCDT.pdf",
+      "sha256": "c3a47df70635e832d64a981d99192c574cabcf5b23f363424200ddd6028ae745",
+      "source_id": "agentic-ucd-user-twins-paper-2026",
+      "source_type": "SOURCE_PAPER"
+    },
+    {
+      "reference": "10_FINE_TUNING_AND_DATASET_PLAN.md",
+      "sha256": "5226f9dd931885f6a3f136bb3a4238b4c34d8a3b11e57e1c788e803562da655a",
+      "source_id": "fine-tuning-and-dataset-plan",
+      "source_type": "PROJECT_CONTRACT"
+    },
+    {
+      "reference": "synthetic_finding.schema.json",
+      "sha256": "32a80ebd77f56a8bd56a7896a62503789dd4556738a8636655b87a2b490cb0c2",
+      "source_id": "synthetic-finding-schema",
+      "source_type": "PROJECT_SCHEMA"
+    },
+    {
+      "reference": "05_USER_TWIN_PROTOCOL.md",
+      "sha256": "0ab2c536af41c430f9a530b58c823d7420ca432fa6ccc2cf8899441592399a93",
+      "source_id": "user-twin-protocol",
+      "source_type": "PROJECT_CONTRACT"
+    }
+  ]
+}
