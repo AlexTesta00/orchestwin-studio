@@ -6,6 +6,11 @@ python_version = "3.13"
 uv_version = "0.12.3"
 lockfile = "uv.lock"
 
+[system_toolchain]
+ubuntu_package = "build-essential"
+required_commands = ["gcc", "g++", "make"]
+required_python_header = "Python.h"
+
 [network]
 default = "disabled"
 authorization_environment_variable = "ORCHESTWIN_TRAINING_ALLOW_NETWORK"
@@ -15,6 +20,7 @@ authorized_value = "1"
 environment_record = "artifacts/environment.json"
 package_lock_digest_required = true
 gpu_measurement_required = true
+build_toolchain_measurement_required = true
 
 [repository]
 commit_model_weights = false
