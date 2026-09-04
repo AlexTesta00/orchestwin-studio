@@ -1,0 +1,83 @@
+{
+  "captured_at": "2026-09-04T09:30:00+00:00",
+  "content_hash": "36b6269757b419d454dc673c4b067c42c96401e39e53505080eb2891a5502fe6",
+  "manifest_id": "user-twin-evaluator-model-candidate-sources-v1",
+  "methodological_constraints": [
+    "The matrix is a preflight shortlist and does not select a model.",
+    "Upstream declarations require local capture and SHA-256 evidence before ranking.",
+    "Italian and English protocol quality must be measured with the frozen benchmark suite.",
+    "QLoRA, adapter export, adapter load, latency, and memory remain unobserved.",
+    "User Twin outputs remain simulated design hypotheses, not empirical user evidence."
+  ],
+  "schema_version": 1,
+  "sources": [
+    {
+      "candidate_id": "model-candidate-granite-3-3-2b-instruct",
+      "capture_status": "PENDING_LOCAL_DIGEST",
+      "declared_claims": [
+        "APACHE_2_0_DECLARED",
+        "CONTEXT_131072_DECLARED",
+        "ENGLISH_AND_ITALIAN_DECLARED",
+        "INSTRUCT_TUNED_DECLARED",
+        "OPENAI_COMPATIBLE_VLLM_DOCUMENTED",
+        "THINKING_CONTROL_DOCUMENTED"
+      ],
+      "license_reference": "https://huggingface.co/ibm-granite/granite-3.3-2b-instruct/blob/9e2a2e5159b7cd2c412346a8434b19990966d739/README.md",
+      "model_card_reference": "https://huggingface.co/ibm-granite/granite-3.3-2b-instruct/blob/9e2a2e5159b7cd2c412346a8434b19990966d739/README.md",
+      "repository_id": "ibm-granite/granite-3.3-2b-instruct",
+      "repository_tree_reference": "https://huggingface.co/ibm-granite/granite-3.3-2b-instruct/tree/9e2a2e5159b7cd2c412346a8434b19990966d739",
+      "revision": "9e2a2e5159b7cd2c412346a8434b19990966d739",
+      "source_id": "granite-3-3-2b-instruct-upstream"
+    },
+    {
+      "candidate_id": "model-candidate-phi-4-mini-instruct",
+      "capture_status": "PENDING_LOCAL_DIGEST",
+      "declared_claims": [
+        "CUSTOM_CODE_TAG_OBSERVED",
+        "MIT_LICENSE_DECLARED",
+        "REMOTE_CODE_REQUIRED_BY_TRANSFORMERS_EXAMPLE"
+      ],
+      "license_reference": "https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/LICENSE",
+      "model_card_reference": "https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/README.md",
+      "repository_id": "microsoft/Phi-4-mini-instruct",
+      "repository_tree_reference": "https://huggingface.co/microsoft/Phi-4-mini-instruct/tree/cfbefacb99257ffa30c83adab238a50856ac3083",
+      "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+      "source_id": "phi-4-mini-instruct-upstream"
+    },
+    {
+      "candidate_id": "model-candidate-qwen3-4b-instruct-2507",
+      "capture_status": "PENDING_LOCAL_DIGEST",
+      "declared_claims": [
+        "APACHE_2_0_DECLARED",
+        "CONTEXT_262144_DECLARED",
+        "INSTRUCT_TUNED_DECLARED",
+        "NON_THINKING_MODE_DECLARED",
+        "OPENAI_COMPATIBLE_VLLM_DOCUMENTED"
+      ],
+      "license_reference": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/blob/abcc171021d4f320b2e7f47c6f0deca67ded870c/LICENSE",
+      "model_card_reference": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/blob/abcc171021d4f320b2e7f47c6f0deca67ded870c/README.md",
+      "repository_id": "Qwen/Qwen3-4B-Instruct-2507",
+      "repository_tree_reference": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/tree/abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "source_id": "qwen3-4b-instruct-2507-upstream"
+    },
+    {
+      "candidate_id": "model-candidate-smollm3-3b",
+      "capture_status": "PENDING_LOCAL_DIGEST",
+      "declared_claims": [
+        "APACHE_2_0_DECLARED",
+        "CONTEXT_131072_DECLARED",
+        "ENGLISH_AND_ITALIAN_DECLARED",
+        "INSTRUCT_TUNED_DECLARED",
+        "OPENAI_COMPATIBLE_VLLM_DOCUMENTED",
+        "THINKING_CONTROL_DOCUMENTED"
+      ],
+      "license_reference": "https://huggingface.co/HuggingFaceTB/SmolLM3-3B/blob/320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53/README.md",
+      "model_card_reference": "https://huggingface.co/HuggingFaceTB/SmolLM3-3B/blob/320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53/README.md",
+      "repository_id": "HuggingFaceTB/SmolLM3-3B",
+      "repository_tree_reference": "https://huggingface.co/HuggingFaceTB/SmolLM3-3B/tree/320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53",
+      "revision": "320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53",
+      "source_id": "smollm3-3b-upstream"
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "benchmark_suite_content_hash": "53b30e2961d56d6b35543566490461d83108102af6700e2655be0d98548e6795",
+  "candidates": [
+    {
+      "artifact_capture": {
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "model_card_path": "README.md",
+        "tokenizer_configuration_path": "tokenizer_config.json",
+        "tokenizer_vocabulary_paths": [
+          "tokenizer.json"
+        ]
+      },
+      "availability_status": "PENDING_DOWNLOAD_PROBE",
+      "benchmark_languages": [
+        "en",
+        "it"
+      ],
+      "candidate_id": "model-candidate-granite-3-3-2b-instruct",
+      "chat_template_control": {
+        "argument_name": "thinking",
+        "argument_value": false,
+        "mode": "TEMPLATE_ARGUMENT_FALSE",
+        "system_prefix": null
+      },
+      "declared_context_limit_tokens": 131072,
+      "declared_parameter_count_millions": 2000,
+      "family_id": "granite-3.3",
+      "instruct_tuned": true,
+      "license": {
+        "allows_adapter_redistribution": null,
+        "allows_weight_redistribution": null,
+        "artifact_path": "README.md",
+        "attribution_required": null,
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "declared_license_id": "Apache-2.0",
+        "review_status": "REVIEW_REQUIRED",
+        "source_id": "granite-3-3-2b-instruct-upstream"
+      },
+      "repository_id": "ibm-granite/granite-3.3-2b-instruct",
+      "revision": "9e2a2e5159b7cd2c412346a8434b19990966d739",
+      "serving": {
+        "runtime_family": "vllm",
+        "runtime_id": "openai-compatible-local",
+        "source_id": "granite-3-3-2b-instruct-upstream",
+        "status": "DOCUMENTED_NOT_LOCALLY_OBSERVED"
+      },
+      "source_id": "granite-3-3-2b-instruct-upstream",
+      "tokenizer_repository_id": "ibm-granite/granite-3.3-2b-instruct",
+      "tokenizer_revision": "9e2a2e5159b7cd2c412346a8434b19990966d739"
+    },
+    {
+      "artifact_capture": {
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "model_card_path": "README.md",
+        "tokenizer_configuration_path": "tokenizer_config.json",
+        "tokenizer_vocabulary_paths": [
+          "tokenizer.json"
+        ]
+      },
+      "availability_status": "PENDING_DOWNLOAD_PROBE",
+      "benchmark_languages": [
+        "en",
+        "it"
+      ],
+      "candidate_id": "model-candidate-qwen3-4b-instruct-2507",
+      "chat_template_control": {
+        "argument_name": null,
+        "argument_value": null,
+        "mode": "DEFAULT_NON_THINKING",
+        "system_prefix": null
+      },
+      "declared_context_limit_tokens": 262144,
+      "declared_parameter_count_millions": 4000,
+      "family_id": "qwen3",
+      "instruct_tuned": true,
+      "license": {
+        "allows_adapter_redistribution": null,
+        "allows_weight_redistribution": null,
+        "artifact_path": "LICENSE",
+        "attribution_required": null,
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "declared_license_id": "Apache-2.0",
+        "review_status": "REVIEW_REQUIRED",
+        "source_id": "qwen3-4b-instruct-2507-upstream"
+      },
+      "repository_id": "Qwen/Qwen3-4B-Instruct-2507",
+      "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "serving": {
+        "runtime_family": "vllm",
+        "runtime_id": "openai-compatible-local",
+        "source_id": "qwen3-4b-instruct-2507-upstream",
+        "status": "DOCUMENTED_NOT_LOCALLY_OBSERVED"
+      },
+      "source_id": "qwen3-4b-instruct-2507-upstream",
+      "tokenizer_repository_id": "Qwen/Qwen3-4B-Instruct-2507",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+    },
+    {
+      "artifact_capture": {
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "model_card_path": "README.md",
+        "tokenizer_configuration_path": "tokenizer_config.json",
+        "tokenizer_vocabulary_paths": [
+          "tokenizer.json"
+        ]
+      },
+      "availability_status": "PENDING_DOWNLOAD_PROBE",
+      "benchmark_languages": [
+        "en",
+        "it"
+      ],
+      "candidate_id": "model-candidate-smollm3-3b",
+      "chat_template_control": {
+        "argument_name": "enable_thinking",
+        "argument_value": false,
+        "mode": "TEMPLATE_ARGUMENT_FALSE",
+        "system_prefix": null
+      },
+      "declared_context_limit_tokens": 131072,
+      "declared_parameter_count_millions": 3000,
+      "family_id": "smollm3",
+      "instruct_tuned": true,
+      "license": {
+        "allows_adapter_redistribution": null,
+        "allows_weight_redistribution": null,
+        "artifact_path": "README.md",
+        "attribution_required": null,
+        "capture_status": "PENDING_LOCAL_DIGEST",
+        "declared_license_id": "Apache-2.0",
+        "review_status": "REVIEW_REQUIRED",
+        "source_id": "smollm3-3b-upstream"
+      },
+      "repository_id": "HuggingFaceTB/SmolLM3-3B",
+      "revision": "320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53",
+      "serving": {
+        "runtime_family": "vllm",
+        "runtime_id": "openai-compatible-local",
+        "source_id": "smollm3-3b-upstream",
+        "status": "DOCUMENTED_NOT_LOCALLY_OBSERVED"
+      },
+      "source_id": "smollm3-3b-upstream",
+      "tokenizer_repository_id": "HuggingFaceTB/SmolLM3-3B",
+      "tokenizer_revision": "320cd3ef7b805b4482ee3776fdd8cbf6ce3b5c53"
+    }
+  ],
+  "content_hash": "fe95f38476c85967d17c4cc542e5bd4fb8ad96c98965394597232e9f21a3c1ea",
+  "decision_status": "NO_MODEL_SELECTED",
+  "evidence_status": "PREFLIGHT_ONLY",
+  "frozen_at": "2026-09-04T09:30:00+00:00",
+  "generation": {
+    "load_in_4bit": true,
+    "max_output_tokens": 1024,
+    "max_sequence_length": 4096,
+    "repetitions": 1,
+    "seed": 20260904,
+    "trust_remote_code": false
+  },
+  "matrix_id": "user-twin-evaluator-live-model-matrix-v1",
+  "schema_version": 1,
+  "screened_out": [
+    {
+      "candidate_id": "model-candidate-phi-4-mini-instruct",
+      "reason": "The upstream Transformers example requires trust_remote_code=True, while the frozen live model-spike runner forbids remote code execution.",
+      "reason_code": "REMOTE_CODE_REQUIRED",
+      "repository_id": "microsoft/Phi-4-mini-instruct",
+      "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+      "source_id": "phi-4-mini-instruct-upstream"
+    }
+  ],
+  "selection_constraints": {
+    "benchmark_languages": [
+      "en",
+      "it"
+    ],
+    "declared_permissive_license_required": true,
+    "instruct_tuned_required": true,
+    "load_in_4bit_required": true,
+    "maximum_local_gpu_memory_mb": 8192,
+    "maximum_parameter_count_millions": 4000,
+    "minimum_parameter_count_millions": 2000,
+    "required_serving_runtime_id": "openai-compatible-local",
+    "trust_remote_code_allowed": false
+  },
+  "source_manifest_sha256": "abb34ec051c833d24b3f311ac4c75af9112620ae6475c9ba911f569578c48c80"
+}
