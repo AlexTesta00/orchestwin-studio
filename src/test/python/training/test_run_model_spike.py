@@ -22,6 +22,11 @@ from orchestwin.training.benchmark_suite_files import (
     load_frozen_evaluator_benchmark_suite,
 )
 from orchestwin.training.benchmarking import create_benchmark_generation_request
+from orchestwin.training.model_candidate_matrix_files import (
+    FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+    FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+    load_frozen_model_candidate_matrix,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 RUNNER_PATH = REPOSITORY_ROOT / "environments" / "training" / "run_model_spike.py"
@@ -42,28 +47,25 @@ def _runner() -> ModuleType:
 
 
 def _request_payload(module: ModuleType) -> dict[str, object]:
+    matrix = load_frozen_model_candidate_matrix(REPOSITORY_ROOT)
+    candidate = matrix.candidates[0]
     payload: dict[str, object] = {
         "schema_version": 1,
         "run_id": str(RUN_ID),
-        "candidate_id": "model-candidate-example-small-instruct",
-        "model_repository": "example/small-instruct",
-        "model_revision": "a" * 40,
-        "tokenizer_repository": "example/small-instruct",
-        "tokenizer_revision": "a" * 40,
+        "candidate_id": candidate.candidate_id,
+        "candidate_matrix_sha256": FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+        "candidate_matrix_content_hash": FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+        "model_repository": candidate.repository_id,
+        "model_revision": candidate.revision,
+        "tokenizer_repository": candidate.tokenizer_repository_id,
+        "tokenizer_revision": candidate.tokenizer_revision,
         "model_card_sha256": "b" * 64,
         "license_evidence_sha256": "c" * 64,
         "benchmark_suite_sha256": FROZEN_BENCHMARK_SUITE_SHA256,
         "benchmark_suite_content_hash": FROZEN_BENCHMARK_SUITE_CONTENT_HASH,
         "package_lock_sha256": "d" * 64,
         "environment_sha256": "e" * 64,
-        "generation": {
-            "max_sequence_length": 4096,
-            "max_output_tokens": 1024,
-            "repetitions": 1,
-            "seed": 3407,
-            "load_in_4bit": True,
-            "trust_remote_code": False,
-        },
+        "generation": matrix.generation.to_snapshot(),
         "requested_at": NOW.isoformat(),
     }
     payload["request_sha256"] = module._request_sha256(payload)
@@ -197,6 +199,105 @@ def test_model_visible_prompt_excludes_frozen_labels() -> None:
         assert f'"{forbidden}"' not in visible
 
 
+def test_request_is_resolved_only_against_the_frozen_candidate_matrix() -> None:
+    module = _runner()
+    matrix = load_frozen_model_candidate_matrix(REPOSITORY_ROOT)
+    payload = _request_payload(module)
+
+    candidate = module._resolve_frozen_candidate(payload, matrix)
+
+    assert candidate.candidate_id == payload["candidate_id"]
+    assert candidate.repository_id == payload["model_repository"]
+
+    changed_identity = dict(payload)
+    changed_identity["model_repository"] = "example/not-the-frozen-model"
+    with pytest.raises(module.ModelSpikeInputError, match="identity differs"):
+        module._resolve_frozen_candidate(changed_identity, matrix)
+
+    changed_generation = dict(payload)
+    changed_generation["generation"] = {
+        **matrix.generation.to_snapshot(),
+        "seed": matrix.generation.seed + 1,
+    }
+    with pytest.raises(module.ModelSpikeInputError, match="generation differs"):
+        module._resolve_frozen_candidate(changed_generation, matrix)
+
+    changed_matrix = dict(payload)
+    changed_matrix["candidate_matrix_content_hash"] = "f" * 64
+    with pytest.raises(module.ModelSpikeInputError, match="matrix content"):
+        module._resolve_frozen_candidate(changed_matrix, matrix)
+
+
+class _TemplateTensor:
+    shape = (1, 8)
+
+    def to(self, device: str) -> _TemplateTensor:
+        assert device == "cuda"
+        return self
+
+
+class _TemplateTorch:
+    @staticmethod
+    def ones_like(value: object) -> _TemplateTensor:
+        assert isinstance(value, _TemplateTensor)
+        return _TemplateTensor()
+
+
+class _CapturingTemplateTokenizer:
+    def __init__(self) -> None:
+        self.kwargs: dict[str, object] | None = None
+
+    def apply_chat_template(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: object,
+    ) -> dict[str, _TemplateTensor]:
+        assert [message["role"] for message in messages] == ["system", "user"]
+        self.kwargs = kwargs
+        return {"input_ids": _TemplateTensor()}
+
+
+@pytest.mark.parametrize(
+    ("candidate_id", "expected_control"),
+    [
+        ("model-candidate-granite-3-3-2b-instruct", {"thinking": False}),
+        ("model-candidate-qwen3-4b-instruct-2507", {}),
+        ("model-candidate-smollm3-3b", {"enable_thinking": False}),
+    ],
+)
+def test_chat_template_controls_are_applied_per_frozen_model_family(
+    candidate_id: str,
+    expected_control: dict[str, bool],
+) -> None:
+    module = _runner()
+    matrix = load_frozen_model_candidate_matrix(REPOSITORY_ROOT)
+    candidate = matrix.candidate(candidate_id)
+    tokenizer = _CapturingTemplateTokenizer()
+
+    inputs = module._prepare_inputs(
+        tokenizer,
+        (
+            {"role": "system", "content": "System"},
+            {"role": "user", "content": "User"},
+        ),
+        _TemplateTorch(),
+        candidate.chat_template_control,
+    )
+
+    assert inputs["input_ids"].shape == (1, 8)
+    assert tokenizer.kwargs is not None
+    core_keys = {
+        "tokenize",
+        "add_generation_prompt",
+        "return_tensors",
+        "return_dict",
+    }
+    observed_control = {
+        key: value for key, value in tokenizer.kwargs.items() if key not in core_keys
+    }
+    assert observed_control == expected_control
+
+
 def test_strict_json_never_repairs_markdown_or_trailing_text() -> None:
     module = _runner()
 
@@ -221,16 +322,18 @@ def test_invalid_json_is_measured_as_model_output_not_infrastructure_failure() -
 
 def test_model_identity_hash_binds_runtime_generation_and_license_evidence() -> None:
     module = _runner()
+    matrix = load_frozen_model_candidate_matrix(REPOSITORY_ROOT)
+    candidate = matrix.candidates[0]
     first = _request_payload(module)
     second = _request_payload(module)
     second["license_evidence_sha256"] = "f" * 64
     second["request_sha256"] = module._request_sha256(second)
 
-    first_identity = module._model_identity(first)
-    second_identity = module._model_identity(second)
+    first_identity = module._model_identity(first, candidate)
+    second_identity = module._model_identity(second, candidate)
 
     assert first_identity.configuration_sha256 != second_identity.configuration_sha256
-    assert first_identity.base_model_revision == "a" * 40
+    assert first_identity.base_model_revision == candidate.revision
     assert first_identity.adapter_id is None
 
 
@@ -356,7 +459,11 @@ def test_fake_runtime_executes_every_frozen_task_and_writes_hashed_evidence(
     monkeypatch.setattr(
         module,
         "_verify_repository_evidence",
-        lambda _request: (suite, environment),
+        lambda _request: (
+            suite,
+            environment,
+            load_frozen_model_candidate_matrix(REPOSITORY_ROOT).candidates[0],
+        ),
     )
     monkeypatch.setattr(
         module,
@@ -371,7 +478,7 @@ def test_fake_runtime_executes_every_frozen_task_and_writes_hashed_evidence(
     monkeypatch.setattr(
         module,
         "_prepare_inputs",
-        lambda _tokenizer, _messages, _torch: {"input_ids": _FakeInputIds()},
+        lambda _tokenizer, _messages, _torch, _control: {"input_ids": _FakeInputIds()},
     )
     result_path = tmp_path / "run" / "result.json"
 
@@ -381,6 +488,12 @@ def test_fake_runtime_executes_every_frozen_task_and_writes_hashed_evidence(
     result_digest = result.pop("result_sha256")
     assert exit_code == 0
     assert result["status"] == "COMPLETED"
+    assert result["candidate_matrix"]["matrix_sha256"] == FROZEN_MODEL_CANDIDATE_MATRIX_SHA256
+    assert result["candidate_matrix"]["chat_template_control"] == (
+        load_frozen_model_candidate_matrix(REPOSITORY_ROOT)
+        .candidates[0]
+        .chat_template_control.to_snapshot()
+    )
     assert result["benchmark"]["complete"] is True
     assert result["benchmark"]["observed_measurement_count"] == len(suite.tasks)
     assert len(result["tasks"]) == len(suite.tasks)

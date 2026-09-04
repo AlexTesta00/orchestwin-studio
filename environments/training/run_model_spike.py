@@ -56,6 +56,15 @@ from orchestwin.training.environment_evidence import (  # noqa: E402
     create_inference_resource_measurement,
     summarize_inference_resources,
 )
+from orchestwin.training.model_candidate_matrix_files import (  # noqa: E402
+    FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+    FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+    CandidateChatTemplateControl,
+    CandidateChatTemplateControlMode,
+    FrozenModelCandidateMatrix,
+    FrozenModelCandidatePreflight,
+    load_frozen_model_candidate_matrix,
+)
 
 MODEL_SPIKE_PROCESS_SCHEMA_VERSION: Final = 1
 EXIT_MISSING_DEPENDENCY: Final = 20
@@ -87,6 +96,8 @@ _REQUEST_KEYS: Final = {
     "schema_version",
     "run_id",
     "candidate_id",
+    "candidate_matrix_sha256",
+    "candidate_matrix_content_hash",
     "model_repository",
     "model_revision",
     "tokenizer_repository",
@@ -251,6 +262,8 @@ def _load_request(path: Path) -> dict[str, object]:
     for key in (
         "model_card_sha256",
         "license_evidence_sha256",
+        "candidate_matrix_sha256",
+        "candidate_matrix_content_hash",
         "benchmark_suite_sha256",
         "benchmark_suite_content_hash",
         "package_lock_sha256",
@@ -299,10 +312,51 @@ def _load_request(path: Path) -> dict[str, object]:
     return payload
 
 
+def _resolve_frozen_candidate(
+    request: Mapping[str, object],
+    matrix: FrozenModelCandidateMatrix,
+) -> FrozenModelCandidatePreflight:
+    if _required_string(request, "candidate_matrix_sha256") != FROZEN_MODEL_CANDIDATE_MATRIX_SHA256:
+        raise ModelSpikeInputError("request does not reference the frozen candidate matrix file")
+    if (
+        _required_string(request, "candidate_matrix_content_hash")
+        != FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH
+    ):
+        raise ModelSpikeInputError("request does not reference the frozen candidate matrix content")
+
+    candidate_id = _required_string(request, "candidate_id")
+    try:
+        candidate = matrix.candidate(candidate_id)
+    except StopIteration as error:
+        raise ModelSpikeInputError("candidate is not present in the frozen matrix") from error
+
+    observed_identity = (
+        _required_string(request, "model_repository"),
+        _required_string(request, "model_revision"),
+        _required_string(request, "tokenizer_repository"),
+        _required_string(request, "tokenizer_revision"),
+    )
+    expected_identity = (
+        candidate.repository_id,
+        candidate.revision,
+        candidate.tokenizer_repository_id,
+        candidate.tokenizer_revision,
+    )
+    if observed_identity != expected_identity:
+        raise ModelSpikeInputError("request model identity differs from the frozen candidate")
+
+    generation = request.get("generation")
+    if generation != matrix.generation.to_snapshot():
+        raise ModelSpikeInputError("request generation differs from the frozen candidate matrix")
+    return candidate
+
+
 def _verify_repository_evidence(
     request: Mapping[str, object],
-) -> tuple[object, dict[str, object]]:
+) -> tuple[object, dict[str, object], FrozenModelCandidatePreflight]:
     suite = load_frozen_evaluator_benchmark_suite(_REPOSITORY_ROOT)
+    matrix = load_frozen_model_candidate_matrix(_REPOSITORY_ROOT)
+    candidate = _resolve_frozen_candidate(request, matrix)
     if _required_string(request, "benchmark_suite_sha256") != FROZEN_BENCHMARK_SUITE_SHA256:
         raise ModelSpikeInputError("request does not reference the frozen benchmark file")
     if (
@@ -340,7 +394,7 @@ def _verify_repository_evidence(
     toolchain = environment.get("build_toolchain")
     if not isinstance(toolchain, dict) or toolchain.get("status") != "OBSERVED":
         raise ModelSpikeInputError("training environment does not contain observed build toolchain")
-    return suite, environment
+    return suite, environment, candidate
 
 
 def _supported_kwargs(callable_value: object, values: dict[str, Any]) -> dict[str, Any]:
@@ -470,12 +524,18 @@ def _load_model(
     return torch, model, tokenizer, evidence
 
 
-def _model_identity(request: Mapping[str, object]) -> ModelRuntimeIdentity:
+def _model_identity(
+    request: Mapping[str, object],
+    candidate: FrozenModelCandidatePreflight,
+) -> ModelRuntimeIdentity:
     generation = request["generation"]
     assert isinstance(generation, dict)
     configuration_sha256 = snapshot_content_hash(
         {
             "runtime": "unsloth-direct-inference-v1",
+            "candidate_matrix_sha256": FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+            "candidate_matrix_content_hash": FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+            "chat_template_control": candidate.chat_template_control.to_snapshot(),
             "generation": generation,
             "model_card_sha256": _required_string(request, "model_card_sha256"),
             "license_evidence_sha256": _required_string(request, "license_evidence_sha256"),
@@ -516,18 +576,34 @@ def _create_chat_messages(generation_request: object) -> tuple[dict[str, str], .
     )
 
 
+def _chat_template_kwargs(
+    control: CandidateChatTemplateControl,
+) -> dict[str, bool]:
+    if control.mode is CandidateChatTemplateControlMode.DEFAULT_NON_THINKING:
+        return {}
+    if (
+        control.mode is CandidateChatTemplateControlMode.TEMPLATE_ARGUMENT_FALSE
+        and control.argument_name is not None
+        and control.argument_value is False
+    ):
+        return {control.argument_name: False}
+    raise ModelSpikeIdentityError("frozen chat-template control is not executable")
+
+
 def _prepare_inputs(
     tokenizer: Any,
     messages: tuple[dict[str, str], ...],
     torch: Any,
+    chat_template_control: CandidateChatTemplateControl,
 ) -> dict[str, Any]:
-    encoded = tokenizer.apply_chat_template(
-        list(messages),
-        tokenize=True,
-        add_generation_prompt=True,
-        return_tensors="pt",
-        return_dict=True,
-    )
+    template_values: dict[str, object] = {
+        "tokenize": True,
+        "add_generation_prompt": True,
+        "return_tensors": "pt",
+        "return_dict": True,
+    }
+    template_values.update(_chat_template_kwargs(chat_template_control))
+    encoded = tokenizer.apply_chat_template(list(messages), **template_values)
     if isinstance(encoded, Mapping):
         inputs = {key: value.to("cuda") for key, value in encoded.items() if hasattr(value, "to")}
     elif hasattr(encoded, "to"):
@@ -640,6 +716,7 @@ def _generate_one(
     candidate_id: str,
     run_id: UUID,
     model_identity: ModelRuntimeIdentity,
+    chat_template_control: CandidateChatTemplateControl,
 ) -> tuple[dict[str, object], object, EvaluatorBenchmarkTaskScore]:
     messages = _create_chat_messages(generation_request)
     prompt_payload = {
@@ -648,6 +725,9 @@ def _generate_one(
         "task_content_hash": task.content_hash,
         "repetition": repetition,
         "messages": list(messages),
+        "candidate_matrix_sha256": FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+        "candidate_matrix_content_hash": FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+        "chat_template_control": chat_template_control.to_snapshot(),
         "output_schema_sha256": generation_request.output_schema.content_hash,
         "prompt_version_ref": generation_request.prompt_version_ref,
     }
@@ -662,7 +742,12 @@ def _generate_one(
         f"{run_id}:{task.task_id}:{repetition}:{task.content_hash}",
     )
     try:
-        inputs = _prepare_inputs(tokenizer, messages, torch)
+        inputs = _prepare_inputs(
+            tokenizer,
+            messages,
+            torch,
+            chat_template_control,
+        )
         input_tokens = int(inputs["input_ids"].shape[-1])
         max_output_tokens = _required_integer(generation, "max_output_tokens")
         max_sequence_length = _required_integer(generation, "max_sequence_length")
@@ -851,7 +936,7 @@ def _run(request: dict[str, object], result_path: Path) -> int:
     network_authorized = os.environ.get(_MODEL_SPIKE_NETWORK_GATE) == "1"
 
     try:
-        suite, environment = _verify_repository_evidence(request)
+        suite, environment, candidate = _verify_repository_evidence(request)
     except ModelSpikeInputError as error:
         payload = _failure_payload(
             started_at=started_at,
@@ -921,7 +1006,7 @@ def _run(request: dict[str, object], result_path: Path) -> int:
 
     workspace = result_path.parent.resolve()
     workspace.mkdir(parents=True, exist_ok=True)
-    model_identity = _model_identity(request)
+    model_identity = _model_identity(request, candidate)
     generation = request["generation"]
     assert isinstance(generation, dict)
     observations: list[dict[str, object]] = []
@@ -949,6 +1034,7 @@ def _run(request: dict[str, object], result_path: Path) -> int:
                     candidate_id=candidate_id,
                     run_id=run_id,
                     model_identity=model_identity,
+                    chat_template_control=candidate.chat_template_control,
                 )
                 observations.append(observation)
                 measurements.append(measurement)
@@ -988,6 +1074,12 @@ def _run(request: dict[str, object], result_path: Path) -> int:
         "completed_at": completed_at.isoformat(),
         "duration_milliseconds": max(0, round((time.perf_counter() - started_clock) * 1000)),
         "candidate_id": candidate_id,
+        "candidate_matrix": {
+            "matrix_sha256": FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
+            "matrix_content_hash": FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
+            "family_id": candidate.family_id,
+            "chat_template_control": candidate.chat_template_control.to_snapshot(),
+        },
         "model_identity": model_identity.to_snapshot(),
         "observed_identity": load_evidence,
         "benchmark": {
