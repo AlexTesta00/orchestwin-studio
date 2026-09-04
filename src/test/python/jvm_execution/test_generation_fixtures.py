@@ -13,6 +13,7 @@ from orchestwin.jvm_execution.detection import (
     detect_jvm_project,
 )
 from orchestwin.sandbox.execution_profiles import ExecutionTarget
+from scripts.verify_jvm_execution_contracts import is_generated_fixture_path
 
 _FIXTURE_ROOT = Path(__file__).parents[2] / "fixtures" / "jvm_execution"
 _EXPECTED_TARGETS = {
@@ -20,16 +21,10 @@ _EXPECTED_TARGETS = {
     "jvm-kotlin-calculator": ExecutionTarget.JVM_KOTLIN,
     "jvm-scala-greeting": ExecutionTarget.JVM_SCALA,
 }
-_GENERATED_DIRECTORY_NAMES = frozenset({".gradle", "build", "target"})
 
 
 def _load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _belongs_to_generated_directory(path: Path, directory: Path) -> bool:
-    relative_parts = path.relative_to(directory).parts[:-1]
-    return any(part in _GENERATED_DIRECTORY_NAMES for part in relative_parts)
 
 
 def _fixture_files(directory: Path) -> tuple[Path, ...]:
@@ -37,7 +32,7 @@ def _fixture_files(directory: Path) -> tuple[Path, ...]:
         sorted(
             path
             for path in directory.rglob("*")
-            if path.is_file() and not _belongs_to_generated_directory(path, directory)
+            if path.is_file() and not is_generated_fixture_path(path, directory)
         )
     )
 
@@ -132,25 +127,43 @@ def test_each_fixture_has_a_stable_hash_and_deterministic_target() -> None:
         assert result.selected.selection.target is expected_target
 
 
-def test_generated_build_state_is_excluded_from_fixture_contract(tmp_path: Path) -> None:
+def test_generated_build_and_tooling_state_is_excluded_from_fixture_contract(
+    tmp_path: Path,
+) -> None:
     directory = tmp_path / "fixture"
     source = directory / "src" / "main" / "kotlin" / "Main.kt"
     source.parent.mkdir(parents=True)
     source.write_text("fun main() = Unit\n", encoding="utf-8")
+    source_hash = _source_content_hash(directory)
 
-    gradle_probe = directory / ".gradle" / "file-system.probe"
-    gradle_probe.parent.mkdir(parents=True)
-    gradle_probe.write_bytes(b"\x03\xdc@?\xfa^3\x9er\x00\x00\x00\x00\x00\x00\x00\x00")
-
-    build_output = directory / "build" / "classes" / "Main.class"
-    build_output.parent.mkdir(parents=True)
-    build_output.write_bytes(b"\xca\xfe\xba\xbe")
-
-    target_output = directory / "target" / "scala-3.3.8" / "classes" / "Main.class"
-    target_output.parent.mkdir(parents=True)
-    target_output.write_bytes(b"\xca\xfe\xba\xbe")
+    generated_paths = (
+        ".bsp/sbt.json",
+        ".gradle/file-system.probe",
+        ".idea/workspace.xml",
+        ".kotlin/sessions/state.bin",
+        ".metals/metals.log",
+        ".scala-build/ide-inputs.json",
+        ".settings/org.eclipse.jdt.core.prefs",
+        ".vscode/settings.json",
+        "__pycache__/probe.pyc",
+        "bin/main/Main.class",
+        "build/classes/Main.class",
+        "out/production/Main.class",
+        "target/scala-3.3.8/classes/Main.class",
+        ".classpath",
+        ".factorypath",
+        ".project",
+        ".DS_Store",
+        "desktop.ini",
+        "Thumbs.db",
+    )
+    for relative_path in generated_paths:
+        generated = directory / relative_path
+        generated.parent.mkdir(parents=True, exist_ok=True)
+        generated.write_bytes(b"generated tooling state")
 
     assert _source_files(directory) == (source,)
+    assert _source_content_hash(directory) == source_hash
 
 
 def test_kotlin_repair_fixture_is_bounded_to_one_changed_source_file() -> None:

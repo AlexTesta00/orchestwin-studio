@@ -8,11 +8,38 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Final
 
 _SHA256_REFERENCE = re.compile(r"^.+@sha256:[0-9a-f]{64}$")
 _ALLOWED_TARGETS = ("JVM_JAVA", "JVM_KOTLIN", "JVM_SCALA")
 _ALLOWED_RUNNERS = ("jvm.gradle", "jvm.sbt")
-_GENERATED_DIRECTORIES = frozenset({".gradle", "build", "target"})
+GENERATED_FIXTURE_DIRECTORY_NAMES: Final = frozenset(
+    {
+        ".bsp",
+        ".gradle",
+        ".idea",
+        ".kotlin",
+        ".metals",
+        ".scala-build",
+        ".settings",
+        ".vscode",
+        "__pycache__",
+        "bin",
+        "build",
+        "out",
+        "target",
+    }
+)
+GENERATED_FIXTURE_FILE_NAMES: Final = frozenset(
+    {
+        ".classpath",
+        ".ds_store",
+        ".factorypath",
+        ".project",
+        "desktop.ini",
+        "thumbs.db",
+    }
+)
 
 
 class ContractError(ValueError):
@@ -45,13 +72,21 @@ def _read(path: Path) -> str:
         raise ContractError(f"could not read {path}") from error
 
 
+def is_generated_fixture_path(path: Path, root: Path) -> bool:
+    """Return whether a fixture path is tooling or build state rather than source input."""
+    relative = path.relative_to(root)
+    normalized_parts = tuple(part.casefold() for part in relative.parts)
+    return normalized_parts[-1] in GENERATED_FIXTURE_FILE_NAMES or any(
+        part in GENERATED_FIXTURE_DIRECTORY_NAMES for part in normalized_parts[:-1]
+    )
+
+
 def _fixture_files(root: Path) -> tuple[Path, ...]:
     return tuple(
         sorted(
             path
             for path in root.rglob("*")
-            if path.is_file()
-            and not any(part in _GENERATED_DIRECTORIES for part in path.relative_to(root).parts)
+            if path.is_file() and not is_generated_fixture_path(path, root)
         )
     )
 

@@ -1,0 +1,20 @@
+# Generated JVM build and IDE state; not part of fixture source contracts.
+**/.bsp/
+**/.gradle/
+**/.idea/
+**/.kotlin/
+**/.metals/
+**/.scala-build/
+**/.settings/
+**/.vscode/
+**/__pycache__/
+**/bin/
+**/build/
+**/out/
+**/target/
+**/.classpath
+**/.factorypath
+**/.project
+**/.DS_Store
+**/desktop.ini
+**/Thumbs.db
