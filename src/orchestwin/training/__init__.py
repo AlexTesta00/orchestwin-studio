@@ -1,4 +1,13 @@
-"""Model-adaptation and evaluator-dataset bounded context."""
+"""Model-adaptation and evaluator-dataset bounded context.
+
+Persistence re-exports remain available to backend callers, but are imported
+only when explicitly requested. Model-spike CLIs must not require SQLAlchemy.
+"""
+
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Final
 
 from orchestwin.training.dataset_examples import (
     DatasetArtifactSnapshot,
@@ -57,18 +66,6 @@ from orchestwin.training.generation import (
     DatasetGenerationUsage,
     DeterministicDatasetExampleGenerator,
 )
-from orchestwin.training.persistence import (
-    DatasetBuildQualityReport,
-    InMemoryTrainingDatasetRepository,
-    SqlAlchemyTrainingDatasetRepository,
-    StoredTrainingDatasetVersion,
-    TrainingDatasetQualityReportRecord,
-    TrainingDatasetRepository,
-    TrainingDatasetStoreResult,
-    TrainingDatasetStoreStatus,
-    TrainingDatasetVersionRecord,
-    create_dataset_quality_report,
-)
 from orchestwin.training.scenarios import (
     DatasetTargetPlatform,
     ScenarioFamily,
@@ -88,6 +85,20 @@ from orchestwin.training.splitting import (
     default_dataset_split_policy,
     split_dataset_examples,
 )
+
+if TYPE_CHECKING:
+    from orchestwin.training.persistence import (
+        DatasetBuildQualityReport,
+        InMemoryTrainingDatasetRepository,
+        SqlAlchemyTrainingDatasetRepository,
+        StoredTrainingDatasetVersion,
+        TrainingDatasetQualityReportRecord,
+        TrainingDatasetRepository,
+        TrainingDatasetStoreResult,
+        TrainingDatasetStoreStatus,
+        TrainingDatasetVersionRecord,
+        create_dataset_quality_report,
+    )
 
 __all__ = [
     "DatasetArtifactSnapshot",
@@ -186,3 +197,35 @@ __all__ += [
     "TrainingDatasetVersionRecord",
     "create_dataset_quality_report",
 ]
+
+
+_PERSISTENCE_EXPORTS: Final[frozenset[str]] = frozenset(
+    {
+        "DatasetBuildQualityReport",
+        "InMemoryTrainingDatasetRepository",
+        "SqlAlchemyTrainingDatasetRepository",
+        "StoredTrainingDatasetVersion",
+        "TrainingDatasetQualityReportRecord",
+        "TrainingDatasetRepository",
+        "TrainingDatasetStoreResult",
+        "TrainingDatasetStoreStatus",
+        "TrainingDatasetVersionRecord",
+        "create_dataset_quality_report",
+    }
+)
+
+
+def __getattr__(name: str) -> object:
+    """Load optional persistence exports only on explicit attribute access.
+
+    Do not catch dependency errors: a caller requesting persistence still needs
+    the backend dependencies and must see any genuine import failure.
+    """
+    if name in _PERSISTENCE_EXPORTS:
+        return getattr(import_module("orchestwin.training.persistence"), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """Expose the historical public API without importing persistence."""
+    return sorted(set(globals()) | set(__all__))
