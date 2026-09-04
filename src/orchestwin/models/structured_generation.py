@@ -29,6 +29,7 @@ class StructuredGenerationProviderKind(StrEnum):
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
     OPENAI_COMPATIBLE_LOCAL = "OPENAI_COMPATIBLE_LOCAL"
+    UNSLOTH_DIRECT_LOCAL = "UNSLOTH_DIRECT_LOCAL"
 
 
 class StructuredGenerationStatus(StrEnum):
