@@ -398,18 +398,37 @@ def _verify_repository_evidence(
 
 
 def _supported_kwargs(callable_value: object, values: dict[str, Any]) -> dict[str, Any]:
-    parameters = inspect.signature(callable_value).parameters
-    if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
-        return values
-    return {key: value for key, value in values.items() if key in parameters}
+    """Reject incompatible loaders rather than silently discard identity or safety controls."""
+    try:
+        inspect.signature(callable_value).bind(**values)
+    except (TypeError, ValueError) as error:
+        raise ModelSpikeIdentityError(
+            f"loader cannot accept the required loading arguments: {error}"
+        ) from error
+    return values
 
 
 def _load_runtime_dependencies() -> tuple[Any, Any, Any]:
+    # Import order is a runtime requirement: Unsloth must patch Transformers first.
+    # Keep these imports lazy so --help and ordinary tests need no GPU packages.
+    # isort: off
+    from unsloth import FastLanguageModel
     import torch
     from transformers import AutoTokenizer
-    from unsloth import FastLanguageModel
+    # isort: on
 
     return torch, AutoTokenizer, FastLanguageModel
+
+
+def _loader_policy() -> dict[str, object]:
+    """Return fresh, serializable evidence of the exact-repository loading policy."""
+    return {
+        "policy_id": "unsloth-exact-revision-v1",
+        "import_order": ["unsloth", "torch", "transformers"],
+        "use_exact_model_name": True,
+        "fast_inference": False,
+        "unsupported_loader_arguments": "REJECT",
+    }
 
 
 def _optional_attribute(value: object, name: str) -> object | None:
@@ -458,6 +477,8 @@ def _load_model(
         "load_in_4bit": True,
         "trust_remote_code": False,
         "local_files_only": not network_authorized,
+        "use_exact_model_name": True,
+        "fast_inference": False,
     }
     model, bundled_tokenizer = FastLanguageModel.from_pretrained(
         **_supported_kwargs(FastLanguageModel.from_pretrained, model_values)
@@ -496,14 +517,21 @@ def _load_model(
     observed_model_revision = _observed_revision(model)
     observed_tokenizer_revision = _observed_revision(tokenizer)
     if observed_model_revision is not None and observed_model_revision != requested_model_revision:
-        raise ModelSpikeIdentityError("loaded model revision differs from the request")
+        raise ModelSpikeIdentityError(
+            "loaded model revision differs from the request: "
+            f"requested={requested_model_revision}; observed={observed_model_revision}"
+        )
     if (
         observed_tokenizer_revision is not None
         and observed_tokenizer_revision != requested_tokenizer_revision
     ):
-        raise ModelSpikeIdentityError("loaded tokenizer revision differs from the request")
+        raise ModelSpikeIdentityError(
+            "loaded tokenizer revision differs from the request: "
+            f"requested={requested_tokenizer_revision}; observed={observed_tokenizer_revision}"
+        )
 
     evidence = {
+        "loader_policy": _loader_policy(),
         "requested_model_revision": requested_model_revision,
         "observed_model_revision": observed_model_revision,
         "requested_tokenizer_revision": requested_tokenizer_revision,
@@ -532,7 +560,8 @@ def _model_identity(
     assert isinstance(generation, dict)
     configuration_sha256 = snapshot_content_hash(
         {
-            "runtime": "unsloth-direct-inference-v1",
+            "runtime": "unsloth-direct-inference-v2",
+            "loader_policy": _loader_policy(),
             "candidate_matrix_sha256": FROZEN_MODEL_CANDIDATE_MATRIX_SHA256,
             "candidate_matrix_content_hash": FROZEN_MODEL_CANDIDATE_MATRIX_CONTENT_HASH,
             "chat_template_control": candidate.chat_template_control.to_snapshot(),
@@ -543,7 +572,7 @@ def _model_identity(
     )
     return ModelRuntimeIdentity(
         provider_id="huggingface-local",
-        runtime_id="unsloth-direct-inference-v1",
+        runtime_id="unsloth-direct-inference-v2",
         base_model_repository=_required_string(request, "model_repository"),
         base_model_revision=_required_string(request, "model_revision"),
         tokenizer_revision=_required_string(request, "tokenizer_revision"),
