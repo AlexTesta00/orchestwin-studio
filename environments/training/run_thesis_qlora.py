@@ -165,6 +165,31 @@ def read_json_object(path: Path) -> dict[str, Any]:
     return value
 
 
+def read_authenticated_json_object(
+    path: Path,
+    *,
+    expected_sha256: str,
+    label: str,
+) -> dict[str, Any]:
+    # HF snapshot entries are symlinks into content-addressed blobs.
+    # Authentication is based on the exact bytes, not symlink rejection.
+    if not path.is_file():
+        raise ValueError(f"{label} is not a readable file: {path}")
+    raw = path.read_bytes()
+    observed_sha256 = sha256_bytes(raw)
+    if observed_sha256 != expected_sha256:
+        raise ValueError(
+            f"{label} SHA-256 changed: expected={expected_sha256}; observed={observed_sha256}"
+        )
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid UTF-8 JSON") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain a JSON object")
+    return value
+
+
 def verify_snapshot_content_hash(value: dict[str, Any], *, label: str) -> None:
     recorded = value.get("content_hash")
     if not isinstance(recorded, str):
@@ -656,9 +681,11 @@ def tokenizer_identity(deps: SimpleNamespace, policy: dict[str, Any]) -> Any:
     )
     if sha256_file(tokenizer_json) != EXPECTED_TOKENIZER_JSON_SHA256:
         raise ValueError("cached tokenizer.json differs from the frozen S50 identity")
-    if sha256_file(tokenizer_config) != EXPECTED_TOKENIZER_CONFIG_SHA256:
-        raise ValueError("cached tokenizer_config.json differs from the frozen S50 identity")
-    tokenizer_config_payload = read_json_object(tokenizer_config)
+    tokenizer_config_payload = read_authenticated_json_object(
+        tokenizer_config,
+        expected_sha256=EXPECTED_TOKENIZER_CONFIG_SHA256,
+        label="cached tokenizer_config.json",
+    )
     if "auto_map" in tokenizer_config_payload:
         raise ValueError("custom remote tokenizer code is forbidden")
     chat_template = tokenizer_config_payload.get("chat_template")

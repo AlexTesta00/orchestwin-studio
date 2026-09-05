@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -126,6 +127,42 @@ def test_loader_is_exact_revision_local_only_and_never_uses_remote_code(tmp_path
     assert values["use_exact_model_name"] is True
     assert values["fast_inference"] is False
     assert values["local_files_only"] is True
+
+
+def test_authenticated_hf_json_accepts_hash_bound_snapshot_symlink(tmp_path):
+    module = runner()
+    blobs = tmp_path / "blobs"
+    snapshot = tmp_path / "snapshots" / "revision"
+    blobs.mkdir()
+    snapshot.mkdir(parents=True)
+    raw = b'{"chat_template":"verified"}'
+    target = blobs / "content-addressed-tokenizer-config"
+    target.write_bytes(raw)
+    link = snapshot / "tokenizer_config.json"
+    try:
+        link.symlink_to(target)
+    except (NotImplementedError, OSError):
+        pytest.skip("filesystem does not permit symlink creation in this test environment")
+
+    assert link.is_symlink()
+    assert module.read_authenticated_json_object(
+        link,
+        expected_sha256=hashlib.sha256(raw).hexdigest(),
+        label="cached tokenizer_config.json",
+    ) == {"chat_template": "verified"}
+
+
+def test_authenticated_hf_json_rejects_content_that_does_not_match_frozen_hash(tmp_path):
+    module = runner()
+    path = tmp_path / "tokenizer_config.json"
+    path.write_text('{"chat_template":"tampered"}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="SHA-256 changed"):
+        module.read_authenticated_json_object(
+            path,
+            expected_sha256="0" * 64,
+            label="cached tokenizer_config.json",
+        )
 
 
 def test_final_sft_policy_uses_completion_only_pretokenized_rows(tmp_path):
