@@ -215,12 +215,59 @@ def test_restore_method_wrapper_records_actual_runtime_calls():
     assert calls["restore"] == 1
 
 
+def test_terminal_checkpoint_rng_is_explicitly_replayed_when_epoch_loop_is_finished(
+    tmp_path,
+):
+    module = cli_module()
+    calls = {"_load_rng_state": 0}
+    checkpoint = tmp_path / "checkpoint-8"
+
+    class Trainer:
+        def __init__(self):
+            self.observed_checkpoint = None
+
+        def _load_rng_state(self, checkpoint):
+            self.observed_checkpoint = checkpoint
+
+    trainer = Trainer()
+    module._wrap_restore_method(trainer, "_load_rng_state", calls)
+
+    mode = module._ensure_terminal_rng_restore(
+        trainer,
+        checkpoint,
+        calls,
+    )
+
+    assert mode == "EXPLICIT_TERMINAL_CHECKPOINT_REPLAY"
+    assert calls["_load_rng_state"] == 1
+    assert trainer.observed_checkpoint == str(checkpoint)
+
+
+def test_automatic_rng_restore_is_not_replayed_twice():
+    module = cli_module()
+    calls = {"_load_rng_state": 1}
+
+    class Trainer:
+        def _load_rng_state(self, checkpoint):
+            pytest.fail("automatic RNG restore must not be replayed")
+
+    mode = module._ensure_terminal_rng_restore(
+        Trainer(),
+        Path("/tmp/checkpoint-8"),
+        calls,
+    )
+
+    assert mode == "AUTOMATIC_DURING_RESUME"
+    assert calls["_load_rng_state"] == 1
+
+
 def test_cli_keeps_gpu_imports_lazy_and_never_sets_training_gate():
     source = (ROOT / "environments/training/verify_qlora_smoke_recovery.py").read_text()
     assert "environment.pop(TRAINING_GATE, None)" in source
     assert 'ORCHESTWIN_QLORA_SMOKE_ALLOW_TRAINING", "1"' not in source
     assert "runner.load_dependencies()" in source
     assert "trainer.train(resume_from_checkpoint=str(bundle.checkpoint8))" in source
+    assert "_ensure_terminal_rng_restore(trainer, bundle.checkpoint8, calls)" in source
 
 
 def test_report_payloads_are_json_serializable():

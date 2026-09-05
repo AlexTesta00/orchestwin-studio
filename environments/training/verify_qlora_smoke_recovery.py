@@ -223,6 +223,28 @@ def _wrap_restore_method(trainer, name: str, calls: dict[str, int]) -> None:
     setattr(trainer, name, wrapped)
 
 
+def _ensure_terminal_rng_restore(
+    trainer,
+    checkpoint: Path,
+    calls: dict[str, int],
+) -> str:
+    """Replay RNG state explicitly when a terminal checkpoint skips the epoch loop.
+
+    Transformers restores model and optimizer/scheduler state before entering the epoch
+    loop. RNG restoration happens inside the epoch loop. For a checkpoint already at
+    max_steps, the epoch loop can legitimately be skipped, so verify the same pinned
+    `_load_rng_state` path explicitly without authorizing any additional optimizer step.
+    """
+    observed = calls.get("_load_rng_state", 0)
+    if observed > 0:
+        return "AUTOMATIC_DURING_RESUME"
+    before = observed
+    trainer._load_rng_state(str(checkpoint))
+    if calls.get("_load_rng_state", 0) != before + 1:
+        raise SmokeRecoveryError("explicit terminal-checkpoint RNG replay was not observed")
+    return "EXPLICIT_TERMINAL_CHECKPOINT_REPLAY"
+
+
 def _checkpoint_worker(training_root: Path, output: Path) -> None:
     if os.environ.get(TRAINING_GATE) == "1":
         raise SmokeRecoveryError("checkpoint worker refuses the training authorization gate")
@@ -286,13 +308,19 @@ def _checkpoint_worker(training_root: Path, output: Path) -> None:
         before_step = trainer.state.global_step
         train_output = trainer.train(resume_from_checkpoint=str(bundle.checkpoint8))
         after_step = trainer.state.global_step
+        automatic_restore_calls = dict(calls)
+        rng_restore_mode = _ensure_terminal_rng_restore(trainer, bundle.checkpoint8, calls)
 
     if blocker.optimizer_step_attempts != 0:
         raise SmokeRecoveryError("checkpoint restore attempted additional optimization")
     if before_step != 0 or after_step != 8 or getattr(train_output, "global_step", None) != 8:
         raise SmokeRecoveryError("checkpoint restore did not recover exactly global_step 8")
-    if any(count < 1 for count in calls.values()):
-        raise SmokeRecoveryError("Trainer did not exercise all model/optimizer/RNG recovery paths")
+    if automatic_restore_calls["_load_from_checkpoint"] < 1:
+        raise SmokeRecoveryError("Trainer did not automatically restore checkpoint model state")
+    if automatic_restore_calls["_load_optimizer_and_scheduler"] < 1:
+        raise SmokeRecoveryError("Trainer did not automatically restore optimizer/scheduler state")
+    if calls["_load_rng_state"] < 1:
+        raise SmokeRecoveryError("checkpoint RNG state was not verified")
     if trainer.optimizer is None or trainer.lr_scheduler is None:
         raise SmokeRecoveryError("checkpoint restore did not reconstruct optimizer and scheduler")
     optimizer_state_entries = len(getattr(trainer.optimizer, "state", {}))
@@ -312,7 +340,9 @@ def _checkpoint_worker(training_root: Path, output: Path) -> None:
         "observed_base_revision": observed,
         "model_weights_loaded": True,
         "checkpoint_adapter_loaded": True,
+        "trainer_automatic_restore_calls": automatic_restore_calls,
         "trainer_restore_calls": calls,
+        "rng_restore_mode": rng_restore_mode,
         "trainer_global_step_before_restore": before_step,
         "trainer_global_step_after_restore": after_step,
         "train_output_global_step": train_output.global_step,
