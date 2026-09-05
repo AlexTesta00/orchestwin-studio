@@ -21,7 +21,7 @@ from orchestwin.evaluation.findings import (
     SyntheticFindingSeverity,
     create_synthetic_finding,
 )
-from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 from orchestwin.training.benchmarking import evaluator_benchmark_output_schema
 from orchestwin.training.dataset_examples import (
     DatasetArtifactSnapshot,
@@ -496,6 +496,11 @@ ARTIFACT_STATES_IT: Final = (
 )
 
 
+VARIANT_SEMANTIC_SPACE_SIZE: Final = (
+    len(EXPERIENCE_LEVELS) * len(CONTEXTS_EN) * len(CONSTRAINTS_EN) * len(ARTIFACT_STATES_EN)
+)
+
+
 BENCHMARK_RESPONSE_CONTRACT: Final = (
     "Return exactly one JSON object and no other text.",
     "Do not wrap the JSON object in Markdown fences.",
@@ -538,6 +543,131 @@ def supervision_mode(project_index: int) -> SupervisionMode:
     if isinstance(project_index, bool) or not isinstance(project_index, int) or project_index < 1:
         raise ValueError("project index must be a positive integer")
     return SUPERVISION_MODES[(project_index - 1) % len(SUPERVISION_MODES)]
+
+
+def semantic_variant_coordinates(
+    *,
+    project_index: int,
+    family_id: str,
+) -> tuple[int, int, int, int]:
+    """Return one high-cardinality semantic combination for a project/family pair."""
+    if isinstance(project_index, bool) or not isinstance(project_index, int):
+        raise ValueError("project index must be an integer")
+    if not 1 <= project_index <= PROJECT_VARIANT_COUNT:
+        raise ValueError("project index is outside the frozen thesis campaign")
+    if not isinstance(family_id, str) or not family_id:
+        raise ValueError("scenario family ID is required")
+
+    family_offset = (
+        int(
+            snapshot_content_hash(
+                {
+                    "policy_id": CAMPAIGN_POLICY_ID,
+                    "semantic_variant_policy": "mixed-radix-v1",
+                    "family_id": family_id,
+                    "seed": CAMPAIGN_SEED,
+                }
+            )[:16],
+            16,
+        )
+        % VARIANT_SEMANTIC_SPACE_SIZE
+    )
+
+    position = (family_offset + project_index - 1) % VARIANT_SEMANTIC_SPACE_SIZE
+    experience_index = position % len(EXPERIENCE_LEVELS)
+    position //= len(EXPERIENCE_LEVELS)
+    context_index = position % len(CONTEXTS_EN)
+    position //= len(CONTEXTS_EN)
+    constraint_index = position % len(CONSTRAINTS_EN)
+    position //= len(CONSTRAINTS_EN)
+    artifact_state_index = position % len(ARTIFACT_STATES_EN)
+
+    return (
+        experience_index,
+        context_index,
+        constraint_index,
+        artifact_state_index,
+    )
+
+
+def _normalized_projection_tree(
+    value: object,
+    *,
+    reference_mapping: dict[str, str],
+) -> object:
+    if isinstance(value, str):
+        normalized = value
+        for source, target in sorted(
+            reference_mapping.items(),
+            key=lambda item: -len(item[0]),
+        ):
+            normalized = normalized.replace(source, target)
+        return normalized
+    if isinstance(value, list):
+        return [
+            _normalized_projection_tree(item, reference_mapping=reference_mapping) for item in value
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _normalized_projection_tree(
+                item,
+                reference_mapping=reference_mapping,
+            )
+            for key, item in sorted(value.items())
+        }
+    return value
+
+
+def semantic_training_fingerprints(
+    example: EvaluatorDatasetExample,
+) -> tuple[str, str, str]:
+    """Hash model-visible semantics after removing identity-only labels."""
+    projection = benchmark_aligned_training_projection(example)
+    user_payload = json.loads(canonical_json(projection["user_payload"]))
+    target = json.loads(canonical_json(projection["target"]))
+
+    references = user_payload["allowed_evidence_refs"]
+    if not isinstance(references, list) or not all(
+        isinstance(item, str) and item for item in references
+    ):
+        raise ValueError("training projection evidence allowlist is malformed")
+    reference_mapping = {
+        reference: f"REF-{index:03d}" for index, reference in enumerate(sorted(references), start=1)
+    }
+
+    user_payload["task_id"] = "THESIS-TASK"
+    normalized_user = _normalized_projection_tree(
+        user_payload,
+        reference_mapping=reference_mapping,
+    )
+    normalized_target = _normalized_projection_tree(
+        target,
+        reference_mapping=reference_mapping,
+    )
+    if not isinstance(normalized_target, dict):
+        raise ValueError("normalized training target must be an object")
+    findings = normalized_target["findings"]
+    if not isinstance(findings, list):
+        raise ValueError("normalized training findings must be a list")
+    for finding in findings:
+        if not isinstance(finding, dict):
+            raise ValueError("normalized training finding must be an object")
+        finding["finding_id"] = "UTF"
+
+    input_snapshot = {
+        "system_instruction": projection["system_instruction"],
+        "user_payload": normalized_user,
+    }
+    target_snapshot = normalized_target
+    conversation_snapshot = {
+        **input_snapshot,
+        "target": target_snapshot,
+    }
+    return (
+        snapshot_content_hash(input_snapshot),
+        snapshot_content_hash(target_snapshot),
+        snapshot_content_hash(conversation_snapshot),
+    )
 
 
 def benchmark_aligned_system_instruction(language: DatasetLanguage) -> str:
@@ -823,6 +953,13 @@ def campaign_snapshot() -> dict[str, object]:
         "target_abstention_fraction": TARGET_ABSTENTION_FRACTION,
         "supervision_modes": [mode.value for mode in SUPERVISION_MODES],
         "supervision_mode_target_fraction": 0.25,
+        "semantic_variant_policy": {
+            "policy_id": "mixed-radix-v1",
+            "semantic_space_size_per_family_language": VARIANT_SEMANTIC_SPACE_SIZE,
+            "required_unique_inputs": TARGET_TOTAL_EXAMPLES,
+            "required_unique_conversations": TARGET_TOTAL_EXAMPLES,
+            "required_unique_inputs_per_family_language": PROJECT_VARIANT_COUNT,
+        },
         "training_projection_contract": training_projection_contract_snapshot(),
         "split_policy": SPLIT_POLICY.to_snapshot(),
         "family_ids": [family.family_id for family in FAMILIES],
@@ -873,21 +1010,30 @@ def build_example(
     twin_id = _deterministic_uuid("twin", project_index, family.family_id)
     artifact_id = _deterministic_uuid("artifact", project_index, family.family_id)
 
-    experience = EXPERIENCE_LEVELS[project_index % len(EXPERIENCE_LEVELS)]
+    (
+        experience_index,
+        context_index,
+        constraint_index,
+        artifact_state_index,
+    ) = semantic_variant_coordinates(
+        project_index=project_index,
+        family_id=family.family_id,
+    )
+    experience = EXPERIENCE_LEVELS[experience_index]
     context = _language_text(
         language,
-        CONTEXTS_EN[project_index % len(CONTEXTS_EN)],
-        CONTEXTS_IT[project_index % len(CONTEXTS_IT)],
+        CONTEXTS_EN[context_index],
+        CONTEXTS_IT[context_index],
     )
     constraint = _language_text(
         language,
-        CONSTRAINTS_EN[(project_index + ordinal) % len(CONSTRAINTS_EN)],
-        CONSTRAINTS_IT[(project_index + ordinal) % len(CONSTRAINTS_IT)],
+        CONSTRAINTS_EN[constraint_index],
+        CONSTRAINTS_IT[constraint_index],
     )
     artifact_state = _language_text(
         language,
-        ARTIFACT_STATES_EN[(project_index * 3 + ordinal) % len(ARTIFACT_STATES_EN)],
-        ARTIFACT_STATES_IT[(project_index * 3 + ordinal) % len(ARTIFACT_STATES_IT)],
+        ARTIFACT_STATES_EN[artifact_state_index],
+        ARTIFACT_STATES_IT[artifact_state_index],
     )
     target_task = _language_text(language, family.task_en, family.task_it)
 
@@ -1208,6 +1354,10 @@ def validate_campaign_dataset(
     supervision_counts: Counter[str] = Counter()
     family_supervision: dict[str, Counter[str]] = defaultdict(Counter)
     reference_ids: set[str] = set()
+    semantic_input_hashes: set[str] = set()
+    semantic_target_hashes: set[str] = set()
+    semantic_conversation_hashes: set[str] = set()
+    family_language_semantic_inputs: dict[tuple[str, str], set[str]] = defaultdict(set)
     for example in examples:
         if example.expected_output.abstained:
             mode = SupervisionMode.ABSTAIN
@@ -1227,7 +1377,24 @@ def validate_campaign_dataset(
         supervision_counts[mode.value] += 1
         family_supervision[example.scenario_family_id][mode.value] += 1
         reference_ids.update(item.reference_id for item in example.evidence)
-        benchmark_aligned_training_projection(example)
+
+        (
+            semantic_input_hash,
+            semantic_target_hash,
+            semantic_conversation_hash,
+        ) = semantic_training_fingerprints(example)
+        if semantic_input_hash in semantic_input_hashes:
+            raise ValueError(
+                "final thesis dataset contains a duplicate model-visible semantic input"
+            )
+        if semantic_conversation_hash in semantic_conversation_hashes:
+            raise ValueError("final thesis dataset contains a duplicate semantic conversation")
+        semantic_input_hashes.add(semantic_input_hash)
+        semantic_target_hashes.add(semantic_target_hash)
+        semantic_conversation_hashes.add(semantic_conversation_hash)
+        family_language_semantic_inputs[(example.scenario_family_id, example.language.value)].add(
+            semantic_input_hash
+        )
 
     expected_mode_count = TARGET_TOTAL_EXAMPLES // len(SUPERVISION_MODES)
     if set(supervision_counts.values()) != {expected_mode_count}:
@@ -1240,6 +1407,16 @@ def validate_campaign_dataset(
             raise ValueError("supervision mode is correlated with a scenario family")
     if len(reference_ids) < TARGET_TOTAL_EXAMPLES * 2:
         raise ValueError("evidence reference IDs are insufficiently diverse")
+    if len(semantic_input_hashes) != TARGET_TOTAL_EXAMPLES:
+        raise ValueError("final thesis dataset semantic input cardinality changed")
+    if len(semantic_conversation_hashes) != TARGET_TOTAL_EXAMPLES:
+        raise ValueError("final thesis dataset semantic conversation cardinality changed")
+    if len(family_language_semantic_inputs) != len(FAMILIES) * len(LANGUAGES):
+        raise ValueError("final thesis dataset family/language semantic matrix is incomplete")
+    if {len(values) for values in family_language_semantic_inputs.values()} != {
+        PROJECT_VARIANT_COUNT
+    }:
+        raise ValueError("each family/language pair must contain 500 distinct semantic inputs")
 
     domains = {family.domain for family in FAMILIES}
     roles = {family.role for family in FAMILIES}
@@ -1265,6 +1442,16 @@ def validate_campaign_dataset(
         "abstention_fraction": abstained / len(examples),
         "supervision_mode_counts": dict(sorted(supervision_counts.items())),
         "evidence_reference_id_count": len(reference_ids),
+        "semantic_input_unique_count": len(semantic_input_hashes),
+        "semantic_target_unique_count": len(semantic_target_hashes),
+        "semantic_conversation_unique_count": len(semantic_conversation_hashes),
+        "family_language_semantic_input_count": len(family_language_semantic_inputs),
+        "minimum_unique_semantic_inputs_per_family_language": min(
+            len(values) for values in family_language_semantic_inputs.values()
+        ),
+        "maximum_unique_semantic_inputs_per_family_language": max(
+            len(values) for values in family_language_semantic_inputs.values()
+        ),
         "training_projection_contract_content_hash": (
             training_projection_contract_snapshot()["content_hash"]
         ),
