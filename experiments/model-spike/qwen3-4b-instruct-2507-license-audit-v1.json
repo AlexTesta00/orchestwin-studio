@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "policy_id": "qwen3-4b-instruct-2507-license-audit-v1",
+  "candidate_id": "model-candidate-qwen3-4b-instruct-2507",
+  "repository_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+  "source_evidence_sha256": "3299db57b2f266c1d0d42784ae82aa442bbb093792ee6bf8d0cf5b111d18cf5b",
+  "source_evidence_content_hash": "e9ae91489b8da7eae67d02e231a6c02ba5a682460e4d53b83db6332c5232bdf5",
+  "model_card": {
+    "relative_path": "README.md",
+    "sha256": "8e3dd0c3b5b11897cc71092ccfe517bb7a9783479baa3665aad73c8d1a2041cd",
+    "declared_license_id": "apache-2.0"
+  },
+  "license_file": {
+    "relative_path": "LICENSE",
+    "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+    "expected_family": "APACHE-2.0"
+  },
+  "review_scope": "LOCAL_QLORA_SMOKE_EVIDENCE",
+  "owner_approval_required": true,
+  "public_adapter_release_review": "DEFERRED",
+  "legal_conclusion": "NOT_ENCODED",
+  "content_hash": "8db15f983e58e49b5c9b7f9a3c0c85739f464581ca2f8e57506581260a4e54b1"
+}
