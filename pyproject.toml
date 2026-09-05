@@ -60,6 +60,7 @@ filterwarnings = [
     # Temporary Python 3.14 compatibility exception. LangSmith 0.11.2 still
     # calls asyncio.iscoroutinefunction while importing its runtime client.
     'ignore:.*asyncio\.iscoroutinefunction.*Python 3\.16.*:DeprecationWarning:langsmith\..*',
+    'ignore:^The anyio\.abc\.BlockingPortal alias is deprecated, use anyio\.from_thread\.BlockingPortal instead\.$:DeprecationWarning:^starlette\.testclient$',
 ]
 
 [tool.ruff]
