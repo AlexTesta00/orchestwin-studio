@@ -166,6 +166,32 @@ def test_generated_build_and_tooling_state_is_excluded_from_fixture_contract(
     assert _source_content_hash(directory) == source_hash
 
 
+def test_declared_source_contract_ignores_unknown_untracked_tool_state(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "fixture"
+    source = directory / "src/main/kotlin/Main.kt"
+    source.parent.mkdir(parents=True)
+    source.write_text("fun main() = Unit\n", encoding="utf-8")
+    (directory / "fixture.json").write_text(
+        json.dumps({"source_paths": ["src/main/kotlin/Main.kt"]}),
+        encoding="utf-8",
+    )
+    source_hash = _source_content_hash(directory)
+
+    for relative in (
+        "gradle/wrapper/gradle-wrapper.jar",
+        "tool-generated/session.bin",
+        "unknown-ide/cache.state",
+    ):
+        generated = directory / relative
+        generated.parent.mkdir(parents=True, exist_ok=True)
+        generated.write_bytes(b"untracked generated state")
+
+    assert _source_files(directory) == (source,)
+    assert _source_content_hash(directory) == source_hash
+
+
 def test_kotlin_repair_fixture_is_bounded_to_one_changed_source_file() -> None:
     repair_root = _FIXTURE_ROOT / "repairs" / "kotlin-calculator"
     manifest = _load_json(repair_root / "repair.json")

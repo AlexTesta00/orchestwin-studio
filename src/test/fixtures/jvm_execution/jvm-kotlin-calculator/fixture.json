@@ -8,6 +8,14 @@
   "entrypoint": "org.orchestwin.calculator.MainKt",
   "expected_output": "42",
   "source_content_hash": "d7dfe24df68aaa09b576f41928122c637d08a2ba823a89cf7d99a541a59b703b",
+  "source_paths": [
+    "build.gradle.kts",
+    "gradle/wrapper/gradle-wrapper.properties",
+    "settings.gradle.kts",
+    "src/main/kotlin/org/orchestwin/calculator/Calculator.kt",
+    "src/main/kotlin/org/orchestwin/calculator/Main.kt",
+    "src/test/kotlin/org/orchestwin/calculator/CalculatorTest.kt"
+  ],
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
   "launcher_complete": false,

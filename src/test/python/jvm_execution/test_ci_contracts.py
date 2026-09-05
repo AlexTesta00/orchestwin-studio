@@ -53,6 +53,21 @@ def test_verifier_rejects_an_unearned_runner_attestation(tmp_path: Path) -> None
         verify_repository(repository)
 
 
+def test_verifier_rejects_new_source_input_until_fixture_contract_is_updated(
+    tmp_path: Path,
+) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    undeclared = (
+        repository
+        / "src/test/fixtures/jvm_execution/jvm-kotlin-calculator/src/main/kotlin/Extra.kt"
+    )
+    undeclared.parent.mkdir(parents=True, exist_ok=True)
+    undeclared.write_text("fun extra() = Unit\n", encoding="utf-8")
+
+    with pytest.raises(ContractError, match="undeclared source-like contract inputs"):
+        verify_repository(repository)
+
+
 def test_verifier_rejects_mobile_material_in_the_jvm_fixture_package(tmp_path: Path) -> None:
     repository = _copy_contract_tree(tmp_path)
     forbidden = (

@@ -8,6 +8,13 @@
   "entrypoint": "org.orchestwin.greeting.Main",
   "expected_output": "Hello, JVM!",
   "source_content_hash": "d8908989747b5009366f8d6015435830400f95472bb5ca2643c0006e83f02f70",
+  "source_paths": [
+    "build.sbt",
+    "project/build.properties",
+    "src/main/scala/org/orchestwin/greeting/Greeting.scala",
+    "src/main/scala/org/orchestwin/greeting/Main.scala",
+    "src/test/scala/org/orchestwin/greeting/GreetingSuite.scala"
+  ],
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
   "launcher_complete": true,
