@@ -115,6 +115,8 @@ def sft_kwargs(config: dict[str, Any], output: Path) -> dict[str, Any]:
     opt, checkpoints = config["optimization"], config["checkpoints"]
     if opt["max_steps"] != 8 or opt["max_sequence_length"] != 1536:
         raise ValueError("this runner only accepts the frozen eight-step smoke")
+    if opt["warmup_ratio"] != 0.0:
+        raise ValueError("this runner only accepts the frozen zero-warmup smoke")
     return {
         "output_dir": str(output),
         "max_length": opt["max_sequence_length"],
@@ -126,7 +128,7 @@ def sft_kwargs(config: dict[str, Any], output: Path) -> dict[str, Any]:
         "gradient_checkpointing": opt["gradient_checkpointing"],
         "learning_rate": opt["learning_rate"],
         "weight_decay": opt["weight_decay"],
-        "warmup_ratio": opt["warmup_ratio"],
+        "warmup_steps": 0,
         "optim": opt["optimizer"],
         "lr_scheduler_type": opt["scheduler"],
         "bf16": opt["precision"] == "bf16",
@@ -138,7 +140,6 @@ def sft_kwargs(config: dict[str, Any], output: Path) -> dict[str, Any]:
         "save_strategy": "steps",
         "save_steps": checkpoints["save_steps"],
         "save_total_limit": checkpoints["save_total_limit"],
-        "save_safetensors": True,
         "load_best_model_at_end": False,
         "seed": config["seed"],
         "data_seed": config["seed"],
@@ -243,6 +244,23 @@ def artifact_inventory(root: Path) -> list[dict[str, object]]:
             }
         )
     return inventory
+
+
+def verified_checkpoint_inventory(path: Path, step: int) -> list[dict[str, object]]:
+    """Require resumable metadata plus safetensors adapter weights for each smoke checkpoint."""
+    required = (
+        path / "trainer_state.json",
+        path / "adapter_config.json",
+        path / "adapter_model.safetensors",
+    )
+    if not all(item.is_file() for item in required):
+        raise ValueError(f"checkpoint at step {step} lacks safetensors adapter evidence")
+    for forbidden in ("adapter_model.bin", "pytorch_model.bin"):
+        if (path / forbidden).exists():
+            raise ValueError(
+                f"checkpoint at step {step} contains unsafe model-weight serialization: {forbidden}"
+            )
+    return artifact_inventory(path)
 
 
 def watchdog(callback_base, deadline):
@@ -400,9 +418,12 @@ def perform_training(
         checkpoints = []
         for step in (4, 8):
             path = output / "checkpoints" / f"checkpoint-{step}"
-            if not (path / "trainer_state.json").is_file():
-                raise ValueError(f"missing checkpoint at step {step}")
-            checkpoints.append({"step": step, "files": artifact_inventory(path)})
+            checkpoints.append(
+                {
+                    "step": step,
+                    "files": verified_checkpoint_inventory(path, step),
+                }
+            )
         progress["phase"] = "EXPORT"
         adapter_path = output / "adapter"
         adapter_path.mkdir()
