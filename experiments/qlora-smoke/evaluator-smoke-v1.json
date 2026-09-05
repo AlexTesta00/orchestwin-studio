@@ -1,0 +1,827 @@
+{
+  "authoring_status": "ASSISTANT_AUTHORED_PENDING_OWNER_REVIEW",
+  "fixture_set_id": "ut-evaluator-qlora-smoke-v1",
+  "human_validation_performed": false,
+  "output_schema_sha256": "9a8615d2579317c27fc4186e00ec45887ac3b8be5d14787dadfa0a75f234f40a",
+  "purpose": "PIPELINE_SMOKE_ONLY",
+  "real_user_data": false,
+  "samples": [
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "comprehensibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-001-ART",
+              "SMK-EN-001-BRIEF"
+            ],
+            "finding_id": "SMK-EN-001-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Place an equivalent transcript next to the audio player.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "The missing transcript can prevent me from accessing the sculpture description."
+          }
+        ],
+        "overall_summary": "The missing transcript can prevent me from accessing the sculpture description. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Museum visitor using an audio guide"
+      },
+      "input": {
+        "artifact_summary": "The exhibit page has an audio player but no transcript.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-001-ART",
+            "text": "The exhibit page has an audio player but no transcript."
+          },
+          {
+            "reference_id": "SMK-EN-001-BRIEF",
+            "text": "The interface brief requests a written transcript beside every audio description."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Museum visitor using an audio guide",
+        "project_brief_summary": "The interface brief requests a written transcript beside every audio description.",
+        "scenario": "A fictional interface review for museum-audio.",
+        "target_task": "Read the description of a sculpture without listening to audio."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-001",
+      "scenario_family_id": "smoke-museum-audio",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "accessibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-002-ART",
+              "SMK-EN-002-BRIEF"
+            ],
+            "finding_id": "SMK-EN-002-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Add a text label and a distinct icon to each availability state.",
+            "requires_human_validation": true,
+            "severity": "major",
+            "summary": "I cannot reliably distinguish the station states from these dots alone."
+          }
+        ],
+        "overall_summary": "I cannot reliably distinguish the station states from these dots alone. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Makerspace member who cannot distinguish red from green"
+      },
+      "input": {
+        "artifact_summary": "Availability is shown only with red or green dots without labels.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-002-ART",
+            "text": "Availability is shown only with red or green dots without labels."
+          },
+          {
+            "reference_id": "SMK-EN-002-BRIEF",
+            "text": "The interface brief requires availability to be readable without color perception."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Makerspace member who cannot distinguish red from green",
+        "project_brief_summary": "The interface brief requires availability to be readable without color perception.",
+        "scenario": "A fictional interface review for makerspace-tools.",
+        "target_task": "Identify whether a soldering station is free."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-002",
+      "scenario_family_id": "smoke-makerspace-tools",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Provide the cancellation rule or a recording of the action."
+        ],
+        "findings": [],
+        "overall_summary": "I cannot determine the companion-seat cancellation behavior from the supplied image. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Cinema visitor reviewing a seat reservation"
+      },
+      "input": {
+        "artifact_summary": "The supplied image shows two selected seats and a Cancel button.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-003-ART",
+            "text": "The supplied image shows two selected seats and a Cancel button."
+          },
+          {
+            "reference_id": "SMK-EN-003-BRIEF",
+            "text": "No cancellation rule, interaction recording, or test result is provided."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Cinema visitor reviewing a seat reservation",
+        "project_brief_summary": "No cancellation rule, interaction recording, or test result is provided.",
+        "scenario": "A fictional interface review for cinema-seat-cancellation.",
+        "target_task": "Determine whether cancelling a seat also cancels its companion seat."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-003",
+      "scenario_family_id": "smoke-cinema-seat-cancellation",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Provide a sample exported file and the encoding specification."
+        ],
+        "findings": [],
+        "overall_summary": "I cannot establish export encoding or preservation of plant names from the button alone. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Community gardener exporting a planting journal"
+      },
+      "input": {
+        "artifact_summary": "The journal displays a Download CSV button.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-004-ART",
+            "text": "The journal displays a Download CSV button."
+          },
+          {
+            "reference_id": "SMK-EN-004-BRIEF",
+            "text": "No exported file or encoding specification is supplied."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Community gardener exporting a planting journal",
+        "project_brief_summary": "No exported file or encoding specification is supplied.",
+        "scenario": "A fictional interface review for garden-export.",
+        "target_task": "Determine whether accented plant names survive the CSV export."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-004",
+      "scenario_family_id": "smoke-garden-export",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "actionability",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-005-ART",
+              "SMK-EN-005-BRIEF"
+            ],
+            "finding_id": "SMK-EN-005-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Show available alternative slots beside the rejected time.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "I cannot choose a replacement time from this rejection message."
+          }
+        ],
+        "overall_summary": "I cannot choose a replacement time from this rejection message. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Amateur astronomer reserving an observatory instrument"
+      },
+      "input": {
+        "artifact_summary": "The reservation form says Unavailable and does not display alternative times.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-005-ART",
+            "text": "The reservation form says Unavailable and does not display alternative times."
+          },
+          {
+            "reference_id": "SMK-EN-005-BRIEF",
+            "text": "The brief requires available alternatives whenever a time slot is rejected."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Amateur astronomer reserving an observatory instrument",
+        "project_brief_summary": "The brief requires available alternatives whenever a time slot is rejected.",
+        "scenario": "A fictional interface review for telescope-calendar.",
+        "target_task": "Resolve a rejected telescope reservation."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-005",
+      "scenario_family_id": "smoke-telescope-calendar",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "trust",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-006-ART",
+              "SMK-EN-006-BRIEF"
+            ],
+            "finding_id": "SMK-EN-006-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Label the preview as a draft and reserve Published for confirmed submissions.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "The publication label may make me believe the draft signature is public."
+          }
+        ],
+        "overall_summary": "The publication label may make me believe the draft signature is public. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Resident checking a draft public petition"
+      },
+      "input": {
+        "artifact_summary": "The preview labels a draft signature as Already published.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-006-ART",
+            "text": "The preview labels a draft signature as Already published."
+          },
+          {
+            "reference_id": "SMK-EN-006-BRIEF",
+            "text": "The requirement says previews must not suggest that a draft has been submitted."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Resident checking a draft public petition",
+        "project_brief_summary": "The requirement says previews must not suggest that a draft has been submitted.",
+        "scenario": "A fictional interface review for petition-preview.",
+        "target_task": "Distinguish a draft signature from a submitted signature."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-006",
+      "scenario_family_id": "smoke-petition-preview",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "task_alignment",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-007-ART",
+              "SMK-EN-007-BRIEF"
+            ],
+            "finding_id": "SMK-EN-007-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Add a garment-size filter with the current selection visible.",
+            "requires_human_validation": true,
+            "severity": "minor",
+            "summary": "I must inspect each pattern instead of narrowing the list to my size."
+          }
+        ],
+        "overall_summary": "I must inspect each pattern instead of narrowing the list to my size. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Knitter choosing a saved garment pattern"
+      },
+      "input": {
+        "artifact_summary": "The pattern list has alphabetical sorting but no garment-size filter.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-007-ART",
+            "text": "The pattern list has alphabetical sorting but no garment-size filter."
+          },
+          {
+            "reference_id": "SMK-EN-007-BRIEF",
+            "text": "The brief requires filtering saved patterns by garment size."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Knitter choosing a saved garment pattern",
+        "project_brief_summary": "The brief requires filtering saved patterns by garment size.",
+        "scenario": "A fictional interface review for knitting-patterns.",
+        "target_task": "Find patterns for the selected garment size."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-007",
+      "scenario_family_id": "smoke-knitting-patterns",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [],
+        "overall_summary": "The supplied summary meets the stated visibility requirement; I infer no issue here. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Musician checking a rehearsal-room duration"
+      },
+      "input": {
+        "artifact_summary": "The booking summary explicitly shows Start 18:00 and End 19:30 with the same date.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-008-ART",
+            "text": "The booking summary explicitly shows Start 18:00 and End 19:30 with the same date."
+          },
+          {
+            "reference_id": "SMK-EN-008-BRIEF",
+            "text": "The brief requires the start and end times to be visible together."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Musician checking a rehearsal-room duration",
+        "project_brief_summary": "The brief requires the start and end times to be visible together.",
+        "scenario": "A fictional interface review for rehearsal-duration.",
+        "target_task": "Identify the end time of a rehearsal."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-008",
+      "scenario_family_id": "smoke-rehearsal-duration",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "comprehensibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-EN-009-ART",
+              "SMK-EN-009-BRIEF"
+            ],
+            "finding_id": "SMK-EN-009-F01",
+            "rationale": "This is an inference from the supplied artifact and brief, not a user study.",
+            "recommended_action": "Display the length in metres beside every lane option.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "I cannot choose a lane by length from these names alone."
+          }
+        ],
+        "overall_summary": "I cannot choose a lane by length from these names alone. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Swimming-club member booking a practice lane"
+      },
+      "input": {
+        "artifact_summary": "The selector names lanes A and B without displaying their lengths.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-009-ART",
+            "text": "The selector names lanes A and B without displaying their lengths."
+          },
+          {
+            "reference_id": "SMK-EN-009-BRIEF",
+            "text": "The brief requires lane length in metres beside each option."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Swimming-club member booking a practice lane",
+        "project_brief_summary": "The brief requires lane length in metres beside each option.",
+        "scenario": "A fictional interface review for swimming-lane-labels.",
+        "target_task": "Choose a lane with the intended length."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-009",
+      "scenario_family_id": "smoke-swimming-lane-labels",
+      "split": "validation"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Provide an animation recording showing pause and resume behavior."
+        ],
+        "findings": [],
+        "overall_summary": "I cannot determine step preservation from a still image. Simulated feedback, not empirical evidence of real-user behavior.",
+        "role_statement": "Origami learner viewing a folding animation"
+      },
+      "input": {
+        "artifact_summary": "The supplied still image shows a Pause button and a folded paper diagram.",
+        "evidence": [
+          {
+            "reference_id": "SMK-EN-010-ART",
+            "text": "The supplied still image shows a Pause button and a folded paper diagram."
+          },
+          {
+            "reference_id": "SMK-EN-010-BRIEF",
+            "text": "No animation trace or pause-behavior specification is supplied."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Origami learner viewing a folding animation",
+        "project_brief_summary": "No animation trace or pause-behavior specification is supplied.",
+        "scenario": "A fictional interface review for origami-animation.",
+        "target_task": "Determine whether pausing the animation preserves the current step."
+      },
+      "language": "en",
+      "sample_id": "SMK-EN-010",
+      "scenario_family_id": "smoke-origami-animation",
+      "split": "validation"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "comprehensibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-001-ART",
+              "SMK-IT-001-BRIEF"
+            ],
+            "finding_id": "SMK-IT-001-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Mostrare una trascrizione equivalente accanto al lettore audio.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "La trascrizione mancante può impedirmi di accedere alla descrizione della scultura."
+          }
+        ],
+        "overall_summary": "La trascrizione mancante può impedirmi di accedere alla descrizione della scultura. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Visitatrice di un museo che usa una guida audio"
+      },
+      "input": {
+        "artifact_summary": "La pagina della scultura contiene un lettore audio ma nessuna trascrizione.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-001-ART",
+            "text": "La pagina della scultura contiene un lettore audio ma nessuna trascrizione."
+          },
+          {
+            "reference_id": "SMK-IT-001-BRIEF",
+            "text": "Il brief richiede una trascrizione scritta accanto a ogni descrizione audio."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Visitatrice di un museo che usa una guida audio",
+        "project_brief_summary": "Il brief richiede una trascrizione scritta accanto a ogni descrizione audio.",
+        "scenario": "Revisione di una interfaccia fittizia per museum-audio.",
+        "target_task": "Leggere la descrizione di una scultura senza ascoltare la registrazione."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-001",
+      "scenario_family_id": "smoke-museum-audio",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "accessibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-002-ART",
+              "SMK-IT-002-BRIEF"
+            ],
+            "finding_id": "SMK-IT-002-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Aggiungere un testo e una icona distinta per ogni stato di disponibilità.",
+            "requires_human_validation": true,
+            "severity": "major",
+            "summary": "Non posso distinguere in modo affidabile gli stati soltanto da questi punti."
+          }
+        ],
+        "overall_summary": "Non posso distinguere in modo affidabile gli stati soltanto da questi punti. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Socia di un laboratorio condiviso che non distingue rosso e verde"
+      },
+      "input": {
+        "artifact_summary": "La disponibilità è indicata soltanto da punti rossi o verdi senza etichette.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-002-ART",
+            "text": "La disponibilità è indicata soltanto da punti rossi o verdi senza etichette."
+          },
+          {
+            "reference_id": "SMK-IT-002-BRIEF",
+            "text": "Il brief richiede di leggere la disponibilità senza distinguere i colori."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Socia di un laboratorio condiviso che non distingue rosso e verde",
+        "project_brief_summary": "Il brief richiede di leggere la disponibilità senza distinguere i colori.",
+        "scenario": "Revisione di una interfaccia fittizia per makerspace-tools.",
+        "target_task": "Capire se una stazione di saldatura è libera."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-002",
+      "scenario_family_id": "smoke-makerspace-tools",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Fornire la regola di annullamento o una registrazione della azione."
+        ],
+        "findings": [],
+        "overall_summary": "Non posso determinare il comportamento del posto associato dalla immagine fornita. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Spettatrice che controlla una prenotazione al cinema"
+      },
+      "input": {
+        "artifact_summary": "La immagine fornita mostra due posti selezionati e un pulsante Annulla.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-003-ART",
+            "text": "La immagine fornita mostra due posti selezionati e un pulsante Annulla."
+          },
+          {
+            "reference_id": "SMK-IT-003-BRIEF",
+            "text": "Non sono disponibili regole di annullamento, registrazioni o risultati di test."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Spettatrice che controlla una prenotazione al cinema",
+        "project_brief_summary": "Non sono disponibili regole di annullamento, registrazioni o risultati di test.",
+        "scenario": "Revisione di una interfaccia fittizia per cinema-seat-cancellation.",
+        "target_task": "Stabilire se annullare un posto annulla anche il posto associato."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-003",
+      "scenario_family_id": "smoke-cinema-seat-cancellation",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Fornire un file esportato di esempio e la specifica della codifica."
+        ],
+        "findings": [],
+        "overall_summary": "Non posso stabilire la codifica o la conservazione dei nomi dal solo pulsante. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Ortolana che esporta un diario di coltivazione"
+      },
+      "input": {
+        "artifact_summary": "Il diario mostra un pulsante Scarica CSV.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-004-ART",
+            "text": "Il diario mostra un pulsante Scarica CSV."
+          },
+          {
+            "reference_id": "SMK-IT-004-BRIEF",
+            "text": "Non sono forniti un file esportato o una specifica della codifica."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Ortolana che esporta un diario di coltivazione",
+        "project_brief_summary": "Non sono forniti un file esportato o una specifica della codifica.",
+        "scenario": "Revisione di una interfaccia fittizia per garden-export.",
+        "target_task": "Stabilire se i nomi delle piante con accenti restano corretti nel file CSV."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-004",
+      "scenario_family_id": "smoke-garden-export",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "actionability",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-005-ART",
+              "SMK-IT-005-BRIEF"
+            ],
+            "finding_id": "SMK-IT-005-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Mostrare gli intervalli alternativi accanto alla richiesta rifiutata.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "Non posso scegliere un orario sostitutivo da questo messaggio."
+          }
+        ],
+        "overall_summary": "Non posso scegliere un orario sostitutivo da questo messaggio. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Astronoma amatoriale che prenota uno strumento in osservatorio"
+      },
+      "input": {
+        "artifact_summary": "Il modulo dice Non disponibile senza mostrare orari alternativi.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-005-ART",
+            "text": "Il modulo dice Non disponibile senza mostrare orari alternativi."
+          },
+          {
+            "reference_id": "SMK-IT-005-BRIEF",
+            "text": "Il brief richiede alternative disponibili quando un intervallo viene rifiutato."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Astronoma amatoriale che prenota uno strumento in osservatorio",
+        "project_brief_summary": "Il brief richiede alternative disponibili quando un intervallo viene rifiutato.",
+        "scenario": "Revisione di una interfaccia fittizia per telescope-calendar.",
+        "target_task": "Risolvere il rifiuto di una prenotazione del telescopio."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-005",
+      "scenario_family_id": "smoke-telescope-calendar",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "trust",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-006-ART",
+              "SMK-IT-006-BRIEF"
+            ],
+            "finding_id": "SMK-IT-006-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Indicare chiaramente Bozza e riservare Pubblicata agli invii confermati.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "La etichetta di pubblicazione può farmi credere che la firma sia pubblica."
+          }
+        ],
+        "overall_summary": "La etichetta di pubblicazione può farmi credere che la firma sia pubblica. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Residente che controlla una bozza di petizione pubblica"
+      },
+      "input": {
+        "artifact_summary": "La anteprima indica una firma in bozza come Già pubblicata.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-006-ART",
+            "text": "La anteprima indica una firma in bozza come Già pubblicata."
+          },
+          {
+            "reference_id": "SMK-IT-006-BRIEF",
+            "text": "Il requisito vieta di suggerire che una bozza sia già stata inviata."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Residente che controlla una bozza di petizione pubblica",
+        "project_brief_summary": "Il requisito vieta di suggerire che una bozza sia già stata inviata.",
+        "scenario": "Revisione di una interfaccia fittizia per petition-preview.",
+        "target_task": "Distinguere una firma in bozza da una firma inviata."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-006",
+      "scenario_family_id": "smoke-petition-preview",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "task_alignment",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-007-ART",
+              "SMK-IT-007-BRIEF"
+            ],
+            "finding_id": "SMK-IT-007-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Aggiungere un filtro per taglia mostrando la selezione corrente.",
+            "requires_human_validation": true,
+            "severity": "minor",
+            "summary": "Devo ispezionare ogni modello invece di restringere la lista alla mia taglia."
+          }
+        ],
+        "overall_summary": "Devo ispezionare ogni modello invece di restringere la lista alla mia taglia. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Persona che lavora a maglia e sceglie un modello salvato"
+      },
+      "input": {
+        "artifact_summary": "La lista ha ordinamento alfabetico ma nessun filtro per taglia.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-007-ART",
+            "text": "La lista ha ordinamento alfabetico ma nessun filtro per taglia."
+          },
+          {
+            "reference_id": "SMK-IT-007-BRIEF",
+            "text": "Il brief richiede un filtro dei modelli salvati per taglia del capo."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Persona che lavora a maglia e sceglie un modello salvato",
+        "project_brief_summary": "Il brief richiede un filtro dei modelli salvati per taglia del capo.",
+        "scenario": "Revisione di una interfaccia fittizia per knitting-patterns.",
+        "target_task": "Trovare modelli per la taglia del capo selezionata."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-007",
+      "scenario_family_id": "smoke-knitting-patterns",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [],
+        "overall_summary": "Il riepilogo soddisfa il requisito fornito; non inferisco problemi su questo aspetto. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Musicista che controlla la durata di una prova"
+      },
+      "input": {
+        "artifact_summary": "Il riepilogo mostra Inizio 18:00 e Fine 19:30 nella stessa data.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-008-ART",
+            "text": "Il riepilogo mostra Inizio 18:00 e Fine 19:30 nella stessa data."
+          },
+          {
+            "reference_id": "SMK-IT-008-BRIEF",
+            "text": "Il brief richiede di mostrare insieme inizio e fine."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Musicista che controlla la durata di una prova",
+        "project_brief_summary": "Il brief richiede di mostrare insieme inizio e fine.",
+        "scenario": "Revisione di una interfaccia fittizia per rehearsal-duration.",
+        "target_task": "Identificare la ora di fine della prova."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-008",
+      "scenario_family_id": "smoke-rehearsal-duration",
+      "split": "train"
+    },
+    {
+      "expected_output": {
+        "abstained": false,
+        "evidence_gaps": [],
+        "findings": [
+          {
+            "criterion": "comprehensibility",
+            "epistemic_status": "MODEL_INFERRED",
+            "evidence_refs": [
+              "SMK-IT-009-ART",
+              "SMK-IT-009-BRIEF"
+            ],
+            "finding_id": "SMK-IT-009-F01",
+            "rationale": "Questa è una inferenza da artefatto e brief forniti, non uno studio con utenti.",
+            "recommended_action": "Mostrare la lunghezza in metri accanto a ciascuna corsia.",
+            "requires_human_validation": true,
+            "severity": "moderate",
+            "summary": "Non posso scegliere la corsia in base alla lunghezza dai soli nomi."
+          }
+        ],
+        "overall_summary": "Non posso scegliere la corsia in base alla lunghezza dai soli nomi. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Socia di un club di nuoto che prenota una corsia"
+      },
+      "input": {
+        "artifact_summary": "Il selettore indica corsia A e B senza riportare la lunghezza.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-009-ART",
+            "text": "Il selettore indica corsia A e B senza riportare la lunghezza."
+          },
+          {
+            "reference_id": "SMK-IT-009-BRIEF",
+            "text": "Il brief richiede la lunghezza in metri accanto a ogni opzione."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Socia di un club di nuoto che prenota una corsia",
+        "project_brief_summary": "Il brief richiede la lunghezza in metri accanto a ogni opzione.",
+        "scenario": "Revisione di una interfaccia fittizia per swimming-lane-labels.",
+        "target_task": "Scegliere una corsia della lunghezza desiderata."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-009",
+      "scenario_family_id": "smoke-swimming-lane-labels",
+      "split": "validation"
+    },
+    {
+      "expected_output": {
+        "abstained": true,
+        "evidence_gaps": [
+          "Fornire una registrazione che mostri pausa e ripresa della animazione."
+        ],
+        "findings": [],
+        "overall_summary": "Non posso determinare la conservazione del passaggio da una immagine statica. Feedback simulato, non evidenza empirica del comportamento di utenti reali.",
+        "role_statement": "Persona che impara origami guardando una animazione"
+      },
+      "input": {
+        "artifact_summary": "La immagine statica mostra un pulsante Pausa e un diagramma di carta piegata.",
+        "evidence": [
+          {
+            "reference_id": "SMK-IT-010-ART",
+            "text": "La immagine statica mostra un pulsante Pausa e un diagramma di carta piegata."
+          },
+          {
+            "reference_id": "SMK-IT-010-BRIEF",
+            "text": "Non sono disponibili una registrazione o una specifica della pausa."
+          }
+        ],
+        "profile_status": "DRAFT_UT",
+        "profile_summary": "Persona che impara origami guardando una animazione",
+        "project_brief_summary": "Non sono disponibili una registrazione o una specifica della pausa.",
+        "scenario": "Revisione di una interfaccia fittizia per origami-animation.",
+        "target_task": "Stabilire se mettere in pausa conserva il passaggio corrente."
+      },
+      "language": "it",
+      "sample_id": "SMK-IT-010",
+      "scenario_family_id": "smoke-origami-animation",
+      "split": "validation"
+    }
+  ],
+  "schema_version": 1,
+  "source_kind": "DETERMINISTIC_FIXTURE",
+  "split_policy": "SCENARIO_FAMILY_WITH_TRANSLATIONS_KEPT_TOGETHER",
+  "use_as_final_training_dataset": false,
+  "use_as_quality_evaluation": false
+}
