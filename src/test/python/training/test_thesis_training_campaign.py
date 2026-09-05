@@ -27,6 +27,7 @@ from orchestwin.training.thesis_training_campaign import (
     SUPERVISION_MODES,
     TARGET_ABSTENTION_FRACTION,
     TARGET_TOTAL_EXAMPLES,
+    VARIANT_SEMANTIC_SPACE_SIZE,
     SupervisionMode,
     benchmark_aligned_system_instruction,
     benchmark_aligned_training_projection,
@@ -36,6 +37,8 @@ from orchestwin.training.thesis_training_campaign import (
     final_qlora_policy_snapshot,
     iter_campaign_examples,
     selection_decision_snapshot,
+    semantic_training_fingerprints,
+    semantic_variant_coordinates,
     supervision_mode,
     training_projection_contract_snapshot,
     validate_campaign_dataset,
@@ -74,7 +77,39 @@ def test_campaign_is_large_bilingual_and_general_purpose_for_evaluator_role():
     assert campaign["target_abstention_fraction"] == 0.25
     assert campaign["supervision_mode_target_fraction"] == 0.25
     assert campaign["supervision_modes"] == [mode.value for mode in SUPERVISION_MODES]
+    assert campaign["semantic_variant_policy"] == {
+        "policy_id": "mixed-radix-v1",
+        "semantic_space_size_per_family_language": 3_200,
+        "required_unique_inputs": 24_000,
+        "required_unique_conversations": 24_000,
+        "required_unique_inputs_per_family_language": 500,
+    }
     assert "not empirical evidence" in campaign["methodological_notice"]
+
+
+def test_mixed_radix_variant_space_provides_500_unique_semantic_coordinates_per_family():
+    assert VARIANT_SEMANTIC_SPACE_SIZE == 3_200
+    for family in FAMILIES:
+        coordinates = {
+            semantic_variant_coordinates(
+                project_index=project_index,
+                family_id=family.family_id,
+            )
+            for project_index in range(1, PROJECT_VARIANT_COUNT + 1)
+        }
+        assert len(coordinates) == PROJECT_VARIANT_COUNT
+
+
+def test_semantic_fingerprint_keeps_real_variants_distinct_after_id_normalization():
+    examples = tuple(islice(iter_campaign_examples(), 24 * 2 * 45))
+    input_hashes = set()
+    conversation_hashes = set()
+    for example in examples:
+        input_hash, _, conversation_hash = semantic_training_fingerprints(example)
+        input_hashes.add(input_hash)
+        conversation_hashes.add(conversation_hash)
+    assert len(input_hashes) == len(examples)
+    assert len(conversation_hashes) == len(examples)
 
 
 def test_supervision_modes_are_orthogonal_to_scenario_family():
@@ -238,6 +273,12 @@ def test_full_24k_campaign_is_publishable_balanced_and_meets_split_minima():
         "USER_PROVIDED": 6_000,
     }
     assert quality["evidence_reference_id_count"] >= 48_000
+    assert quality["semantic_input_unique_count"] == 24_000
+    assert quality["semantic_conversation_unique_count"] == 24_000
+    assert quality["semantic_target_unique_count"] > 1_920
+    assert quality["family_language_semantic_input_count"] == 48
+    assert quality["minimum_unique_semantic_inputs_per_family_language"] == 500
+    assert quality["maximum_unique_semantic_inputs_per_family_language"] == 500
     assert quality["leakage_issue_count"] == 0
     assert quality["publishable"] is True
     assert quality["methodological_status"] == (
