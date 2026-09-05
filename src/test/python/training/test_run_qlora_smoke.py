@@ -65,6 +65,9 @@ def test_sft_uses_pretokenized_data_without_aliases_or_mask_column_pruning(tmp_p
     assert values["max_steps"] == 8
     assert values["max_length"] == 1536
     assert "max_seq_length" not in values
+    assert values["warmup_steps"] == 0
+    assert "warmup_ratio" not in values
+    assert "save_safetensors" not in values
     assert values["dataset_kwargs"] == {"skip_prepare_dataset": True}
     assert values["remove_unused_columns"] is False
     assert values["packing"] is False
@@ -164,6 +167,8 @@ def fake_dependencies(data, *, revision=None, fail=False):
                 path = Path(self.args.output_dir) / f"checkpoint-{step}"
                 path.mkdir(parents=True)
                 (path / "trainer_state.json").write_text("{}")
+                (path / "adapter_config.json").write_text("{}")
+                (path / "adapter_model.safetensors").write_bytes(b"synthetic-test-not-weights")
 
     cuda = SimpleNamespace(
         is_available=lambda: True,
@@ -207,6 +212,11 @@ def test_fake_journey_exports_without_claiming_reload_or_quality(tmp_path):
     assert report["checkpoint_restore_status"] == "NOT_RUN"
     assert report["quality_improvement_measured"] is False
     assert (output / "adapter/adapter_model.safetensors").is_file()
+    assert [checkpoint["step"] for checkpoint in report["checkpoints"]] == [4, 8]
+    assert all(
+        any(item["path"] == "adapter_model.safetensors" for item in checkpoint["files"])
+        for checkpoint in report["checkpoints"]
+    )
     json.dumps(report)
 
 
@@ -227,6 +237,22 @@ def test_training_failure_does_not_export_adapter(tmp_path):
             data, fake_dependencies(data, fail=True), tmp_path / "run", timeout_seconds=1800
         )
     assert not (tmp_path / "run/adapter").exists()
+
+
+def test_checkpoint_contract_rejects_unsafe_or_missing_adapter_weights(tmp_path):
+    module = runner()
+    checkpoint = tmp_path / "checkpoint-4"
+    checkpoint.mkdir()
+    (checkpoint / "trainer_state.json").write_text("{}")
+    (checkpoint / "adapter_config.json").write_text("{}")
+    (checkpoint / "adapter_model.bin").write_bytes(b"unsafe-test-placeholder")
+
+    with pytest.raises(ValueError, match="safetensors"):
+        module.verified_checkpoint_inventory(checkpoint, 4)
+
+    (checkpoint / "adapter_model.bin").unlink()
+    (checkpoint / "adapter_model.safetensors").write_bytes(b"safe-test-placeholder")
+    assert module.verified_checkpoint_inventory(checkpoint, 4)
 
 
 def test_cli_refuses_before_importing_gpu_libraries(monkeypatch, tmp_path):
