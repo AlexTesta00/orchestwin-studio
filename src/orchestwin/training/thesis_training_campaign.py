@@ -8,6 +8,8 @@ curriculum whose examples remain explicit design hypotheses rather than real-use
 
 from __future__ import annotations
 
+import json
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -20,6 +22,7 @@ from orchestwin.evaluation.findings import (
     create_synthetic_finding,
 )
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.training.benchmarking import evaluator_benchmark_output_schema
 from orchestwin.training.dataset_examples import (
     DatasetArtifactSnapshot,
     DatasetEvidenceKind,
@@ -101,6 +104,18 @@ class CampaignRisk(StrEnum):
     STAKEHOLDER_CONFLICT = "STAKEHOLDER_CONFLICT"
 
 
+class SupervisionMode(StrEnum):
+    """Orthogonal supervision modes repeated inside every scenario family."""
+
+    GROUNDED_INFERENCE = "GROUNDED_INFERENCE"
+    USER_PROVIDED = "USER_PROVIDED"
+    UNSUPPORTED_HYPOTHESIS = "UNSUPPORTED_HYPOTHESIS"
+    ABSTAIN = "ABSTAIN"
+
+
+SUPERVISION_MODES: Final = tuple(SupervisionMode)
+
+
 @dataclass(frozen=True, slots=True)
 class ThesisScenarioFamily:
     family_id: str
@@ -110,12 +125,13 @@ class ThesisScenarioFamily:
     risk: CampaignRisk
     criterion: SyntheticFindingCriterion
     severity: SyntheticFindingSeverity
-    abstain: bool
+    evidence_risk_family: bool
     task_en: str
     task_it: str
 
 
-# 24 deliberately different software contexts. Six are abstention-heavy (=25%).
+# 24 deliberately different software contexts. Six are evidence-risk-oriented.
+# Abstention is deliberately orthogonal to domain/family and is assigned per project variant.
 FAMILIES: Final = (
     ThesisScenarioFamily(
         "ecommerce-checkout-accessibility",
@@ -480,6 +496,224 @@ ARTIFACT_STATES_IT: Final = (
 )
 
 
+BENCHMARK_RESPONSE_CONTRACT: Final = (
+    "Return exactly one JSON object and no other text.",
+    "Do not wrap the JSON object in Markdown fences.",
+    "Do not expose hidden reasoning or chain-of-thought.",
+)
+
+_BENCHMARK_FINDING_KEYS: Final = frozenset(
+    {
+        "finding_id",
+        "summary",
+        "rationale",
+        "criterion",
+        "severity",
+        "epistemic_status",
+        "evidence_refs",
+        "recommended_action",
+        "requires_human_validation",
+    }
+)
+_BENCHMARK_TOP_LEVEL_KEYS: Final = frozenset(
+    {
+        "overall_summary",
+        "role_statement",
+        "findings",
+        "evidence_gaps",
+        "abstained",
+    }
+)
+
+_EXPERIENCE_IT: Final = {
+    "novice": "principiante",
+    "occasional": "occasionale",
+    "intermediate": "intermedio",
+    "experienced": "esperto",
+    "expert": "specialista",
+}
+
+
+def supervision_mode(project_index: int) -> SupervisionMode:
+    if isinstance(project_index, bool) or not isinstance(project_index, int) or project_index < 1:
+        raise ValueError("project index must be a positive integer")
+    return SUPERVISION_MODES[(project_index - 1) % len(SUPERVISION_MODES)]
+
+
+def benchmark_aligned_system_instruction(language: DatasetLanguage) -> str:
+    language_name = "English" if language is DatasetLanguage.ENGLISH else "Italian"
+    return (
+        f"Return one JSON object in {language_name} from the represented role. "
+        "Use only supplied evidence references. Mark unsupported hypotheses as "
+        "UNSUPPORTED_ASSUMPTION, abstain when evidence is insufficient, and never "
+        "present simulated feedback as empirical evidence of real-user behavior."
+    )
+
+
+def _profile_summary(example: EvaluatorDatasetExample) -> str:
+    profile = json.loads(example.user_twin_profile_json)
+    role = profile["role"]
+    experience = profile["experience_level"]
+    domain = profile["domain"]
+    platform = profile["platform"]
+    goal = profile["goal"]
+    constraint = profile["constraint"]
+    if example.language is DatasetLanguage.ENGLISH:
+        return (
+            f"A {experience} {role} in {domain} using {platform}. "
+            f"Goal: {goal}. Constraint: {constraint}."
+        )
+    return (
+        f"Un utente {role} con esperienza {_EXPERIENCE_IT.get(experience, experience)} "
+        f"nel dominio {domain} usa {platform}. Obiettivo: {goal}. Vincolo: {constraint}."
+    )
+
+
+def _role_statement(example: EvaluatorDatasetExample) -> str:
+    profile = json.loads(example.user_twin_profile_json)
+    role = profile["role"]
+    experience = profile["experience_level"]
+    if example.language is DatasetLanguage.ENGLISH:
+        return f"Simulated perspective: {experience} {role}."
+    return f"Prospettiva simulata: {_EXPERIENCE_IT.get(experience, experience)} {role}."
+
+
+def _model_visible_evidence(example: EvaluatorDatasetExample) -> list[dict[str, str]]:
+    profile = json.loads(example.user_twin_profile_json)
+    evidence: list[dict[str, str]] = []
+    for item in example.evidence:
+        if item.kind is DatasetEvidenceKind.PROJECT_BRIEF:
+            text = example.project_brief_summary
+        elif item.kind is DatasetEvidenceKind.PROJECT_ARTIFACT:
+            text = example.artifact.description
+        elif item.kind is DatasetEvidenceKind.OWNER_INPUT:
+            constraint = profile["constraint"]
+            text = (
+                f"Owner-provided constraint: {constraint}."
+                if example.language is DatasetLanguage.ENGLISH
+                else f"Vincolo dichiarato dal proprietario: {constraint}."
+            )
+        else:
+            raise ValueError(f"unsupported final-curriculum evidence kind: {item.kind.value}")
+        evidence.append({"reference_id": item.reference_id, "text": text})
+    return sorted(evidence, key=lambda item: item["reference_id"])
+
+
+def _benchmark_target(example: EvaluatorDatasetExample) -> dict[str, object]:
+    expected = example.expected_output
+    findings = []
+    for finding in expected.findings:
+        findings.append(
+            {
+                "finding_id": finding.finding_id,
+                "summary": finding.summary,
+                "rationale": finding.rationale,
+                "criterion": finding.criterion.value,
+                "severity": finding.severity.value,
+                "epistemic_status": finding.epistemic_status.value,
+                "evidence_refs": list(finding.evidence_refs),
+                "recommended_action": finding.recommended_action,
+                "requires_human_validation": finding.requires_human_validation,
+            }
+        )
+    target: dict[str, object] = {
+        "overall_summary": expected.overall_summary,
+        "role_statement": _role_statement(example),
+        "findings": findings,
+        "evidence_gaps": list(expected.evidence_gaps),
+        "abstained": expected.abstained,
+    }
+    _validate_benchmark_target(target)
+    return target
+
+
+def _validate_benchmark_target(target: dict[str, object]) -> None:
+    if set(target) != _BENCHMARK_TOP_LEVEL_KEYS:
+        raise ValueError("training target top-level keys differ from frozen evaluator schema")
+    findings = target["findings"]
+    if not isinstance(findings, list):
+        raise ValueError("training target findings must be a list")
+    for finding in findings:
+        if not isinstance(finding, dict) or set(finding) != _BENCHMARK_FINDING_KEYS:
+            raise ValueError("training finding keys differ from frozen evaluator schema")
+    schema = json.loads(evaluator_benchmark_output_schema().canonical_schema_json)
+    if set(schema["properties"]) != _BENCHMARK_TOP_LEVEL_KEYS:
+        raise ValueError("frozen evaluator output schema changed without curriculum migration")
+    finding_properties = schema["properties"]["findings"]["items"]["properties"]
+    if set(finding_properties) != _BENCHMARK_FINDING_KEYS:
+        raise ValueError("frozen evaluator finding schema changed without curriculum migration")
+
+
+def training_projection_contract_snapshot() -> dict[str, object]:
+    schema = evaluator_benchmark_output_schema()
+    snapshot = {
+        "contract_id": "benchmark-aligned-thesis-sft-v1",
+        "output_schema_content_hash": schema.content_hash,
+        "output_schema": json.loads(schema.canonical_schema_json),
+        "response_contract": list(BENCHMARK_RESPONSE_CONTRACT),
+        "input_keys": [
+            "language",
+            "profile_summary",
+            "scenario",
+            "target_task",
+            "artifact_summary",
+            "evidence",
+            "evaluation_criteria",
+            "methodological_notice",
+        ],
+        "user_envelope_keys": [
+            "task_id",
+            "input",
+            "allowed_evidence_refs",
+            "output_schema",
+            "response_contract",
+        ],
+        "model_visible_target_keys": sorted(_BENCHMARK_TOP_LEVEL_KEYS),
+        "model_visible_finding_keys": sorted(_BENCHMARK_FINDING_KEYS),
+    }
+    return {**snapshot, "content_hash": snapshot_content_hash(snapshot)}
+
+
+def benchmark_aligned_training_projection(
+    example: EvaluatorDatasetExample,
+) -> dict[str, object]:
+    input_payload = {
+        "language": example.language.value,
+        "profile_summary": _profile_summary(example),
+        "scenario": example.scenario,
+        "target_task": example.target_task,
+        "artifact_summary": example.artifact.description,
+        "evidence": _model_visible_evidence(example),
+        "evaluation_criteria": [item.value for item in SyntheticFindingCriterion],
+        "methodological_notice": (
+            "The output is simulated feedback and a design hypothesis, "
+            "not empirical evidence of real-user behavior."
+        ),
+    }
+    output_schema = json.loads(evaluator_benchmark_output_schema().canonical_schema_json)
+    allowed_refs = sorted(item.reference_id for item in example.evidence)
+    user_payload = {
+        "task_id": f"thesis-{example.example_id.casefold()}",
+        "input": input_payload,
+        "allowed_evidence_refs": allowed_refs,
+        "output_schema": output_schema,
+        "response_contract": list(BENCHMARK_RESPONSE_CONTRACT),
+    }
+    target = _benchmark_target(example)
+    return {
+        "system_instruction": benchmark_aligned_system_instruction(example.language),
+        "user_payload": user_payload,
+        "target": target,
+        "projection_content_hash": snapshot_content_hash(
+            {
+                "system_instruction": benchmark_aligned_system_instruction(example.language),
+                "user_payload": user_payload,
+                "target": target,
+            }
+        ),
+    }
+
+
 def selection_decision_snapshot() -> dict[str, object]:
     """Owner-approved BASE selection for the final thesis fine-tuning campaign."""
     snapshot = {
@@ -587,6 +821,9 @@ def campaign_snapshot() -> dict[str, object]:
         "minimum_validation_examples": MINIMUM_VALIDATION_EXAMPLES,
         "minimum_internal_test_examples": MINIMUM_INTERNAL_TEST_EXAMPLES,
         "target_abstention_fraction": TARGET_ABSTENTION_FRACTION,
+        "supervision_modes": [mode.value for mode in SUPERVISION_MODES],
+        "supervision_mode_target_fraction": 0.25,
+        "training_projection_contract": training_projection_contract_snapshot(),
         "split_policy": SPLIT_POLICY.to_snapshot(),
         "family_ids": [family.family_id for family in FAMILIES],
         "domains": sorted({family.domain for family in FAMILIES}),
@@ -726,13 +963,18 @@ def build_example(
         description=artifact_description,
     )
 
+    mode = supervision_mode(project_index)
+    brief_reference_id = f"BRIEF-{ordinal:06d}"
+    artifact_reference_id = f"ART-{ordinal:06d}"
+    owner_reference_id = f"OWNER-{ordinal:06d}"
+
     evidence_1_hash = snapshot_content_hash({"brief": brief_summary, "constraint": constraint})
     evidence_2_hash = snapshot_content_hash(
         {"artifact": artifact_description, "risk": family.risk.value}
     )
-    evidence = (
+    evidence_items = [
         DatasetEvidenceReference(
-            reference_id="EVID-001",
+            reference_id=brief_reference_id,
             kind=DatasetEvidenceKind.PROJECT_BRIEF,
             source_id=str(brief_id),
             source_version=1,
@@ -740,16 +982,35 @@ def build_example(
             locator="project-brief",
         ),
         DatasetEvidenceReference(
-            reference_id="EVID-002",
+            reference_id=artifact_reference_id,
             kind=DatasetEvidenceKind.PROJECT_ARTIFACT,
             source_id=str(artifact_id),
             source_version=1,
             content_hash=evidence_2_hash,
             locator="candidate-artifact",
         ),
-    )
+    ]
+    if mode is SupervisionMode.USER_PROVIDED:
+        owner_hash = snapshot_content_hash(
+            {
+                "project_id": str(project_id),
+                "owner_constraint": constraint,
+                "family_id": family.family_id,
+            }
+        )
+        evidence_items.append(
+            DatasetEvidenceReference(
+                reference_id=owner_reference_id,
+                kind=DatasetEvidenceKind.OWNER_INPUT,
+                source_id=f"owner-input-{project_id}",
+                source_version=1,
+                content_hash=owner_hash,
+                locator="owner-declared-constraint",
+            )
+        )
+    evidence = tuple(evidence_items)
 
-    if family.abstain:
+    if mode is SupervisionMode.ABSTAIN:
         findings = ()
         gaps = (
             _language_text(
@@ -764,8 +1025,68 @@ def build_example(
             "Astenersi da un finding sostanziale finché il gap di evidenza non viene risolto.",
         )
     else:
+        if mode is SupervisionMode.GROUNDED_INFERENCE:
+            epistemic_status = SyntheticFindingEpistemicStatus.MODEL_INFERRED
+            finding_refs = (brief_reference_id, artifact_reference_id)
+            requires_human_validation = True
+            confidence = 0.72
+            rationale = _language_text(
+                language,
+                (
+                    f"The {family.risk.value.casefold().replace('_', ' ')} concern is "
+                    f"grounded in {brief_reference_id} and {artifact_reference_id}, "
+                    "but remains simulated model-inferred feedback."
+                ),
+                (
+                    f"La criticità relativa a {family.risk.value.casefold().replace('_', ' ')} "
+                    f"è supportata da {brief_reference_id} e {artifact_reference_id}, "
+                    "ma resta feedback simulato inferito dal modello."
+                ),
+            )
+            gaps = ()
+        elif mode is SupervisionMode.USER_PROVIDED:
+            epistemic_status = SyntheticFindingEpistemicStatus.USER_PROVIDED
+            finding_refs = (owner_reference_id,)
+            requires_human_validation = False
+            confidence = 0.90
+            rationale = _language_text(
+                language,
+                (
+                    f"The finding restates the explicit owner constraint in {owner_reference_id}; "
+                    "it is user-provided project input, not empirical target-user validation."
+                ),
+                (
+                    f"Il finding riprende il vincolo esplicito in {owner_reference_id}; "
+                    "è input dichiarato dal proprietario, non validazione empirica degli utenti target."
+                ),
+            )
+            gaps = ()
+        else:
+            epistemic_status = SyntheticFindingEpistemicStatus.UNSUPPORTED_ASSUMPTION
+            finding_refs = ()
+            requires_human_validation = True
+            confidence = 0.35
+            rationale = _language_text(
+                language,
+                (
+                    "The concern is plausible but is not directly supported by any supplied "
+                    "evidence reference, so it must remain an unsupported assumption."
+                ),
+                (
+                    "La criticità è plausibile ma non è direttamente supportata da alcun "
+                    "riferimento fornito, quindi deve restare un'assunzione non supportata."
+                ),
+            )
+            gaps = (
+                _language_text(
+                    language,
+                    "Human validation or stronger evidence is required before treating the hypothesis as supported.",
+                    "Serve validazione umana o evidenza più forte prima di considerare l'ipotesi supportata.",
+                ),
+            )
+
         finding = create_synthetic_finding(
-            finding_id="UTF-000001",
+            finding_id=f"UTF-{ordinal:06d}",
             twin_id=twin_id,
             twin_version=1,
             artifact_id=artifact_id,
@@ -776,37 +1097,32 @@ def build_example(
                 f"The artifact may hinder the {family.role} during the primary task.",
                 f"L'artefatto può ostacolare l'utente {family.role} durante il compito principale.",
             ),
-            rationale=_language_text(
-                language,
-                (
-                    f"The observed {family.risk.value.casefold().replace('_', ' ')} concern "
-                    f"is grounded in EVID-001 and EVID-002, but remains simulated feedback."
-                ),
-                (
-                    f"La criticità relativa a {family.risk.value.casefold().replace('_', ' ')} "
-                    f"è supportata da EVID-001 ed EVID-002, ma resta feedback simulato."
-                ),
-            ),
+            rationale=rationale,
             criterion=family.criterion,
             severity=family.severity,
-            epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
-            evidence_refs=("EVID-001", "EVID-002"),
-            confidence=0.72,
+            epistemic_status=epistemic_status,
+            evidence_refs=finding_refs,
+            confidence=confidence,
             recommended_action=_language_text(
                 language,
                 f"Revise the interaction to support the stated constraint: {constraint}.",
                 f"Rivedere l'interazione per supportare il vincolo dichiarato: {constraint}.",
             ),
-            requires_human_validation=True,
-            model_config_ref="researcher-template-synthesis-v1",
-            prompt_version_ref="ut-evaluator-thesis-curriculum-v1",
+            requires_human_validation=requires_human_validation,
+            model_config_ref="researcher-template-synthesis-v2",
+            prompt_version_ref="ut-evaluator-thesis-curriculum-v2",
         )
         findings = (finding,)
-        gaps = ()
         overall_summary = _language_text(
             language,
-            "The synthetic review identifies one evidence-grounded design hypothesis.",
-            "La revisione sintetica identifica una ipotesi di design fondata sulle evidenze.",
+            (
+                "The synthetic review identifies one structured design hypothesis with "
+                f"epistemic status {epistemic_status.value}."
+            ),
+            (
+                "La revisione sintetica identifica una ipotesi di design strutturata con "
+                f"stato epistemico {epistemic_status.value}."
+            ),
         )
 
     return create_evaluator_dataset_example(
@@ -831,7 +1147,7 @@ def build_example(
         overall_summary=overall_summary,
         findings=findings,
         evidence_gaps=gaps,
-        abstained=family.abstain,
+        abstained=(mode is SupervisionMode.ABSTAIN),
         generation_ref=CAMPAIGN_POLICY_ID,
     )
 
@@ -889,6 +1205,42 @@ def validate_campaign_dataset(
     if abstained / len(examples) != TARGET_ABSTENTION_FRACTION:
         raise ValueError("final thesis dataset abstention balance changed")
 
+    supervision_counts: Counter[str] = Counter()
+    family_supervision: dict[str, Counter[str]] = defaultdict(Counter)
+    reference_ids: set[str] = set()
+    for example in examples:
+        if example.expected_output.abstained:
+            mode = SupervisionMode.ABSTAIN
+        else:
+            status = example.expected_output.findings[0].epistemic_status
+            mode = {
+                SyntheticFindingEpistemicStatus.MODEL_INFERRED: (
+                    SupervisionMode.GROUNDED_INFERENCE
+                ),
+                SyntheticFindingEpistemicStatus.USER_PROVIDED: SupervisionMode.USER_PROVIDED,
+                SyntheticFindingEpistemicStatus.UNSUPPORTED_ASSUMPTION: (
+                    SupervisionMode.UNSUPPORTED_HYPOTHESIS
+                ),
+            }.get(status)
+            if mode is None:
+                raise ValueError("final thesis dataset contains an unexpected epistemic status")
+        supervision_counts[mode.value] += 1
+        family_supervision[example.scenario_family_id][mode.value] += 1
+        reference_ids.update(item.reference_id for item in example.evidence)
+        benchmark_aligned_training_projection(example)
+
+    expected_mode_count = TARGET_TOTAL_EXAMPLES // len(SUPERVISION_MODES)
+    if set(supervision_counts.values()) != {expected_mode_count}:
+        raise ValueError("final thesis supervision modes are not exactly balanced")
+    expected_family_mode_count = PROJECT_VARIANT_COUNT * len(LANGUAGES) // len(SUPERVISION_MODES)
+    for counts_by_mode in family_supervision.values():
+        if set(counts_by_mode) != {mode.value for mode in SUPERVISION_MODES}:
+            raise ValueError("a scenario family is missing one supervision mode")
+        if set(counts_by_mode.values()) != {expected_family_mode_count}:
+            raise ValueError("supervision mode is correlated with a scenario family")
+    if len(reference_ids) < TARGET_TOTAL_EXAMPLES * 2:
+        raise ValueError("evidence reference IDs are insufficiently diverse")
+
     domains = {family.domain for family in FAMILIES}
     roles = {family.role for family in FAMILIES}
     criteria = {family.criterion for family in FAMILIES}
@@ -911,6 +1263,11 @@ def validate_campaign_dataset(
         "language_counts": language_counts,
         "abstained_examples": abstained,
         "abstention_fraction": abstained / len(examples),
+        "supervision_mode_counts": dict(sorted(supervision_counts.items())),
+        "evidence_reference_id_count": len(reference_ids),
+        "training_projection_contract_content_hash": (
+            training_projection_contract_snapshot()["content_hash"]
+        ),
         "domain_count": len(domains),
         "role_count": len(roles),
         "scenario_family_count": len(FAMILIES),

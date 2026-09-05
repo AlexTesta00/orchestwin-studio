@@ -18,6 +18,7 @@ from orchestwin.training.thesis_training_campaign import (  # noqa: E402
     BASE_MODEL_REPOSITORY,
     BASE_MODEL_REVISION,
     CAMPAIGN_POLICY_ID,
+    benchmark_aligned_training_projection,
     build_campaign_dataset,
     campaign_snapshot,
     final_qlora_policy_snapshot,
@@ -41,39 +42,27 @@ def _safe_new_root(path: Path) -> Path:
 
 def _sft_row(example) -> dict[str, object]:
     snapshot = example.to_snapshot()
-    user_payload = {
-        "language": snapshot["language"],
-        "project_brief_summary": snapshot["project_brief_summary"],
-        "user_twin_profile": snapshot["user_twin_profile"],
-        "scenario": snapshot["scenario"],
-        "target_task": snapshot["target_task"],
-        "artifact": snapshot["artifact"],
-        "evidence": snapshot["evidence"],
-        "evaluation_criteria": snapshot["rubric"]["criteria"],
-        "methodological_notice": (
-            "The output is simulated feedback and a design hypothesis, "
-            "not empirical evidence of real-user behavior."
-        ),
-    }
-    target = snapshot["expected_output"]
+    projection = benchmark_aligned_training_projection(example)
     return {
         "example_id": snapshot["example_id"],
         "project_id": snapshot["project_id"],
         "scenario_family_id": snapshot["scenario_family_id"],
         "language": snapshot["language"],
         "example_content_hash": snapshot["content_hash"],
+        "projection_content_hash": projection["projection_content_hash"],
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "Act as a synthetic User Twin evaluator. Use only supplied evidence. "
-                    "Return one JSON object matching the required evaluator structure. "
-                    "Never present simulated feedback as empirical user evidence. "
-                    "Abstain when evidence is insufficient or contradictory."
-                ),
+                "content": projection["system_instruction"],
             },
-            {"role": "user", "content": canonical_json(user_payload)},
-            {"role": "assistant", "content": canonical_json(target)},
+            {
+                "role": "user",
+                "content": canonical_json(projection["user_payload"]),
+            },
+            {
+                "role": "assistant",
+                "content": canonical_json(projection["target"]),
+            },
         ],
     }
 
