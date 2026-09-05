@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 _SHA256_REFERENCE = re.compile(r"^.+@sha256:[0-9a-f]{64}$")
@@ -72,13 +73,95 @@ def _read(path: Path) -> str:
         raise ContractError(f"could not read {path}") from error
 
 
+def declared_fixture_source_paths(root: Path) -> tuple[str, ...] | None:
+    """Return an explicit fixture source allow-list when its manifest declares one."""
+    manifest_path = root / "fixture.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        return None
+    manifest = _json(manifest_path)
+    raw_paths = manifest.get("source_paths")
+    if raw_paths is None:
+        return None
+    paths = _sequence(raw_paths, label=f"{root.name} source paths")
+    normalized: list[str] = []
+    for raw in paths:
+        if not isinstance(raw, str) or not raw or "\\" in raw:
+            raise ContractError(f"{root.name} source paths must use relative POSIX syntax")
+        pure = PurePosixPath(raw)
+        if pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts):
+            raise ContractError(f"{root.name} source path is unsafe: {raw}")
+        value = pure.as_posix()
+        if value == "fixture.json":
+            raise ContractError(f"{root.name} source paths must not include fixture.json")
+        normalized.append(value)
+    result = tuple(normalized)
+    if result != tuple(sorted(set(result))):
+        raise ContractError(f"{root.name} source paths must be unique and sorted")
+    return result
+
+
 def is_generated_fixture_path(path: Path, root: Path) -> bool:
-    """Return whether a fixture path is tooling or build state rather than source input."""
+    """Return whether a path is outside an explicit fixture contract or known generated state."""
     relative = path.relative_to(root)
+    relative_posix = relative.as_posix()
+    declared = declared_fixture_source_paths(root)
+    if declared is not None:
+        return relative_posix != "fixture.json" and relative_posix not in declared
     normalized_parts = tuple(part.casefold() for part in relative.parts)
     return normalized_parts[-1] in GENERATED_FIXTURE_FILE_NAMES or any(
         part in GENERATED_FIXTURE_DIRECTORY_NAMES for part in normalized_parts[:-1]
     )
+
+
+def fixture_source_content_hash(root: Path) -> str:
+    """Hash only source files explicitly owned by one fixture manifest."""
+    declared = declared_fixture_source_paths(root)
+    if declared is None:
+        raise ContractError(f"{root.name} must declare source_paths")
+    inventory: list[dict[str, object]] = []
+    for relative in declared:
+        path = root.joinpath(*PurePosixPath(relative).parts)
+        if path.is_symlink() or not path.is_file():
+            raise ContractError(f"{root.name} declared source is missing: {relative}")
+        raw = path.read_bytes()
+        inventory.append(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size_bytes": len(raw),
+            }
+        )
+    encoded = json.dumps(
+        inventory,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def undeclared_fixture_source_candidates(root: Path) -> tuple[str, ...]:
+    """Detect source-like contract inputs added without updating source_paths."""
+    declared = set(declared_fixture_source_paths(root) or ())
+    build_inputs = {
+        "build.gradle.kts",
+        "settings.gradle.kts",
+        "gradle/wrapper/gradle-wrapper.properties",
+        "build.sbt",
+        "project/build.properties",
+    }
+    candidates: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(root).as_posix()
+        if relative in declared or relative == "fixture.json":
+            continue
+        parts = PurePosixPath(relative).parts
+        source_tree = len(parts) >= 2 and parts[0] == "src" and parts[1] in {"main", "test"}
+        if source_tree or relative in build_inputs:
+            candidates.append(relative)
+    return tuple(sorted(candidates))
 
 
 def _fixture_files(root: Path) -> tuple[Path, ...]:
@@ -176,7 +259,16 @@ def verify_repository(repository_root: Path) -> dict[str, object]:
     )
     fixture_files = _fixture_files(fixture_root)
     for fixture_id in fixture_ids:
-        fixture = _json(fixture_root / fixture_id / "fixture.json")
+        fixture_directory = fixture_root / fixture_id
+        fixture = _json(fixture_directory / "fixture.json")
+        undeclared = undeclared_fixture_source_candidates(fixture_directory)
+        if undeclared:
+            raise ContractError(
+                f"{fixture_id} contains undeclared source-like contract inputs: "
+                f"{', '.join(undeclared)}"
+            )
+        if fixture.get("source_content_hash") != fixture_source_content_hash(fixture_directory):
+            raise ContractError(f"{fixture_id} source content hash differs from declared sources")
         if fixture.get("execution_attested") is not False:
             raise ContractError(f"{fixture_id} must not claim execution evidence")
         if fixture.get("attestation_boundary") != "SOURCE_CONTRACT_ONLY":
