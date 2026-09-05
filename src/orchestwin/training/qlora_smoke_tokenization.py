@@ -81,6 +81,23 @@ def _object(raw: bytes) -> dict[str, Any]:
     return value
 
 
+def _canonical_system_temp_root() -> Path:
+    """Resolve only the trusted system temp root used for internal reproduction work.
+
+    macOS exposes /var as a compatibility symlink to /private/var. tempfile may return
+    the /var spelling even when pytest and other callers use /private/var. Canonicalize
+    this internally-created temporary root before passing it to the stricter output-path
+    guard; caller-supplied paths continue to reject symbolic-link ancestors.
+    """
+    try:
+        root = Path(tempfile.gettempdir()).resolve(strict=True)
+    except OSError as error:
+        raise SmokeTokenizationError("system temporary directory cannot be resolved") from error
+    if not root.is_dir():
+        raise SmokeTokenizationError("system temporary directory must be a directory")
+    return root
+
+
 def load_smoke_preparation(repository: Path, root: Path) -> PreparedSmoke:
     """Reproduce S49 artifacts from frozen fixtures rather than trusting self-reported hashes.
 
@@ -110,7 +127,10 @@ def load_smoke_preparation(repository: Path, root: Path) -> PreparedSmoke:
         ):
             raise SmokeTokenizationError("invalid recorded implementation digest")
     timestamp = datetime.fromisoformat(metadata["created_at"])
-    with tempfile.TemporaryDirectory(prefix="orchestwin-smoke-reproduction-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="orchestwin-smoke-reproduction-",
+        dir=_canonical_system_temp_root(),
+    ) as temporary:
         expected_path = prepare_qlora_smoke(
             repository_root=repository,
             reanalysis_path=root / "reanalysis-source.json",
