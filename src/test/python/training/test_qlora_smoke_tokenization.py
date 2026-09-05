@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import orchestwin.training.qlora_smoke_tokenization as smoke_tokenization
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 from orchestwin.training.benchmark_measurement_v2 import measurement_policy_snapshot
 from orchestwin.training.benchmark_suite_files import load_frozen_evaluator_benchmark_suite
@@ -258,6 +259,30 @@ def test_invalid_token_boundaries_are_blocked(kind):
 def test_preparation_files_are_regenerated_and_verified(tmp_path):
     prepared, _ = inputs(tmp_path)
     loaded = load_smoke_preparation(ROOT, prepared)
+    assert len(loaded.records) == 20
+    assert loaded.configuration["optimization"]["max_steps"] == 8
+
+
+def test_reproduction_temp_root_canonicalizes_an_os_level_symlink_alias(tmp_path, monkeypatch):
+    actual_temp = tmp_path / "actual-temp"
+    actual_temp.mkdir()
+    alias_temp = tmp_path / "temp-alias"
+    try:
+        alias_temp.symlink_to(actual_temp, target_is_directory=True)
+    except OSError:
+        pytest.skip("symbolic links are unavailable")
+
+    monkeypatch.setattr(
+        smoke_tokenization.tempfile,
+        "gettempdir",
+        lambda: str(alias_temp),
+    )
+
+    assert smoke_tokenization._canonical_system_temp_root() == actual_temp.resolve(strict=True)
+
+    prepared = prepare(tmp_path / "work").parent
+    loaded = load_smoke_preparation(ROOT, prepared)
+
     assert len(loaded.records) == 20
     assert loaded.configuration["optimization"]["max_steps"] == 8
 
