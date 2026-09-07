@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "sprint": 12,
+  "evaluation_scope": "formal_case_studies_and_expert_evaluation",
+  "formal_case_ids": [
+    "web-calculator",
+    "hotel-management-web",
+    "weather-comparison-web"
+  ],
+  "technical_validation_families": [
+    "JVM_JAVA",
+    "JVM_KOTLIN",
+    "JVM_SCALA"
+  ],
+  "evaluation_supported_technologies": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Node.js",
+    "Vue",
+    "Express",
+    "Java",
+    "Kotlin",
+    "Scala"
+  ],
+  "mobile_platforms_in_scope": false,
+  "native_mobile_artifacts_required": false,
+  "global_definition_of_done": [
+    {
+      "id": "S12-DOD-001",
+      "description": "The project brief and case-specific Definition of Done are frozen before the formal run."
+    },
+    {
+      "id": "S12-DOD-002",
+      "description": "The formal run preserves workflow checkpoints, approved artifacts, deterministic evidence, and final export references."
+    },
+    {
+      "id": "S12-DOD-003",
+      "description": "Requirement, acceptance-criterion, gate, artifact, test, traceability, repair, duration, and model-usage metrics are computable from preserved evidence."
+    },
+    {
+      "id": "S12-DOD-004",
+      "description": "Synthetic User Twin findings remain explicitly distinct from independent human evidence."
+    },
+    {
+      "id": "S12-DOD-005",
+      "description": "Base-versus-adapter expert packages are blinded and the identity key is stored separately from the review package."
+    },
+    {
+      "id": "S12-DOD-006",
+      "description": "Every reported result identifies the platform, execution profile, or model component to which it applies and records its limitation."
+    }
+  ]
+}

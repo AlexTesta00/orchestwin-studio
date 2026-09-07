@@ -14,6 +14,7 @@ dependencies = [
     "alembic==1.19.1",
     "email-validator==2.3.0",
     "fastapi==0.141.1",
+    "langgraph==1.2.11",
     "psycopg[binary]==3.3.4",
     "pwdlib[argon2]==0.3.1",
     "pydantic-settings==2.15.0",
@@ -50,7 +51,16 @@ markers = [
 addopts = [
     "--strict-config",
     "--strict-markers",
+    "-p",
+    "no:langsmith_plugin",
     "-ra",
+]
+filterwarnings = [
+    "error",
+    # Temporary Python 3.14 compatibility exception. LangSmith 0.11.2 still
+    # calls asyncio.iscoroutinefunction while importing its runtime client.
+    'ignore:.*asyncio\.iscoroutinefunction.*Python 3\.16.*:DeprecationWarning:langsmith\..*',
+    'ignore:^The anyio\.abc\.BlockingPortal alias is deprecated, use anyio\.from_thread\.BlockingPortal instead\.$:DeprecationWarning:^starlette\.testclient$',
 ]
 
 [tool.ruff]

@@ -43,9 +43,12 @@ from orchestwin.api.execution import (
     ExecutionQueryApiService,
     HighImpactApprovalApiService,
 )
+from orchestwin.api.finalization import FinalizationApiService
 from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.sprint07_runtime import build_sprint07_services
+from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import WebExecutionApiService
+from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.identity.application import (
@@ -97,6 +100,7 @@ from orchestwin.projects.requirements_runtime import (
     SqlAlchemyRequirementsQueryService,
     build_requirements_services,
 )
+from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -189,6 +193,9 @@ class ApplicationRuntime:
     high_impact_service: HighImpactApprovalApiService | None = None
     web_execution_api_service: WebExecutionApiService | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
+    workflow_run_api_service: WorkflowRunApiService | None = None
+    finalization_api_service: FinalizationApiService | None = None
+    training_api_service: TrainingApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
@@ -271,4 +278,10 @@ def create_default_runtime(
         brownfield_service=sprint07.brownfield,
         execution_query_service=sprint07.execution_queries,
         high_impact_service=sprint07.high_impact,
+        training_api_service=SqlAlchemyTrainingApiService(
+            session_factory=database_runtime.session_factory,
+            adapter_registry=ContentAddressedAdapterRegistry(
+                resolved_settings.training_adapter_registry_root
+            ),
+        ),
     )

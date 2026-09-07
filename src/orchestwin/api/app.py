@@ -16,13 +16,16 @@ from orchestwin.api.brownfield import create_brownfield_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.execution import create_execution_router
+from orchestwin.api.finalization import create_finalization_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.jvm_execution import create_jvm_execution_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.teams import create_team_router
+from orchestwin.api.training import create_training_router
 from orchestwin.api.web_execution import create_web_execution_router
+from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
 
 
@@ -85,6 +88,9 @@ def create_app(
     application.state.high_impact_service = resolved_runtime.high_impact_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
     application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
+    application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
+    application.state.finalization_api_service = resolved_runtime.finalization_api_service
+    application.state.training_api_service = resolved_runtime.training_api_service
     application.state.source_archive_maximum_upload_bytes = (
         resolved_settings.source_archive_maximum_upload_bytes
     )
@@ -120,6 +126,9 @@ def create_app(
         create_execution_router(),
         create_web_execution_router(),
         create_jvm_execution_router(),
+        create_workflow_run_router(),
+        create_finalization_router(),
+        create_training_router(),
     ):
         application.include_router(
             router,

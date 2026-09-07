@@ -1,0 +1,10 @@
+.venv/
+.cache/
+artifacts/
+checkpoints/
+outputs/
+unsloth_compiled_cache/
+*.safetensors
+*.gguf
+*.pt
+*.pth

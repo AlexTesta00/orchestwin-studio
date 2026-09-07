@@ -8,6 +8,14 @@
   "entrypoint": "org.orchestwin.greeting.Main",
   "expected_output": "Hello, JVM!",
   "source_content_hash": "f58bf0eefa50490b323ad0fb44f9d757a0e6afe878e65a514c0fa22ae3d98faa",
+  "source_paths": [
+    "build.gradle.kts",
+    "gradle/wrapper/gradle-wrapper.properties",
+    "settings.gradle.kts",
+    "src/main/java/org/orchestwin/greeting/Greeting.java",
+    "src/main/java/org/orchestwin/greeting/Main.java",
+    "src/test/java/org/orchestwin/greeting/GreetingTest.java"
+  ],
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
   "launcher_complete": false,

@@ -25,7 +25,11 @@ class HumanGateRecord(OrmBase):
     __tablename__ = "human_gates"
     __table_args__ = (
         CheckConstraint(
-            "gate_type IN ('PROJECT_BRIEF', 'AGENT_TEAM', 'USER_MODELING', 'REQUIREMENTS', 'DESIGN', 'ARCHITECTURE', 'HIGH_IMPACT_OPERATION')",
+            "gate_type IN ("
+            "'PROJECT_BRIEF', 'AGENT_TEAM', 'USER_MODELING', "
+            "'REQUIREMENTS', 'DESIGN', 'ARCHITECTURE', "
+            "'HIGH_IMPACT_OPERATION', 'FINAL_OUTPUT'"
+            ")",
             name="gate_type_valid",
         ),
         CheckConstraint(
@@ -173,7 +177,11 @@ class HumanGateEventRecord(OrmBase):
             name="sequence_number_positive",
         ),
         CheckConstraint(
-            "gate_type IN ('PROJECT_BRIEF', 'AGENT_TEAM', 'USER_MODELING', 'REQUIREMENTS', 'DESIGN', 'ARCHITECTURE', 'HIGH_IMPACT_OPERATION')",
+            "gate_type IN ("
+            "'PROJECT_BRIEF', 'AGENT_TEAM', 'USER_MODELING', "
+            "'REQUIREMENTS', 'DESIGN', 'ARCHITECTURE', "
+            "'HIGH_IMPACT_OPERATION', 'FINAL_OUTPUT'"
+            ")",
             name="gate_type_valid",
         ),
         CheckConstraint(

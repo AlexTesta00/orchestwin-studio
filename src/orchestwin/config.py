@@ -59,6 +59,7 @@ class ApplicationSettings(BaseSettings):
     source_archive_storage_root: Path = Path("var/artifacts/source-archives")
     brownfield_workspace_root: Path = Path("var/artifacts/workspaces")
     sandbox_evidence_storage_root: Path = Path("var/artifacts/sandbox-evidence")
+    training_adapter_registry_root: Path = Path("var/artifacts/model-adapters")
     source_archive_maximum_upload_bytes: int = _MAXIMUM_SOURCE_ARCHIVE_UPLOAD_BYTES
     available_execution_runners: tuple[str, ...] = ()
     sandbox_runtime_enabled: bool = False
@@ -101,6 +102,7 @@ class ApplicationSettings(BaseSettings):
         "source_archive_storage_root",
         "brownfield_workspace_root",
         "sandbox_evidence_storage_root",
+        "training_adapter_registry_root",
     )
     @classmethod
     def validate_storage_paths(cls, value: Path) -> Path:
@@ -195,9 +197,10 @@ class ApplicationSettings(BaseSettings):
             self.source_archive_storage_root.absolute(),
             self.brownfield_workspace_root.absolute(),
             self.sandbox_evidence_storage_root.absolute(),
+            self.training_adapter_registry_root.absolute(),
         }
-        if len(storage_paths) != 3:
-            raise ValueError("archive, workspace, and evidence roots must be distinct")
+        if len(storage_paths) != 4:
+            raise ValueError("archive, workspace, evidence, and adapter roots must be distinct")
 
         return self
 
