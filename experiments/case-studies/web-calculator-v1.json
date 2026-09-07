@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "case_id": "web-calculator",
+  "version": 1,
+  "title": "Accessible Web Calculator",
+  "family": "WEB",
+  "execution_profile": "WEB_STATIC",
+  "technologies": ["HTML", "CSS", "JavaScript"],
+  "project_brief": "Create a small responsive calculator for basic arithmetic. The application must be usable with keyboard and pointer input, expose understandable state and errors, require no network access, and remain intentionally small so the formal run evaluates the governed end-to-end workflow rather than domain complexity.",
+  "user_twin_roles": ["novice end user"],
+  "constraints": [
+    "No network dependency",
+    "No external runtime service",
+    "Keyboard operation must cover every calculator action",
+    "The interface must remain usable at narrow and wide viewport sizes"
+  ],
+  "definition_of_done": [
+    {
+      "criterion_id": "CALC-001",
+      "description": "The approved requirements cover addition, subtraction, multiplication, division, decimal input, clear, and error handling.",
+      "evidence": ["REQUIREMENTS", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "CALC-002",
+      "description": "The application builds or validates successfully under the WEB_STATIC execution profile.",
+      "evidence": ["BUILD_REPORT"]
+    },
+    {
+      "criterion_id": "CALC-003",
+      "description": "Deterministic tests cover arithmetic, decimal input, clear behavior, and division-by-zero handling.",
+      "evidence": ["TEST_REPORT"]
+    },
+    {
+      "criterion_id": "CALC-004",
+      "description": "The application is navigable and operable with keyboard input without pointer-only actions.",
+      "evidence": ["RUNTIME_REPORT", "ACCESSIBILITY_REPORT"]
+    },
+    {
+      "criterion_id": "CALC-005",
+      "description": "Automated accessibility evidence contains no unresolved critical violation in the evaluated screen.",
+      "evidence": ["ACCESSIBILITY_REPORT"]
+    },
+    {
+      "criterion_id": "CALC-006",
+      "description": "At least one synthetic User Twin evaluation is preserved with provenance and explicit simulated-feedback status.",
+      "evidence": ["USER_TWIN_FINDINGS"]
+    },
+    {
+      "criterion_id": "CALC-007",
+      "description": "Any repair attempt is bounded, recorded, and linked to the evidence that triggered it.",
+      "evidence": ["REPAIR_HISTORY", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "CALC-008",
+      "description": "The final approved source and evidence package is exportable and content-addressed.",
+      "evidence": ["FINAL_EXPORT"]
+    }
+  ]
+}
