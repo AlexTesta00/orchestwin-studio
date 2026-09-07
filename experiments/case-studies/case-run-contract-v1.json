@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "record_kind": "FORMAL_CASE_STUDY_RUN",
+  "final_statuses": [
+    "ABORTED",
+    "COMPLETED",
+    "FAILED"
+  ],
+  "required_fields": [
+    "schema_version",
+    "run_id",
+    "case_id",
+    "case_version",
+    "case_content_hash",
+    "workflow_run_id",
+    "platform_commit",
+    "execution_profile",
+    "environment_identity_hash",
+    "started_at",
+    "completed_at",
+    "status",
+    "evidence",
+    "measurement",
+    "notes",
+    "real_user_behavior_validated",
+    "empirical_user_evidence_created",
+    "content_hash"
+  ],
+  "evidence_reference_required_fields": [
+    "kind",
+    "relative_path",
+    "sha256_digest",
+    "size_bytes",
+    "criterion_ids"
+  ],
+  "invariants": {
+    "bind_exact_case_definition": true,
+    "bind_exact_platform_commit": true,
+    "bind_exact_execution_profile": true,
+    "bind_environment_identity": true,
+    "evidence_is_content_addressed": true,
+    "evidence_is_criterion_traceable": true,
+    "measurement_required_when_completed": true,
+    "finalized_record_is_immutable": true
+  },
+  "permanent_claim_flags": {
+    "real_user_behavior_validated": false,
+    "empirical_user_evidence_created": false
+  }
+}
