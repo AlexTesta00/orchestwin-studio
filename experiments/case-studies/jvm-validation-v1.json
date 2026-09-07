@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "validation_kind": "technical_execution_fixture_matrix",
+  "family": "JVM",
+  "formal_case_study": false,
+  "fixtures": [
+    {
+      "language": "Java",
+      "execution_profile": "JVM_JAVA",
+      "build_tool": "Gradle",
+      "fixture_path": "src/test/fixtures/jvm_execution/jvm-java-greeting"
+    },
+    {
+      "language": "Kotlin",
+      "execution_profile": "JVM_KOTLIN",
+      "build_tool": "Gradle",
+      "fixture_path": "src/test/fixtures/jvm_execution/jvm-kotlin-calculator"
+    },
+    {
+      "language": "Scala",
+      "execution_profile": "JVM_SCALA",
+      "build_tool": "sbt",
+      "fixture_path": "src/test/fixtures/jvm_execution/jvm-scala-greeting"
+    }
+  ],
+  "required_evidence": [
+    "deterministic_detection",
+    "structured_phase_plan",
+    "build_result",
+    "test_result",
+    "runtime_or_artifact_evidence",
+    "bounded_repair_fixture_where_available"
+  ]
+}
