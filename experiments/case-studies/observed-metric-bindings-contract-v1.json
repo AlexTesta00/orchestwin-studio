@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "binding_kind": "JSON_POINTER_EVIDENCE",
+  "source_truth": "ACTUAL_WORKFLOW_EVIDENCE",
+  "values_must_be_read_from_source": true,
+  "fabricated_values_allowed": false,
+  "case_specific_logic_allowed": false,
+  "required_fields": [
+    {
+      "field": "gates_completed",
+      "type": "INTEGER"
+    },
+    {
+      "field": "gates_total",
+      "type": "INTEGER"
+    },
+    {
+      "field": "artifacts_completed",
+      "type": "INTEGER"
+    },
+    {
+      "field": "artifacts_total",
+      "type": "INTEGER"
+    },
+    {
+      "field": "requirements_satisfied",
+      "type": "INTEGER"
+    },
+    {
+      "field": "requirements_total",
+      "type": "INTEGER"
+    },
+    {
+      "field": "criteria_satisfied",
+      "type": "INTEGER"
+    },
+    {
+      "field": "criteria_total",
+      "type": "INTEGER"
+    },
+    {
+      "field": "traceability_links_present",
+      "type": "INTEGER"
+    },
+    {
+      "field": "traceability_links_required",
+      "type": "INTEGER"
+    },
+    {
+      "field": "tests_passed",
+      "type": "INTEGER"
+    },
+    {
+      "field": "tests_total",
+      "type": "INTEGER"
+    },
+    {
+      "field": "repair_successes",
+      "type": "INTEGER"
+    },
+    {
+      "field": "repair_attempts",
+      "type": "INTEGER"
+    },
+    {
+      "field": "build_succeeded",
+      "type": "BOOLEAN"
+    },
+    {
+      "field": "final_runtime_succeeded",
+      "type": "BOOLEAN"
+    },
+    {
+      "field": "elapsed_seconds",
+      "type": "NUMBER"
+    },
+    {
+      "field": "model_calls",
+      "type": "INTEGER"
+    },
+    {
+      "field": "input_tokens",
+      "type": "INTEGER"
+    },
+    {
+      "field": "output_tokens",
+      "type": "INTEGER"
+    },
+    {
+      "field": "estimated_cost_usd",
+      "type": "NUMBER"
+    }
+  ]
+}
