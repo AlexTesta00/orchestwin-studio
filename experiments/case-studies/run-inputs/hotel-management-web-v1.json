@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "case_id": "hotel-management-web",
+  "case_version": 1,
+  "case_content_hash": "1c64c984976420d4fc7e8585436903e552df8590633709ecfc5a5e8f6d1e066f",
+  "title": "Hotel Management Web Application",
+  "definition_path": "experiments/case-studies/hotel-management-web-v1.json",
+  "project_mode": "GREENFIELD",
+  "owner_request": "Create a small hotel operations application for reception and management workflows. The system must support rooms, guests, reservations, reservation status changes, and a concise operational overview through a Vue frontend and a Node.js Express API. Persistence may use a deterministic repository fixture for the formal case so the evaluation focuses on workflow completeness, traceability, execution, tests, repair, and User Twin feedback.",
+  "execution_profile": "WEB_VUE_NODE",
+  "technologies": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Vue",
+    "Node.js",
+    "Express"
+  ],
+  "user_twin_roles": [
+    "receptionist",
+    "hotel manager"
+  ],
+  "constraints": [
+    "Use JavaScript across browser and server application code",
+    "Use Vue for the browser application",
+    "Use Node.js and Express for the API",
+    "Keep authentication local, simulated, or fixture-backed for the formal case",
+    "Do not require a paid external service"
+  ],
+  "required_gates": [
+    "PROJECT_BRIEF",
+    "AGENT_TEAM",
+    "USER_MODELING",
+    "REQUIREMENTS",
+    "DESIGN",
+    "ARCHITECTURE",
+    "HIGH_IMPACT_OPERATION",
+    "FINAL_OUTPUT"
+  ],
+  "network_policy": "Dependency installation may use the approved Web runner policy; build, test, and generated application runtime must not depend on an external production service.",
+  "operator_instructions": [
+    "Create the project through the normal OrchesTwin greenfield workflow.",
+    "Resolve every owner gate through the OrchesTwin UI or API without bypassing the governed transition.",
+    "Preserve generated source, deterministic execution evidence, synthetic User Twin findings, traceability, and final export evidence.",
+    "Do not modify the frozen case definition or launch input after the formal run begins."
+  ],
+  "content_hash": "cbd7473809db65ee9084cb8a3ccce57a533be7511aa9e5412591d47d0ff04dd7"
+}

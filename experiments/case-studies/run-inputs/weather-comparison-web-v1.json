@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "case_id": "weather-comparison-web",
+  "case_version": 1,
+  "case_content_hash": "2adf9d525662dfc9795bd505ddec93b70b94f7335d2b5cac2a433045303397e2",
+  "title": "Weather Provider Comparison Web Application",
+  "definition_path": "experiments/case-studies/weather-comparison-web-v1.json",
+  "project_mode": "GREENFIELD",
+  "owner_request": "Create a responsive weather comparison application that presents normalized forecasts from multiple provider adapters. The formal case must use deterministic mocked provider responses, clearly show provider source and observation or forecast timestamps, communicate unavailable or conflicting values, and expose the comparison through an accessible Vue interface backed by a Node.js Express API.",
+  "execution_profile": "WEB_VUE_NODE",
+  "technologies": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Vue",
+    "Node.js",
+    "Express"
+  ],
+  "user_twin_roles": [
+    "general weather-information user"
+  ],
+  "constraints": [
+    "Use deterministic mocked provider adapters for the formal evaluation run",
+    "Do not require production API subscriptions",
+    "Show source and timestamp information for compared values",
+    "Represent missing or conflicting provider data explicitly",
+    "Use JavaScript across browser and server application code"
+  ],
+  "required_gates": [
+    "PROJECT_BRIEF",
+    "AGENT_TEAM",
+    "USER_MODELING",
+    "REQUIREMENTS",
+    "DESIGN",
+    "ARCHITECTURE",
+    "HIGH_IMPACT_OPERATION",
+    "FINAL_OUTPUT"
+  ],
+  "network_policy": "Dependency installation may use the approved Web runner policy; build, test, and generated application runtime use deterministic mocked weather providers with no production API subscription.",
+  "operator_instructions": [
+    "Create the project through the normal OrchesTwin greenfield workflow.",
+    "Resolve every owner gate through the OrchesTwin UI or API without bypassing the governed transition.",
+    "Preserve generated source, deterministic execution evidence, synthetic User Twin findings, traceability, and final export evidence.",
+    "Do not modify the frozen case definition or launch input after the formal run begins."
+  ],
+  "content_hash": "e6ac83c6d3c8343bf16f745f24724bcf7ef98722bfaf9a5940de4ef2f08dbb18"
+}

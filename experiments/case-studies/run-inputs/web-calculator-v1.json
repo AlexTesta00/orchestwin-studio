@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "case_id": "web-calculator",
+  "case_version": 1,
+  "case_content_hash": "d12213a16bf4412f7379d4779ac960cdb341f6ba2a47cce838675f753714f8df",
+  "title": "Accessible Web Calculator",
+  "definition_path": "experiments/case-studies/web-calculator-v1.json",
+  "project_mode": "GREENFIELD",
+  "owner_request": "Create a small responsive calculator for basic arithmetic. The application must be usable with keyboard and pointer input, expose understandable state and errors, require no network access, and remain intentionally small so the formal run evaluates the governed end-to-end workflow rather than domain complexity.",
+  "execution_profile": "WEB_STATIC",
+  "technologies": [
+    "HTML",
+    "CSS",
+    "JavaScript"
+  ],
+  "user_twin_roles": [
+    "novice end user"
+  ],
+  "constraints": [
+    "No network dependency",
+    "No external runtime service",
+    "Keyboard operation must cover every calculator action",
+    "The interface must remain usable at narrow and wide viewport sizes"
+  ],
+  "required_gates": [
+    "PROJECT_BRIEF",
+    "AGENT_TEAM",
+    "USER_MODELING",
+    "REQUIREMENTS",
+    "DESIGN",
+    "ARCHITECTURE",
+    "HIGH_IMPACT_OPERATION",
+    "FINAL_OUTPUT"
+  ],
+  "network_policy": "No external network access is permitted during generated application build, test, or runtime.",
+  "operator_instructions": [
+    "Create the project through the normal OrchesTwin greenfield workflow.",
+    "Resolve every owner gate through the OrchesTwin UI or API without bypassing the governed transition.",
+    "Preserve generated source, deterministic execution evidence, synthetic User Twin findings, traceability, and final export evidence.",
+    "Do not modify the frozen case definition or launch input after the formal run begins."
+  ],
+  "content_hash": "e8402c93cba9c14220459715c6dc59fdf91ea6b7acfe6416f3ffcd08fa11eb5e"
+}
