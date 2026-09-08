@@ -90,6 +90,9 @@ def create_app(
     application.state.high_impact_service = resolved_runtime.high_impact_service
     application.state.web_source_api_service = resolved_runtime.web_source_api_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
+    application.state.web_execution_read_api_service = (
+        resolved_runtime.web_execution_read_api_service
+    )
     application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
     application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
     application.state.finalization_api_service = resolved_runtime.finalization_api_service

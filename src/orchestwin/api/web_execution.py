@@ -154,6 +154,31 @@ class WebSourceApiService(Protocol):
     ) -> dict[str, JsonValue] | None: ...
 
 
+class WebExecutionReadApiService(Protocol):
+    """Read stored attempts independently from permission to execute new code."""
+
+    async def execution_history(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+    ) -> tuple[dict[str, JsonValue], ...]: ...
+
+    async def execution(
+        self,
+        *,
+        owner_user_id: UUID,
+        execution_id: UUID,
+    ) -> dict[str, JsonValue] | None: ...
+
+    async def execution_report(
+        self,
+        *,
+        owner_user_id: UUID,
+        execution_id: UUID,
+    ) -> dict[str, JsonValue] | None: ...
+
+
 class WebExecutionApiService(WebSourceApiService, Protocol):
     """Combined port retained for existing execution adapters and test doubles."""
 
@@ -416,6 +441,19 @@ def web_source_api_service_dependency(request: Request) -> WebSourceApiService:
     return service
 
 
+def web_execution_read_api_service_dependency(request: Request) -> WebExecutionReadApiService:
+    """Prefer dedicated read services; preserve injected combined adapters."""
+    service = getattr(request.app.state, "web_execution_read_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_EXECUTION_READ_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
 def create_web_execution_router() -> APIRouter:
     router = APIRouter(tags=["web-execution"])
 
@@ -515,8 +553,8 @@ def create_web_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -535,8 +573,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -557,8 +595,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(

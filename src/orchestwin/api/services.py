@@ -47,7 +47,12 @@ from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
-from orchestwin.api.web_execution import WebExecutionApiService, WebSourceApiService
+from orchestwin.api.web_execution import (
+    WebExecutionApiService,
+    WebExecutionReadApiService,
+    WebSourceApiService,
+)
+from orchestwin.api.web_execution_read_runtime import SqlAlchemyWebExecutionReadApiService
 from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
 from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
@@ -189,6 +194,7 @@ class ApplicationRuntime:
     execution_query_service: ExecutionQueryApiService | None = None
     high_impact_service: HighImpactApprovalApiService | None = None
     web_source_api_service: WebSourceApiService | None = None
+    web_execution_read_api_service: WebExecutionReadApiService | None = None
     web_execution_api_service: WebExecutionApiService | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
@@ -277,6 +283,9 @@ def create_default_runtime(
         brownfield_service=sprint07.brownfield,
         execution_query_service=sprint07.execution_queries,
         high_impact_service=sprint07.high_impact,
+        web_execution_read_api_service=SqlAlchemyWebExecutionReadApiService(
+            database_runtime.session_factory,
+        ),
         web_source_api_service=SqlAlchemyWebSourceApiService(
             database_runtime.session_factory,
             content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",

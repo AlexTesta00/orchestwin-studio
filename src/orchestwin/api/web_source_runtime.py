@@ -49,6 +49,10 @@ from orchestwin.web_execution.targets import (
     WebTargetSelection,
     web_scope_for,
 )
+from orchestwin.web_execution.workspaces import (
+    PreparedWebWorkspace,
+    materialize_web_source_snapshot,
+)
 from orchestwin.workflow.gates import GateArtifactReference, HumanGateStatus, HumanGateType
 from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
 
@@ -269,6 +273,27 @@ class SqlAlchemyWebSourceApiService:
                 snapshot=_snapshot(stored.revision),
                 message="Web source revision stored; execution has not been performed.",
             )
+
+    async def prepare_workspace(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        revision_id: UUID,
+    ) -> PreparedWebWorkspace | None:
+        """Restore an owner-visible revision; preparation grants no execution authority."""
+        snapshot = await self.source_revision(
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+            revision_id=revision_id,
+        )
+        if snapshot is None:
+            return None
+        return materialize_web_source_snapshot(
+            snapshot,
+            content_root=self._content_root,
+            workspaces_root=self._content_root.parent / "web-execution-workspaces",
+        )
 
     async def source_revision_history(
         self, *, owner_user_id: UUID, project_id: UUID
