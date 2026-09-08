@@ -127,8 +127,8 @@ class WebApiCommandResult:
             raise ValueError("Web API command result shape is inconsistent")
 
 
-class WebExecutionApiService(Protocol):
-    """Application port preserving owner/project scope and typed command inputs."""
+class WebSourceApiService(Protocol):
+    """Owner-scoped source persistence independent from sandbox execution."""
 
     async def create_source_revision(
         self,
@@ -152,6 +152,10 @@ class WebExecutionApiService(Protocol):
         project_id: UUID,
         revision_id: UUID,
     ) -> dict[str, JsonValue] | None: ...
+
+
+class WebExecutionApiService(WebSourceApiService, Protocol):
+    """Combined port retained for existing execution adapters and test doubles."""
 
     async def start_execution(
         self,
@@ -399,6 +403,19 @@ def web_execution_api_service_dependency(request: Request) -> WebExecutionApiSer
     return service
 
 
+def web_source_api_service_dependency(request: Request) -> WebSourceApiService:
+    """Prefer the dedicated source adapter; retain legacy combined-service injection."""
+    service = getattr(request.app.state, "web_source_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_SOURCE_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
 def create_web_execution_router() -> APIRouter:
     router = APIRouter(tags=["web-execution"])
 
@@ -413,8 +430,8 @@ def create_web_execution_router() -> APIRouter:
         body: CreateWebSourceRevisionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(
@@ -434,8 +451,8 @@ def create_web_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -455,8 +472,8 @@ def create_web_execution_router() -> APIRouter:
         revision_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         snapshot = await service.source_revision(

@@ -88,6 +88,7 @@ def create_app(
     application.state.brownfield_service = resolved_runtime.brownfield_service
     application.state.execution_query_service = resolved_runtime.execution_query_service
     application.state.high_impact_service = resolved_runtime.high_impact_service
+    application.state.web_source_api_service = resolved_runtime.web_source_api_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
     application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
     application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
