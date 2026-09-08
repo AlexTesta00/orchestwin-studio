@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
@@ -45,6 +44,7 @@ from orchestwin.api.execution import (
 )
 from orchestwin.api.finalization import FinalizationApiService
 from orchestwin.api.jvm_execution import JvmExecutionApiService
+from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import WebExecutionApiService
@@ -57,19 +57,12 @@ from orchestwin.identity.application import (
 )
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
-from orchestwin.identity.tokens import (
-    JwtAccessTokenService,
-    load_access_token_settings,
-)
+from orchestwin.identity.tokens import JwtAccessTokenService
 from orchestwin.models.runtime import (
     create_team_proposal_port,
     load_team_proposal_runtime_settings,
 )
-from orchestwin.persistence import (
-    DatabaseRuntime,
-    create_database_runtime,
-    load_database_settings,
-)
+from orchestwin.persistence import DatabaseRuntime, create_database_runtime
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
@@ -206,21 +199,20 @@ class ApplicationRuntime:
 def create_default_runtime(
     settings: ApplicationSettings | None = None,
 ) -> ApplicationRuntime:
-    """Create persistence-backed services when configuration exists."""
+    """Compose services from validated process/dotenv credentials, not os.getenv alone."""
+    connection_settings = load_runtime_connection_settings()
     resolved_settings = settings if settings is not None else load_settings()
-    database_url = os.getenv(DATABASE_URL_ENVIRONMENT)
-    jwt_secret = os.getenv(JWT_SECRET_ENVIRONMENT)
 
-    if not database_url or not jwt_secret:
+    if connection_settings is None:
         return ApplicationRuntime()
 
     team_proposal_port = create_team_proposal_port(load_team_proposal_runtime_settings())
-    database_runtime = create_database_runtime(load_database_settings())
+    database_runtime = create_database_runtime(connection_settings.database)
 
     identity_service = LocalIdentityApplicationService(
         unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory),
         password_service=Argon2PasswordService(),
-        access_token_service=JwtAccessTokenService(load_access_token_settings()),
+        access_token_service=JwtAccessTokenService(connection_settings.access_tokens),
     )
     project_service = LocalProjectApplicationService(
         unit_of_work_factory=SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory)

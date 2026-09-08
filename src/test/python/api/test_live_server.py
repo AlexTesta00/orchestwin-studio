@@ -47,9 +47,14 @@ def select_available_port() -> int:
         return int(candidate.getsockname()[1])
 
 
-def start_server(port: int) -> subprocess.Popen[str]:
-    """Start the installed ASGI runner with deterministic test configuration."""
-    environment = os.environ.copy()
+# S12-C51-R1: isolate liveness tests from local configuration.
+def build_server_environment() -> dict[str, str]:
+    """Build a child-only environment without inherited application settings."""
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.upper().startswith("ORCHESTWIN_") and name.upper() != "PYTHONPATH"
+    }
     environment.update(
         {
             "ORCHESTWIN_APPLICATION_NAME": "OrchesTwin Smoke Test API",
@@ -58,8 +63,16 @@ def start_server(port: int) -> subprocess.Popen[str]:
             "ORCHESTWIN_LOG_LEVEL": "INFO",
             "ORCHESTWIN_API_PREFIX": "/api/v1",
             "PYTHONUNBUFFERED": "1",
+            "PYTHONPATH": str(PROJECT_ROOT / "src"),
         }
     )
+
+    return environment
+
+
+def start_server(port: int, *, working_directory: Path) -> subprocess.Popen[str]:
+    """Start the real ASGI runner outside the developer dotenv directory."""
+    environment = build_server_environment()
 
     return subprocess.Popen(
         [
@@ -71,7 +84,7 @@ def start_server(port: int) -> subprocess.Popen[str]:
             "--port",
             str(port),
         ],
-        cwd=PROJECT_ROOT,
+        cwd=working_directory,
         env=environment,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -178,10 +191,10 @@ def stop_server(process: subprocess.Popen[str]) -> str:
     return output or ""
 
 
-def test_live_server_starts_and_serves_health_contract() -> None:
+def test_live_server_starts_and_serves_health_contract(tmp_path: Path) -> None:
     """Start the installed runner and verify its liveness contract over TCP."""
     port = select_available_port()
-    process = start_server(port)
+    process = start_server(port, working_directory=tmp_path)
     failure: SmokeTestFailure | None = None
 
     try:
@@ -198,3 +211,21 @@ def test_live_server_starts_and_serves_health_contract() -> None:
             f"{failure}\n\nServer output:\n{diagnostics}",
             pytrace=False,
         )
+
+
+def test_live_server_environment_is_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Do not copy developer credentials or mutate the parent process environment."""
+    monkeypatch.setenv("ORCHESTWIN_DATABASE_URL", "invalid-test-only-url")
+    monkeypatch.setenv("ORCHESTWIN_AUTH_JWT_SECRET", "short-test-only-secret")
+    monkeypatch.setenv("ORCHESTWIN_API_PREFIX", "/unexpected")
+    monkeypatch.setenv("ORCHESTWIN_TEAM_PROPOSAL_PROVIDER", "MODEL_ADAPTER")
+    before = dict(os.environ)
+
+    environment = build_server_environment()
+
+    assert "ORCHESTWIN_DATABASE_URL" not in environment
+    assert "ORCHESTWIN_AUTH_JWT_SECRET" not in environment
+    assert "ORCHESTWIN_TEAM_PROPOSAL_PROVIDER" not in environment
+    assert environment["ORCHESTWIN_API_PREFIX"] == "/api/v1"
+    assert environment["PYTHONPATH"] == str(PROJECT_ROOT / "src")
+    assert dict(os.environ) == before
