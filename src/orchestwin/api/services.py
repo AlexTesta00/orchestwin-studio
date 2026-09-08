@@ -94,6 +94,7 @@ from orchestwin.projects.requirements_runtime import (
     build_requirements_services,
 )
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
+from orchestwin.twins.runtime import UserModelingServices, build_user_modeling_services
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -168,6 +169,7 @@ class ApplicationRuntime:
     database_runtime: DatabaseRuntime | None = None
     team_proposal_service: TeamProposalApplicationService | None = None
     agent_team_service: AgentTeamApprovalService | None = None
+    user_modeling_services: UserModelingServices | None = None
     requirements_generation_service: LocalRequirementsGenerationService | None = None
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
@@ -236,6 +238,7 @@ def create_default_runtime(
     agent_team_service = LocalAgentTeamApprovalService(
         unit_of_work_factory=SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
     )
+    user_modeling = build_user_modeling_services(database_runtime.session_factory)
     requirements = build_requirements_services(database_runtime.session_factory)
     design = build_design_services(database_runtime.session_factory)
     architecture = build_architecture_services(database_runtime.session_factory)
@@ -252,6 +255,7 @@ def create_default_runtime(
         database_runtime=database_runtime,
         team_proposal_service=team_proposal_service,
         agent_team_service=agent_team_service,
+        user_modeling_services=user_modeling,
         requirements_generation_service=requirements.generation,
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,

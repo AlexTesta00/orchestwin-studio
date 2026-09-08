@@ -127,8 +127,8 @@ class GovernedUserModelingContext:
 
     project_id: UUID
 
-    brief_version: ProjectBriefVersion
-    brief_gate: HumanGate
+    brief_version: ProjectBriefVersion | None
+    brief_gate: HumanGate | None
 
     team_reference: VersionedArtifactReference | None
     approved_team_reference: VersionedArtifactReference | None
@@ -138,7 +138,7 @@ class GovernedUserModelingContext:
 
     def __post_init__(self) -> None:
         """Protect basic consistency of the supplied context."""
-        if self.brief_version.project_id != self.project_id:
+        if self.brief_version is not None and self.brief_version.project_id != self.project_id:
             raise ValueError("User Modeling brief must belong to the context project")
 
         if self.team_reference is None:
@@ -171,6 +171,8 @@ class GovernedUserModelingContext:
         self,
     ) -> VersionedArtifactReference:
         """Return the exact Project Brief reference."""
+        if self.brief_version is None:
+            raise ValueError("User Modeling context has no current Project Brief")
         return VersionedArtifactReference(
             artifact_id=(self.brief_version.id),
             version_number=(self.brief_version.version_number),
@@ -182,6 +184,8 @@ class GovernedUserModelingContext:
         self,
     ) -> UserModelingContextFingerprint:
         """Return the context identity used for stale-result checks."""
+        if self.brief_version is None:
+            raise ValueError("User Modeling context has no current Project Brief")
         return UserModelingContextFingerprint(
             brief_version_id=(self.brief_version.id),
             brief_version_number=(self.brief_version.version_number),
@@ -765,6 +769,9 @@ def _governance_issue(
     """Return the first governance blocker for User Modeling."""
     if context is None:
         return UserModelingApplicationIssueCode.PROJECT_NOT_FOUND
+
+    if context.brief_version is None or context.brief_gate is None:
+        return UserModelingApplicationIssueCode.BRIEF_APPROVAL_REQUIRED
 
     if not (
         project_brief_gate_is_currently_approved(
