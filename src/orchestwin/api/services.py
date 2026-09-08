@@ -48,6 +48,7 @@ from orchestwin.api.runtime_configuration import load_runtime_connection_setting
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import WebExecutionApiService
+from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import ApplicationSettings, load_settings
@@ -274,6 +275,7 @@ def create_default_runtime(
         brownfield_service=sprint07.brownfield,
         execution_query_service=sprint07.execution_queries,
         high_impact_service=sprint07.high_impact,
+        workflow_run_api_service=SqlAlchemyWorkflowRunApiService(database_runtime.session_factory),
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,
             adapter_registry=ContentAddressedAdapterRegistry(
