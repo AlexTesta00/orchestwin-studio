@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -77,10 +78,13 @@ def parse_server_options(
 
 
 def run_server(options: ServerOptions) -> None:
-    """Run Uvicorn using the FastAPI application factory."""
+    """Run the API with a Psycopg-compatible event loop on Windows."""
     uvicorn.run(
         APPLICATION_IMPORT,
         factory=True,
+        # Psycopg async connections need SelectorEventLoop on Windows.
+        # A Uvicorn hook avoids changing the global asyncio policy.
+        loop="asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
         host=options.host,
         port=options.port,
         log_level=DEFAULT_LOG_LEVEL,

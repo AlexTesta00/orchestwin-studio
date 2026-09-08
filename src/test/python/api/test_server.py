@@ -1,5 +1,6 @@
 """Tests for the OrchesTwin ASGI server entry point."""
 
+import sys
 from importlib.metadata import entry_points
 
 import pytest
@@ -84,6 +85,7 @@ def test_run_server_uses_the_application_factory(
     assert captured_arguments == {
         "application": APPLICATION_IMPORT,
         "factory": True,
+        "loop": "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
         "host": "0.0.0.0",
         "port": 9000,
         "log_level": DEFAULT_LOG_LEVEL,
