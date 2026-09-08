@@ -48,7 +48,13 @@ async function run() {
       axe_core: axe.version, node: process.version }, checks: {}, screens: [] };
   try {
     // No no-sandbox fallback: unsupported namespace/seccomp configuration must fail.
-    browser = await chromium.launch({ headless: true, chromiumSandbox: true, timeout: 20000 });
+    browser = await chromium.launch({
+      headless: true,
+      chromiumSandbox: true,
+      timeout: 20000,
+      // Browser.getBrowserCommandLine requires this explicit Chromium switch.
+      args: ["--enable-automation"],
+    });
     report.versions.chromium = browser.version();
     report.checks.browser_launched = true;
     report.checks.chromium_sandbox_requested = true;
