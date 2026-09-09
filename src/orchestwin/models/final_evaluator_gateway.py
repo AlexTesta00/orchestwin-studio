@@ -10,6 +10,10 @@ import asyncio
 import hashlib
 from collections.abc import Callable
 
+from orchestwin.evaluation.artifact_content import (
+    CONTENT_PROMPT_VERSION,
+    validate_generation_content,
+)
 from orchestwin.evaluation.field_scope_prompt import FIELD_SCOPE_PROMPT_VERSION
 from orchestwin.models.final_evaluator_session import (
     MODEL_NAME,
@@ -168,7 +172,8 @@ class FinalEvaluatorGenerationPort:
         try:
             require(
                 request.task_id == "user-twin-evaluation-v1"
-                and request.prompt_version_ref == FIELD_SCOPE_PROMPT_VERSION
+                and request.prompt_version_ref
+                in {FIELD_SCOPE_PROMPT_VERSION, CONTENT_PROMPT_VERSION}
                 and request.temperature == 0.0
                 and type(request.max_output_tokens) is int
                 and 1 <= request.max_output_tokens <= 1024
@@ -177,6 +182,7 @@ class FinalEvaluatorGenerationPort:
                 "FINAL_EVALUATOR_REQUEST_OUTSIDE_CONTRACT",
             )
             check_evaluator_schema(strict_json_object(request.output_schema.canonical_schema_json))
+            validate_generation_content(request)
             self.session.assert_unchanged()
         except (FinalEvaluatorSessionError, ValueError, TypeError, KeyError):
             return _failure(

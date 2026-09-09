@@ -10,6 +10,7 @@ from enum import StrEnum
 from typing import Final
 from uuid import UUID
 
+from orchestwin.evaluation.artifact_content import VerifiedArtifactContext
 from orchestwin.evaluation.evaluator import (
     SYNTHETIC_EVALUATION_DISCLAIMER,
     UserTwinEvaluationRequest,
@@ -117,6 +118,7 @@ class ModelGatewayUserTwinEvaluator:
         max_output_tokens: int = 2_048,
         timeout_seconds: int = 120,
         system_instruction: str | None = None,
+        verified_content: VerifiedArtifactContext | None = None,
     ) -> None:
         if configuration.model_config_ref != model_identity.content_hash:
             raise ModelGatewayEvaluationError(
@@ -130,6 +132,11 @@ class ModelGatewayUserTwinEvaluator:
             instruction, label="evaluator system instruction", maximum_length=16_000
         ):
             raise ValueError("evaluator system instruction must be normalized")
+        if verified_content is not None and not isinstance(
+            verified_content, VerifiedArtifactContext
+        ):
+            raise TypeError("verified_content must be a prepared artifact context")
+        self._verified_content = verified_content
         self._system_instruction = instruction
         self._configuration = configuration
         self._model_identity = model_identity
@@ -157,6 +164,13 @@ class ModelGatewayUserTwinEvaluator:
             schema_payload=_output_schema_payload(),
         )
 
+    def build_input_payload(self, request: UserTwinEvaluationRequest) -> dict[str, object]:
+        """Build the exact input; the historical metadata-only shape stays unchanged."""
+        payload = _input_payload(request)
+        if self._verified_content is None:
+            return payload
+        return self._verified_content.enrich(request, payload)
+
     async def evaluate(
         self,
         request: UserTwinEvaluationRequest,
@@ -167,7 +181,7 @@ class ModelGatewayUserTwinEvaluator:
             expected_identity=self._model_identity,
             output_schema=self.output_schema,
             system_instruction=self.system_instruction,
-            input_payload=_input_payload(request),
+            input_payload=self.build_input_payload(request),
             allowed_evidence_refs=tuple(reference.reference_id for reference in request.evidence),
             prompt_version_ref=self.configuration.prompt_version_ref,
             temperature=0.0,
@@ -194,6 +208,8 @@ class ModelGatewayUserTwinEvaluator:
                 payload=payload,
                 completed_at=self._clock(),
             )
+            if self._verified_content is not None:
+                self._verified_content.validate_response(response)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise ModelGatewayEvaluationError(
                 ModelGatewayEvaluationErrorCode.INVALID_PAYLOAD,

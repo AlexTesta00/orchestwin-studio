@@ -11,6 +11,11 @@ from uuid import uuid4
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from orchestwin.evaluation.artifact_content import (
+    CONTENT_PROMPT_VERSION,
+    VerifiedArtifactContext,
+    artifact_content_instruction,
+)
 from orchestwin.evaluation.evaluator import UserTwinEvaluatorConfiguration
 from orchestwin.evaluation.field_scope_prompt import (
     FIELD_SCOPE_PROMPT_VERSION,
@@ -49,7 +54,14 @@ class FinalEvaluatorSettings(BaseSettings):
 class FinalEvaluatorRuntime:
     session: FinalEvaluatorSession
 
-    def create_evaluator(self, *, generation_port=None, request_id_factory=uuid4, clock=None):
+    def create_evaluator(
+        self,
+        *,
+        generation_port=None,
+        request_id_factory=uuid4,
+        clock=None,
+        verified_content: VerifiedArtifactContext | None = None,
+    ):
         """New evaluator per invocation avoids shared current request and accumulated trace state.
 
         generation_port injection is for trusted tests/replay, never accepted by an HTTP body.
@@ -65,12 +77,19 @@ class FinalEvaluatorRuntime:
             if generation_port is not None
             else FinalEvaluatorGenerationPort(self.session)
         )
+        instruction = field_scope_instruction(_system_instruction(), _output_schema_payload())
+        prompt_version = FIELD_SCOPE_PROMPT_VERSION
+        if verified_content is not None:
+            if not isinstance(verified_content, VerifiedArtifactContext):
+                raise TypeError("verified_content must be a prepared artifact context")
+            instruction = artifact_content_instruction(instruction)
+            prompt_version = CONTENT_PROMPT_VERSION
         return ModelGatewayUserTwinEvaluator(
             configuration=UserTwinEvaluatorConfiguration(
                 evaluator_id="s67-final-user-twin-evaluator",
                 evaluator_version="1.0.0",
                 model_config_ref=identity.content_hash,
-                prompt_version_ref=FIELD_SCOPE_PROMPT_VERSION,
+                prompt_version_ref=prompt_version,
             ),
             model_identity=identity,
             generation_port=port,
@@ -78,9 +97,8 @@ class FinalEvaluatorRuntime:
             clock=clock if clock is not None else (lambda: datetime.now(UTC)),
             max_output_tokens=1024,
             timeout_seconds=90,
-            system_instruction=field_scope_instruction(
-                _system_instruction(), _output_schema_payload()
-            ),
+            system_instruction=instruction,
+            verified_content=verified_content,
         )
 
     async def check_health(self):
