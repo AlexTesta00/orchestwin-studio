@@ -28,9 +28,15 @@ from orchestwin.evaluation.validation import (
     SyntheticFindingValidationContext,
     validate_synthetic_finding,
 )
+from orchestwin.models.strict_evaluator_json import (
+    check_evaluator_schema,
+    strict_json_object,
+    validate_evaluator_value,
+)
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
+    StructuredGenerationFinishReason,
     StructuredGenerationPort,
     StructuredGenerationResult,
     StructuredGenerationStatus,
@@ -110,6 +116,7 @@ class ModelGatewayUserTwinEvaluator:
         clock: Callable[[], datetime],
         max_output_tokens: int = 2_048,
         timeout_seconds: int = 120,
+        system_instruction: str | None = None,
     ) -> None:
         if configuration.model_config_ref != model_identity.content_hash:
             raise ModelGatewayEvaluationError(
@@ -118,6 +125,12 @@ class ModelGatewayUserTwinEvaluator:
             )
         if max_output_tokens < 1 or timeout_seconds < 1:
             raise ValueError("model evaluator limits must be positive")
+        instruction = _system_instruction() if system_instruction is None else system_instruction
+        if instruction != normalize_required_text(
+            instruction, label="evaluator system instruction", maximum_length=16_000
+        ):
+            raise ValueError("evaluator system instruction must be normalized")
+        self._system_instruction = instruction
         self._configuration = configuration
         self._model_identity = model_identity
         self._generation_port = generation_port
@@ -130,6 +143,11 @@ class ModelGatewayUserTwinEvaluator:
     @property
     def configuration(self) -> UserTwinEvaluatorConfiguration:
         return self._configuration
+
+    @property
+    def system_instruction(self) -> str:
+        """Exact versioned instruction, available for evidence/replay without mutation."""
+        return self._system_instruction
 
     @property
     def output_schema(self) -> StructuredJsonSchema:
@@ -148,7 +166,7 @@ class ModelGatewayUserTwinEvaluator:
             task_id=USER_TWIN_MODEL_EVALUATION_TASK_ID,
             expected_identity=self._model_identity,
             output_schema=self.output_schema,
-            system_instruction=_system_instruction(),
+            system_instruction=self.system_instruction,
             input_payload=_input_payload(request),
             allowed_evidence_refs=tuple(reference.reference_id for reference in request.evidence),
             prompt_version_ref=self.configuration.prompt_version_ref,
@@ -164,7 +182,12 @@ class ModelGatewayUserTwinEvaluator:
                 "Structured generation returned a different runtime identity.",
             )
         try:
-            payload = json.loads(success.payload_json)
+            if success.finish_reason is not StructuredGenerationFinishReason.STOP:
+                raise ValueError("evaluator response is incomplete")
+            payload = strict_json_object(success.payload_json)
+            schema = strict_json_object(self.output_schema.canonical_schema_json)
+            check_evaluator_schema(schema)
+            validate_evaluator_value(payload, schema)
             response = _response_from_payload(
                 request=request,
                 configuration=self.configuration,

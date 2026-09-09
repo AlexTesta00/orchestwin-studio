@@ -62,6 +62,7 @@ def create_app(
         lifespan=lifespan,
     )
 
+    application.state.final_evaluator_runtime = resolved_runtime.final_evaluator_runtime
     application.state.identity_service = resolved_runtime.identity_service
     application.state.project_service = resolved_runtime.project_service
     application.state.clarification_service = resolved_runtime.clarification_service

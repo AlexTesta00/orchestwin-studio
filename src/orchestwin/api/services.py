@@ -59,6 +59,7 @@ from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.evaluation.final_runtime import FinalEvaluatorRuntime, build_final_evaluator_runtime
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -171,6 +172,7 @@ class AgentTeamApprovalService(Protocol):
 class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
+    final_evaluator_runtime: FinalEvaluatorRuntime | None = None
     identity_service: IdentityApplicationService | None = None
     project_service: ProjectApplicationService | None = None
     clarification_service: ProjectClarificationApplicationService | None = None
@@ -220,6 +222,7 @@ def create_default_runtime(
     if connection_settings is None:
         return ApplicationRuntime()
 
+    final_evaluator = build_final_evaluator_runtime()
     team_proposal_port = create_team_proposal_port(load_team_proposal_runtime_settings())
     database_runtime = create_database_runtime(connection_settings.database)
 
@@ -260,6 +263,7 @@ def create_default_runtime(
     )
 
     return ApplicationRuntime(
+        final_evaluator_runtime=final_evaluator,
         identity_service=identity_service,
         project_service=project_service,
         clarification_service=clarification_service,

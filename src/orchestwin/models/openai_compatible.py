@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
@@ -324,13 +325,16 @@ def _request_payload(
         "metadata": {
             "orchestwin_request_id": str(request.request_id),
             "orchestwin_request_hash": request.content_hash,
+            "orchestwin_task_id": request.task_id,
+            "orchestwin_prompt_version_ref": request.prompt_version_ref,
+            "allowed_evidence_refs": list(request.allowed_evidence_refs),
             "expected_model_identity": request.expected_identity.to_snapshot(),
         },
     }
 
 
 def _parse_response_payload(body: bytes) -> dict[str, object]:
-    parsed = json.loads(body.decode("utf-8"))
+    parsed = strict_json_object(body)
     if not isinstance(parsed, dict):
         raise ValueError("completion response must be an object")
     return parsed
@@ -371,7 +375,7 @@ def _parse_success(
     if not isinstance(message, dict):
         raise ValueError("completion message must be an object")
     content = message.get("content")
-    output_payload = json.loads(content) if isinstance(content, str) else content
+    output_payload = strict_json_object(content) if isinstance(content, str) else content
     if not isinstance(output_payload, dict):
         raise ValueError("completion content must be a JSON object")
     finish_value = choice.get("finish_reason")
