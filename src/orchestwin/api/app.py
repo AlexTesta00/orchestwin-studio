@@ -22,6 +22,7 @@ from orchestwin.api.jvm_execution import create_jvm_execution_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
+from orchestwin.api.static_inspections import create_static_inspection_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
@@ -88,6 +89,7 @@ def create_app(
     application.state.brownfield_service = resolved_runtime.brownfield_service
     application.state.execution_query_service = resolved_runtime.execution_query_service
     application.state.high_impact_service = resolved_runtime.high_impact_service
+    application.state.static_inspection_service = resolved_runtime.static_inspection_service
     application.state.web_source_api_service = resolved_runtime.web_source_api_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
     application.state.web_execution_read_api_service = (
@@ -131,6 +133,7 @@ def create_app(
         create_artifact_graph_router(),
         create_brownfield_router(),
         create_execution_router(),
+        create_static_inspection_router(),
         create_web_execution_router(),
         create_jvm_execution_router(),
         create_workflow_run_router(),

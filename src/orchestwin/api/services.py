@@ -46,6 +46,7 @@ from orchestwin.api.finalization import FinalizationApiService
 from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
+from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import (
     WebExecutionApiService,
@@ -102,6 +103,7 @@ from orchestwin.projects.requirements_runtime import (
 )
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
 from orchestwin.twins.runtime import UserModelingServices, build_user_modeling_services
+from orchestwin.web_execution.static_inspections import StaticInspectionService
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -193,6 +195,7 @@ class ApplicationRuntime:
     brownfield_service: BrownfieldApiService | None = None
     execution_query_service: ExecutionQueryApiService | None = None
     high_impact_service: HighImpactApprovalApiService | None = None
+    static_inspection_service: StaticInspectionService | None = None
     web_source_api_service: WebSourceApiService | None = None
     web_execution_read_api_service: WebExecutionReadApiService | None = None
     web_execution_api_service: WebExecutionApiService | None = None
@@ -283,6 +286,9 @@ def create_default_runtime(
         brownfield_service=sprint07.brownfield,
         execution_query_service=sprint07.execution_queries,
         high_impact_service=sprint07.high_impact,
+        static_inspection_service=build_static_inspection_service(
+            database_runtime.session_factory, resolved_settings
+        ),
         web_execution_read_api_service=SqlAlchemyWebExecutionReadApiService(
             database_runtime.session_factory,
         ),

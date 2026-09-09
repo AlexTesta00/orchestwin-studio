@@ -50,6 +50,7 @@ from orchestwin.training.training_run_persistence import (
     TrainingRunCheckpointRecord,
     TrainingRunRecord,
 )
+from orchestwin.web_execution.static_inspection_persistence import STATIC_BROWSER_INSPECTIONS
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
@@ -103,6 +104,7 @@ _IMPORTED_MODELS = (
     SANDBOX_RUNS,
     SANDBOX_COMMAND_RESULTS,
     HIGH_IMPACT_OPERATION_VERSIONS,
+    STATIC_BROWSER_INSPECTIONS,
 )
 
 target_metadata = OrmBase.metadata
