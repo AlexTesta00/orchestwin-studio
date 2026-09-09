@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "purpose": "REPOSITORY_OWNED_PROFILE_VALIDATION_NOT_FORMAL_CASES",
+  "fixtures": [
+    {
+      "id": "greeting",
+      "files": {
+        "index.html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Greeting fixture</title><link rel=\"stylesheet\" href=\"style.css\"></head><body><main><h1>Greeting fixture</h1><label for=\"name\">Name</label><input id=\"name\"><button id=\"greet\">Greet</button><p id=\"result\" role=\"status\">Ready</p></main><script src=\"app.js\"></script></body></html>",
+        "app.js": "document.querySelector(\"#greet\").addEventListener(\"click\", () => { document.querySelector(\"#result\").textContent = \"Hello \" + document.querySelector(\"#name\").value; });",
+        "style.css": "body { font: 18px sans-serif; margin: 1rem; color: #111; background: #fff; } input, button { font: inherit; margin: .4rem; }"
+      },
+      "actions": [
+        {
+          "kind": "fill",
+          "selector": "#name",
+          "value": "Ada"
+        },
+        {
+          "kind": "click",
+          "selector": "#greet",
+          "value": null
+        },
+        {
+          "kind": "expect_text",
+          "selector": "#result",
+          "value": "Hello Ada"
+        }
+      ],
+      "expected": "PASSED"
+    },
+    {
+      "id": "keyboard-panel",
+      "files": {
+        "index.html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Panel fixture</title></head><body><main><h1>Panel fixture</h1><button id=\"toggle\" aria-expanded=\"false\">Show details</button><p id=\"panel\" hidden>Details available</p><p id=\"state\" role=\"status\">Closed</p></main><script src=\"panel.js\"></script></body></html>",
+        "panel.js": "document.querySelector(\"#toggle\").addEventListener(\"click\", () => { document.querySelector(\"#panel\").hidden = false; document.querySelector(\"#toggle\").setAttribute(\"aria-expanded\", \"true\"); document.querySelector(\"#state\").textContent = \"Opened\"; });"
+      },
+      "actions": [
+        {
+          "kind": "press",
+          "selector": "#toggle",
+          "value": "Enter"
+        },
+        {
+          "kind": "expect_text",
+          "selector": "#state",
+          "value": "Opened"
+        }
+      ],
+      "expected": "PASSED"
+    },
+    {
+      "id": "intentional-failed-assertion",
+      "files": {
+        "index.html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Panel fixture</title></head><body><main><h1>Panel fixture</h1><button id=\"toggle\" aria-expanded=\"false\">Show details</button><p id=\"panel\" hidden>Details available</p><p id=\"state\" role=\"status\">Closed</p></main><script src=\"panel.js\"></script></body></html>",
+        "panel.js": "document.querySelector(\"#toggle\").addEventListener(\"click\", () => { document.querySelector(\"#state\").textContent = \"Opened\"; });"
+      },
+      "actions": [
+        {
+          "kind": "expect_text",
+          "selector": "#state",
+          "value": "This text is intentionally absent"
+        }
+      ],
+      "expected": "FAILED"
+    }
+  ]
+}

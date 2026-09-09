@@ -35,6 +35,7 @@ async def run_bounded_host_process(
     timeout_seconds: int,
     maximum_output_bytes_per_stream: int,
     environment_overrides: Mapping[str, str],
+    stdin_bytes: bytes | None = None,
 ) -> BoundedHostProcessResult:
     """Invoke argv with no shell, bounded memory and cooperative cancellation."""
     if not arguments or any(not isinstance(part, str) or "\x00" in part for part in arguments):
@@ -44,6 +45,10 @@ async def run_bounded_host_process(
         for value in (timeout_seconds, maximum_output_bytes_per_stream)
     ):
         raise ValueError("host process limits must be positive integers")
+    if stdin_bytes is not None and (
+        not isinstance(stdin_bytes, bytes) or len(stdin_bytes) > 4 * 1024 * 1024
+    ):
+        raise ValueError("host process stdin must be bounded bytes")
     environment = dict(os.environ)
     environment.update(environment_overrides)
     cancelled = threading.Event()
@@ -55,6 +60,7 @@ async def run_bounded_host_process(
             maximum_output_bytes_per_stream,
             environment,
             cancelled,
+            stdin_bytes,
         )
     )
     try:
@@ -78,6 +84,7 @@ def _run_process(
     maximum_output: int,
     environment: dict[str, str],
     cancelled: threading.Event,
+    stdin_bytes: bytes | None,
 ) -> BoundedHostProcessResult:
     buffers = (bytearray(), bytearray())
     overflow = threading.Event()
@@ -89,7 +96,7 @@ def _run_process(
     try:
         process = subprocess.Popen(
             arguments,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL if stdin_bytes is None else subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=environment,
@@ -125,6 +132,35 @@ def _run_process(
         )
         thread.start()
         threads.append(thread)
+
+    # Write input concurrently with both readers, without buffering it again.
+    # EOF matters for docker start --attach --interactive and protocol readers.
+    def send_input() -> None:
+        assert process.stdin is not None
+        try:
+            view = memoryview(stdin_bytes or b"")
+            while view:
+                written = process.stdin.write(view[:65536])
+                if not written:
+                    raise OSError("stdin pipe stopped accepting data")
+                view = view[written:]
+            process.stdin.flush()
+        except BrokenPipeError:
+            # A child may intentionally exit before consuming all input.
+            pass
+        except OSError:
+            # Windows can report a closed anonymous pipe as OSError rather
+            # than BrokenPipeError after an already-exited child.
+            if process.poll() is None and not cancelled.is_set():
+                read_error.set()
+        finally:
+            with suppress(OSError):
+                process.stdin.close()
+
+    if stdin_bytes is not None:
+        writer = threading.Thread(target=send_input, name="orchestwin-cli-stdin", daemon=True)
+        writer.start()
+        threads.append(writer)
 
     status = "COMPLETED"
     try:
