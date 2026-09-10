@@ -48,6 +48,7 @@ from orchestwin.models.structured_generation import (
 from orchestwin.projects.requirements_primitives import normalize_required_text
 
 USER_TWIN_MODEL_EVALUATION_TASK_ID: Final = "user-twin-evaluation-v1"
+FINDING_ID_PATTERN: Final = r"^UTF-[0-9]{3,6}$"
 _MAX_SUMMARY_LENGTH: Final = 4_000
 _MAX_GAP_LENGTH: Final = 1_000
 _MAX_FINDINGS: Final = 100
@@ -118,6 +119,7 @@ class ModelGatewayUserTwinEvaluator:
         max_output_tokens: int = 2_048,
         timeout_seconds: int = 120,
         system_instruction: str | None = None,
+        output_schema_version: int = 1,
         verified_content: VerifiedArtifactContext | None = None,
     ) -> None:
         if configuration.model_config_ref != model_identity.content_hash:
@@ -127,6 +129,8 @@ class ModelGatewayUserTwinEvaluator:
             )
         if max_output_tokens < 1 or timeout_seconds < 1:
             raise ValueError("model evaluator limits must be positive")
+        if type(output_schema_version) is not int or output_schema_version not in {1, 2}:
+            raise ValueError("model evaluator output schema version must be 1 or 2")
         instruction = _system_instruction() if system_instruction is None else system_instruction
         if instruction != normalize_required_text(
             instruction, label="evaluator system instruction", maximum_length=16_000
@@ -137,6 +141,7 @@ class ModelGatewayUserTwinEvaluator:
         ):
             raise TypeError("verified_content must be a prepared artifact context")
         self._verified_content = verified_content
+        self._output_schema_version = output_schema_version
         self._system_instruction = instruction
         self._configuration = configuration
         self._model_identity = model_identity
@@ -160,8 +165,10 @@ class ModelGatewayUserTwinEvaluator:
     def output_schema(self) -> StructuredJsonSchema:
         return create_structured_json_schema(
             schema_id="orchestwin-user-twin-evaluation",
-            version_number=1,
-            schema_payload=_output_schema_payload(),
+            version_number=self._output_schema_version,
+            schema_payload=_output_schema_payload(
+                require_finding_id_pattern=self._output_schema_version == 2
+            ),
         )
 
     def build_input_payload(self, request: UserTwinEvaluationRequest) -> dict[str, object]:
@@ -402,7 +409,10 @@ def _system_instruction() -> str:
     )
 
 
-def _output_schema_payload() -> dict[str, object]:
+def _output_schema_payload(*, require_finding_id_pattern: bool = False) -> dict[str, object]:
+    finding_id_schema: dict[str, object] = {"type": "string"}
+    if require_finding_id_pattern:
+        finding_id_schema["pattern"] = FINDING_ID_PATTERN
     finding = {
         "type": "object",
         "additionalProperties": False,
@@ -422,7 +432,7 @@ def _output_schema_payload() -> dict[str, object]:
             "requires_human_validation",
         ],
         "properties": {
-            "finding_id": {"type": "string"},
+            "finding_id": finding_id_schema,
             "artifact_id": {"type": "string", "format": "uuid"},
             "artifact_version": {"type": "integer", "minimum": 1},
             "location": {"type": "string"},

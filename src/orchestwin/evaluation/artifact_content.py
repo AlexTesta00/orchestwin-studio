@@ -24,7 +24,8 @@ if TYPE_CHECKING:
     )
 
 CONTENT_POLICY_ID = "verified-evaluator-artifact-text-v1"
-CONTENT_PROMPT_VERSION = "s12-verified-artifact-content-v1"
+CONTENT_PROMPT_VERSION_V1 = "s12-verified-artifact-content-v1"
+CONTENT_PROMPT_VERSION = "s12-verified-artifact-content-v2-finding-id-pattern"
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 MAX_VIEW_BYTES = 8 * 1024
 MAX_CONTEXT_BYTES = 12 * 1024
@@ -404,7 +405,9 @@ def artifact_content_instruction(base: str) -> str:
         "recorded automated checks, with omissions listed explicitly; zero violations is not "
         "complete accessibility validation. Distinguish source observations from simulated "
         "role-based interpretations. Retain uncertainty and abstain when the supplied content "
-        "does not support a conclusion. Do not claim empirical user research or human validation."
+        "does not support a conclusion. Every finding_id must match the supplied output schema "
+        "pattern ^UTF-[0-9]{3,6}$ exactly. Do not claim empirical user research or human "
+        "validation."
     )
 
 

@@ -12,6 +12,7 @@ import pytest
 
 from orchestwin.evaluation.artifact_content import (
     CONTENT_PROMPT_VERSION,
+    CONTENT_PROMPT_VERSION_V1,
     prepare_artifact_content,
 )
 from orchestwin.evaluation.artifacts import (
@@ -76,6 +77,7 @@ def configured_evaluator(prepared, port):
         generation_port=port,
         request_id_factory=lambda: REQUEST_ID,
         clock=lambda: NOW,
+        output_schema_version=2,
         verified_content=prepared.content,
     )
 
@@ -203,15 +205,25 @@ def test_content_path_keeps_root_field_rejection():
         )
 
 
-def test_factory_uses_new_prompt_only_for_explicit_content(tmp_path):
+def test_factory_versions_content_schema_without_changing_metadata_only_r2(tmp_path):
     _, prepared, _ = request_with_content()
     runtime = FinalEvaluatorRuntime(make_session(tmp_path))
     plain = runtime.create_evaluator()
     content = runtime.create_evaluator(verified_content=prepared.content)
     assert plain.configuration.prompt_version_ref == FIELD_SCOPE_PROMPT_VERSION
+    assert CONTENT_PROMPT_VERSION_V1 == "s12-verified-artifact-content-v1"
+    assert CONTENT_PROMPT_VERSION == "s12-verified-artifact-content-v2-finding-id-pattern"
     assert content.configuration.prompt_version_ref == CONTENT_PROMPT_VERSION
     assert content.system_instruction.startswith(plain.system_instruction)
-    assert content.output_schema == plain.output_schema
+    assert "^UTF-[0-9]{3,6}$" in content.system_instruction
+    assert plain.output_schema.version_number == 1
+    assert content.output_schema.version_number == 2
+    plain_schema = json.loads(plain.output_schema.canonical_schema_json)
+    content_schema = json.loads(content.output_schema.canonical_schema_json)
+    plain_id = plain_schema["properties"]["findings"]["items"]["properties"]["finding_id"]
+    content_id = content_schema["properties"]["findings"]["items"]["properties"]["finding_id"]
+    assert plain_id == {"type": "string"}
+    assert content_id == {"type": "string", "pattern": r"^UTF-[0-9]{3,6}$"}
     assert content._model_identity == plain._model_identity
     assert plain.traces is not content.traces
     with pytest.raises(TypeError):

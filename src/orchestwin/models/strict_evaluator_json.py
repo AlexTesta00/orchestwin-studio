@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +25,7 @@ KEYWORDS = frozenset(
         "minimum",
         "maximum",
         "format",
+        "pattern",
     }
 )
 
@@ -76,6 +78,16 @@ def check_evaluator_schema(schema: dict[str, Any], *, _depth: int = 0) -> None:
         "EVALUATOR_SCHEMA_TYPE_UNSUPPORTED",
     )
     require(schema.get("format") in (None, "uuid"), "EVALUATOR_SCHEMA_FORMAT_UNSUPPORTED")
+    if "pattern" in schema:
+        pattern = schema["pattern"]
+        require(
+            kind == "string" and isinstance(pattern, str) and 0 < len(pattern) <= 256,
+            "EVALUATOR_SCHEMA_PATTERN_INVALID",
+        )
+        try:
+            re.compile(pattern)
+        except re.error:
+            raise ValueError("EVALUATOR_SCHEMA_PATTERN_INVALID") from None
     if "enum" in schema:
         require(isinstance(schema["enum"], list) and bool(schema["enum"]), "INVALID_ENUM_SCHEMA")
     require(kind is not None or "enum" in schema, "EMPTY_SCHEMA_UNSUPPORTED")
@@ -127,6 +139,9 @@ def validate_evaluator_value(value: Any, schema: dict[str, Any]) -> None:
         require(isinstance(value, str), "OUTPUT_SCHEMA_STRING_INVALID")
         if schema.get("format") == "uuid":
             require(str(UUID(value)) == value.casefold(), "OUTPUT_SCHEMA_UUID_INVALID")
+        pattern = schema.get("pattern")
+        if pattern is not None:
+            require(re.search(pattern, value) is not None, "OUTPUT_SCHEMA_PATTERN_MISMATCH")
     elif kind == "boolean":
         require(type(value) is bool, "OUTPUT_SCHEMA_BOOLEAN_INVALID")
     elif kind in ("number", "integer"):

@@ -96,10 +96,31 @@ def test_nested_fields_and_types_rejected(finding):
         validate_evaluator_value({**GOOD, "findings": [finding]}, SCHEMA)
 
 
-@pytest.mark.parametrize("keyword", ["$ref", "oneOf", "pattern", "unevaluatedProperties"])
+@pytest.mark.parametrize("keyword", ["$ref", "oneOf", "unevaluatedProperties"])
 def test_unknown_schema_vocabulary_fails_closed(keyword):
     with pytest.raises(ValueError):
         check_evaluator_schema({**SCHEMA, keyword: True})
+
+
+def test_string_pattern_is_validated_without_repair():
+    schema = {"type": "string", "pattern": r"^UTF-[0-9]{3,6}$"}
+    check_evaluator_schema(schema)
+    validate_evaluator_value("UTF-126", schema)
+    with pytest.raises(ValueError, match="OUTPUT_SCHEMA_PATTERN_MISMATCH"):
+        validate_evaluator_value("finding-126", schema)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "number", "pattern": "x"},
+        {"type": "string", "pattern": "["},
+        {"type": "string", "pattern": ""},
+    ],
+)
+def test_invalid_pattern_schema_fails_closed(schema):
+    with pytest.raises(ValueError, match="EVALUATOR_SCHEMA_PATTERN_INVALID"):
+        check_evaluator_schema(schema)
 
 
 @pytest.mark.parametrize("value", [True, "1", float("nan"), float("inf"), -0.1, 1.1])

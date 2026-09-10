@@ -77,13 +77,18 @@ class FinalEvaluatorRuntime:
             if generation_port is not None
             else FinalEvaluatorGenerationPort(self.session)
         )
-        instruction = field_scope_instruction(_system_instruction(), _output_schema_payload())
+        schema_version = 1
+        schema_payload = _output_schema_payload()
         prompt_version = FIELD_SCOPE_PROMPT_VERSION
         if verified_content is not None:
             if not isinstance(verified_content, VerifiedArtifactContext):
                 raise TypeError("verified_content must be a prepared artifact context")
-            instruction = artifact_content_instruction(instruction)
+            schema_version = 2
+            schema_payload = _output_schema_payload(require_finding_id_pattern=True)
             prompt_version = CONTENT_PROMPT_VERSION
+        instruction = field_scope_instruction(_system_instruction(), schema_payload)
+        if verified_content is not None:
+            instruction = artifact_content_instruction(instruction)
         return ModelGatewayUserTwinEvaluator(
             configuration=UserTwinEvaluatorConfiguration(
                 evaluator_id="s67-final-user-twin-evaluator",
@@ -98,6 +103,7 @@ class FinalEvaluatorRuntime:
             max_output_tokens=1024,
             timeout_seconds=90,
             system_instruction=instruction,
+            output_schema_version=schema_version,
             verified_content=verified_content,
         )
 
