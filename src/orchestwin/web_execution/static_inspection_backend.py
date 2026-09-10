@@ -120,7 +120,9 @@ class PersistedStaticBrowserBackend:
         return verify_inspection_result(self.evidence_root / inspection.id.hex, inspection)
 
 
-def verify_inspection_result(directory: Path, inspection: Inspection) -> dict[str, object]:
+def _verify_inspection_result(
+    directory: Path, inspection: Inspection
+) -> tuple[dict[str, object], dict[str, bytes]]:
     """Verify terminal evidence and raw decoder output before committing a result.
 
     No Docker call is made here; this is also the explicit crash-recovery path.
@@ -234,4 +236,28 @@ def verify_inspection_result(directory: Path, inspection: Inspection) -> dict[st
         )
     # Verify the summary itself is serializable without nonfinite numbers.
     canonical_bytes(result)
+    return result, contents
+
+
+def verify_inspection_result(
+    directory: Path,
+    inspection: Inspection,
+) -> dict[str, object]:
+    """Verify evidence and return the existing public result summary."""
+    result, _ = _verify_inspection_result(
+        directory,
+        inspection,
+    )
     return result
+
+
+def verify_inspection_result_with_contents(
+    directory: Path,
+    inspection: Inspection,
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    """Return the exact bytes from the same completed verification pass."""
+    result, contents = _verify_inspection_result(
+        directory,
+        inspection,
+    )
+    return result, dict(contents)
