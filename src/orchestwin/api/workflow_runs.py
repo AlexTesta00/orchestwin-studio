@@ -18,6 +18,7 @@ from orchestwin.api.auth import current_user_dependency
 from orchestwin.identity.domain import UserAccount
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.workflow.commands import WorkflowLifecycleCommandKind
+from orchestwin.workflow.runs import WorkflowStage
 
 
 class WorkflowRunApiStatus(StrEnum):
@@ -53,6 +54,39 @@ class WorkflowRunLifecycleCommand:
     occurred_at: datetime
     reason: str | None
     authorization_reference: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowRunStartCommand:
+    """Optimistic command for starting one draft workflow run."""
+
+    command_id: UUID
+    project_id: UUID
+    expected_state_version: int
+    expected_checkpoint_sequence: int
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowRunAdvanceCommand:
+    """Optimistic command for traversing one legal workflow stage edge."""
+
+    command_id: UUID
+    project_id: UUID
+    expected_state_version: int
+    expected_checkpoint_sequence: int
+    next_stage: WorkflowStage
+    pending_gate_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowRunGateResumeCommand:
+    """Resume one exact workflow human gate after its persisted approval."""
+
+    project_id: UUID
+    expected_state_version: int
+    expected_checkpoint_sequence: int
+    gate_id: UUID
+    decision_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +146,30 @@ class WorkflowRunApiService(Protocol):
         limit: int,
     ) -> tuple[dict[str, JsonValue], ...]: ...
 
+    async def start_run(
+        self,
+        *,
+        owner_user_id: UUID,
+        run_id: UUID,
+        command: WorkflowRunStartCommand,
+    ) -> WorkflowRunApiCommandResult: ...
+
+    async def advance_run(
+        self,
+        *,
+        owner_user_id: UUID,
+        run_id: UUID,
+        command: WorkflowRunAdvanceCommand,
+    ) -> WorkflowRunApiCommandResult: ...
+
+    async def resume_after_gate(
+        self,
+        *,
+        owner_user_id: UUID,
+        run_id: UUID,
+        command: WorkflowRunGateResumeCommand,
+    ) -> WorkflowRunApiCommandResult: ...
+
     async def apply_lifecycle_command(
         self,
         *,
@@ -160,6 +218,57 @@ class WorkflowLifecycleBody(ApiModel):
             occurred_at=self.occurred_at,
             reason=self.reason,
             authorization_reference=self.authorization_reference,
+        )
+
+
+class WorkflowStartBody(ApiModel):
+    command_id: UUID
+    project_id: UUID
+    expected_state_version: int = Field(gt=0)
+    expected_checkpoint_sequence: int = Field(ge=0)
+
+    def to_command(self) -> WorkflowRunStartCommand:
+        return WorkflowRunStartCommand(
+            command_id=self.command_id,
+            project_id=self.project_id,
+            expected_state_version=self.expected_state_version,
+            expected_checkpoint_sequence=self.expected_checkpoint_sequence,
+        )
+
+
+class WorkflowAdvanceBody(ApiModel):
+    command_id: UUID
+    project_id: UUID
+    expected_state_version: int = Field(gt=0)
+    expected_checkpoint_sequence: int = Field(ge=0)
+    next_stage: WorkflowStage
+    pending_gate_id: UUID | None = None
+
+    def to_command(self) -> WorkflowRunAdvanceCommand:
+        return WorkflowRunAdvanceCommand(
+            command_id=self.command_id,
+            project_id=self.project_id,
+            expected_state_version=self.expected_state_version,
+            expected_checkpoint_sequence=self.expected_checkpoint_sequence,
+            next_stage=self.next_stage,
+            pending_gate_id=self.pending_gate_id,
+        )
+
+
+class WorkflowGateResumeBody(ApiModel):
+    project_id: UUID
+    expected_state_version: int = Field(gt=0)
+    expected_checkpoint_sequence: int = Field(ge=0)
+    gate_id: UUID
+    decision_id: UUID
+
+    def to_command(self) -> WorkflowRunGateResumeCommand:
+        return WorkflowRunGateResumeCommand(
+            project_id=self.project_id,
+            expected_state_version=self.expected_state_version,
+            expected_checkpoint_sequence=self.expected_checkpoint_sequence,
+            gate_id=self.gate_id,
+            decision_id=self.decision_id,
         )
 
 
@@ -310,6 +419,72 @@ def create_workflow_run_router() -> APIRouter:
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
             },
+        )
+
+    @router.post(
+        "/runs/{run_id}/start",
+        response_model=WorkflowCommandResponse,
+        operation_id="startWorkflowRun",
+    )
+    async def start_run(
+        run_id: UUID,
+        body: WorkflowStartBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            WorkflowRunApiService,
+            Depends(workflow_run_api_service_dependency),
+        ],
+    ) -> WorkflowCommandResponse:
+        return _command_response(
+            await service.start_run(
+                owner_user_id=user.id,
+                run_id=run_id,
+                command=body.to_command(),
+            )
+        )
+
+    @router.post(
+        "/runs/{run_id}/advance",
+        response_model=WorkflowCommandResponse,
+        operation_id="advanceWorkflowRun",
+    )
+    async def advance_run(
+        run_id: UUID,
+        body: WorkflowAdvanceBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            WorkflowRunApiService,
+            Depends(workflow_run_api_service_dependency),
+        ],
+    ) -> WorkflowCommandResponse:
+        return _command_response(
+            await service.advance_run(
+                owner_user_id=user.id,
+                run_id=run_id,
+                command=body.to_command(),
+            )
+        )
+
+    @router.post(
+        "/runs/{run_id}/resume-gate",
+        response_model=WorkflowCommandResponse,
+        operation_id="resumeWorkflowRunAfterGate",
+    )
+    async def resume_after_gate(
+        run_id: UUID,
+        body: WorkflowGateResumeBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            WorkflowRunApiService,
+            Depends(workflow_run_api_service_dependency),
+        ],
+    ) -> WorkflowCommandResponse:
+        return _command_response(
+            await service.resume_after_gate(
+                owner_user_id=user.id,
+                run_id=run_id,
+                command=body.to_command(),
+            )
         )
 
     _add_lifecycle_route(router, "/runs/{run_id}/pause", WorkflowLifecycleCommandKind.PAUSE)

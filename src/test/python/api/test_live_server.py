@@ -53,7 +53,8 @@ def build_server_environment() -> dict[str, str]:
     environment = {
         name: value
         for name, value in os.environ.items()
-        if not name.upper().startswith("ORCHESTWIN_") and name.upper() != "PYTHONPATH"
+        if not name.upper().startswith("ORCHESTWIN_")
+        and name.upper() not in {"PYTHONPATH", "PYTHONWARNINGS"}
     }
     environment.update(
         {
@@ -219,6 +220,7 @@ def test_live_server_environment_is_isolated(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("ORCHESTWIN_AUTH_JWT_SECRET", "short-test-only-secret")
     monkeypatch.setenv("ORCHESTWIN_API_PREFIX", "/unexpected")
     monkeypatch.setenv("ORCHESTWIN_TEAM_PROPOSAL_PROVIDER", "MODEL_ADAPTER")
+    monkeypatch.setenv("PYTHONWARNINGS", "error")
     before = dict(os.environ)
 
     environment = build_server_environment()
@@ -226,6 +228,7 @@ def test_live_server_environment_is_isolated(monkeypatch: pytest.MonkeyPatch) ->
     assert "ORCHESTWIN_DATABASE_URL" not in environment
     assert "ORCHESTWIN_AUTH_JWT_SECRET" not in environment
     assert "ORCHESTWIN_TEAM_PROPOSAL_PROVIDER" not in environment
+    assert "PYTHONWARNINGS" not in environment
     assert environment["ORCHESTWIN_API_PREFIX"] == "/api/v1"
     assert environment["PYTHONPATH"] == str(PROJECT_ROOT / "src")
     assert dict(os.environ) == before
