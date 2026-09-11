@@ -349,7 +349,12 @@ def _user_modeling_input(user_modeling_version) -> DesignUserModelingInput:
                     content_hash=version.content_hash,
                     name=version.profile.name,
                 ),
-                observations=version.profile.observations,
+                observations=tuple(
+                    sorted(
+                        version.profile.observations,
+                        key=lambda observation: observation.observation_key,
+                    )
+                ),
             )
             for version in user_modeling_version.snapshot.twin_versions
         ),
