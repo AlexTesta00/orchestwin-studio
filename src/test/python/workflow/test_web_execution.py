@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
+
+import pytest
 
 from orchestwin.artifacts.web_sources import (
     WebSourceFileEntry,
@@ -43,6 +46,7 @@ from orchestwin.web_execution.profile_registry import (
 )
 from orchestwin.web_execution.reports import (
     WebEvidenceReference,
+    WebExecutionReportStatus,
     WebFailureCategory,
     WebPhaseResult,
     WebPhaseResultStatus,
@@ -256,7 +260,7 @@ def authorize(candidate: WebExecutionRequest) -> WebExecutionRequest:
     return replace(candidate, authorization=authorization)
 
 
-def service(executor: FakePhaseExecutor):
+def service(executor: FakePhaseExecutor, *, lifecycle=None):
     repository = InMemoryWebExecutionAttemptRepository(
         owner_user_id=OWNER_ID,
         project_ids=frozenset({PROJECT_ID}),
@@ -268,6 +272,7 @@ def service(executor: FakePhaseExecutor):
             phase_executor=executor,
             clock=SequenceClock(),
             ids=SequenceIds(),
+            phase_lifecycle=lifecycle,
         ),
         repository,
     )
@@ -361,3 +366,203 @@ def test_manual_rerun_executes_only_requested_phases_and_reuses_prior_evidence()
     assert second.attempt is not None
     assert second.attempt.attempt_number == 2
     assert tuple(executor.calls) == rerun.rerun_phases
+
+
+def finalization_result(*, failed=False):
+    evidence = WebEvidenceReference(
+        storage_key="sha256/bb/" + "b" * 64,
+        sha256_digest="b" * 64,
+        size_bytes=8,
+        media_type="text/plain",
+    )
+    return WebPhaseResult(
+        phase=WebExecutionPhase.COLLECT_ARTIFACTS,
+        status=WebPhaseResultStatus.RUNTIME_ERROR if failed else WebPhaseResultStatus.PASSED,
+        command_plan_hashes=(),
+        started_at=BASE_TIME,
+        completed_at=BASE_TIME + timedelta(seconds=1),
+        exit_codes=(1,) if failed else (0,),
+        stdout_refs=(evidence,),
+        stderr_refs=(),
+        artifact_refs=(),
+        findings=(),
+        failure_category=WebFailureCategory.ARTIFACT_COLLECTION if failed else None,
+        failure_code="CLEANUP_NOT_CONFIRMED" if failed else None,
+        normalized_summary="Final resource cleanup failed."
+        if failed
+        else "Final resource cleanup confirmed.",
+    )
+
+
+class FakeLifecycle:
+    def __init__(self, result=None, error=None):
+        self.result = result
+        self.error = error
+        self.calls = 0
+        self.completed = False
+
+    async def finalize(self):
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        self.completed = True
+        return self.result
+
+
+@pytest.mark.parametrize("cleanup_failed", [False, True])
+def test_lifecycle_result_is_recorded_only_after_finalization(monkeypatch, cleanup_failed) -> None:
+    lifecycle = FakeLifecycle(finalization_result(failed=cleanup_failed))
+    application, repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+    original_append = repository.append
+
+    async def append(attempt):
+        assert lifecycle.completed
+        assert attempt.report.phase_results[-1] == lifecycle.result
+        return await original_append(attempt)
+
+    monkeypatch.setattr(repository, "append", append)
+    result = asyncio.run(
+        application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+    )
+
+    assert lifecycle.calls == 1
+    assert result.attempt is not None
+    assert result.attempt.report.status is (
+        WebExecutionReportStatus.FAILED if cleanup_failed else WebExecutionReportStatus.PASSED
+    )
+    assert result.attempt.executed_phases.count(WebExecutionPhase.COLLECT_ARTIFACTS) == 1
+
+
+def test_failed_early_phase_still_records_actual_finalization() -> None:
+    lifecycle = FakeLifecycle(finalization_result())
+    executor = FakePhaseExecutor(failure_phase=WebExecutionPhase.TEST)
+    application, _repository = service(executor, lifecycle=lifecycle)
+
+    result = asyncio.run(
+        application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+    )
+
+    assert lifecycle.completed
+    assert result.attempt is not None
+    assert result.attempt.report.status is WebExecutionReportStatus.FAILED
+    assert result.attempt.report.phase_results[-1] == lifecycle.result
+    assert result.attempt.executed_phases[-1] is WebExecutionPhase.COLLECT_ARTIFACTS
+    assert WebExecutionPhase.RUN not in executor.calls
+    assert WebExecutionPhase.COLLECT_ARTIFACTS not in executor.calls
+
+
+def test_successful_cleanup_does_not_erase_existing_collection_failure() -> None:
+    lifecycle = FakeLifecycle(finalization_result())
+    application, _repository = service(
+        FakePhaseExecutor(failure_phase=WebExecutionPhase.COLLECT_ARTIFACTS),
+        lifecycle=lifecycle,
+    )
+    result = asyncio.run(
+        application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+    )
+    assert result.attempt is not None
+    collection = result.attempt.report.phase_results[-1]
+    assert collection.status is WebPhaseResultStatus.FAILED
+    assert collection.failure_code == "TEST_FAILED"
+    assert collection.stdout_refs == lifecycle.result.stdout_refs
+    assert len(collection.stderr_refs) == 1
+    assert result.attempt.report.status is WebExecutionReportStatus.FAILED
+
+
+def test_lifecycle_without_executed_cleanup_preserves_existing_result() -> None:
+    lifecycle = FakeLifecycle()
+    application, _repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+    result = asyncio.run(
+        application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+    )
+    assert lifecycle.completed
+    assert result.attempt is not None
+    assert (
+        result.attempt.report.phase_results[-1].normalized_summary
+        == "COLLECT_ARTIFACTS completed successfully."
+    )
+
+
+def test_lifecycle_cannot_replace_evidence_for_another_phase() -> None:
+    lifecycle = FakeLifecycle(replace(finalization_result(), phase=WebExecutionPhase.TEST))
+    application, repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+    with pytest.raises(ValueError, match="artifact collection evidence"):
+        asyncio.run(
+            application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+        )
+    assert asyncio.run(repository.current(project_id=PROJECT_ID)) is None
+
+
+@pytest.mark.parametrize("error", [RuntimeError("runtime failed"), asyncio.CancelledError()])
+def test_executor_exception_finalizes_without_appending(error) -> None:
+    class RaisingExecutor(FakePhaseExecutor):
+        async def execute(self, phase_plan, *, contract):
+            raise error
+
+    lifecycle = FakeLifecycle(finalization_result())
+    application, repository = service(RaisingExecutor(), lifecycle=lifecycle)
+
+    with pytest.raises(type(error)):
+        asyncio.run(
+            application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+        )
+
+    assert lifecycle.calls == 1
+    assert lifecycle.completed
+    assert asyncio.run(repository.current(project_id=PROJECT_ID)) is None
+
+
+def test_lifecycle_exception_prevents_persistence() -> None:
+    lifecycle = FakeLifecycle(error=RuntimeError("cleanup failed"))
+    application, repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        asyncio.run(
+            application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+        )
+    assert asyncio.run(repository.current(project_id=PROJECT_ID)) is None
+
+
+def test_cancellation_waits_for_finalization_and_never_appends() -> None:
+    async def scenario():
+        cleanup_started = asyncio.Event()
+        cleanup_release = asyncio.Event()
+
+        class WaitingLifecycle(FakeLifecycle):
+            async def finalize(self):
+                self.calls += 1
+                cleanup_started.set()
+                await cleanup_release.wait()
+                self.completed = True
+                return self.result
+
+        lifecycle = WaitingLifecycle(finalization_result())
+        application, repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+        task = asyncio.create_task(
+            application.execute(authorize(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)))
+        )
+        await asyncio.wait_for(cleanup_started.wait(), timeout=2)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert not lifecycle.completed
+        assert await repository.current(project_id=PROJECT_ID) is None
+        cleanup_release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=2)
+        assert lifecycle.completed
+        assert lifecycle.calls == 1
+        assert await repository.current(project_id=PROJECT_ID) is None
+
+    asyncio.run(scenario())
+
+
+def test_authorization_failure_does_not_start_lifecycle() -> None:
+    lifecycle = FakeLifecycle(finalization_result())
+    application, _repository = service(FakePhaseExecutor(), lifecycle=lifecycle)
+    result = asyncio.run(
+        application.execute(request(purpose=WebExecutionPurpose.PROFILE_VALIDATION))
+    )
+    assert result.status is WebExecutionServiceStatus.AUTHORIZATION_REQUIRED
+    assert lifecycle.calls == 0
