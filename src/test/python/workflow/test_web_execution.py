@@ -260,7 +260,7 @@ def authorize(candidate: WebExecutionRequest) -> WebExecutionRequest:
     return replace(candidate, authorization=authorization)
 
 
-def service(executor: FakePhaseExecutor, *, lifecycle=None):
+def service(executor: FakePhaseExecutor, *, lifecycle=None, binding=None):
     repository = InMemoryWebExecutionAttemptRepository(
         owner_user_id=OWNER_ID,
         project_ids=frozenset({PROJECT_ID}),
@@ -273,9 +273,32 @@ def service(executor: FakePhaseExecutor, *, lifecycle=None):
             clock=SequenceClock(),
             ids=SequenceIds(),
             phase_lifecycle=lifecycle,
+            phase_attempt_binding=binding,
         ),
         repository,
     )
+
+
+def test_attempt_identity_is_bound_after_authorization_and_before_first_phase() -> None:
+    class BoundExecutor(FakePhaseExecutor):
+        attempt_id = None
+
+        def bind_attempt(self, attempt_id):
+            assert not self.calls
+            self.attempt_id = attempt_id
+
+        async def execute(self, phase_plan, *, contract):
+            assert self.attempt_id is not None
+            return await super().execute(phase_plan, contract=contract)
+
+    executor = BoundExecutor()
+    application, _ = service(executor, binding=executor)
+    candidate = request(purpose=WebExecutionPurpose.PROFILE_VALIDATION)
+    blocked = asyncio.run(application.execute(candidate))
+    assert blocked.status is WebExecutionServiceStatus.AUTHORIZATION_REQUIRED
+    assert executor.attempt_id is None
+    recorded = asyncio.run(application.execute(authorize(candidate)))
+    assert recorded.attempt.id == executor.attempt_id
 
 
 def test_owner_execution_is_blocked_while_profile_remains_level_c() -> None:

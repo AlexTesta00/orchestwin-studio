@@ -21,6 +21,7 @@ from orchestwin.sandbox.docker_runtime import (
     HostProcessStatus,
 )
 from orchestwin.sandbox.execution_policy import SandboxResourceLimits
+from orchestwin.sandbox.host_process import BoundedHostProcessResult
 
 _NODE_WRAPPER = r"""
 const {spawn} = require('node:child_process');
@@ -50,11 +51,30 @@ exit($code < 0 ? 125 : $code);
 class WebPhaseRuntimeError(RuntimeError):
     """Safe boundary failure without raw Docker configuration or host paths."""
 
-    def __init__(self, code, *, result=None, observations=(), command_result=None):
+    def __init__(
+        self,
+        code,
+        *,
+        result=None,
+        observations=(),
+        command_result=None,
+        browser_cleanup_failures=(),
+    ):
         super().__init__(code)
         self.result = result
         self.observations = tuple(observations)
         self.command_result = command_result
+        self.browser_cleanup_failures = tuple(browser_cleanup_failures)
+
+
+@dataclass(frozen=True, slots=True)
+class WebBrowserCleanupFailure:
+    """An unresolved owned sidecar and its actual bounded transport observations."""
+
+    operation_id: str
+    container_id: str | None
+    container_name: str
+    operations: tuple[tuple[str, BoundedHostProcessResult], ...]
 
 
 @dataclass(slots=True)
@@ -132,8 +152,22 @@ class LocalWebPhaseRuntime:
         self._names: list[str] = []
         self._servers: list[str] = []
         self._sessions: dict[str, _ServerSession] = {}
+        self._browser_cleanup_failures: list[WebBrowserCleanupFailure] = []
         self._opened = False
         self._closed = False
+
+    @property
+    def browser_cleanup_failures(self) -> tuple[WebBrowserCleanupFailure, ...]:
+        return tuple(self._browser_cleanup_failures)
+
+    def record_browser_cleanup_failure(
+        self, *, operation_id, container_id, container_name, operations
+    ):
+        # This must finish without awaiting: cancellation cannot discard the
+        # unresolved resource after the transport's shielded cleanup completes.
+        self._browser_cleanup_failures.append(
+            WebBrowserCleanupFailure(operation_id, container_id, container_name, tuple(operations))
+        )
 
     async def _call(self, argv, *, timeout_seconds=30):
         return await self.runner.run(
@@ -440,6 +474,27 @@ class LocalWebPhaseRuntime:
                 original.command_result = session.result
             raise
 
+    async def browser_network(self) -> str:
+        """Expose only the immutable ID of this attempt's running isolated server."""
+        if (
+            self._closed
+            or not self._servers
+            or any(item.result is not None for item in self._sessions.values())
+        ):
+            raise WebPhaseRuntimeError("WEB_SERVER_NOT_RUNNING")
+        actual = await self._inspect("inspect", self._servers[0])
+        identifier = actual.get("Id")
+        if (
+            not isinstance(identifier, str)
+            or re.fullmatch(r"[0-9a-f]{64}", identifier) is None
+            or actual.get("Image") != self.image_id
+            or actual.get("State", {}).get("Running") is not True
+            or actual.get("HostConfig", {}).get("NetworkMode") != "none"
+            or actual.get("Config", {}).get("User") != "65532:65532"
+        ):
+            raise WebPhaseRuntimeError("WEB_BROWSER_NETWORK_UNVERIFIED")
+        return identifier
+
     async def invoke(self, argv: tuple[str, ...], *, timeout_seconds: int):
         if not self._servers:
             raise WebPhaseRuntimeError("WEB_SERVER_NOT_RUNNING")
@@ -571,3 +626,11 @@ class LocalWebPhaseRuntime:
             finally:
                 self._sessions.clear()
                 self._closed = True
+        if self._browser_cleanup_failures:
+            # App server removal does not prove that its browser sidecar exited.
+            # Keep this sticky across close retries so finalization retains the
+            # workspace and the diagnostics instead of reporting a false PASS.
+            raise WebPhaseRuntimeError(
+                "WEB_BROWSER_CLEANUP_UNCONFIRMED",
+                browser_cleanup_failures=self.browser_cleanup_failures,
+            )

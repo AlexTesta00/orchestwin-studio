@@ -11,6 +11,7 @@ from dataclasses import replace
 import pytest
 
 from orchestwin.sandbox.docker_runtime import HostProcessResult, HostProcessStatus
+from orchestwin.sandbox.host_process import BoundedHostProcessResult
 from orchestwin.web_execution.phase_runtime import WebPhaseRuntimeError
 
 from .test_phase_runtime import IMAGE, Host, runtime, static_command, terminal_state
@@ -217,6 +218,32 @@ def test_stop_cleanup_failure_keeps_observations_for_every_server(tmp_path):
         assert failure.value.command_result.stdout == b"server output"
         host.cleanup_fails = False
         await adapter.close()
+
+    asyncio.run(scenario())
+
+
+def test_close_reaps_servers_but_keeps_unconfirmed_browser_cleanup_sticky(tmp_path):
+    async def scenario():
+        host = LifecycleHost()
+        adapter = runtime(tmp_path, host)
+        name = await adapter.start_command(static_command())
+        diagnostic = BoundedHostProcessResult("COMPLETED", 1, b"", b"not removed", None)
+        adapter.record_browser_cleanup_failure(
+            operation_id="f" * 32,
+            container_id="e" * 64,
+            container_name="orchestwin-web-browser-" + "f" * 32,
+            operations=(("REMOVE", diagnostic),),
+        )
+        for _ in range(2):
+            with pytest.raises(
+                WebPhaseRuntimeError, match="WEB_BROWSER_CLEANUP_UNCONFIRMED"
+            ) as error:
+                await adapter.close()
+            assert error.value.browser_cleanup_failures == adapter.browser_cleanup_failures
+            assert error.value.browser_cleanup_failures[0].operations == (("REMOVE", diagnostic),)
+        assert host.removed.is_set()
+        assert name in host.finished_streams
+        assert not adapter._names and not adapter._sessions
 
     asyncio.run(scenario())
 

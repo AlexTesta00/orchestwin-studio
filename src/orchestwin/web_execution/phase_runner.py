@@ -42,7 +42,7 @@ class WebPhaseRunnerIdentity:
     recipe_content_hash: str
 
     def __post_init__(self) -> None:
-        if self.kind not in {"NODE", "PHP"}:
+        if self.kind not in {"NODE", "PHP", "BROWSER"}:
             raise WebPhaseRunnerError("WEB_PHASE_RUNNER_KIND_INVALID")
         if not isinstance(self.image_id, str) or _IMAGE_ID.fullmatch(self.image_id) is None:
             raise WebPhaseRunnerError("WEB_PHASE_RUNNER_IMAGE_ID_INVALID")
@@ -54,8 +54,8 @@ class WebPhaseRunnerIdentity:
 def load_phase_runner_identity(
     manifest_path: Path, *, repo_root: Path, kind: str
 ) -> WebPhaseRunnerIdentity:
-    """Verify all bootstrap artifacts and recipes, then select only Node or PHP."""
-    if kind not in {"NODE", "PHP"}:
+    """Verify all bootstrap artifacts and recipes, then select the exact local runner."""
+    if kind not in {"NODE", "PHP", "BROWSER"}:
         raise WebPhaseRunnerError("WEB_PHASE_RUNNER_KIND_INVALID")
     try:
         path = Path(manifest_path).absolute()

@@ -193,6 +193,12 @@ class WebPhaseLifecyclePort(Protocol):
     async def finalize(self) -> WebPhaseResult | None: ...
 
 
+class WebPhaseAttemptBindingPort(Protocol):
+    """Bind evidence to the authorized attempt before execution starts."""
+
+    def bind_attempt(self, attempt_id: UUID) -> None: ...
+
+
 class WebExecutionClock(Protocol):
     def now(self) -> datetime: ...
 
@@ -213,6 +219,7 @@ class LocalGovernedWebExecutionService:
         clock: WebExecutionClock,
         ids: WebExecutionIdProvider,
         phase_lifecycle: WebPhaseLifecyclePort | None = None,
+        phase_attempt_binding: WebPhaseAttemptBindingPort | None = None,
     ) -> None:
         self._registry = registry
         self._attempts = attempts
@@ -220,6 +227,7 @@ class LocalGovernedWebExecutionService:
         self._clock = clock
         self._ids = ids
         self._phase_lifecycle = phase_lifecycle
+        self._phase_attempt_binding = phase_attempt_binding
 
     async def execute(self, request: WebExecutionRequest) -> WebExecutionServiceResult:
         profile = self._registry.find(request.profile_id, request.profile_version)
@@ -277,6 +285,9 @@ class LocalGovernedWebExecutionService:
         rerun_issue = _rerun_issue(request, current=current)
         if rerun_issue is not None:
             return _failed(WebExecutionServiceStatus.RERUN_INVALID, rerun_issue)
+        attempt_id = self._ids.new_id()
+        if self._phase_attempt_binding is not None:
+            self._phase_attempt_binding.bind_attempt(attempt_id)
         phases_to_execute = (
             tuple(WebExecutionPhase) if request.rerun_phases is None else request.rerun_phases
         )
@@ -333,7 +344,7 @@ class LocalGovernedWebExecutionService:
         )
         completed_at = self._clock.now()
         attempt = WebExecutionAttempt(
-            id=self._ids.new_id(),
+            id=attempt_id,
             project_id=request.project_id,
             created_by_user_id=request.owner_user_id,
             attempt_number=1 if current is None else current.attempt_number + 1,

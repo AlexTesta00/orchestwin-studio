@@ -11,7 +11,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from orchestwin.sandbox.docker_runtime import HostProcessStatus
 from orchestwin.sandbox.evidence import (
@@ -94,6 +94,7 @@ class GovernedWebPhaseExecutor:
         self.network = controlled_network
         self.browser_executor = browser_executor
         self.run_id = uuid4()
+        self.execution_attempt_id = None
         self.workspace = None
         self.runtime = None
         self._last_phase = -1
@@ -103,6 +104,17 @@ class GovernedWebPhaseExecutor:
         self._runtime_observations = []
         self._health = []
         self._generated_artifacts = {}
+
+    def bind_attempt(self, attempt_id: UUID) -> None:
+        """Bind the durable attempt identity before any phase or resource is started."""
+        if (
+            not isinstance(attempt_id, UUID)
+            or self.execution_attempt_id is not None
+            or self.workspace is not None
+            or self._last_phase != -1
+        ):
+            raise ValueError("WEB_ATTEMPT_BINDING_INVALID")
+        self.execution_attempt_id = attempt_id
 
     def _block(self, phase, code):
         return create_web_policy_blocked_phase_result(
@@ -132,9 +144,16 @@ class GovernedWebPhaseExecutor:
             source_revision_content_hash=contract.source_revision_content_hash,
             source_tree_hash=contract.source_tree_hash,
             runners=contract.runners,
+            declared_routes=(
+                ()
+                if contract.browser_evidence_request is None
+                else contract.browser_evidence_request.routes[1:]
+            ),
         )
         if not contract.health_checks or contract.health_checks != checked.health_checks:
             return "WEB_HEALTH_CONTRACT_MISMATCH"
+        if contract.browser_evidence_request != checked.browser_evidence_request:
+            return "WEB_BROWSER_CONTRACT_MISMATCH"
         if (
             self.identity.image_id != f"sha256:{contract.runners.execution_runner_image_digest}"
             or self.prepared.source_revision_content_hash != contract.source_revision_content_hash
@@ -168,6 +187,9 @@ class GovernedWebPhaseExecutor:
         return {
             "schema_version": 1,
             "attempt_runtime_id": str(self.run_id),
+            "execution_attempt_id": (
+                None if self.execution_attempt_id is None else str(self.execution_attempt_id)
+            ),
             "phase": phase.phase.value,
             "phase_plan": phase.to_snapshot(),
             "contract_hash": self.contract.content_hash,
@@ -307,6 +329,9 @@ class GovernedWebPhaseExecutor:
                 docker_context=self.context,
                 controlled_network=self.network,
             )
+            self.runtime.execution_attempt_id = self.execution_attempt_id
+            self.runtime.contract_content_hash = self.contract.content_hash
+            self.runtime.bootstrap_manifest_hash = self.identity.bootstrap_manifest_hash
         await self.runtime.open()
         return self.runtime
 
@@ -334,7 +359,10 @@ class GovernedWebPhaseExecutor:
                     self._failed = True
                     return self._block(phase_plan, "WEB_BROWSER_EVIDENCE_ADAPTER_UNAVAILABLE")
                 result = await self.browser_executor.execute(
-                    phase_plan, contract=contract, runtime=await self._get_runtime()
+                    phase_plan,
+                    contract=contract,
+                    runtime=await self._get_runtime(),
+                    execution_attempt_id=self.execution_attempt_id,
                 )
                 if result.phase is not phase:
                     raise WebPhaseRuntimeError("WEB_BROWSER_PHASE_MISMATCH")
@@ -695,6 +723,35 @@ class GovernedWebPhaseExecutor:
                     self.workspace.close()
                 except (OSError, ValueError):
                     code = "WEB_WORKSPACE_CLEANUP_UNCONFIRMED"
+        browser_cleanup_failures = []
+        for failure in getattr(self.runtime, "browser_cleanup_failures", ()):
+            operations = []
+            for label, observed in failure.operations:
+                streams = {}
+                for stream in ("stdout", "stderr"):
+                    ref = self.store.store_log(
+                        run_id=self.run_id,
+                        command_id=f"browser.cleanup.{label.lower()}",
+                        stream=SandboxLogStream(stream.upper()),
+                        content=getattr(observed, stream),
+                    )
+                    streams[f"{stream}_ref"] = _reference(ref).to_snapshot()
+                operations.append(
+                    {
+                        "label": label,
+                        "status": observed.status,
+                        "exit_code": observed.exit_code,
+                        **streams,
+                    }
+                )
+            browser_cleanup_failures.append(
+                {
+                    "operation_id": failure.operation_id,
+                    "container_id": failure.container_id,
+                    "container_name": failure.container_name,
+                    "operations": operations,
+                }
+            )
         self._final_result = self._result(
             phase,
             started,
@@ -705,6 +762,7 @@ class GovernedWebPhaseExecutor:
                 "processes": self._runtime_observations,
                 "health_checks": self._health,
                 "cleanup_confirmed": code is None,
+                "browser_cleanup_failures": browser_cleanup_failures,
             },
         )
         return self._final_result

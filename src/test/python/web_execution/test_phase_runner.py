@@ -133,7 +133,7 @@ def observation(tmp_path: Path):
     return root, path, manifest
 
 
-@pytest.mark.parametrize("kind", ["NODE", "PHP"])
+@pytest.mark.parametrize("kind", ["NODE", "PHP", "BROWSER"])
 def test_verified_identity_is_local_immutable_and_keeps_exact_lineage(tmp_path, kind) -> None:
     root, path, manifest = observation(tmp_path)
     result = load_phase_runner_identity(path, repo_root=root, kind=kind)
@@ -268,7 +268,7 @@ def test_current_recipe_bytes_must_match_recorded_bootstrap(tmp_path) -> None:
 
 @pytest.mark.parametrize(
     "kind,image",
-    [("BROWSER", "sha256:" + "a" * 64), ("NODE", "runner:latest"), ("node", "sha256:" + "a" * 64)],
+    [("JVM", "sha256:" + "a" * 64), ("NODE", "runner:latest"), ("node", "sha256:" + "a" * 64)],
 )
 def test_identity_constructor_rejects_unsupported_kind_and_mutable_image(kind, image) -> None:
     with pytest.raises(WebPhaseRunnerError):
