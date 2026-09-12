@@ -176,6 +176,11 @@ jobs:
           docker build --pull --file infra/web-runners/Dockerfile.node --tag orchestwin/web-node-runner:ci .
           docker build --pull --file infra/web-runners/browser-locked/Dockerfile --tag orchestwin/web-browser-runner:ci .
           docker build --pull --file infra/web-runners/Dockerfile.php --tag orchestwin/web-php-runner:ci .
+          docker build --network none --tag orchestwin/web-dependency-proxy:ci infra/web-runners/dependency-network
+
+      - name: Test restricted dependency proxy without external network
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 65532:65532 --memory 256m --pids-limit 64 --mount "type=bind,source=$PWD/infra/web-runners/dependency-network,target=/tests,readonly" orchestwin/web-node-runner:ci node --test /tests/proxy.test.mjs
 
       - name: Smoke test non-root runner images without network
         run: |
