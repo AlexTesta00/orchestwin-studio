@@ -27,6 +27,7 @@ from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.web_execution import create_web_execution_router
+from orchestwin.api.web_operations import create_web_operations_router
 from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
 
@@ -93,6 +94,14 @@ def create_app(
     application.state.static_inspection_service = resolved_runtime.static_inspection_service
     application.state.web_source_api_service = resolved_runtime.web_source_api_service
     application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
+    application.state.web_execution_start_api_service = (
+        resolved_runtime.web_execution_start_api_service
+    )
+    application.state.web_browser_evidence_api_service = (
+        resolved_runtime.web_browser_evidence_api_service
+    )
+    application.state.web_repair_api_service = resolved_runtime.web_repair_api_service
+    application.state.web_operation_store = resolved_runtime.web_operation_store
     application.state.web_execution_read_api_service = (
         resolved_runtime.web_execution_read_api_service
     )
@@ -136,6 +145,7 @@ def create_app(
         create_execution_router(),
         create_static_inspection_router(),
         create_web_execution_router(),
+        create_web_operations_router(),
         create_jvm_execution_router(),
         create_workflow_run_router(),
         create_finalization_router(),

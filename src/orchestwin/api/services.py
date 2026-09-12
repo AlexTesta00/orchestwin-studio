@@ -43,17 +43,20 @@ from orchestwin.api.execution import (
     HighImpactApprovalApiService,
 )
 from orchestwin.api.finalization import FinalizationApiService
+from orchestwin.api.governed_web_runtime import build_governed_web_services
 from orchestwin.api.jvm_execution import JvmExecutionApiService
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import (
+    WebBrowserEvidenceApiService,
     WebExecutionApiService,
     WebExecutionReadApiService,
+    WebExecutionStartApiService,
+    WebRepairApiService,
     WebSourceApiService,
 )
-from orchestwin.api.web_execution_read_runtime import SqlAlchemyWebExecutionReadApiService
 from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
 from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
@@ -201,6 +204,10 @@ class ApplicationRuntime:
     web_source_api_service: WebSourceApiService | None = None
     web_execution_read_api_service: WebExecutionReadApiService | None = None
     web_execution_api_service: WebExecutionApiService | None = None
+    web_execution_start_api_service: WebExecutionStartApiService | None = None
+    web_browser_evidence_api_service: WebBrowserEvidenceApiService | None = None
+    web_repair_api_service: WebRepairApiService | None = None
+    web_operation_store: object | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
@@ -261,6 +268,7 @@ def create_default_runtime(
         resolved_settings,
         database_runtime.session_factory,
     )
+    governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
 
     return ApplicationRuntime(
         final_evaluator_runtime=final_evaluator,
@@ -293,9 +301,11 @@ def create_default_runtime(
         static_inspection_service=build_static_inspection_service(
             database_runtime.session_factory, resolved_settings
         ),
-        web_execution_read_api_service=SqlAlchemyWebExecutionReadApiService(
-            database_runtime.session_factory,
-        ),
+        web_execution_read_api_service=governed_web.reads,
+        web_execution_start_api_service=governed_web.start,
+        web_browser_evidence_api_service=governed_web.reads,
+        web_repair_api_service=governed_web.repairs,
+        web_operation_store=governed_web.operations,
         web_source_api_service=SqlAlchemyWebSourceApiService(
             database_runtime.session_factory,
             content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",

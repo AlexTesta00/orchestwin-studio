@@ -38,13 +38,23 @@ class GovernedWebBrowserExecutor:
     """Browser sidecar with no capability promotion or formal-run side effects."""
 
     def __init__(
-        self, *, runner_identity, repo_root: Path, evidence_store, interactions=(), transport=None
+        self,
+        *,
+        runner_identity,
+        repo_root: Path,
+        evidence_store,
+        interactions=(),
+        transport=None,
+        expected_harness_sha256: str | None = None,
+        expected_seccomp_sha256: str | None = None,
     ):
         self.identity = runner_identity
         self.root = Path(repo_root)
         self.store = evidence_store
         self.interactions = interactions
         self.transport = transport or DockerWebBrowserTransport()
+        self.expected_harness_sha256 = expected_harness_sha256
+        self.expected_seccomp_sha256 = expected_seccomp_sha256
 
     async def execute(self, phase_plan, *, contract, runtime, execution_attempt_id):
         def blocked(code):
@@ -78,16 +88,26 @@ class GovernedWebBrowserExecutor:
             return blocked("WEB_BROWSER_EXECUTION_BINDING_MISMATCH")
         try:
             harness = read_regular(self.root / "infra/web-runners/phase-browser/inspect.cjs", 30000)
+            harness_sha256 = hashlib.sha256(harness).hexdigest()
+            if (
+                self.expected_harness_sha256 is not None
+                and harness_sha256 != self.expected_harness_sha256
+            ):
+                return blocked("WEB_BROWSER_HARNESS_MISMATCH")
             seccomp = read_regular(
                 self.root / "infra/web-runners/browser-automation/seccomp.json", 2 * 1024 * 1024
             )
-            if hashlib.sha256(seccomp).hexdigest() != _SECCOMP_SHA256:
+            seccomp_sha256 = hashlib.sha256(seccomp).hexdigest()
+            if seccomp_sha256 != _SECCOMP_SHA256 or (
+                self.expected_seccomp_sha256 is not None
+                and seccomp_sha256 != self.expected_seccomp_sha256
+            ):
                 return blocked("WEB_BROWSER_SECCOMP_MISMATCH")
             job = create_browser_job(
                 request,
                 execution_attempt_id=execution_attempt_id,
                 operation_id=uuid4().hex,
-                harness_sha256=hashlib.sha256(harness).hexdigest(),
+                harness_sha256=harness_sha256,
                 interactions=self.interactions,
             )
         except (OSError, ValueError):

@@ -78,7 +78,7 @@ def test_unconfigured_read_service_does_not_fabricate_results() -> None:
 
 
 def test_factory_wires_reads_only_when_credentials_exist(monkeypatch) -> None:
-    from orchestwin.api import services
+    from orchestwin.api import governed_web_execution_runtime, services
 
     database = SimpleNamespace(session_factory=object(), dispose=AsyncMock())
     marker = object()
@@ -88,11 +88,16 @@ def test_factory_wires_reads_only_when_credentials_exist(monkeypatch) -> None:
     )
     monkeypatch.setattr(services, "create_database_runtime", lambda _settings: database)
     constructor = Mock(return_value=marker)
-    monkeypatch.setattr(services, "SqlAlchemyWebExecutionReadApiService", constructor)
-    runtime = create_default_runtime(ApplicationSettings(_env_file=None))
+    monkeypatch.setattr(
+        governed_web_execution_runtime, "SqlAlchemyWebExecutionReadApiService", constructor
+    )
+    settings = ApplicationSettings(_env_file=None)
+    runtime = create_default_runtime(settings)
     assert runtime.web_execution_read_api_service is marker
     assert runtime.web_execution_api_service is None
-    constructor.assert_called_once_with(database.session_factory)
+    constructor.assert_called_once_with(
+        database.session_factory, evidence_root=settings.sandbox_evidence_storage_root.absolute()
+    )
     asyncio.run(runtime.close())
     database.dispose.assert_awaited_once()
 

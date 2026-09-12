@@ -1,6 +1,7 @@
 """Fail closed before browser transport when attempt, route or runner binding is wrong."""
 
 import asyncio
+import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -66,6 +67,60 @@ def test_invalid_browser_binding_cannot_start_transport(tmp_path, invalid):
     assert not result.exit_codes
 
 
+@pytest.mark.parametrize("changed", ["harness", "seccomp"])
+def test_browser_uses_only_the_exact_bytes_bound_to_approval(tmp_path, monkeypatch, changed):
+    from orchestwin.web_execution import phase_browser_executor as module
+
+    _, contract, store, _ = setup_executor(tmp_path)
+    attempt = uuid4()
+    root = Path(__file__).parents[4]
+    identity = WebPhaseRunnerIdentity("BROWSER", "sha256:" + "c" * 64, "d" * 64, "e" * 64)
+    runtime = SimpleNamespace(
+        execution_attempt_id=attempt,
+        contract_content_hash=contract.content_hash,
+        image_id="sha256:" + "b" * 64,
+        bootstrap_manifest_hash="d" * 64,
+    )
+    harness_path = root / "infra/web-runners/phase-browser/inspect.cjs"
+    seccomp_path = root / "infra/web-runners/browser-automation/seccomp.json"
+    approved_harness = hashlib.sha256(harness_path.read_bytes()).hexdigest()
+    approved_seccomp = hashlib.sha256(seccomp_path.read_bytes()).hexdigest()
+
+    class ForbiddenTransport:
+        async def execute(self, *args, **kwargs):
+            pytest.fail("changed approved browser inputs reached Docker")
+
+    adapter = GovernedWebBrowserExecutor(
+        runner_identity=identity,
+        repo_root=root,
+        evidence_store=store,
+        transport=ForbiddenTransport(),
+        expected_harness_sha256=approved_harness,
+        expected_seccomp_sha256=approved_seccomp if changed == "harness" else "f" * 64,
+    )
+    if changed == "harness":
+        original_read = module.read_regular
+
+        def changed_after_approval(path, limit):
+            content = original_read(path, limit)
+            return content + b"\n// changed after approval\n" if path == harness_path else content
+
+        monkeypatch.setattr(module, "read_regular", changed_after_approval)
+    result = asyncio.run(
+        adapter.execute(
+            contract.execution_plan.phase(WebExecutionPhase.BROWSER_EVIDENCE),
+            contract=contract,
+            runtime=runtime,
+            execution_attempt_id=attempt,
+        )
+    )
+    assert result.status.value == "POLICY_BLOCKED"
+    assert result.failure_code == (
+        "WEB_BROWSER_HARNESS_MISMATCH" if changed == "harness" else "WEB_BROWSER_SECCOMP_MISMATCH"
+    )
+    assert not result.exit_codes and not result.stdout_refs and not result.stderr_refs
+
+
 @pytest.mark.parametrize("case", ["passed", "console", "malformed", "timeout", "cleanup", "oom"])
 def test_browser_phase_derives_failure_and_keeps_actual_transport_bytes(tmp_path, case):
     _, contract, store, _ = setup_executor(tmp_path)
@@ -111,11 +166,18 @@ def test_browser_phase_derives_failure_and_keeps_actual_transport_bytes(tmp_path
             )
 
     transport = Transport()
+    root = Path(__file__).parents[4]
     adapter = GovernedWebBrowserExecutor(
         runner_identity=identity,
-        repo_root=Path(__file__).parents[4],
+        repo_root=root,
         evidence_store=store,
         transport=transport,
+        expected_harness_sha256=hashlib.sha256(
+            (root / "infra/web-runners/phase-browser/inspect.cjs").read_bytes()
+        ).hexdigest(),
+        expected_seccomp_sha256=hashlib.sha256(
+            (root / "infra/web-runners/browser-automation/seccomp.json").read_bytes()
+        ).hexdigest(),
     )
     result = asyncio.run(
         adapter.execute(
