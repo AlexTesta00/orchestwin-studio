@@ -51,6 +51,7 @@ from orchestwin.training.training_run_persistence import (
     TrainingRunRecord,
 )
 from orchestwin.web_execution.static_inspection_persistence import STATIC_BROWSER_INSPECTIONS
+from orchestwin.web_execution.validation_evidence_persistence import WEB_PROFILE_VALIDATION_EVIDENCE
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
@@ -78,6 +79,7 @@ if configuration.config_file_name is not None:
     )
 
 _IMPORTED_MODELS = (
+    WEB_PROFILE_VALIDATION_EVIDENCE,
     UserRecord,
     AuthSessionRecord,
     ProjectRecord,
