@@ -9,7 +9,6 @@ from uuid import UUID
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import text
 
 from orchestwin.evaluation.artifact_content_registry import (
     ArtifactContentRegistryStoreStatus,
@@ -59,11 +58,6 @@ OTHER_PROJECT_ID = UUID("00000000-0000-4000-8000-000000087003")
 ARTIFACT_ID = UUID("00000000-0000-4000-8000-000000087004")
 
 NOW = datetime(2026, 9, 10, 14, 0, tzinfo=UTC)
-
-
-async def _truncate(runtime) -> None:
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
 
 
 async def _create_scope(runtime):
@@ -153,8 +147,6 @@ def test_postgresql_registry_is_owner_project_workflow_scoped() -> None:
         runtime = create_database_runtime(settings)
 
         try:
-            await _truncate(runtime)
-
             owner, foreign, project = await _create_scope(runtime)
 
             reference = _reference(b"<!doctype html><button>Confirm</button>")
@@ -230,8 +222,6 @@ def test_postgresql_registry_rejects_metadata_conflict() -> None:
         runtime = create_database_runtime(settings)
 
         try:
-            await _truncate(runtime)
-
             owner, _, project = await _create_scope(runtime)
 
             original = AuthorizedEvaluationArtifactRecord(

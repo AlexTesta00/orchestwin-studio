@@ -83,12 +83,6 @@ IMAGE = "example/web@sha256:" + "8" * 64
 RESOURCES = SandboxResourceLimits(2.0, 4096, 256, 512)
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset owner-scoped data while preserving the migrated schema."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 def create_source_archive(path: Path) -> None:
     """Create one deterministic archive with source and ignored generated content."""
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -194,7 +188,6 @@ async def run_integration_scenario(tmp_path: Path) -> None:
     runtime = create_database_runtime(database_settings)
 
     try:
-        await truncate_application_data(runtime)
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory),
             password_service=Argon2PasswordService(),
@@ -387,7 +380,6 @@ async def run_integration_scenario(tmp_path: Path) -> None:
             script.revision for script in scripts.walk_revisions(base="base", head=current_head)
         }
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

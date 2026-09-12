@@ -10,7 +10,6 @@ from uuid import UUID
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import text
 
 from orchestwin.evaluation.application import (
     ApprovedUserTwinEvaluationTarget,
@@ -109,11 +108,6 @@ BASE_TIME = datetime(
 )
 
 CONTENT = b"<!doctype html><button id='confirm'>Confirm reservation</button>"
-
-
-async def _truncate(runtime) -> None:
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
 
 
 async def _create_scope(runtime):
@@ -346,8 +340,6 @@ def test_postgresql_persists_evaluation_and_checkpoints_revision_stage() -> None
         runtime = create_database_runtime(settings)
 
         try:
-            await _truncate(runtime)
-
             owner, foreign, project = await _create_scope(runtime)
 
             workflow = _workflow(owner, project)

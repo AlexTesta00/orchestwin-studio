@@ -66,16 +66,6 @@ ARTIFACT_ID = UUID("00000000-0000-4000-8000-000000111907")
 CREATED_AT = datetime(2026, 10, 13, 12, 30, tzinfo=UTC)
 
 
-async def _truncate(runtime) -> None:
-    async with runtime.engine.begin() as connection:
-        await connection.execute(
-            text(
-                "TRUNCATE TABLE training_dataset_quality_reports, "
-                "training_dataset_versions, users CASCADE"
-            )
-        )
-
-
 def _example(example_id: str, language: DatasetLanguage):
     evidence = (
         DatasetEvidenceReference(
@@ -242,7 +232,6 @@ async def _run_scenario() -> None:
     settings = load_database_settings(env_file=None)
     runtime = create_database_runtime(settings)
     try:
-        await _truncate(runtime)
         async with runtime.session_factory.begin() as session:
             session.add(
                 UserRecord(
@@ -299,7 +288,6 @@ async def _run_scenario() -> None:
         )
         assert revision == scripts.get_current_head()
     finally:
-        await _truncate(runtime)
         await runtime.dispose()
 
 

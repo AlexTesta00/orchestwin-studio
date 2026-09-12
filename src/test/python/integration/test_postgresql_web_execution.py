@@ -65,12 +65,6 @@ ATTEMPT_TWO_ID = UUID("40000000-0000-4000-8000-000000000202")
 FAILURE_SIGNATURE = "9" * 64
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset owner-scoped data while preserving the migrated schema."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 def source_revision(
     *,
     revision_id: UUID,
@@ -225,7 +219,6 @@ async def run_integration_scenario() -> None:
     runtime = create_database_runtime(database_settings)
 
     try:
-        await truncate_application_data(runtime)
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory),
             password_service=Argon2PasswordService(),
@@ -381,7 +374,6 @@ async def run_integration_scenario() -> None:
             script.revision for script in scripts.walk_revisions(base="base", head=current_head)
         }
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

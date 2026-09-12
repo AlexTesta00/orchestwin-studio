@@ -8,7 +8,6 @@ from uuid import UUID
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import text
 
 from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import (
@@ -63,11 +62,6 @@ class MutableClock:
 
     def __call__(self) -> datetime:
         return self.current
-
-
-async def _truncate(runtime) -> None:
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
 
 
 async def _create_owner_and_project(runtime):
@@ -182,7 +176,6 @@ async def _run_scenario() -> None:
     settings = load_database_settings(env_file=None)
     runtime = create_database_runtime(settings)
     try:
-        await _truncate(runtime)
         owner, project = await _create_owner_and_project(runtime)
         base = max(project.created_at, datetime.now(UTC)) + timedelta(seconds=1)
         clock = MutableClock(base)
@@ -406,7 +399,6 @@ async def _run_scenario() -> None:
         assert recovery.run is not None
         assert recovery.run.current_stage is WorkflowStage.USER_MODELING
     finally:
-        await _truncate(runtime)
         await runtime.dispose()
 
 
