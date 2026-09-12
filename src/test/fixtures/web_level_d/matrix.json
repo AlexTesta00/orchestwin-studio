@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "static",
+      "profile_id": "web.static",
+      "profile_version": "1.0.0",
+      "target": "WEB_STATIC",
+      "language_configuration": {
+        "frontend": "STATIC_ASSETS",
+        "backend": null
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "static",
+      "failure_change": {
+        "path": "app.js",
+        "content": "console.error('LEVEL_D_NEGATIVE_CONTROL');\nlet count = 0;\ndocument.querySelector('#increment').addEventListener('click', () => {\n  count += 2;\n  document.querySelector('#count').textContent = String(count);\n});\n"
+      },
+      "repair": {
+        "path": "app.js",
+        "content": "let count = 0;\ndocument.querySelector('#increment').addEventListener('click', () => {\n  count += 1;\n  document.querySelector('#count').textContent = String(count);\n});\n"
+      },
+      "expected_failure_phase": "BROWSER_EVIDENCE",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.html"
+        }
+      ],
+      "browser_interactions": [
+        {
+          "route_id": "root",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "#increment",
+              "value": null
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "1"
+            },
+            {
+              "kind": "press",
+              "selector": "#increment",
+              "value": "Enter"
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "2"
+            }
+          ]
+        }
+      ],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "vue-js",
+      "profile_id": "web.vue",
+      "profile_version": "1.0.0",
+      "target": "WEB_VUE",
+      "language_configuration": {
+        "frontend": "JAVASCRIPT",
+        "backend": null
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "vue-js",
+      "failure_change": {
+        "path": "src/counter.js",
+        "content": "export function increment(count) {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "src/counter.js",
+        "content": "export function increment(count) {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.html"
+        }
+      ],
+      "browser_interactions": [
+        {
+          "route_id": "root",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "#increment",
+              "value": null
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "1"
+            },
+            {
+              "kind": "press",
+              "selector": "#increment",
+              "value": "Enter"
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "2"
+            }
+          ]
+        }
+      ],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "vue-ts",
+      "profile_id": "web.vue",
+      "profile_version": "1.0.0",
+      "target": "WEB_VUE",
+      "language_configuration": {
+        "frontend": "TYPESCRIPT",
+        "backend": null
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "vue-ts",
+      "failure_change": {
+        "path": "src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.html"
+        }
+      ],
+      "browser_interactions": [
+        {
+          "route_id": "root",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "#increment",
+              "value": null
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "1"
+            },
+            {
+              "kind": "press",
+              "selector": "#increment",
+              "value": "Enter"
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "2"
+            }
+          ]
+        }
+      ],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "express-js",
+      "profile_id": "web.node-express",
+      "profile_version": "1.0.0",
+      "target": "WEB_NODE_EXPRESS",
+      "language_configuration": {
+        "frontend": null,
+        "backend": "JAVASCRIPT"
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "express-js",
+      "failure_change": {
+        "path": "src/counter.js",
+        "content": "export function increment(count) {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "src/counter.js",
+        "content": "export function increment(count) {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [],
+      "browser_interactions": [],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "express-ts",
+      "profile_id": "web.node-express",
+      "profile_version": "1.0.0",
+      "target": "WEB_NODE_EXPRESS",
+      "language_configuration": {
+        "frontend": null,
+        "backend": "TYPESCRIPT"
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "express-ts",
+      "failure_change": {
+        "path": "src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [],
+      "browser_interactions": [],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "php",
+      "profile_id": "web.php",
+      "profile_version": "1.0.0",
+      "target": "WEB_PHP",
+      "language_configuration": {
+        "frontend": null,
+        "backend": "PHP"
+      },
+      "layout": "SINGLE_ROOT",
+      "source_dir": "php",
+      "failure_change": {
+        "path": "src/Counter.php",
+        "content": "<?php\ndeclare(strict_types=1);\n\nfunction increment(int $count): int\n{\n    return $count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "src/Counter.php",
+        "content": "<?php\ndeclare(strict_types=1);\n\nfunction increment(int $count): int\n{\n    return $count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.php"
+        }
+      ],
+      "browser_interactions": [],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "vue-node-js",
+      "profile_id": "web.vue-node",
+      "profile_version": "1.0.0",
+      "target": "WEB_VUE_NODE",
+      "language_configuration": {
+        "frontend": "JAVASCRIPT",
+        "backend": "JAVASCRIPT"
+      },
+      "layout": "FRONTEND_BACKEND",
+      "source_dir": "vue-node-js",
+      "failure_change": {
+        "path": "backend/src/counter.js",
+        "content": "export function increment(count) {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "backend/src/counter.js",
+        "content": "export function increment(count) {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.html"
+        }
+      ],
+      "browser_interactions": [
+        {
+          "route_id": "root",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "#increment",
+              "value": null
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "1"
+            },
+            {
+              "kind": "press",
+              "selector": "#increment",
+              "value": "Enter"
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "2"
+            }
+          ]
+        }
+      ],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    },
+    {
+      "id": "vue-node-ts",
+      "profile_id": "web.vue-node",
+      "profile_version": "1.0.0",
+      "target": "WEB_VUE_NODE",
+      "language_configuration": {
+        "frontend": "TYPESCRIPT",
+        "backend": "TYPESCRIPT"
+      },
+      "layout": "FRONTEND_BACKEND",
+      "source_dir": "vue-node-ts",
+      "failure_change": {
+        "path": "backend/src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 2;\n}\n"
+      },
+      "repair": {
+        "path": "backend/src/counter.ts",
+        "content": "export function increment(count: number): number {\n  return count + 1;\n}\n"
+      },
+      "expected_failure_phase": "TEST",
+      "browser_routes": [
+        {
+          "route_id": "details",
+          "path": "/details.html"
+        }
+      ],
+      "browser_interactions": [
+        {
+          "route_id": "root",
+          "actions": [
+            {
+              "kind": "click",
+              "selector": "#increment",
+              "value": null
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "1"
+            },
+            {
+              "kind": "press",
+              "selector": "#increment",
+              "value": "Enter"
+            },
+            {
+              "kind": "expect_text",
+              "selector": "#count",
+              "value": "2"
+            }
+          ]
+        }
+      ],
+      "expected_failure_marker": "LEVEL_D_NEGATIVE_CONTROL"
+    }
+  ]
+}

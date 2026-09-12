@@ -5,15 +5,19 @@ from __future__ import annotations
 import hashlib
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from orchestwin.sandbox.command_plans import CommandNetworkMode
 from orchestwin.sandbox.evidence_store import FileSystemSandboxEvidenceStore
-from orchestwin.sandbox.execution_policy import DEFAULT_SANDBOX_EXECUTION_POLICY
+from orchestwin.sandbox.execution_policy import (
+    DEFAULT_SANDBOX_EXECUTION_POLICY,
+    SandboxExecutionPolicy,
+)
 from orchestwin.web_execution.browser_evidence import WebBrowserRouteSpec
 from orchestwin.web_execution.detection import WebDetectionSnapshot, WebTextFile
 from orchestwin.web_execution.lockfiles import validate_web_dependency_locks
@@ -34,6 +38,27 @@ from orchestwin.workflow.web_execution import (
     WebExecutionRequest,
     _rerun_issue,
 )
+
+CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY = replace(
+    DEFAULT_SANDBOX_EXECUTION_POLICY,
+    allowed_network_modes=frozenset({CommandNetworkMode.DISABLED, CommandNetworkMode.CONTROLLED}),
+)
+
+
+def governed_web_execution_policy(
+    controlled_network: ControlledWebNetwork | None = None,
+) -> SandboxExecutionPolicy:
+    """Select the explicitly provisioned network policy without changing defaults.
+
+    Operators can use the exported controlled-policy hash when provisioning the
+    internal network and its restricted proxy, before constructing the lease.
+    Runtime transport still verifies that exact network identity and policy label.
+    """
+    if controlled_network is None:
+        return DEFAULT_SANDBOX_EXECUTION_POLICY
+    if not isinstance(controlled_network, ControlledWebNetwork):
+        raise ValueError("controlled Web network policy requires an explicit network lease")
+    return CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY
 
 
 class GovernedWebSettings(BaseSettings):
@@ -63,7 +88,8 @@ class GovernedWebSettings(BaseSettings):
             raise ValueError("governed Web Docker context is invalid")
         if (
             self.controlled_network is not None
-            and self.controlled_network.policy_hash != DEFAULT_SANDBOX_EXECUTION_POLICY.content_hash
+            and self.controlled_network.policy_hash
+            != governed_web_execution_policy(self.controlled_network).content_hash
         ):
             raise ValueError("controlled Web network must bind the current execution policy")
         return self
@@ -102,7 +128,11 @@ class WebExecutionBackend:
         self.content_root = Path(content_root).absolute()
         self.evidence_root = Path(evidence_root).absolute()
         self.resources = resources
-        self.policy = DEFAULT_SANDBOX_EXECUTION_POLICY
+        self.policy = governed_web_execution_policy(config.controlled_network)
+        if config.controlled_network is not None and (
+            config.controlled_network.policy_hash != self.policy.content_hash
+        ):
+            raise ValueError("controlled Web network must bind the current execution policy")
 
     def prepare(self, revision, *, command, registry, previous):
         """Read source objects and bootstrap lineage; no workspace or process is created."""
@@ -310,8 +340,6 @@ class WebExecutionBackend:
         )
 
     async def execute(self, context, *, operation, authorization, attempts):
-        from dataclasses import replace
-
         root = self.config.workspaces_root
         _regular_parents(root)
         root.mkdir(parents=True, exist_ok=True)

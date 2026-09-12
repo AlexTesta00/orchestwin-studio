@@ -1,0 +1,17 @@
+{
+  "name": "fixture-vue-node-js-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "node --check src/app.js && node --check src/server.js && node --check src/counter.js",
+    "test": "vitest --maxWorkers=1 --minWorkers=1 --pool=forks",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "vitest": "3.0.0"
+  }
+}

@@ -30,6 +30,7 @@ def sources(root: Path):
         "images.lock.json",
         "bin/static-server.mjs",
         "bin/php-lint.php",
+        "packages/unzip_6.0-28+deb12u1_amd64.deb",
         "browser-locked/Dockerfile",
         "browser-locked/package.json",
         "browser-locked/package-lock.json",

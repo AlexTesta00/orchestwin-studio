@@ -35,6 +35,7 @@ def _fixture(root: Path) -> Path:
             f"FROM {BASES['composer']} AS composer_source\nFROM {BASES['php']}\nUSER runner\n"
         ),
         f"{PREFIX}/bin/php-lint.php": "<?php exit(0);\n",
+        f"{PREFIX}/packages/unzip_6.0-28+deb12u1_amd64.deb": "synthetic package bytes\n",
         f"{BROWSER}/Dockerfile": f"FROM {BASES['browser']}\nUSER pwuser\n",
     }
     for relative, content in files.items():
@@ -108,7 +109,7 @@ def test_inputs_capture_exact_three_runner_recipes_and_no_other_repository_files
     inputs = load_bootstrap_inputs(root)
     sources = dict(inputs.sources)
 
-    assert len(sources) == 8
+    assert len(sources) == 9
     assert tuple(sources) == tuple(sorted(sources))
     assert LOCK in sources
     assert ".env" not in sources
@@ -142,6 +143,24 @@ def test_helper_changes_only_its_runner_recipe_identity_and_full_input_hash(tmp_
     assert previous["PHP"] != changed["PHP"]
     assert previous["NODE"] == changed["NODE"]
     assert previous["BROWSER"] == changed["BROWSER"]
+
+
+def test_offline_php_archive_extractor_is_captured_and_changes_only_php_identity(tmp_path):
+    root = _fixture(tmp_path / "repo")
+    package_path = f"{PREFIX}/packages/unzip_6.0-28+deb12u1_amd64.deb"
+    package = root / package_path
+    package.parent.mkdir(parents=True, exist_ok=True)
+    package.write_bytes(b"test-only-debian-package-one")
+    before = load_bootstrap_inputs(root)
+    assert dict(before.sources)[package_path] == package.read_bytes()
+    package.write_bytes(b"test-only-debian-package-two")
+    after = load_bootstrap_inputs(root)
+    assert before.content_hash != after.content_hash
+    first = {recipe.kind: recipe.recipe_content_hash for recipe in before.runners}
+    second = {recipe.kind: recipe.recipe_content_hash for recipe in after.runners}
+    assert first["PHP"] != second["PHP"]
+    assert first["NODE"] == second["NODE"]
+    assert first["BROWSER"] == second["BROWSER"]
 
 
 @pytest.mark.parametrize("kind", ["NODE", "PHP", "BROWSER"])

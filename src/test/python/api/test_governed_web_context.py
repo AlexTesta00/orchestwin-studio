@@ -155,3 +155,139 @@ def test_validation_purpose_cannot_use_an_owner_initial_trigger(tmp_path, monkey
             registry=create_sprint08_web_profile_registry(),
             previous=None,
         )
+
+
+def _controlled_network(policy_hash):
+    from orchestwin.web_execution.phase_runtime import ControlledWebNetwork
+
+    return ControlledWebNetwork(
+        "validation-internal", "4" * 64, policy_hash, "restricted-proxy", 3128
+    )
+
+
+def test_explicit_controlled_network_requires_the_derived_policy_hash():
+    from orchestwin.api.governed_web_context import CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY
+
+    with pytest.raises(ValueError, match="policy"):
+        GovernedWebSettings(
+            _env_file=None,
+            controlled_network=_controlled_network(DEFAULT_SANDBOX_EXECUTION_POLICY.content_hash),
+        )
+    config = GovernedWebSettings(
+        _env_file=None,
+        controlled_network=_controlled_network(
+            CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY.content_hash
+        ),
+    )
+    assert config.controlled_network.policy_hash != DEFAULT_SANDBOX_EXECUTION_POLICY.content_hash
+
+
+def test_controlled_policy_is_explicit_and_does_not_mutate_global_defaults():
+    from orchestwin.api.governed_web_context import (
+        CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY,
+        governed_web_execution_policy,
+    )
+    from orchestwin.sandbox.command_plans import CommandNetworkMode
+
+    before = DEFAULT_SANDBOX_EXECUTION_POLICY.to_snapshot()
+    assert governed_web_execution_policy() is DEFAULT_SANDBOX_EXECUTION_POLICY
+    network = _controlled_network(CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY.content_hash)
+    policy = governed_web_execution_policy(network)
+    assert policy.allowed_network_modes == frozenset(
+        {CommandNetworkMode.DISABLED, CommandNetworkMode.CONTROLLED}
+    )
+    expected = before | {"allowed_network_modes": ["CONTROLLED", "DISABLED"]}
+    assert policy.to_snapshot() == expected
+    assert DEFAULT_SANDBOX_EXECUTION_POLICY.to_snapshot() == before
+
+
+@pytest.mark.parametrize(
+    "fixture_id",
+    [
+        "web-vue-js-valid",
+        "web-vue-ts-valid",
+        "web-express-js-valid",
+        "web-express-ts-valid",
+        "web-php-valid",
+        "web-vue-node-js-valid",
+        "web-vue-node-ts-valid",
+    ],
+)
+def test_controlled_setup_contracts_require_the_explicit_derived_policy(fixture_id):
+    from orchestwin.api.governed_web_context import CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY
+    from orchestwin.sandbox.execution_policy import SandboxPolicyIssueCode, validate_sandbox_plan
+    from orchestwin.web_execution.detection import detect_web_project
+    from orchestwin.web_execution.lockfiles import validate_web_dependency_locks
+    from orchestwin.web_execution.plans import WebExecutionPhase
+    from orchestwin.web_execution.profile_contracts import WebProfileRunnerSet
+    from src.test.python.web_execution.test_profile_fixture_matrix import (
+        detection_snapshot,
+        fixture_files,
+    )
+
+    snapshot = detection_snapshot(fixture_files(fixture_id))
+    selection = detect_web_project(snapshot).selected.selection
+    profile = create_sprint08_web_profile_registry().for_target(selection.target)
+    contract = profile.create_contract(
+        snapshot,
+        selection=selection,
+        lock_report=validate_web_dependency_locks(snapshot, selection=selection),
+        source_revision_content_hash="5" * 64,
+        source_tree_hash=snapshot.inventory_content_hash,
+        runners=WebProfileRunnerSet(
+            "6" * 64, None if selection.target is ExecutionTarget.WEB_NODE_EXPRESS else "7" * 64
+        ),
+    )
+    plans = contract.execution_plan.phase(WebExecutionPhase.SETUP).command_plans
+    assert plans
+    for plan in plans:
+        default = validate_sandbox_plan(plan)
+        assert SandboxPolicyIssueCode.NETWORK_MODE_NOT_ALLOWED in {
+            issue.code for issue in default.issues
+        }
+        controlled = validate_sandbox_plan(plan, policy=CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY)
+        assert controlled.is_accepted, controlled.issues
+
+
+def test_backend_and_approval_payload_use_the_lease_bound_policy(tmp_path, monkeypatch):
+    from orchestwin.api.governed_web_context import CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY
+
+    old_backend, revision, command = context_fixture(tmp_path, monkeypatch)
+    network = _controlled_network(CONTROLLED_GOVERNED_WEB_EXECUTION_POLICY.content_hash)
+    config = GovernedWebSettings(
+        _env_file=None, **(old_backend.config.model_dump() | {"controlled_network": network})
+    )
+    backend = WebExecutionBackend(
+        config=config,
+        content_root=old_backend.content_root,
+        evidence_root=old_backend.evidence_root,
+        resources=old_backend.resources,
+    )
+    with pytest.raises(ValueError, match="POLICY"):
+        backend.prepare(
+            revision,
+            command=command,
+            registry=create_sprint08_web_profile_registry(),
+            previous=None,
+        )
+    context = backend.prepare(
+        revision,
+        command=replace(command, policy_content_hash=backend.policy.content_hash),
+        registry=create_sprint08_web_profile_registry(),
+        previous=None,
+    )
+    assert context.request.policy_content_hash == network.policy_hash
+    assert context.payload["execution_policy"] == backend.policy.to_snapshot()
+    assert context.payload["controlled_network"]["policy_hash"] == network.policy_hash
+
+
+def test_backend_rejects_unvalidated_configuration_with_mismatched_lease(tmp_path, monkeypatch):
+    backend, _, _ = context_fixture(tmp_path, monkeypatch)
+    config = backend.config.model_copy(update={"controlled_network": _controlled_network("f" * 64)})
+    with pytest.raises(ValueError, match="policy"):
+        WebExecutionBackend(
+            config=config,
+            content_root=backend.content_root,
+            evidence_root=backend.evidence_root,
+            resources=backend.resources,
+        )

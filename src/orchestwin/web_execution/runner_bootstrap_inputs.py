@@ -30,7 +30,11 @@ _RECIPES = (
         "PHP",
         "web.php",
         "infra/web-runners/Dockerfile.php",
-        ("infra/web-runners/Dockerfile.php", "infra/web-runners/bin/php-lint.php"),
+        (
+            "infra/web-runners/Dockerfile.php",
+            "infra/web-runners/bin/php-lint.php",
+            "infra/web-runners/packages/unzip_6.0-28+deb12u1_amd64.deb",
+        ),
     ),
     (
         "BROWSER",
