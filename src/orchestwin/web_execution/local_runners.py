@@ -63,13 +63,11 @@ if (!existsSync(executable)) throw new Error("Chromium binaries missing");
 const chromium = spawnSync(executable, ["--version"], { encoding: "utf8", timeout: 4000, maxBuffer: 65536 });
 const npm = spawnSync("npm", ["--version"], { encoding: "utf8", timeout: 4000, maxBuffer: 65536 });
 if (chromium.status !== 0 || npm.status !== 0) throw new Error("tool version probe failed");
-const version = chromium.stdout.match(/Chromium\s+(\d+\.\d+\.\d+\.\d+)/);
-if (!version) throw new Error("Chromium version unavailable");
 console.log(JSON.stringify({ node_version: process.version, npm_version: npm.stdout.trim(), uid,
   browser_binaries_present: true, playwright_package_resolvable: true,
   playwright_version: require("playwright/package.json").version,
   playwright_core_version: require("playwright-core/package.json").version,
-  axe_version: require("axe-core/package.json").version, chromium_version: version[1],
+  axe_version: require("axe-core/package.json").version, chromium_version_output: chromium.stdout.trim(),
   package_lock_sha256: createHash("sha256").update(readFileSync("/opt/orchestwin/browser-automation/package-lock.json")).digest("hex") }));
 """
 _PHP_PROBE = r"""
@@ -192,7 +190,7 @@ def _probe_metadata(kind, observed, recipe, sources):
             "playwright_version",
             "playwright_core_version",
             "axe_version",
-            "chromium_version",
+            "chromium_version_output",
             "package_lock_sha256",
         )
     metadata = {"uid": 65532, **{flag: True for flag in flags}}
@@ -203,6 +201,15 @@ def _probe_metadata(kind, observed, recipe, sources):
         ):
             raise RunnerBootstrapError("RUNNER_TOOL_VERSION_INVALID")
     if kind == "BROWSER":
+        # Playwright's Chromium distribution may identify as Chrome for Testing.
+        # Retain the observed product string and derive the numeric version here.
+        version = re.fullmatch(
+            r"(?:Chromium|Google Chrome for Testing) (\d+\.\d+\.\d+\.\d+)",
+            metadata["chromium_version_output"],
+        )
+        if version is None:
+            raise RunnerBootstrapError("RUNNER_BROWSER_VERSION_INVALID")
+        metadata["chromium_version"] = version.group(1)
         lock_bytes = sources["infra/web-runners/browser-locked/package-lock.json"]
         packages = _json(lock_bytes)["packages"]
         for field, package in (

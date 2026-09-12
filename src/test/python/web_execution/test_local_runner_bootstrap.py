@@ -155,7 +155,7 @@ class FakeDocker:
                     "playwright_version": "1.62.1",
                     "playwright_core_version": "1.62.1",
                     "axe_version": "4.13.0",
-                    "chromium_version": "149.0.0.0",
+                    "chromium_version_output": "Google Chrome for Testing 151.0.7922.34",
                     "package_lock_sha256": hashlib.sha256(lock).hexdigest(),
                 }
             if self.bad_probe:
@@ -359,6 +359,65 @@ def test_changed_working_tree_during_build_cannot_produce_success_manifest(tmp_p
         asyncio.run(
             module.build_and_probe_local_web_runners(
                 root, tmp_path / "out", runner=FakeDocker(changed_after_build=True)
+            )
+        )
+    assert json.loads((tmp_path / "out/manifest.json").read_text())["status"] == "FAILED"
+
+
+@pytest.mark.parametrize(
+    ("version_output", "expected"),
+    [
+        ("Chromium 149.0.0.0", "149.0.0.0"),
+        # Observed from the pinned d641dc1 image as UID 65532, with exit code zero.
+        ("Google Chrome for Testing 151.0.7922.34", "151.0.7922.34"),
+    ],
+)
+def test_browser_version_is_parsed_from_observed_product_output(
+    tmp_path: Path, version_output: str, expected: str
+) -> None:
+    root = sources(tmp_path / "repo")
+    result = asyncio.run(
+        module.build_and_probe_local_web_runners(
+            root,
+            tmp_path / "out",
+            runner=FakeDocker(
+                bad_probe={"chromium_version_output": version_output, "chromium_version": None}
+            ),
+        )
+    )
+    browser = next(row for row in result["runners"] if row["kind"] == "BROWSER")
+    assert browser["probe"]["chromium_version"] == expected
+    assert browser["probe"]["chromium_version_output"] == version_output
+    assert result["browser_automation_verified"] is False
+    assert result["level_d_validated"] is False
+
+
+@pytest.mark.parametrize(
+    "version_output",
+    [
+        None,
+        "",
+        "151.0.7922.34",
+        "Unknown 151.0.7922.34",
+        "Chromium 151.0",
+        "Chromium 151.0.7922.34 extra",
+    ],
+)
+def test_invalid_browser_product_output_cannot_use_a_claimed_version(
+    tmp_path: Path, version_output: str | None
+) -> None:
+    root = sources(tmp_path / "repo")
+    with pytest.raises(module.RunnerBootstrapError):
+        asyncio.run(
+            module.build_and_probe_local_web_runners(
+                root,
+                tmp_path / "out",
+                runner=FakeDocker(
+                    bad_probe={
+                        "chromium_version_output": version_output,
+                        "chromium_version": "151.0.7922.34",
+                    }
+                ),
             )
         )
     assert json.loads((tmp_path / "out/manifest.json").read_text())["status"] == "FAILED"
