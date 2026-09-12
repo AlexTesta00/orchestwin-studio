@@ -179,8 +179,8 @@ class WebExecutionReadApiService(Protocol):
     ) -> dict[str, JsonValue] | None: ...
 
 
-class WebExecutionApiService(WebSourceApiService, Protocol):
-    """Combined port retained for existing execution adapters and test doubles."""
+class WebExecutionStartApiService(Protocol):
+    """Start governed Web execution independently from other write resources."""
 
     async def start_execution(
         self,
@@ -189,6 +189,14 @@ class WebExecutionApiService(WebSourceApiService, Protocol):
         project_id: UUID,
         command: WebExecutionStartCommand,
     ) -> WebApiCommandResult: ...
+
+
+class WebExecutionApiService(
+    WebSourceApiService,
+    WebExecutionStartApiService,
+    Protocol,
+):
+    """Combined port retained for existing execution adapters and test doubles."""
 
     async def execution_history(
         self,
@@ -428,6 +436,21 @@ def web_execution_api_service_dependency(request: Request) -> WebExecutionApiSer
     return service
 
 
+def web_execution_start_api_service_dependency(
+    request: Request,
+) -> WebExecutionStartApiService:
+    """Prefer a dedicated start service; preserve legacy combined-service injection."""
+    service = getattr(request.app.state, "web_execution_start_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_EXECUTION_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
 def web_source_api_service_dependency(request: Request) -> WebSourceApiService:
     """Prefer the dedicated source adapter; retain legacy combined-service injection."""
     service = getattr(request.app.state, "web_source_api_service", None)
@@ -532,8 +555,8 @@ def create_web_execution_router() -> APIRouter:
         body: StartWebExecutionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionStartApiService,
+            Depends(web_execution_start_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(
