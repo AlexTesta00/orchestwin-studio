@@ -34,8 +34,8 @@
     {
       "runner_id": "web.browser",
       "kind": "BROWSER",
-      "version": "1.0.0",
-      "dockerfile_path": "infra/web-runners/Dockerfile.browser",
+      "version": "2.0.0",
+      "dockerfile_path": "infra/web-runners/browser-locked/Dockerfile",
       "base_image_ids": [
         "playwright-1.62.1-noble"
       ],

@@ -174,13 +174,13 @@ jobs:
       - name: Build controlled Web runner images
         run: |
           docker build --pull --file infra/web-runners/Dockerfile.node --tag orchestwin/web-node-runner:ci .
-          docker build --pull --file infra/web-runners/Dockerfile.browser --tag orchestwin/web-browser-runner:ci .
+          docker build --pull --file infra/web-runners/browser-locked/Dockerfile --tag orchestwin/web-browser-runner:ci .
           docker build --pull --file infra/web-runners/Dockerfile.php --tag orchestwin/web-php-runner:ci .
 
       - name: Smoke test non-root runner images without network
         run: |
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-node-runner:ci node --version
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-browser-runner:ci node --version
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-browser-runner:ci node -e 'if (process.getuid() === 0 || require("playwright/package.json").version !== "1.62.1" || require("axe-core/package.json").version !== "4.13.0") process.exit(1)'
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-php-runner:ci php --version
 
       - name: Record local runner image identities

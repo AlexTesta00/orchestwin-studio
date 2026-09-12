@@ -1,4 +1,4 @@
-"""Build repository-owned Node/browser recipes and record local runner probes.
+"""Build pinned Node, PHP and locked browser recipes and record local probes.
 
 This opt-in operation creates Docker images and short-lived probe containers.
 Builds may download pinned bases. Probes are network-isolated. Neither image
@@ -14,23 +14,21 @@ import json
 import re
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from orchestwin.sandbox.host_process import run_bounded_host_process
+from orchestwin.web_execution.runner_bootstrap_inputs import load_bootstrap_inputs
 
-_BASE = re.compile(r"^FROM\s+[^\s]+@sha256:[0-9a-f]{64}\s*$", re.MULTILINE)
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
-_RECIPE_FILES = (
-    "infra/web-runners/Dockerfile.node",
-    "infra/web-runners/Dockerfile.browser",
-    "infra/web-runners/bin/static-server.mjs",
-)
 _NODE_PROBE = r"""
 import { mkdir, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 const uid = process.getuid();
 if (uid === 0) throw new Error("root is prohibited");
+const npm = spawnSync("npm", ["--version"], { encoding: "utf8", timeout: 4000, maxBuffer: 65536 });
+if (npm.status !== 0) throw new Error("npm version probe failed");
 await mkdir("/tmp/orchestwin-probe", { recursive: true });
 await writeFile("/tmp/orchestwin-probe/index.html", "orchestwin-static-probe");
 const child = spawn(process.execPath, ["/opt/orchestwin/bin/static-server.mjs",
@@ -46,22 +44,69 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   if (!ok) throw new Error("static HTTP probe failed");
-  console.log(JSON.stringify({ node_version: process.version, uid, static_http: ok }));
+  console.log(JSON.stringify({ node_version: process.version, npm_version: npm.stdout.trim(), uid, static_http: ok }));
 } finally {
   child.kill("SIGKILL");
 }
 """
 _BROWSER_PROBE = r"""
-import { readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 const uid = process.getuid();
 if (uid === 0) throw new Error("root is prohibited");
-const browser_binaries_present = readdirSync("/ms-playwright").some(name => name.startsWith("chromium"));
-if (!browser_binaries_present) throw new Error("Chromium binaries missing");
-let playwright_package_resolvable = false;
-try { createRequire(import.meta.url).resolve("playwright"); playwright_package_resolvable = true; } catch {}
-console.log(JSON.stringify({ node_version: process.version, uid,
-  browser_binaries_present, playwright_package_resolvable }));
+const require = createRequire("/opt/orchestwin/browser-automation/package.json");
+const playwright = require("playwright");
+const executable = playwright.chromium.executablePath();
+if (!existsSync(executable)) throw new Error("Chromium binaries missing");
+const chromium = spawnSync(executable, ["--version"], { encoding: "utf8", timeout: 4000, maxBuffer: 65536 });
+const npm = spawnSync("npm", ["--version"], { encoding: "utf8", timeout: 4000, maxBuffer: 65536 });
+if (chromium.status !== 0 || npm.status !== 0) throw new Error("tool version probe failed");
+const version = chromium.stdout.match(/Chromium\s+(\d+\.\d+\.\d+\.\d+)/);
+if (!version) throw new Error("Chromium version unavailable");
+console.log(JSON.stringify({ node_version: process.version, npm_version: npm.stdout.trim(), uid,
+  browser_binaries_present: true, playwright_package_resolvable: true,
+  playwright_version: require("playwright/package.json").version,
+  playwright_core_version: require("playwright-core/package.json").version,
+  axe_version: require("axe-core/package.json").version, chromium_version: version[1],
+  package_lock_sha256: createHash("sha256").update(readFileSync("/opt/orchestwin/browser-automation/package-lock.json")).digest("hex") }));
+"""
+_PHP_PROBE = r"""
+function runProbe(array $argv): array {
+    $p = proc_open($argv, [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']], $pipes);
+    if (!is_resource($p)) throw new RuntimeException('probe process failed');
+    fclose($pipes[0]);
+    $out = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $err = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    return [proc_close($p), $out, $err];
+}
+$uid = posix_geteuid();
+if ($uid === 0) throw new RuntimeException('root is prohibited');
+$root = '/tmp/orchestwin-php-probe';
+mkdir($root.'/valid', 0777, true); mkdir($root.'/invalid', 0777, true);
+file_put_contents($root.'/valid/index.php', '<?php echo "orchestwin-php-probe";');
+file_put_contents($root.'/invalid/broken.php', '<?php function (');
+$composer = runProbe(['composer','--no-plugins','--no-scripts','--no-interaction','--no-ansi','--version']);
+if ($composer[0] !== 0 || !preg_match('/Composer version (\d+\.\d+\.\d+)/', $composer[1], $version))
+    throw new RuntimeException('Composer probe failed');
+$valid = runProbe(['php','/opt/orchestwin/bin/php-lint.php',$root.'/valid']);
+$invalid = runProbe(['php','/opt/orchestwin/bin/php-lint.php',$root.'/invalid']);
+if ($valid[0] !== 0 || $invalid[0] === 0) throw new RuntimeException('PHP lint probe failed');
+$server = proc_open(['php','-S','127.0.0.1:4173','-t',$root.'/valid'],
+    [0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']], $pipes);
+if (!is_resource($server)) throw new RuntimeException('PHP server failed');
+$ok = false;
+try {
+    $options = stream_context_create(['http'=>['timeout'=>0.3]]);
+    for ($i=0; $i<30; $i++) {
+        if (@file_get_contents('http://127.0.0.1:4173/', false, $options) === 'orchestwin-php-probe') { $ok=true; break; }
+        usleep(100000);
+    }
+    if (!$ok) throw new RuntimeException('PHP HTTP probe failed');
+    echo json_encode(['uid'=>$uid,'php_version'=>PHP_VERSION,'composer_version'=>$version[1],
+        'php_lint_valid'=>true,'php_lint_invalid_rejected'=>true,'php_http'=>true], JSON_THROW_ON_ERROR);
+} finally { proc_terminate($server, 9); proc_close($server); }
 """
 
 
@@ -99,30 +144,86 @@ def _json(content: bytes):
         raise RunnerBootstrapError("COMMAND_RETURNED_INVALID_JSON") from None
 
 
-def _write_manifest(path: Path, result: dict[str, object]) -> None:
-    body = json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    payload = {**result, "content_hash": hashlib.sha256(body.encode()).hexdigest()}
+def _hash(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        ).encode()
+    ).hexdigest()
+
+
+def _write_manifest(path: Path, result: dict[str, object]) -> dict[str, object]:
+    payload = {**result, "content_hash": _hash(result)}
     with path.open("x", encoding="utf-8", newline="\n") as output:
         output.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return payload
 
 
-def _recipe_bytes(root: Path) -> dict[str, bytes]:
-    content = {}
-    for relative in _RECIPE_FILES:
-        path = root / relative
-        if any(
-            candidate.is_symlink() or candidate.is_junction() for candidate in (path, *path.parents)
+def _observed_text(value: object) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 256
+        or value != value.strip()
+        or any(ord(c) < 32 for c in value)
+    ):
+        raise RunnerBootstrapError("OBSERVED_METADATA_INVALID")
+    return value
+
+
+def _probe_metadata(kind, observed, recipe, sources):
+    if (
+        not isinstance(observed, dict)
+        or type(observed.get("uid")) is not int
+        or observed["uid"] != 65532
+    ):
+        raise RunnerBootstrapError("PROBE_USER_IDENTITY_INVALID")
+    flags = {
+        "NODE": ("static_http",),
+        "PHP": ("php_lint_valid", "php_lint_invalid_rejected", "php_http"),
+        "BROWSER": ("browser_binaries_present", "playwright_package_resolvable"),
+    }[kind]
+    if any(observed.get(flag) is not True for flag in flags):
+        raise RunnerBootstrapError("RUNNER_FUNCTION_PROBE_FAILED")
+    names = (
+        ("php_version", "composer_version") if kind == "PHP" else ("node_version", "npm_version")
+    )
+    if kind == "BROWSER":
+        names += (
+            "playwright_version",
+            "playwright_core_version",
+            "axe_version",
+            "chromium_version",
+            "package_lock_sha256",
+        )
+    metadata = {"uid": 65532, **{flag: True for flag in flags}}
+    metadata.update({name: _observed_text(observed.get(name)) for name in names})
+    for name in names:
+        if name.endswith("version") and not re.fullmatch(
+            r"v?\d+\.\d+\.\d+(?:[.\w+-]*)?", metadata[name]
         ):
-            raise RunnerBootstrapError("RUNNER_RECIPE_REDIRECTED")
-        content[relative] = path.read_bytes()
-    for relative in _RECIPE_FILES[:2]:
-        text = content[relative].decode("utf-8")
-        from_lines = [
-            line for line in text.splitlines() if line.strip().upper().startswith("FROM ")
-        ]
-        if len(from_lines) != 1 or _BASE.fullmatch(from_lines[0]) is None:
-            raise RunnerBootstrapError("RUNNER_BASE_NOT_PINNED")
-    return content
+            raise RunnerBootstrapError("RUNNER_TOOL_VERSION_INVALID")
+    if kind == "BROWSER":
+        lock_bytes = sources["infra/web-runners/browser-locked/package-lock.json"]
+        packages = _json(lock_bytes)["packages"]
+        for field, package in (
+            ("playwright_version", "playwright"),
+            ("playwright_core_version", "playwright-core"),
+            ("axe_version", "axe-core"),
+        ):
+            if metadata[field] != packages[f"node_modules/{package}"]["version"]:
+                raise RunnerBootstrapError("RUNNER_TOOL_VERSION_MISMATCH")
+        if metadata["package_lock_sha256"] != hashlib.sha256(lock_bytes).hexdigest():
+            raise RunnerBootstrapError("RUNNER_LOCK_IDENTITY_MISMATCH")
+    else:
+        for tool in ("node",) if kind == "NODE" else ("php", "composer"):
+            versions = [
+                match.group(1)
+                for reference in recipe.base_image_references
+                if (match := re.search(rf"/{tool}:(\d+\.\d+\.\d+)(?:[-@])", reference))
+            ]
+            if len(versions) != 1 or metadata[f"{tool}_version"].removeprefix("v") != versions[0]:
+                raise RunnerBootstrapError("RUNNER_TOOL_VERSION_MISMATCH")
+    return metadata
 
 
 async def build_and_probe_local_web_runners(
@@ -131,7 +232,7 @@ async def build_and_probe_local_web_runners(
     *,
     runner=None,
 ) -> dict[str, object]:
-    """Build two trusted recipes, probe observed images, preserve explicit limits."""
+    """Build committed trusted recipes; record tool probes without profile promotion."""
     root = Path(repo_root).resolve(strict=True)
     output = Path(output_root).absolute()
     if ".." in output.parts:
@@ -175,8 +276,21 @@ async def build_and_probe_local_web_runners(
     dirty = await command(("git", "-C", str(root), "status", "--porcelain"), "GIT_STATUS")
     if dirty.stdout.strip():
         raise RunnerBootstrapError("WORKING_TREE_NOT_CLEAN_COMMIT_VERIFIED_CODE_FIRST")
-    sources = _recipe_bytes(root)
+    try:
+        inputs = load_bootstrap_inputs(root)
+    except ValueError as error:
+        code = str(error)
+        if code == "BOOTSTRAP_DOCKERFILE_BASE_NOT_PINNED":
+            code = "RUNNER_BASE_NOT_PINNED"
+        raise RunnerBootstrapError(code) from None
+    sources = dict(inputs.sources)
+    for path, content in sources.items():
+        committed = await command(("git", "-C", str(root), "show", f"{head}:{path}"), "GIT_RECIPE")
+        if committed.stdout != content:
+            raise RunnerBootstrapError("RECIPE_BYTES_DO_NOT_MATCH_COMMITTED_TREE")
     context = (await command(("docker", "context", "show"), "CONTEXT")).stdout.decode().strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", context):
+        raise RunnerBootstrapError("DOCKER_CONTEXT_NAME_INVALID")
     details = _json(
         (await command(("docker", "context", "inspect", context), "CONTEXT_INSPECT")).stdout
     )
@@ -184,29 +298,86 @@ async def build_and_probe_local_web_runners(
     if not endpoint.startswith(("npipe://", "unix://")):
         raise RunnerBootstrapError("LOCAL_DOCKER_CONTEXT_REQUIRED")
     docker = ("docker", "--context", context)
+    builder = (
+        await command((*docker, "buildx", "inspect", context), "BUILDER_INSPECT")
+    ).stdout.decode()
+    if re.findall(r"^Driver:\s*(\S+)\s*$", builder, re.MULTILINE) != ["docker"] or re.findall(
+        r"^Endpoint:\s*(\S+)\s*$", builder, re.MULTILINE
+    ) != [context]:
+        raise RunnerBootstrapError("LOCAL_CONTEXT_DOCKER_BUILDER_REQUIRED")
     info = _json(
         (
             await command(
-                (*docker, "info", "--format", '{"os":"{{.OSType}}","arch":"{{.Architecture}}"}'),
+                (
+                    *docker,
+                    "info",
+                    "--format",
+                    '{"os":{{json .OSType}},"arch":{{json .Architecture}},'
+                    '"kernel_version":{{json .KernelVersion}},'
+                    '"operating_system":{{json .OperatingSystem}}}',
+                ),
                 "DOCKER_INFO",
             )
         ).stdout
     )
     if info.get("os") != "linux" or info.get("arch") not in {"x86_64", "amd64"}:
         raise RunnerBootstrapError("LINUX_AMD64_ENGINE_REQUIRED")
+    version = _json(
+        (
+            await command(
+                (
+                    *docker,
+                    "version",
+                    "--format",
+                    '{"client_version":{{json .Client.Version}},"server_version":{{json .Server.Version}}}',
+                ),
+                "DOCKER_VERSION",
+            )
+        ).stdout
+    )
+    environment = {
+        "docker_context": context,
+        "builder_driver": "docker",
+        "platform": "linux/amd64",
+        **{
+            key: _observed_text(info.get(key))
+            for key in ("os", "arch", "kernel_version", "operating_system")
+        },
+        **{key: _observed_text(version.get(key)) for key in ("client_version", "server_version")},
+    }
 
     output.mkdir(parents=True)
     result = {
+        "schema_version": 2,
         "report_type": "LOCAL_RUNNER_BOOTSTRAP_NOT_FORMAL_EVIDENCE",
         "status": "IN_PROGRESS",
+        "started_at": datetime.now(UTC).isoformat(),
         "platform_commit": head,
+        "bootstrap_inputs_hash": inputs.content_hash,
+        "environment": environment,
+        "environment_hash": _hash(environment),
+        "probe_policy": {
+            "network": "none",
+            "read_only": True,
+            "uid": 65532,
+            "gid": 65532,
+            "cap_drop": "ALL",
+            "no_new_privileges": True,
+            "memory_bytes": 512 * 1024 * 1024,
+            "cpus": 1,
+            "pids_limit": 128,
+            "tmpfs": "/tmp:rw,noexec,nosuid,size=64m,mode=1777",
+            "host_mounts": False,
+            "timeout_seconds": 20,
+            "maximum_output_bytes_per_stream": 8 * 1024 * 1024,
+        },
         "level_d_validated": False,
         "formal_run_started": False,
         "browser_automation_verified": False,
         "runners": [],
         "artifacts": artifacts,
         "recipes": [
-            {"path": name, "sha256": hashlib.sha256(body).hexdigest()}
+            {"path": name, "sha256": hashlib.sha256(body).hexdigest(), "size_bytes": len(body)}
             for name, body in sources.items()
         ],
     }
@@ -217,17 +388,23 @@ async def build_and_probe_local_web_runners(
                 path = build_root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(body)
-            for kind, probe in (("node", _NODE_PROBE), ("browser", _BROWSER_PROBE)):
+            for recipe in inputs.runners:
+                kind = recipe.kind.lower()
+                build_network = "default" if recipe.kind == "BROWSER" else "none"
                 tag = f"orchestwin/web-{kind}-runner:s12-{uuid4().hex}"
                 await command(
                     (
                         *docker,
                         "build",
+                        "--builder",
+                        context,
                         "--pull",
                         "--platform",
                         "linux/amd64",
+                        "--network",
+                        build_network,
                         "--file",
-                        str(build_root / f"infra/web-runners/Dockerfile.{kind}"),
+                        str(build_root / recipe.dockerfile_path),
                         "--tag",
                         tag,
                         str(build_root),
@@ -249,6 +426,12 @@ async def build_and_probe_local_web_runners(
                     raise RunnerBootstrapError("LOCAL_IMAGE_IDENTITY_INVALID")
                 metadata = {
                     "kind": kind.upper(),
+                    "runner_id": recipe.runner_id,
+                    "runner_version": recipe.version,
+                    "recipe_content_hash": recipe.recipe_content_hash,
+                    "source_paths": list(recipe.source_paths),
+                    "base_image_references": list(recipe.base_image_references),
+                    "build_network": build_network,
                     "local_tag": tag,
                     "image_id": image_id,
                     "image_id_kind": "LOCAL_CONFIG_DIGEST",
@@ -256,6 +439,11 @@ async def build_and_probe_local_web_runners(
                 }
                 result["runners"].append(metadata)
                 name = f"orchestwin-s12-probe-{uuid4().hex}"
+                probe_command = {
+                    "NODE": ("node", "--input-type=module", "-e", _NODE_PROBE),
+                    "PHP": ("php", "-r", _PHP_PROBE),
+                    "BROWSER": ("node", "--input-type=module", "-e", _BROWSER_PROBE),
+                }[recipe.kind]
                 argv = (
                     *docker,
                     "run",
@@ -281,26 +469,19 @@ async def build_and_probe_local_web_runners(
                     "65532:65532",
                     "--tmpfs",
                     "/tmp:rw,noexec,nosuid,size=64m,mode=1777",
+                    "--env",
+                    "HOME=/tmp",
+                    "--env",
+                    "COMPOSER_HOME=/tmp/orchestwin-composer",
                     image_id,
-                    "node",
-                    "--input-type=module",
-                    "-e",
-                    probe,
+                    *probe_command,
                 )
                 try:
                     observed = await command(argv, f"PROBE_{kind.upper()}", timeout=20, log=True)
-                    observed_json = _json(observed.stdout)
-                    if not isinstance(observed_json, dict) or observed_json.get("uid") != 65532:
-                        raise RunnerBootstrapError("PROBE_USER_IDENTITY_INVALID")
-                    if kind == "node" and observed_json.get("static_http") is not True:
-                        raise RunnerBootstrapError("STATIC_HTTP_PROBE_FAILED")
-                    if (
-                        kind == "browser"
-                        and observed_json.get("browser_binaries_present") is not True
-                    ):
-                        raise RunnerBootstrapError("BROWSER_BINARY_INVENTORY_FAILED")
-                    metadata["probe"] = observed_json
-                except BaseException:
+                    metadata["probe"] = _probe_metadata(
+                        recipe.kind, _json(observed.stdout), recipe, sources
+                    )
+                finally:
                     # Only remove the specific probe container created by this operation.
                     cleanup = asyncio.create_task(
                         command(
@@ -309,20 +490,39 @@ async def build_and_probe_local_web_runners(
                             required=False,
                         )
                     )
+                    cancelled_during_cleanup = False
                     while not cleanup.done():
                         try:
                             await asyncio.shield(cleanup)
                         except asyncio.CancelledError:
-                            continue
-                    metadata["cleanup_confirmed"] = cleanup.result().exit_code == 0
-                    raise
+                            cancelled_during_cleanup = True
+                    cleanup_result = cleanup.result()
+                    metadata["cleanup_confirmed"] = (
+                        cleanup_result.transport_status == "COMPLETED"
+                        and (
+                            cleanup_result.exit_code == 0
+                            or cleanup_result.stderr.decode(errors="replace").strip()
+                            == f"Error response from daemon: No such container: {name}"
+                        )
+                    )
+                    if not metadata["cleanup_confirmed"]:
+                        raise RunnerBootstrapError("PROBE_CLEANUP_NOT_CONFIRMED")
+                    if cancelled_during_cleanup:
+                        raise asyncio.CancelledError
+        final_head = await command(("git", "-C", str(root), "rev-parse", "HEAD"), "GIT_HEAD")
+        final_status = await command(
+            ("git", "-C", str(root), "status", "--porcelain"), "GIT_STATUS"
+        )
+        if final_head.stdout.decode().strip() != head or final_status.stdout.strip():
+            raise RunnerBootstrapError("WORKING_TREE_CHANGED_DURING_BOOTSTRAP")
         result["status"] = "IMAGES_BUILT_PROBES_RECORDED"
     except BaseException:
         result["status"] = "FAILED"
+        result["finished_at"] = datetime.now(UTC).isoformat()
         _write_manifest(output / "manifest.json", result)
         raise
-    _write_manifest(output / "manifest.json", result)
-    return result
+    result["finished_at"] = datetime.now(UTC).isoformat()
+    return _write_manifest(output / "manifest.json", result)
 
 
 def main(argv: list[str] | None = None) -> int:
