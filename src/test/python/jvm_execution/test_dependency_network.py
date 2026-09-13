@@ -263,6 +263,67 @@ def test_ready_network_is_internal_with_only_hardened_dual_homed_proxy(setup):
     assert (arguments["output_root"] / "manifest.json").is_file()
 
 
+def test_ready_receipt_can_be_reverified_without_modifying_resources_or_files(setup):
+    docker, arguments = setup
+    result = run_create(setup)
+    path = arguments["output_root"] / "manifest.json"
+    before = path.read_bytes()
+    calls_before = len(docker.calls)
+    binding = asyncio.run(
+        network.verify_dependency_network(
+            path,
+            expected_content_hash=result["content_hash"],
+            docker_context="desktop-linux",
+            runner=docker,
+        )
+    )
+    assert binding.to_snapshot() == result["controlled_network"]
+    assert path.read_bytes() == before
+    assert len(docker.containers) == 1 and len(docker.networks) == 2
+    assert all("inspect" in argv or "info" in argv for argv, *_ in docker.calls[calls_before:])
+
+
+@pytest.mark.parametrize(
+    "change", ["hash", "member", "proxy", "network", "endpoint", "binding", "status"]
+)
+def test_runtime_network_revalidation_rejects_stale_or_changed_boundaries(setup, change):
+    docker, arguments = setup
+    result = run_create(setup)
+    path = arguments["output_root"] / "manifest.json"
+    expected_hash = result["content_hash"]
+    if change == "hash":
+        expected_hash = "0" * 64
+    elif change == "member":
+        docker.networks[result["controlled_network"]["network_id"]]["Containers"]["f" * 64] = {
+            "Name": "foreign"
+        }
+    elif change == "proxy":
+        next(iter(docker.containers.values()))["HostConfig"]["Privileged"] = True
+    elif change == "network":
+        docker.networks[result["controlled_network"]["network_id"]]["Internal"] = False
+    elif change == "endpoint":
+        docker.remote = True
+    else:
+        if change == "binding":
+            result["controlled_network"]["network_id"] = "f" * 64
+        else:
+            result["status"] = "REMOVED"
+        payload = {key: value for key, value in result.items() if key != "content_hash"}
+        expected_hash = network._hash(payload)
+        path.write_text(json.dumps({**payload, "content_hash": expected_hash}))
+    calls_before = len(docker.calls)
+    with pytest.raises(network.DependencyNetworkError):
+        asyncio.run(
+            network.verify_dependency_network(
+                path,
+                expected_content_hash=expected_hash,
+                docker_context="desktop-linux",
+                runner=docker,
+            )
+        )
+    assert all("inspect" in argv or "info" in argv for argv, *_ in docker.calls[calls_before:])
+
+
 @pytest.mark.parametrize("mutation", ["extra-copy", "entrypoint", "user", "argument"])
 def test_proxy_recipe_drift_is_rejected_before_docker(setup, mutation):
     docker, arguments = setup

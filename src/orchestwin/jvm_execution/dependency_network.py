@@ -863,6 +863,52 @@ def _load_manifest(path):
     return manifest
 
 
+async def verify_dependency_network(
+    manifest_path, *, expected_content_hash, docker_context, runner=None
+) -> ControlledJvmNetwork:
+    """Recheck an exact ready receipt and its live resources without changing them.
+
+    The caller pins the receipt hash. Verification is performed before joining the
+    internal bridge, while the proxy is its only member; it is not authorization.
+    """
+    manifest = _load_manifest(_safe_path(manifest_path, must_exist=True))
+    if (
+        manifest["content_hash"] != expected_content_hash
+        or manifest.get("status") != "READY"
+        or manifest["execution_policy_hash"] != JVM_SETUP_POLICY_HASH
+        or set(manifest["resources"]) != {"internal", "egress", "proxy"}
+        or any(resource["id"] is None for resource in manifest["resources"].values())
+        or manifest.get("cleanup_failures") != []
+        or manifest.get("probes")
+        != {
+            "schema_version": 1,
+            "passed": True,
+            "checks": {check: True for check in PROBE_CHECKS},
+        }
+        or manifest.get("dependency_policy_hash") != _hash(manifest.get("dependency_policy"))
+    ):
+        raise DependencyNetworkError("JVM_DEPENDENCY_NETWORK_RECEIPT_NOT_READY")
+    internal = manifest["resources"]["internal"]
+    binding = ControlledJvmNetwork(
+        name=internal["name"],
+        network_id=internal["id"],
+        policy_hash=JVM_SETUP_POLICY_HASH,
+    )
+    if manifest.get("controlled_network") != binding.to_snapshot():
+        raise DependencyNetworkError("JVM_DEPENDENCY_NETWORK_BINDING_MISMATCH")
+    commands = _Commands(docker_context, runner)
+    if await commands.environment() != manifest["environment"]:
+        raise DependencyNetworkError("JVM_DEPENDENCY_NETWORK_MANIFEST_ENDPOINT_CHANGED")
+    await _image(commands, manifest.get("proxy_image_id"))
+    for role in ("internal", "egress", "proxy"):
+        item = await _inspect_resource(commands, manifest, role, hardened=True)
+        if role != "proxy" and set(item.get("Containers", {})) != {
+            manifest["resources"]["proxy"]["id"]
+        }:
+            raise DependencyNetworkError("JVM_DEPENDENCY_NETWORK_UNEXPECTED_NETWORK_MEMBER")
+    return binding
+
+
 async def remove_dependency_network(manifest_path, *, docker_context, runner=None):
     """Preflight every identity and ownership label before removing exact Docker IDs."""
     path = _safe_path(manifest_path, must_exist=True)
