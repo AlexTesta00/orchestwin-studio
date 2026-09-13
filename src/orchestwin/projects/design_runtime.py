@@ -30,6 +30,7 @@ from orchestwin.models.design import (
     DesignUserTwinInput,
 )
 from orchestwin.models.design_runtime import (
+    DesignRuntime,
     DesignRuntimeMode,
     DesignRuntimeSettings,
     build_design_runtime,
@@ -380,9 +381,11 @@ class DesignServices:
 def build_design_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: DesignRuntimeSettings | None = None,
+    *,
+    proposal_runtime: DesignRuntime | None = None,
 ) -> DesignServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 5."""
-    runtime = build_design_runtime(settings)
+    runtime = proposal_runtime if proposal_runtime is not None else build_design_runtime(settings)
     command_uow_factory = ManagedDesignUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyDesignGateUnitOfWorkFactory(session_factory)
 

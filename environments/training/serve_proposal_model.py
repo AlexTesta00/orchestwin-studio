@@ -38,6 +38,22 @@ MAX_OUTPUT = 8192
 MAX_BODY = 2_000_000
 
 
+def health_snapshot(state):
+    return {
+        "health_contract_version": 2,
+        "status": "READY",
+        "model_name": state["model_name"],
+        "model_identity": state["identity"].to_snapshot(),
+        "supported_tasks": sorted(TASKS),
+        "max_sequence_length": MAX_SEQUENCE,
+        "max_output_tokens": MAX_OUTPUT,
+        "completed_generation_count": state["completed_generation_count"],
+        "adapter_loaded": False,
+        "training_executed": False,
+        "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK",
+    }
+
+
 def load_model():
     """Reuse the tested exact-revision loader, always with network disabled."""
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -156,7 +172,7 @@ def handler_for(state, token):
                 return self._send(401, {"error": "UNAUTHORIZED"})
             if self.path != "/health":
                 return self._send(404, {"error": "NOT_FOUND"})
-            self._send(200, {"status": "READY", "model_identity": state["identity"].to_snapshot()})
+            self._send(200, health_snapshot(state))
 
         def do_POST(self):
             self.connection.settimeout(10)
@@ -175,6 +191,7 @@ def handler_for(state, token):
                 return self._send(429, {"error": "MODEL_BUSY"})
             try:
                 response = completion(state, payload)
+                state["completed_generation_count"] += 1
             except (ValueError, TypeError, KeyError):
                 return self._send(422, {"error": "REQUEST_REJECTED"})
             except Exception:
@@ -237,6 +254,7 @@ def main():
         "identity": identity,
         "model_name": "qwen3-4b-proposals",
         "slot": threading.BoundedSemaphore(1),
+        "completed_generation_count": 0,
     }
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(state, token))
     server.daemon_threads = True

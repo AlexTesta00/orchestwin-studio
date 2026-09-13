@@ -21,6 +21,7 @@ from orchestwin.api.finalization import create_finalization_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.jvm_execution import create_jvm_execution_router
 from orchestwin.api.jvm_operations import create_jvm_operations_router
+from orchestwin.api.model_runtime import create_model_runtime_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.proposal_evidence import create_proposal_evidence_router
 from orchestwin.api.requirements import create_requirements_router
@@ -35,6 +36,7 @@ from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.real_runtime import RealModelRuntimeError
 
 
 def create_app(
@@ -55,8 +57,16 @@ def create_app(
         """Own and dispose process-level runtime resources."""
         del application
 
-        yield
-        await resolved_runtime.close()
+        try:
+            if resolved_runtime.real_model_runtime is not None:
+                report = await resolved_runtime.real_model_runtime.check_readiness(
+                    resolved_runtime.database_runtime.session_factory
+                )
+                if not report["ready"]:
+                    raise RealModelRuntimeError("REAL_MODEL_DEPENDENCIES_NOT_READY")
+            yield
+        finally:
+            await resolved_runtime.close()
 
     application = FastAPI(
         title=resolved_settings.application_name,
@@ -75,6 +85,14 @@ def create_app(
             status_code=503 if unavailable else 502,
             content={"detail": {"code": error.code, "stage": "MODEL_PROPOSAL"}},
         )
+
+    @application.exception_handler(RealModelRuntimeError)
+    async def real_model_runtime_failure(_request, error: RealModelRuntimeError):
+        return JSONResponse(
+            status_code=503, content={"detail": {"code": str(error), "stage": "MODEL_RUNTIME"}}
+        )
+
+    application.state.application_runtime = resolved_runtime
 
     @application.exception_handler(ProposalEvidenceError)
     async def proposal_evidence_failure(_request, error: ProposalEvidenceError):
@@ -182,6 +200,7 @@ def create_app(
         create_finalization_router(),
         create_training_router(),
         create_proposal_evidence_router(),
+        create_model_runtime_router(),
     ):
         application.include_router(
             router,

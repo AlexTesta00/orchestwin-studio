@@ -68,7 +68,12 @@ from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
 from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
-from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.config import (
+    ApplicationSettings,
+    ModelRuntimeMode,
+    RuntimeEnvironment,
+    load_settings,
+)
 from orchestwin.evaluation.final_runtime import FinalEvaluatorRuntime, build_final_evaluator_runtime
 from orchestwin.identity.application import (
     IdentityApplicationService,
@@ -79,6 +84,11 @@ from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
 from orchestwin.identity.tokens import JwtAccessTokenService
 from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
+from orchestwin.models.real_runtime import (
+    RealModelRuntime,
+    RealModelRuntimeError,
+    build_real_model_runtime,
+)
 from orchestwin.models.runtime import (
     create_team_proposal_port,
     load_team_proposal_runtime_settings,
@@ -185,6 +195,7 @@ class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
     final_evaluator_runtime: FinalEvaluatorRuntime | None = None
+    real_model_runtime: RealModelRuntime | None = None
     proposal_evidence_store: SqlAlchemyProposalEvidenceStore | None = None
     identity_service: IdentityApplicationService | None = None
     project_service: ProjectApplicationService | None = None
@@ -241,11 +252,30 @@ def create_default_runtime(
     connection_settings = load_runtime_connection_settings()
     resolved_settings = settings if settings is not None else load_settings()
 
+    real_required = resolved_settings.model_runtime_mode is ModelRuntimeMode.REAL_REQUIRED
+    if not real_required and resolved_settings.model_runtime_config_file is not None:
+        raise RealModelRuntimeError("REAL_MODEL_MODE_REQUIRED_FOR_CONFIGURATION")
+    if resolved_settings.environment is RuntimeEnvironment.PRODUCTION and not real_required:
+        raise RealModelRuntimeError("PRODUCTION_REQUIRES_REAL_MODEL_RUNTIME")
+
     if connection_settings is None:
+        if real_required:
+            raise RealModelRuntimeError("REAL_MODEL_RUNTIME_REQUIRES_DATABASE_AND_AUTH")
         return ApplicationRuntime()
 
-    final_evaluator = build_final_evaluator_runtime()
-    team_proposal_port = create_team_proposal_port(load_team_proposal_runtime_settings())
+    real_models = (
+        build_real_model_runtime(resolved_settings.model_runtime_config_file)
+        if real_required
+        else None
+    )
+    final_evaluator = (
+        real_models.final_evaluator if real_models is not None else build_final_evaluator_runtime()
+    )
+    team_proposal_port = (
+        real_models.team
+        if real_models is not None
+        else create_team_proposal_port(load_team_proposal_runtime_settings())
+    )
     database_runtime = create_database_runtime(connection_settings.database)
 
     identity_service = LocalIdentityApplicationService(
@@ -277,10 +307,22 @@ def create_default_runtime(
     agent_team_service = LocalAgentTeamApprovalService(
         unit_of_work_factory=SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
     )
-    user_modeling = build_user_modeling_services(database_runtime.session_factory)
-    requirements = build_requirements_services(database_runtime.session_factory)
-    design = build_design_services(database_runtime.session_factory)
-    architecture = build_architecture_services(database_runtime.session_factory)
+    user_modeling = build_user_modeling_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.user_modeling} if real_models is not None else {}),
+    )
+    requirements = build_requirements_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.requirements} if real_models is not None else {}),
+    )
+    design = build_design_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.design} if real_models is not None else {}),
+    )
+    architecture = build_architecture_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.architecture} if real_models is not None else {}),
+    )
     sprint07 = build_sprint07_services(
         resolved_settings,
         database_runtime.session_factory,
@@ -289,6 +331,7 @@ def create_default_runtime(
     governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
 
     return ApplicationRuntime(
+        real_model_runtime=real_models,
         final_evaluator_runtime=final_evaluator,
         proposal_evidence_store=proposal_evidence_store,
         identity_service=identity_service,

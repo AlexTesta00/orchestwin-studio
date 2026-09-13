@@ -22,6 +22,7 @@ from orchestwin.models.requirements import (
     RequirementsUserTwinInput,
 )
 from orchestwin.models.requirements_runtime import (
+    RequirementsRuntime,
     RequirementsRuntimeMode,
     RequirementsRuntimeSettings,
     build_requirements_runtime,
@@ -427,9 +428,13 @@ class RequirementsServices:
 def build_requirements_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: RequirementsRuntimeSettings | None = None,
+    *,
+    proposal_runtime: RequirementsRuntime | None = None,
 ) -> RequirementsServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 4."""
-    runtime = build_requirements_runtime(settings)
+    runtime = (
+        proposal_runtime if proposal_runtime is not None else build_requirements_runtime(settings)
+    )
     command_uow_factory = ManagedRequirementsUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyRequirementsGateUnitOfWorkFactory(session_factory)
 

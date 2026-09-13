@@ -30,6 +30,7 @@ from orchestwin.models.architecture import (
     ArchitectureRequirementsInput,
 )
 from orchestwin.models.architecture_runtime import (
+    ArchitectureRuntime,
     ArchitectureRuntimeMode,
     ArchitectureRuntimeSettings,
     build_architecture_runtime,
@@ -345,9 +346,13 @@ class ArchitectureServices:
 def build_architecture_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: ArchitectureRuntimeSettings | None = None,
+    *,
+    proposal_runtime: ArchitectureRuntime | None = None,
 ) -> ArchitectureServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 6."""
-    runtime = build_architecture_runtime(settings)
+    runtime = (
+        proposal_runtime if proposal_runtime is not None else build_architecture_runtime(settings)
+    )
     command_uow_factory = ManagedArchitectureUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyArchitectureGateUnitOfWorkFactory(session_factory)
 

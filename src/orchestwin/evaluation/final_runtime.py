@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -28,6 +28,7 @@ from orchestwin.models.final_evaluator_session import (
     check_final_health,
     load_final_session,
 )
+from orchestwin.models.serialized_generation import SerializedGenerationPort
 from orchestwin.models.structured_generation import ModelRuntimeIdentity
 
 
@@ -53,6 +54,7 @@ class FinalEvaluatorSettings(BaseSettings):
 @dataclass(frozen=True, slots=True)
 class FinalEvaluatorRuntime:
     session: FinalEvaluatorSession
+    generation_lock: asyncio.Lock | None = field(default=None, repr=False, compare=False)
 
     def create_evaluator(
         self,
@@ -77,6 +79,8 @@ class FinalEvaluatorRuntime:
             if generation_port is not None
             else FinalEvaluatorGenerationPort(self.session)
         )
+        if self.generation_lock is not None:
+            port = SerializedGenerationPort(port, self.generation_lock)
         schema_version = 1
         schema_payload = _output_schema_payload()
         prompt_version = FIELD_SCOPE_PROMPT_VERSION

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.user_modeling_runtime import (
+    UserModelingRuntime,
     UserModelingRuntimeMode,
     UserModelingRuntimeSettings,
     build_user_modeling_runtime,
@@ -258,9 +259,13 @@ class UserModelingServices:
 def build_user_modeling_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: UserModelingRuntimeSettings | None = None,
+    *,
+    proposal_runtime: UserModelingRuntime | None = None,
 ) -> UserModelingServices:
     """Wire persistence and existing domain services without running a provider or opening SQL."""
-    runtime = build_user_modeling_runtime(settings)
+    runtime = (
+        proposal_runtime if proposal_runtime is not None else build_user_modeling_runtime(settings)
+    )
     command_units = ManagedUserModelingUnitOfWorkFactory(session_factory)
     return UserModelingServices(
         runtime_mode=runtime.mode,

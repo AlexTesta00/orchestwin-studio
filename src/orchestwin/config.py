@@ -29,6 +29,13 @@ class LogLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
+class ModelRuntimeMode(StrEnum):
+    """Explicit separation of development fixtures and real model services."""
+
+    DEVELOPMENT_FIXTURES = "DEVELOPMENT_FIXTURES"
+    REAL_REQUIRED = "REAL_REQUIRED"
+
+
 _MEBIBYTE = 1024 * 1024
 _MAXIMUM_SOURCE_ARCHIVE_UPLOAD_BYTES = 25 * _MEBIBYTE
 _IMAGE_REFERENCE_PATTERN = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
@@ -51,6 +58,8 @@ class ApplicationSettings(BaseSettings):
     application_name: str = "OrchesTwin Studio API"
     environment: RuntimeEnvironment = RuntimeEnvironment.DEVELOPMENT
     debug: bool = False
+    model_runtime_mode: ModelRuntimeMode = ModelRuntimeMode.DEVELOPMENT_FIXTURES
+    model_runtime_config_file: Path | None = None
     log_level: LogLevel = LogLevel.INFO
     api_prefix: str = "/api/v1"
     cors_allowed_origins: tuple[str, ...] = ("http://127.0.0.1:5173",)
