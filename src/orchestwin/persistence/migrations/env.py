@@ -23,6 +23,7 @@ from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
     UserRecord,
 )
+from orchestwin.jvm_execution.operation_persistence import JVM_GOVERNED_OPERATIONS
 from orchestwin.jvm_execution.validation_evidence_persistence import JVM_PROFILE_VALIDATION_EVIDENCE
 from orchestwin.persistence.config import (
     load_database_settings,
@@ -81,6 +82,7 @@ if configuration.config_file_name is not None:
     )
 
 _IMPORTED_MODELS = (
+    JVM_GOVERNED_OPERATIONS,
     JVM_PROFILE_VALIDATION_EVIDENCE,
     WEB_GOVERNED_OPERATIONS,
     WEB_PROFILE_VALIDATION_EVIDENCE,

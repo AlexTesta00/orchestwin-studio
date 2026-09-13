@@ -70,6 +70,7 @@ from orchestwin.identity.application import (
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
 from orchestwin.identity.tokens import JwtAccessTokenService
+from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
 from orchestwin.models.runtime import (
     create_team_proposal_port,
     load_team_proposal_runtime_settings,
@@ -209,6 +210,7 @@ class ApplicationRuntime:
     web_repair_api_service: WebRepairApiService | None = None
     web_operation_store: object | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
+    jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
     training_api_service: TrainingApiService | None = None
@@ -306,6 +308,7 @@ def create_default_runtime(
         web_browser_evidence_api_service=governed_web.reads,
         web_repair_api_service=governed_web.repairs,
         web_operation_store=governed_web.operations,
+        jvm_operation_store=SqlAlchemyJvmOperationStore(database_runtime.session_factory),
         web_source_api_service=SqlAlchemyWebSourceApiService(
             database_runtime.session_factory,
             content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
