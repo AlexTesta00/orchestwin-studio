@@ -1,6 +1,7 @@
 """Proposal serving controls with an injected tensor/model double, no GPU."""
 
 import importlib.util
+import json
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +46,7 @@ def state_and_payload(tmp_path, *, tokens=(8, 9, 2), temperature=0.6):
         "torch": SimpleNamespace(inference_mode=nullcontext),
         "model": model,
         "tokenizer": tokenizer,
+        "schema_processor": Mock(return_value=Mock(finish=Mock(return_value=True))),
     }
     payload = {
         "model": state["model_name"],
@@ -54,8 +56,15 @@ def state_and_payload(tmp_path, *, tokens=(8, 9, 2), temperature=0.6):
         },
         "messages": [
             {"role": "system", "content": "Instruction"},
-            {"role": "user", "content": "Context"},
+            {
+                "role": "user",
+                "content": json.dumps({"context": {}, "output_schema": {"type": "object"}}),
+            },
         ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"strict": True, "schema": {"type": "object"}},
+        },
         "max_tokens": 16,
         "temperature": temperature,
     }
@@ -72,6 +81,9 @@ def test_serving_calls_generation_once_with_configured_sampling_and_keeps_raw_te
     state["model"].generate.assert_called_once()
     assert state["model"].generate.call_args.kwargs["do_sample"] is sampling
     assert state["model"].generate.call_args.kwargs["max_time"] == 120
+    assert state["model"].generate.call_args.kwargs["logits_processor"] == [
+        state["schema_processor"].return_value
+    ]
     if sampling:
         assert state["model"].generate.call_args.kwargs["temperature"] == temperature
     assert response["choices"][0]["message"]["content"] == state["tokenizer"].decode.return_value
@@ -80,7 +92,7 @@ def test_serving_calls_generation_once_with_configured_sampling_and_keeps_raw_te
     assert response["orchestwin_serving"]["adapter_loaded"] is False
 
 
-@pytest.mark.parametrize("mutation", ["task", "identity", "budget", "context"])
+@pytest.mark.parametrize("mutation", ["task", "identity", "budget", "context", "schema", "strict"])
 def test_serving_rejects_invalid_requests_before_generation(tmp_path, mutation):
     module = server_module()
     state, payload = state_and_payload(tmp_path)
@@ -90,8 +102,12 @@ def test_serving_rejects_invalid_requests_before_generation(tmp_path, mutation):
         payload["metadata"]["expected_model_identity"]["adapter_id"] = "foreign-adapter"
     elif mutation == "budget":
         payload["max_tokens"] = module.MAX_OUTPUT + 1
-    else:
+    elif mutation == "context":
         module.MAX_SEQUENCE = 4
+    elif mutation == "schema":
+        payload["response_format"]["json_schema"]["schema"] = {"type": "string"}
+    else:
+        payload["response_format"]["json_schema"]["strict"] = False
     with pytest.raises(ValueError):
         module.completion(state, payload)
     state["model"].generate.assert_not_called()
@@ -102,3 +118,11 @@ def test_serving_reports_truncation_instead_of_fabricating_completion(tmp_path):
     state, payload = state_and_payload(tmp_path, tokens=(8, 9, 10))
     response = module.completion(state, payload)
     assert response["choices"][0]["finish_reason"] == "length"
+
+
+def test_serving_does_not_accept_eos_without_complete_schema(tmp_path):
+    module = server_module()
+    state, payload = state_and_payload(tmp_path)
+    state["schema_processor"].return_value.finish.return_value = False
+    with pytest.raises(ValueError, match="SCHEMA_INCOMPLETE_AT_EOS"):
+        module.completion(state, payload)

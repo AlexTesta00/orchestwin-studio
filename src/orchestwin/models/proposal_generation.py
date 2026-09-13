@@ -175,9 +175,22 @@ class ProposalGenerator:
     def provider_id(self):
         return f"model-proposals-{self.configuration.identity.content_hash}"
 
-    async def generate(self, *, task: str, context, output_type, instruction: str):
+    async def generate(
+        self,
+        *,
+        task: str,
+        context,
+        output_type,
+        instruction: str,
+        max_output_tokens: int | None = None,
+    ):
         if task not in TASKS:
             raise ValueError("unsupported proposal task")
+        budget = (
+            self.configuration.max_output_tokens if max_output_tokens is None else max_output_tokens
+        )
+        if type(budget) is not int or not 1 <= budget <= self.configuration.max_output_tokens:
+            raise ValueError("invalid proposal output budget")
         adapter = TypeAdapter(output_type)
         schema_payload = adapter.json_schema()
         _forbid_extra_schema(schema_payload)
@@ -200,7 +213,7 @@ class ProposalGenerator:
             allowed_evidence_refs=(),
             prompt_version_ref=f"proposal-{task}-v1",
             temperature=self.configuration.temperature,
-            max_output_tokens=self.configuration.max_output_tokens,
+            max_output_tokens=budget,
             timeout_seconds=self.configuration.timeout_seconds,
         )
         await begin_model_generation(request)

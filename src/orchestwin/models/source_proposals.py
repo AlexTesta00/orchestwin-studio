@@ -67,6 +67,7 @@ class SourceProposal:
     output: SourceOutput | RepairOutput
     source_binding: dict
     status: SourceProposalStatus = SourceProposalStatus.PROPOSED
+    generation_steps: tuple[dict, ...] = ()
 
 
 def file_entry(path, content: bytes, media_type):
@@ -228,6 +229,12 @@ def build_source_binding(task, context, output):
 class ModelSourceProposalAdapter:
     def __init__(self, generator):
         self.generator = generator
+
+    @_model_boundary
+    async def propose_files(self, *, task, context):
+        from orchestwin.models.source_file_generation import generate_source_files
+
+        return await generate_source_files(self.generator, task=task, context=context)
 
     @_model_boundary
     async def propose(self, *, task, context):

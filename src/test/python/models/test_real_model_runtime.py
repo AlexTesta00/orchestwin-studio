@@ -169,6 +169,8 @@ def test_real_mode_cannot_silently_become_unconfigured_and_production_cannot_use
 def proposal_health(runtime):
     return {
         "health_contract_version": 2,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_V1",
+        "schema_decoder_version": "1.8.0",
         "status": "READY",
         "model_name": runtime.proposal_configuration.model_name,
         "model_identity": runtime.proposal_configuration.identity.to_snapshot(),

@@ -141,6 +141,8 @@ def _proposal_health(config, token):
             and health.get("model_name") == config.model_name
             and health.get("model_identity") == config.identity.to_snapshot()
             and health.get("supported_tasks") == sorted(TASKS)
+            and health.get("schema_decoding") == "LLGUIDANCE_JSON_SCHEMA_V1"
+            and health.get("schema_decoder_version") == "1.8.0"
             and type(health.get("max_output_tokens")) is int
             and health["max_output_tokens"] >= config.max_output_tokens
             and type(health.get("max_sequence_length")) is int
@@ -228,7 +230,7 @@ async def _check_schema(session_factory):
         config = Config()
         config.set_main_option("script_location", str(files("orchestwin.persistence.migrations")))
         scripts = ScriptDirectory.from_config(config)
-        if len(revisions) != 1 or "0039_model_source_generation" not in {
+        if len(revisions) != 1 or "0040_source_file_evidence" not in {
             r.revision for r in scripts.walk_revisions(base="base", head=revisions[0])
         }:
             raise RealModelRuntimeError("PROPOSAL_EVIDENCE_MIGRATION_REQUIRED")

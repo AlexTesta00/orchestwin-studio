@@ -7,6 +7,7 @@ observations in short transactions; artifact links join the artifact transaction
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -76,6 +77,20 @@ _SCOPE: ContextVar[ProposalEvidenceScope | None] = ContextVar(
 
 def current_proposal_evidence():
     return _SCOPE.get()
+
+
+@contextmanager
+def child_proposal_evidence():
+    """One independent invocation, retaining its parent application scope."""
+    parent = current_proposal_evidence()
+    if parent is None or parent.request is None:
+        raise ProposalEvidenceError("SOURCE_PARENT_EVIDENCE_REQUIRED")
+    child = ProposalEvidenceScope(parent.store, parent.owner_user_id, parent.project_id)
+    token = _SCOPE.set(child)
+    try:
+        yield child
+    finally:
+        _SCOPE.reset(token)
 
 
 def evidence_application(function):

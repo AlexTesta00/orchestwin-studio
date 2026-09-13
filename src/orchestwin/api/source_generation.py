@@ -369,6 +369,17 @@ class ModelSourceApplication:
                     "base_files": entries,
                     "source_files": contents,
                     "failure_signature": signature.to_snapshot(),
+                    "recorded_failure": next(
+                        {
+                            "phase": phase.phase.value,
+                            "status": phase.status.value,
+                            "failure_code": phase.failure_code,
+                            "normalized_summary": phase.normalized_summary,
+                            "findings": [finding.to_snapshot() for finding in phase.findings],
+                        }
+                        for phase in attempt.report.phase_results
+                        if phase.phase == signature.phase
+                    ),
                     "fixed_files": [
                         file_entry(path, data, "application/octet-stream")
                         for path, data in sorted(fixed.items())
@@ -388,7 +399,7 @@ class ModelSourceApplication:
         context = await self.source_context(
             owner_user_id=owner_user_id, project_id=project_id, platform=platform, body=body
         )
-        proposal = await self.adapter.propose(task=platform + "-source", context=context)
+        proposal = await self.adapter.propose_files(task=platform + "-source", context=context)
         output = proposal.output
         commands = web_commands if platform == "web" else jvm_commands
         prefix = "Web" if platform == "web" else "Jvm"

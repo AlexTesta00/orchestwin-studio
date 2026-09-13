@@ -58,6 +58,7 @@ from src.test.python.integration.test_proposal_evidence_postgres import database
 from src.test.python.jvm_execution import attempt_support as jvm_fixture
 from src.test.python.models.test_fake_architecture import proposal_request, propose
 from src.test.python.models.test_proposal_evidence import audited_generator
+from src.test.python.models.test_source_file_generation import source_sequence_generator
 
 __all__ = ["database"]
 pytestmark = [
@@ -170,15 +171,15 @@ def application(database_runtime, directory, generator):
 def source_output(target):
     path = {
         ExecutionTarget.WEB_STATIC: "index.html",
-        ExecutionTarget.JVM_JAVA: "src/main/java/Main.java",
-        ExecutionTarget.JVM_KOTLIN: "src/main/kotlin/Main.kt",
-        ExecutionTarget.JVM_SCALA: "src/main/scala/Main.scala",
+        ExecutionTarget.JVM_JAVA: "src/main/java/org/orchestwin/greeting/Main.java",
+        ExecutionTarget.JVM_KOTLIN: "src/main/kotlin/org/orchestwin/calculator/Main.kt",
+        ExecutionTarget.JVM_SCALA: "src/main/scala/org/orchestwin/greeting/Main.scala",
     }[target]
     content = {
         ExecutionTarget.WEB_STATIC: "<!doctype html><title>Fixture</title><h1>Fixture</h1>",
-        ExecutionTarget.JVM_JAVA: 'public class Main { public static void main(String[] args) { System.out.println("Fixture"); } }',
-        ExecutionTarget.JVM_KOTLIN: 'fun main() { println("Fixture") }',
-        ExecutionTarget.JVM_SCALA: 'object Main { def main(args: Array[String]): Unit = println("Fixture") }',
+        ExecutionTarget.JVM_JAVA: 'package org.orchestwin.greeting; public class Main { public static void main(String[] args) { System.out.println("Fixture"); } }',
+        ExecutionTarget.JVM_KOTLIN: 'package org.orchestwin.calculator\nfun main() { println("Fixture") }',
+        ExecutionTarget.JVM_SCALA: 'package org.orchestwin.greeting\nobject Main { def main(args: Array[String]): Unit = println("Fixture") }',
     }[target]
     return {
         "rationale": "Implement the synthetic approved context.",
@@ -214,7 +215,7 @@ def client_app(runtime, owner):
 @pytest.mark.parametrize("target", TARGETS)
 def test_generated_sources_use_governed_api_and_exact_atomic_link(database, tmp_path, target):
     versions = artifacts()
-    generator, transport = audited_generator(tmp_path, source_output(target))
+    generator, transport = source_sequence_generator(tmp_path, source_output(target))
 
     async def scenario():
         db = create_database_runtime(database)
@@ -248,13 +249,159 @@ def test_generated_sources_use_governed_api_and_exact_atomic_link(database, tmp_
                     e for e in evidence["observations"] if e["kind"] == "ADAPTER_ACCEPTED"
                 )
                 assert accepted["payload"]["source_binding"]["files"] == snapshot["files"]
+                assert len(evidence["source_children"]) == 1
+                child = await runtime.proposal_evidence_store.get_owned(
+                    owner_user_id=owner,
+                    project_id=project,
+                    generation_id=UUID(evidence["source_children"][0]["generation_id"]),
+                )
+                assert child["source_parent"]["parent_generation_id"] == str(generation)
+                assert child["artifact_links"] == []
                 assert (
                     await client.post(
                         f"/projects/{project}/source-generations/{platform}",
                         json=body(target, versions[2]),
                     )
                 ).status_code == 409
-                assert len(transport.calls) == 1
+                assert len(transport.calls) == 2
+        finally:
+            await db.dispose()
+
+    run(scenario())
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "child_bytes",
+        "aggregate_bytes",
+        "binding_bytes",
+        "missing_child",
+        "child_hash",
+        "child_reference",
+    ],
+)
+def test_sql_rejects_source_lineage_tampering(database, tmp_path, monkeypatch, tamper):
+    from copy import deepcopy
+
+    versions = artifacts()
+    generator, _ = source_sequence_generator(tmp_path, source_output(ExecutionTarget.WEB_STATIC))
+    original = SqlAlchemyProposalEvidenceStore.append
+
+    async def altered(self, **kwargs):
+        if kwargs["kind"] == "ADAPTER_ACCEPTED":
+            payload = deepcopy(kwargs["payload"])
+            if "source_file" in payload and tamper == "child_bytes":
+                payload["source_file"]["content"] += "Injected bytes"
+            elif "result" in payload:
+                if tamper == "aggregate_bytes":
+                    payload["result"]["output"]["files"][0]["content"] += "Injected bytes"
+                elif tamper == "binding_bytes":
+                    payload["source_binding"]["files"][0]["sha256_digest"] = "a" * 64
+                elif tamper == "missing_child":
+                    payload["result"]["generation_steps"] = []
+                elif tamper == "child_hash":
+                    payload["result"]["generation_steps"][0]["request_hash"] = "b" * 64
+                elif tamper == "child_reference":
+                    payload["result"]["generation_steps"][0]["generation_id"] = str(uuid4())
+            kwargs["payload"] = payload
+        return await original(self, **kwargs)
+
+    monkeypatch.setattr(SqlAlchemyProposalEvidenceStore, "append", altered)
+
+    async def scenario():
+        db = create_database_runtime(database)
+        try:
+            owner, project = await seed(db, versions)
+            runtime = application(db, tmp_path, generator)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=client_app(runtime, owner)),
+                base_url="http://synthetic/api/v1",
+            ) as client:
+                response = await client.post(
+                    f"/projects/{project}/source-generations/web",
+                    json=body(ExecutionTarget.WEB_STATIC, versions[2]),
+                )
+                assert response.status_code == 503, response.text
+            assert (
+                await runtime.web_source_api_service.source_revision_history(
+                    owner_user_id=owner, project_id=project
+                )
+                == ()
+            )
+            async with db.session_factory() as session:
+                assert await session.scalar(sa.select(sa.func.count()).select_from(LINKS)) == 0
+        finally:
+            await db.dispose()
+
+    run(scenario())
+
+
+@pytest.mark.parametrize(
+    "field", ["parent_generation_id", "parent_request_hash", "manifest_hash", "ordinal", "file"]
+)
+def test_sql_rejects_file_request_with_wrong_manifest(database, tmp_path, monkeypatch, field):
+    import json
+    from dataclasses import fields
+
+    from orchestwin.models.structured_generation import create_structured_generation_request
+
+    versions = artifacts()
+    generator, transport = source_sequence_generator(
+        tmp_path, source_output(ExecutionTarget.WEB_STATIC)
+    )
+    original = SqlAlchemyProposalEvidenceStore.begin
+
+    async def altered(self, **kwargs):
+        request = kwargs["request"]
+        payload = json.loads(request.input_payload_json)
+        step = payload["context"].get("source_step")
+        if step:
+            step[field] = {
+                "parent_generation_id": str(uuid4()),
+                "parent_request_hash": "f" * 64,
+                "manifest_hash": "e" * 64,
+                "ordinal": 9,
+                "file": {**step["file"], "normalized_path": "other.html"},
+            }[field]
+            parameters = {
+                f.name: getattr(request, f.name)
+                for f in fields(request)
+                if f.name not in {"schema_version", "content_hash", "input_payload_json"}
+            }
+            # Recompute valid request/snapshot hashes: only the relational guard can reject this.
+            kwargs["request"] = create_structured_generation_request(
+                **parameters, input_payload=payload
+            )
+        return await original(self, **kwargs)
+
+    monkeypatch.setattr(SqlAlchemyProposalEvidenceStore, "begin", altered)
+
+    async def scenario():
+        db = create_database_runtime(database)
+        try:
+            owner, project = await seed(db, versions)
+            runtime = application(db, tmp_path, generator)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=client_app(runtime, owner)),
+                base_url="http://synthetic/api/v1",
+            ) as client:
+                response = await client.post(
+                    f"/projects/{project}/source-generations/web",
+                    json=body(ExecutionTarget.WEB_STATIC, versions[2]),
+                )
+            assert response.status_code == 503, response.text
+            assert len(transport.calls) == 1
+            assert (
+                await runtime.web_source_api_service.source_revision_history(
+                    owner_user_id=owner, project_id=project
+                )
+                == ()
+            )
+            rows = await runtime.proposal_evidence_store.list_owned(
+                owner_user_id=owner, project_id=project
+            )
+            assert len(rows) == 1
         finally:
             await db.dispose()
 
@@ -334,7 +481,7 @@ def test_generated_repairs_remain_pending_and_exact(
 ):
     versions = artifacts()
     output = source_output(target)
-    generator, _ = audited_generator(tmp_path, output)
+    generator, _ = source_sequence_generator(tmp_path, output)
 
     async def scenario():
         db = create_database_runtime(database)
@@ -390,6 +537,24 @@ def test_generated_repairs_remain_pending_and_exact(
                     201 if failure is None else 503 if failure == "different_bytes" else 409
                 ), response.text
                 assert len(transport.calls) == (0 if failure in ("stale", "signature") else 1)
+                if transport.calls:
+                    import json
+
+                    recorded_context = json.loads(
+                        transport.calls[0]["payload"]["messages"][1]["content"]
+                    )["context"]
+                    failed_phase = next(
+                        phase
+                        for phase in attempt.report.phase_results
+                        if phase.phase.value == recorded_context["failure_signature"]["phase"]
+                    )
+                    assert recorded_context["recorded_failure"]["findings"] == [
+                        finding.to_snapshot() for finding in failed_phase.findings
+                    ]
+                    assert (
+                        recorded_context["recorded_failure"]["failure_code"]
+                        == failed_phase.failure_code
+                    )
                 proposals = await service.repair_proposals(
                     owner_user_id=owner, execution_id=attempt.id
                 )
@@ -455,7 +620,9 @@ def test_generated_repairs_remain_pending_and_exact(
 )
 def test_source_admission_and_atomic_rollback(database, tmp_path, monkeypatch, failure):
     versions = artifacts()
-    generator, transport = audited_generator(tmp_path, source_output(ExecutionTarget.WEB_STATIC))
+    generator, transport = source_sequence_generator(
+        tmp_path, source_output(ExecutionTarget.WEB_STATIC)
+    )
 
     async def scenario():
         db = create_database_runtime(database)
@@ -494,7 +661,7 @@ def test_source_admission_and_atomic_rollback(database, tmp_path, monkeypatch, f
                 )
                 assert response.status_code in (404, 409, 503), response.text
             assert len(transport.calls) == (
-                1 if failure in ("link_write", "different_bytes") else 0
+                2 if failure in ("link_write", "different_bytes") else 0
             )
             assert (
                 await runtime.web_source_api_service.source_revision_history(

@@ -2,7 +2,7 @@
 """Offline, authenticated loopback serving for proposal adapters; no training.
 
 Uses the existing WSL/Unsloth environment and exact cached Qwen base revision.
-JSON schemas are model-visible instructions; the application validates outputs.
+JSON schemas constrain token selection; the application still validates outputs.
 This operator does not load the specialized final-evaluator LoRA adapter.
 """
 
@@ -13,9 +13,11 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import secrets
 import sys
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
@@ -24,6 +26,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from orchestwin.models.proposal_tasks import TASKS  # noqa: E402
+from orchestwin.models.schema_decoding import (  # noqa: E402
+    POLICY as SCHEMA_DECODING,
+)
+from orchestwin.models.schema_decoding import (  # noqa: E402
+    VERSION as LLGUIDANCE_VERSION,
+)
+from orchestwin.models.schema_decoding import (  # noqa: E402
+    build_schema_processor_factory,
+)
 from orchestwin.models.strict_evaluator_json import strict_json_object  # noqa: E402
 from orchestwin.models.structured_generation import ModelRuntimeIdentity  # noqa: E402
 from orchestwin.projects.requirements_primitives import (  # noqa: E402
@@ -49,6 +60,8 @@ def health_snapshot(state):
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
         "generation_watchdog": "COOPERATIVE_120_SECONDS_NOT_HARD_GPU_PREEMPTION",
+        "schema_decoding": SCHEMA_DECODING,
+        "schema_decoder_version": LLGUIDANCE_VERSION,
         "completed_generation_count": state["completed_generation_count"],
         "adapter_loaded": False,
         "training_executed": False,
@@ -103,6 +116,17 @@ def completion(state, payload):
         raise ValueError("TOKEN_BUDGET_REJECTED")
     if type(temperature) not in (float, int) or not 0 <= temperature <= 2:
         raise ValueError("TEMPERATURE_REJECTED")
+    response_format = payload.get("response_format", {})
+    specification = response_format.get("json_schema", {})
+    schema = specification.get("schema")
+    visible = strict_json_object(messages[1]["content"])
+    if (
+        response_format.get("type") != "json_schema"
+        or specification.get("strict") is not True
+        or not isinstance(schema, dict)
+        or schema != visible.get("output_schema")
+    ):
+        raise ValueError("SCHEMA_MISMATCH")
     torch, model, tokenizer = state["torch"], state["model"], state["tokenizer"]
     encoded = tokenizer.apply_chat_template(
         messages, tokenize=True, add_generation_prompt=True, return_tensors="pt", return_dict=True
@@ -111,6 +135,7 @@ def completion(state, payload):
     input_tokens = inputs["input_ids"].shape[-1]
     if input_tokens + maximum > MAX_SEQUENCE:
         raise ValueError("CONTEXT_BUDGET_EXCEEDED")
+    processor = state["schema_processor"](schema, input_tokens)
     options = {"do_sample": temperature > 0}
     if temperature > 0:
         options["temperature"] = temperature
@@ -122,6 +147,7 @@ def completion(state, payload):
             use_cache=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
+            logits_processor=[processor],
             **options,
         )
     tokens = generated[0, input_tokens:]
@@ -130,6 +156,9 @@ def completion(state, payload):
     eos = tokenizer.eos_token_id
     eos_ids = {eos} if isinstance(eos, int) else set(eos or ())
     finished = len(tokens) > 0 and int(tokens[-1]) in eos_ids
+    schema_complete = processor.finish(generated)
+    if finished and not schema_complete:
+        raise ValueError("SCHEMA_INCOMPLETE_AT_EOS")
     return {
         "id": f"proposal-{uuid4()}",
         "model": state["model_name"],
@@ -151,6 +180,8 @@ def completion(state, payload):
             "output_repair_used": False,
             "adapter_loaded": False,
             "generation_wall_time_budget_seconds": MAX_GENERATION_SECONDS,
+            "schema_decoding": SCHEMA_DECODING,
+            "schema_complete": schema_complete,
         },
     }
 
@@ -196,15 +227,36 @@ def handler_for(state, token):
             try:
                 response = completion(state, payload)
                 state["completed_generation_count"] += 1
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError) as error:
+                log_failure(error)
                 return self._send(422, {"error": "REQUEST_REJECTED"})
-            except Exception:
+            except Exception as error:
+                log_failure(error)
                 return self._send(500, {"error": "GENERATION_FAILED"})
             finally:
                 state["slot"].release()
             self._send(200, response)
 
     return Handler
+
+
+def log_failure(error):
+    """Local diagnostics contain no request text, tokens, source or credentials."""
+    code = str(error)
+    print(
+        canonical_json(
+            {
+                "event": "PROPOSAL_FAILURE",
+                "type": type(error).__name__,
+                "code": code if re.fullmatch(r"[A-Z][A-Z0-9_]{1,79}", code) else None,
+                "frames": [
+                    {"file": Path(frame.filename).name, "line": frame.lineno}
+                    for frame in traceback.extract_tb(error.__traceback__)[-6:]
+                ],
+            }
+        ),
+        flush=True,
+    )
 
 
 def main():
@@ -220,6 +272,7 @@ def main():
     os.chdir(ROOT / "environments/training")
     print("Loading the exact cached proposal base model (offline).", flush=True)
     torch, model, tokenizer, evidence = load_model()
+    schema_processor = build_schema_processor_factory(tokenizer, torch, model.config.vocab_size)
     configuration = {
         "runtime_id": f"proposal-base-{uuid4()}",
         "supported_tasks": sorted(TASKS),
@@ -233,6 +286,14 @@ def main():
         "adapter_loaded": False,
         "network_authorized": False,
         "server_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "schema_decoding": SCHEMA_DECODING,
+        "schema_decoder_version": LLGUIDANCE_VERSION,
+        "schema_decoder_sha256": hashlib.sha256(
+            (ROOT / "src/orchestwin/models/schema_decoding.py").read_bytes()
+        ).hexdigest(),
+        "proposal_dependencies_sha256": hashlib.sha256(
+            (ROOT / "environments/training/requirements-proposals.txt").read_bytes()
+        ).hexdigest(),
         "loader_sha256": hashlib.sha256(
             (ROOT / "environments/training/run_model_spike.py").read_bytes()
         ).hexdigest(),
@@ -257,6 +318,7 @@ def main():
         "torch": torch,
         "model": model,
         "tokenizer": tokenizer,
+        "schema_processor": schema_processor,
         "identity": identity,
         "model_name": "qwen3-4b-proposals",
         "slot": threading.BoundedSemaphore(1),
