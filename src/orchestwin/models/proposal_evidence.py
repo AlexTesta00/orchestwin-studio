@@ -129,6 +129,8 @@ async def retain_provider_result(result):
 
 
 def _generated_hashes(result):
+    if getattr(result, "source_binding", None) is not None:
+        return {result.kind: (snapshot_content_hash(result.source_binding),)}
     if getattr(result, "proposal", None) is not None:
         return {"AGENT_TEAM": (result.proposal.content_hash,)}
     if getattr(result, "specification", None) is not None:
@@ -166,6 +168,11 @@ async def retain_adapter_result(result=None, *, error=None):
         {
             "result": wire_value(result),
             "generated_content_hashes": hashes,
+            **(
+                {"source_binding": result.source_binding}
+                if hasattr(result, "source_binding")
+                else {}
+            ),
         },
     )
     scope.accepted_hashes = hashes

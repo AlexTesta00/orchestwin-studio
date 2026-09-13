@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "phase": 4,
+  "recorded_at": "2026-09-13T18:02:29.202511+00:00",
+  "base_commit": "53cb2b38c3429c75701d9d72793819bb67b7aa1e",
+  "source_state": "UNCOMMITTED_PHASE_4_SOURCE_SNAPSHOT_HASHED",
+  "source_sha256": {
+    "environments/training/serve_proposal_model.py": "c4850b98cfd497a6c357894e69d022884a20493e2c8345da223a4226369ec407",
+    "src/orchestwin/api/app.py": "ef0c27e4904773b8be446ba639bc69748052f1c8cc48f26e3645ff95d2aa8860",
+    "src/orchestwin/api/jvm_repair_runtime.py": "718a95a2c397f04dc59b09ee997108d1e4b1457ebeac73429ee33b0d1044d9c2",
+    "src/orchestwin/api/jvm_source_runtime.py": "7b958b9fa3eb3bd91bbd4b72647378241969de80f4a7d2ef79eb7a8c10d74951",
+    "src/orchestwin/api/source_generation.py": "f5434890487b50fe818fc842a5928bdbc1685059364dd92e3872a6dc07830478",
+    "src/orchestwin/api/web_repair_runtime.py": "16cb6f4b97c51081924e8d1ea0bd1ea4f514ec021a2a9aee4c0935bb51853262",
+    "src/orchestwin/api/web_source_runtime.py": "ad8f299984d7809658bd1b6ef8e1d97136092f94513622412968a12d587d5ace",
+    "src/orchestwin/models/proposal_evidence.py": "3e46b042f131729ab4c88968832ebd7d684c4e997162245895e3350a420a6173",
+    "src/orchestwin/models/proposal_tasks.py": "48e4b55a42107fe62f8ff3e5d261c56e6feb1b03b519655a33ea196f3c4ccb88",
+    "src/orchestwin/models/real_runtime.py": "6ad9f89574abeeb27fa1b100397a14caac6af86508f7b6da43383bc0ddf8c44f",
+    "src/orchestwin/models/source_proposals.py": "3664236c37d7d9fa5960941c232317956f028f929ce857b63b4b721b06472840",
+    "src/orchestwin/models/source_publication.py": "62f7feb8eb873e323bf7d256ee73bc97652432aa8ce5dc218afe1c384ceae901",
+    "src/orchestwin/persistence/migrations/versions/0039_model_source_generation.py": "5778182a0cfb1a99e296b924521eaebb55f244bd19d4680efe09f6ca85d46286",
+    "src/test/python/api/test_source_generation.py": "13679b6eaeabb92bb5f56bdc9abe1dd97b6bc3a189d53320ab40a82b4bd75f8b",
+    "src/test/python/integration/test_model_source_generation_postgres.py": "af16c02199f073aa0635c8e47586f0d32539c958a0fc06d624c9cb185514a1bc",
+    "src/test/python/integration/test_real_model_runtime_postgres.py": "0dead159ec7611225e16c6016a9b9b034d40950de76455b694514345009ad34d",
+    "src/test/python/models/test_proposal_serving.py": "c07efb2408d3492de9167981fac77f092079b94a36e4eaf448d4e5f257cab3db",
+    "src/test/python/models/test_real_model_runtime.py": "deb163e85a4756cc6c7c7735da8612e9bd9b94eda147baf81d5d3bd1b850778e",
+    "src/test/python/models/test_source_proposals.py": "eead3b0502ee48fd845b1a58c09c0ae514f8ff278b8a66b07feb2b3e7604ce1f"
+  },
+  "scope": "GOVERNED_REAL_SOURCE_AND_REPAIR_GENERATION_WITH_ATOMIC_DATABASE_EVIDENCE",
+  "formal_case": false,
+  "new_level_d_claim": false,
+  "semantic_quality_qualified": false,
+  "training_executed": false,
+  "frozen_case_used": false,
+  "commit_performed": false,
+  "capabilities": {
+    "tasks": [
+      "web-source",
+      "web-repair",
+      "jvm-source",
+      "jvm-repair"
+    ],
+    "source_endpoint": "POST /api/v1/projects/{project_id}/source-generations/{platform}",
+    "repair_endpoint": "POST /api/v1/projects/{project_id}/repair-generations/{platform}/{execution_id}",
+    "initial_source_admission": "EXACT_OWNER_APPROVED_CURRENT_ARCHITECTURE_AND_GROUNDED_VERSIONS",
+    "source_context_view": "SOURCE_IMPLEMENTATION_V1_FULL_REQUIREMENTS_ARCHITECTURE_TEST_PLAN_SELECTED_DESIGN_WITH_EXPLICIT_OMISSIONS_AND_EXACT_VERSION_REFERENCES",
+    "jvm_recipes": "ALL_PINNED_BYTES_PRESERVED_ONLY_BUILD_DEFINITIONS_SHOWN_TO_MODEL",
+    "repair_admission": "EXACT_CURRENT_ATTEMPT_BASE_HASH_RECORDED_FAILURE_SIGNATURE_AND_RETRY_POLICY",
+    "repair_application": "EXACT_GATE_7_APPROVAL_STILL_REQUIRED",
+    "publication": "ACCEPTED_MODEL_BYTES_AND_ARTIFACT_IDENTITY_CHECKED_BY_POSTGRESQL_TRIGGER_IN_SAME_TRANSACTION",
+    "failure_behavior": "RETAIN_REQUEST_RAW_RESPONSE_AND_REJECTION_NO_FAKE_FALLBACK_NO_AUTOMATIC_RETRY",
+    "context_max_bytes": 32768,
+    "generation_watchdog": "COOPERATIVE_120_SECONDS_NOT_HARD_GPU_PREEMPTION",
+    "model_output_max_bytes": 65536
+  },
+  "deployment": {
+    "api_origin": "http://127.0.0.1:8110",
+    "api_process_id": 24524,
+    "mode": "REAL_REQUIRED",
+    "database_bridge": "127.0.0.1:15432",
+    "database_schema": "0039_model_source_generation",
+    "migration": {
+      "recorded_at": "2026-09-13T17:49:41.227392+00:00",
+      "database": "EXISTING_LOCAL_ORCHESTWIN",
+      "before": "0038_proposal_generation_evidence",
+      "after": "0039_model_source_generation",
+      "migration_sha256": "5778182a0cfb1a99e296b924521eaebb55f244bd19d4680efe09f6ca85d46286",
+      "committed_migration_verified": false,
+      "source_state": "UNCOMMITTED_PHASE_4_WORKING_BYTES",
+      "case_artifacts_read": false,
+      "new_generation_rows": 0,
+      "migration": "PASSED"
+    },
+    "readiness": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase4-final-local-runtime\\api-readiness.json",
+      "sha256": "dd7e01ac3f51bf6e8d5605c23a16a102cd9ed079ed1c16e413a976a39fb0092d",
+      "size_bytes": 5573
+    },
+    "proposal_model_config": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase4-final-local-runtime\\proposals.json",
+      "sha256": "a9b9de8b0bdb38b94154cc0759ddbc9e6bdbef02fa2f29577a0b608d6b30a1dc",
+      "size_bytes": 843
+    },
+    "proposal_runtime": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase4-final-proposal-model-20260913\\runtime.json",
+      "sha256": "6e258357bc3d6b8b346c4a843c835a61f7caa8cfc03a4742c3809073b601b98c",
+      "size_bytes": 745
+    },
+    "s67_evaluator": "REUSED_UNCHANGED_PHASE_3_SESSION_NO_NEW_TRAINING_OR_EVALUATOR_INFERENCE"
+  },
+  "validation": {
+    "broad_regression": {
+      "passed": 2611,
+      "failed": 0,
+      "skipped": 30,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase4-final-verification\\phase4-regression-one.xml",
+        "sha256": "40364458e77818e34130091bef1e2948083d51052e3c725f316ce8c9b1f6ec83",
+        "size_bytes": 453982
+      },
+      "timing": "PRECEDES_FINAL_ENTRYPOINT_AND_WATCHDOG_HARDENING_FOLLOWED_BY_FINAL_TARGETED_AND_POSTGRES_TESTS"
+    },
+    "final_targeted": {
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase4-final-verification\\phase4-final.xml",
+        "sha256": "722d44d40b87e8c420d0e6936594c6f20a2086e5f4e49d8f60dbb38ae4edb273",
+        "size_bytes": 11530
+      }
+    },
+    "final_postgresql": {
+      "passed": 41,
+      "failed": 0,
+      "skipped": 1,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-19178e480b2e4c388dbede1854246e42\\pytest.xml",
+        "sha256": "e9f1fb5ed7a43b7ee437ae58f93349041b581fecf0f1c9ec4d8b3d4abc3e61d7",
+        "size_bytes": 7931
+      },
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-19178e480b2e4c388dbede1854246e42\\result.json",
+        "sha256": "8a38d4f0eba6788c28fc57f3d2696c32827ca0935b13d540eee159a8ac5249f0",
+        "size_bytes": 549
+      },
+      "database": "DISPOSABLE_ONLY",
+      "migration_roundtrip": "PASSED",
+      "cleanup": "REMOVED"
+    }
+  },
+  "final_live_probe": {
+    "report": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\live-report.json",
+      "sha256": "ec6bd316cb7862ea7427a8dc29a4d052d82523c4b3653313719af76357614566",
+      "size_bytes": 1792
+    },
+    "scope": "REAL_MODEL_API_AND_DATABASE_TECHNICAL_PROBE",
+    "governance": "SYNTHETIC_APPROVED_FIXTURE",
+    "failures": "SYNTHETIC_RECORDED_TEST_FAILURES",
+    "formal_case": false,
+    "level_d_validation": false,
+    "execution_performed": false,
+    "semantic_quality_qualified": false,
+    "automatic_retries": 0,
+    "frozen_case_used": false,
+    "authentication": "ASGI_OWNER_DEPENDENCY_OVERRIDE_SYNTHETIC_DATABASE",
+    "outcomes": {
+      "web-source": 502,
+      "web-repair": 201,
+      "jvm-source": 502,
+      "jvm-repair": 409
+    },
+    "generations": [
+      {
+        "generation_id": "de506bef-9711-4398-b750-4f8c5adb720e",
+        "file": "de506bef-9711-4398-b750-4f8c5adb720e-evidence.json",
+        "sha256": "c4482f4f616fa1fb8abd62bad2a71788dd0ec740064296ef896f7276014fcdca",
+        "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+      },
+      {
+        "generation_id": "a906b98e-2431-4f7b-b526-948e55ee7bd3",
+        "file": "a906b98e-2431-4f7b-b526-948e55ee7bd3-evidence.json",
+        "sha256": "fa00fde5a3ae87068a57f3b57ade7b5d3b3bc19271aefcc60473313b30392737",
+        "publication_state": "MODEL_REJECTED"
+      },
+      {
+        "generation_id": "a245118a-6502-45ef-a670-a7763a81f334",
+        "file": "a245118a-6502-45ef-a670-a7763a81f334-evidence.json",
+        "sha256": "6c527b56e164d4bee792eca7d03e5552f1c2e02a8eae8c3b5e9038b0ca97b744",
+        "publication_state": "MODEL_REJECTED"
+      },
+      {
+        "generation_id": "04432e6e-3666-4238-9f4f-c309909313c3",
+        "file": "04432e6e-3666-4238-9f4f-c309909313c3-evidence.json",
+        "sha256": "5f3c4fc183b6bd0c9969371b82c1a2e561c3f45c340409db17886b775f2bc483",
+        "publication_state": "ARTIFACTS_LINKED"
+      }
+    ],
+    "ready_after": true,
+    "counter_deltas": {
+      "proposals": 4,
+      "evaluator": 0
+    },
+    "source_snapshot": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\source-hashes.json",
+      "sha256": "a52a0dabbf12e21d64d8704b8bb72e3c66b0a3218cfdb930bb88f084fc077ce3",
+      "size_bytes": 2296
+    },
+    "database": "DISPOSABLE_ONLY_REMOVED_AFTER_EVIDENCE_EXPORT",
+    "note": "Source and repair are separate technical probes. A failed source is preserved; any synthetic base used for repair is explicitly recorded. No repair was approved or applied.",
+    "web-source_response": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\web-source-response.json",
+      "sha256": "05a67ae8da634f4d43e09ff3aedbb6829bdd8b0654bd85c8883295506675f5ff",
+      "size_bytes": 142
+    },
+    "web-repair_response": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\web-repair-response.json",
+      "sha256": "228ea51372c14554a8c356b372b34d9f253411673d27ee6678d68370421edaa2",
+      "size_bytes": 5202
+    },
+    "jvm-source_response": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\jvm-source-response.json",
+      "sha256": "05a67ae8da634f4d43e09ff3aedbb6829bdd8b0654bd85c8883295506675f5ff",
+      "size_bytes": 142
+    },
+    "jvm-repair_response": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-4dceb80d3a724c3a81bbff97993799e4\\jvm-repair-response.json",
+      "sha256": "3a8514e7fe552eff663d0bfa27f631741b5f991576454edf7701be04c4d4bb30",
+      "size_bytes": 168
+    }
+  },
+  "final_live_interpretation": {
+    "web_source": "OUTPUT_INCOMPLETE_AT_COOPERATIVE_TIME_LIMIT_FINISH_LENGTH_1203_TOKENS_NO_PUBLICATION",
+    "jvm_source": "OUTPUT_INCOMPLETE_AT_COOPERATIVE_TIME_LIMIT_FINISH_LENGTH_1191_TOKENS_NO_PUBLICATION",
+    "web_repair": "REAL_OUTPUT_ACCEPTED_AND_ATOMICALLY_LINKED_PENDING_GATE_7_SYNTHETIC_BASE_AND_FAILURE",
+    "jvm_repair": "REAL_OUTPUT_ACCEPTED_PUBLICATION_BLOCKED_BY_EXISTING_PENDING_GATE_7_IN_SHARED_SYNTHETIC_PROJECT",
+    "jvm_repair_block_code": "JVM_OPERATION_EXISTING_GATE_REQUIRES_DECISION",
+    "technical_inference_calls_completed": 4,
+    "model_outputs_accepted": 2,
+    "artifacts_published": 1,
+    "initial_generation_quality_qualified": false
+  },
+  "limits": [
+    "Inference, structural acceptance and atomic publication do not demonstrate compiled or functionally correct software.",
+    "The final evaluator remains separately trained S67; proposal tasks use the sampled base model, without fine-tuning.",
+    "The source context view omits duplicated grounding, design critiques and unselected alternatives; their version hashes and omission metadata remain visible.",
+    "Browser/Level D execution and formal user-twin evaluation of newly generated code remain separate governed work.",
+    "Cooperative stopping does not guarantee hard GPU preemption or client-disconnect cancellation."
+  ],
+  "preliminary_live_probes": [
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-aa736df15ba34012b703860ed151f8e6\\result.json",
+        "sha256": "6468c0398a7fa1967236ffa2593e3f084425b7f1af3fdeef085775a694714f02",
+        "size_bytes": 512
+      },
+      "status": "FAILED"
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-f3bcc90793d347af8e94463a1d5ab9f1\\result.json",
+        "sha256": "1372d072f4800ff14f93ac2722b5d1d8653661db44745ed5809887e06316c92c",
+        "size_bytes": 512
+      },
+      "status": "FAILED"
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-91e7a31b03904af98132cc3600d2f450\\result.json",
+        "sha256": "6e05cd6460d665ed7a5415cb184f70fd233d15f6f551d55694609308915c1cf9",
+        "size_bytes": 512
+      },
+      "status": "PASSED",
+      "report": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-91e7a31b03904af98132cc3600d2f450\\live-report.json",
+        "sha256": "18fd2a613ecc7b045e97be0280f9c6cfd4b58c6511c041e7707472783e12d76a",
+        "size_bytes": 1166
+      }
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-a2559c94987a4dd59959ac0ebc31d7ef\\result.json",
+        "sha256": "8ef0e64d6fedcfb89434978db5731cb1a39f93e1b89e2359f6308048293b9615",
+        "size_bytes": 512
+      },
+      "status": "PASSED",
+      "report": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-live-a2559c94987a4dd59959ac0ebc31d7ef\\live-report.json",
+        "sha256": "a7330991cb905cf318f16dced55ebd7787b1949ddc94313a1b27b98863a409f9",
+        "size_bytes": 1470
+      }
+    }
+  ],
+  "preliminary_postgresql_probes": [
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-dd4f8855947f4d7288b67cd012cedc6b\\result.json",
+        "sha256": "aed446663f286c9168b97115e90dc5a560517d269e828ca1399cbbc4ec371bef",
+        "size_bytes": 513
+      },
+      "passed": 7,
+      "failed": 2,
+      "skipped": 0
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-58fa139a7f844dda8e44efe323553402\\result.json",
+        "sha256": "1461ba8c279a3f9ecbd76e064b8d59a7b39ddd582da3ae1ae0fb50224af1df37",
+        "size_bytes": 513
+      },
+      "passed": 11,
+      "failed": 14,
+      "skipped": 0
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-ee4afd912e6e43dc9ec39be10b230a4b\\result.json",
+        "sha256": "9ccb8e96298e967b7d75e337928aa189ce9074d7cfcac3e6d872f62746cf268e",
+        "size_bytes": 549
+      },
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-856ca2dc91544eb6b78558072e9f576f\\result.json",
+        "sha256": "16dd49bdef4532b5331f74d0d008ff49c93beba7d71dce006d7dd430ab5756d3",
+        "size_bytes": 513
+      },
+      "passed": 37,
+      "failed": 4,
+      "skipped": 1
+    },
+    {
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase4-source-test-76ba1c5fc0b0491f8d3d1115297d583f\\result.json",
+        "sha256": "ba9357ddd33b8d49708c69af18aa1eb17f840c34aa1dcb1cc71c4377ab7d0860",
+        "size_bytes": 549
+      },
+      "passed": 41,
+      "failed": 0,
+      "skipped": 1
+    }
+  ],
+  "preliminary_live_interpretation": [
+    "First two attempts failed in probe setup before inference.",
+    "Full-context requests exceeded token budget and were rejected before inference; original token counts Web 8991, JVM 10426, plus 8192 output reservation against 16384 total.",
+    "An earlier Web source was published structurally with a misplaced entrypoint; final code rejects this shape. Its repair was rejected, and JVM generation reached client timeout. These are not functional successes and were not relabelled."
+  ]
+}

@@ -41,6 +41,7 @@ from orchestwin.artifacts.web_sources import (
     WebSourceProvenanceReference,
     WebSourceRevision,
 )
+from orchestwin.models.source_publication import bind_source_publication
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.web_execution.attempt_persistence import (
     WEB_EXECUTION_ATTEMPTS,
@@ -247,6 +248,7 @@ class SqlAlchemyWebRepairApiService:
                     source_revision_id=base.id, kind="REPAIR", payload=payload
                 )
                 verified = _proposal(operation, owner_user_id=owner_user_id)
+                await bind_source_publication(scope.session, "WEB_REPAIR", operation)
                 return WebApiCommandResult(
                     status=WebApiCommandStatus.REPAIR_PROPOSED,
                     snapshot=await _snapshot(scope, operation, verified),

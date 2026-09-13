@@ -26,6 +26,7 @@ from orchestwin.api.projects import create_project_router
 from orchestwin.api.proposal_evidence import create_proposal_evidence_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
+from orchestwin.api.source_generation import create_source_generation_router
 from orchestwin.api.static_inspections import create_static_inspection_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
@@ -201,6 +202,7 @@ def create_app(
         create_training_router(),
         create_proposal_evidence_router(),
         create_model_runtime_router(),
+        create_source_generation_router(),
     ):
         application.include_router(
             router,

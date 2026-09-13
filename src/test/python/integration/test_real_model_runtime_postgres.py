@@ -24,7 +24,8 @@ pytestmark = [
 def test_real_runtime_requires_proposal_evidence_schema(database, migrated):
     if not migrated:
         command.downgrade(
-            create_alembic_config(database.url.get_secret_value()), "0037_jvm_governed_operations"
+            create_alembic_config(database.url.get_secret_value()),
+            "0038_proposal_generation_evidence",
         )
 
     async def scenario():

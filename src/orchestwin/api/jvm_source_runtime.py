@@ -30,6 +30,7 @@ from orchestwin.jvm_execution.source_policy import (
     verify_source_policy,
 )
 from orchestwin.jvm_execution.workspaces import portable_path
+from orchestwin.models.source_publication import bind_source_publication
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.workflow.gates import GateArtifactReference, HumanGateStatus, HumanGateType
 from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
@@ -165,6 +166,7 @@ class SqlAlchemyJvmSourceApiService:
             stored = await revisions.append(revision)
             if stored.status.value != "APPENDED":
                 raise HTTPException(409, detail={"code": "JVM_SOURCE_APPEND_CONFLICT"})
+            await bind_source_publication(session, "JVM_SOURCE", revision)
             return JvmApiCommandResult(
                 JvmApiCommandStatus.SOURCE_REVISION_CREATED,
                 revision.to_snapshot(),

@@ -41,6 +41,7 @@ from orchestwin.artifacts.web_sources import (
     WebSourceRevision,
     create_web_source_revision,
 )
+from orchestwin.models.source_publication import bind_source_publication
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.web_execution.targets import (
@@ -268,6 +269,7 @@ class SqlAlchemyWebSourceApiService:
                 # Raising is necessary: the repository may have a failed INSERT.
                 # The enclosing transaction rolls back; no failed result commits.
                 raise HTTPException(409, detail={"code": "WEB_SOURCE_APPEND_CONFLICT"})
+            await bind_source_publication(session, "WEB_SOURCE", stored.revision)
             return WebApiCommandResult(
                 status=WebApiCommandStatus.SOURCE_REVISION_CREATED,
                 snapshot=_snapshot(stored.revision),

@@ -41,6 +41,7 @@ from orchestwin.models.proposal_generation import (
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.requirements_runtime import RequirementsRuntime, RequirementsRuntimeMode
 from orchestwin.models.serialized_generation import SerializedGenerationPort
+from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.user_modeling_runtime import UserModelingRuntime, UserModelingRuntimeMode
 
@@ -167,6 +168,7 @@ class RealModelRuntime:
     requirements: RequirementsRuntime
     design: DesignRuntime
     architecture: ArchitectureRuntime
+    sources: ModelSourceProposalAdapter
     _files: tuple[tuple[Path, str], ...] = field(repr=False)
     _token: str = field(repr=False)
 
@@ -226,7 +228,7 @@ async def _check_schema(session_factory):
         config = Config()
         config.set_main_option("script_location", str(files("orchestwin.persistence.migrations")))
         scripts = ScriptDirectory.from_config(config)
-        if len(revisions) != 1 or "0038_proposal_generation_evidence" not in {
+        if len(revisions) != 1 or "0039_model_source_generation" not in {
             r.revision for r in scripts.walk_revisions(base="base", head=revisions[0])
         }:
             raise RealModelRuntimeError("PROPOSAL_EVIDENCE_MIGRATION_REQUIRED")
@@ -281,6 +283,7 @@ def build_real_model_runtime(path: Path | None):
             ArchitectureRuntime(
                 ArchitectureRuntimeMode.MODEL_ADAPTER, ModelArchitectureAdapter(generator)
             ),
+            ModelSourceProposalAdapter(generator),
             tuple(
                 (p, hashlib.sha256(content).hexdigest())
                 for p, content in (

@@ -48,7 +48,7 @@ def configuration(tmp_path, monkeypatch):
     return path, proposal, final
 
 
-def test_real_factory_builds_all_six_tasks_and_keeps_evaluator_separate(configuration):
+def test_real_factory_builds_all_ten_tasks_and_keeps_evaluator_separate(configuration):
     runtime = build_real_model_runtime(configuration[0])
     assert type(runtime.team).__name__ == "ModelTeamProposalAdapter"
     for member, expected in (
@@ -62,6 +62,9 @@ def test_real_factory_builds_all_six_tasks_and_keeps_evaluator_separate(configur
         )
         assert member.proposal_port.generator is runtime.team.generator
     assert runtime.proposal_configuration.temperature > 0
+    assert type(runtime.sources).__name__ == "ModelSourceProposalAdapter"
+    assert runtime.sources.generator is runtime.team.generator
+    assert len(TASKS) == 10
     assert runtime.final_evaluator.session.identity["adapter_id"] == "s67-final-user-twin-evaluator"
     assert runtime.final_evaluator.generation_lock is runtime.team.generator.port._lock
     assert "proposal-secret-" not in repr(runtime)

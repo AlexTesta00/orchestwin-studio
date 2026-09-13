@@ -71,6 +71,7 @@ def test_serving_calls_generation_once_with_configured_sampling_and_keeps_raw_te
     response = module.completion(state, payload)
     state["model"].generate.assert_called_once()
     assert state["model"].generate.call_args.kwargs["do_sample"] is sampling
+    assert state["model"].generate.call_args.kwargs["max_time"] == 120
     if sampling:
         assert state["model"].generate.call_args.kwargs["temperature"] == temperature
     assert response["choices"][0]["message"]["content"] == state["tokenizer"].decode.return_value

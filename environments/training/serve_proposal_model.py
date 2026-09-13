@@ -35,6 +35,7 @@ MODEL = "Qwen/Qwen3-4B-Instruct-2507"
 REVISION = "abcc171021d4f320b2e7f47c6f0deca67ded870c"
 MAX_SEQUENCE = 16384
 MAX_OUTPUT = 8192
+MAX_GENERATION_SECONDS = 120
 MAX_BODY = 2_000_000
 
 
@@ -47,6 +48,7 @@ def health_snapshot(state):
         "supported_tasks": sorted(TASKS),
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
+        "generation_watchdog": "COOPERATIVE_120_SECONDS_NOT_HARD_GPU_PREEMPTION",
         "completed_generation_count": state["completed_generation_count"],
         "adapter_loaded": False,
         "training_executed": False,
@@ -116,6 +118,7 @@ def completion(state, payload):
         generated = model.generate(
             **inputs,
             max_new_tokens=maximum,
+            max_time=MAX_GENERATION_SECONDS,
             use_cache=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -147,6 +150,7 @@ def completion(state, payload):
             "model_visible_messages_sha256": snapshot_content_hash(messages),
             "output_repair_used": False,
             "adapter_loaded": False,
+            "generation_wall_time_budget_seconds": MAX_GENERATION_SECONDS,
         },
     }
 
@@ -218,10 +222,12 @@ def main():
     torch, model, tokenizer, evidence = load_model()
     configuration = {
         "runtime_id": f"proposal-base-{uuid4()}",
+        "supported_tasks": sorted(TASKS),
         "model": MODEL,
         "revision": REVISION,
         "max_sequence": MAX_SEQUENCE,
         "max_output": MAX_OUTPUT,
+        "max_generation_seconds": MAX_GENERATION_SECONDS,
         "load_in_4bit": True,
         "loader_evidence": evidence,
         "adapter_loaded": False,

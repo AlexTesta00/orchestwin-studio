@@ -56,6 +56,7 @@ from orchestwin.jvm_execution.repair_records import (
 from orchestwin.jvm_execution.source_policy import read_source_objects, verify_source_policy
 from orchestwin.jvm_execution.workspaces import portable_path as _portable_path
 from orchestwin.jvm_execution.workspaces import regular_path as _safe_storage_root
+from orchestwin.models.source_publication import bind_source_publication
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.workflow.gates import GateArtifactReference, HumanGateStatus, HumanGateType
 from orchestwin.workflow.jvm_repair import (
@@ -260,6 +261,7 @@ class SqlAlchemyJvmRepairApiService:
                     source_revision_id=base.id, kind="REPAIR", payload=payload
                 )
                 verified = _proposal(operation, owner_user_id=owner_user_id)
+                await bind_source_publication(scope.session, "JVM_REPAIR", operation)
                 return JvmApiCommandResult(
                     status=JvmApiCommandStatus.REPAIR_PROPOSED,
                     snapshot=await _snapshot(scope, operation, verified),
