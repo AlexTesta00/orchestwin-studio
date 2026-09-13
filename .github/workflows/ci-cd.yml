@@ -118,11 +118,12 @@ jobs:
       - name: Show current database revision
         run: orchestwin-migrate current
 
-      - name: Verify durable JVM Gate 7 operations
+      - name: Verify durable JVM execution API and Gate 7 operations
         env:
+          ORCHESTWIN_JVM_API_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
           ORCHESTWIN_JVM_OPERATION_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
           ORCHESTWIN_WEB_OPERATION_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
-        run: python -m pytest -q src/test/python/integration/test_jvm_operation_postgres.py src/test/python/integration/test_web_operation_postgres.py
+        run: python -m pytest -q src/test/python/integration/test_jvm_operation_postgres.py src/test/python/integration/test_web_operation_postgres.py src/test/python/integration/test_jvm_execution_api_postgres.py
 
       - name: Run PostgreSQL integration tests with coverage
         if: runner.os == 'Linux'

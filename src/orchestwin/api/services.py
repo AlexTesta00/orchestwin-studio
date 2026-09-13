@@ -43,8 +43,13 @@ from orchestwin.api.execution import (
     HighImpactApprovalApiService,
 )
 from orchestwin.api.finalization import FinalizationApiService
+from orchestwin.api.governed_jvm_runtime import build_governed_jvm_services
 from orchestwin.api.governed_web_runtime import build_governed_web_services
-from orchestwin.api.jvm_execution import JvmExecutionApiService
+from orchestwin.api.jvm_execution import (
+    JvmExecutionApiService,
+    JvmExecutionReadApiService,
+    JvmExecutionStartApiService,
+)
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.static_inspection_runtime import build_static_inspection_service
@@ -210,6 +215,8 @@ class ApplicationRuntime:
     web_repair_api_service: WebRepairApiService | None = None
     web_operation_store: object | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
+    jvm_execution_read_api_service: JvmExecutionReadApiService | None = None
+    jvm_execution_start_api_service: JvmExecutionStartApiService | None = None
     jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
@@ -270,6 +277,7 @@ def create_default_runtime(
         resolved_settings,
         database_runtime.session_factory,
     )
+    governed_jvm = build_governed_jvm_services(database_runtime.session_factory, resolved_settings)
     governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
 
     return ApplicationRuntime(
@@ -308,7 +316,9 @@ def create_default_runtime(
         web_browser_evidence_api_service=governed_web.reads,
         web_repair_api_service=governed_web.repairs,
         web_operation_store=governed_web.operations,
-        jvm_operation_store=SqlAlchemyJvmOperationStore(database_runtime.session_factory),
+        jvm_operation_store=governed_jvm.operations,
+        jvm_execution_read_api_service=governed_jvm.reads,
+        jvm_execution_start_api_service=governed_jvm.start,
         web_source_api_service=SqlAlchemyWebSourceApiService(
             database_runtime.session_factory,
             content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",

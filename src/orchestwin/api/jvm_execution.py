@@ -25,6 +25,7 @@ class JvmApiCommandStatus(StrEnum):
 
     SOURCE_REVISION_CREATED = "SOURCE_REVISION_CREATED"
     EXECUTION_RECORDED = "EXECUTION_RECORDED"
+    EXECUTION_PREPARED = "EXECUTION_PREPARED"
     REPAIR_PROPOSED = "REPAIR_PROPOSED"
     REPAIR_APPLIED = "REPAIR_APPLIED"
     NOT_FOUND = "NOT_FOUND"
@@ -105,6 +106,7 @@ class JvmApiCommandResult:
         success = self.status in {
             JvmApiCommandStatus.SOURCE_REVISION_CREATED,
             JvmApiCommandStatus.EXECUTION_RECORDED,
+            JvmApiCommandStatus.EXECUTION_PREPARED,
             JvmApiCommandStatus.REPAIR_PROPOSED,
             JvmApiCommandStatus.REPAIR_APPLIED,
         }
@@ -112,22 +114,12 @@ class JvmApiCommandResult:
             raise ValueError("JVM API command result shape is inconsistent")
 
 
-class JvmExecutionApiService(Protocol):
-    """Application port preserving owner/project scope and typed inputs."""
-
+class JvmExecutionReadApiService(Protocol):
     async def profiles(
         self,
         *,
         owner_user_id: UUID,
     ) -> tuple[dict[str, JsonValue], ...]: ...
-
-    async def create_source_revision(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        command: JvmSourceRevisionCreateCommand,
-    ) -> JvmApiCommandResult: ...
 
     async def source_revision_history(
         self,
@@ -143,14 +135,6 @@ class JvmExecutionApiService(Protocol):
         project_id: UUID,
         revision_id: UUID,
     ) -> dict[str, JsonValue] | None: ...
-
-    async def start_execution(
-        self,
-        *,
-        owner_user_id: UUID,
-        project_id: UUID,
-        command: JvmExecutionStartCommand,
-    ) -> JvmApiCommandResult: ...
 
     async def execution_history(
         self,
@@ -172,6 +156,34 @@ class JvmExecutionApiService(Protocol):
         owner_user_id: UUID,
         execution_id: UUID,
     ) -> dict[str, JsonValue] | None: ...
+
+
+class JvmExecutionStartApiService(Protocol):
+    async def prepare_execution(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        command: JvmExecutionStartCommand,
+    ) -> JvmApiCommandResult: ...
+
+    async def start_execution(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        command: JvmExecutionStartCommand,
+    ) -> JvmApiCommandResult: ...
+
+
+class JvmExecutionApiService(JvmExecutionReadApiService, JvmExecutionStartApiService, Protocol):
+    async def create_source_revision(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        command: JvmSourceRevisionCreateCommand,
+    ) -> JvmApiCommandResult: ...
 
     async def repair_proposals(
         self,
@@ -359,6 +371,16 @@ def jvm_execution_api_service_dependency(request: Request) -> JvmExecutionApiSer
     return service
 
 
+def jvm_execution_read_api_service_dependency(request: Request) -> JvmExecutionReadApiService:
+    service = getattr(request.app.state, "jvm_execution_read_api_service", None)
+    return service if service is not None else jvm_execution_api_service_dependency(request)
+
+
+def jvm_execution_start_api_service_dependency(request: Request) -> JvmExecutionStartApiService:
+    service = getattr(request.app.state, "jvm_execution_start_api_service", None)
+    return service if service is not None else jvm_execution_api_service_dependency(request)
+
+
 def create_jvm_execution_router() -> APIRouter:
     router = APIRouter(tags=["jvm-execution"])
 
@@ -370,8 +392,8 @@ def create_jvm_execution_router() -> APIRouter:
     async def list_profiles(
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(items=await service.profiles(owner_user_id=user.id))
@@ -408,8 +430,8 @@ def create_jvm_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -429,8 +451,8 @@ def create_jvm_execution_router() -> APIRouter:
         revision_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -440,6 +462,29 @@ def create_jvm_execution_router() -> APIRouter:
                     project_id=project_id,
                     revision_id=revision_id,
                 )
+            )
+        )
+
+    @router.post(
+        "/projects/{project_id}/jvm-executions/prepare",
+        response_model=JvmCommandResponse,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="prepareJvmExecution",
+    )
+    async def prepare_execution(
+        project_id: UUID,
+        body: StartJvmExecutionBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            JvmExecutionStartApiService,
+            Depends(jvm_execution_start_api_service_dependency),
+        ],
+    ) -> JvmCommandResponse:
+        return _command_response(
+            await service.prepare_execution(
+                owner_user_id=user.id,
+                project_id=project_id,
+                command=body.to_command(),
             )
         )
 
@@ -454,8 +499,8 @@ def create_jvm_execution_router() -> APIRouter:
         body: StartJvmExecutionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionStartApiService,
+            Depends(jvm_execution_start_api_service_dependency),
         ],
     ) -> JvmCommandResponse:
         return _command_response(
@@ -475,8 +520,8 @@ def create_jvm_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -495,8 +540,8 @@ def create_jvm_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -517,8 +562,8 @@ def create_jvm_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmExecutionReadApiService,
+            Depends(jvm_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(

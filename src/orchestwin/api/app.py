@@ -107,6 +107,12 @@ def create_app(
         resolved_runtime.web_execution_read_api_service
     )
     application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
+    application.state.jvm_execution_read_api_service = (
+        resolved_runtime.jvm_execution_read_api_service
+    )
+    application.state.jvm_execution_start_api_service = (
+        resolved_runtime.jvm_execution_start_api_service
+    )
     application.state.jvm_operation_store = resolved_runtime.jvm_operation_store
     application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
     application.state.finalization_api_service = resolved_runtime.finalization_api_service
