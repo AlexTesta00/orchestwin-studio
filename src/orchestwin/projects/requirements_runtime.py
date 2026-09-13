@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
 )
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
+)
 from orchestwin.models.requirements import (
     RequirementsBriefInput,
     RequirementsTeamInput,
@@ -73,6 +77,7 @@ class ManagedRequirementsUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyRequirementsUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -431,6 +436,7 @@ def build_requirements_services(
     return RequirementsServices(
         runtime_mode=runtime.mode,
         generation=LocalRequirementsGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyRequirementsGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

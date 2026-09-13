@@ -129,12 +129,14 @@ jobs:
         if: runner.os == 'Linux'
         env:
           PYTHONWARNINGS: error
+          ORCHESTWIN_PROPOSAL_EVIDENCE_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
         run: npm run test:coverage:integration:python
 
       - name: Run PostgreSQL integration tests
         if: runner.os != 'Linux'
         env:
           PYTHONWARNINGS: error
+          ORCHESTWIN_PROPOSAL_EVIDENCE_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
         run: npm run test:integration:python
 
       - name: Upload backend coverage to Codecov

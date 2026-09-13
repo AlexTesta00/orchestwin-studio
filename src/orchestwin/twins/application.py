@@ -13,6 +13,7 @@ from orchestwin.agents.catalog import (
     AGENT_CATALOG_CONTENT_HASH,
     AGENT_CATALOG_VERSION,
 )
+from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     ProposedPersonaProfile,
@@ -290,6 +291,7 @@ class LocalUserModelingApplicationService:
     def __init__(
         self,
         *,
+        proposal_evidence_store=None,
         governance: UserModelingGovernancePort,
         proposals: UserModelingProposalPort,
         uow_factory: UserModelingUnitOfWorkFactory,
@@ -305,11 +307,13 @@ class LocalUserModelingApplicationService:
     ) -> None:
         """Configure explicit application dependencies."""
         self._governance = governance
+        self._proposal_evidence_store = proposal_evidence_store
         self._proposals = proposals
         self._uow_factory = uow_factory
         self._uuid_factory = uuid_factory
         self._clock = clock if clock is not None else _utc_now
 
+    @evidence_application
     async def propose_personas(
         self,
         *,
@@ -418,6 +422,7 @@ class LocalUserModelingApplicationService:
                         persistence_status=(append_status),
                     )
 
+            await bind_model_artifacts(uow, "PERSONA", versions)
             await uow.commit()
 
         return PersonaProposalApplicationResult(
@@ -510,6 +515,7 @@ class LocalUserModelingApplicationService:
             version=next_version,
         )
 
+    @evidence_application
     async def generate_grounded_snapshot(
         self,
         *,
@@ -677,6 +683,10 @@ class LocalUserModelingApplicationService:
                     persistence_status=(snapshot_append_status),
                 )
 
+            await bind_model_artifacts(uow, "USER_TWIN", twin_versions)
+            await bind_model_artifacts(
+                uow, "USER_MODELING", (snapshot_version,), relation="ASSEMBLED"
+            )
             await uow.commit()
 
         return GroundedSnapshotGenerationResult(

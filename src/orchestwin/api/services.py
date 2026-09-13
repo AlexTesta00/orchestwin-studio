@@ -78,6 +78,7 @@ from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
 from orchestwin.identity.tokens import JwtAccessTokenService
 from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
+from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.runtime import (
     create_team_proposal_port,
     load_team_proposal_runtime_settings,
@@ -184,6 +185,7 @@ class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
     final_evaluator_runtime: FinalEvaluatorRuntime | None = None
+    proposal_evidence_store: SqlAlchemyProposalEvidenceStore | None = None
     identity_service: IdentityApplicationService | None = None
     project_service: ProjectApplicationService | None = None
     clarification_service: ProjectClarificationApplicationService | None = None
@@ -264,7 +266,9 @@ def create_default_runtime(
             database_runtime.session_factory
         )
     )
+    proposal_evidence_store = SqlAlchemyProposalEvidenceStore(database_runtime.session_factory)
     team_proposal_service = LocalTeamProposalApplicationService(
+        proposal_evidence_store=proposal_evidence_store,
         unit_of_work_factory=SqlAlchemyTeamProposalUnitOfWorkFactory(
             database_runtime.session_factory
         ),
@@ -286,6 +290,7 @@ def create_default_runtime(
 
     return ApplicationRuntime(
         final_evaluator_runtime=final_evaluator,
+        proposal_evidence_store=proposal_evidence_store,
         identity_service=identity_service,
         project_service=project_service,
         clarification_service=clarification_service,

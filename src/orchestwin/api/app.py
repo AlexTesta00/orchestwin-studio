@@ -22,6 +22,7 @@ from orchestwin.api.health import create_health_router
 from orchestwin.api.jvm_execution import create_jvm_execution_router
 from orchestwin.api.jvm_operations import create_jvm_operations_router
 from orchestwin.api.projects import create_project_router
+from orchestwin.api.proposal_evidence import create_proposal_evidence_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.static_inspections import create_static_inspection_router
@@ -32,6 +33,7 @@ from orchestwin.api.web_execution import create_web_execution_router
 from orchestwin.api.web_operations import create_web_operations_router
 from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 
 
@@ -74,6 +76,14 @@ def create_app(
             content={"detail": {"code": error.code, "stage": "MODEL_PROPOSAL"}},
         )
 
+    @application.exception_handler(ProposalEvidenceError)
+    async def proposal_evidence_failure(_request, error: ProposalEvidenceError):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": {"code": str(error), "stage": "MODEL_PROPOSAL_EVIDENCE"}},
+        )
+
+    application.state.proposal_evidence_store = resolved_runtime.proposal_evidence_store
     application.state.final_evaluator_runtime = resolved_runtime.final_evaluator_runtime
     application.state.identity_service = resolved_runtime.identity_service
     application.state.project_service = resolved_runtime.project_service
@@ -171,6 +181,7 @@ def create_app(
         create_workflow_run_router(),
         create_finalization_router(),
         create_training_router(),
+        create_proposal_evidence_router(),
     ):
         application.include_router(
             router,

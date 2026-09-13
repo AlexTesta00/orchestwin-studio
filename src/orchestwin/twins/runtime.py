@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
+from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.user_modeling_runtime import (
     UserModelingRuntimeMode,
     UserModelingRuntimeSettings,
@@ -264,6 +265,7 @@ def build_user_modeling_services(
     return UserModelingServices(
         runtime_mode=runtime.mode,
         commands=LocalUserModelingApplicationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyUserModelingGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_units,

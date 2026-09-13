@@ -34,6 +34,10 @@ from orchestwin.models.design_runtime import (
     DesignRuntimeSettings,
     build_design_runtime,
 )
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
+)
 from orchestwin.projects.design_application import (
     GovernedDesignContext,
     LocalDesignGenerationService,
@@ -62,6 +66,7 @@ class ManagedDesignUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyDesignUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -384,6 +389,7 @@ def build_design_services(
     return DesignServices(
         runtime_mode=runtime.mode,
         generation=LocalDesignGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyDesignGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

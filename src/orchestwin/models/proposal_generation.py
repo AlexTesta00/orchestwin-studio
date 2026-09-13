@@ -28,6 +28,11 @@ from orchestwin.models.openai_compatible import (
     OpenAICompatibleTimeoutError,
     OpenAICompatibleTransportError,
 )
+from orchestwin.models.proposal_evidence import (
+    AuditedProposalTransport,
+    begin_model_generation,
+    retain_provider_result,
+)
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
@@ -198,7 +203,9 @@ class ProposalGenerator:
             max_output_tokens=self.configuration.max_output_tokens,
             timeout_seconds=self.configuration.timeout_seconds,
         )
+        await begin_model_generation(request)
         result = await self.port.generate(request)
+        await retain_provider_result(result)
         if result.success is None:
             raise ProposalGenerationError(result.failure.code.value, request=request, result=result)
         success = result.success
@@ -265,7 +272,9 @@ def build_proposal_generator(
             model_name=config.model_name,
             expected_identity=config.identity,
         ),
-        transport=transport if transport is not None else DirectProposalTransport(),
+        transport=AuditedProposalTransport(
+            transport if transport is not None else DirectProposalTransport()
+        ),
         bearer_token=token,
     )
     return ProposalGenerator(config, port)

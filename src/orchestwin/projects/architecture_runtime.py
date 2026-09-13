@@ -34,6 +34,10 @@ from orchestwin.models.architecture_runtime import (
     ArchitectureRuntimeSettings,
     build_architecture_runtime,
 )
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
+)
 from orchestwin.projects.architecture_application import (
     GovernedArchitectureContext,
     LocalArchitectureGenerationService,
@@ -58,6 +62,7 @@ class ManagedArchitectureUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyArchitectureUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -349,6 +354,7 @@ def build_architecture_services(
     return ArchitectureServices(
         runtime_mode=runtime.mode,
         generation=LocalArchitectureGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyArchitectureGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

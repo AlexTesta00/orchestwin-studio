@@ -28,6 +28,10 @@ from orchestwin.models.design import (
     DesignProposalResult,
     DesignProposalStatus,
 )
+from orchestwin.models.proposal_evidence import (
+    generation_output_reference,
+    retain_adapter_result,
+)
 from orchestwin.models.proposal_generation import ProposalGenerationError, ProposalGenerator
 from orchestwin.models.requirements import (
     RequirementsProposalProviderKind,
@@ -74,19 +78,28 @@ def _model_boundary(function):
     @wraps(function)
     async def guarded(*args, **kwargs):
         try:
-            return await function(*args, **kwargs)
+            result = await function(*args, **kwargs)
         except (ValueError, TypeError) as error:
-            raise ProposalGenerationError("INVALID_PROVIDER_OUTPUT") from error
+            failure = ProposalGenerationError("INVALID_PROVIDER_OUTPUT")
+            await retain_adapter_result(error=failure)
+            raise failure from error
+        except BaseException as error:
+            await retain_adapter_result(error=error)
+            raise
+        await retain_adapter_result(result)
+        return result
 
     return guarded
 
 
 def _model_reference(generator, locator):
+    generation = generation_output_reference()
     return EvidenceReference(
         source_kind=EvidenceSourceKind.MODEL_OUTPUT,
-        source_id=generator.provider_id,
+        source_id=generator.provider_id if generation is None else generation[0],
         source_version=1,
         locator=locator,
+        content_hash=None if generation is None else generation[1],
     )
 
 
