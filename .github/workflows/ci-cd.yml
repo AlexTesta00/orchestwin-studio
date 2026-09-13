@@ -237,6 +237,16 @@ jobs:
         run: |
           docker build --pull --network none --file infra/jvm-runners/Dockerfile.gradle --tag orchestwin/jvm-gradle-runner:ci .
           docker build --pull --network none --file infra/jvm-runners/Dockerfile.sbt --tag orchestwin/jvm-sbt-runner:ci .
+          docker build --pull --network none --tag orchestwin/jvm-dependency-proxy:ci infra/jvm-runners/dependency-network
+
+      - name: Test restricted JVM dependency proxy without external network
+        shell: bash
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 65532:65532 \
+            --cpus 1 --memory 256m --pids-limit 64 \
+            --mount "type=bind,source=$PWD/infra/jvm-runners/dependency-network,target=/tests,readonly" \
+            --entrypoint node orchestwin/jvm-dependency-proxy:ci --test /tests/proxy.test.mjs
 
       - name: Regenerate Gradle launchers offline and verify exact bytes
         shell: bash
@@ -266,6 +276,7 @@ jobs:
         run: |
           docker image inspect --format '{{.Id}}' orchestwin/jvm-gradle-runner:ci
           docker image inspect --format '{{.Id}}' orchestwin/jvm-sbt-runner:ci
+          docker image inspect --format '{{.Id}}' orchestwin/jvm-dependency-proxy:ci
 
   build:
     name: Build (${{ matrix.os }})
