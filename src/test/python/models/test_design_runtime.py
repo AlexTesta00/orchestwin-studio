@@ -48,6 +48,6 @@ def test_unknown_design_runtime_mode_is_rejected(
         DesignRuntimeSettings()
 
 
-def test_sprint_six_runtime_exposes_no_provider_credentials() -> None:
-    """Keep the deterministic Design runtime free from secrets and URLs."""
-    assert set(DesignRuntimeSettings.model_fields) == {"mode"}
+def test_runtime_exposes_config_path_without_provider_credentials() -> None:
+    """Expose only mode and a non-secret configuration path."""
+    assert set(DesignRuntimeSettings.model_fields) == {"mode", "model_config_file"}

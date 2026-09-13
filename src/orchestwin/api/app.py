@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
 from orchestwin.api.architecture import create_architecture_router
@@ -31,6 +32,7 @@ from orchestwin.api.web_execution import create_web_execution_router
 from orchestwin.api.web_operations import create_web_operations_router
 from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.models.proposal_generation import ProposalGenerationError
 
 
 def create_app(
@@ -63,6 +65,14 @@ def create_app(
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    @application.exception_handler(ProposalGenerationError)
+    async def proposal_failure(_request, error: ProposalGenerationError):
+        unavailable = error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}
+        return JSONResponse(
+            status_code=503 if unavailable else 502,
+            content={"detail": {"code": error.code, "stage": "MODEL_PROPOSAL"}},
+        )
 
     application.state.final_evaluator_runtime = resolved_runtime.final_evaluator_runtime
     application.state.identity_service = resolved_runtime.identity_service

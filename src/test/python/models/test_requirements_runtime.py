@@ -53,6 +53,6 @@ def test_unknown_requirements_runtime_mode_is_rejected(
         RequirementsRuntimeSettings()
 
 
-def test_sprint_five_runtime_exposes_no_provider_credentials() -> None:
-    """Keep the deterministic runtime free from secrets and network URLs."""
-    assert set(RequirementsRuntimeSettings.model_fields) == {"mode"}
+def test_runtime_exposes_config_path_without_provider_credentials() -> None:
+    """Expose only mode and a non-secret configuration path."""
+    assert set(RequirementsRuntimeSettings.model_fields) == {"mode", "model_config_file"}
