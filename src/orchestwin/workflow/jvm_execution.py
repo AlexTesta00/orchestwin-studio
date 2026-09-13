@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -165,6 +166,32 @@ class JvmPhaseExecutionPort(Protocol):
     ) -> JvmPhaseResult: ...
 
 
+class JvmExecutionLifecyclePort(Protocol):
+    """Own resources for one attempt, without manufacturing phase evidence."""
+
+    def bind_attempt(
+        self,
+        attempt_id: UUID,
+        *,
+        contract: JvmProfileContract,
+        phases_to_execute: tuple[JvmExecutionPhase, ...],
+    ) -> None:
+        """Bind identity and exact scope before execution, without allocating resources.
+
+        Reject a scope the adapter cannot execute (for example, missing SETUP for
+        fresh dependency caches). A rejected binding must leave ownership unchanged.
+        """
+        ...
+
+    async def finalize(self) -> None:
+        """Release only this attempt's resources; raise if cleanup is not confirmed.
+
+        This hook does not run phase commands or replace their results. An adapter
+        must retain its cleanup diagnostics separately from command evidence.
+        """
+        ...
+
+
 class JvmExecutionClock(Protocol):
     def now(self) -> datetime: ...
 
@@ -184,12 +211,14 @@ class LocalGovernedJvmExecutionService:
         phase_executor: JvmPhaseExecutionPort,
         clock: JvmExecutionClock,
         ids: JvmExecutionIdProvider,
+        lifecycle: JvmExecutionLifecyclePort | None = None,
     ) -> None:
         self._registry = registry
         self._attempts = attempts
         self._phase_executor = phase_executor
         self._clock = clock
         self._ids = ids
+        self._lifecycle = lifecycle
 
     async def execute(self, request: JvmExecutionRequest) -> JvmExecutionServiceResult:
         profile = self._registry.find(request.profile_id, request.profile_version)
@@ -236,47 +265,67 @@ class LocalGovernedJvmExecutionService:
         phases_to_execute = (
             tuple(JvmExecutionPhase) if request.rerun_phases is None else request.rerun_phases
         )
-        started_at = self._clock.now()
-        results: list[JvmPhaseResult] = []
-        executed_phases: list[JvmExecutionPhase] = []
-        failed = False
         previous_results = (
             {}
             if current is None
             else {result.phase: result for result in current.report.phase_results}
         )
+        # Reject unusable evidence before binding or starting any attempt resources.
         for phase_plan in contract.execution_plan.phases:
-            phase = phase_plan.phase
-            if failed:
-                results.append(
-                    _not_run_result(
-                        phase_plan,
-                        "A previous JVM phase failed.",
-                    )
+            if phase_plan.phase in phases_to_execute:
+                continue
+            previous = previous_results.get(phase_plan.phase)
+            if (
+                previous is None
+                or previous.status is not JvmPhaseResultStatus.PASSED
+                or previous.command_plan_hash != phase_plan.command_plan.content_hash
+            ):
+                return _failed(
+                    JvmExecutionServiceStatus.RERUN_INVALID,
+                    "JVM rerun requires passed evidence for the exact plan of each reused phase.",
                 )
-                continue
-            if phase not in phases_to_execute:
-                previous = previous_results.get(phase)
-                if previous is None:
-                    return _failed(
-                        JvmExecutionServiceStatus.RERUN_INVALID,
-                        "JVM rerun cannot reuse a phase without previous evidence.",
+
+        attempt_id = self._ids.new_id()
+        if self._lifecycle is not None:
+            self._lifecycle.bind_attempt(
+                attempt_id,
+                contract=contract,
+                phases_to_execute=phases_to_execute,
+            )
+        results: list[JvmPhaseResult] = []
+        executed_phases: list[JvmExecutionPhase] = []
+        try:
+            started_at = self._clock.now()
+            failed = False
+            for phase_plan in contract.execution_plan.phases:
+                phase = phase_plan.phase
+                if failed:
+                    results.append(
+                        _not_run_result(
+                            phase_plan,
+                            "A previous JVM phase failed.",
+                        )
                     )
-                results.append(previous)
-                continue
-            result = await self._phase_executor.execute(phase_plan, contract=contract)
-            if result.phase is not phase:
-                raise ValueError("JVM phase executor returned evidence for another phase")
-            if result.command_plan_hash != phase_plan.command_plan.content_hash:
-                raise ValueError("JVM phase executor returned evidence for another plan")
-            results.append(result)
-            executed_phases.append(phase)
-            failed = result.is_failure
+                    continue
+                if phase not in phases_to_execute:
+                    results.append(previous_results[phase])
+                    continue
+                result = await self._phase_executor.execute(phase_plan, contract=contract)
+                if result.phase is not phase:
+                    raise ValueError("JVM phase executor returned evidence for another phase")
+                if result.command_plan_hash != phase_plan.command_plan.content_hash:
+                    raise ValueError("JVM phase executor returned evidence for another plan")
+                results.append(result)
+                executed_phases.append(phase)
+                failed = result.is_failure
+        finally:
+            if self._lifecycle is not None:
+                await _finalize_execution(self._lifecycle)
 
         report = create_jvm_execution_report(contract.execution_plan, tuple(results))
         completed_at = self._clock.now()
         attempt = JvmExecutionAttempt(
-            id=self._ids.new_id(),
+            id=attempt_id,
             project_id=request.project_id,
             created_by_user_id=request.owner_user_id,
             attempt_number=1 if current is None else current.attempt_number + 1,
@@ -311,6 +360,22 @@ class LocalGovernedJvmExecutionService:
             attempt=persisted.attempt,
             message="JVM execution attempt was recorded.",
         )
+
+
+async def _finalize_execution(lifecycle: JvmExecutionLifecyclePort) -> None:
+    """Wait for cleanup across repeated cancellation before propagating it."""
+    cleanup = asyncio.create_task(lifecycle.finalize())
+    cancelled = False
+    try:
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled = True
+        cleanup.result()
+    finally:
+        if cancelled:
+            raise asyncio.CancelledError
 
 
 def _rerun_issue(
