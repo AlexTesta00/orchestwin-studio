@@ -121,6 +121,7 @@ def test_each_fixture_has_a_stable_hash_and_deterministic_target() -> None:
         assert manifest["source_content_hash"] == _source_content_hash(directory)
         assert manifest["execution_attested"] is False
         assert manifest["attestation_boundary"] == "SOURCE_CONTRACT_ONLY"
+        assert manifest["launcher_complete"] is True
         assert manifest["dependency_verification_complete"] is False
         assert result.status is JvmDetectionStatus.SELECTED
         assert result.selected is not None
@@ -180,7 +181,7 @@ def test_declared_source_contract_ignores_unknown_untracked_tool_state(
     source_hash = _source_content_hash(directory)
 
     for relative in (
-        "gradle/wrapper/gradle-wrapper.jar",
+        "tool-generated/launcher-cache.jar",
         "tool-generated/session.bin",
         "unknown-ide/cache.state",
     ):

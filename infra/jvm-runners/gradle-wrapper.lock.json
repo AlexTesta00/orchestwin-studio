@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "gradle_version": "9.5.0",
+  "distribution": {
+    "url": "https://services.gradle.org/distributions/gradle-9.5.0-bin.zip",
+    "sha256": "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746",
+    "checksum_url": "https://services.gradle.org/distributions/gradle-9.5.0-bin.zip.sha256"
+  },
+  "wrapper_checksum_url": "https://services.gradle.org/distributions/gradle-9.5.0-wrapper.jar.sha256",
+  "generator": {
+    "image_reference": "docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28",
+    "command": [
+      "gradle",
+      "--offline",
+      "--no-daemon",
+      "--console=plain",
+      ":wrapper",
+      "--gradle-version",
+      "9.5.0",
+      "--distribution-type",
+      "bin",
+      "--gradle-distribution-sha256-sum",
+      "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746",
+      "--no-validate-url"
+    ]
+  },
+  "files": [
+    {
+      "path": "gradle/wrapper/gradle-wrapper.jar",
+      "sha256": "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7",
+      "size_bytes": 48462
+    },
+    {
+      "path": "gradlew",
+      "sha256": "ab5c0cad16305af2e619c159c1f58dd68d07fab9c11e36701e109c0277407f7a",
+      "size_bytes": 8654
+    },
+    {
+      "path": "gradlew.bat",
+      "sha256": "475c4f08cd57cf2faa819e7f36d72aa93f0ad646ea23a8f7fa3ef54dee1cbc52",
+      "size_bytes": 2846
+    }
+  ]
+}

@@ -228,10 +228,34 @@ jobs:
       - name: Verify complete JVM fixture matrix
         run: npm run test:jvm-fixtures
 
+      - name: Check executable Gradle launcher modes
+        run: |
+          test -x src/test/fixtures/jvm_execution/jvm-java-greeting/gradlew
+          test -x src/test/fixtures/jvm_execution/jvm-kotlin-calculator/gradlew
+
       - name: Build controlled JVM runner images
         run: |
-          docker build --pull --file infra/jvm-runners/Dockerfile.gradle --tag orchestwin/jvm-gradle-runner:ci .
-          docker build --pull --file infra/jvm-runners/Dockerfile.sbt --tag orchestwin/jvm-sbt-runner:ci .
+          docker build --pull --network none --file infra/jvm-runners/Dockerfile.gradle --tag orchestwin/jvm-gradle-runner:ci .
+          docker build --pull --network none --file infra/jvm-runners/Dockerfile.sbt --tag orchestwin/jvm-sbt-runner:ci .
+
+      - name: Regenerate Gradle launchers offline and verify exact bytes
+        shell: bash
+        run: |
+          wrapper_root="$(mktemp -d "$RUNNER_TEMP/jvm-wrapper.XXXXXX")"
+          chmod 777 "$wrapper_root"
+          touch "$wrapper_root/settings.gradle"
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 65532:65532 \
+            --cpus 2 --memory 1536m --pids-limit 256 \
+            --tmpfs /tmp:rw,exec,nosuid,size=1073741824,mode=1777 \
+            --mount "type=bind,source=$wrapper_root,target=/workspace" \
+            --workdir /workspace --env GRADLE_USER_HOME=/tmp/gradle --env HOME=/tmp \
+            --entrypoint gradle orchestwin/jvm-gradle-runner:ci \
+            --offline --no-daemon --console=plain :wrapper --gradle-version 9.5.0 \
+            --distribution-type bin \
+            --gradle-distribution-sha256-sum 553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746 \
+            --no-validate-url
+          python scripts/verify_jvm_execution_contracts.py --repository-root . --generated-wrapper-root "$wrapper_root"
 
       - name: Smoke test non-root runner images without network
         run: |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -9,6 +10,7 @@ import pytest
 
 from orchestwin.artifacts.jvm_change_sets import (
     JvmSourceChange,
+    JvmSourceChangeImpact,
     JvmSourceChangeIssueCode,
     JvmSourceChangeOperation,
     JvmSourceChangeValidationStatus,
@@ -121,6 +123,22 @@ def test_build_and_wrapper_changes_require_gate7() -> None:
     )
 
     assert report.status is JvmSourceChangeValidationStatus.REQUIRES_OWNER_APPROVAL
+    assert {issue.code for issue in report.issues} == {JvmSourceChangeIssueCode.HIGH_IMPACT_FILE}
+
+
+@pytest.mark.parametrize("path", ["gradlew", "gradlew.bat", "nested/gradlew", "Gradlew.BAT"])
+@pytest.mark.parametrize("operation", list(JvmSourceChangeOperation))
+def test_launcher_changes_require_gate7_for_every_operation(
+    path: str, operation: JvmSourceChangeOperation
+) -> None:
+    base = base_revision()
+    if operation is not JvmSourceChangeOperation.ADD:
+        base = replace(base, files=(entry(path, "a" * 64),))
+    report = validate_jvm_source_change_set(
+        change_set(change(path, operation), base=base), base_revision=base
+    )
+    assert report.status is JvmSourceChangeValidationStatus.REQUIRES_OWNER_APPROVAL
+    assert report.impact is JvmSourceChangeImpact.REQUIRES_GATE_7
     assert {issue.code for issue in report.issues} == {JvmSourceChangeIssueCode.HIGH_IMPACT_FILE}
 
 
