@@ -65,6 +65,60 @@ def _run(scenario: Callable[[DatabaseRuntime], Awaitable[None]]) -> None:
     asyncio.run(execute(), loop_factory=asyncio.SelectorEventLoop)
 
 
+def test_publication_rolls_back_all_new_records_when_stored_history_conflicts(
+    monkeypatch, tmp_path
+):
+    from orchestwin.jvm_execution import validation_harvest
+    from orchestwin.jvm_execution.validation_evidence import JvmProfileValidationEvidenceCatalog
+
+    records = canonical_jvm_validation_evidence(
+        tuple(record for target in _TARGETS for record in _evidence_catalog(target).records)
+    )
+    catalog = JvmProfileValidationEvidenceCatalog(records)
+    monkeypatch.setattr(validation_harvest, "load_publication", lambda *args, **kwargs: catalog)
+    conflict = replace(
+        records[0], evidence_id="test.jvm.publication.conflict", environment_fingerprint="f" * 64
+    )
+
+    async def scenario(runtime):
+        async with SqlAlchemyJvmValidationEvidenceUnitOfWork(runtime.session_factory) as unit:
+            await unit.evidence.append(conflict)
+            await unit.commit()
+        with pytest.raises(ValueError, match="STORED_CATALOG_INELIGIBLE"):
+            await validation_harvest.publish_catalog(
+                runtime.session_factory, root=tmp_path, expected_package_hash="a" * 64
+            )
+        loaded = await build_jvm_profile_catalog_loader(runtime.session_factory).load()
+        assert loaded.catalog.records == (conflict,)
+
+    _run(scenario)
+
+
+def test_publication_is_atomic_and_identical_retry_is_idempotent(monkeypatch, tmp_path):
+    from orchestwin.jvm_execution import validation_harvest
+    from orchestwin.jvm_execution.validation_evidence import JvmProfileValidationEvidenceCatalog
+
+    records = canonical_jvm_validation_evidence(
+        tuple(record for target in _TARGETS for record in _evidence_catalog(target).records)
+    )
+    catalog = JvmProfileValidationEvidenceCatalog(records)
+    monkeypatch.setattr(validation_harvest, "load_publication", lambda *args, **kwargs: catalog)
+
+    async def scenario(runtime):
+        first = await validation_harvest.publish_catalog(
+            runtime.session_factory, root=tmp_path, expected_package_hash="a" * 64
+        )
+        repeated = await validation_harvest.publish_catalog(
+            runtime.session_factory, root=tmp_path, expected_package_hash="a" * 64
+        )
+        assert first == repeated and first["database_published"] is True
+        loaded = await build_jvm_profile_catalog_loader(runtime.session_factory).load()
+        assert loaded.catalog.records == records and len(records) == 51
+        assert all(decision.is_eligible for decision in loaded.promotion_decisions)
+
+    _run(scenario)
+
+
 def test_three_profile_catalog_is_fresh_and_survives_an_engine_restart() -> None:
     records = canonical_jvm_validation_evidence(
         tuple(record for target in _TARGETS for record in _evidence_catalog(target).records)
@@ -341,7 +395,7 @@ def test_migration_round_trip_preserves_existing_web_evidence() -> None:
         upgrade_database(settings)
         with engine.connect() as connection:
             assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-                "0036_jvm_validation_evidence"
+                "0037_jvm_governed_operations"
             )
             assert (
                 connection.scalar(

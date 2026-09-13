@@ -23,6 +23,8 @@ from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
 from orchestwin.api.governed_jvm_execution_runtime import SqlAlchemyGovernedJvmExecutionApiService
 from orchestwin.api.jvm_execution_read_runtime import SqlAlchemyJvmExecutionReadApiService
+from orchestwin.api.jvm_repair_runtime import SqlAlchemyJvmRepairApiService
+from orchestwin.api.jvm_source_runtime import SqlAlchemyJvmSourceApiService
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.artifacts.jvm_source_persistence import SqlAlchemyJvmSourceRevisionRepository
 from orchestwin.artifacts.jvm_sources import JvmSourceOrigin
@@ -122,6 +124,15 @@ async def api_fixture(
                 jvm_execution_start_api_service=start,
                 jvm_execution_read_api_service=reads,
                 jvm_operation_store=operations,
+                jvm_source_api_service=SqlAlchemyJvmSourceApiService(
+                    sessions, content_root=backend.content_root, repo_root=backend.config.repo_root
+                ),
+                jvm_repair_api_service=SqlAlchemyJvmRepairApiService(
+                    sessions,
+                    operation_store=operations,
+                    content_root=backend.content_root,
+                    repo_root=backend.config.repo_root,
+                ),
             ),
         )
         app.dependency_overrides[current_user_dependency] = lambda: actor

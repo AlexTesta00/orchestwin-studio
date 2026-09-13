@@ -113,6 +113,8 @@ def create_app(
     application.state.jvm_execution_start_api_service = (
         resolved_runtime.jvm_execution_start_api_service
     )
+    application.state.jvm_source_api_service = resolved_runtime.jvm_source_api_service
+    application.state.jvm_repair_api_service = resolved_runtime.jvm_repair_api_service
     application.state.jvm_operation_store = resolved_runtime.jvm_operation_store
     application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
     application.state.finalization_api_service = resolved_runtime.finalization_api_service

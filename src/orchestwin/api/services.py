@@ -49,6 +49,8 @@ from orchestwin.api.jvm_execution import (
     JvmExecutionApiService,
     JvmExecutionReadApiService,
     JvmExecutionStartApiService,
+    JvmRepairApiService,
+    JvmSourceApiService,
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
@@ -217,6 +219,8 @@ class ApplicationRuntime:
     jvm_execution_api_service: JvmExecutionApiService | None = None
     jvm_execution_read_api_service: JvmExecutionReadApiService | None = None
     jvm_execution_start_api_service: JvmExecutionStartApiService | None = None
+    jvm_source_api_service: JvmSourceApiService | None = None
+    jvm_repair_api_service: JvmRepairApiService | None = None
     jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
@@ -317,6 +321,8 @@ def create_default_runtime(
         web_repair_api_service=governed_web.repairs,
         web_operation_store=governed_web.operations,
         jvm_operation_store=governed_jvm.operations,
+        jvm_source_api_service=governed_jvm.sources,
+        jvm_repair_api_service=governed_jvm.repairs,
         jvm_execution_read_api_service=governed_jvm.reads,
         jvm_execution_start_api_service=governed_jvm.start,
         web_source_api_service=SqlAlchemyWebSourceApiService(

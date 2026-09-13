@@ -176,7 +176,7 @@ class JvmExecutionStartApiService(Protocol):
     ) -> JvmApiCommandResult: ...
 
 
-class JvmExecutionApiService(JvmExecutionReadApiService, JvmExecutionStartApiService, Protocol):
+class JvmSourceApiService(Protocol):
     async def create_source_revision(
         self,
         *,
@@ -185,6 +185,8 @@ class JvmExecutionApiService(JvmExecutionReadApiService, JvmExecutionStartApiSer
         command: JvmSourceRevisionCreateCommand,
     ) -> JvmApiCommandResult: ...
 
+
+class JvmRepairApiService(Protocol):
     async def repair_proposals(
         self,
         *,
@@ -208,6 +210,16 @@ class JvmExecutionApiService(JvmExecutionReadApiService, JvmExecutionStartApiSer
         proposal_id: UUID,
         command: JvmRepairProposalApplyCommand,
     ) -> JvmApiCommandResult: ...
+
+
+class JvmExecutionApiService(
+    JvmExecutionReadApiService,
+    JvmExecutionStartApiService,
+    JvmSourceApiService,
+    JvmRepairApiService,
+    Protocol,
+):
+    pass
 
 
 class ApiModel(BaseModel):
@@ -381,6 +393,16 @@ def jvm_execution_start_api_service_dependency(request: Request) -> JvmExecution
     return service if service is not None else jvm_execution_api_service_dependency(request)
 
 
+def jvm_source_api_service_dependency(request: Request) -> JvmSourceApiService:
+    service = getattr(request.app.state, "jvm_source_api_service", None)
+    return service if service is not None else jvm_execution_api_service_dependency(request)
+
+
+def jvm_repair_api_service_dependency(request: Request) -> JvmRepairApiService:
+    service = getattr(request.app.state, "jvm_repair_api_service", None)
+    return service if service is not None else jvm_execution_api_service_dependency(request)
+
+
 def create_jvm_execution_router() -> APIRouter:
     router = APIRouter(tags=["jvm-execution"])
 
@@ -409,8 +431,8 @@ def create_jvm_execution_router() -> APIRouter:
         body: CreateJvmSourceRevisionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmSourceApiService,
+            Depends(jvm_source_api_service_dependency),
         ],
     ) -> JvmCommandResponse:
         return _command_response(
@@ -584,8 +606,8 @@ def create_jvm_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmRepairApiService,
+            Depends(jvm_repair_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -606,8 +628,8 @@ def create_jvm_execution_router() -> APIRouter:
         body: CreateJvmRepairProposalBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmRepairApiService,
+            Depends(jvm_repair_api_service_dependency),
         ],
     ) -> JvmCommandResponse:
         return _command_response(
@@ -629,8 +651,8 @@ def create_jvm_execution_router() -> APIRouter:
         body: ApplyJvmRepairProposalBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            JvmExecutionApiService,
-            Depends(jvm_execution_api_service_dependency),
+            JvmRepairApiService,
+            Depends(jvm_repair_api_service_dependency),
         ],
     ) -> JvmCommandResponse:
         return _command_response(

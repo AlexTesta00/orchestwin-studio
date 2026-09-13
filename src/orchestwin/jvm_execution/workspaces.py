@@ -171,9 +171,31 @@ class JvmPhaseWorkspace:
         if self.closed:
             return
         self.verify_owned()
+        if os.name != "nt" and os.geteuid() == 0:
+            # A root controller need not have CAP_DAC_OVERRIDE. Reclaim directory
+            # ownership only inside the verified, no-longer-mounted workspace.
+            pending = [self.path]
+            while pending:
+                directory = pending.pop()
+                regular_path(directory)
+                info = directory.lstat()
+                if not stat.S_ISDIR(info.st_mode):
+                    raise JvmWorkspaceError("JVM_WORKSPACE_CLEANUP_DIRECTORY_CHANGED")
+                os.chown(directory, 0, 0, follow_symlinks=False)
+                directory.chmod(stat.S_IMODE(info.st_mode) | stat.S_IRWXU)
+                with os.scandir(directory) as entries:
+                    pending.extend(
+                        Path(entry.path) for entry in entries if entry.is_dir(follow_symlinks=False)
+                    )
+
+        retried = set()
 
         def writable_retry(function, path, error):
             target = Path(path)
+            key = (function, target)
+            if key in retried:
+                raise JvmWorkspaceError("JVM_WORKSPACE_CLEANUP_RETRY_EXHAUSTED") from error
+            retried.add(key)
             if not target.is_relative_to(self.path):
                 raise JvmWorkspaceError("JVM_WORKSPACE_CLEANUP_ESCAPE") from error
             regular_path(target)

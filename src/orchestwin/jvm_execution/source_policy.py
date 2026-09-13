@@ -18,6 +18,26 @@ SOURCE_POLICY_HASH = "312245b9d2e9f83d6b3a549b0c9c51afebe38eb81eec86dbb92d42c424
 SOURCE_POLICY_SCOPE = "PINNED_BUILD_CONFIGURATIONS_V1"
 
 
+def pinned_build_files(target, *, repo_root: Path) -> dict[str, bytes]:
+    """Read reviewed recipe files, including the binary wrapper, from the pinned bundle."""
+    raw = read_regular_file(repo_root / "infra/jvm-runners/source-policy.json", maximum_bytes=32768)
+    if hashlib.sha256(raw).hexdigest() != SOURCE_POLICY_HASH:
+        raise ValueError("JVM_SOURCE_POLICY_INTEGRITY_FAILED")
+    fixture = {
+        "JVM_JAVA": "jvm-java-greeting",
+        "JVM_KOTLIN": "jvm-kotlin-calculator",
+        "JVM_SCALA": "jvm-scala-greeting",
+    }[target.value]
+    root = repo_root / "src/test/fixtures/jvm_execution" / fixture
+    result = {}
+    for name, pin in json.loads(raw)["profiles"][target.value].items():
+        data = read_regular_file(root / portable_path(name), maximum_bytes=pin["size_bytes"])
+        if len(data) != pin["size_bytes"] or hashlib.sha256(data).hexdigest() != pin["sha256"]:
+            raise ValueError("JVM_RECIPE_FILE_INTEGRITY_FAILED")
+        result[name] = data
+    return result
+
+
 def read_source_objects(revision, root: Path) -> dict[str, bytes]:
     if (
         not 1 <= len(revision.files) <= 1024

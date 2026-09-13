@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from orchestwin.api.governed_jvm_context import GovernedJvmSettings, JvmExecutionBackend
 from orchestwin.api.governed_jvm_execution_runtime import SqlAlchemyGovernedJvmExecutionApiService
 from orchestwin.api.jvm_execution_read_runtime import SqlAlchemyJvmExecutionReadApiService
+from orchestwin.api.jvm_repair_runtime import SqlAlchemyJvmRepairApiService
+from orchestwin.api.jvm_source_runtime import SqlAlchemyJvmSourceApiService
 from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
 from orchestwin.jvm_execution.profile_loader import build_jvm_profile_catalog_loader
 
@@ -14,6 +16,8 @@ class GovernedJvmServices:
     start: SqlAlchemyGovernedJvmExecutionApiService
     reads: SqlAlchemyJvmExecutionReadApiService
     operations: SqlAlchemyJvmOperationStore
+    sources: SqlAlchemyJvmSourceApiService
+    repairs: SqlAlchemyJvmRepairApiService
 
 
 def build_governed_jvm_services(session_factory, settings, *, configuration=None):
@@ -31,4 +35,13 @@ def build_governed_jvm_services(session_factory, settings, *, configuration=None
         ),
         reads=SqlAlchemyJvmExecutionReadApiService(session_factory, catalog_loader=catalog),
         operations=operations,
+        sources=SqlAlchemyJvmSourceApiService(
+            session_factory, content_root=backend.content_root, repo_root=config.repo_root
+        ),
+        repairs=SqlAlchemyJvmRepairApiService(
+            session_factory,
+            operation_store=operations,
+            content_root=backend.content_root,
+            repo_root=config.repo_root,
+        ),
     )

@@ -476,5 +476,8 @@ def test_root_prepared_workspace_is_owned_by_the_unprivileged_runner(tmp_path):
             assert path.stat().st_uid == 65532
             assert path.stat().st_gid == 65532
         assert (case.adapter.source_path / "build.gradle.kts").stat().st_uid == 0
+        # A root controller with CHOWN/FOWNER but without DAC_OVERRIDE must be
+        # able to reclaim an inaccessible directory after the runner has stopped.
+        owned.path.chmod(0)
     finally:
         owned.close()
