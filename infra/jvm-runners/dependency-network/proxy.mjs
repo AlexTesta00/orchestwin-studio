@@ -178,10 +178,11 @@ export function createProxyServer({
     record.host = host;
     const hostHeaders = request.rawHeaders.filter((_value, index, headers) => index % 2 === 1 && headers[index - 1].toLowerCase() === 'host');
     // HTTP/1.0 clients may omit Host. The allowlisted CONNECT authority
-    // remains the sole destination in that case.
+    // remains the sole destination in that case. OpenJDK omits the default
+    // HTTPS port from Host; it still sends an explicit :443 CONNECT authority.
     const validHost = hostHeaders.length === 0
       ? request.httpVersion === '1.0'
-      : hostHeaders.length === 1 && parseAuthority(hostHeaders[0]) === host;
+      : hostHeaders.length === 1 && (parseAuthority(hostHeaders[0]) === host || hostHeaders[0].toLowerCase() === host);
     if (!validHost ||
         request.headers['transfer-encoding'] !== undefined ||
         (request.headers['content-length'] !== undefined && request.headers['content-length'] !== '0')) {

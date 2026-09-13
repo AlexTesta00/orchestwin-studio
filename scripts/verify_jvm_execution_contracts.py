@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import sys
+import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -22,6 +23,9 @@ _GRADLE_DISTRIBUTION_URL = (
 _GRADLE_LAUNCHER_PATHS = frozenset({"gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar"})
 _GRADLE_FIXTURES = ("jvm-java-greeting", "jvm-kotlin-calculator")
 _MAX_LAUNCHER_SIZE_BYTES = 1024 * 1024
+_VERIFICATION_METADATA_PATH = "gradle/verification-metadata.xml"
+_VERIFICATION_NAMESPACE = "https://schema.gradle.org/dependency-verification"
+_MAX_VERIFICATION_METADATA_BYTES = 2 * 1024 * 1024
 GENERATED_FIXTURE_DIRECTORY_NAMES: Final = frozenset(
     {
         ".bsp",
@@ -327,6 +331,145 @@ def _verify_gradle_launcher_files(root: Path, lock: Mapping[str, object]) -> Non
             raise ContractError(f"{root.name} Gradle launcher differs from its lock: {relative}")
 
 
+def _verify_gradle_recipe(
+    runner_root: Path, *, generator_image: str, lock: Mapping[str, object]
+) -> None:
+    """Require a checked, world-readable distribution seed and fixed resolver script."""
+    recipe = _read(_confined_launcher_file(runner_root, "Dockerfile.gradle"))
+    if re.search(r"^\s*#\s*(?:syntax|escape)\s*=", recipe, re.MULTILINE | re.IGNORECASE):
+        raise ContractError("Gradle runner recipe must not override Dockerfile parsing")
+    instructions = tuple(
+        line.strip()
+        for line in recipe.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    distribution = _object(lock["distribution"], label="Gradle distribution")
+    if instructions != (
+        f"FROM {generator_image}",
+        "USER root",
+        f"ADD --checksum=sha256:{distribution['sha256']} --chmod=0444 "
+        f"{distribution['url']} /opt/orchestwin/gradle-{_GRADLE_VERSION}-bin.zip",
+        "COPY --chmod=0444 infra/jvm-runners/resolve-dependencies.gradle.kts "
+        "/opt/orchestwin/resolve-dependencies.gradle.kts",
+        "RUN chmod 0555 /opt/orchestwin",
+        "USER gradle",
+        "WORKDIR /workspace",
+        "ENTRYPOINT []",
+        'CMD ["gradle", "--version"]',
+    ):
+        raise ContractError("Gradle runner recipe differs from its pinned readable seed contract")
+    resolver = _confined_launcher_file(runner_root, "resolve-dependencies.gradle.kts")
+    if not 0 < resolver.stat().st_size <= _MAX_LAUNCHER_SIZE_BYTES:
+        raise ContractError("Gradle dependency resolver script must be non-empty and bounded")
+
+
+def _verify_gradle_dependency_metadata(root: Path, fixture: Mapping[str, object]) -> None:
+    """Check strict checksum policy syntax; actual resolution remains a runtime observation."""
+    complete = fixture.get("dependency_verification_complete")
+    if type(complete) is not bool:
+        raise ContractError(f"{root.name} dependency verification marker must be a boolean")
+    if not complete:
+        return
+    if _VERIFICATION_METADATA_PATH not in (declared_fixture_source_paths(root) or ()):
+        raise ContractError(
+            f"{root.name} dependency verification metadata must be a declared source"
+        )
+    path = _confined_launcher_file(root, _VERIFICATION_METADATA_PATH)
+    try:
+        with path.open("rb") as stream:
+            raw = stream.read(_MAX_VERIFICATION_METADATA_BYTES + 1)
+        if len(raw) > _MAX_VERIFICATION_METADATA_BYTES:
+            raise ContractError(f"{root.name} dependency verification metadata exceeds its limit")
+        text = raw.decode("utf-8")
+        if re.search(r"<!\s*(?:DOCTYPE|ENTITY)", text, re.IGNORECASE):
+            raise ContractError(
+                f"{root.name} dependency verification metadata forbids DTD/entities"
+            )
+        document = ET.fromstring(text)
+    except (OSError, UnicodeError, ET.ParseError) as error:
+        raise ContractError(
+            f"{root.name} dependency verification metadata must be valid XML"
+        ) from error
+
+    def tag(name: str) -> str:
+        return f"{{{_VERIFICATION_NAMESPACE}}}{name}"
+
+    def invalid() -> None:
+        raise ContractError(
+            f"{root.name} dependency verification metadata must enforce exact SHA-256"
+        )
+
+    schema = "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation"
+    if document.tag != tag("verification-metadata") or set(document.attrib) - {schema}:
+        invalid()
+    if (
+        schema in document.attrib
+        and re.fullmatch(
+            re.escape(_VERIFICATION_NAMESPACE)
+            + r"\s+"
+            + re.escape(_VERIFICATION_NAMESPACE)
+            + r"/dependency-verification-1\.[0-3]\.xsd",
+            document.attrib[schema],
+        )
+        is None
+    ):
+        invalid()
+    if [child.tag for child in document] != [tag("configuration"), tag("components")]:
+        invalid()
+    configuration, components = document
+    if configuration.attrib or components.attrib or not len(components):
+        invalid()
+    if [child.tag for child in configuration] != [tag("verify-metadata"), tag("verify-signatures")]:
+        invalid()
+    for element, expected in zip(configuration, ("true", "false"), strict=True):
+        if element.attrib or len(element) or (element.text or "").strip() != expected:
+            invalid()
+    identities: set[tuple[str, str, str]] = set()
+    for component in components:
+        if component.tag != tag("component") or set(component.attrib) != {
+            "group",
+            "name",
+            "version",
+        }:
+            invalid()
+        identity = tuple(component.attrib[key] for key in ("group", "name", "version"))
+        if identity in identities or not all(
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,254}", value) for value in identity
+        ):
+            invalid()
+        identities.add(identity)
+        if not len(component):
+            invalid()
+        artifact_names: set[str] = set()
+        for artifact in component:
+            if artifact.tag != tag("artifact") or set(artifact.attrib) != {"name"}:
+                invalid()
+            name = artifact.attrib["name"]
+            if (
+                name in artifact_names
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,254}", name) is None
+            ):
+                invalid()
+            artifact_names.add(name)
+            if len(artifact) != 1 or artifact[0].tag != tag("sha256"):
+                invalid()
+            checksum = artifact[0]
+            if (
+                set(checksum.attrib) - {"value", "origin", "reason"}
+                or _SHA256.fullmatch(checksum.attrib.get("value", "")) is None
+                or len(checksum)
+            ):
+                invalid()
+    for element in document.iter():
+        if (
+            element.tag not in {tag("verify-metadata"), tag("verify-signatures")}
+            and (element.text or "").strip()
+        ):
+            invalid()
+        if (element.tail or "").strip():
+            invalid()
+
+
 def verify_generated_gradle_wrapper(repository_root: Path, generated_root: Path) -> None:
     """Verify an isolated generated launcher against pinned repository provenance."""
     runner_root = repository_root.resolve() / "infra/jvm-runners"
@@ -381,6 +524,11 @@ def verify_repository(repository_root: Path) -> dict[str, object]:
         )
         if not base_ids or not set(base_ids) <= set(image_references):
             raise ContractError("JVM runner references an unknown base image")
+        if runner_id == "jvm.gradle" and (
+            runner.get("dockerfile_path") != "infra/jvm-runners/Dockerfile.gradle"
+            or base_ids != (f"gradle-{_GRADLE_VERSION}-jdk21-noble",)
+        ):
+            raise ContractError("Gradle runner requires its exact Dockerfile and pinned base")
         dockerfile_path = root / str(runner.get("dockerfile_path", ""))
         dockerfile = _read(dockerfile_path)
         expected_references = [image_references[image_id] for image_id in base_ids]
@@ -395,6 +543,7 @@ def verify_repository(repository_root: Path) -> dict[str, object]:
     if generator_image is None:
         raise ContractError("Gradle launcher requires the exact pinned Gradle base image")
     gradle_lock = _gradle_launcher_lock(runner_root, generator_image=generator_image)
+    _verify_gradle_recipe(runner_root, generator_image=generator_image, lock=gradle_lock)
 
     shapes = _object(matrix.get("validated_project_shapes"), label="validated project shapes")
     if tuple(sorted(shapes)) != _ALLOWED_TARGETS:
@@ -433,6 +582,7 @@ def verify_repository(repository_root: Path) -> dict[str, object]:
             )
         if fixture_id in _GRADLE_FIXTURES:
             _verify_gradle_launcher(fixture_directory, fixture, gradle_lock)
+            _verify_gradle_dependency_metadata(fixture_directory, fixture)
         if fixture.get("source_content_hash") != fixture_source_content_hash(fixture_directory):
             raise ContractError(f"{fixture_id} source content hash differs from declared sources")
         if fixture.get("execution_attested") is not False:

@@ -15,7 +15,8 @@ function connect(authority) {
   return new Promise((resolve, reject) => {
     const request = http.request({
       host, port, method: "CONNECT", path: authority, agent: false,
-      headers: { Host: authority }, maxHeaderSize: 8192,
+      // Match Java's CONNECT Host header, which omits the default HTTPS port.
+      headers: { Host: authority === "repo.maven.apache.org:443" ? "repo.maven.apache.org" : authority }, maxHeaderSize: 8192,
     });
     const timer = setTimeout(() => {
       request.destroy(new Error("DEPENDENCY_PROBE_CONNECT_TIMEOUT"));

@@ -131,6 +131,21 @@ test('rejects a Host authority inconsistent with CONNECT', async t => {
   await request(t, instance, `CONNECT ${AUTHORITY} HTTP/1.1\r\nHost: api.github.com:443\r\n\r\n`, 400);
 });
 
+test('accepts the OpenJDK Host form without the default HTTPS port', async t => {
+  const upstream = await echo(t);
+  const instance = await proxy(t, { dial: upstream.dial });
+  await request(t, instance, `CONNECT ${AUTHORITY} HTTP/1.1\r\nHost: repo.maven.apache.org\r\nProxy-Connection: keep-alive\r\n\r\n`, 200);
+  assert.equal(upstream.calls.length, 1);
+});
+
+test('default Host port compatibility cannot change the CONNECT destination', async t => {
+  const instance = await proxy(t, { resolve4: () => assert.fail('Unexpected DNS') });
+  for (const host of ['repo.maven.apache.org:80', 'repo.maven.apache.org.', 'api.github.com', '127.0.0.1', 'repo.maven.apache.org@evil.example']) {
+    await request(t, instance, `CONNECT ${AUTHORITY} HTTP/1.1\r\nHost: ${host}\r\n\r\n`, 400);
+  }
+  await request(t, instance, 'CONNECT repo.maven.apache.org:80 HTTP/1.1\r\nHost: repo.maven.apache.org\r\n\r\n', 403);
+});
+
 test('accepts HTTP/1.0 CONNECT without Host only for Maven Central', async t => {
   const upstream = await echo(t);
   const instance = await proxy(t, { dial: upstream.dial });

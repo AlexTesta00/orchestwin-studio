@@ -7,9 +7,10 @@
   "build_system": "GRADLE_KOTLIN_DSL",
   "entrypoint": "org.orchestwin.greeting.Main",
   "expected_output": "Hello, JVM!",
-  "source_content_hash": "911e9b28ec6a43c86c7d857286e1f1a1009f974eb2fd46c2ba2243e27e316474",
+  "source_content_hash": "ba6c2591cd4f84a837767d3056cff15059d05c06e3425d7a990bfdab4d0b43f4",
   "source_paths": [
     "build.gradle.kts",
+    "gradle/verification-metadata.xml",
     "gradle/wrapper/gradle-wrapper.jar",
     "gradle/wrapper/gradle-wrapper.properties",
     "gradlew",
@@ -22,5 +23,5 @@
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
   "launcher_complete": true,
-  "dependency_verification_complete": false
+  "dependency_verification_complete": true
 }

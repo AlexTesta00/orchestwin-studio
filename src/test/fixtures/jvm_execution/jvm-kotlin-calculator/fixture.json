@@ -7,9 +7,10 @@
   "build_system": "GRADLE_KOTLIN_DSL",
   "entrypoint": "org.orchestwin.calculator.MainKt",
   "expected_output": "42",
-  "source_content_hash": "055d367c7df28dd0eeb1ad59d4548c413843b32daaf3b4f92efd10b9ce3b5be3",
+  "source_content_hash": "efcda40b10a407a56e3d290c32f3891e14222d46652d21673548124336507db6",
   "source_paths": [
     "build.gradle.kts",
+    "gradle/verification-metadata.xml",
     "gradle/wrapper/gradle-wrapper.jar",
     "gradle/wrapper/gradle-wrapper.properties",
     "gradlew",
@@ -22,5 +23,5 @@
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
   "launcher_complete": true,
-  "dependency_verification_complete": false
+  "dependency_verification_complete": true
 }

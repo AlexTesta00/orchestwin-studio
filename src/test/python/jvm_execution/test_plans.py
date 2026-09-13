@@ -39,6 +39,42 @@ def test_java_uses_same_gradle_contract_but_a_distinct_profile() -> None:
     assert java.content_hash != kotlin.content_hash
 
 
+def test_gradle_setup_materializes_artifacts_with_trusted_resolver_and_strict_checksums() -> None:
+    bundle = create_jvm_execution_plan_bundle(selection_for(ExecutionTarget.JVM_JAVA))
+    command = bundle.phase(JvmExecutionPhase.SETUP).command_plan.commands[0]
+
+    assert command.arguments == (
+        "--init-script",
+        "/opt/orchestwin/resolve-dependencies.gradle.kts",
+        "orchestwinResolveDependencies",
+        "--dependency-verification",
+        "strict",
+        "--no-daemon",
+        "--console=plain",
+    )
+    assert all(
+        "--write-verification-metadata" not in phase.command_plan.commands[0].arguments
+        for phase in bundle.phases
+    )
+
+
+def test_sbt_validates_launcher_offline_then_resolves_compiler_and_bridge_during_setup() -> None:
+    bundle = create_jvm_execution_plan_bundle(selection_for(ExecutionTarget.JVM_SCALA))
+
+    assert bundle.phase(JvmExecutionPhase.VALIDATE).command_plan.commands[0].arguments == (
+        "-batch",
+        "-no-colors",
+        "--script-version",
+    )
+    assert bundle.phase(JvmExecutionPhase.SETUP).command_plan.commands[0].arguments == (
+        "-batch",
+        "-no-colors",
+        "update",
+        "scalaInstance",
+        "scalaCompilerBridgeBinaryJar",
+    )
+
+
 def test_scala_sbt_bundle_never_uses_a_shell_string_or_gradle() -> None:
     bundle = create_jvm_execution_plan_bundle(selection_for(ExecutionTarget.JVM_SCALA))
 

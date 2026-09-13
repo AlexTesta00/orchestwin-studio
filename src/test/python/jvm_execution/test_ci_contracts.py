@@ -10,6 +10,7 @@ import pytest
 
 from scripts.verify_jvm_execution_contracts import (
     ContractError,
+    fixture_source_content_hash,
     main,
     verify_generated_gradle_wrapper,
     verify_repository,
@@ -308,3 +309,195 @@ def test_generated_wrapper_verification_rejects_a_redirected_parent_directory(
 
     with pytest.raises(ContractError, match="Gradle launcher file is missing or unsafe"):
         verify_generated_gradle_wrapper(_REPOSITORY_ROOT, redirected_root)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "checksum",
+        "seed-permissions",
+        "script-permissions",
+        "extra-run",
+        "directory-not-traversable",
+        "directory-writable",
+        "missing-directory-permissions",
+        "chmod-extra-command",
+        "extra-from",
+        "argument",
+        "url",
+        "parser",
+    ],
+)
+def test_gradle_recipe_rejects_unpinned_or_inaccessible_seed_and_additional_instructions(
+    tmp_path: Path, mutation: str
+) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    path = repository / "infra/jvm-runners/Dockerfile.gradle"
+    text = path.read_text(encoding="utf-8")
+    if mutation == "checksum":
+        lock = json.loads((repository / "infra/jvm-runners/gradle-wrapper.lock.json").read_text())
+        text = text.replace(lock["distribution"]["sha256"], "0" * 64)
+    elif mutation == "seed-permissions":
+        text = text.replace("--chmod=0444", "--chmod=0400", 1)
+    elif mutation == "script-permissions":
+        text = text.replace("COPY --chmod=0444", "COPY --chmod=0400")
+    elif mutation == "extra-run":
+        text += "\nRUN apt-get update\n"
+    elif mutation == "directory-not-traversable":
+        text = text.replace("RUN chmod 0555", "RUN chmod 0444")
+    elif mutation == "directory-writable":
+        text = text.replace("RUN chmod 0555", "RUN chmod 0777")
+    elif mutation == "missing-directory-permissions":
+        text = text.replace("RUN chmod 0555 /opt/orchestwin", "")
+    elif mutation == "chmod-extra-command":
+        text = text.replace(
+            "RUN chmod 0555 /opt/orchestwin",
+            "RUN chmod 0555 /opt/orchestwin && curl https://example.com",
+        )
+    elif mutation == "extra-from":
+        text += "\n" + text.splitlines()[0] + "\nUSER gradle\n"
+    elif mutation == "argument":
+        text += "\nARG UNVERIFIED=1\n"
+    elif mutation == "url":
+        text = text.replace("https://services.gradle.org/", "https://example.com/")
+    else:
+        text = "# escape=`\n" + text
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ContractError, match="Gradle runner recipe"):
+        verify_repository(repository)
+
+
+def test_gradle_recipe_requires_its_resolver_script_source(tmp_path: Path) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    (repository / "infra/jvm-runners/resolve-dependencies.gradle.kts").unlink()
+    with pytest.raises(ContractError, match="missing or unsafe"):
+        verify_repository(repository)
+
+
+_VALID_VERIFICATION_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<verification-metadata xmlns="https://schema.gradle.org/dependency-verification">
+  <configuration>
+    <verify-metadata>true</verify-metadata>
+    <verify-signatures>false</verify-signatures>
+  </configuration>
+  <components>
+    <component group="org.example" name="test-fixture" version="1.0">
+      <artifact name="test-fixture-1.0.jar">
+        <sha256 value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" origin="Synthetic unit test only"/>
+      </artifact>
+    </component>
+  </components>
+</verification-metadata>
+"""
+
+
+def _set_verification_metadata(repository: Path, payload: str) -> Path:
+    root = repository / "src/test/fixtures/jvm_execution/jvm-java-greeting"
+    manifest_path = root / "fixture.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    metadata = root / "gradle/verification-metadata.xml"
+    metadata.write_text(payload, encoding="utf-8")
+    manifest["source_paths"] = sorted(
+        {*manifest["source_paths"], "gradle/verification-metadata.xml"}
+    )
+    manifest["dependency_verification_complete"] = True
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest["source_content_hash"] = fixture_source_content_hash(root)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return metadata
+
+
+def test_declared_sha256_metadata_is_validated_without_claiming_execution(tmp_path: Path) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    _set_verification_metadata(repository, _VALID_VERIFICATION_XML)
+    report = verify_repository(repository)
+    assert report["execution_attested"] is False
+    assert report["capability_status"] == "DESIGN_ONLY_LEVEL_C"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "malformed",
+        "namespace",
+        "metadata-disabled",
+        "signatures-enabled",
+        "trusted-artifacts",
+        "ignored-keys",
+        "sha1",
+        "bad-checksum",
+        "missing-checksum",
+        "also-trust",
+        "duplicate-component",
+        "duplicate-artifact",
+        "empty-components",
+        "dtd",
+        "verify-attribute",
+    ],
+)
+def test_verification_metadata_rejects_bypasses_even_when_fixture_hash_is_recomputed(
+    tmp_path: Path, mutation: str
+) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    text = _VALID_VERIFICATION_XML
+    if mutation == "malformed":
+        text = text[:-10]
+    elif mutation == "namespace":
+        text = text.replace("https://schema.gradle.org/", "https://example.com/")
+    elif mutation == "metadata-disabled":
+        text = text.replace("<verify-metadata>true", "<verify-metadata>false")
+    elif mutation == "signatures-enabled":
+        text = text.replace("<verify-signatures>false", "<verify-signatures>true")
+    elif mutation in {"trusted-artifacts", "ignored-keys"}:
+        text = text.replace("</configuration>", f"<{mutation}/></configuration>")
+    elif mutation == "sha1":
+        text = text.replace("sha256", "sha1")
+    elif mutation == "bad-checksum":
+        text = text.replace("a" * 64, "g" * 64)
+    elif mutation == "missing-checksum":
+        text = text.replace('value="' + "a" * 64 + '"', "")
+    elif mutation == "also-trust":
+        text = text.replace("/>", '><also-trust value="' + "b" * 64 + '"/></sha256>')
+    elif mutation == "duplicate-component":
+        component = text[text.index("    <component ") : text.index("  </components>")]
+        text = text.replace("  </components>", component + "  </components>")
+    elif mutation == "duplicate-artifact":
+        artifact = text[text.index("      <artifact ") : text.index("    </component>")]
+        text = text.replace("    </component>", artifact + "    </component>")
+    elif mutation == "empty-components":
+        start, end = text.index("    <component "), text.index("  </components>")
+        text = text[:start] + text[end:]
+    elif mutation == "dtd":
+        text = text.replace(
+            "<verification-metadata",
+            '<!DOCTYPE verification-metadata [<!ENTITY trusted "true">]><verification-metadata',
+            1,
+        )
+    else:
+        text = text.replace("<artifact name=", '<artifact verify="false" name=')
+    _set_verification_metadata(repository, text)
+    with pytest.raises(ContractError, match="dependency verification metadata"):
+        verify_repository(repository)
+
+
+def test_verification_metadata_cannot_be_modified_outside_the_fixture_hash(tmp_path: Path) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    metadata = _set_verification_metadata(repository, _VALID_VERIFICATION_XML)
+    metadata.write_text(_VALID_VERIFICATION_XML.replace("a" * 64, "b" * 64), encoding="utf-8")
+    with pytest.raises(ContractError, match="source content hash differs"):
+        verify_repository(repository)
+
+
+def test_complete_verification_requires_metadata_in_the_source_manifest(tmp_path: Path) -> None:
+    repository = _copy_contract_tree(tmp_path)
+    metadata = _set_verification_metadata(repository, _VALID_VERIFICATION_XML)
+    root = metadata.parents[1]
+    metadata.unlink()
+    manifest_path = root / "fixture.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_paths"].remove("gradle/verification-metadata.xml")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        ContractError, match="dependency verification metadata must be a declared source"
+    ):
+        verify_repository(repository)
