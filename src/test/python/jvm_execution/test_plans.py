@@ -28,6 +28,16 @@ def test_kotlin_gradle_bundle_is_complete_tokenized_and_offline_after_setup() ->
         )
         if phase.phase not in {JvmExecutionPhase.VALIDATE, JvmExecutionPhase.SETUP}:
             assert "--offline" in command.arguments
+        assert command.timeout_seconds == (
+            600
+            if phase.phase
+            in {
+                JvmExecutionPhase.SETUP,
+                JvmExecutionPhase.BUILD,
+                JvmExecutionPhase.TEST,
+            }
+            else 300
+        )
 
 
 def test_java_uses_same_gradle_contract_but_a_distinct_profile() -> None:

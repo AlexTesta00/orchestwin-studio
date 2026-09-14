@@ -31,7 +31,10 @@ def save(path, value):
 
 def read_data(folder):
     manifest = json.loads((folder / "manifest.json").read_text())
-    if manifest["curriculum_id"] != "grounded-evaluator-contract-calibration-v1":
+    if manifest["curriculum_id"] not in {
+        "grounded-evaluator-contract-calibration-v1",
+        "grounded-evaluator-relational-calibration-v2",
+    }:
         raise ValueError("unexpected calibration dataset")
     rows = {}
     for split in ("train", "validation", "test"):
@@ -67,6 +70,7 @@ def encode(tokenizer, row):
 
 
 def assess(output, row):
+    from orchestwin.evaluation.model_evaluator import ModelGatewayEvaluationError
     from orchestwin.models.strict_evaluator_json import strict_json_object, validate_evaluator_value
     from orchestwin.training.grounded_evaluator_curriculum import SCHEMA
 
@@ -98,8 +102,17 @@ def assess(output, row):
         result["abstention_contract_valid"] = not payload["abstained"] or (
             not payload["findings"] and bool(payload["evidence_gaps"])
         )
+        result["criterion_and_cardinality_correct"] = len(payload["findings"]) == len(
+            expected["findings"]
+        ) and [finding["criterion"] for finding in payload["findings"]] == [
+            finding["criterion"] for finding in expected["findings"]
+        ]
+        from orchestwin.training.evaluator_assessment import validate_domain_response
+
+        validate_domain_response(payload, row)
+        result["domain_accepted"] = True
         result["passed"] = all(result.values())
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, ModelGatewayEvaluationError):
         result["passed"] = False
     return result
 

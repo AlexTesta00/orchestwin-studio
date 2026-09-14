@@ -30,6 +30,17 @@ def implementation_work_order(contract: dict[str, Any]) -> dict[str, Any]:
             }
             for category, keys in fields.items()
             for index, item in enumerate(requirements.get(category, []))
+        ]
+        + [
+            {
+                "source": f"implementation_contract.content.design.prototype.screens[{screen_index}].elements[{element_index}]",
+                **deepcopy(element),
+            }
+            for screen_index, screen in enumerate(
+                contract["content"].get("design", {}).get("prototype", {}).get("screens", [])
+            )
+            for element_index, element in enumerate(screen.get("elements", []))
+            if element.get("required") is True and element.get("field_name")
         ],
     }
 

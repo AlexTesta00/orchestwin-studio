@@ -175,7 +175,12 @@ def _gradle_phase(
         ),
         output_parser_id="jvm.gradle",
         artifact_patterns=artifacts_by_phase.get(phase, frozenset()),
-        timeout_seconds=600 if phase in {JvmExecutionPhase.BUILD, JvmExecutionPhase.TEST} else 300,
+        # Cold Kotlin plugin/artifact resolution approached the old five-minute
+        # bound even on successful runs. Keep SETUP within the existing runner
+        # ceiling while leaving the shorter offline/run limits unchanged.
+        timeout_seconds=600
+        if phase in {JvmExecutionPhase.SETUP, JvmExecutionPhase.BUILD, JvmExecutionPhase.TEST}
+        else 300,
     )
     return JvmPhasePlan(
         phase=phase,

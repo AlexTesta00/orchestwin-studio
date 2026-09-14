@@ -53,7 +53,9 @@ FAMILIES = (
     "heading",
 )
 SCHEMA = _output_schema_payload(require_finding_id_pattern=True)
-INSTRUCTION = artifact_content_instruction(field_scope_instruction(_system_instruction(), SCHEMA))
+INSTRUCTION = artifact_content_instruction(
+    field_scope_instruction(_system_instruction(), SCHEMA), relational_scope=False
+)
 TASKS = (
     ("Confirm booking", "Conferma prenotazione"),
     ("Save draft", "Salva bozza"),
@@ -146,7 +148,18 @@ def _html(family: str, target: str, text: str, locale: str, present: bool) -> st
     return f'<html id="{document_id}" lang="{language}"><body><main>{snippet}{distractor}</main></body></html>'
 
 
-def example(*, seed: int, family: str, variant: int, locale: str, state: str) -> dict:
+def example(
+    *,
+    seed: int,
+    family: str,
+    variant: int,
+    locale: str,
+    state: str,
+    curriculum_id: str = CURRICULUM_ID,
+    render=None,
+    classify=oracle,
+    instruction: str = INSTRUCTION,
+) -> dict:
     if (
         family not in FAMILIES
         or locale not in {"en", "it"}
@@ -154,7 +167,7 @@ def example(*, seed: int, family: str, variant: int, locale: str, state: str) ->
     ):
         raise ValueError("invalid calibration selection")
     # State/locale are absent from identity seed: siblings have the same opaque IDs.
-    group = hashlib.sha256(f"{CURRICULUM_ID}:{seed}:{family}:{variant}".encode()).hexdigest()
+    group = hashlib.sha256(f"{curriculum_id}:{seed}:{family}:{variant}".encode()).hexdigest()
     rng = random.Random(group)
     project, workflow, artifact, twin_id, evaluation, scenario_id, bundle_id = (
         _uuid(rng) for _ in range(7)
@@ -167,7 +180,11 @@ def example(*, seed: int, family: str, variant: int, locale: str, state: str) ->
     check = CHECKS[family][lang]
     raw = _html(family, target, task, locale, state == "PRESENT")
     supplied = None if state == "INSUFFICIENT" else raw
-    judgement = oracle(supplied, family, target)
+    if render is not None:
+        raw, supplied = render(family, target, task, locale, state, variant)
+    judgement = classify(supplied, family, target)
+    if judgement != state:
+        raise ValueError("calibration label disagrees with the content oracle")
     digest = hashlib.sha256(raw.encode()).hexdigest()
     descriptor = EvaluationArtifactReference(
         artifact_id=artifact,
@@ -219,9 +236,17 @@ def example(*, seed: int, family: str, variant: int, locale: str, state: str) ->
         payload = prepared.content.enrich(request, _input_payload(request))
     missing = judgement == "MISSING"
     gap = (
-        "Artifact content was not supplied; identifiers and hashes do not reveal the element."
+        (
+            "The selected element is absent from the supplied fragment; its properties cannot be assessed."
+            if supplied is not None
+            else "Artifact content was not supplied; identifiers and hashes do not reveal the element."
+        )
         if locale == "en"
-        else "Il contenuto dell'artefatto non è fornito; identificativi e hash non mostrano l'elemento."
+        else (
+            "L'elemento selezionato è assente dal frammento fornito; le sue proprietà non sono valutabili."
+            if supplied is not None
+            else "Il contenuto dell'artefatto non è fornito; identificativi e hash non mostrano l'elemento."
+        )
     )
     summary = (
         (
@@ -277,7 +302,7 @@ def example(*, seed: int, family: str, variant: int, locale: str, state: str) ->
     _response_from_payload(
         request=request,
         configuration=UserTwinEvaluatorConfiguration(
-            CURRICULUM_ID, "1", "synthetic-candidate", "contract-calibration-v1"
+            curriculum_id, "1", "synthetic-candidate", "contract-calibration-v1"
         ),
         payload=output,
         completed_at=NOW,
@@ -297,7 +322,7 @@ def example(*, seed: int, family: str, variant: int, locale: str, state: str) ->
         "synthetic": True,
         "empirical": False,
         "messages": [
-            {"role": "system", "content": INSTRUCTION},
+            {"role": "system", "content": instruction},
             {"role": "user", "content": canonical_json(user)},
             {"role": "assistant", "content": canonical_json(output)},
         ],

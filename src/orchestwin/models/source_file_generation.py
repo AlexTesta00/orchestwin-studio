@@ -31,10 +31,10 @@ from orchestwin.models.source_proposals import (
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 PROTOCOL = "SOURCE_FILES_V2_TEXT"
-MANIFEST_BUDGET = 1600
-FILE_BUDGET = 2200
+MANIFEST_BUDGET = 3200
+FILE_BUDGET = 4096
 MAX_FILES = 8
-MANIFEST_CONTRACT = "SOURCE_MANIFEST_V7_BEHAVIOR_PLAN"
+MANIFEST_CONTRACT = "SOURCE_MANIFEST_V9_ACCEPTANCE_INPUTS"
 
 
 class PlannedFile(_Output):
@@ -55,8 +55,10 @@ class PlannedFile(_Output):
         "text/x-php",
         "text/xml",
     ]
-    purpose: str = Field(min_length=1, max_length=120)
-    interface: str = Field(min_length=1, max_length=400, pattern=r"^[^\r\n]*[(:][^\r\n]*$")
+    purpose: str = Field(min_length=1, max_length=120, pattern=r"^[^\x00-\x1f\x7f]*$")
+    interface: str = Field(
+        min_length=1, max_length=400, pattern=r"^[^\x00-\x1f\x7f]*[(:][^\x00-\x1f\x7f]*$"
+    )
     depends_on: list[Annotated[str, Field(min_length=1, max_length=240)]] = Field(
         max_length=MAX_FILES - 1
     )
@@ -65,15 +67,43 @@ class PlannedFile(_Output):
 class BehaviorPlan(_Output):
     """A model-authored implementation plan, never proof of implemented behavior."""
 
-    inputs_and_validation: str = Field(min_length=1, max_length=300)
-    state_and_lifetime: str = Field(min_length=1, max_length=300)
-    observable_outputs: str = Field(min_length=1, max_length=300)
+    inputs_and_validation: str = Field(min_length=1, max_length=300, pattern=r"^[^\x00-\x1f\x7f]*$")
+    state_and_lifetime: str = Field(min_length=1, max_length=300, pattern=r"^[^\x00-\x1f\x7f]*$")
+    observable_outputs: str = Field(min_length=1, max_length=300, pattern=r"^[^\x00-\x1f\x7f]*$")
 
 
 class SourceManifest(_Output):
     behavior_plan: BehaviorPlan
-    rationale: str = Field(min_length=1, max_length=160, pattern=r"^\S+( \S+)*$")
+    rationale: str = Field(
+        min_length=1, max_length=160, pattern=r"^[^\x00-\x20\x7f]+( [^\x00-\x20\x7f]+)*$"
+    )
     files: list[PlannedFile] = Field(min_length=1, max_length=MAX_FILES)
+
+
+class AcceptanceCheck(_Output):
+    """Model-authored witness plan; execution must independently verify it."""
+
+    source: str
+    public_interface: str = Field(min_length=3, max_length=300, pattern=r"^[^\x00-\x1f\x7f]*$")
+    observable_postcondition: str = Field(
+        min_length=3, max_length=400, pattern=r"^[^\x00-\x1f\x7f]*$"
+    )
+
+
+def _coverage_manifest_type(target, entrypoint, work_order):
+    checks = tuple(
+        create_model(
+            f"ApprovedStatementCheck{ordinal}",
+            __base__=AcceptanceCheck,
+            source=(Literal[statement["source"]], ...),
+        )
+        for ordinal, statement in enumerate(work_order["statements"])
+    )
+    return create_model(
+        "CoveredSourceManifest",
+        __base__=_manifest_type(target, entrypoint),
+        acceptance_checks=(tuple[checks], ...),
+    )
 
 
 class SourceText(_Output):
@@ -83,7 +113,11 @@ class SourceText(_Output):
 
 
 class CallablePlannedFile(PlannedFile):
-    interface: str = Field(min_length=3, max_length=400, pattern=r"^[^\r\n]*\([^\r\n]*\)[^\r\n]*$")
+    interface: str = Field(
+        min_length=3,
+        max_length=400,
+        pattern=r"^[^\x00-\x1f\x7f]*\([^\x00-\x1f\x7f]*\)[^\x00-\x1f\x7f]*$",
+    )
 
 
 def _selected_file(name, path, *, dependencies=(), media_types=("text/plain",), dom=False):
@@ -238,6 +272,8 @@ def _file_instruction(planned):
         "The source_step.file in the input is the ONLY file to write; completed_files are read-only context. "
         "Do not repeat the HTML page when writing scripts, tests, JSON, CSS or JVM code. "
         "Implement the approved business statements repeated in work_order; read the complete implementation_contract for all remaining conditions and relationships. "
+        "Implement every observable_postcondition in manifest.acceptance_checks through its public interface. "
+        "A scenario's expected_outcome is required behavior, including any read-back or retrieval operation; returning an identifier alone does not implement retrieval. "
         "The example names in pinned build paths do not define the business requirements. "
     )
     if planned.normalized_path.startswith("src/test/") or ".test." in planned.normalized_path:
@@ -275,11 +311,13 @@ def _jvm_file_instruction(planned, entrypoint, target):
     if not entrypoint:
         return ""
     instruction = (
+        f"Declare package {entrypoint['package']} in this file, including test files. "
         "Keep this program small and self-contained. Define every referenced domain type in a planned file. "
         "Implement the requirements, including observable state changes and return values. Keep stored domain records across successive operations on the same service. Derive returned identifiers from those records. Validate required inputs before changing state. No empty methods or TODO placeholders. "
         "Names in build_recipes identify the launcher only, not the requested business behavior. "
         "Implement dependencies before files which import them. Do not duplicate class/object declarations. "
         "Put mutable domain state in a service instance; tests create a fresh instance instead of sharing global state. "
+        "Expose data needed by callers through accessible public return types and methods. Tests must not access private fields or private nested types. "
         "This profile runs a console program: express the selected interaction through the CLI, without HTML rendering. "
     )
     if planned.normalized_path == entrypoint["normalized_path"]:
@@ -380,10 +418,13 @@ async def generate_source_files(generator, *, task, context):
     manifest = await generator.generate(
         task=task,
         context=root_context,
-        output_type=_manifest_type(target, entrypoint),
+        output_type=_coverage_manifest_type(target, entrypoint, work_order),
         max_output_tokens=MANIFEST_BUDGET,
         instruction="Plan the business behavior in work_order, using the complete approved artifacts for all conditions. Pinned example package names are launcher metadata, not the requested application. "
         "First fill behavior_plan with the actual inputs and validation, state ownership and lifetime, and observable outputs required by work_order. A plan is a proposal, not evidence that behavior exists. "
+        "For EACH work_order statement, fill the corresponding acceptance_checks entry with the callable public interface and observable postcondition that satisfies it. "
+        "Include scenario expected_outcome as well as acceptance criteria. If an outcome requires retrieval, expose a read method returning the stored data, not just an identifier. "
+        "A required field in the approved design requires validation before changing state; include its invalid-input postcondition. "
         "Then plan file names, responsibilities and exact public interfaces that implement that behavior. No source code. "
         "Rationale and each purpose must be one short sentence, preferably under 80 characters. "
         "Define exact callable signatures, return types and shared state ownership in interface, not file names. List project files imported or consumed in depends_on; use [] for independent files. Order dependencies before consumers. Tests depend on their actual implementation, and HTML depends on its script. "

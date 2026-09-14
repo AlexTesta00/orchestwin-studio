@@ -163,12 +163,17 @@ class ModelGatewayUserTwinEvaluator:
 
     @property
     def output_schema(self) -> StructuredJsonSchema:
+        payload = _output_schema_payload(
+            require_finding_id_pattern=self._output_schema_version == 2
+        )
+        if self._verified_content is not None:
+            from orchestwin.evaluation.artifact_content import artifact_bound_schema
+
+            payload = artifact_bound_schema(payload, self._verified_content)
         return create_structured_json_schema(
             schema_id="orchestwin-user-twin-evaluation",
             version_number=self._output_schema_version,
-            schema_payload=_output_schema_payload(
-                require_finding_id_pattern=self._output_schema_version == 2
-            ),
+            schema_payload=payload,
         )
 
     def build_input_payload(self, request: UserTwinEvaluationRequest) -> dict[str, object]:

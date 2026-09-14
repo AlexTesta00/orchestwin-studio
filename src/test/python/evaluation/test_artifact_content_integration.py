@@ -212,7 +212,7 @@ def test_factory_versions_content_schema_without_changing_metadata_only_r2(tmp_p
     content = runtime.create_evaluator(verified_content=prepared.content)
     assert plain.configuration.prompt_version_ref == FIELD_SCOPE_PROMPT_VERSION
     assert CONTENT_PROMPT_VERSION_V1 == "s12-verified-artifact-content-v1"
-    assert CONTENT_PROMPT_VERSION == "s12-verified-artifact-content-v2-finding-id-pattern"
+    assert CONTENT_PROMPT_VERSION == "s12-verified-artifact-content-v3-relational-scope"
     assert content.configuration.prompt_version_ref == CONTENT_PROMPT_VERSION
     assert content.system_instruction.startswith(plain.system_instruction)
     assert "^UTF-[0-9]{3,6}$" in content.system_instruction
@@ -224,6 +224,11 @@ def test_factory_versions_content_schema_without_changing_metadata_only_r2(tmp_p
     content_id = content_schema["properties"]["findings"]["items"]["properties"]["finding_id"]
     assert plain_id == {"type": "string"}
     assert content_id == {"type": "string", "pattern": r"^UTF-[0-9]{3,6}$"}
+    reference = prepared.request.artifact_bundle.artifacts[0]
+    fields = content_schema["properties"]["findings"]["items"]["properties"]
+    assert fields["artifact_id"]["enum"] == [str(reference.artifact_id)]
+    assert fields["artifact_version"]["enum"] == [reference.version_number]
+    assert "enum" not in content_schema["properties"]["abstained"]
     assert content._model_identity == plain._model_identity
     assert plain.traces is not content.traces
     with pytest.raises(TypeError):

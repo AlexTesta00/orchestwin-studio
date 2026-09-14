@@ -137,8 +137,13 @@ def test_observed_gradle_dependency_metadata_matches_its_preparation_inputs() ->
     assert provenance["development"] is True
     assert provenance["level_d_validated"] is False
     assert provenance["report_type"] == "JVM_FIXTURE_DEPENDENCY_PREPARATION_NOT_PROFILE_VALIDATION"
+    # These are historical preparation receipts. Preserve their exact inputs
+    # when the current runner gains instrumentation; never rewrite old hashes
+    # to make a new image appear to have produced the previous observations.
+    assert set(provenance["runner_input_snapshots"]) == set(provenance["runner_inputs"])
     for relative, digest in provenance["runner_inputs"].items():
-        assert hashlib.sha256((repository / relative).read_bytes()).hexdigest() == digest
+        original = provenance["runner_input_snapshots"][relative].encode("utf-8")
+        assert hashlib.sha256(original).hexdigest() == digest
     assert {item["fixture_id"] for item in provenance["fixtures"]} == {
         "jvm-java-greeting",
         "jvm-kotlin-calculator",

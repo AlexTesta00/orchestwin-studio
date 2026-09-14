@@ -57,6 +57,17 @@ def test_scoring_rejects_invented_artifact_or_citation():
     assert run.assess("not JSON", row)["passed"] is False
 
 
+def test_scoring_rejects_wrong_criterion_and_duplicate_findings():
+    run = operator("run_evaluator_calibration")
+    row = example(seed=7, family="error_guidance", variant=7, locale="en", state="MISSING")
+    value = json.loads(row["messages"][-1]["content"])
+    value["findings"][0]["criterion"] = "accessibility"
+    assert run.assess(json.dumps(value), row)["passed"] is False
+    value = json.loads(row["messages"][-1]["content"])
+    value["findings"].append({**value["findings"][0], "finding_id": "UTF-002"})
+    assert run.assess(json.dumps(value), row)["passed"] is False
+
+
 def test_tokenization_never_truncates_or_trains_on_prompt():
     run = operator("run_evaluator_calibration")
     row = {"messages": [{}, {}, {}]}

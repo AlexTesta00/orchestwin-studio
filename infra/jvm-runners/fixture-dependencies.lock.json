@@ -65,9 +65,14 @@
   ],
   "level_d_validated": false,
   "report_type": "JVM_FIXTURE_DEPENDENCY_PREPARATION_NOT_PROFILE_VALIDATION",
+  "runner_input_snapshots": {
+    "infra/jvm-runners/Dockerfile.gradle": "FROM docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28\n\nUSER root\nADD --checksum=sha256:553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746 --chmod=0444 https://services.gradle.org/distributions/gradle-9.5.0-bin.zip /opt/orchestwin/gradle-9.5.0-bin.zip\nCOPY --chmod=0444 infra/jvm-runners/resolve-dependencies.gradle.kts /opt/orchestwin/resolve-dependencies.gradle.kts\nRUN chmod 0555 /opt/orchestwin\n\nUSER gradle\nWORKDIR /workspace\nENTRYPOINT []\nCMD [\"gradle\", \"--version\"]\n",
+    "infra/jvm-runners/resolve-dependencies.gradle.kts": "// Trusted runner input, supplied with --init-script during controlled SETUP.\n// Configuration.resolve() materializes artifact files; a dependencies report\n// resolves the dependency graph without guaranteeing an offline artifact cache.\n// Dependency verification stays enabled and resolution failures must propagate.\n// https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.Configuration.html\n\nallprojects {\n    val dependencyConfigurations = configurations\n    tasks.register(\"orchestwinResolveDependencies\") {\n        group = \"build setup\"\n        description = \"Materialize every resolvable dependency configuration before offline execution.\"\n        doLast {\n            dependencyConfigurations.filter { it.isCanBeResolved }.sortedBy { it.name }\n                .forEach { configuration ->\n                    val files = configuration.resolve()\n                    logger.lifecycle(\"Resolved ${configuration.name}: ${files.size} artifact files\")\n                }\n        }\n    }\n}\n"
+  },
   "runner_inputs": {
     "infra/jvm-runners/Dockerfile.gradle": "3433f221be113e93a50564005b75fe060a0c6308882aa2bfe78b5c64bac71a15",
     "infra/jvm-runners/resolve-dependencies.gradle.kts": "cb936918cc38f9a02227a1d5414a0ddb7a4d8d506ad271f561963a7378d734e4"
   },
-  "schema_version": 1
+  "schema_version": 1,
+  "snapshot_retrieval_commit": "3009de6be9104286895efac14e141da6e3965cbc"
 }

@@ -66,6 +66,21 @@ def test_work_order_repeats_business_statements_and_conditions_without_rewriting
     assert contract == before
 
 
+def test_required_design_fields_reach_the_acceptance_work_order_verbatim():
+    original = approved_context()
+    element = {"id": "guest", "field_name": "guest_name", "required": True, "kind": "TEXT_INPUT"}
+    original["design"]["content"]["prototype"]["screens"][0]["elements"] = [element]
+    contract = implementation_contract(original)
+    work = implementation_work_order(contract)
+    field = next(item for item in work["statements"] if item.get("id") == "guest")
+    assert {k: v for k, v in field.items() if k != "source"} == element
+    assert field["source"].endswith("screens[0].elements[0]")
+    field["required"] = False
+    assert (
+        contract["content"]["design"]["prototype"]["screens"][0]["elements"][0]["required"] is True
+    )
+
+
 @pytest.mark.parametrize(
     "path,new_value",
     [

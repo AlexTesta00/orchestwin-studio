@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Final
 from uuid import UUID
@@ -132,7 +133,11 @@ class DirectFindingConflict:
         ordered = tuple(sorted(self.findings, key=_finding_sort_key))
         if ordered != self.findings:
             raise ValueError("direct conflicts must use canonical finding order")
-        if tuple(item.finding_id for item in self.findings) != self.declaration.finding_ids:
+        matches = [
+            [item for item in self.findings if ref in {item.finding_id, finding_reference(item)}]
+            for ref in self.declaration.finding_ids
+        ]
+        if any(len(items) != 1 for items in matches) or matches[0][0] == matches[1][0]:
             raise ValueError("direct conflict findings must match the declaration")
         left, right = self.findings
         if left.twin_id == right.twin_id:
@@ -309,9 +314,17 @@ def aggregate_synthetic_evaluation(
 ) -> MultiTwinEvaluationAggregation:
     """Aggregate exact findings while preserving role specificity and disagreements."""
     findings = run.findings
-    findings_by_id = {item.finding_id: item for item in findings}
+    findings_by_id = {finding_reference(item): item for item in findings}
     if len(findings_by_id) != len(findings):
-        raise ValueError("synthetic evaluation finding IDs must be unique across User Twins")
+        raise ValueError(
+            "synthetic evaluation finding IDs must be unique within each User Twin version"
+        )
+    counts = Counter(item.finding_id for item in findings)
+    # Keep historical unambiguous references working; a repeated local ID must
+    # be qualified by its Twin. Never rewrite the model's original finding.
+    findings_by_id.update(
+        {item.finding_id: item for item in findings if counts[item.finding_id] == 1}
+    )
 
     ordered_declarations = tuple(sorted(declared_conflicts, key=lambda item: item.sort_key))
     if ordered_declarations != declared_conflicts:
@@ -325,14 +338,19 @@ def aggregate_synthetic_evaluation(
                 findings_by_id[declaration.right_finding_id],
             )
         except KeyError as error:
-            raise ValueError("declared conflict references an unknown finding") from error
-        if conflicted_ids.intersection(declaration.finding_ids):
+            raise ValueError(
+                "declared conflict references an unknown finding or ambiguous local ID; use a Twin-qualified reference"
+            ) from error
+        pair_ids = {finding_reference(item) for item in pair}
+        if conflicted_ids.intersection(pair_ids):
             raise ValueError("one finding cannot belong to multiple direct conflicts")
-        conflict = DirectFindingConflict(declaration=declaration, findings=pair)
+        conflict = DirectFindingConflict(
+            declaration=declaration, findings=tuple(sorted(pair, key=_finding_sort_key))
+        )
         direct_conflicts.append(conflict)
-        conflicted_ids.update(declaration.finding_ids)
+        conflicted_ids.update(pair_ids)
 
-    candidates = [item for item in findings if item.finding_id not in conflicted_ids]
+    candidates = [item for item in findings if finding_reference(item) not in conflicted_ids]
     grouped: dict[tuple[str, int, str, str, str], list[SyntheticFinding]] = {}
     for finding in candidates:
         grouped.setdefault(_shared_comparison_key(finding), []).append(finding)
@@ -346,14 +364,15 @@ def aggregate_synthetic_evaluation(
         ordered = tuple(sorted(group, key=_finding_sort_key))
         group_id = f"shared-{snapshot_content_hash({'key': list(key)})[:16]}"
         shared.append(SharedFindingGroup(group_id=group_id, findings=ordered))
-        shared_ids.update(item.finding_id for item in ordered)
+        shared_ids.update(finding_reference(item) for item in ordered)
 
     role_specific = tuple(
         sorted(
             (
                 RoleSpecificFinding(item)
                 for item in findings
-                if item.finding_id not in conflicted_ids and item.finding_id not in shared_ids
+                if finding_reference(item) not in conflicted_ids
+                and finding_reference(item) not in shared_ids
             ),
             key=lambda item: item.sort_key,
         )
@@ -455,8 +474,9 @@ def _human_validation_questions(
     conflicts: tuple[DirectFindingConflict, ...],
 ) -> tuple[HumanValidationQuestion, ...]:
     questions: list[HumanValidationQuestion] = []
+    counts = Counter(item.finding_id for item in findings)
     conflicted_ids = {
-        finding_id for conflict in conflicts for finding_id in conflict.declaration.finding_ids
+        finding_reference(item) for conflict in conflicts for item in conflict.findings
     }
     for conflict in conflicts:
         questions.append(
@@ -467,19 +487,27 @@ def _human_validation_questions(
             )
         )
     for finding in sorted(findings, key=_finding_sort_key):
-        if not finding.requires_human_validation or finding.finding_id in conflicted_ids:
+        if not finding.requires_human_validation or finding_reference(finding) in conflicted_ids:
             continue
+        reference = (
+            finding.finding_id if counts[finding.finding_id] == 1 else finding_reference(finding)
+        )
         questions.append(
             HumanValidationQuestion(
                 question_id=f"HVQ-{finding.content_hash[:12]}",
-                related_finding_ids=(finding.finding_id,),
+                related_finding_ids=(reference,),
                 question=(
-                    f"Validate with target users whether finding {finding.finding_id} "
+                    f"Validate with target users whether finding {reference} "
                     f"affects the stated task: {finding.summary}"
                 ),
             )
         )
     return tuple(sorted(questions, key=lambda item: item.sort_key))
+
+
+def finding_reference(finding: SyntheticFinding) -> str:
+    """Unambiguous run-local reference, preserving each independently generated ID."""
+    return f"twin:{finding.twin_id}:v{finding.twin_version}:{finding.finding_id}"
 
 
 def _shared_comparison_key(finding: SyntheticFinding) -> tuple[str, int, str, str, str]:

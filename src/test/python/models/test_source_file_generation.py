@@ -26,6 +26,14 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
             value = {"content": item["content"]}
         else:
             value = {
+                "acceptance_checks": [
+                    {
+                        "source": statement["source"],
+                        "public_interface": "value(): object",
+                        "observable_postcondition": "Return the synthetic fixture value.",
+                    }
+                    for statement in ctx["work_order"]["statements"]
+                ],
                 "behavior_plan": {
                     "inputs_and_validation": "Use the synthetic fixture input.",
                     "state_and_lifetime": "The synthetic fixture has no mutable state.",
@@ -123,6 +131,8 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         "content_large",
         "extra",
         "second_file",
+        "manifest_nul",
+        "coverage_omitted",
     ],
 )
 def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failure):
@@ -135,6 +145,10 @@ def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failur
                 value["files"][0]["normalized_path"] = "../index.html"
             if failure == "too_many":
                 value["files"] *= 5
+            if failure == "manifest_nul":
+                value["files"][2]["interface"] = "DOM: field\x00"
+            if failure == "coverage_omitted":
+                del value["acceptance_checks"]
         elif failure == "carriage_return":
             value["content"] = "one\rtwo"
         elif failure == "line_control":
