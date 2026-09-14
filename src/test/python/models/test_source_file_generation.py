@@ -23,18 +23,29 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
         step = ctx.get("source_step")
         if step:
             item = payload["files"][step["ordinal"] - 1]
-            value = {"lines": item["content"].splitlines()}
+            value = {"content": item["content"]}
         else:
             value = {
+                "behavior_plan": {
+                    "inputs_and_validation": "Use the synthetic fixture input.",
+                    "state_and_lifetime": "The synthetic fixture has no mutable state.",
+                    "observable_outputs": "Return the fixture value.",
+                },
                 "rationale": payload["rationale"],
                 "files": [
                     {
                         "normalized_path": f["normalized_path"],
                         "media_type": f["media_type"],
                         "purpose": "Synthetic file purpose.",
-                        "interface": "Synthetic public interface.",
+                        "interface": "value(): object",
+                        "depends_on": [
+                            item["normalized_path"]
+                            for item in payload["files"][:index]
+                            if f["normalized_path"] not in {"app.test.cjs", "index.html"}
+                            or item["normalized_path"] == "app.js"
+                        ],
                     }
-                    for f in payload["files"]
+                    for index, f in enumerate(payload["files"])
                 ],
             }
         transport.output = mutate(ctx, value) if mutate else value
@@ -70,12 +81,13 @@ def complete_output():
             },
         ]
     )
+    payload["files"] = payload["files"][1:] + payload["files"][:1]
     return payload
 
 
 def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
-    payload["files"][0]["content"] = '<title>Ã¨</title>\n<script>const s = "\\n";</script>'
+    payload["files"][0]["content"] = 'const label = "è";\nconst s = "\\n";'
     generator, transport = source_sequence_generator(tmp_path, payload)
     result = execute(generator, ctx, store)
     assert len(transport.calls) == len(store.requests) == 4
@@ -86,11 +98,14 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         FILE_BUDGET,
         FILE_BUDGET,
     ]
-    assert result.output.files[0].content == payload["files"][0]["content"] + "\n"
+    assert result.output.files[0].content == payload["files"][0]["content"]
     assert [s["generation_id"] for s in result.generation_steps] == list(map(str, children))
     for ordinal, child in enumerate(children, 1):
         request = store.requests[child][0]
         child_ctx = json.loads(request.input_payload_json)["context"]
+        assert child_ctx["manifest"]["behavior_plan"]["observable_outputs"] == (
+            "Return the fixture value."
+        )
         assert child_ctx["source_step"]["parent_generation_id"] == str(parent)
         assert child_ctx["source_step"]["ordinal"] == ordinal
         assert len(child_ctx["completed_files"]) == ordinal - 1
@@ -103,9 +118,9 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     [
         "manifest_path",
         "too_many",
-        "line_break",
+        "carriage_return",
         "line_control",
-        "line_long",
+        "content_large",
         "extra",
         "second_file",
     ],
@@ -120,16 +135,16 @@ def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failur
                 value["files"][0]["normalized_path"] = "../index.html"
             if failure == "too_many":
                 value["files"] *= 5
-        elif failure == "line_break":
-            value["lines"] = ["one\ntwo"]
+        elif failure == "carriage_return":
+            value["content"] = "one\rtwo"
         elif failure == "line_control":
-            value["lines"] = ["\x01"]
-        elif failure == "line_long":
-            value["lines"] = ["x" * 241]
+            value["content"] = "\x01"
+        elif failure == "content_large":
+            value["content"] = "x" * 32769
         elif failure == "extra":
             value["approved"] = True
         elif failure == "second_file" and step["ordinal"] == 2:
-            value["lines"] = []
+            value["content"] = ""
         return value
 
     generator, _ = source_sequence_generator(tmp_path, payload, mutate=mutate)
@@ -231,4 +246,50 @@ def test_incomplete_static_manifest_is_rejected_before_file_calls(tmp_path, path
     generator, transport = source_sequence_generator(tmp_path, payload)
     with pytest.raises(ProposalGenerationError):
         execute(generator, context(), MemoryEvidence())
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize("failure", ["unknown", "self", "forward", "duplicate", "omitted"])
+def test_invalid_dependency_plan_is_rejected_before_any_file_call(tmp_path, failure):
+    def mutate(ctx, value):
+        if ctx.get("source_step"):
+            raise AssertionError("Invalid dependency plan reached file generation")
+        files = value["files"]
+        if failure == "unknown":
+            files[0]["depends_on"] = ["absent.js"]
+        elif failure == "self":
+            files[0]["depends_on"] = [files[0]["normalized_path"]]
+        elif failure == "forward":
+            files[0]["depends_on"] = [files[-1]["normalized_path"]]
+        elif failure == "duplicate":
+            files[1]["depends_on"] *= 2
+        else:
+            files[1]["depends_on"] = []
+        return value
+
+    generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    with pytest.raises(ProposalGenerationError):
+        execute(generator, context(), MemoryEvidence())
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize("failure", ["duplicate_entrypoint", "test_before_implementation"])
+def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, failure):
+    ctx = context("jvm-source", "JVM_JAVA")
+    ctx["build_recipes"] = {"synthetic-build": 'mainClass = "org.example.Main"'}
+    payload = output("jvm-source", "src/main/java/org/example/Main.java")
+    payload["files"].append(
+        {
+            "normalized_path": "src/test/java/org/example/MainTest.java",
+            "media_type": "text/plain",
+            "content": "// Synthetic persistence test.",
+        }
+    )
+    if failure == "duplicate_entrypoint":
+        payload["files"][1]["normalized_path"] = payload["files"][0]["normalized_path"]
+    else:
+        payload["files"].reverse()
+    generator, transport = source_sequence_generator(tmp_path, payload)
+    with pytest.raises(ProposalGenerationError):
+        execute(generator, ctx, MemoryEvidence())
     assert len(transport.calls) == 1

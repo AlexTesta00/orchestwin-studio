@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from orchestwin.models.source_context import implementation_contract
+from orchestwin.models.source_context import implementation_contract, implementation_work_order
 
 
 def approved_context():
@@ -45,6 +45,25 @@ def test_preserves_complete_selected_content_without_mutating_approved_artifacts
     assert projected["content"] == {name: value["content"] for name, value in original.items()}
     projected["content"]["design"]["prototype"]["screens"].clear()
     assert original == before
+
+
+def test_work_order_repeats_business_statements_and_conditions_without_rewriting_them():
+    original = approved_context()
+    original["requirements"]["content"]["scenarios"] = [
+        {"code": "SCN-9", "steps": ["Save two reservations."], "expected_outcome": "Retrieve both."}
+    ]
+    contract = implementation_contract(original)
+    before = deepcopy(contract)
+    work = implementation_work_order(contract)
+    scenario = next(item for item in work["statements"] if item["code"] == "SCN-9")
+    assert scenario == {
+        "source": "implementation_contract.content.requirements.scenarios[0]",
+        "code": "SCN-9",
+        "steps": ["Save two reservations."],
+        "expected_outcome": "Retrieve both.",
+    }
+    scenario["steps"].clear()
+    assert contract == before
 
 
 @pytest.mark.parametrize(

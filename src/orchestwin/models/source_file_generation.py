@@ -5,7 +5,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, create_model
 
 from orchestwin.models.proposal_evidence import (
     ProposalEvidenceError,
@@ -16,6 +16,7 @@ from orchestwin.models.proposal_generation import ProposalGenerationError, wire_
 from orchestwin.models.source_context import (
     IMPLEMENTATION_VIEW,
     implementation_contract,
+    implementation_work_order,
 )
 from orchestwin.models.source_proposals import (
     MAX_CONTEXT_BYTES,
@@ -29,11 +30,11 @@ from orchestwin.models.source_proposals import (
 )
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
-PROTOCOL = "SOURCE_FILES_V1"
-MANIFEST_BUDGET = 1000
-FILE_BUDGET = 1100
+PROTOCOL = "SOURCE_FILES_V2_TEXT"
+MANIFEST_BUDGET = 1600
+FILE_BUDGET = 2200
 MAX_FILES = 8
-MANIFEST_CONTRACT = "SOURCE_MANIFEST_V2_TEST_REQUIRED"
+MANIFEST_CONTRACT = "SOURCE_MANIFEST_V7_BEHAVIOR_PLAN"
 
 
 class PlannedFile(_Output):
@@ -55,33 +56,86 @@ class PlannedFile(_Output):
         "text/xml",
     ]
     purpose: str = Field(min_length=1, max_length=120)
-    interface: str = Field(min_length=1, max_length=200)
+    interface: str = Field(min_length=1, max_length=400, pattern=r"^[^\r\n]*[(:][^\r\n]*$")
+    depends_on: list[Annotated[str, Field(min_length=1, max_length=240)]] = Field(
+        max_length=MAX_FILES - 1
+    )
+
+
+class BehaviorPlan(_Output):
+    """A model-authored implementation plan, never proof of implemented behavior."""
+
+    inputs_and_validation: str = Field(min_length=1, max_length=300)
+    state_and_lifetime: str = Field(min_length=1, max_length=300)
+    observable_outputs: str = Field(min_length=1, max_length=300)
 
 
 class SourceManifest(_Output):
+    behavior_plan: BehaviorPlan
     rationale: str = Field(min_length=1, max_length=160, pattern=r"^\S+( \S+)*$")
     files: list[PlannedFile] = Field(min_length=1, max_length=MAX_FILES)
 
 
-class SourceLines(_Output):
-    lines: list[Annotated[str, Field(max_length=240, pattern=r"^[^\x00-\x08\x0a-\x1f\x7f]*$")]] = (
-        Field(
-            min_length=1,
-            max_length=60,
-        )
+class SourceText(_Output):
+    """A complete file, preserved byte-for-byte after UTF-8 encoding."""
+
+    content: str = Field(min_length=1, max_length=32768, pattern=r"^[^\x00-\x08\x0b-\x1f\x7f]*$")
+
+
+class CallablePlannedFile(PlannedFile):
+    interface: str = Field(min_length=3, max_length=400, pattern=r"^[^\r\n]*\([^\r\n]*\)[^\r\n]*$")
+
+
+def _selected_file(name, path, *, dependencies=(), media_types=("text/plain",), dom=False):
+    """Pin policy-owned paths and dependency order in the provider's schema."""
+    dependency_type = list[Literal[dependencies]] if dependencies else list[str]
+    return create_model(
+        name,
+        __base__=PlannedFile if dom else CallablePlannedFile,
+        normalized_path=(Literal[path], ...),
+        media_type=(Literal[media_types], ...),
+        depends_on=(
+            dependency_type,
+            Field(min_length=len(dependencies), max_length=len(dependencies)),
+        ),
     )
 
 
-class StaticSourceManifest(SourceManifest):
-    files: list[PlannedFile] = Field(min_length=1, max_length=4)
-
-
-class JvmPlannedFile(PlannedFile):
-    media_type: Literal["text/plain"]
-
-
-class JvmSourceManifest(SourceManifest):
-    files: list[JvmPlannedFile] = Field(min_length=1, max_length=4)
+def _manifest_type(target, entrypoint):
+    if target == "WEB_STATIC":
+        javascript = ("text/javascript", "application/javascript")
+        core = _selected_file("StaticCore", "app.js", media_types=javascript)
+        tests = _selected_file(
+            "StaticTests", "app.test.cjs", dependencies=("app.js",), media_types=javascript
+        )
+        page = _selected_file(
+            "StaticPage",
+            "index.html",
+            dependencies=("app.js",),
+            media_types=("text/html",),
+            dom=True,
+        )
+        return create_model(
+            "StaticSourceManifest", __base__=SourceManifest, files=(tuple[core, tests, page], ...)
+        )
+    if not entrypoint:
+        return SourceManifest
+    main_path = entrypoint["normalized_path"]
+    test_name = PurePosixPath(main_path).stem + "Test" + PurePosixPath(main_path).suffix
+    test_path = str(
+        PurePosixPath(main_path.replace("src/main/", "src/test/", 1)).with_name(test_name)
+    )
+    main = _selected_file("JvmMain", main_path)
+    tests = _selected_file(
+        "JvmTests",
+        test_path,
+        dependencies=(main_path,),
+    )
+    return create_model(
+        "JvmSourceManifest",
+        __base__=SourceManifest,
+        files=(tuple[main, tests], ...),
+    )
 
 
 def _jvm_entrypoint(context):
@@ -106,7 +160,33 @@ def _jvm_entrypoint(context):
     }
 
 
+def _validate_dependencies(manifest):
+    """Reject incomplete or forward dependencies before any source-file call."""
+    paths = {file.normalized_path for file in manifest.files}
+    completed = set()
+    for file in manifest.files:
+        dependencies = set(file.depends_on)
+        if len(dependencies) != len(file.depends_on):
+            raise ValueError("duplicate source dependency")
+        if file.normalized_path in dependencies or not dependencies <= paths:
+            raise ValueError("unknown or self-referential source dependency")
+        if not dependencies <= completed:
+            raise ValueError("source dependencies must precede their consumers")
+        if (
+            file.normalized_path in {"index.html", "app.test.cjs"}
+            and "app.js" in paths
+            and "app.js" not in dependencies
+        ):
+            raise ValueError("static consumers must depend on app.js")
+        if file.normalized_path.startswith("src/test/") and not any(
+            dependency.startswith("src/main/") for dependency in dependencies
+        ):
+            raise ValueError("JVM tests must depend on their implementation")
+        completed.add(file.normalized_path)
+
+
 def _validate_manifest(context, manifest):
+    _validate_dependencies(manifest)
     placeholders = [
         SourceFile(normalized_path=f.normalized_path, content="", media_type=f.media_type)
         for f in manifest.files
@@ -153,14 +233,20 @@ def _file_instruction(planned):
         ".scala": "Scala",
         ".ts": "TypeScript",
     }.get(suffix, planned.media_type)
-    return (
+    instruction = (
         f"Write the file {planned.normalized_path} in {language}. "
         "The source_step.file in the input is the ONLY file to write; completed_files are read-only context. "
         "Do not repeat the HTML page when writing scripts, tests, JSON, CSS or JVM code. "
-        "For tests import the actual implementation, call its public interface and assert behavior. "
-        "For browser scripts guard document access so the pure core can also run in Node. "
-        "Use exact package and main class and only test libraries listed in build_recipes for JVM files. "
+        "Implement the approved business statements repeated in work_order; read the complete implementation_contract for all remaining conditions and relationships. "
+        "The example names in pinned build paths do not define the business requirements. "
     )
+    if planned.normalized_path.startswith("src/test/") or ".test." in planned.normalized_path:
+        instruction += (
+            "Import the actual implementation, call its public interface and assert behavior. "
+            "Exercise two successive valid operations on one service plus an invalid input; "
+            "verify retained data, distinct identifiers when required, and rejection without corrupting prior state. "
+        )
+    return instruction
 
 
 def _static_file_instruction(planned):
@@ -177,7 +263,7 @@ def _static_file_instruction(planned):
         )
     if suffix in {".js", ".cjs"}:
         return (
-            "Implement the business behavior as pure functions, including input validation and unique identifiers when required. "
+            "Implement a testable business core with explicit state ownership, input validation and unique identifiers when required. Keep records across successive operations on the same service. A factory can return methods sharing one private store. Wire the browser to the same core. "
             "Export the public functions inside if (typeof module !== 'undefined') for Node tests. "
             "Use module.exports = { ... } in that guard. This is a classic browser script: never use import or export statements. "
             "Put every document/window reference inside if (typeof document !== 'undefined') for the browser. "
@@ -190,9 +276,10 @@ def _jvm_file_instruction(planned, entrypoint, target):
         return ""
     instruction = (
         "Keep this program small and self-contained. Define every referenced domain type in a planned file. "
-        "Implement the requirements, including observable state changes and return values. No empty methods or TODO placeholders. "
+        "Implement the requirements, including observable state changes and return values. Keep stored domain records across successive operations on the same service. Derive returned identifiers from those records. Validate required inputs before changing state. No empty methods or TODO placeholders. "
         "Names in build_recipes identify the launcher only, not the requested business behavior. "
         "Implement dependencies before files which import them. Do not duplicate class/object declarations. "
+        "Put mutable domain state in a service instance; tests create a fresh instance instead of sharing global state. "
         "This profile runs a console program: express the selected interaction through the CLI, without HTML rendering. "
     )
     if planned.normalized_path == entrypoint["normalized_path"]:
@@ -208,15 +295,24 @@ def _jvm_file_instruction(planned, entrypoint, target):
         elif target == "JVM_SCALA":
             instruction += "Define object Main with def main(args: Array[String]): Unit. Do not use extends App. "
         elif target == "JVM_JAVA":
-            instruction += "Define public class Main with public static void main(String[] args). "
+            instruction += (
+                "Define public class Main with public static void main(String[] args). "
+                "Supporting types belong in this file as nested types of Main or package-private types. "
+            )
     elif planned.normalized_path.startswith("src/test/"):
         instruction += "Write two compact behavioral tests: one successful input and one invalid input. Assert actual return values or changed state, never a constant or assertTrue(true). Include every required assertion import. "
         if target == "JVM_SCALA":
-            instruction += "Use the pinned munit.FunSuite with test blocks, assertEquals and intercept; no ScalaTest imports. "
+            instruction += "The exact test import is import munit.FunSuite, never org.scalameta.munit.FunSuite. Extend FunSuite and use test blocks, assertEquals and intercept. "
+        elif target == "JVM_KOTLIN":
+            instruction += "Use kotlin.test.Test, kotlin.test.assertEquals and kotlin.test.assertFailsWith. println is built in and needs no import. "
+        elif target == "JVM_JAVA":
+            instruction += "Use import org.junit.jupiter.api.Test; and import static org.junit.jupiter.api.Assertions.*; for the pinned JUnit 5 API. "
     return instruction
 
 
 def _validate_file_language(item):
+    if len(item.content.encode("utf-8")) > 32768:
+        raise ValueError("source file exceeds the UTF-8 byte budget")
     suffix = PurePosixPath(item.normalized_path).suffix.lower()
     if suffix == ".json":
         json.loads(item.content)
@@ -240,10 +336,12 @@ async def generate_source_files(generator, *, task, context):
     if parent is None:
         raise ProposalEvidenceError("SOURCE_PARENT_EVIDENCE_REQUIRED")
     semantic = implementation_contract(context)
+    work_order = implementation_work_order(semantic)
     root_context = {
         **context,
         "generation_protocol": PROTOCOL,
         "manifest_contract": MANIFEST_CONTRACT,
+        "work_order": work_order,
     }
     for name, content in semantic["content"].items():
         root_context[name] = {
@@ -267,7 +365,7 @@ async def generate_source_files(generator, *, task, context):
             "This request selects WEB_STATIC. The HTML entry MUST be exactly index.html at the project root. "
             "Never public/index.html or src/index.html. Use app.js with a pure CommonJS-exportable core and "
             "a document-existence guard for browser bindings, plus app.test.cjs using node:test and node:assert/strict. "
-            "Plan app.js first, its test second and index.html last so consumers can use the actual implementation. "
+            "Plan exactly three files: app.js first, app.test.cjs second and index.html last. Put any CSS in the HTML. "
             "The HTML must load app.js with a script src element. No npm, jsdom, browser-only test framework, or external dependencies."
         )
     elif entrypoint:
@@ -275,29 +373,29 @@ async def generate_source_files(generator, *, task, context):
             f" The manifest MUST include {entrypoint['normalized_path']} with package {entrypoint['package']}. "
             f"The pinned launcher invokes {entrypoint['main_class']}. Implement a finite CLI demonstration "
             "of the core use case, then exit; do not wait for interactive input or start a server. "
-            "Use text/plain media_type for every JVM file. Reserve one of the four files for unit tests under src/test/ in the selected language. "
-            "Use at most four files: put related domain types together in the core file, then the main entry and real unit tests. "
-            "Do not spend the file budget on separate command, query, factory or repository wrappers."
+            "Use text/plain media_type for every JVM file. Plan exactly two files from the schema: "
+            "the main file containing the entrypoint and the complete business service, then its test file. "
+            "Put related domain types in the main file. Do not create extra command, query, UI or repository files."
         )
     manifest = await generator.generate(
         task=task,
         context=root_context,
-        output_type=StaticSourceManifest
-        if target == "WEB_STATIC"
-        else JvmSourceManifest
-        if entrypoint
-        else SourceManifest,
+        output_type=_manifest_type(target, entrypoint),
         max_output_tokens=MANIFEST_BUDGET,
-        instruction="Plan only file names, responsibilities and exact public interfaces. No source code. "
+        instruction="Plan the business behavior in work_order, using the complete approved artifacts for all conditions. Pinned example package names are launcher metadata, not the requested application. "
+        "First fill behavior_plan with the actual inputs and validation, state ownership and lifetime, and observable outputs required by work_order. A plan is a proposal, not evidence that behavior exists. "
+        "Then plan file names, responsibilities and exact public interfaces that implement that behavior. No source code. "
         "Rationale and each purpose must be one short sentence, preferably under 80 characters. "
-        "Define exact function signatures in interface, not file names. "
-        "Every normalized_path is a relative POSIX path, without a leading slash, drive letter or parent traversal. "
-        "Use at most 8 small files, normally 3 or 4. Each file must fit in 60 short lines. "
+        "Define exact callable signatures, return types and shared state ownership in interface, not file names. List project files imported or consumed in depends_on; use [] for independent files. Order dependencies before consumers. Tests depend on their actual implementation, and HTML depends on its script. "
+        "For executable files interface contains real function or constructor signatures with parentheses; for HTML list concrete DOM IDs after DOM:. Never copy architecture labels as interfaces. Every normalized_path is a relative POSIX path, without a leading slash, drive letter or parent traversal. "
+        "Use at most 8 small files, normally 3 or 4. Keep each file compact and complete, normally 25-70 readable lines. "
         "Include an independently executable test. Never generate fixed_files or documentation. "
         + stack,
     )
     _validate_manifest(context, manifest)
-    manifest_hash = snapshot_content_hash(manifest.model_dump())
+    # Tuple schemas constrain each position; the evidence protocol remains a JSON array.
+    manifest_snapshot = manifest.model_dump(mode="json")
+    manifest_hash = snapshot_content_hash(manifest_snapshot)
     files, steps = [], []
     for ordinal, planned in enumerate(manifest.files, 1):
         step = {
@@ -313,12 +411,13 @@ async def generate_source_files(generator, *, task, context):
             "source_step": step,
             "target_selection": context["target_selection"],
             "implementation_contract": semantic,
-            "manifest": manifest.model_dump(),
+            "manifest": manifest_snapshot,
             "build_recipes": context.get("build_recipes", {}),
             "entrypoint_contract": entrypoint,
             "completed_files": [
                 {"normalized_path": f.normalized_path, "content": f.content} for f in files
             ],
+            "work_order": work_order,
         }
         if len(canonical_json(wire_value(child_context)).encode()) > MAX_CONTEXT_BYTES:
             raise ProposalGenerationError("SOURCE_FILE_CONTEXT_LIMIT_EXCEEDED")
@@ -327,21 +426,22 @@ async def generate_source_files(generator, *, task, context):
                 output = await generator.generate(
                     task=task,
                     context=child_context,
-                    output_type=SourceLines,
+                    output_type=SourceText,
                     max_output_tokens=FILE_BUDGET,
                     instruction=_file_instruction(planned)
                     + (_static_file_instruction(planned) if target == "WEB_STATIC" else "")
                     + _jvm_file_instruction(planned, entrypoint, target)
-                    + "Return a JSON object with a lines array. Each element is one real source line, "
-                    "without a newline character. Escape JSON once; do not put literal backslash-n between source statements. "
-                    "The application joins lines with LF and adds one final LF. Write complete compact code, at most 60 lines, "
-                    "prefer 10-35 lines. Match the manifest interfaces and completed files exactly. No prose or Markdown. "
-                    "Use only pinned dependencies. Tests must check behavior, including at least one failure/edge case.",
+                    + "Return one JSON object with a content string containing the complete source file. "
+                    "Use escaped newline characters inside that JSON string. Keep every source-language comma, "
+                    "semicolon, quote and brace in the content. Preserve readable source formatting. "
+                    "Match the actual exported methods and types in completed_files; never invent an import. "
+                    "Write only this file. No Markdown fences, prose or placeholders. "
+                    "Use only pinned dependencies and check actual behavior in tests.",
                 )
                 item = SourceFile(
                     normalized_path=planned.normalized_path,
                     media_type=planned.media_type,
-                    content="\n".join(output.lines) + "\n",
+                    content=output.content,
                 )
                 _validate_files([item], task=task)
                 _validate_file_language(item)

@@ -189,7 +189,9 @@ def source_output(target):
     test_files = [
         {
             "normalized_path": test_path,
-            "media_type": "text/plain",
+            "media_type": "text/javascript"
+            if target is ExecutionTarget.WEB_STATIC
+            else "text/plain",
             "content": "// Synthetic test source; this fixture checks persistence only.",
         }
     ]
@@ -199,19 +201,19 @@ def source_output(target):
             {
                 "normalized_path": "app.js",
                 "media_type": "text/javascript",
-                "content": "const synthetic = true;",
+                "content": "const synthetic = 'Fixture';",
             },
         )
+    entry = {
+        "normalized_path": path,
+        "content": content,
+        "media_type": "text/html" if target is ExecutionTarget.WEB_STATIC else "text/plain",
+    }
     return {
         "rationale": "Implement the synthetic approved context.",
-        "files": [
-            {
-                "normalized_path": path,
-                "content": content,
-                "media_type": "text/html" if target is ExecutionTarget.WEB_STATIC else "text/plain",
-            },
-            *test_files,
-        ],
+        "files": [*test_files, entry]
+        if target is ExecutionTarget.WEB_STATIC
+        else [entry, *test_files],
     }
 
 
@@ -497,7 +499,7 @@ async def failed_attempt(db, owner, project, target):
 
 
 @pytest.mark.parametrize("target", TARGETS)
-@pytest.mark.parametrize("failure", [None, "stale", "signature", "different_bytes"])
+@pytest.mark.parametrize("failure", [None, "stale", "signature", "different_bytes", "missing_logs"])
 def test_generated_repairs_remain_pending_and_exact(
     database, tmp_path, monkeypatch, target, failure
 ):
@@ -545,6 +547,14 @@ def test_generated_repairs_remain_pending_and_exact(
                     request_body["base_revision_content_hash"] = "f" * 64
                 elif failure == "signature":
                     request_body["failure_signature_digest"] = "f" * 64
+                elif failure == "missing_logs":
+                    setattr(
+                        runtime,
+                        platform + "_execution_start_api_service",
+                        SimpleNamespace(
+                            backend=SimpleNamespace(evidence_root=tmp_path / "missing-evidence")
+                        ),
+                    )
                 elif failure == "different_bytes":
                     original = service.create_repair_proposal
 
@@ -563,7 +573,9 @@ def test_generated_repairs_remain_pending_and_exact(
                 assert response.status_code == (
                     201 if failure is None else 503 if failure == "different_bytes" else 409
                 ), response.text
-                assert len(transport.calls) == (0 if failure in ("stale", "signature") else 1)
+                assert len(transport.calls) == (
+                    0 if failure in ("stale", "signature", "missing_logs") else 1
+                )
                 if transport.calls:
                     import json
 

@@ -25,6 +25,7 @@ from orchestwin.jvm_execution.source_policy import pinned_build_files
 from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import wire_value
+from orchestwin.models.repair_diagnostics import failure_log_context
 from orchestwin.models.source_proposals import MAX_CONTEXT_BYTES, file_entry
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.projects.requirements_persistence import (
@@ -400,6 +401,12 @@ class ModelSourceApplication:
                         "media_type": entry["media_type"],
                     }
                 )
+            failed_phase = next(
+                phase for phase in attempt.report.phase_results if phase.phase == signature.phase
+            )
+            execution_service = getattr(self.runtime, platform + "_execution_start_api_service")
+            backend = getattr(execution_service, "backend", None)
+            diagnostics = failure_log_context(failed_phase, getattr(backend, "evidence_root", None))
             return _bounded_context(
                 {
                     "project_id": str(project_id),
@@ -411,6 +418,7 @@ class ModelSourceApplication:
                     "source_files": contents,
                     "approved_context": grounding,
                     "failure_signature": signature.to_snapshot(),
+                    "failure_log_evidence": diagnostics,
                     "recorded_failure": next(
                         {
                             "phase": phase.phase.value,

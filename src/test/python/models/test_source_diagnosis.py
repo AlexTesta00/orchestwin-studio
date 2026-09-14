@@ -3,6 +3,7 @@
 import copy
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ SPEC = importlib.util.spec_from_file_location(
     "source_diagnosis", ROOT / "environments/training/diagnose_source_generation.py"
 )
 diagnosis = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = diagnosis
 SPEC.loader.exec_module(diagnosis)
 
 
@@ -55,6 +57,15 @@ def test_ablation_changes_only_declared_factor_and_never_mutates_baseline(target
 def test_rejects_unknown_intervention():
     with pytest.raises(ValueError, match="unknown intervention"):
         diagnosis.variant({}, "WEB_STATIC", "UNDECLARED_REPAIR")
+
+
+def test_historical_diagnosis_keeps_v1_limits_and_rejects_live_text_protocol():
+    assert diagnosis.HistoricalSourceLines.model_validate({"lines": ["old file"]}).lines == [
+        "old file"
+    ]
+    for payload in ({"lines": ["line"] * 61}, {"content": "new file"}):
+        with pytest.raises(ValueError):
+            diagnosis.HistoricalSourceLines.model_validate(payload)
 
 
 def test_transport_never_returns_response_that_echoes_secret(monkeypatch):

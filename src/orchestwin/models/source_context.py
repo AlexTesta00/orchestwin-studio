@@ -7,6 +7,33 @@ IMPLEMENTATION_VIEW = "SOURCE_SEMANTIC_CONTENT_V2"
 IMPLEMENTATION_ARTIFACTS = ("requirements", "architecture", "design")
 
 
+def implementation_work_order(contract: dict[str, Any]) -> dict[str, Any]:
+    """Repeat exact business statements near the task, retaining the complete view.
+
+    Example names in pinned launchers must not become the application's goal.
+    This reading aid carries verbatim statements and their source locations;
+    every original field remains in ``implementation_contract``.
+    """
+    requirements = contract["content"].get("requirements", {})
+    fields = {
+        "requirements": ("code", "kind", "priority", "title", "statement"),
+        "acceptance_criteria": ("code", "statement", "verification_method"),
+        "scenarios": ("code", "title", "preconditions", "trigger", "steps", "expected_outcome"),
+        "definition_of_done": ("code", "applicability", "condition", "statement"),
+    }
+    return {
+        "role": "Verbatim approved business data; the complete implementation contract also applies.",
+        "statements": [
+            {
+                "source": f"implementation_contract.content.requirements.{category}[{index}]",
+                **{key: deepcopy(item[key]) for key in keys if key in item},
+            }
+            for category, keys in fields.items()
+            for index, item in enumerate(requirements.get(category, []))
+        ],
+    }
+
+
 def implementation_contract(context: dict[str, Any]) -> dict[str, Any]:
     """Preserve semantic identifiers, references and nested decision context.
 

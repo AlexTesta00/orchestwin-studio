@@ -17,12 +17,24 @@ import random
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from orchestwin.models.proposal_generation import ProposalModelConfiguration
-from orchestwin.models.source_file_generation import SourceLines
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
+
+
+class HistoricalSourceLines(BaseModel):
+    """Frozen V1 decoder for the retained diagnostic cases, independent of live V2."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    lines: list[Annotated[str, Field(max_length=240, pattern=r"^[^\x00-\x08\x0a-\x1f\x7f]*$")]] = (
+        Field(min_length=1, max_length=60)
+    )
+
 
 CASES = {
     "WEB_STATIC": ("ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4", "app.js"),
@@ -125,7 +137,9 @@ def audit(external):
             step = context.get("source_step")
             output = json.loads(response["choices"][0]["message"]["content"])
             if step:
-                item = SourceLines.model_validate(output, strict=True)
+                if context.get("generation_protocol") != "SOURCE_FILES_V1":
+                    raise ValueError("historical V1 source protocol required")
+                item = HistoricalSourceLines.model_validate(output, strict=True)
                 assembled = "\n".join(item.lines) + "\n"
                 accepted = observation(value, "ADAPTER_ACCEPTED")["payload"]["source_file"]
                 if accepted["content"] != assembled:
@@ -256,7 +270,7 @@ def execute_protocol(output, config_path):
             )
             if result["finish_reason"] != "stop":
                 raise ValueError("INCOMPLETE_OUTPUT")
-            lines = SourceLines.model_validate_json(
+            lines = HistoricalSourceLines.model_validate_json(
                 response["choices"][0]["message"]["content"], strict=True
             ).lines
             source = ("\n".join(lines) + "\n").encode("utf-8")

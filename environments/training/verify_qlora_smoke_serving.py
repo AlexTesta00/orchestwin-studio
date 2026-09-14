@@ -83,8 +83,9 @@ def _http_json(
             raw = response.read(4_000_000)
             status = int(response.status)
     except HTTPError as error:
-        raw = error.read(4_000_000)
-        status = int(error.code)
+        with error:
+            raw = error.read(4_000_000)
+            status = int(error.code)
     value = json.loads(raw.decode("utf-8"))
     if not isinstance(value, dict):
         raise QloraSmokeServingError("serving probe response must be a JSON object")

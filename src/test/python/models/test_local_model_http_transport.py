@@ -59,3 +59,37 @@ def test_transport_ignores_ambient_proxy_and_never_follows_redirects(monkeypatch
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize("read_fails", [False, True])
+def test_transport_closes_http_error_response_even_if_read_fails(monkeypatch, read_fails):
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from orchestwin.models import openai_compatible
+
+    class Body(BytesIO):
+        def read(self, *args):
+            if read_fails:
+                raise OSError("synthetic body read failure")
+            return super().read(*args)
+
+    body = Body(b"{}")
+    error = HTTPError("http://127.0.0.1/local", 302, "redirect", {}, body)
+
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            raise error
+
+    monkeypatch.setattr(openai_compatible, "build_opener", lambda *_args: Opener())
+    try:
+        call = UrllibOpenAICompatibleTransport._post_json_sync
+        arguments = dict(url="http://127.0.0.1/local", payload={}, headers={}, timeout_seconds=2)
+        if read_fails:
+            with pytest.raises(OSError, match="synthetic body read failure"):
+                call(**arguments)
+        else:
+            assert call(**arguments).status_code == 302
+        assert body.closed
+    finally:
+        error.close()

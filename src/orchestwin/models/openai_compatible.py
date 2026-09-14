@@ -173,8 +173,9 @@ class UrllibOpenAICompatibleTransport:
                 response_body = response.read(_MAX_RESPONSE_BYTES + 1)
                 status_code = int(response.status)
         except HTTPError as error:
-            response_body = error.read(_MAX_RESPONSE_BYTES + 1)
-            status_code = int(error.code)
+            with error:
+                response_body = error.read(_MAX_RESPONSE_BYTES + 1)
+                status_code = int(error.code)
         except TimeoutError as error:
             raise OpenAICompatibleTimeoutError("local model request timed out") from error
         except URLError as error:

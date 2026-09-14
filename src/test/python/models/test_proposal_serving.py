@@ -135,6 +135,29 @@ def test_serving_reports_truncation_instead_of_fabricating_completion(tmp_path):
     assert response["choices"][0]["finish_reason"] == "length"
 
 
+@pytest.mark.parametrize("value", ["29", "541", "1.5", "unlimited"])
+def test_generation_timeout_rejects_unbounded_or_invalid_operator_values(value):
+    import argparse
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        server_module().generation_timeout(value)
+
+
+def test_selected_deadline_is_applied_and_reported_without_accepting_truncation(tmp_path):
+    module = server_module()
+    state, payload = state_and_payload(tmp_path, tokens=(8, 9, 10))
+    state.update(
+        max_generation_seconds=module.generation_timeout("300"), completed_generation_count=0
+    )
+    response = module.completion(state, payload)
+    assert state["model"].generate.call_args.kwargs["max_time"] == 300
+    assert response["orchestwin_serving"]["generation_wall_time_budget_seconds"] == 300
+    assert response["choices"][0]["finish_reason"] == "length"
+    assert module.health_snapshot(state)["generation_watchdog"] == (
+        "COOPERATIVE_300_SECONDS_NOT_HARD_GPU_PREEMPTION"
+    )
+
+
 def test_serving_does_not_accept_eos_without_complete_schema(tmp_path):
     module = server_module()
     state, payload = state_and_payload(tmp_path)

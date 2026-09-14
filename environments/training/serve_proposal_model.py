@@ -17,6 +17,7 @@ import re
 import secrets
 import sys
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -59,7 +60,7 @@ def health_snapshot(state):
         "supported_tasks": sorted(TASKS),
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
-        "generation_watchdog": "COOPERATIVE_120_SECONDS_NOT_HARD_GPU_PREEMPTION",
+        "generation_watchdog": f"COOPERATIVE_{state.get('max_generation_seconds', MAX_GENERATION_SECONDS)}_SECONDS_NOT_HARD_GPU_PREEMPTION",
         "schema_decoding": SCHEMA_DECODING,
         "schema_decoder_version": LLGUIDANCE_VERSION,
         "completed_generation_count": state["completed_generation_count"],
@@ -151,6 +152,8 @@ def completion(state, payload):
     if input_tokens + maximum > MAX_SEQUENCE:
         raise ValueError("CONTEXT_BUDGET_EXCEEDED")
     processor = state["schema_processor"](schema, input_tokens)
+    generation_seconds = state.get("max_generation_seconds", MAX_GENERATION_SECONDS)
+    started = time.perf_counter()
     options = {"do_sample": temperature > 0}
     if temperature > 0:
         options["temperature"] = temperature
@@ -158,7 +161,7 @@ def completion(state, payload):
         generated = model.generate(
             **inputs,
             max_new_tokens=maximum,
-            max_time=MAX_GENERATION_SECONDS,
+            max_time=generation_seconds,
             use_cache=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -194,7 +197,8 @@ def completion(state, payload):
             "model_visible_messages_sha256": snapshot_content_hash(messages),
             "output_repair_used": False,
             "adapter_loaded": False,
-            "generation_wall_time_budget_seconds": MAX_GENERATION_SECONDS,
+            "generation_wall_time_budget_seconds": generation_seconds,
+            "generation_wall_time_milliseconds": round((time.perf_counter() - started) * 1000),
             "schema_decoding": SCHEMA_DECODING,
             "schema_complete": schema_complete,
         },
@@ -283,12 +287,26 @@ def log_failure(error):
     )
 
 
+def generation_timeout(value):
+    """Keep cooperative generation and the client wait finite and explicit."""
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("generation timeout must be an integer") from error
+    if not 30 <= seconds <= 540:
+        raise argparse.ArgumentTypeError("generation timeout must be between 30 and 540 seconds")
+    return seconds
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--model-repository")
     parser.add_argument("--model-revision")
+    parser.add_argument(
+        "--generation-timeout-seconds", type=generation_timeout, default=MAX_GENERATION_SECONDS
+    )
     args = parser.parse_args()
     repository, revision = selected_model(args.model_repository, args.model_revision)
     directory = args.output_directory.resolve()
@@ -307,7 +325,7 @@ def main():
         "revision": revision,
         "max_sequence": MAX_SEQUENCE,
         "max_output": MAX_OUTPUT,
-        "max_generation_seconds": MAX_GENERATION_SECONDS,
+        "max_generation_seconds": args.generation_timeout_seconds,
         "load_in_4bit": True,
         "loader_evidence": evidence,
         "adapter_loaded": False,
@@ -352,6 +370,7 @@ def main():
         else repository,
         "slot": threading.BoundedSemaphore(1),
         "completed_generation_count": 0,
+        "max_generation_seconds": args.generation_timeout_seconds,
     }
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(state, token))
     server.daemon_threads = True
@@ -363,7 +382,7 @@ def main():
         "token_file": str(token_file),
         "temperature": 0.6,
         "max_output_tokens": MAX_OUTPUT,
-        "timeout_seconds": 180,
+        "timeout_seconds": args.generation_timeout_seconds + 60,
     }
     (directory / "loader.json").write_text(canonical_json(configuration), encoding="utf-8")
     (directory / "runtime.json").write_text(canonical_json(runtime), encoding="utf-8")
