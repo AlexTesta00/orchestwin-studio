@@ -54,18 +54,35 @@ def execute(generator, ctx, store):
     )
 
 
-def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
-    ctx, payload, store = context(), output(), MemoryEvidence()
-    payload["files"][0]["content"] = '<title>è</title>\n<script>const s = "\\n";</script>'
-    payload["files"].append(
-        {"normalized_path": "app.js", "media_type": "text/javascript", "content": "const x = 3;"}
+def complete_output():
+    payload = output()
+    payload["files"].extend(
+        [
+            {
+                "normalized_path": "app.js",
+                "media_type": "text/javascript",
+                "content": "exports.value = 3;",
+            },
+            {
+                "normalized_path": "app.test.cjs",
+                "media_type": "text/javascript",
+                "content": "require('node:assert/strict').equal(require('./app.js').value, 3);",
+            },
+        ]
     )
+    return payload
+
+
+def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
+    payload["files"][0]["content"] = '<title>Ã¨</title>\n<script>const s = "\\n";</script>'
     generator, transport = source_sequence_generator(tmp_path, payload)
     result = execute(generator, ctx, store)
-    assert len(transport.calls) == len(store.requests) == 3
+    assert len(transport.calls) == len(store.requests) == 4
     parent, *children = store.requests
     assert [c["payload"]["max_tokens"] for c in transport.calls] == [
         MANIFEST_BUDGET,
+        FILE_BUDGET,
         FILE_BUDGET,
         FILE_BUDGET,
     ]
@@ -82,13 +99,19 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "failure", ["manifest_path", "too_many", "line_break", "line_long", "extra", "second_file"]
+    "failure",
+    [
+        "manifest_path",
+        "too_many",
+        "line_break",
+        "line_control",
+        "line_long",
+        "extra",
+        "second_file",
+    ],
 )
 def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failure):
-    ctx, payload, store = context(), output(), MemoryEvidence()
-    payload["files"].append(
-        {"normalized_path": "app.js", "media_type": "text/javascript", "content": "const x = 3;"}
-    )
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
 
     def mutate(ctx, value):
         step = ctx.get("source_step")
@@ -99,6 +122,8 @@ def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failur
                 value["files"] *= 5
         elif failure == "line_break":
             value["lines"] = ["one\ntwo"]
+        elif failure == "line_control":
+            value["lines"] = ["\x01"]
         elif failure == "line_long":
             value["lines"] = ["x" * 241]
         elif failure == "extra":
@@ -131,7 +156,8 @@ def test_file_generation_requires_auditing(tmp_path):
 
 @pytest.mark.parametrize("path", ["app.js", "app.test.cjs", "data.json"])
 def test_html_is_not_accepted_as_javascript_or_json(tmp_path, path):
-    payload = output()
+    payload = complete_output()
+    payload["files"] = [f for f in payload["files"] if f["normalized_path"] != path]
     payload["files"].append(
         {
             "normalized_path": path,
@@ -169,6 +195,13 @@ def test_pinned_entrypoint_is_required_before_file_calls(tmp_path, target, recip
     ctx = context("jvm-source", target)
     ctx["build_recipes"] = {"synthetic-build": recipe}
     payload = output("jvm-source", "src/main/" + path)
+    payload["files"].append(
+        {
+            "normalized_path": "src/test/" + path.replace("Main.", "MainTest."),
+            "media_type": "text/plain",
+            "content": "// Synthetic test source.",
+        }
+    )
     store = MemoryEvidence()
     generator, transport = source_sequence_generator(tmp_path, payload)
     execute(generator, ctx, store)
@@ -188,4 +221,14 @@ def test_pinned_entrypoint_is_required_before_file_calls(tmp_path, target, recip
     generator, transport = source_sequence_generator(rejected_directory, payload)
     with pytest.raises(ProposalGenerationError):
         execute(generator, ctx, MemoryEvidence())
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize("path", ["app.js", "app.test.cjs", "index.html"])
+def test_incomplete_static_manifest_is_rejected_before_file_calls(tmp_path, path):
+    payload = complete_output()
+    payload["files"] = [f for f in payload["files"] if f["normalized_path"] != path]
+    generator, transport = source_sequence_generator(tmp_path, payload)
+    with pytest.raises(ProposalGenerationError):
+        execute(generator, context(), MemoryEvidence())
     assert len(transport.calls) == 1

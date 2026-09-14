@@ -9,6 +9,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from orchestwin.artifacts.jvm_source_plans import (
+    DEFAULT_JVM_SOURCE_PLAN_POLICY,
+    JVM_REPAIR_SOURCE_PLAN_POLICY,
+    JvmSourcePlanFile,
+    validate_jvm_source_plan,
+)
 from orchestwin.artifacts.web_source_plans import WebSourcePlanFile, validate_web_source_plan
 from orchestwin.jvm_execution.workspaces import portable_path
 from orchestwin.models.model_proposals import _model_boundary
@@ -19,6 +25,7 @@ from orchestwin.projects.requirements_primitives import canonical_json, snapshot
 # Accommodate exact approved snapshots plus pinned manifests. The serving runtime
 # separately enforces its token window; oversized inputs are never truncated.
 MAX_CONTEXT_BYTES = 32768
+REPAIR_OUTPUT_TOKEN_LIMIT = 4096
 
 
 class _Output(BaseModel):
@@ -96,9 +103,11 @@ def canonical_paths(entries):
     )
 
 
-def _validate_files(items):
+def _validate_files(items, *, task="web-source"):
+    jvm = task.startswith("jvm")
+    file_type = JvmSourcePlanFile if jvm else WebSourcePlanFile
     files = tuple(
-        WebSourcePlanFile(
+        file_type(
             portable_path(item.normalized_path), item.content or "", item.media_type or "text/plain"
         )
         for item in items
@@ -106,10 +115,18 @@ def _validate_files(items):
     canonical_paths([{"normalized_path": item.normalized_path} for item in files])
     if sum(len(item.content_bytes) for item in files) > 65536:
         raise ValueError("source output exceeds byte budget")
-    report = validate_web_source_plan(
-        SimpleNamespace(
-            files=files, content_hash=snapshot_content_hash([item.to_snapshot() for item in files])
+    plan = SimpleNamespace(
+        files=files, content_hash=snapshot_content_hash([item.to_snapshot() for item in files])
+    )
+    report = (
+        validate_jvm_source_plan(
+            plan,
+            policy=JVM_REPAIR_SOURCE_PLAN_POLICY
+            if task.endswith("repair")
+            else DEFAULT_JVM_SOURCE_PLAN_POLICY,
         )
+        if jvm
+        else validate_web_source_plan(plan)
     )
     if not report.is_accepted:
         raise ValueError("source path or media policy rejected")
@@ -138,12 +155,26 @@ def _validate_entrypoints(context, files):
         raise ValueError("source lacks the selected profile entry files")
 
 
+def _has_test_sources(target, entries):
+    paths = [entry["normalized_path"] for entry in entries]
+    if target == "WEB_STATIC":
+        return any(path.endswith((".test.js", ".test.cjs", ".test.mjs")) for path in paths)
+    language = {
+        "JVM_JAVA": ("java", ".java"),
+        "JVM_KOTLIN": ("kotlin", ".kt"),
+        "JVM_SCALA": ("scala", ".scala"),
+    }.get(target)
+    return bool(language) and any(
+        path.startswith(f"src/test/{language[0]}/") and path.endswith(language[1]) for path in paths
+    )
+
+
 def build_source_binding(task, context, output):
     if output.rationale != " ".join(output.rationale.split()):
         raise ValueError("normalized rationale required")
     repair = task.endswith("repair")
     items = output.changes if repair else output.files
-    _validate_files(items)
+    _validate_files(items, task=task)
     fixed = {entry["normalized_path"]: entry for entry in context["fixed_files"]}
     if any(item.normalized_path in fixed for item in items):
         raise ValueError("model cannot replace pinned build files")
@@ -211,6 +242,11 @@ def build_source_binding(task, context, output):
         raise ValueError("repair cannot delete all source files")
     canonical_paths(list(base.values()))
     _validate_entrypoints(context, list(base.values()))
+    target = context["target_selection"]["target"]
+    if _has_test_sources(target, context["base_files"]) and not _has_test_sources(
+        target, base.values()
+    ):
+        raise ValueError("model repair cannot remove all existing test sources")
     return {
         "changes": canonical_paths(changes),
         "rationale": output.rationale,
@@ -247,6 +283,12 @@ class ModelSourceProposalAdapter:
             task=task,
             context=context,
             output_type=RepairOutput if repair else SourceOutput,
+            # Reserve room for the complete approved artifacts and current source.
+            max_output_tokens=(
+                min(REPAIR_OUTPUT_TOKEN_LIMIT, self.generator.configuration.max_output_tokens)
+                if repair
+                else None
+            ),
             instruction=(
                 "Return complete UTF-8 source files, never patches, placeholders or omitted code. "
                 "Omit documentation. Keep rationale on one short line. Target exactly the supplied stack and approved architecture. "
@@ -254,6 +296,8 @@ class ModelSourceProposalAdapter:
                 "Use only listed build dependencies; do not change build configuration. "
                 + (
                     "Repair only the supplied recorded failure using ADD, REPLACE or DELETE; REPLACE replaces the entire file. DELETE requires null content and media_type. "
+                    "Preserve the requirements and interfaces in approved_context when available. "
+                    "Correct the implementation without weakening assertions, removing tests, bypassing validation or replacing behavior with constants. "
                     if repair
                     else "Create a minimal complete implementation and useful tests for the approved requirements. "
                 )

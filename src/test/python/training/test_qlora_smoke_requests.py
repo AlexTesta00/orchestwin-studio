@@ -235,6 +235,8 @@ def _bound_fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
 
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    # A disposable fixture must not invoke the owner's global signing key.
+    subprocess.run(["git", "-C", str(repo), "config", "commit.gpgsign", "false"], check=True)
     subprocess.run(
         ["git", "-C", str(repo), "config", "user.email", "test@example.invalid"],
         check=True,

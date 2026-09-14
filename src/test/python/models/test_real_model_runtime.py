@@ -169,7 +169,7 @@ def test_real_mode_cannot_silently_become_unconfigured_and_production_cannot_use
 def proposal_health(runtime):
     return {
         "health_contract_version": 2,
-        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_V1",
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_V2",
         "schema_decoder_version": "1.8.0",
         "status": "READY",
         "model_name": runtime.proposal_configuration.model_name,
@@ -185,7 +185,7 @@ def proposal_health(runtime):
 
 
 @pytest.mark.parametrize(
-    "change", [None, "identity", "missing_task", "budget", "redirect", "old_health"]
+    "change", [None, "identity", "missing_task", "budget", "redirect", "old_health", "old_decoder"]
 )
 def test_authenticated_live_health_rejects_wrong_identity_or_capability_without_inference(
     configuration, monkeypatch, change
@@ -224,6 +224,8 @@ def test_authenticated_live_health_rejects_wrong_identity_or_capability_without_
             payload["max_output_tokens"] = 32
         if change == "old_health":
             payload.pop("health_contract_version")
+        if change == "old_decoder":
+            payload["schema_decoding"] = "LLGUIDANCE_JSON_SCHEMA_V1"
 
         async def schema(_):
             return {"revision": "synthetic"}

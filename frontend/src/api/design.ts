@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   DesignGateDecisionPayload,
   DesignGateDecisionRequest,
@@ -28,26 +30,7 @@ export interface DesignApiOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class DesignApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(
-    message: string,
-    options: {
-      status: number;
-      code: string | null;
-      payload: unknown;
-    },
-  ) {
-    super(message);
-    this.name = "DesignApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class DesignApiError extends ApiRequestError {}
 
 export interface DesignApi {
   generate(projectId: string, accessToken: string): Promise<DesignGenerationPayload>;

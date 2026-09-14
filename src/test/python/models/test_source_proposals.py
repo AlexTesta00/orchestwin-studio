@@ -1,6 +1,7 @@
 """Synthetic completions exercise source boundaries, never model quality."""
 
 import asyncio
+import json
 from copy import deepcopy
 from uuid import uuid4
 
@@ -73,6 +74,98 @@ def test_source_and_repair_use_real_transport_contract_and_record_exact_bytes(tm
     assert any(kind == "HTTP_RESPONSE" and raw for kind, _, raw in store.events[request_id])
     assert result.kind == task.upper().replace("-", "_")
     assert result.source_binding["changes" if task.endswith("repair") else "files"]
+
+
+@pytest.mark.parametrize("configured", [512, 8192])
+def test_repair_reserves_context_without_raising_a_smaller_configured_output_limit(
+    tmp_path, configured
+):
+    from uuid import UUID
+
+    task = "jvm-repair"
+    ctx = context(task)
+    generator, _ = audited_generator(tmp_path, output(task))
+    generator.configuration = generator.configuration.model_copy(
+        update={"max_output_tokens": configured}
+    )
+    store = MemoryEvidence()
+    operation = Command(
+        store, lambda: ModelSourceProposalAdapter(generator).propose(task=task, context=ctx)
+    )
+    asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
+    request = next(iter(store.requests.values()))[0]
+    assert request.max_output_tokens == min(4096, configured)
+    assert json.loads(request.input_payload_json)["context"] == ctx
+
+
+@pytest.mark.parametrize("task", ["jvm-repair", "web-repair"])
+def test_repository_jvm_mime_is_allowed_only_for_jvm_source_bytes(tmp_path, task):
+    payload = output(task)
+    payload["changes"][0]["media_type"] = "application/octet-stream"
+    if task == "web-repair":
+        with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+            run_proposal(tmp_path, task, payload)
+    else:
+        result, _, _ = run_proposal(tmp_path, task, payload)
+        assert result.output.changes[0].content == payload["changes"][0]["content"]
+        assert result.source_binding["changes"][0]["media_type"] == "application/octet-stream"
+
+
+@pytest.mark.parametrize("invalid", ["nul", "path", "fixed"])
+def test_jvm_octet_stream_metadata_does_not_bypass_source_guards(tmp_path, invalid):
+    task = "jvm-repair"
+    payload, ctx = output(task), context(task)
+    item = payload["changes"][0]
+    item["media_type"] = "application/octet-stream"
+    if invalid == "nul":
+        item["content"] += "\x00"
+    elif invalid == "path":
+        item["normalized_path"] = "../Main.java"
+    else:
+        ctx["fixed_files"] = deepcopy(ctx["base_files"])
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        run_proposal(tmp_path, task, payload, ctx)
+
+
+@pytest.mark.parametrize(
+    "target,folder,extension",
+    [
+        ("WEB_STATIC", None, ".cjs"),
+        ("JVM_JAVA", "java", ".java"),
+        ("JVM_KOTLIN", "kotlin", ".kt"),
+        ("JVM_SCALA", "scala", ".scala"),
+    ],
+)
+@pytest.mark.parametrize("replacement", [False, True])
+def test_repair_cannot_drop_all_tests_but_can_rename_a_test(
+    tmp_path, target, folder, extension, replacement
+):
+    task = "jvm-repair" if folder else "web-repair"
+    ctx = context(task, target)
+    if folder:
+        ctx["base_files"] = [file_entry(f"src/main/{folder}/Main{extension}", b"old", "text/plain")]
+    path = f"src/test/{folder}/OriginalTest{extension}" if folder else "app.test.cjs"
+    renamed = f"src/test/{folder}/RenamedTest{extension}" if folder else "renamed.test.cjs"
+    ctx["base_files"].append(file_entry(path, b"old tests", "text/plain"))
+    changes = [
+        {"normalized_path": path, "operation": "DELETE", "content": None, "media_type": None}
+    ]
+    if replacement:
+        changes.append(
+            {
+                "normalized_path": renamed,
+                "operation": "ADD",
+                "content": "// Synthetic source; this test verifies proposal admission only.",
+                "media_type": "text/plain",
+            }
+        )
+    payload = {"rationale": "Repair the test source.", "changes": changes}
+    if replacement:
+        result, _, _ = run_proposal(tmp_path, task, payload, ctx)
+        assert len(result.source_binding["changes"]) == 2
+    else:
+        with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+            run_proposal(tmp_path, task, payload, ctx)
 
 
 @pytest.mark.parametrize(

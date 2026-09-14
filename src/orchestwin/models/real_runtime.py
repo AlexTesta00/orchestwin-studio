@@ -40,6 +40,7 @@ from orchestwin.models.proposal_generation import (
 )
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.requirements_runtime import RequirementsRuntime, RequirementsRuntimeMode
+from orchestwin.models.schema_decoding import POLICY as SCHEMA_DECODING_POLICY
 from orchestwin.models.serialized_generation import SerializedGenerationPort
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.strict_evaluator_json import strict_json_object
@@ -141,7 +142,7 @@ def _proposal_health(config, token):
             and health.get("model_name") == config.model_name
             and health.get("model_identity") == config.identity.to_snapshot()
             and health.get("supported_tasks") == sorted(TASKS)
-            and health.get("schema_decoding") == "LLGUIDANCE_JSON_SCHEMA_V1"
+            and health.get("schema_decoding") == SCHEMA_DECODING_POLICY
             and health.get("schema_decoder_version") == "1.8.0"
             and type(health.get("max_output_tokens")) is int
             and health["max_output_tokens"] >= config.max_output_tokens

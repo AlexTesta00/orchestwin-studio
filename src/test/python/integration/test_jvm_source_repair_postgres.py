@@ -25,8 +25,9 @@ pytestmark = [
 
 
 @pytest.mark.parametrize("target", TARGETS)
+@pytest.mark.parametrize("media_type", ["text/plain", "application/octet-stream"])
 def test_repair_requires_exact_gate_creates_revision_and_fresh_cache_rerun(
-    tmp_path, monkeypatch, target
+    tmp_path, monkeypatch, target, media_type
 ):
     async def scenario():
         async with api_fixture(tmp_path, monkeypatch, target=target, mode="failed-test") as f:
@@ -51,7 +52,7 @@ def test_repair_requires_exact_gate_creates_revision_and_fresh_cache_rerun(
                             "operation": "REPLACE",
                             "normalized_path": path.normalized_path,
                             "content": original + "\n// reviewed repair\n",
-                            "media_type": "text/plain",
+                            "media_type": media_type,
                         }
                     ],
                 },

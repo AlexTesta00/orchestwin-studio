@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline, authenticated loopback serving for proposal adapters; no training.
 
-Uses the existing WSL/Unsloth environment and exact cached Qwen base revision.
+Uses the existing WSL/Unsloth environment and an exact cached base revision.
 JSON schemas constrain token selection; the application still validates outputs.
 This operator does not load the specialized final-evaluator LoRA adapter.
 """
@@ -69,7 +69,22 @@ def health_snapshot(state):
     }
 
 
-def load_model():
+def selected_model(repository: str | None, revision: str | None) -> tuple[str, str]:
+    """A replacement is explicit and immutable; never resolve a moving branch."""
+    if repository is None and revision is None:
+        return MODEL, REVISION
+    if (
+        not isinstance(repository, str)
+        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*", repository)
+        is None
+        or not isinstance(revision, str)
+        or re.fullmatch(r"[0-9a-f]{40}", revision) is None
+    ):
+        raise ValueError("MODEL_REPOSITORY_AND_EXACT_REVISION_REQUIRED")
+    return repository, revision
+
+
+def load_model(repository=MODEL, revision=REVISION):
     """Reuse the tested exact-revision loader, always with network disabled."""
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -81,15 +96,15 @@ def load_model():
     spec.loader.exec_module(module)
     torch, model, tokenizer, evidence = module._load_model(
         {
-            "model_repository": MODEL,
-            "model_revision": REVISION,
-            "tokenizer_repository": MODEL,
-            "tokenizer_revision": REVISION,
+            "model_repository": repository,
+            "model_revision": revision,
+            "tokenizer_repository": repository,
+            "tokenizer_revision": revision,
             "generation": {"seed": 42, "max_sequence_length": MAX_SEQUENCE},
         },
         network_authorized=False,
     )
-    if getattr(model, "peft_config", None) or evidence["observed_model_revision"] != REVISION:
+    if getattr(model, "peft_config", None) or evidence["observed_model_revision"] != revision:
         raise RuntimeError("exact base-model identity was not observed")
     return torch, model, tokenizer, evidence
 
@@ -229,7 +244,7 @@ def handler_for(state, token):
                 state["completed_generation_count"] += 1
             except (ValueError, TypeError, KeyError) as error:
                 log_failure(error)
-                return self._send(422, {"error": "REQUEST_REJECTED"})
+                return self._send(422, {"error": request_failure_code(error)})
             except Exception as error:
                 log_failure(error)
                 return self._send(500, {"error": "GENERATION_FAILED"})
@@ -238,6 +253,15 @@ def handler_for(state, token):
             self._send(200, response)
 
     return Handler
+
+
+def request_failure_code(error):
+    """Expose only the actionable context limit, never arbitrary exception text."""
+    return (
+        "CONTEXT_BUDGET_EXCEEDED"
+        if isinstance(error, ValueError) and str(error) == "CONTEXT_BUDGET_EXCEEDED"
+        else "REQUEST_REJECTED"
+    )
 
 
 def log_failure(error):
@@ -263,7 +287,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--model-repository")
+    parser.add_argument("--model-revision")
     args = parser.parse_args()
+    repository, revision = selected_model(args.model_repository, args.model_revision)
     directory = args.output_directory.resolve()
     # New directory per launch; never overwrite previous credentials or observations.
     directory.mkdir(mode=0o700, parents=False, exist_ok=False)
@@ -271,13 +298,13 @@ def main():
     # training boundary, not beside application source or evaluation reports.
     os.chdir(ROOT / "environments/training")
     print("Loading the exact cached proposal base model (offline).", flush=True)
-    torch, model, tokenizer, evidence = load_model()
+    torch, model, tokenizer, evidence = load_model(repository, revision)
     schema_processor = build_schema_processor_factory(tokenizer, torch, model.config.vocab_size)
     configuration = {
         "runtime_id": f"proposal-base-{uuid4()}",
         "supported_tasks": sorted(TASKS),
-        "model": MODEL,
-        "revision": REVISION,
+        "model": repository,
+        "revision": revision,
         "max_sequence": MAX_SEQUENCE,
         "max_output": MAX_OUTPUT,
         "max_generation_seconds": MAX_GENERATION_SECONDS,
@@ -304,9 +331,9 @@ def main():
     identity = ModelRuntimeIdentity(
         provider_id="local-proposal-model",
         runtime_id=configuration["runtime_id"],
-        base_model_repository=MODEL,
-        base_model_revision=REVISION,
-        tokenizer_revision=REVISION,
+        base_model_repository=repository,
+        base_model_revision=revision,
+        tokenizer_revision=revision,
         configuration_sha256=snapshot_content_hash(configuration),
     )
     token = secrets.token_urlsafe(48)
@@ -320,7 +347,9 @@ def main():
         "tokenizer": tokenizer,
         "schema_processor": schema_processor,
         "identity": identity,
-        "model_name": "qwen3-4b-proposals",
+        "model_name": "qwen3-4b-proposals"
+        if (repository, revision) == (MODEL, REVISION)
+        else repository,
         "slot": threading.BoundedSemaphore(1),
         "completed_generation_count": 0,
     }

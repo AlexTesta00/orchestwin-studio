@@ -17,6 +17,7 @@ from orchestwin.api.brownfield import create_brownfield_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.execution import create_execution_router
+from orchestwin.api.execution_launch import create_execution_launch_router
 from orchestwin.api.finalization import create_finalization_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.jvm_execution import create_jvm_execution_router
@@ -192,6 +193,7 @@ def create_app(
         create_artifact_graph_router(),
         create_brownfield_router(),
         create_execution_router(),
+        create_execution_launch_router(),
         create_static_inspection_router(),
         create_web_execution_router(),
         create_web_operations_router(),

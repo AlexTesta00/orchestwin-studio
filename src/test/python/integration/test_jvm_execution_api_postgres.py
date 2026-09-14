@@ -340,6 +340,38 @@ def test_generated_source_cannot_bypass_capability_by_claiming_profile_validatio
     run(scenario())
 
 
+@pytest.mark.parametrize("target", TARGETS)
+def test_configured_launch_enforces_owner_source_and_catalog_before_creating_a_gate(
+    tmp_path, monkeypatch, target
+):
+    async def scenario():
+        async with api_fixture(
+            tmp_path, monkeypatch, target=target, origin=JvmSourceOrigin.GENERATED_PLAN
+        ) as f:
+            path = f"/projects/{f.project}/execution-launch/jvm/prepare"
+            body = {
+                "source_revision_id": str(f.revision.id),
+                "source_revision_content_hash": f.revision.content_hash,
+            }
+            stale = await f.client.post(
+                path, json={**body, "source_revision_content_hash": "e" * 64}
+            )
+            assert stale.status_code == 409 and "EXECUTION_SOURCE_CHANGED" in stale.text
+            f.actor.id = uuid4()
+            foreign = await f.client.post(path, json=body)
+            assert foreign.status_code == 404 and "EXECUTION_SOURCE_NOT_FOUND" in foreign.text
+            f.actor.id = f.owner
+            override = await f.client.post(path, json={**body, "purpose": "PROFILE_VALIDATION"})
+            assert override.status_code == 422
+            blocked = await f.client.post(path, json=body)
+            assert blocked.status_code == 409 and "CAPABILITY_BLOCKED" in blocked.text, blocked.text
+            history = await f.client.get(f"/projects/{f.project}/jvm-operations")
+            assert history.json()["items"] == []
+            assert not f.instances and not f.backend.config.workspaces_root.exists()
+
+    run(scenario())
+
+
 @pytest.mark.parametrize("cancel", [False, True])
 def test_lost_commit_response_reconciles_atomic_result_without_second_execution(
     tmp_path, monkeypatch, cancel

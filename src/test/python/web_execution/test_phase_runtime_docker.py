@@ -41,7 +41,11 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_real_static_phases_preserve_source_health_logs_and_cleanup(tmp_path: Path):
+@pytest.mark.parametrize(
+    "unit_outcome",
+    ["smoke", "passed", "nested_passed", "failed", "syntax", "empty", "skipped", "mixed_skipped"],
+)
+def test_real_static_phases_preserve_source_health_logs_and_cleanup(tmp_path: Path, unit_outcome):
     async def scenario():
         repository = Path(__file__).parents[4]
         manifest_path = Path(MANIFEST)
@@ -53,6 +57,23 @@ def test_real_static_phases_preserve_source_health_logs_and_cleanup(tmp_path: Pa
             if row["kind"] == "BROWSER"
         )
         files = fixture_files("web-static-js-valid")
+        if unit_outcome != "smoke":
+            files["core.cjs"] = "exports.add = (a, b) => a + b;"
+            files["app.test.cjs"] = (
+                "const test = require('node:test'); const assert = require('node:assert/strict'); "
+                "const { add } = require('./core.cjs'); "
+                + {
+                    "passed": "test('sum', () => assert.equal(add(2, 3), 5));",
+                    "failed": "test('wrong sum', () => assert.equal(add(2, 3), 100));",
+                    "syntax": "const broken = ;",
+                    "empty": "// No registered tests.",
+                    "skipped": "test.skip('sum', () => assert.equal(add(2, 3), 5));",
+                    "nested_passed": "test.describe('suite', () => test('sum', () => assert.equal(add(2, 3), 5)));",
+                    "mixed_skipped": "test.describe('suite', () => test.skip('sum', () => assert.equal(add(2, 3), 5)));",
+                }[unit_outcome]
+            )
+            if unit_outcome == "mixed_skipped":
+                files["empty.test.cjs"] = "// No registered tests."
         snapshot = detection_snapshot(files)
         selection = detect_web_project(snapshot).selected.selection
         lock = validate_web_dependency_locks(snapshot, selection=selection)
@@ -124,6 +145,22 @@ def test_real_static_phases_preserve_source_health_logs_and_cleanup(tmp_path: Pa
             for phase in contract.execution_plan.phases:
                 result = await executor.execute(phase, contract=contract)
                 results.append(result)
+                if phase.phase is WebExecutionPhase.TEST and unit_outcome in {
+                    "failed",
+                    "syntax",
+                    "empty",
+                    "skipped",
+                    "mixed_skipped",
+                }:
+                    assert result.status.value == "FAILED", result.to_snapshot()
+                    assert result.command_plan_hashes and result.stdout_refs
+                    assert result.exit_codes == (
+                        (1,) if unit_outcome in {"failed", "syntax"} else (0,)
+                    )
+                    if unit_outcome == "syntax":
+                        assert "SyntaxError" in result.normalized_summary
+                        assert result.findings[0].location.startswith("app.test.cjs:")
+                    break
                 if phase.phase is WebExecutionPhase.BROWSER_EVIDENCE:
                     assert result.status.value == "POLICY_BLOCKED"
                     assert result.failure_code == "WEB_BROWSER_EVIDENCE_ADAPTER_UNAVAILABLE"
@@ -159,7 +196,10 @@ def test_real_static_phases_preserve_source_health_logs_and_cleanup(tmp_path: Pa
         assert final.status.value == "PASSED", final.to_snapshot()
         final_manifest = json.loads(store.read(final.artifact_refs[0].storage_key))
         assert final_manifest["observations"]["cleanup_confirmed"] is True
-        assert len(final_manifest["observations"]["processes"]) == 2
+        expected_processes = (
+            2 if unit_outcome == "smoke" else int(unit_outcome in {"passed", "nested_passed"})
+        )
+        assert len(final_manifest["observations"]["processes"]) == expected_processes
         assert all(
             row["terminated_by_controller"] for row in final_manifest["observations"]["processes"]
         )

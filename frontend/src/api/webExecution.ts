@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   ApplyWebRepairProposalInput,
   CreateWebRepairProposalInput,
@@ -55,19 +57,7 @@ export interface WebExecutionApi {
   ): Promise<WebSourceRevisionPayload>;
 }
 
-export class WebExecutionApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(message: string, options: { status: number; code: string | null; payload: unknown }) {
-    super(message);
-    this.name = "WebExecutionApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class WebExecutionApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");

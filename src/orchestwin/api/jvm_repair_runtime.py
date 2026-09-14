@@ -34,6 +34,7 @@ from orchestwin.artifacts.jvm_source_persistence import (
 )
 from orchestwin.artifacts.jvm_source_plans import (
     DEFAULT_JVM_SOURCE_PLAN_POLICY,
+    JVM_REPAIR_SOURCE_PLAN_POLICY,
     FileSystemJvmSourceContentStore,
 )
 from orchestwin.artifacts.jvm_sources import (
@@ -469,7 +470,7 @@ def _changes(command: JvmRepairProposalCreateCommand):
         or not _HASH.fullmatch(command.failure_signature)
     ):
         _reject("JVM_REPAIR_COMMAND_INVALID", JvmApiCommandStatus.INVALID)
-    policy = DEFAULT_JVM_SOURCE_PLAN_POLICY
+    policy = JVM_REPAIR_SOURCE_PLAN_POLICY
     changes, contents = [], {}
     for item in command.changes:
         path = _portable_path(item.normalized_path)

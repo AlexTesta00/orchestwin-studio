@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -18,7 +18,10 @@ import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectJvmEvidenceReview from "@/components/ProjectJvmEvidenceReview.vue";
 import ProjectJvmSourceReview from "@/components/ProjectJvmSourceReview.vue";
+import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
+import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
+import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
 import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
@@ -70,6 +73,7 @@ const briefHistory = ref<readonly ProjectBriefVersionResponse[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const errorDetail = ref<string | null>(null);
+let projectEpoch = 0;
 
 const projectId = computed(() => {
   const value = route.params.projectId ?? route.params.id;
@@ -101,7 +105,12 @@ async function authorized<T>(operation: (accessToken: string) => Promise<T>): Pr
 }
 
 async function loadProject(): Promise<void> {
-  if (!projectId.value) {
+  const id = projectId.value;
+  const epoch = ++projectEpoch;
+  project.value = null;
+  currentBrief.value = null;
+  briefHistory.value = [];
+  if (!id) {
     errorDetail.value = "project_not_found";
     loading.value = false;
 
@@ -113,22 +122,24 @@ async function loadProject(): Promise<void> {
 
   try {
     const [projectResult, versions] = await Promise.all([
-      authorized((accessToken) => apiClient.getProject(accessToken, projectId.value)),
-      authorized((accessToken) => apiClient.listBriefVersions(accessToken, projectId.value)),
+      authorized((accessToken) => apiClient.getProject(accessToken, id)),
+      authorized((accessToken) => apiClient.listBriefVersions(accessToken, id)),
     ]);
-
+    if (epoch !== projectEpoch) return;
     project.value = projectResult;
     briefHistory.value = [...versions];
     currentBrief.value = versions.length > 0 ? (versions[versions.length - 1] ?? null) : null;
   } catch (error: unknown) {
-    errorDetail.value = errorCode(error, "project_load_failed");
+    if (epoch === projectEpoch) errorDetail.value = errorCode(error, "project_load_failed");
   } finally {
-    loading.value = false;
+    if (epoch === projectEpoch) loading.value = false;
   }
 }
 
 async function saveBrief(brief: ProjectBriefInput): Promise<void> {
-  if (!projectId.value) {
+  const id = projectId.value;
+  const epoch = projectEpoch;
+  if (!id || saving.value) {
     return;
   }
 
@@ -136,23 +147,19 @@ async function saveBrief(brief: ProjectBriefInput): Promise<void> {
   errorDetail.value = null;
 
   try {
-    await authorized((accessToken) =>
-      apiClient.createBriefVersion(accessToken, projectId.value, brief),
-    );
-
-    await loadProject();
+    await authorized((accessToken) => apiClient.createBriefVersion(accessToken, id, brief));
+    if (epoch === projectEpoch) await loadProject();
   } catch (error: unknown) {
-    errorDetail.value = errorCode(error, "brief_save_failed");
+    if (epoch === projectEpoch) errorDetail.value = errorCode(error, "brief_save_failed");
   } finally {
     saving.value = false;
   }
 }
 
-watch(projectId, async () => {
-  await loadProject();
+watch(projectId, loadProject, { immediate: true });
+onUnmounted(() => {
+  projectEpoch++;
 });
-
-onMounted(loadProject);
 </script>
 
 <template>
@@ -180,6 +187,8 @@ onMounted(loadProject);
           {{ project.mode }}
         </p>
       </header>
+
+      <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
 
       <section class="grid gap-5" aria-labelledby="current-brief-title">
         <h2 id="current-brief-title" class="text-2xl font-black text-slate-950">
@@ -302,6 +311,13 @@ onMounted(loadProject);
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
+      <ProjectSourceGeneration
+        v-if="project.mode === 'GREENFIELD_GENERATION'"
+        :key="`${projectId}:source-generation`"
+        :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
       <ProjectJvmSourceReview
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
         :project-id="projectId"
@@ -314,6 +330,12 @@ onMounted(loadProject);
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
+      <ProjectExecutionLaunch
+        :project-id="projectId"
+        platform="jvm"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
       <ProjectWebSourceReview
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
         :project-id="projectId"
@@ -323,6 +345,12 @@ onMounted(loadProject);
       <ProjectWebEvidenceReview
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
         :project-id="projectId"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
+      <ProjectExecutionLaunch
+        :project-id="projectId"
+        platform="web"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 

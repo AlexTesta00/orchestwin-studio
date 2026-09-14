@@ -22,6 +22,11 @@ from orchestwin.sandbox.evidence import (
     create_sandbox_run_evidence,
 )
 from orchestwin.sandbox.execution_policy import validate_sandbox_plan
+from orchestwin.web_execution.node_test_evidence import PARSER_ID as NODE_TEST_PARSER
+from orchestwin.web_execution.node_test_evidence import (
+    failure_findings as node_test_failure_findings,
+)
+from orchestwin.web_execution.node_test_evidence import has_executed_passing_tests
 from orchestwin.web_execution.phase_health import probe_web_health
 from orchestwin.web_execution.phase_runtime import LocalWebPhaseRuntime, WebPhaseRuntimeError
 from orchestwin.web_execution.phase_workspace import prepare_phase_workspace
@@ -266,6 +271,7 @@ class GovernedWebPhaseExecutor:
         details=None,
         exit_codes=(),
         plan_hashes=(),
+        summary=None,
     ):
         completed = datetime.now(UTC)
         metadata = self._metadata(
@@ -313,7 +319,9 @@ class GovernedWebPhaseExecutor:
             ),
             failure_code=code,
             normalized_summary=(
-                code.replace("_", " ") if code else f"Web {phase.phase.value.lower()} completed."
+                code.replace("_", " ")
+                if code
+                else summary or f"Web {phase.phase.value.lower()} completed."
             ),
         )
 
@@ -420,6 +428,7 @@ class GovernedWebPhaseExecutor:
                     started,
                     status=WebPhaseResultStatus.PASSED if healthy else WebPhaseResultStatus.FAILED,
                     code=None if healthy else "WEB_STATIC_SMOKE_FAILED",
+                    summary="Static HTTP smoke passed; no application unit tests were executed.",
                     details={
                         "health_checks": [item.to_snapshot() for item in health],
                         "check_kind": "LOCAL_HTTP_SMOKE",
@@ -567,6 +576,7 @@ class GovernedWebPhaseExecutor:
 
         runtime = await self._get_runtime()
         runs = []
+        findings = []
         runtime_failures = []
         for plan in phase.command_plans:
             start = datetime.now(UTC)
@@ -574,6 +584,7 @@ class GovernedWebPhaseExecutor:
             for command in plan.commands:
                 begun = datetime.now(UTC)
                 runtime_failure = None
+                evidence_failure = None
                 try:
                     observed = await runtime.run_command(command)
                 except (WebPhaseRuntimeError, OSError, ValueError) as error:
@@ -613,6 +624,28 @@ class GovernedWebPhaseExecutor:
                         if observed.exit_code in command.expected_exit_codes
                         else SandboxCommandStatus.FAILED
                     )
+                    if (
+                        status is SandboxCommandStatus.SUCCEEDED
+                        and command.output_parser_id == NODE_TEST_PARSER
+                        and not has_executed_passing_tests(
+                            observed.stdout,
+                            tuple(
+                                argument
+                                for argument in command.arguments
+                                if argument.startswith("./")
+                            ),
+                        )
+                    ):
+                        status = SandboxCommandStatus.FAILED
+                        evidence_failure = "WEB_NODE_TEST_EVIDENCE_INVALID"
+                    if (
+                        status is SandboxCommandStatus.FAILED
+                        and command.output_parser_id == NODE_TEST_PARSER
+                    ):
+                        diagnostics = node_test_failure_findings(observed.stdout, observed.stderr)
+                        findings.extend(diagnostics)
+                        if diagnostics and evidence_failure is None:
+                            evidence_failure = diagnostics[0].message
                 commands.append(
                     SandboxCommandEvidence(
                         command_id=command.command_id,
@@ -626,7 +659,11 @@ class GovernedWebPhaseExecutor:
                         output_parser_id=command.output_parser_id,
                         failure_message=None
                         if status is SandboxCommandStatus.SUCCEEDED
-                        else (runtime_failure or f"Web command {status.value.lower()}."),
+                        else (
+                            runtime_failure
+                            or evidence_failure
+                            or f"Web command {status.value.lower()}."
+                        ),
                     )
                 )
                 if status is not SandboxCommandStatus.SUCCEEDED or runtime_failure is not None:
@@ -651,7 +688,7 @@ class GovernedWebPhaseExecutor:
             runs.append(run)
             if run.status.value != "SUCCEEDED":
                 break
-        result = normalize_web_command_phase(phase, runs=tuple(runs))
+        result = normalize_web_command_phase(phase, runs=tuple(runs), findings=tuple(findings))
         artifact_failure = None
         try:
             artifacts = self._collect(

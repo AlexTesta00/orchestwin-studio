@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   BrownfieldCapabilityPayload,
   BrownfieldIntakeListPayload,
@@ -84,26 +86,7 @@ export interface ExecutionApi {
   ): Promise<HumanGateEventPayload[]>;
 }
 
-export class ExecutionApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(
-    message: string,
-    options: {
-      status: number;
-      code: string | null;
-      payload: unknown;
-    },
-  ) {
-    super(message);
-    this.name = "ExecutionApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class ExecutionApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");

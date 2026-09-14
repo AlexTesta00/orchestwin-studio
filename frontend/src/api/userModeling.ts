@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   GateCommandPayload,
   GateDecisionRequest,
@@ -30,27 +32,7 @@ export interface UserModelingApiOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class UserModelingApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(
-    message: string,
-    options: {
-      status: number;
-      code: string | null;
-      payload: unknown;
-    },
-  ) {
-    super(message);
-
-    this.name = "UserModelingApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class UserModelingApiError extends ApiRequestError {}
 
 export interface UserModelingApi {
   proposePersonas(projectId: string, accessToken: string): Promise<PersonaProposalCommandPayload>;

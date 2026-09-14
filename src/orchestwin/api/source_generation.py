@@ -178,6 +178,60 @@ def _artifact_view(version, kind):
     }
 
 
+async def _grounded_artifact_views(session, *, owner_user_id, project_id, architecture):
+    """Load the immutable inputs referenced by this architecture, not today's latest versions."""
+    grounding = architecture.package.grounding
+    inputs = {"architecture": _artifact_view(architecture, "architecture")}
+    for name, repo, reference in (
+        (
+            "requirements",
+            SqlAlchemyRequirementsSpecificationRepository,
+            grounding.requirements_reference,
+        ),
+        ("design", SqlAlchemyDesignPackageRepository, grounding.design_package_reference),
+    ):
+        version = await repo(session, owner_user_id=owner_user_id).get(
+            project_id=project_id, version_id=reference.artifact_id
+        )
+        _require(
+            version is not None
+            and version.version_number == reference.version_number
+            and version.content_hash == reference.content_hash,
+            "SOURCE_GROUNDING_UNAVAILABLE",
+        )
+        inputs[name] = _artifact_view(version, name)
+    return inputs
+
+
+async def _repair_grounding(session, *, owner_user_id, project_id, base):
+    references = [ref for ref in base.provenance_references if ref.kind.value == "ARCHITECTURE"]
+    if not references:
+        # Imported sources may have no architecture. Do not invent approved requirements.
+        return {"status": "SOURCE_ONLY_NO_ARCHITECTURE_REFERENCE"}
+    _require(len(references) == 1, "REPAIR_ARCHITECTURE_REFERENCE_AMBIGUOUS")
+    reference = references[0]
+    _require(
+        reference.reference_id.startswith("architecture:"), "REPAIR_ARCHITECTURE_REFERENCE_INVALID"
+    )
+    architecture = await SqlAlchemyArchitecturePackageRepository(
+        session, owner_user_id=owner_user_id
+    ).get(
+        project_id=project_id, version_id=UUID(reference.reference_id.removeprefix("architecture:"))
+    )
+    _require(
+        architecture is not None
+        and architecture.version_number == reference.version_number
+        and architecture.content_hash == reference.content_hash,
+        "REPAIR_ARCHITECTURE_UNAVAILABLE",
+    )
+    return {
+        "status": "EXACT_SOURCE_ARCHITECTURE",
+        **await _grounded_artifact_views(
+            session, owner_user_id=owner_user_id, project_id=project_id, architecture=architecture
+        ),
+    }
+
+
 class ModelSourceApplication:
     def __init__(self, runtime):
         _require(runtime.real_model_runtime is not None, "REAL_SOURCE_MODEL_NOT_CONFIGURED", 503)
@@ -249,31 +303,15 @@ class ModelSourceApplication:
                 and gate.status is HumanGateStatus.APPROVED,
                 "SOURCE_ARCHITECTURE_APPROVAL_REQUIRED",
             )
-            grounding = architecture.package.grounding
-            inputs = {}
-            for name, repo, reference in (
-                (
-                    "requirements",
-                    SqlAlchemyRequirementsSpecificationRepository,
-                    grounding.requirements_reference,
-                ),
-                ("design", SqlAlchemyDesignPackageRepository, grounding.design_package_reference),
-            ):
-                version = await repo(session, owner_user_id=owner_user_id).get(
-                    project_id=project_id, version_id=reference.artifact_id
-                )
-                _require(
-                    version is not None
-                    and version.version_number == reference.version_number
-                    and version.content_hash == reference.content_hash,
-                    "SOURCE_GROUNDING_UNAVAILABLE",
-                )
-                inputs[name] = _artifact_view(version, name)
             context = {
                 "project_id": str(project_id),
                 "target_selection": selection.to_snapshot(),
-                "architecture": _artifact_view(architecture, "architecture"),
-                **inputs,
+                **await _grounded_artifact_views(
+                    session,
+                    owner_user_id=owner_user_id,
+                    project_id=project_id,
+                    architecture=architecture,
+                ),
                 "provenance_references": [
                     {
                         "kind": "ARCHITECTURE",
@@ -330,6 +368,9 @@ class ModelSourceApplication:
                     for entry in await attempts.history(project_id=project_id)
                 )
                 module._check_limits(number, occurrences)
+                grounding = await _repair_grounding(
+                    scope.session, owner_user_id=owner_user_id, project_id=project_id, base=base
+                )
             fixed = self._fixed_files(platform, base.target_selection.target)
             entries = [item.to_snapshot() for item in base.files]
             selected = [item for item in entries if item["normalized_path"] not in fixed]
@@ -368,6 +409,7 @@ class ModelSourceApplication:
                     "base_revision": base.reference.to_snapshot(),
                     "base_files": entries,
                     "source_files": contents,
+                    "approved_context": grounding,
                     "failure_signature": signature.to_snapshot(),
                     "recorded_failure": next(
                         {

@@ -143,7 +143,7 @@ def create_structured_web_phase_plans(
         _setup_phase(snapshot, selection=selection),
         _static_check_phase(snapshot, selection=selection),
         _build_phase(snapshot, selection=selection),
-        _test_phase(selection=selection),
+        _test_phase(snapshot, selection=selection),
         _run_phase(selection=selection),
         _adapter_phase(WebExecutionPhase.HEALTH_CHECK, "web.health.check.v1"),
         _browser_phase(selection=selection),
@@ -283,8 +283,38 @@ def _build_phase(
     return _command_phase(WebExecutionPhase.BUILD, tuple(plans))
 
 
-def _test_phase(*, selection: WebTargetSelection) -> WebPhasePlan:
+def _test_phase(snapshot: WebDetectionSnapshot, *, selection: WebTargetSelection) -> WebPhasePlan:
     if selection.target is ExecutionTarget.WEB_STATIC:
+        tests = tuple(
+            path
+            for path in snapshot.included_paths
+            if path.endswith((".test.js", ".test.cjs", ".test.mjs"))
+        )
+        if tests:
+            if len(tests) > 64:
+                raise ValueError("Static Node test entrypoint limit exceeded")
+            return _command_phase(
+                WebExecutionPhase.TEST,
+                (
+                    _single_command_plan(
+                        phase=WebExecutionPhase.TEST,
+                        selection=selection,
+                        root=".",
+                        command=_command(
+                            command_id="static.node-test",
+                            executable="node",
+                            arguments=(
+                                "--test",
+                                "--test-concurrency=1",
+                                "--test-reporter=tap",
+                                *("./" + path for path in tests),
+                            ),
+                            working_directory=".",
+                            parser="node.test.tap.v1",
+                        ),
+                    ),
+                ),
+            )
         return _adapter_phase(WebExecutionPhase.TEST, "web.static.smoke.v1")
     if selection.target is ExecutionTarget.WEB_PHP:
         return _command_phase(

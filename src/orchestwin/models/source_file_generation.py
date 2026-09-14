@@ -13,6 +13,10 @@ from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError, wire_value
+from orchestwin.models.source_context import (
+    IMPLEMENTATION_VIEW,
+    implementation_contract,
+)
 from orchestwin.models.source_proposals import (
     MAX_CONTEXT_BYTES,
     SourceFile,
@@ -29,10 +33,13 @@ PROTOCOL = "SOURCE_FILES_V1"
 MANIFEST_BUDGET = 1000
 FILE_BUDGET = 1100
 MAX_FILES = 8
+MANIFEST_CONTRACT = "SOURCE_MANIFEST_V2_TEST_REQUIRED"
 
 
 class PlannedFile(_Output):
-    normalized_path: str = Field(min_length=1, max_length=240)
+    normalized_path: str = Field(
+        min_length=1, max_length=240, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_./-]*$"
+    )
     media_type: Literal[
         "application/javascript",
         "application/json",
@@ -57,9 +64,11 @@ class SourceManifest(_Output):
 
 
 class SourceLines(_Output):
-    lines: list[Annotated[str, Field(max_length=240, pattern=r"^[^\r\n\x00]*$")]] = Field(
-        min_length=1,
-        max_length=60,
+    lines: list[Annotated[str, Field(max_length=240, pattern=r"^[^\x00-\x08\x0a-\x1f\x7f]*$")]] = (
+        Field(
+            min_length=1,
+            max_length=60,
+        )
     )
 
 
@@ -97,44 +106,6 @@ def _jvm_entrypoint(context):
     }
 
 
-def implementation_contract(context):
-    """Keep semantic content; repeated UUID/hash fields remain in the root evidence."""
-    omitted = {
-        "id",
-        "project_id",
-        "created_by_user_id",
-        "content_hash",
-        "schema_version",
-        "grounding",
-        "context",
-        "user_twin_references",
-        "code",
-        "metadata_only_alternative_ids",
-    }
-
-    def view(value):
-        if isinstance(value, dict):
-            return {
-                k: view(v)
-                for k, v in value.items()
-                if k not in omitted and not k.endswith(("_id", "_ids", "_reference", "_references"))
-            }
-        if isinstance(value, list):
-            return [view(v) for v in value]
-        return value
-
-    contract = {
-        name: view(context[name]["content"])
-        for name in ("requirements", "architecture", "design")
-        if name in context
-    }
-    return {
-        "view": "SOURCE_SEMANTIC_CONTENT_V1",
-        "identity_fields_in_parent_context": True,
-        "content": contract,
-    }
-
-
 def _validate_manifest(context, manifest):
     placeholders = [
         SourceFile(normalized_path=f.normalized_path, content="", media_type=f.media_type)
@@ -154,6 +125,18 @@ def _validate_manifest(context, manifest):
         f.normalized_path for f in manifest.files
     }:
         raise ValueError("manifest omits the pinned JVM entrypoint")
+    paths = {f.normalized_path for f in manifest.files}
+    target = context["target_selection"]["target"]
+    if target == "WEB_STATIC" and not {"index.html", "app.js", "app.test.cjs"} <= paths:
+        raise ValueError("static manifest requires entry, implementation and Node tests")
+    if target.startswith("JVM_"):
+        language, extension = {
+            "JVM_JAVA": ("java", ".java"),
+            "JVM_KOTLIN": ("kotlin", ".kt"),
+            "JVM_SCALA": ("scala", ".scala"),
+        }[target]
+        if not any(p.startswith(f"src/test/{language}/") and p.endswith(extension) for p in paths):
+            raise ValueError("JVM manifest requires tests in the selected language test root")
 
 
 def _file_instruction(planned):
@@ -196,6 +179,7 @@ def _static_file_instruction(planned):
         return (
             "Implement the business behavior as pure functions, including input validation and unique identifiers when required. "
             "Export the public functions inside if (typeof module !== 'undefined') for Node tests. "
+            "Use module.exports = { ... } in that guard. This is a classic browser script: never use import or export statements. "
             "Put every document/window reference inside if (typeof document !== 'undefined') for the browser. "
         )
     return ""
@@ -206,6 +190,8 @@ def _jvm_file_instruction(planned, entrypoint, target):
         return ""
     instruction = (
         "Keep this program small and self-contained. Define every referenced domain type in a planned file. "
+        "Implement the requirements, including observable state changes and return values. No empty methods or TODO placeholders. "
+        "Names in build_recipes identify the launcher only, not the requested business behavior. "
         "Implement dependencies before files which import them. Do not duplicate class/object declarations. "
         "This profile runs a console program: express the selected interaction through the CLI, without HTML rendering. "
     )
@@ -224,7 +210,7 @@ def _jvm_file_instruction(planned, entrypoint, target):
         elif target == "JVM_JAVA":
             instruction += "Define public class Main with public static void main(String[] args). "
     elif planned.normalized_path.startswith("src/test/"):
-        instruction += "Write two compact behavioral tests: one successful input and one invalid input. Include every required assertion import. "
+        instruction += "Write two compact behavioral tests: one successful input and one invalid input. Assert actual return values or changed state, never a constant or assertTrue(true). Include every required assertion import. "
         if target == "JVM_SCALA":
             instruction += "Use the pinned munit.FunSuite with test blocks, assertEquals and intercept; no ScalaTest imports. "
     return instruction
@@ -254,17 +240,17 @@ async def generate_source_files(generator, *, task, context):
     if parent is None:
         raise ProposalEvidenceError("SOURCE_PARENT_EVIDENCE_REQUIRED")
     semantic = implementation_contract(context)
-    root_context = {**context, "generation_protocol": PROTOCOL}
-    # Keep exact artifact references and declare the semantic projection; the complete
-    # immutable versions are still available through those references in the database.
-    for name in ("requirements", "architecture", "design"):
-        if name in root_context:
-            root_context[name] = {
-                "reference": context[name]["reference"],
-                "view": "SOURCE_SEMANTIC_CONTENT_V1",
-                "identity_fields_omitted": True,
-                "content": semantic["content"][name],
-            }
+    root_context = {
+        **context,
+        "generation_protocol": PROTOCOL,
+        "manifest_contract": MANIFEST_CONTRACT,
+    }
+    for name, content in semantic["content"].items():
+        root_context[name] = {
+            **context[name],
+            "view": IMPLEMENTATION_VIEW,
+            "content": content,
+        }
     target = context["target_selection"]["target"]
     entrypoint = _jvm_entrypoint(context)
     if entrypoint:
@@ -289,7 +275,9 @@ async def generate_source_files(generator, *, task, context):
             f" The manifest MUST include {entrypoint['normalized_path']} with package {entrypoint['package']}. "
             f"The pinned launcher invokes {entrypoint['main_class']}. Implement a finite CLI demonstration "
             "of the core use case, then exit; do not wait for interactive input or start a server. "
-            "Use text/plain media_type for every JVM file. Use at most four files: core and domain types first, main entry and real unit tests after their dependencies."
+            "Use text/plain media_type for every JVM file. Reserve one of the four files for unit tests under src/test/ in the selected language. "
+            "Use at most four files: put related domain types together in the core file, then the main entry and real unit tests. "
+            "Do not spend the file budget on separate command, query, factory or repository wrappers."
         )
     manifest = await generator.generate(
         task=task,
@@ -303,6 +291,7 @@ async def generate_source_files(generator, *, task, context):
         instruction="Plan only file names, responsibilities and exact public interfaces. No source code. "
         "Rationale and each purpose must be one short sentence, preferably under 80 characters. "
         "Define exact function signatures in interface, not file names. "
+        "Every normalized_path is a relative POSIX path, without a leading slash, drive letter or parent traversal. "
         "Use at most 8 small files, normally 3 or 4. Each file must fit in 60 short lines. "
         "Include an independently executable test. Never generate fixed_files or documentation. "
         + stack,
@@ -323,7 +312,7 @@ async def generate_source_files(generator, *, task, context):
             "generation_protocol": PROTOCOL,
             "source_step": step,
             "target_selection": context["target_selection"],
-            "implementation_contract": implementation_contract(context),
+            "implementation_contract": semantic,
             "manifest": manifest.model_dump(),
             "build_recipes": context.get("build_recipes", {}),
             "entrypoint_contract": entrypoint,
@@ -354,7 +343,7 @@ async def generate_source_files(generator, *, task, context):
                     media_type=planned.media_type,
                     content="\n".join(output.lines) + "\n",
                 )
-                _validate_files([item])
+                _validate_files([item], task=task)
                 _validate_file_language(item)
                 await child.event("ADAPTER_ACCEPTED", {"source_file": item.model_dump()})
                 await child.event("APPLICATION_RESULT", {"status": "SOURCE_FILE_GENERATED"})

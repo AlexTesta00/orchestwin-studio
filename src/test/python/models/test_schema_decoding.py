@@ -57,3 +57,16 @@ def test_different_decoder_version_is_rejected_before_initialization(monkeypatch
     monkeypatch.setattr(schema_decoding, "version", lambda _: "1.9.0")
     with pytest.raises(RuntimeError, match="pinned"):
         schema_decoding.build_schema_processor_factory(object(), object(), 16)
+
+
+def test_schema_order_matches_canonical_wire_order_without_changing_the_input(monkeypatch):
+    create, _ = factory(monkeypatch)
+    schema = {"type": "object", "properties": {"z": {"type": "string"}, "a": {"type": "boolean"}}}
+    create(schema, 2)
+    compiled = sys.modules["llguidance"].LLMatcher.grammar_from_json_schema.call_args.args[0]
+    assert list(compiled["properties"]) == ["a", "z"]
+    assert list(schema["properties"]) == ["z", "a"]
+    create({"properties": {"a": {"type": "boolean"}, "z": {"type": "string"}}, "type": "object"}, 2)
+    again = sys.modules["llguidance"].LLMatcher.grammar_from_json_schema.call_args.args[0]
+    assert list(again) == list(compiled)
+    assert list(again["properties"]) == list(compiled["properties"])

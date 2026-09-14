@@ -1,0 +1,89 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { apiClient } from "@/api/client";
+import { modelRuntimeReadiness, type ModelRuntimeReadiness } from "@/api/modelRuntime";
+import { useAuthStore } from "@/stores/auth";
+import type { AuthorizedRequest } from "@/stores/architecture";
+
+const props = withDefaults(
+  defineProps<{
+    locale?: "it" | "en";
+    authorize?: AuthorizedRequest;
+    query?: (token: string) => Promise<ModelRuntimeReadiness>;
+  }>(),
+  { locale: "en" },
+);
+const auth = useAuthStore();
+const status = ref<ModelRuntimeReadiness | null>(null);
+const pending = ref(false);
+let mounted = true;
+const copy = computed(() =>
+  props.locale === "it"
+    ? {
+        title: "Stato dei modelli",
+        ready: "I modelli sono disponibili per le richieste.",
+        development: "Modalità di sviluppo: il runtime completo dei modelli non è configurato.",
+        unavailable:
+          "I modelli non sono disponibili. La disponibilità non attesta la qualità delle risposte.",
+        unknown: "Stato dei modelli non disponibile.",
+        refresh: "Verifica disponibilità",
+        checking: "Verifica in corso…",
+      }
+    : {
+        title: "Model status",
+        ready: "The models are available for requests.",
+        development: "Development mode: the complete model runtime is not configured.",
+        unavailable:
+          "The models are unavailable. Availability does not establish response quality.",
+        unknown: "Model status unavailable.",
+        refresh: "Check availability",
+        checking: "Checking…",
+      },
+);
+const description = computed(() =>
+  !status.value
+    ? copy.value.unknown
+    : status.value.mode === "DEVELOPMENT_FIXTURES"
+      ? copy.value.development
+      : status.value.ready
+        ? copy.value.ready
+        : copy.value.unavailable,
+);
+async function refresh() {
+  if (pending.value) return;
+  pending.value = true;
+  try {
+    const operation = props.query ?? modelRuntimeReadiness;
+    const report = await (props.authorize?.(operation) ??
+      auth.withAccessToken(apiClient, operation));
+    if (mounted) status.value = report;
+  } catch {
+    if (mounted) status.value = null;
+  } finally {
+    if (mounted) pending.value = false;
+  }
+}
+onMounted(refresh);
+onUnmounted(() => {
+  mounted = false;
+});
+</script>
+
+<template>
+  <section
+    class="rounded-xl border border-slate-300 bg-white p-4"
+    aria-labelledby="model-runtime-status-title"
+    :aria-busy="pending"
+  >
+    <h2 id="model-runtime-status-title" class="font-bold">{{ copy.title }}</h2>
+    <p role="status">{{ pending ? copy.checking : description }}</p>
+    <button
+      class="rounded border border-slate-400 px-3 py-2 font-semibold"
+      type="button"
+      :disabled="pending"
+      @click="refresh"
+    >
+      {{ copy.refresh }}
+    </button>
+  </section>
+</template>

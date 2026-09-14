@@ -1,8 +1,9 @@
 """Exact JSON-schema token masking for the optional local GPU proposal server."""
 
+import json
 from importlib.metadata import version
 
-POLICY = "LLGUIDANCE_JSON_SCHEMA_V1"
+POLICY = "LLGUIDANCE_JSON_SCHEMA_CANONICAL_V2"
 VERSION = "1.8.0"
 
 
@@ -18,7 +19,11 @@ def build_schema_processor_factory(tokenizer, torch, vocabulary_size):
 
     class SchemaProcessor:
         def __init__(self, schema, prompt_length):
-            grammar = LLMatcher.grammar_from_json_schema(schema)
+            # LLGuidance fixes object field order from the schema's insertion order.
+            # Match our canonical HTTP serialization so equivalent schema hashes
+            # cannot silently produce different token masks in local operators.
+            canonical_schema = json.loads(json.dumps(schema, sort_keys=True, allow_nan=False))
+            grammar = LLMatcher.grammar_from_json_schema(canonical_schema)
             self.matcher = LLMatcher(vocabulary, grammar)
             if self.matcher.is_error():
                 raise ValueError("SCHEMA_GRAMMAR_REJECTED")

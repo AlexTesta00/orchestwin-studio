@@ -381,6 +381,9 @@ def test_migration_round_trip_preserves_existing_web_evidence() -> None:
     web_record = _evidence(f"test.integration.jvm-migration.{uuid4().hex}")
     try:
         with engine.begin() as connection:
+            original_revision = connection.scalar(
+                sa.text("SELECT version_num FROM alembic_version")
+            )
             connection.execute(
                 sa.insert(WEB_PROFILE_VALIDATION_EVIDENCE).values(
                     web_validation_evidence_to_record(web_record)
@@ -394,8 +397,9 @@ def test_migration_round_trip_preserves_existing_web_evidence() -> None:
             )
         upgrade_database(settings)
         with engine.connect() as connection:
-            assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-                "0037_jvm_governed_operations"
+            assert (
+                connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+                == original_revision
             )
             assert (
                 connection.scalar(

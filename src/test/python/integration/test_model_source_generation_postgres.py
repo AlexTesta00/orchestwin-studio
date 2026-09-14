@@ -181,6 +181,27 @@ def source_output(target):
         ExecutionTarget.JVM_KOTLIN: 'package org.orchestwin.calculator\nfun main() { println("Fixture") }',
         ExecutionTarget.JVM_SCALA: 'package org.orchestwin.greeting\nobject Main { def main(args: Array[String]): Unit = println("Fixture") }',
     }[target]
+    test_path = (
+        "app.test.cjs"
+        if target is ExecutionTarget.WEB_STATIC
+        else path.replace("src/main/", "src/test/").replace("Main.", "MainTest.")
+    )
+    test_files = [
+        {
+            "normalized_path": test_path,
+            "media_type": "text/plain",
+            "content": "// Synthetic test source; this fixture checks persistence only.",
+        }
+    ]
+    if target is ExecutionTarget.WEB_STATIC:
+        test_files.insert(
+            0,
+            {
+                "normalized_path": "app.js",
+                "media_type": "text/javascript",
+                "content": "const synthetic = true;",
+            },
+        )
     return {
         "rationale": "Implement the synthetic approved context.",
         "files": [
@@ -188,7 +209,8 @@ def source_output(target):
                 "normalized_path": path,
                 "content": content,
                 "media_type": "text/html" if target is ExecutionTarget.WEB_STATIC else "text/plain",
-            }
+            },
+            *test_files,
         ],
     }
 
@@ -249,7 +271,7 @@ def test_generated_sources_use_governed_api_and_exact_atomic_link(database, tmp_
                     e for e in evidence["observations"] if e["kind"] == "ADAPTER_ACCEPTED"
                 )
                 assert accepted["payload"]["source_binding"]["files"] == snapshot["files"]
-                assert len(evidence["source_children"]) == 1
+                assert len(evidence["source_children"]) == len(source_output(target)["files"])
                 child = await runtime.proposal_evidence_store.get_owned(
                     owner_user_id=owner,
                     project_id=project,
@@ -263,7 +285,7 @@ def test_generated_sources_use_governed_api_and_exact_atomic_link(database, tmp_
                         json=body(target, versions[2]),
                     )
                 ).status_code == 409
-                assert len(transport.calls) == 2
+                assert len(transport.calls) == 1 + len(source_output(target)["files"])
         finally:
             await db.dispose()
 
@@ -506,6 +528,11 @@ def test_generated_repairs_remain_pending_and_exact(
                             **output["files"][0],
                             "operation": "REPLACE",
                             "content": output["files"][0]["content"].replace("Fixture", "Repaired"),
+                            "media_type": (
+                                output["files"][0]["media_type"]
+                                if platform == "web"
+                                else "application/octet-stream"
+                            ),
                         }
                     ],
                 }
@@ -543,6 +570,13 @@ def test_generated_repairs_remain_pending_and_exact(
                     recorded_context = json.loads(
                         transport.calls[0]["payload"]["messages"][1]["content"]
                     )["context"]
+                    grounding = recorded_context["approved_context"]
+                    assert grounding["status"] == "EXACT_SOURCE_ARCHITECTURE"
+                    for name, version in zip(
+                        ("requirements", "design", "architecture"), versions, strict=True
+                    ):
+                        assert grounding[name]["reference"]["id"] == str(version.id)
+                        assert grounding[name]["reference"]["content_hash"] == version.content_hash
                     failed_phase = next(
                         phase
                         for phase in attempt.report.phase_results
@@ -661,7 +695,9 @@ def test_source_admission_and_atomic_rollback(database, tmp_path, monkeypatch, f
                 )
                 assert response.status_code in (404, 409, 503), response.text
             assert len(transport.calls) == (
-                2 if failure in ("link_write", "different_bytes") else 0
+                1 + len(source_output(ExecutionTarget.WEB_STATIC)["files"])
+                if failure in ("link_write", "different_bytes")
+                else 0
             )
             assert (
                 await runtime.web_source_api_service.source_revision_history(

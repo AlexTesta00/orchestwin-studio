@@ -20,6 +20,21 @@ def server_module():
     return module
 
 
+@pytest.mark.parametrize(
+    "repository,revision",
+    [("Qwen/other", None), (None, "a" * 40), ("Qwen/other", "main"), ("../local", "a" * 40)],
+)
+def test_alternate_model_requires_repository_and_immutable_revision(repository, revision):
+    with pytest.raises(ValueError, match="EXACT_REVISION_REQUIRED"):
+        server_module().selected_model(repository, revision)
+
+
+def test_default_is_unchanged_and_alternate_identity_is_explicit():
+    module = server_module()
+    assert module.selected_model(None, None) == (module.MODEL, module.REVISION)
+    assert module.selected_model("Qwen/coder", "b" * 40) == ("Qwen/coder", "b" * 40)
+
+
 def state_and_payload(tmp_path, *, tokens=(8, 9, 2), temperature=0.6):
     generator, _ = make_generator(tmp_path, {})
 
@@ -126,3 +141,15 @@ def test_serving_does_not_accept_eos_without_complete_schema(tmp_path):
     state["schema_processor"].return_value.finish.return_value = False
     with pytest.raises(ValueError, match="SCHEMA_INCOMPLETE_AT_EOS"):
         module.completion(state, payload)
+
+
+@pytest.mark.parametrize(
+    "error,code",
+    [
+        (ValueError("CONTEXT_BUDGET_EXCEEDED"), "CONTEXT_BUDGET_EXCEEDED"),
+        (ValueError("request text must never escape"), "REQUEST_REJECTED"),
+        (KeyError("CONTEXT_BUDGET_EXCEEDED"), "REQUEST_REJECTED"),
+    ],
+)
+def test_context_rejection_is_actionable_without_exposing_arbitrary_error_text(error, code):
+    assert server_module().request_failure_code(error) == code
