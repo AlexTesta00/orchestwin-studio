@@ -1,0 +1,138 @@
+{
+  "experiment_id": "cloud-evaluator-pilot-e3afd684-20260915",
+  "status": "RUNNER_AND_PILOT_TRANSFER_VERIFIED_AWAITING_USER_COMMIT",
+  "preparation_base_commit": "e3afd684d457a7c52d4bcb030efcfb07da5e9e33",
+  "scope": "Cloud throughput and reliability pilot preparation; no thesis-model gradient updates, cloud resources, final-case inference or promotion.",
+  "model": "Qwen/Qwen3-4B-Instruct-2507",
+  "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+  "dataset_manifest_sha256": "477af12816ade32b2f9dec51fcfb125fe2b0e6dd2a1321f4a43b795b8b57c3d9",
+  "full_training_rows": 63420,
+  "pilot_cache": {
+    "rows": 904,
+    "total_tokens": 3139732,
+    "completion_tokens": 353240,
+    "group_limit": 32,
+    "states": {
+      "PRESENT": 64,
+      "INSUFFICIENT": 88,
+      "PARTIAL": 340,
+      "MISSING": 412
+    },
+    "locales": {
+      "en": 452,
+      "it": 452
+    },
+    "min_tokens": 2141,
+    "max_tokens": 4690,
+    "max_sequence": 6144,
+    "output_reserve": 2048,
+    "database_sha256": "3a3e796533f2fdc4e3a9cfa4cee99232781c1b936b02e503b0f2c0203baa3414"
+  },
+  "pilot_cache_manifest_sha256": "a624d827175826f1f1e34688bf9400da690e04a24c822da90081610625dc5647",
+  "pilot_policy": {
+    "max_steps": 40,
+    "batch_size": 1,
+    "accumulation": 4,
+    "learning_rate": 0.0001,
+    "rank": 16,
+    "alpha": 32,
+    "save_steps": 10,
+    "max_active_seconds": 3600
+  },
+  "sampling": "Whole training groups selected round-robin over component/service/layout strata with a fixed seed; all group states/translations retained. Within-cache shuffle without replacement per epoch. This is not a quality-validation sample.",
+  "cpu_checkpoint_verification": {
+    "status": "PASSED",
+    "device": "CPU",
+    "pretrained_weights_loaded": false,
+    "thesis_examples_read": false,
+    "optimizer_steps": 8,
+    "interrupted_at": 3,
+    "crossed_epoch_boundary": true,
+    "sample_order_identical": true,
+    "adapter_parameters_bitwise_identical": true,
+    "optimizer_state_identical": true,
+    "scheduler_state_identical": true,
+    "dropout_enabled": true,
+    "max_parameter_difference": 0.0
+  },
+  "verification": {
+    "training_suite": {
+      "tests": "515",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "9",
+      "time": "59.719"
+    },
+    "final_cloud_control_tests": {
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.703"
+    },
+    "unique_tests_passed": 509,
+    "windows_symlink_tests_skipped": 9,
+    "full_suite_includes_18_of_the_21_cloud_control_tests": true,
+    "ruff_check": "PASS",
+    "ruff_format": "PASS",
+    "transfer_extracted_and_hash_verified": true
+  },
+  "transfer": {
+    "archive_sha256": "51043ed75d8a7cfc80140827e5bfa626f762dfd9bdfd548d160fcf9c95b4c400",
+    "manifest_sha256": "c0532675f3480f6f8f54ab368cbcc530730bf56f2577ba407e971755c0f6768b",
+    "bytes": 816969,
+    "files": 11
+  },
+  "sources_sha256": {
+    "environments/training/bootstrap_complete_training.py": "fa2363de657d02876a1fd87f8631bd715b6a29d877df7d31130bbd5ebb9e1cb8",
+    "environments/training/complete-evaluator-pilot.json": "d278f43731ddb5eae17951b9298510f524c9412d61c3015072d18b3f4ed96175",
+    "environments/training/complete_training_data.py": "364ba2e4b1475a2c16abc1b81234f38febc9d855d5aa5b87d489fea2bf76b52c",
+    "environments/training/complete_training_runtime.py": "474732e1fae6a1a7e75446d939ed4153c6174d5200674d0fc6a42b10b577ab53",
+    "environments/training/prepare_cloud_training_bundle.py": "dfa440aa09922ec1ea18c556bb7525003e6109505c8260b1ad5396017b93fdbd",
+    "environments/training/run_cloud_training_job.py": "f6569c28faf82e19c66dd5df735f899b2a47639472fbfcb48d1dd1f7a26685bb",
+    "environments/training/run_complete_evaluator.py": "57b01d2a303fbc29e8c3a19387a754f8687f5768e2bc6110eaf37b291505a0c0",
+    "environments/training/verify_complete_training_resume.py": "406bf9ee2a2d09809a395ee2955b2a9c15e8419dcf7bd91f230916dd46824a9d",
+    "src/test/python/training/test_complete_cloud_training.py": "47de180e320042dc286bb8f4b0efbb56224a6564596cf93d3fb21e99971fa361"
+  },
+  "evidence_sha256": {
+    "tests.xml": "5a9170700e191d7dcbf59fdc0bde755ff5030d2ac0352d19b722fec111bff9fa",
+    "control-tests.xml": "877b7fb42e3f16926a23dad48b5a58a0471e39d7fbcf11a650d14326bf7a2628",
+    "cpu-resume-02/verification.json": "9bc5df8c17f73b44e34a898d7a9881734e212a54c04693ce8393426451d51fd0",
+    "transfer-01/transfer.json": "b8034ef5a9ed9373fa4d3222f352c38bdc4af2489d6bab1f28563e2245a875d7",
+    "transfer-01/bundle.json": "c0532675f3480f6f8f54ab368cbcc530730bf56f2577ba407e971755c0f6768b"
+  },
+  "cloud_configuration": {
+    "provider": "Runpod",
+    "oauth_connection_verified": true,
+    "pod_created": false,
+    "budget_currency": "USD",
+    "campaign_budget_maximum": 200,
+    "deposit_source": "USER_REPORTED_NOT_BALANCE_API_VERIFIED",
+    "pilot_allocation_maximum": 10,
+    "reserved_for_storage_and_contingencies": 20,
+    "suggested_gpu": "NVIDIA A100-SXM4-80GB",
+    "observed_secure_gpu_rate_usd_per_hour": 1.59,
+    "rate_observed_at_utc": "2026-09-15T09:06:43Z",
+    "requires_fresh_rate_and_cuda_capacity_check": true,
+    "official_template_candidate": "runpod-torch-v280",
+    "official_image_candidate": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+    "runtime": "Separate Python 3.13 environment from the committed uv.lock; do not use the template system torch as the experiment runtime.",
+    "notification_interval_hours": 5,
+    "cloud_email_configured": false,
+    "cost_control": "Pod-local monotonic lease includes setup since Pod creation, checkpoint grace, scoped child termination and Runpod v2 stop with retry. Live price must fit the ceiling.",
+    "cost_control_limitations": "Not a provider-enforced account cap. Host or API outage requires an independent external monitor. Persistent storage remains billable after stop; assign retention and cleanup before provisioning."
+  },
+  "next_launch_prerequisites": [
+    "User commit; agent must never stage, commit or push.",
+    "Dedicated Runpod API credential for the autonomous stop path; never export Codex OAuth storage.",
+    "Independent Gmail SMTP app credential, entered securely outside chat and Git; test delivery.",
+    "Independent shutdown fallback, persistent output storage and retention plan; fresh price/CUDA capacity verification.",
+    "Provision one owned Pod, bind lease to its exact identity/creation time and supervise setup from the start.",
+    "Run the 40-step pilot, verify a usable checkpoint and adapter plus actual Pod shutdown, then measure time/cost before the full run."
+  ],
+  "limits": [
+    "CPU resume probe used a randomly initialized tiny Qwen3 with dropout, standard Trainer/PEFT and AdamW. It does not validate Unsloth CUDA kernels, 4-bit AdamW or remote GPU throughput.",
+    "No validation/test split enters the transfer; the pilot cannot establish model quality.",
+    "Do not expand data solely to exhaust credits; use development error analysis with group-disjoint final evaluation."
+  ]
+}
