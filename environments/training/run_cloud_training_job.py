@@ -81,7 +81,13 @@ def pod_request(pod_id, token, *, stop=False):
     path = f"{API}/pods/{pod_id}" + ("/action" if stop else "")
     request = urllib.request.Request(
         path,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            # Runpod's HTTP edge rejects urllib's default agent with error 1010.
+            "User-Agent": "OrchesTwin-Training-Guard/1.0",
+        },
         data=b'{"action":"stop"}' if stop else None,
         method="POST" if stop else "GET",
     )

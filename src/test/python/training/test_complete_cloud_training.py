@@ -1,6 +1,7 @@
 """Training isolation, loss masking, checkpoint integrity and cloud cost controls."""
 
 import importlib
+import io
 import json
 import tarfile
 from dataclasses import replace
@@ -307,6 +308,42 @@ def test_pod_stop_still_succeeds_when_status_disk_is_unwritable(modules, tmp_pat
         request=lambda *a, **kw: dict(status="EXITED"),
         sleep=lambda _: None,
     )
+
+
+@pytest.mark.parametrize("stop", [False, True])
+def test_runpod_http_requests_identify_guard_and_never_redirect_credentials(
+    modules, monkeypatch, stop
+):
+    _, _, cloud = modules
+    requests = []
+
+    class Opener:
+        def open(self, request, *, timeout):
+            requests.append(request)
+            assert timeout == 20
+            # Regression for the real HTTP 403/1010 returned for Python-urllib's default agent.
+            assert request.get_header("User-agent") == "OrchesTwin-Training-Guard/1.0"
+            assert request.get_header("Accept") == "application/json"
+            assert request.get_header("Authorization") == "Bearer fixture-token"
+            return io.StringIO('{"status":"EXITED"}')
+
+    def opener_factory(handler):
+        assert (
+            handler().redirect_request(
+                None, None, 302, "redirect", {}, "https://other.example.test/"
+            )
+            is None
+        )
+        return Opener()
+
+    monkeypatch.setattr(cloud.urllib.request, "build_opener", opener_factory)
+    assert cloud.pod_request("owned-pilot", "fixture-token", stop=stop)["status"] == "EXITED"
+    request = requests[0]
+    assert request.full_url == "https://api.runpod.io/v2/pods/owned-pilot" + (
+        "/action" if stop else ""
+    )
+    assert request.get_method() == ("POST" if stop else "GET")
+    assert request.data == (b'{"action":"stop"}' if stop else None)
 
 
 @pytest.mark.parametrize("failure", [None, "mail_auth", "child_cleanup"])
