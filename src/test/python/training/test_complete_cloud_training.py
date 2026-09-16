@@ -68,9 +68,18 @@ def dataset_source(tmp_path, data_module):
     return source
 
 
-def test_prepare_never_needs_validation_or_test_and_keeps_whole_groups(modules, tmp_path):
+@pytest.mark.parametrize(
+    "curriculum",
+    ["grounded-evaluator-complete-interface-v3", "grounded-evaluator-scoped-interface-v4"],
+)
+def test_prepare_never_needs_validation_or_test_and_keeps_whole_groups(
+    modules, tmp_path, curriculum
+):
     data, _, _ = modules
     source = dataset_source(tmp_path, data)
+    manifest = json.loads((source / "manifest.json").read_bytes())
+    manifest["curriculum_id"] = curriculum
+    data.save(source / "manifest.json", manifest)
     selected = data.selected_groups(source, 3)
     assert selected == data.selected_groups(source, 3)
     assert len(selected) == 3
@@ -79,6 +88,7 @@ def test_prepare_never_needs_validation_or_test_and_keeps_whole_groups(modules, 
         source, output, data.digest(source / "manifest.json"), Tokenizer(), group_limit=3
     )
     assert report["rows"] == 24
+    assert report["curriculum_id"] == curriculum
     assert set(report["selected_groups"]) == selected
     assert report["states"] == dict.fromkeys(("PRESENT", "MISSING", "PARTIAL", "INSUFFICIENT"), 6)
     dataset = data.TokenDataset(output)

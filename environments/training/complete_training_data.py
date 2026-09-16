@@ -14,6 +14,7 @@ from pathlib import Path
 MODEL = "Qwen/Qwen3-4B-Instruct-2507"
 REVISION = "abcc171021d4f320b2e7f47c6f0deca67ded870c"
 CURRICULUM = "grounded-evaluator-complete-interface-v3"
+SUPPORTED_CURRICULA = {CURRICULUM, "grounded-evaluator-scoped-interface-v4"}
 MAX_SEQUENCE = 6144
 OUTPUT_RESERVE = 2048
 SEED = 2026091503
@@ -115,8 +116,8 @@ def prepare_cache(data, output, manifest_sha256, tokenizer, *, group_limit=None)
     if digest(data / "manifest.json") != manifest_sha256:
         raise ValueError("dataset manifest changed")
     manifest = json.loads((data / "manifest.json").read_bytes())
-    if manifest["curriculum_id"] != CURRICULUM:
-        raise ValueError("complete-interface v3 curriculum required")
+    if manifest["curriculum_id"] not in SUPPORTED_CURRICULA:
+        raise ValueError("supported complete-interface or scoped-interface curriculum required")
     expected = manifest["files"]["train.jsonl"]
     if digest(data / "train.jsonl") != expected["sha256"]:
         raise ValueError("training source digest mismatch")
@@ -157,7 +158,7 @@ def prepare_cache(data, output, manifest_sha256, tokenizer, *, group_limit=None)
         format_version=1,
         model=MODEL,
         revision=REVISION,
-        curriculum_id=CURRICULUM,
+        curriculum_id=manifest["curriculum_id"],
         dataset_manifest_sha256=manifest_sha256,
         source=expected,
         database_sha256=digest(database),
