@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "report_id": "cloud-evaluator-validation-e7a8bd9-20260916",
+  "recorded_at": "2026-09-16T05:53:54.560735+00:00",
+  "base_commit": "e7a8bd906ca46fc8e4309b6b5c4624ee1cfc4ec8",
+  "status": "DIAGNOSTIC_SCREEN_PASSED_WITH_LIMITATIONS_NOT_SELECTED",
+  "summary_it": "Training cloud completato e candidato verificato in locale. Superati 240/240 casi sintetici di validazione e 26/26 regressioni ricontrollate con lo stesso criterio, contro 8/26 del precedente adapter. Nessun problema nelle 26 nuove risposte lette; restano due lievi imprecisioni di ambito nelle regressioni storiche. Qualificazione completa ancora da svolgere.",
+  "scope": "User-Twin evaluator adapter only; this does not qualify all providers, source generation, the iterative HCDT workflow or a formal thesis campaign.",
+  "artifact_root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/validation-e7a8bd9-20260915-01",
+  "artifact_storage": "VERIFIED_LOCAL_FILES_AND_RETAINED_RUNPOD_VOLUME",
+  "binary_weights_in_git": false,
+  "model": {
+    "repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "adapter_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+    "contract_sha256": "ed43ede82d09bcef1f84ddece4f784f57167eee74ee7e31095500275eedb43d2",
+    "candidate_selected": false
+  },
+  "training": {
+    "run_id": "full-e7a8bd9-01",
+    "examples": 63420,
+    "optimizer_steps": 15855,
+    "epochs": 1.0,
+    "active_seconds": 29910.177215039963,
+    "mean_training_loss": 0.005560706104321016,
+    "completion_report": {
+      "path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/full-training-e7a8bd9-20260915-01/full-completion.json",
+      "sha256": "67241a0d1d8b7a59dd220b5cc369a07aec5ad4ab717ee95c85a7ea848c3b9bb9"
+    },
+    "verified_backup": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\full-training-e7a8bd9-20260915-01\\full-result-verified\\runs\\full-e7a8bd9-01",
+    "verified_backup_files": 28,
+    "backup_archive_sha256": "d616d7f2e393a95a7ddac1f3a3c6f575f6f220e42633be2e6988f0d1a2a54d0c",
+    "interpretation": "Optimization completion and low training loss do not establish generalization or user-impact validity."
+  },
+  "protocol": {
+    "scope": "FIRST_POST_TRAINING_DIAGNOSTIC_VALIDATION",
+    "git_head": "e7a8bd906ca46fc8e4309b6b5c4624ee1cfc4ec8",
+    "training_run": "full-e7a8bd9-01",
+    "candidate_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+    "validation_dataset_sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e",
+    "selection": "Smallest full group in each held-out service-family/structure-family cell; all cases of each chosen group, frozen before model inference.",
+    "selected_groups": [
+      "00f0a2f6ca92cb3315ed6b4db679808c12a0ad3e174cbe034b37051c1c230436",
+      "01bd3b61e34e455ea084f286b8f74f98be5e88d706d023ec1253290ddd0a26c9",
+      "02cc86ef7ef872c853372ea4f95da19b518e228dc94669947d6d0bc5df3d98d0",
+      "0436c01b8bd992f926f7bb50457f5f5502b109a2b3f94134b42bfb1fe6c6498d",
+      "0fff8f01c7cbd8e3e0450fa4a6a2fd2def57ec4e353ffcf73ab52c21d5e3d991",
+      "317df2a1f2c116c10d999d0febac153b0544072cabcbdc26f450e795c4745816"
+    ],
+    "selected_validation_rows": 240,
+    "historical_exact_message_pairs": 26,
+    "total_requests": 266,
+    "states": {
+      "PARTIAL": 80,
+      "MISSING": 124,
+      "INSUFFICIENT": 24,
+      "PRESENT": 12
+    },
+    "locales": {
+      "en": 120,
+      "it": 120
+    },
+    "v3_max_output_tokens": 2048,
+    "regression_max_output_tokens": 1400,
+    "decoding": "GREEDY_SCHEMA_CONSTRAINED",
+    "max_sequence": 6144,
+    "output_repair": false,
+    "retries": false,
+    "no_final_cases": true,
+    "training": false,
+    "production_promotion": false,
+    "test_files_opened": false,
+    "labels_uploaded": false,
+    "limitation": "Engineering screen over six correlated synthetic groups and previously used regression fixtures; narrative review required; this is not full held-out or empirical validation."
+  },
+  "results": {
+    "total_observed": 266,
+    "total_planned": 266,
+    "cohorts": {
+      "v3_validation": {
+        "cases": 240,
+        "passed": 240,
+        "schema_accepted": 240,
+        "domain_accepted": 240,
+        "true_positive": 288,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "historical_regression": {
+        "cases": 26,
+        "passed": 26,
+        "schema_accepted": 26,
+        "domain_accepted": 26,
+        "true_positive": 22,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      }
+    },
+    "per_state": {
+      "MISSING": {
+        "cases": 124,
+        "passed": 124,
+        "schema_accepted": 124,
+        "domain_accepted": 124,
+        "true_positive": 248,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "PARTIAL": {
+        "cases": 80,
+        "passed": 80,
+        "schema_accepted": 80,
+        "domain_accepted": 80,
+        "true_positive": 40,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "PRESENT": {
+        "cases": 12,
+        "passed": 12,
+        "schema_accepted": 12,
+        "domain_accepted": 12,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "INSUFFICIENT": {
+        "cases": 24,
+        "passed": 24,
+        "schema_accepted": 24,
+        "domain_accepted": 24,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      }
+    },
+    "per_group": {
+      "00f0a2f6ca92cb3315ed6b4db679808c12a0ad3e174cbe034b37051c1c230436": {
+        "cases": 32,
+        "passed": 32,
+        "schema_accepted": 32,
+        "domain_accepted": 32,
+        "true_positive": 30,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "01bd3b61e34e455ea084f286b8f74f98be5e88d706d023ec1253290ddd0a26c9": {
+        "cases": 52,
+        "passed": 52,
+        "schema_accepted": 52,
+        "domain_accepted": 52,
+        "true_positive": 72,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "02cc86ef7ef872c853372ea4f95da19b518e228dc94669947d6d0bc5df3d98d0": {
+        "cases": 52,
+        "passed": 52,
+        "schema_accepted": 52,
+        "domain_accepted": 52,
+        "true_positive": 72,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "0436c01b8bd992f926f7bb50457f5f5502b109a2b3f94134b42bfb1fe6c6498d": {
+        "cases": 32,
+        "passed": 32,
+        "schema_accepted": 32,
+        "domain_accepted": 32,
+        "true_positive": 30,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "0fff8f01c7cbd8e3e0450fa4a6a2fd2def57ec4e353ffcf73ab52c21d5e3d991": {
+        "cases": 20,
+        "passed": 20,
+        "schema_accepted": 20,
+        "domain_accepted": 20,
+        "true_positive": 12,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      },
+      "317df2a1f2c116c10d999d0febac153b0544072cabcbdc26f450e795c4745816": {
+        "cases": 52,
+        "passed": 52,
+        "schema_accepted": 52,
+        "domain_accepted": 52,
+        "true_positive": 72,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failure_checks": {}
+      }
+    }
+  },
+  "historical_comparison": {
+    "pairs": 26,
+    "new_passed": 26,
+    "prior_passed": 8,
+    "new_only_correct": 18,
+    "prior_only_correct": 0,
+    "same_input_messages": true,
+    "runtime_hardware_not_identical": true,
+    "prior_adapter_sha256": "9568ae8c3ed614431abf2cb0ed974fa8a6a23d535f1d43080efa04c40532dfec",
+    "same_scorer_for_both": true,
+    "rescoring_note": "The previously published broader review counted 13/26 with its older screen. Here the retained old raw outputs score 8/26 under the same current stricter criterion used for the new candidate; no old output was repaired.",
+    "inference_scope": "Exact input message replay; prior hardware/runtime differ. Diagnostic comparison, not a controlled causal training-effect estimate."
+  },
+  "narrative_review": {
+    "reviewer": "CODEX_ASSISTANT_ENGINEERING_REVIEW",
+    "human_expert_validation": false,
+    "v3_reviewed": 26,
+    "v3_without_observed_issues": 26,
+    "v3_unreviewed": 214,
+    "historical_reviewed": 26,
+    "historical_minor_scope_issues": 2,
+    "known_issue_ids": [
+      "regression-12-1",
+      "regression-12-2"
+    ],
+    "known_issue": "The overall summary calls #quantity a requested satisfied check although only #requester and #request-submit were requested. The element really exists; no extra finding was emitted."
+  },
+  "provenance_audit": {
+    "inference_source_files_checked": 24,
+    "changed_inference_sources": [],
+    "scorer_and_protocol_files_checked": 5,
+    "changed_scorer_or_protocol_files": [],
+    "training_rows_verified": 63420,
+    "training_broad_rows_checked": 59964,
+    "training_file_sha256": "0a61bc04e095d6b93a53fb60c149090f50ffaf3e175c3ea9d8672259d47b1b57",
+    "validation_file_sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e",
+    "validation_rows": 3280,
+    "selected_rows_verified_against_validation_file": 240,
+    "selected_group_overlap_with_training": [],
+    "selected_normalized_prompt_overlap_with_broad_training": [],
+    "normalized_comparison_limit": "Uses the committed semantic_key for the closed complete-interface grammar; no claim of independent natural-language decontamination. Narrow retention rows are included in the training file hash and group audit, but not this broad-grammar normalization.",
+    "v3_outputs_exactly_match_synthetic_gold_json": 240,
+    "reserved_test_file_opened": false,
+    "sample_ids": [
+      "v3-006",
+      "v3-027",
+      "v3-008",
+      "v3-025",
+      "v3-069",
+      "v3-054",
+      "v3-074",
+      "v3-049",
+      "v3-089",
+      "v3-133",
+      "v3-100",
+      "v3-127",
+      "v3-157",
+      "v3-147",
+      "v3-160",
+      "v3-145",
+      "v3-171",
+      "v3-188",
+      "v3-172",
+      "v3-184",
+      "v3-220",
+      "v3-210",
+      "v3-230",
+      "v3-205"
+    ],
+    "sample_counts": {
+      "size": 24,
+      "locales": {
+        "en": 12,
+        "it": 12
+      },
+      "conditions": {
+        "complete": 12,
+        "partial": 6,
+        "content_unavailable": 5,
+        "form_absent": 1
+      }
+    },
+    "interpretation": "Exact synthetic gold reproduction is not evidence of general real-world quality, calibrated confidence or empirical user impact."
+  },
+  "performance": {
+    "v3_calls": 240,
+    "mean_call_seconds": 14.771804166666668,
+    "median_call_seconds": 12.929,
+    "total_call_seconds": 3545.233,
+    "scope": "Observed serial calls on the recorded Runpod GPU; excludes model load and orchestration time."
+  },
+  "evidence": {
+    "protocol.json": {
+      "sha256": "c44bab329fc2bc30ba69991e0317c1d05ffdfe0ad02833097a540023a79e2acb",
+      "bytes": 1765
+    },
+    "assessment.json": {
+      "sha256": "924efa9ff20a61c366a2023b264ed3d6b6c61444d0770b6600e5af67db636b58",
+      "bytes": 644109
+    },
+    "local-provenance-audit.json": {
+      "sha256": "a440f44d25f12015bad7fc0cf100f145761bdb448dc515a642c55ab6439c80be",
+      "bytes": 1790
+    },
+    "v3-narrative-review.json": {
+      "sha256": "b3c7a6f6311041f2f3368bf43c82579ee46783eed550c11aef63628ca7287371",
+      "bytes": 12544
+    },
+    "narrative-review-sample.json": {
+      "sha256": "01ac0301c76723cfabaf3fbe9ef1c96dbd1fce99a51b81279a23a537d0785c53",
+      "bytes": 83754
+    },
+    "narrative-review-supplement.json": {
+      "sha256": "e2b55c1e334c7bcd81949f111f23da89544c38fc3aa03e5c4b44fa1ceeef871d",
+      "bytes": 11955
+    },
+    "regression-assessment.json": {
+      "sha256": "03885ce812929ef9f1d0863523bbebe6633f31bba6da7be61e0ad1eaad23870e",
+      "bytes": 45674
+    },
+    "regression-narrative-review.json": {
+      "sha256": "6ca2c4ea7a83c215f171db0a4aee2efedea1a1d0eda72b182ea33eae02fab4de",
+      "bytes": 10828
+    },
+    "validation-receipt.json": {
+      "sha256": "c43073713b4b4deae5de897adff1f6c70c7deaba58c571e1af7799b028b999e8",
+      "bytes": 118870
+    },
+    "validation-results.tar.gz": {
+      "sha256": "8ef631db4e2cb28bb27ece1948475de7254ab791a4d457001f9b37a02b4ed25c",
+      "bytes": 1320981
+    },
+    "labels.json": {
+      "sha256": "25c1cf8444e47a6056a841a5a12912fea67a665ef8c4ef671e0a64534051f836",
+      "bytes": 3608326
+    },
+    "cases.json": {
+      "sha256": "23c88fb54311d645d2518c46bc0547c43289eada09bd2dcbf4e586ead3675a42",
+      "bytes": 2938876
+    },
+    "source-inventory.json": {
+      "sha256": "2845b46646b7476550d70ef6bd50ba2e45b5f9f9959aeca8940ab8ad51448763",
+      "bytes": 2749
+    },
+    "score_validation.py": {
+      "sha256": "d2a1990b0647d7a4e4bb466afb25abba7f9628d4831535dca5291ff173dee2db",
+      "bytes": 2597
+    },
+    "assess_outputs.py": {
+      "sha256": "01fef2af162a26f5df4ef49bf4d64e9aab40686cdff3d0f03ecd83741433d0ec",
+      "bytes": 3895
+    },
+    "prepare_local_review.py": {
+      "sha256": "21db241e9cecf0ab05953f33b04945db04baa480f2c9a1901b1953aa457268ff",
+      "bytes": 5714
+    },
+    "finalize_local_review.py": {
+      "sha256": "f97f99020a6dfce717d951a176fa4dc04eac91a8a9b865ff2d1c7ef91b683886",
+      "bytes": 15340
+    }
+  },
+  "cloud": {
+    "pods": [
+      {
+        "id": "zg50tifkx87hvr",
+        "status": "EXITED"
+      },
+      {
+        "id": "mqpsfl4szcdiy5",
+        "status": "EXITED"
+      }
+    ],
+    "status_verified_at": "2026-09-16T05:51:09+00:00",
+    "status_source": "Runpod get_pod read immediately before this report",
+    "compute_restarted_for_this_analysis": false
+  },
+  "decision": {
+    "retain_candidate_for_further_qualification": true,
+    "additional_training_justified_by_this_screen": false,
+    "production_promotion": false,
+    "formal_campaign_resumed": false,
+    "next_steps": [
+      "Commit this evidence record through the user before beginning the next phase.",
+      "Freeze qualification criteria for the remaining 3040 validation cases across 90 groups and an independently labeled challenge set of new pages and differently worded requests, including the observed scope drift.",
+      "Run the frozen qualification with the same adapter; compare retained old-model outputs where available and otherwise obtain matched reference inference. Keep reserved final cases sealed.",
+      "Use observed failures to decide whether targeted data changes and another training run are necessary; do not spend remaining credits solely to expand training.",
+      "Complete human expert review and governed runtime qualification before selecting the adapter or resuming the formal thesis campaign."
+    ]
+  },
+  "limits": [
+    "Six correlated synthetic validation groups, not the complete 96-group validation split.",
+    "Regressions were previously inspected and reused for model development.",
+    "Greedy schema-constrained decoding; valid syntax does not prove correct narratives.",
+    "No human study, final reserved case inference or production promotion.",
+    "Only six of 96 validation groups were inferred: 240 of 3280 rows. Rows, translations and counterfactuals are correlated.",
+    "All 240 new outputs exactly reproduce their synthetic gold JSON. This demonstrates the narrow generated task and does not demonstrate robust behavior outside its grammar.",
+    "The synthetic generator and its annotations share a static oracle; a no-overlap audit is not independent expert validation of those annotations.",
+    "The current adapter alone was run on the new 240 cases; there is no paired old-adapter baseline for that cohort.",
+    "Neither output confidence calibration nor the empirical severity of predicted user impacts was established."
+  ],
+  "new_training_this_phase": false,
+  "new_inference_this_phase": false,
+  "reserved_test_files_opened_this_phase": false,
+  "database_writes_this_phase": false,
+  "production_configuration_changed": false,
+  "commits_created": false
+}
