@@ -16,18 +16,23 @@ from prepare_complete_evaluator import checked_output, digest, save
 CURRICULUM = "grounded-evaluator-scoped-interface-v4"
 
 
-def audit(data, output, tokenizer, *, tokenizer_files=None):
+def audit(data, output, tokenizer, *, tokenizer_files=None, curriculum_id=CURRICULUM):
     manifest_path = data / "manifest.json"
     manifest_hash = digest(manifest_path)
     manifest = json.loads(manifest_path.read_bytes())
-    if manifest["curriculum_id"] != CURRICULUM or set(manifest["files"]) != {
-        "train.jsonl",
-        "validation.jsonl",
-    }:
+    if (
+        curriculum_id not in {CURRICULUM, "grounded-evaluator-balanced-scope-v5"}
+        or (manifest["curriculum_id"] != curriculum_id)
+        or set(manifest["files"])
+        != {
+            "train.jsonl",
+            "validation.jsonl",
+        }
+    ):
         raise ValueError("scoped train/validation development corpus required")
     output = checked_output(output)
     report = dict(
-        curriculum_id=CURRICULUM,
+        curriculum_id=curriculum_id,
         model=MODEL,
         revision=REVISION,
         dataset_manifest_sha256=manifest_hash,
@@ -82,6 +87,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--curriculum",
+        choices=(CURRICULUM, "grounded-evaluator-balanced-scope-v5"),
+        default=CURRICULUM,
+    )
     args = parser.parse_args()
     os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", TOKENIZERS_PARALLELISM="false")
     from huggingface_hub import try_to_load_from_cache
@@ -97,7 +107,9 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(
         MODEL, revision=REVISION, local_files_only=True, trust_remote_code=False
     )
-    report = audit(args.data, args.output, tokenizer, tokenizer_files=files)
+    report = audit(
+        args.data, args.output, tokenizer, tokenizer_files=files, curriculum_id=args.curriculum
+    )
     report["package_versions"] = {
         name: importlib.metadata.version(name) for name in ("transformers", "tokenizers")
     }

@@ -70,7 +70,11 @@ def dataset_source(tmp_path, data_module):
 
 @pytest.mark.parametrize(
     "curriculum",
-    ["grounded-evaluator-complete-interface-v3", "grounded-evaluator-scoped-interface-v4"],
+    [
+        "grounded-evaluator-complete-interface-v3",
+        "grounded-evaluator-scoped-interface-v4",
+        "grounded-evaluator-balanced-scope-v5",
+    ],
 )
 def test_prepare_never_needs_validation_or_test_and_keeps_whole_groups(
     modules, tmp_path, curriculum

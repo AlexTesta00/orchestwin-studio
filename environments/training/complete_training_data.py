@@ -14,7 +14,11 @@ from pathlib import Path
 MODEL = "Qwen/Qwen3-4B-Instruct-2507"
 REVISION = "abcc171021d4f320b2e7f47c6f0deca67ded870c"
 CURRICULUM = "grounded-evaluator-complete-interface-v3"
-SUPPORTED_CURRICULA = {CURRICULUM, "grounded-evaluator-scoped-interface-v4"}
+SUPPORTED_CURRICULA = {
+    CURRICULUM,
+    "grounded-evaluator-scoped-interface-v4",
+    "grounded-evaluator-balanced-scope-v5",
+}
 MAX_SEQUENCE = 6144
 OUTPUT_RESERVE = 2048
 SEED = 2026091503
