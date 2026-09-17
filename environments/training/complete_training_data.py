@@ -18,6 +18,7 @@ SUPPORTED_CURRICULA = {
     CURRICULUM,
     "grounded-evaluator-scoped-interface-v4",
     "grounded-evaluator-balanced-scope-v5",
+    "grounded-evaluator-robust-interface-v6",
 }
 MAX_SEQUENCE = 6144
 OUTPUT_RESERVE = 2048

@@ -14,6 +14,11 @@ from complete_training_data import MAX_SEQUENCE, OUTPUT_RESERVE, prepare_cache
 from prepare_complete_evaluator import checked_output, digest, save
 
 CURRICULUM = "grounded-evaluator-scoped-interface-v4"
+DEVELOPMENT_CURRICULA = (
+    CURRICULUM,
+    "grounded-evaluator-balanced-scope-v5",
+    "grounded-evaluator-robust-interface-v6",
+)
 
 
 def audit(data, output, tokenizer, *, tokenizer_files=None, curriculum_id=CURRICULUM):
@@ -21,7 +26,7 @@ def audit(data, output, tokenizer, *, tokenizer_files=None, curriculum_id=CURRIC
     manifest_hash = digest(manifest_path)
     manifest = json.loads(manifest_path.read_bytes())
     if (
-        curriculum_id not in {CURRICULUM, "grounded-evaluator-balanced-scope-v5"}
+        curriculum_id not in DEVELOPMENT_CURRICULA
         or (manifest["curriculum_id"] != curriculum_id)
         or set(manifest["files"])
         != {
@@ -89,7 +94,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--curriculum",
-        choices=(CURRICULUM, "grounded-evaluator-balanced-scope-v5"),
+        choices=DEVELOPMENT_CURRICULA,
         default=CURRICULUM,
     )
     args = parser.parse_args()
