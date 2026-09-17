@@ -384,7 +384,7 @@ def test_runpod_http_requests_identify_guard_and_never_redirect_credentials(
     assert request.data == (b'{"action":"stop"}' if stop else None)
 
 
-@pytest.mark.parametrize("failure", [None, "mail_auth", "child_cleanup"])
+@pytest.mark.parametrize("failure", [None, "mail_auth", "child_cleanup", "completed"])
 def test_supervisor_enforces_deadline_and_stops_even_after_failures(
     modules, tmp_path, monkeypatch, failure
 ):
@@ -456,6 +456,9 @@ def test_supervisor_enforces_deadline_and_stops_even_after_failures(
         pid, returncode = 73, None
 
         def poll(self):
+            if failure == "completed" and elapsed[0] >= 5 * 3600 + 60:
+                self.returncode = 0
+                return 0
             return None
 
         def wait(self, timeout):
@@ -469,16 +472,25 @@ def test_supervisor_enforces_deadline_and_stops_even_after_failures(
         return Child()
 
     monkeypatch.setattr(cloud.subprocess, "Popen", launch)
-    if failure:
+    if failure in ("mail_auth", "child_cleanup"):
         with pytest.raises((cloud.smtplib.SMTPAuthenticationError, RuntimeError)):
             cloud.supervise(args)
+    elif failure == "completed":
+        assert cloud.supervise(args) == 0
+        assert states[-1]["reason"] == "CHILD_COMPLETED"
+        assert not (run / "STOP_REQUESTED").exists()
+        assert not signals
     else:
         assert cloud.supervise(args) == 1
         assert (run / "STOP_REQUESTED").exists()
         assert states[-1]["reason"] == "COMPUTE_LEASE_EXPIRED"
         assert signals[0][0] == 73
         assert any(stage.get("stage") == "CHECKPOINT_GRACE" for stage in states)
-        assert any(timestamp >= 5 * 3600 and "5 ore" in subject for timestamp, subject in emails)
         assert child_env == [dict(RUNPOD_POD_ID=lease.pod_id, KEEP="public-runtime-value")]
         assert lease.created_unix + stopped[0] == pytest.approx(lease.deadline_unix)
+    if failure in (None, "completed"):
+        assert len(emails) == 2
+        assert emails[0][0] == 0 and "avviato" in emails[0][1]
+        assert emails[1][0] == stopped[0] > 5 * 3600
+        assert "conclusa" in emails[1][1]
     assert len(stopped) == 1

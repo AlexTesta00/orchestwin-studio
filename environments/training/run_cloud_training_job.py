@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pod-local supervisor: finite compute lease, checkpoint grace, SMTP updates, Pod stop.
+"""Pod-local supervisor: finite lease, checkpoint grace, start/end email, Pod stop.
 
 Secrets arrive through environment variables, never command-line arguments or reports.
 This must supervise setup as well as training. It is not a provider-enforced spending
@@ -219,7 +219,6 @@ def supervise(args):
     child = None
     reason = "SUPERVISOR_FAILURE"
     deadline = time.monotonic() + max(0, lease.deadline_unix - time.time())
-    next_notification = time.monotonic() + 5 * 3600
 
     def publish(stage, **extra):
         save(
@@ -259,21 +258,6 @@ def supervise(args):
                 publish("ARMED")
             if now >= deadline:
                 break
-            if now >= next_notification:
-                try:
-                    progress = json.loads((args.run_directory / "progress.json").read_bytes())
-                except (OSError, ValueError):
-                    progress = dict(stage="SETUP_OR_PROGRESS_UNAVAILABLE")
-                try:
-                    send_email(
-                        "OrchesTwin: aggiornamento training (5 ore)",
-                        notification_body(progress, lease, time.time()),
-                        credentials,
-                    )
-                    save(args.state.with_suffix(".email.json"), dict(sent_unix=time.time()))
-                except (OSError, smtplib.SMTPException):
-                    save(args.state.with_suffix(".email.json"), dict(status="SEND_FAILED"))
-                next_notification = now + 5 * 3600
             time.sleep(min(30, max(0, deadline - time.monotonic())))
         if child.poll() is not None and reason != "COMPUTE_LEASE_EXPIRED":
             reason = "CHILD_COMPLETED" if child.returncode == 0 else "CHILD_FAILED"
