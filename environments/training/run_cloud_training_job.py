@@ -42,6 +42,7 @@ class ComputeLease:
     campaign_remaining_usd: float
     storage_reserve_usd: float = 20
     checkpoint_grace_seconds: int = 180
+    pod_started_unix: float | None = None
 
     def __post_init__(self):
         if not re.fullmatch(r"[A-Za-z0-9_-]+", self.pod_id) or not self.pod_name:
@@ -66,6 +67,12 @@ class ComputeLease:
             raise ValueError("invalid checkpoint grace interval")
         if self.duration_seconds <= self.checkpoint_grace_seconds + 60:
             raise ValueError("lease is too short for checkpoint grace and API stop margin")
+        if self.pod_started_unix is not None and (
+            isinstance(self.pod_started_unix, bool)
+            or not math.isfinite(self.pod_started_unix)
+            or self.pod_started_unix < self.created_unix
+        ):
+            raise ValueError("resumed Pod start must be finite and covered by the lease")
 
     @property
     def duration_seconds(self):
@@ -114,6 +121,13 @@ def verify_pod(pod, lease):
     from datetime import datetime
 
     created = datetime.fromisoformat(pod["createdAt"].replace("Z", "+00:00")).timestamp()
+    if lease.pod_started_unix is not None:
+        # A resumed allocation has a new billable start. Bind that exact allocation;
+        # a subsequent restart must obtain a fresh lease rather than reuse this one.
+        started = datetime.fromisoformat(pod["startedAt"].replace("Z", "+00:00")).timestamp()
+        if started != lease.pod_started_unix or started < created:
+            raise ValueError("resumed Pod allocation differs from the bound start")
+        created = started
     if lease.created_unix > created:
         raise ValueError("lease omits part of the Pod lifetime")
 

@@ -1,0 +1,1011 @@
+{
+  "schema_version": 1,
+  "status": "SCOPED_PILOT_REVIEW_COMPLETE_ADVANCEMENT_REJECTED",
+  "recorded_unix": 1789641843.5617087,
+  "baseline_git_head": "21033febe9bfb961c0d5419b98c29fe8e29fb43a",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-pilot-21033fe-20260917-01\\final-20260917",
+  "decision": {
+    "pilot_selected": false,
+    "production_promotion": false,
+    "expanded_480_case_screen_started": false,
+    "new_training_started": false,
+    "reason": "Scope gate fails on 12/160 inputs; pilot regresses on 32 retention and 4 known challenge cases. Aggregate improvement does not override the frozen per-case gates.",
+    "previous_candidate_status": "Retained as experimental comparator; not qualified or promoted. Separate narrative defect also recorded."
+  },
+  "training": {
+    "status": "TRAINED_CANDIDATE_NOT_SELECTED",
+    "steps": 650,
+    "rows": 2600,
+    "scope_rows": 2124,
+    "retention_rows": 476,
+    "epochs": 1,
+    "total_sequence_tokens": 8286581,
+    "active_seconds": 1241.858194746077,
+    "initialization": "FRESH_LORA_FROM_PINNED_BASE_NOT_CONTINUATION_OF_OLD_ADAPTER",
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "adapter_weights_sha256": "b603e9ae562a8f77100a7380d3436f1b203851ffdf73f647ab34d4e4ff76fc18",
+    "adapter_config_sha256": "f80ff438152c7a890c30c0d3e14b9f80d0f4aa10d8eb1fb1138db54b1841de1b",
+    "contract_sha256": "240ab7bc16e2679c9ed432f79d6e0557e55ce307677cdb47c618da313f2202ba",
+    "training_loss": 0.049045804698879904,
+    "loss_is_not_quality_evidence": true
+  },
+  "inference": {
+    "completed": 1026,
+    "unique_inputs": 342,
+    "active_seconds": 14987.279976799153,
+    "decoding": {
+      "mode": "schema",
+      "temperature": 0,
+      "max_output_tokens": 2048,
+      "max_sequence": 6144,
+      "output_repair": false,
+      "retries": 0
+    },
+    "retries": 0,
+    "output_repair": false,
+    "cohorts": {
+      "base/scope_development": {
+        "cases": 160,
+        "passed": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 72,
+        "failed_domain": 156,
+        "failed_locations": 156,
+        "failed_criterion": 156,
+        "failed_gaps": 160,
+        "failed_abstention": 160,
+        "failed_summary_scope": 159
+      },
+      "base/retention_development": {
+        "cases": 158,
+        "passed": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 150,
+        "failed_domain": 150,
+        "failed_locations": 150,
+        "failed_criterion": 150,
+        "failed_gaps": 158,
+        "failed_abstention": 158,
+        "failed_summary_scope": 153
+      },
+      "base/known_challenge_regression": {
+        "cases": 24,
+        "passed": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 18,
+        "failed_domain": 20,
+        "failed_locations": 22,
+        "failed_criterion": 20,
+        "failed_gaps": 22,
+        "failed_abstention": 22,
+        "failed_summary_scope": 20
+      },
+      "candidate/scope_development": {
+        "cases": 160,
+        "passed": 86,
+        "true_positive": 65,
+        "false_positive": 8,
+        "false_negative": 7,
+        "failed_gaps": 44,
+        "failed_summary_scope": 24,
+        "failed_abstention": 12,
+        "failed_locations": 15
+      },
+      "candidate/retention_development": {
+        "cases": 158,
+        "passed": 158,
+        "true_positive": 150,
+        "false_positive": 0,
+        "false_negative": 0
+      },
+      "candidate/known_challenge_regression": {
+        "cases": 24,
+        "passed": 13,
+        "true_positive": 16,
+        "false_positive": 0,
+        "false_negative": 2,
+        "failed_summary_scope": 5,
+        "failed_locations": 2,
+        "failed_gaps": 4,
+        "failed_abstention": 2
+      },
+      "pilot/scope_development": {
+        "cases": 160,
+        "passed": 148,
+        "true_positive": 72,
+        "false_positive": 0,
+        "false_negative": 0,
+        "failed_gaps": 12,
+        "failed_abstention": 12
+      },
+      "pilot/retention_development": {
+        "cases": 158,
+        "passed": 126,
+        "true_positive": 132,
+        "false_positive": 5,
+        "false_negative": 18,
+        "failed_locations": 22,
+        "failed_gaps": 7,
+        "failed_criterion": 8,
+        "failed_abstention": 1
+      },
+      "pilot/known_challenge_regression": {
+        "cases": 24,
+        "passed": 14,
+        "true_positive": 16,
+        "false_positive": 5,
+        "false_negative": 2,
+        "failed_locations": 7,
+        "failed_gaps": 4,
+        "failed_criterion": 1,
+        "failed_abstention": 2
+      }
+    },
+    "by_locale": {
+      "base/scope_development/en": {
+        "cases": 80,
+        "passed": 0
+      },
+      "base/scope_development/it": {
+        "cases": 80,
+        "passed": 0
+      },
+      "base/retention_development/it": {
+        "cases": 79,
+        "passed": 0
+      },
+      "base/retention_development/en": {
+        "cases": 79,
+        "passed": 0
+      },
+      "base/known_challenge_regression/en": {
+        "cases": 12,
+        "passed": 0
+      },
+      "base/known_challenge_regression/it": {
+        "cases": 12,
+        "passed": 0
+      },
+      "candidate/scope_development/en": {
+        "cases": 80,
+        "passed": 50
+      },
+      "candidate/scope_development/it": {
+        "cases": 80,
+        "passed": 36
+      },
+      "candidate/retention_development/it": {
+        "cases": 79,
+        "passed": 79
+      },
+      "candidate/retention_development/en": {
+        "cases": 79,
+        "passed": 79
+      },
+      "candidate/known_challenge_regression/en": {
+        "cases": 12,
+        "passed": 9
+      },
+      "candidate/known_challenge_regression/it": {
+        "cases": 12,
+        "passed": 4
+      },
+      "pilot/scope_development/en": {
+        "cases": 80,
+        "passed": 74
+      },
+      "pilot/scope_development/it": {
+        "cases": 80,
+        "passed": 74
+      },
+      "pilot/retention_development/it": {
+        "cases": 79,
+        "passed": 60
+      },
+      "pilot/retention_development/en": {
+        "cases": 79,
+        "passed": 66
+      },
+      "pilot/known_challenge_regression/en": {
+        "cases": 12,
+        "passed": 7
+      },
+      "pilot/known_challenge_regression/it": {
+        "cases": 12,
+        "passed": 7
+      }
+    },
+    "variants": {
+      "base": {
+        "cases": 342,
+        "automatic_pass": 0,
+        "findings": 745,
+        "epistemic_status": {
+          "EMPIRICALLY_SUPPORTED": 745
+        },
+        "findings_without_required_human_validation": 745,
+        "domain_errors": {
+          "ValueError: synthetic finding recommended action must not be empty": 157,
+          "ModelGatewayEvaluationError: Model output failed deterministic finding provenance validation.": 164,
+          "ModelGatewayEvaluationError: Model output referenced an artifact outside the authorized bundle.": 2,
+          "ValueError: synthetic finding rationale must be normalized": 3
+        },
+        "median_inference_seconds": 17.8705
+      },
+      "candidate": {
+        "cases": 342,
+        "automatic_pass": 257,
+        "findings": 239,
+        "epistemic_status": {
+          "MODEL_INFERRED": 239
+        },
+        "findings_without_required_human_validation": 0,
+        "domain_errors": {},
+        "median_inference_seconds": 10.428
+      },
+      "pilot": {
+        "cases": 342,
+        "automatic_pass": 288,
+        "findings": 232,
+        "epistemic_status": {
+          "MODEL_INFERRED": 232
+        },
+        "findings_without_required_human_validation": 0,
+        "domain_errors": {},
+        "median_inference_seconds": 7.4254999999999995
+      }
+    },
+    "paired_pilot_vs_previous_candidate": {
+      "scope_development": {
+        "cases": 160,
+        "pilot_only_pass": {
+          "count": 62,
+          "pair_ids": [
+            "scope_development-0000",
+            "scope_development-0001",
+            "scope_development-0002",
+            "scope_development-0003",
+            "scope_development-0010",
+            "scope_development-0013",
+            "scope_development-0014",
+            "scope_development-0015",
+            "scope_development-0017",
+            "scope_development-0023",
+            "scope_development-0024",
+            "scope_development-0026",
+            "scope_development-0030",
+            "scope_development-0033",
+            "scope_development-0041",
+            "scope_development-0042",
+            "scope_development-0048",
+            "scope_development-0051",
+            "scope_development-0058",
+            "scope_development-0060",
+            "scope_development-0063",
+            "scope_development-0067",
+            "scope_development-0068",
+            "scope_development-0069",
+            "scope_development-0070",
+            "scope_development-0074",
+            "scope_development-0077",
+            "scope_development-0078",
+            "scope_development-0081",
+            "scope_development-0082",
+            "scope_development-0083",
+            "scope_development-0168",
+            "scope_development-0170",
+            "scope_development-0179",
+            "scope_development-0188",
+            "scope_development-0189",
+            "scope_development-0191",
+            "scope_development-0193",
+            "scope_development-0196",
+            "scope_development-0197",
+            "scope_development-0200",
+            "scope_development-0201",
+            "scope_development-0202",
+            "scope_development-0204",
+            "scope_development-0205",
+            "scope_development-0286",
+            "scope_development-0288",
+            "scope_development-0289",
+            "scope_development-0290",
+            "scope_development-0291",
+            "scope_development-0294",
+            "scope_development-0297",
+            "scope_development-0298",
+            "scope_development-0302",
+            "scope_development-0305",
+            "scope_development-0308",
+            "scope_development-0309",
+            "scope_development-0311",
+            "scope_development-0312",
+            "scope_development-0314",
+            "scope_development-0315",
+            "scope_development-0317"
+          ]
+        },
+        "candidate_only_pass": {
+          "count": 0,
+          "pair_ids": []
+        },
+        "both_pass": {
+          "count": 86,
+          "pair_ids": [
+            "scope_development-0004",
+            "scope_development-0005",
+            "scope_development-0007",
+            "scope_development-0009",
+            "scope_development-0012",
+            "scope_development-0016",
+            "scope_development-0018",
+            "scope_development-0019",
+            "scope_development-0020",
+            "scope_development-0021",
+            "scope_development-0022",
+            "scope_development-0025",
+            "scope_development-0027",
+            "scope_development-0028",
+            "scope_development-0029",
+            "scope_development-0031",
+            "scope_development-0032",
+            "scope_development-0034",
+            "scope_development-0035",
+            "scope_development-0036",
+            "scope_development-0037",
+            "scope_development-0038",
+            "scope_development-0039",
+            "scope_development-0043",
+            "scope_development-0044",
+            "scope_development-0045",
+            "scope_development-0046",
+            "scope_development-0047",
+            "scope_development-0049",
+            "scope_development-0050",
+            "scope_development-0052",
+            "scope_development-0053",
+            "scope_development-0055",
+            "scope_development-0056",
+            "scope_development-0057",
+            "scope_development-0059",
+            "scope_development-0061",
+            "scope_development-0062",
+            "scope_development-0065",
+            "scope_development-0066",
+            "scope_development-0071",
+            "scope_development-0072",
+            "scope_development-0073",
+            "scope_development-0075",
+            "scope_development-0076",
+            "scope_development-0169",
+            "scope_development-0171",
+            "scope_development-0172",
+            "scope_development-0173",
+            "scope_development-0174",
+            "scope_development-0176",
+            "scope_development-0177",
+            "scope_development-0178",
+            "scope_development-0180",
+            "scope_development-0181",
+            "scope_development-0182",
+            "scope_development-0183",
+            "scope_development-0184",
+            "scope_development-0185",
+            "scope_development-0186",
+            "scope_development-0187",
+            "scope_development-0190",
+            "scope_development-0192",
+            "scope_development-0194",
+            "scope_development-0195",
+            "scope_development-0199",
+            "scope_development-0203",
+            "scope_development-0287",
+            "scope_development-0292",
+            "scope_development-0293",
+            "scope_development-0295",
+            "scope_development-0296",
+            "scope_development-0299",
+            "scope_development-0300",
+            "scope_development-0301",
+            "scope_development-0303",
+            "scope_development-0304",
+            "scope_development-0306",
+            "scope_development-0307",
+            "scope_development-0310",
+            "scope_development-0316",
+            "scope_development-0318",
+            "scope_development-0319",
+            "scope_development-0321",
+            "scope_development-0322",
+            "scope_development-0323"
+          ]
+        },
+        "both_fail": {
+          "count": 12,
+          "pair_ids": [
+            "scope_development-0006",
+            "scope_development-0008",
+            "scope_development-0011",
+            "scope_development-0040",
+            "scope_development-0054",
+            "scope_development-0064",
+            "scope_development-0079",
+            "scope_development-0080",
+            "scope_development-0175",
+            "scope_development-0198",
+            "scope_development-0313",
+            "scope_development-0320"
+          ]
+        }
+      },
+      "retention_development": {
+        "cases": 158,
+        "pilot_only_pass": {
+          "count": 0,
+          "pair_ids": []
+        },
+        "candidate_only_pass": {
+          "count": 32,
+          "pair_ids": [
+            "retention_development-0200",
+            "retention_development-0201",
+            "retention_development-0205",
+            "retention_development-0212",
+            "retention_development-0215",
+            "retention_development-0218",
+            "retention_development-0219",
+            "retention_development-0220",
+            "retention_development-0221",
+            "retention_development-0227",
+            "retention_development-0233",
+            "retention_development-0243",
+            "retention_development-0250",
+            "retention_development-0251",
+            "retention_development-0305",
+            "retention_development-0314",
+            "retention_development-0315",
+            "retention_development-0961",
+            "retention_development-0966",
+            "retention_development-0972",
+            "retention_development-0973",
+            "retention_development-0975",
+            "retention_development-0976",
+            "retention_development-0982",
+            "retention_development-0983",
+            "retention_development-0984",
+            "retention_development-0986",
+            "retention_development-0988",
+            "retention_development-2757",
+            "retention_development-3091",
+            "retention_development-3092",
+            "retention_development-3102"
+          ]
+        },
+        "both_pass": {
+          "count": 126,
+          "pair_ids": [
+            "retention_development-0202",
+            "retention_development-0203",
+            "retention_development-0204",
+            "retention_development-0206",
+            "retention_development-0207",
+            "retention_development-0208",
+            "retention_development-0209",
+            "retention_development-0210",
+            "retention_development-0211",
+            "retention_development-0213",
+            "retention_development-0214",
+            "retention_development-0216",
+            "retention_development-0217",
+            "retention_development-0222",
+            "retention_development-0223",
+            "retention_development-0224",
+            "retention_development-0225",
+            "retention_development-0226",
+            "retention_development-0228",
+            "retention_development-0229",
+            "retention_development-0230",
+            "retention_development-0231",
+            "retention_development-0232",
+            "retention_development-0234",
+            "retention_development-0235",
+            "retention_development-0236",
+            "retention_development-0237",
+            "retention_development-0238",
+            "retention_development-0239",
+            "retention_development-0240",
+            "retention_development-0241",
+            "retention_development-0242",
+            "retention_development-0244",
+            "retention_development-0245",
+            "retention_development-0246",
+            "retention_development-0247",
+            "retention_development-0248",
+            "retention_development-0249",
+            "retention_development-0304",
+            "retention_development-0306",
+            "retention_development-0307",
+            "retention_development-0308",
+            "retention_development-0309",
+            "retention_development-0310",
+            "retention_development-0311",
+            "retention_development-0312",
+            "retention_development-0313",
+            "retention_development-0316",
+            "retention_development-0317",
+            "retention_development-0318",
+            "retention_development-0319",
+            "retention_development-0320",
+            "retention_development-0321",
+            "retention_development-0322",
+            "retention_development-0323",
+            "retention_development-0960",
+            "retention_development-0962",
+            "retention_development-0963",
+            "retention_development-0964",
+            "retention_development-0965",
+            "retention_development-0967",
+            "retention_development-0968",
+            "retention_development-0969",
+            "retention_development-0970",
+            "retention_development-0971",
+            "retention_development-0974",
+            "retention_development-0977",
+            "retention_development-0978",
+            "retention_development-0979",
+            "retention_development-0980",
+            "retention_development-0981",
+            "retention_development-0985",
+            "retention_development-0987",
+            "retention_development-0989",
+            "retention_development-0990",
+            "retention_development-0991",
+            "retention_development-1410",
+            "retention_development-1411",
+            "retention_development-1412",
+            "retention_development-1413",
+            "retention_development-1414",
+            "retention_development-1415",
+            "retention_development-1416",
+            "retention_development-1417",
+            "retention_development-1418",
+            "retention_development-1419",
+            "retention_development-1420",
+            "retention_development-1421",
+            "retention_development-1422",
+            "retention_development-1423",
+            "retention_development-1424",
+            "retention_development-1425",
+            "retention_development-1426",
+            "retention_development-1427",
+            "retention_development-2752",
+            "retention_development-2753",
+            "retention_development-2754",
+            "retention_development-2755",
+            "retention_development-2756",
+            "retention_development-2758",
+            "retention_development-2759",
+            "retention_development-2760",
+            "retention_development-2761",
+            "retention_development-2762",
+            "retention_development-2763",
+            "retention_development-2764",
+            "retention_development-2765",
+            "retention_development-2766",
+            "retention_development-2767",
+            "retention_development-2768",
+            "retention_development-2769",
+            "retention_development-2770",
+            "retention_development-2771",
+            "retention_development-3090",
+            "retention_development-3093",
+            "retention_development-3094",
+            "retention_development-3095",
+            "retention_development-3096",
+            "retention_development-3097",
+            "retention_development-3098",
+            "retention_development-3099",
+            "retention_development-3100",
+            "retention_development-3101",
+            "retention_development-3103",
+            "retention_development-3104",
+            "retention_development-3105"
+          ]
+        },
+        "both_fail": {
+          "count": 0,
+          "pair_ids": []
+        }
+      },
+      "known_challenge_regression": {
+        "cases": 24,
+        "pilot_only_pass": {
+          "count": 5,
+          "pair_ids": [
+            "known-blank-title-and-alert-it",
+            "known-implicit-is-not-explicit-en",
+            "known-implicit-is-not-explicit-it",
+            "known-restrict-summary-scope-it",
+            "known-untrusted-page-instruction-it"
+          ]
+        },
+        "candidate_only_pass": {
+          "count": 4,
+          "pair_ids": [
+            "known-blank-title-and-alert-en",
+            "known-caption-is-not-alt-en",
+            "known-caption-is-not-alt-it",
+            "known-external-label-en"
+          ]
+        },
+        "both_pass": {
+          "count": 9,
+          "pair_ids": [
+            "known-broken-name-references-en",
+            "known-broken-name-references-it",
+            "known-explicit-form-ownership-en",
+            "known-explicit-form-ownership-it",
+            "known-formatted-label-and-name-en",
+            "known-metadata-without-html-en",
+            "known-metadata-without-html-it",
+            "known-restrict-summary-scope-en",
+            "known-untrusted-page-instruction-en"
+          ]
+        },
+        "both_fail": {
+          "count": 6,
+          "pair_ids": [
+            "known-external-label-it",
+            "known-formatted-label-and-name-it",
+            "known-partial-detached-control-en",
+            "known-partial-detached-control-it",
+            "known-selected-form-absent-en",
+            "known-selected-form-absent-it"
+          ]
+        }
+      }
+    }
+  },
+  "gates": {
+    "native_schema_domain_identity_for_pilot": "PASS",
+    "scope_all_cases_both_languages": "FAIL_12_OF_160",
+    "no_matched_retention_regression": "FAIL_32_OF_158",
+    "no_known_challenge_regression": "FAIL_4_OF_24",
+    "narrative_scope_truth": "FAIL_CONFIRMED_WRONG_STATIC_CLAIMS",
+    "advance_to_full_v4_validation": false
+  },
+  "diagnosis": {
+    "observed": "Targeted curriculum improves exact scope behavior and requested-target summaries, but does not solve full abstention and reduces retention relative to the larger prior candidate.",
+    "interpretation": "The pilot was trained as a fresh LoRA from the base, with 476 retention rows versus the prior 63420-row training. These data do not establish catastrophic forgetting from continued training, nor that more hours or a larger base model alone would fix the errors.",
+    "causal_attribution_proven": false
+  },
+  "narrative_review": {
+    "reviewer_type": "CODEX_ENGINEERING_REVIEW_NOT_HUMAN_EXPERT_VALIDATION",
+    "all_automatic_failures_classified": 481,
+    "failure_review_method": "All failures retain exact checks, labels, response hashes and IDs. Adapted-model failed gaps, summaries and findings were inspected and grouped; base failures were classified by domain and epistemic checks.",
+    "full_narrative_known_challenge_ids": [
+      "base-known-external-label-en",
+      "base-known-external-label-it",
+      "base-known-implicit-is-not-explicit-en",
+      "base-known-implicit-is-not-explicit-it",
+      "base-known-broken-name-references-en",
+      "base-known-broken-name-references-it",
+      "base-known-partial-detached-control-en",
+      "base-known-partial-detached-control-it",
+      "base-known-blank-title-and-alert-en",
+      "base-known-blank-title-and-alert-it",
+      "base-known-caption-is-not-alt-en",
+      "base-known-caption-is-not-alt-it",
+      "base-known-selected-form-absent-en",
+      "base-known-selected-form-absent-it",
+      "base-known-metadata-without-html-en",
+      "base-known-metadata-without-html-it",
+      "base-known-formatted-label-and-name-en",
+      "base-known-formatted-label-and-name-it",
+      "base-known-untrusted-page-instruction-en",
+      "base-known-untrusted-page-instruction-it",
+      "base-known-explicit-form-ownership-en",
+      "base-known-explicit-form-ownership-it",
+      "base-known-restrict-summary-scope-en",
+      "base-known-restrict-summary-scope-it",
+      "candidate-known-external-label-en",
+      "candidate-known-external-label-it",
+      "candidate-known-implicit-is-not-explicit-en",
+      "candidate-known-implicit-is-not-explicit-it",
+      "candidate-known-broken-name-references-en",
+      "candidate-known-broken-name-references-it",
+      "candidate-known-partial-detached-control-en",
+      "candidate-known-partial-detached-control-it",
+      "candidate-known-blank-title-and-alert-en",
+      "candidate-known-blank-title-and-alert-it",
+      "candidate-known-caption-is-not-alt-en",
+      "candidate-known-caption-is-not-alt-it",
+      "candidate-known-selected-form-absent-en",
+      "candidate-known-selected-form-absent-it",
+      "candidate-known-metadata-without-html-en",
+      "candidate-known-metadata-without-html-it",
+      "candidate-known-formatted-label-and-name-en",
+      "candidate-known-formatted-label-and-name-it",
+      "candidate-known-untrusted-page-instruction-en",
+      "candidate-known-untrusted-page-instruction-it",
+      "candidate-known-explicit-form-ownership-en",
+      "candidate-known-explicit-form-ownership-it",
+      "candidate-known-restrict-summary-scope-en",
+      "candidate-known-restrict-summary-scope-it",
+      "pilot-known-external-label-en",
+      "pilot-known-external-label-it",
+      "pilot-known-implicit-is-not-explicit-en",
+      "pilot-known-implicit-is-not-explicit-it",
+      "pilot-known-broken-name-references-en",
+      "pilot-known-broken-name-references-it",
+      "pilot-known-partial-detached-control-en",
+      "pilot-known-partial-detached-control-it",
+      "pilot-known-blank-title-and-alert-en",
+      "pilot-known-blank-title-and-alert-it",
+      "pilot-known-caption-is-not-alt-en",
+      "pilot-known-caption-is-not-alt-it",
+      "pilot-known-selected-form-absent-en",
+      "pilot-known-selected-form-absent-it",
+      "pilot-known-metadata-without-html-en",
+      "pilot-known-metadata-without-html-it",
+      "pilot-known-formatted-label-and-name-en",
+      "pilot-known-formatted-label-and-name-it",
+      "pilot-known-untrusted-page-instruction-en",
+      "pilot-known-untrusted-page-instruction-it",
+      "pilot-known-explicit-form-ownership-en",
+      "pilot-known-explicit-form-ownership-it",
+      "pilot-known-restrict-summary-scope-en",
+      "pilot-known-restrict-summary-scope-it"
+    ],
+    "paired_narrative_sample": {
+      "method": "SHA256(narrative-review-v1/pair_id) minimum per cohort/service/layout/locale; independent of scores",
+      "pair_ids": [
+        "scope_development-0018",
+        "scope_development-0020",
+        "scope_development-0291",
+        "scope_development-0307",
+        "scope_development-0169",
+        "scope_development-0170",
+        "scope_development-0064",
+        "scope_development-0075",
+        "retention_development-0960",
+        "retention_development-0969",
+        "retention_development-0214",
+        "retention_development-0223",
+        "retention_development-1425",
+        "retention_development-1421",
+        "retention_development-2771",
+        "retention_development-2767",
+        "retention_development-3097",
+        "retention_development-3092",
+        "retention_development-0305",
+        "retention_development-0322"
+      ],
+      "outputs": 60
+    },
+    "known_challenge_outputs_reviewed": 72,
+    "additional_paired_sample_outputs_reviewed": 60,
+    "observations": [
+      {
+        "severity": "BLOCKING",
+        "variants": [
+          "base"
+        ],
+        "issue": "All 745 findings claim EMPIRICALLY_SUPPORTED and disable human validation despite synthetic static evidence. Many also report correct controls as findings or substitute unrelated page elements. Zero strict passes measures this protocol, not general HTML understanding.",
+        "example_ids": [
+          "base-known-implicit-is-not-explicit-en",
+          "base-known-metadata-without-html-en",
+          "base-retention_development-0960"
+        ]
+      },
+      {
+        "severity": "BLOCKING",
+        "variants": [
+          "candidate"
+        ],
+        "issue": "A structurally passing response recommends removing unrelated nearby text. This out-of-scope change is not detected by the automatic scorer. The original automatic score is retained, with this separate narrative rejection.",
+        "example_ids": [
+          "candidate-known-untrusted-page-instruction-en"
+        ],
+        "quote": "remove unrelated nearby text."
+      },
+      {
+        "severity": "BLOCKING",
+        "variants": [
+          "pilot"
+        ],
+        "issue": "Twelve scope outputs fail full abstention/gaps for externally owned controls under descendants-only policy or a missing selected form. Some summaries incorrectly report these unavailable targets as satisfied.",
+        "example_ids": [
+          "pilot-scope_development-0006",
+          "pilot-scope_development-0008",
+          "pilot-scope_development-0011"
+        ]
+      },
+      {
+        "severity": "BLOCKING",
+        "variants": [
+          "pilot"
+        ],
+        "issue": "Retention failures include missed labels, false absent-target gaps, incorrect criteria, false image findings, and duplicate image findings.",
+        "example_ids": [
+          "pilot-retention_development-0200",
+          "pilot-retention_development-0221",
+          "pilot-retention_development-0975",
+          "pilot-retention_development-3092"
+        ]
+      },
+      {
+        "severity": "BLOCKING",
+        "variants": [
+          "pilot"
+        ],
+        "issue": "Known challenge failures include external explicit labels, detached targets, alt-text requirements, absent form, multiple aria-labelledby references in Italian, and recovery criterion in English.",
+        "example_ids": [
+          "pilot-known-external-label-en",
+          "pilot-known-partial-detached-control-it",
+          "pilot-known-caption-is-not-alt-en",
+          "pilot-known-formatted-label-and-name-it"
+        ]
+      },
+      {
+        "severity": "IMPROVEMENT_WITH_LIMITS",
+        "variants": [
+          "pilot"
+        ],
+        "issue": "The reviewed pilot samples and known challenges use model-inferred hypotheses and human-validation markers; no recommendation to remove unrelated content was observed there. This does not certify every possible narrative or establish real-user quality."
+      }
+    ],
+    "automatic_pass_is_not_narrative_acceptance": true,
+    "limitations": [
+      "No human experts or real users participated.",
+      "Narrative reading covers the 72 known responses, the 60 fixed sample responses, and adapted-model failure fields; it is not an exhaustive independent expert reading of all 1026 full narratives.",
+      "The deterministic summary check recognizes explicit hashtag IDs and cannot establish arbitrary natural-language truth."
+    ]
+  },
+  "next_phase": [
+    "Freeze this rejected pilot and its comparison; Alex reviews and commits the current phase.",
+    "Audit and build a separate curriculum revision balancing all prior property families, criteria, target cardinalities, languages and layouts with scope counterfactuals. Strengthen all-unassessable examples, external-label support and multiple aria-labelledby references using new training identities, without copying development evaluation rows.",
+    "Declare an explicit initialization and a bounded comparison before training. Preserve broad retention coverage; compare controlled continuation from the previous adapter against a balanced fresh adapter only if needed, with distinct manifests and budgets.",
+    "Require zero targeted-scope failures and zero per-case retention/challenge regressions, plus narrative action-scope review. Only then run the complete 480-case development validation.",
+    "Freeze new independently authored qualification cases; reserve final thesis test and human expert evaluation for their separate approved phase."
+  ],
+  "recovery": {
+    "status": "VERIFIED_COMPLETE",
+    "recovered_unix": 1789641227.9674194,
+    "inferences": 1026,
+    "planned": 1026,
+    "archive_sha256": "5b53c35094c96e410560d9df2b3ed78b1d44e3e9353757a54c86f3a0525d70eb",
+    "verified_files": 2116,
+    "output_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-pilot-21033fe-20260917-01\\final-20260917\\outputs\\scoped-pilot-results-21033fe-01",
+    "promotion": false
+  },
+  "cloud_resources": {
+    "observed_unix": 1789641775.333,
+    "pods": [
+      {
+        "id": "a9snm01sdh90pw",
+        "name": "orchestwin-scoped-pilot-21033fe-20260917",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-17T10:30:58.772Z"
+      },
+      {
+        "id": "jpxjtn64u2h2ck",
+        "name": "orchestwin-qualification-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-16T19:19:48.206Z"
+      },
+      {
+        "id": "mqpsfl4szcdiy5",
+        "name": "orchestwin-full-watchdog-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 0.06,
+        "startedAt": "2026-09-15T20:53:09.347Z"
+      },
+      {
+        "id": "s6hre5532jvtry",
+        "name": "orchestwin-qualification-watchdog-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 0.06,
+        "startedAt": "2026-09-17T05:44:36.221Z"
+      },
+      {
+        "id": "zg50tifkx87hvr",
+        "name": "orchestwin-pilot-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-15T22:12:11.424Z"
+      }
+    ],
+    "network_volume_retained": "pwdbxu66v4"
+  },
+  "budget": {
+    "phase_ceiling_usd": 25,
+    "campaign_ceiling_usd": 200,
+    "opening_balance_usd": 148.4341057819,
+    "closing_read": {
+      "budget_fields": {
+        "clientBalance": 138.1450451574,
+        "currentSpendPerHr": 0.01,
+        "notifyLowBalance": true,
+        "spendLimit": 80
+      }
+    },
+    "note": "Opening minus closing account balance includes billed storage and time between reads; it is not an itemized compute invoice. No compute is running. Persistent storage is retained."
+  },
+  "limitations": [
+    "All cases are synthetic development or known regression inputs, not independent final qualification.",
+    "Known challenge cases have already informed engineering decisions.",
+    "Frozen scoring fails closed on domain errors; downstream false checks in those cases are not independent diagnoses. Base target-level TP/FP/FN counters must not be interpreted as standalone HTML accuracy.",
+    "Case outcomes share service/layout groups; raw case percentages are descriptive and no independent-sample confidence interval or significance claim is made.",
+    "No production runtime selection, database mutation, reserved final-case inference, staging, commit or push."
+  ],
+  "source_snapshot_sha256": "02dac5bc0477e9c517595d3baeba0411f47d55aa6963fcc76be80e1883ac3e28",
+  "scorer_sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+  "validation": {
+    "source_tests_prelaunch": 57,
+    "source_bytes_unchanged_since_prelaunch_tests": true,
+    "archive_files_verified": 2116,
+    "runtime_and_paired_request_audit": "PASS",
+    "raw_evidence_unchanged": true
+  },
+  "artifacts": {
+    "final-20260917\\recovery.json": {
+      "sha256": "9a131e02ee9e8d19e04f6b95cde5cf6c7b688431d249d0c57cbdb5cfae298867",
+      "bytes": 471
+    },
+    "final-20260917\\export-receipt.json": {
+      "sha256": "ebf76d77456401e1343cb7ed6b9c6a098e9338c64c47127bfd659c48b0c998fb",
+      "bytes": 460044
+    },
+    "final-20260917\\assessment.json": {
+      "sha256": "5e3547cfe52614778743bada6d93850c1e03f351e00b3588ad3783bd8743bc72",
+      "bytes": 1476807
+    },
+    "final-20260917\\runtime-audit.json": {
+      "sha256": "99cbdb045aedb97aebf47c24bd62c03647535ea957cab6edea66df5053ece8a7",
+      "bytes": 13446
+    },
+    "final-20260917\\failure-catalog.json": {
+      "sha256": "ead1c1c089537c1686297ae108327e9a71ad801cd81444be88308a5d595be701",
+      "bytes": 430197
+    },
+    "final-20260917\\narrative-review.json": {
+      "sha256": "0e1f7f5147518dc8cc01e06f51223284f3992a1e8861382dbc84dca014b9503f",
+      "bytes": 8148
+    },
+    "final-20260917\\narrative-sample.json": {
+      "sha256": "fe28fcdba9941aef6a237904c72ee089153f4ca2943b49f1df8ee569f23446e9",
+      "bytes": 827
+    },
+    "bundle\\protocol.json": {
+      "sha256": "2d26fd5d6d90a45cd3faa5a5ad283dcd9da754a1d559a9e79257fa67fcc4ea8e",
+      "bytes": 4713
+    },
+    "assess_results.py": {
+      "sha256": "9eac2184f08430db2a87b3357053e8778dac89c107b75b7c04141c5f429896e3",
+      "bytes": 2840
+    },
+    "complete_review.py": {
+      "sha256": "5e4017ea11b7bf9d37819d4d631f78119220257d063ec219a4be64a58fd36117",
+      "bytes": 18124
+    },
+    "scoring-tests.xml": {
+      "sha256": "e1c1e7a69e4cfcb467b335612cca964c8f33ec5354f2b66213654589f076d7b8",
+      "bytes": 5231
+    },
+    "guard-tests.xml": {
+      "sha256": "a21277af44fbcf344594907da8add3f4cd7b11795ff4f5ab2447b151aff9a279",
+      "bytes": 4374
+    },
+    "screen-plan-tests.xml": {
+      "sha256": "91aff0dbec851a89f9d962a0e936fd4249821e0c8c7c3a2c3829dbe4667e0bfe",
+      "bytes": 456
+    }
+  }
+}

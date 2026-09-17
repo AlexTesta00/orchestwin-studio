@@ -231,6 +231,30 @@ def test_lease_counts_setup_time_and_protects_campaign_reserve(modules):
         cloud.verify_pod(pod, replace(lease, created_unix=1001))
 
 
+def test_resumed_allocation_requires_exact_start_and_covers_setup(modules):
+    _, _, cloud = modules
+    lease = replace(lease_fixture(cloud), created_unix=1990, pod_started_unix=2000)
+    pod = dict(
+        id=lease.pod_id,
+        name=lease.pod_name,
+        locked=False,
+        actions=["stop"],
+        cost=1.59,
+        createdAt="1970-01-01T00:16:40Z",
+        startedAt="1970-01-01T00:33:20Z",
+    )
+    cloud.verify_pod(pod, lease)
+    with pytest.raises(ValueError, match="allocation"):
+        cloud.verify_pod(dict(pod, startedAt="1970-01-01T00:33:21Z"), lease)
+    for change in (
+        dict(pod_started_unix=float("nan")),
+        dict(created_unix=2001),
+        dict(pod_started_unix=True),
+    ):
+        with pytest.raises(ValueError, match="start"):
+            replace(lease, **change)
+
+
 def test_stop_retries_and_only_reports_confirmed_state(modules, tmp_path):
     _, _, cloud = modules
     calls = []

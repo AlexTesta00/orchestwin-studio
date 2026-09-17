@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline evaluator experiment over owned process pipes; no service or promotion.
 
-One explicitly hashed adapter, exact requests, unchanged raw outputs and no retry.
+One explicitly hashed adapter or pinned unadapted base, unchanged outputs and no retry.
 The frozen S67 serving operator and its production selection remain independent.
 """
 
@@ -76,18 +76,44 @@ def verify_adapter(path, weights_hash, config_hash):
     return files
 
 
-def main():
+def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--adapter", type=Path, required=True)
-    parser.add_argument("--weights-sha256", required=True)
-    parser.add_argument("--config-sha256", required=True)
+    choice = parser.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--adapter", type=Path)
+    choice.add_argument("--base-only", action="store_true")
+    parser.add_argument("--weights-sha256")
+    parser.add_argument("--config-sha256")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--decoding", choices=("prompted", "schema"), default="prompted")
     parser.add_argument("--max-requests", type=int, default=64)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    supplied = (args.weights_sha256, args.config_sha256)
+    if (args.base_only and any(supplied)) or (not args.base_only and not all(supplied)):
+        parser.error("adapter mode requires both hashes; base-only mode forbids adapter hashes")
     if not 1 <= args.max_requests <= 256:
         raise ValueError("candidate request count must be between 1 and 256")
-    adapter = args.adapter.absolute()
+    return args
+
+
+def inference_model(base, adapter, *, load_adapter, prepare_inference):
+    if adapter is None:
+        if getattr(base, "peft_config", None) or getattr(base, "_hf_peft_config_loaded", False):
+            raise ValueError("unadapted baseline must not contain a loaded adapter")
+        model = base
+        model.requires_grad_(False)
+    else:
+        model = load_adapter(base, adapter, is_trainable=False, local_files_only=True)
+    prepare_inference(model)
+    if any(p.requires_grad for p in model.parameters()):
+        raise ValueError("experiment model must be inference only")
+    if adapter is not None and model.active_adapters != ["default"]:
+        raise ValueError("candidate adapter not active for inference only")
+    return model
+
+
+def main():
+    args = parse_arguments()
+    adapter = args.adapter.absolute() if args.adapter else None
     output = args.output.absolute()
     if (
         ROOT in output.parents
@@ -95,7 +121,7 @@ def main():
         or any(p.is_symlink() for p in (output, *output.parents))
     ):
         raise ValueError("use a new external experiment directory without links")
-    hashes = verify_adapter(adapter, args.weights_sha256, args.config_sha256)
+    hashes = verify_adapter(adapter, args.weights_sha256, args.config_sha256) if adapter else {}
     output.mkdir(parents=True, exist_ok=False)
     source = Path(__file__).read_bytes()
     (output / "operator.py").write_bytes(source)
@@ -104,6 +130,7 @@ def main():
         "base": MODEL,
         "revision": REVISION,
         "adapter_files": hashes,
+        "base_only": args.base_only,
         "operator_sha256": hashlib.sha256(source).hexdigest(),
         "max_sequence": 6144,
         "max_generation_seconds": 180,
@@ -136,10 +163,12 @@ def main():
     )
     if base.config._commit_hash != REVISION or not base.is_loaded_in_4bit:
         raise ValueError("loaded candidate base identity differs")
-    model = PeftModel.from_pretrained(base, adapter, is_trainable=False, local_files_only=True)
-    FastLanguageModel.for_inference(model)
-    if any(p.requires_grad for p in model.parameters()) or model.active_adapters != ["default"]:
-        raise ValueError("candidate adapter not active for inference only")
+    model = inference_model(
+        base,
+        adapter,
+        load_adapter=PeftModel.from_pretrained,
+        prepare_inference=FastLanguageModel.for_inference,
+    )
     identity = ModelRuntimeIdentity(
         provider_id="unsloth-evaluator-experiment",
         runtime_id=str(uuid4()),
@@ -147,8 +176,8 @@ def main():
         base_model_revision=REVISION,
         tokenizer_revision=REVISION,
         configuration_sha256=snapshot_content_hash(config),
-        adapter_id="experimental-" + args.weights_sha256[:16],
-        adapter_sha256=snapshot_content_hash(hashes),
+        adapter_id="experimental-" + args.weights_sha256[:16] if adapter else None,
+        adapter_sha256=snapshot_content_hash(hashes) if adapter else None,
     )
     save(output / "identity.json", identity.to_snapshot())
     emit({"event": "READY", "identity": identity.to_snapshot()})

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -69,3 +70,71 @@ def test_adapter_hashes_and_base_are_verified_without_loading_a_model(tmp_path):
     (tmp_path / "adapter_model.safetensors").write_bytes(weights + b"changed")
     with pytest.raises(ValueError, match="bytes differ"):
         worker.verify_adapter(tmp_path, *hashes)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        [],
+        ["--base-only", "--adapter", "x"],
+        ["--adapter", "x"],
+        ["--base-only", "--weights-sha256", "a" * 64],
+    ],
+)
+def test_worker_rejects_ambiguous_baseline_or_unsealed_adapter(options):
+    worker = operator("evaluator_candidate_worker")
+    with pytest.raises(SystemExit):
+        worker.parse_arguments([*options, "--output", "unused"])
+
+
+def test_base_mode_never_loads_an_adapter_and_freezes_parameters():
+    worker = operator("evaluator_candidate_worker")
+    args = worker.parse_arguments(["--base-only", "--output", "unused"])
+    assert args.base_only and args.adapter is None
+
+    class Base:
+        def __init__(self):
+            self.parameter = SimpleNamespace(requires_grad=True)
+
+        def requires_grad_(self, value):
+            self.parameter.requires_grad = value
+
+        def parameters(self):
+            return [self.parameter]
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("baseline attempted to load an adapter")
+
+    base = Base()
+    assert (
+        worker.inference_model(base, None, load_adapter=forbidden, prepare_inference=lambda m: None)
+        is base
+    )
+    assert not base.parameter.requires_grad
+    base.peft_config = {"default": "already attached"}
+    with pytest.raises(ValueError, match="must not contain"):
+        worker.inference_model(base, None, load_adapter=forbidden, prepare_inference=lambda m: None)
+
+
+def test_adapted_mode_preserves_loader_and_active_adapter_checks(tmp_path):
+    worker = operator("evaluator_candidate_worker")
+    model = SimpleNamespace(active_adapters=["default"], parameters=lambda: [])
+    calls = []
+
+    def loader(base, path, **options):
+        calls.append((base, path, options))
+        return model
+
+    base = object()
+    assert (
+        worker.inference_model(
+            base, tmp_path, load_adapter=loader, prepare_inference=lambda m: None
+        )
+        is model
+    )
+    assert calls == [(base, tmp_path, dict(is_trainable=False, local_files_only=True))]
+    model.active_adapters = ["other"]
+    with pytest.raises(ValueError, match="not active"):
+        worker.inference_model(
+            base, tmp_path, load_adapter=loader, prepare_inference=lambda m: None
+        )
