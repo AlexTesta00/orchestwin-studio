@@ -43,6 +43,10 @@ const messages = {
       loginLink: "Accedi",
     },
     errors: {
+      password_too_short:
+        "La password deve contenere almeno 15 caratteri. Puoi usare una frase con spazi.",
+      password_too_long: "La password può contenere al massimo 1024 caratteri.",
+      invalid_request: "Controlla i dati inseriti e riprova.",
       invalid_authentication: "L'email o la password non sono valide.",
       email_already_registered: "Esiste già un account con questo indirizzo email.",
       invalid_registration: "I dati di registrazione non sono validi.",

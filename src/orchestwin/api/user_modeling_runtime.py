@@ -136,6 +136,7 @@ class _UnavailableUserModelingPort:
     propose_revision = unavailable
     decide_revision = unavailable
     current_snapshot = unavailable
+    current_personas = unavailable
     snapshot_history = unavailable
     get_diff = unavailable
     submit = unavailable

@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 import traceback
+from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
@@ -57,14 +58,15 @@ def health_snapshot(state):
         "status": "READY",
         "model_name": state["model_name"],
         "model_identity": state["identity"].to_snapshot(),
-        "supported_tasks": sorted(TASKS),
+        "supported_tasks": state.get("supported_tasks", sorted(TASKS)),
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
         "generation_watchdog": f"COOPERATIVE_{state.get('max_generation_seconds', MAX_GENERATION_SECONDS)}_SECONDS_NOT_HARD_GPU_PREEMPTION",
         "schema_decoding": SCHEMA_DECODING,
         "schema_decoder_version": LLGUIDANCE_VERSION,
         "completed_generation_count": state["completed_generation_count"],
-        "adapter_loaded": False,
+        "adapter_loaded": state.get("shared_adapter_loaded", False),
+        "adapter_active": state.get("evaluator", False),
         "training_executed": False,
         "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK",
     }
@@ -116,7 +118,9 @@ def completion(state, payload):
     metadata = payload.get("metadata", {})
     if metadata.get("expected_model_identity") != state["identity"].to_snapshot():
         raise ValueError("IDENTITY_MISMATCH")
-    if metadata.get("orchestwin_task_id") not in {f"proposal-{task}-v1" for task in TASKS}:
+    evaluator = state.get("evaluator", False)
+    tasks = {"user-twin-evaluation-v1"} if evaluator else {f"proposal-{task}-v1" for task in TASKS}
+    if metadata.get("orchestwin_task_id") not in tasks:
         raise ValueError("TASK_REJECTED")
     messages = payload.get("messages")
     if (
@@ -140,9 +144,15 @@ def completion(state, payload):
         response_format.get("type") != "json_schema"
         or specification.get("strict") is not True
         or not isinstance(schema, dict)
-        or schema != visible.get("output_schema")
+        or (not evaluator and schema != visible.get("output_schema"))
     ):
         raise ValueError("SCHEMA_MISMATCH")
+    if evaluator:
+        from orchestwin.models.strict_evaluator_json import check_evaluator_schema
+
+        check_evaluator_schema(schema)
+        if temperature != 0:
+            raise ValueError("EVALUATOR_TEMPERATURE_REJECTED")
     torch, model, tokenizer = state["torch"], state["model"], state["tokenizer"]
     encoded = tokenizer.apply_chat_template(
         messages, tokenize=True, add_generation_prompt=True, return_tensors="pt", return_dict=True
@@ -157,7 +167,12 @@ def completion(state, payload):
     options = {"do_sample": temperature > 0}
     if temperature > 0:
         options["temperature"] = temperature
-    with torch.inference_mode():
+    adapter_context = (
+        model.disable_adapter()
+        if state.get("shared_adapter_loaded") and not evaluator
+        else nullcontext()
+    )
+    with adapter_context, torch.inference_mode():
         generated = model.generate(
             **inputs,
             max_new_tokens=maximum,
@@ -196,7 +211,8 @@ def completion(state, payload):
         "orchestwin_serving": {
             "model_visible_messages_sha256": snapshot_content_hash(messages),
             "output_repair_used": False,
-            "adapter_loaded": False,
+            "adapter_loaded": state.get("shared_adapter_loaded", False),
+            "adapter_active": evaluator,
             "generation_wall_time_budget_seconds": generation_seconds,
             "generation_wall_time_milliseconds": round((time.perf_counter() - started) * 1000),
             "schema_decoding": SCHEMA_DECODING,

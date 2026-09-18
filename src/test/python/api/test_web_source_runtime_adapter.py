@@ -411,3 +411,19 @@ def test_real_domain_stores_readable_content_addressed_bytes(environment, monkey
     assert store.read(item["storage_key"]) == b"<h1>Test</h1>"
     assert "content" not in item
     assert snapshot["provenance_references"][0]["reference_id"] == f"architecture:{ARCHITECTURE}"
+
+    env.service.source_revision = AsyncMock(return_value=snapshot)
+    read_scope = dict(owner_user_id=OWNER, project_id=PROJECT, revision_id=REVISION)
+    _, files = asyncio.run(env.service.source_files(**read_scope))
+    assert files == [("index.html", "text/html", b"<h1>Test</h1>")]
+    env.service.source_revision.assert_awaited_once_with(**read_scope)
+
+    # A same-size substitution must not be exposed as the immutable revision.
+    env.service._content_store = SimpleNamespace(read=lambda key: b"<h1>Oops</h1>")
+    with pytest.raises(HTTPException) as failure:
+        asyncio.run(env.service.source_files(**read_scope))
+    assert failure.value.status_code == 503
+
+    env.service.source_revision = AsyncMock(return_value=None)
+    env.service._content_store = SimpleNamespace(read=Mock(side_effect=AssertionError))
+    assert asyncio.run(env.service.source_files(**read_scope)) is None

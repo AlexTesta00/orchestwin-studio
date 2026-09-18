@@ -238,13 +238,28 @@ class SqlAlchemyHumanGateRepository:
         owner_user_id: UUID,
         gate_type: HumanGateType,
     ) -> HumanGate | None:
-        """Lock and return the latest owner-scoped gate."""
+        """Lock project before gate, matching the command transaction order.
+
+        A joined FOR UPDATE can lock a gate before its project and deadlock
+        against a concurrent readiness/decision transaction holding the project.
+        """
+        project = await self._session.scalar(
+            select(ProjectRecord.id)
+            .where(
+                ProjectRecord.id == project_id,
+                ProjectRecord.owner_user_id == owner_user_id,
+                ProjectRecord.archived_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if project is None:
+            return None
         record = await self._session.scalar(
             latest_owned_gate_statement(
                 project_id=project_id,
                 owner_user_id=owner_user_id,
                 gate_type=gate_type,
-            ).with_for_update()
+            ).with_for_update(of=HumanGateRecord)
         )
 
         if record is None:

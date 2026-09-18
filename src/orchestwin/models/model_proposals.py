@@ -28,11 +28,16 @@ from orchestwin.models.design import (
     DesignProposalResult,
     DesignProposalStatus,
 )
+from orchestwin.models.profile_drafts import UserTwinModelOutput
 from orchestwin.models.proposal_evidence import (
     generation_output_reference,
     retain_adapter_result,
 )
-from orchestwin.models.proposal_generation import ProposalGenerationError, ProposalGenerator
+from orchestwin.models.proposal_generation import (
+    ProposalGenerationError,
+    ProposalGenerator,
+    wire_value,
+)
 from orchestwin.models.requirements import (
     RequirementsProposalProviderKind,
     RequirementsProposalResult,
@@ -60,13 +65,20 @@ from orchestwin.models.user_modeling import (
 )
 from orchestwin.projects.requirements_specifications import RequirementsSpecification
 from orchestwin.twins.epistemics import (
+    ConfidenceScore,
     EpistemicStatus,
     EvidenceReference,
     EvidenceSourceKind,
     HumanValidationRequirement,
     ObservationProvenance,
+    ProfileObservation,
 )
-from orchestwin.twins.user_twins import MAX_PROJECT_USER_TWINS, ConfirmedPersonaReference
+from orchestwin.twins.user_twins import (
+    MAX_PROJECT_USER_TWINS,
+    ConfirmedPersonaReference,
+    UserTwinLifecycleStatus,
+    UserTwinProfile,
+)
 
 
 def _require(condition: bool):
@@ -118,11 +130,6 @@ class TeamModelOutput(BaseModel):
 @dataclass(frozen=True)
 class PersonaModelOutput:
     proposals: tuple[ProposedPersonaProfile, ...]
-
-
-@dataclass(frozen=True)
-class UserTwinModelOutput:
-    proposals: tuple[ProposedUserTwinProfile, ...]
 
 
 class ModelTeamProposalAdapter:
@@ -421,13 +428,22 @@ class ModelUserModelingAdapter:
             1 <= len(request.candidates) <= MAX_PROJECT_USER_TWINS
             and all(item.project_id == request.project_id for item in request.candidates)
         )
+        context = wire_value(request)
+        for item, candidate in zip(context["candidates"], request.candidates, strict=True):
+            item["candidate_content_hash"] = candidate.content_hash
         output = await self.generator.generate(
             task="personas",
-            context=request,
+            context=context,
             output_type=PersonaModelOutput,
             instruction=(
                 "Propose one pending SYSTEM_PROPOSED PROTO_PERSONA per candidate, in input order, "
-                "with exact candidate ordinal/hash. Preserve the candidate role observation. "
+                "with exact candidate ordinal and candidate_content_hash copied from the input. "
+                "Never calculate or invent hashes. Preserve the candidate role observation. "
+                "Each profile MUST contain persona.role (TEXT), persona.summary (TEXT), "
+                "persona.goals (ITEMS or UNKNOWN) and persona.context_of_use (TEXT or UNKNOWN), "
+                "in exactly that order, with concise values. For UNKNOWN use reason=null, text=null "
+                "and items=[]; explain uncertainty in rationale. Every new observation needs a nonempty rationale, confidence "
+                "between 0 and 1, MODEL_INFERRED and human_validation=REQUIRED. "
                 "New observations must be MODEL_INFERRED or UNSUPPORTED_ASSUMPTION and require "
                 "human validation. Reuse only supplied evidence references; abstain when unknown. "
                 "Do not create empirical, owner or human-review evidence."
@@ -465,31 +481,73 @@ class ModelUserModelingAdapter:
                 for item in personas
             )
         )
+        context = wire_value(request)
+        context["persona_references"] = [
+            wire_value(ConfirmedPersonaReference.from_version(persona)) for persona in personas
+        ]
         output = await self.generator.generate(
             task="user-twins",
-            context=request,
+            context=context,
             output_type=UserTwinModelOutput,
             instruction=(
-                "Propose one PROJECT_GROUNDED_UT per confirmed persona, in input order. Copy exact "
-                "persona, brief, team and catalog references. All newly inferred or rekeyed "
-                "observations must be MODEL_INFERRED or UNSUPPORTED_ASSUMPTION and require human "
-                "validation. Use only supplied persona evidence references. Abstain when unknown; "
-                "never invent empirical research or human approval."
+                "Propose one User Twin content draft per confirmed persona, in input order. "
+                "Return the exact persona_id, a name and observations. The application binds "
+                "the exact project references, source provenance and MODEL_INFERRED status with "
+                "required human review; do not output these metadata. Abstain when unknown; "
+                "never invent empirical research or human approval. Required observation keys, in order: "
+                "user_twin.role, user_twin.expertise, user_twin.goals, user_twin.recurring_tasks, "
+                "user_twin.context_of_use, user_twin.information_needs, user_twin.decision_criteria, "
+                "user_twin.preferred_vocabulary, user_twin.frustrations, user_twin.pain_points, "
+                "user_twin.trust_concerns, user_twin.accessibility_needs, user_twin.operational_constraints, "
+                "user_twin.technical_literacy, user_twin.risk_sensitivity, user_twin.assumptions. "
+                "role must be TEXT; context_of_use, technical_literacy and risk_sensitivity use "
+                "TEXT or UNKNOWN; other fields use ITEMS or UNKNOWN. Every inferred observation "
+                "requires a concise rationale and confidence between 0 and 1. UNKNOWN uses "
+                "reason=null, text=null and items=[]; explain uncertainty in rationale. Keep values and rationales very short."
             ),
         )
         _require(len(output.proposals) == len(personas))
         proposals = []
         for proposed, persona in zip(output.proposals, personas, strict=True):
-            profile = proposed.profile
-            _require(
-                profile.persona_reference == ConfirmedPersonaReference.from_version(persona)
-                and profile.project_brief_reference == request.project_brief_reference
-                and profile.agent_team_reference == request.agent_team_reference
-                and profile.catalog_version == request.catalog_version
-                and profile.catalog_content_hash == request.catalog_content_hash
+            _require(proposed.persona_id == persona.persona_id)
+            source = EvidenceReference(
+                source_kind=EvidenceSourceKind.SYSTEM_ARTIFACT,
+                source_id=f"persona:{persona.persona_id}",
+                source_version=persona.version_number,
+                content_hash=persona.content_hash,
+                locator="profile",
+                summary="Confirmed persona used as model context.",
+            )
+            profile = UserTwinProfile(
+                name=proposed.name,
+                persona_reference=ConfirmedPersonaReference.from_version(persona),
+                project_brief_reference=request.project_brief_reference,
+                agent_team_reference=request.agent_team_reference,
+                catalog_version=request.catalog_version,
+                catalog_content_hash=request.catalog_content_hash,
+                validation_status=UserTwinLifecycleStatus.PROJECT_GROUNDED_UT,
+                observations=tuple(
+                    ProfileObservation(
+                        observation_key=item.observation_key,
+                        value=item.value,
+                        confidence=ConfidenceScore(item.confidence),
+                        rationale=item.rationale,
+                        epistemic_status=EpistemicStatus.MODEL_INFERRED,
+                        human_validation=HumanValidationRequirement.REQUIRED,
+                        provenance=ObservationProvenance.from_references(
+                            (source, _model_reference(self.generator, item.observation_key))
+                        ),
+                    )
+                    for item in proposed.observations
+                ),
             )
             proposals.append(
-                replace(proposed, profile=self._profile(profile, persona.profile.observations))
+                ProposedUserTwinProfile(
+                    persona_id=persona.persona_id,
+                    persona_version_number=persona.version_number,
+                    persona_content_hash=persona.content_hash,
+                    profile=profile,
+                )
             )
         return UserTwinProposalResult(
             status=UserModelingProposalStatus.PROPOSED,

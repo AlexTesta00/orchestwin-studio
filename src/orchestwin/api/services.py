@@ -75,6 +75,7 @@ from orchestwin.config import (
     load_settings,
 )
 from orchestwin.evaluation.final_runtime import FinalEvaluatorRuntime, build_final_evaluator_runtime
+from orchestwin.evaluation.local_runtime import LocalEvaluatorRuntime
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
@@ -194,7 +195,7 @@ class AgentTeamApprovalService(Protocol):
 class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
-    final_evaluator_runtime: FinalEvaluatorRuntime | None = None
+    final_evaluator_runtime: FinalEvaluatorRuntime | LocalEvaluatorRuntime | None = None
     real_model_runtime: RealModelRuntime | None = None
     proposal_evidence_store: SqlAlchemyProposalEvidenceStore | None = None
     identity_service: IdentityApplicationService | None = None

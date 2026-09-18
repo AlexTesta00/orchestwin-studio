@@ -522,6 +522,44 @@ describe("ProjectUserModelingFlow", () => {
     expect(details.length).toBeGreaterThan(0);
   });
 
+  it("replaces an unknown context of use with text accepted by the domain", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    const value = structuredClone(snapshot);
+    value.snapshot.twin_versions[0]!.profile.observations = [
+      {
+        ...goalsObservation,
+        observation_key: "user_twin.context_of_use",
+        value: { kind: "UNKNOWN", text: null, items: [], reason: null },
+      },
+    ];
+    store.applySnapshot(value);
+    const propose = vi.spyOn(store, "proposeRevision").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      diff: proposedDiff,
+      twin_version: null,
+      snapshot_version: null,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="edit-twin-observation"]').trigger("click");
+    await wrapper.get('[data-testid="revision-value"]').setValue("At the reception desk");
+    await wrapper.get('[data-testid="submit-revision"]').trigger("submit");
+    await flushPromises();
+    expect(propose).toHaveBeenCalledWith(
+      PROJECT_ID,
+      TWIN_ID,
+      [
+        expect.objectContaining({
+          field: "context_of_use",
+          value: { kind: "TEXT", text: "At the reception desk", items: [], reason: null },
+        }),
+      ],
+      ACCESS_TOKEN,
+    );
+  });
+
   it("creates an explicit ProfileDiff instead of silently mutating a User Twin", async () => {
     const store = useUserModelingStore();
 

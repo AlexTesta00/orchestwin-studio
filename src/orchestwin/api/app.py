@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -32,13 +33,16 @@ from orchestwin.api.static_inspections import create_static_inspection_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
+from orchestwin.api.validation import request_validation_error
 from orchestwin.api.web_execution import create_web_execution_router
 from orchestwin.api.web_operations import create_web_operations_router
+from orchestwin.api.web_preview import create_web_preview_router
 from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
+from orchestwin.workflow.repository import HumanGateStateConflict
 
 
 def create_app(
@@ -61,11 +65,9 @@ def create_app(
 
         try:
             if resolved_runtime.real_model_runtime is not None:
-                report = await resolved_runtime.real_model_runtime.check_readiness(
+                await resolved_runtime.real_model_runtime.check_readiness(
                     resolved_runtime.database_runtime.session_factory
                 )
-                if not report["ready"]:
-                    raise RealModelRuntimeError("REAL_MODEL_DEPENDENCIES_NOT_READY")
             yield
         finally:
             await resolved_runtime.close()
@@ -79,6 +81,12 @@ def create_app(
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    application.add_exception_handler(RequestValidationError, request_validation_error)
+
+    @application.exception_handler(HumanGateStateConflict)
+    async def gate_conflict(_request, _error):
+        return JSONResponse(status_code=409, content={"detail": "gate_state_conflict"})
 
     @application.exception_handler(ProposalGenerationError)
     async def proposal_failure(_request, error: ProposalGenerationError):
@@ -205,6 +213,7 @@ def create_app(
         create_proposal_evidence_router(),
         create_model_runtime_router(),
         create_source_generation_router(),
+        create_web_preview_router(),
     ):
         application.include_router(
             router,

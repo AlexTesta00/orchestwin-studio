@@ -347,7 +347,7 @@ def test_cancelled_inference_keeps_slot_until_provider_finishes_and_queue_can_ca
     asyncio.run(scenario())
 
 
-def test_api_startup_fails_on_unready_dependency_and_disposes_resources():
+def test_api_stays_available_on_unready_models_and_disposes_resources():
     closed = []
 
     async def readiness(_):
@@ -360,11 +360,8 @@ def test_api_startup_fails_on_unready_dependency_and_disposes_resources():
         real_model_runtime=SimpleNamespace(check_readiness=readiness),
         database_runtime=SimpleNamespace(session_factory=None, dispose=dispose),
     )
-    with (
-        pytest.raises(RealModelRuntimeError, match="DEPENDENCIES_NOT_READY"),
-        TestClient(create_app(runtime=runtime)),
-    ):
-        pass
+    with TestClient(create_app(runtime=runtime)) as client:
+        assert client.get("/api/v1/health").status_code == 200
     assert closed == [True]
 
 

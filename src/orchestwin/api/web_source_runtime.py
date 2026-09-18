@@ -6,6 +6,7 @@ build, test, execute code, authorize Gate 7, or approve a formal case.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path, PureWindowsPath
 from typing import cast
@@ -313,6 +314,30 @@ class SqlAlchemyWebSourceApiService:
                 .all()
             )
             return tuple(_snapshot(web_source_revision_from_record(row)) for row in rows)
+
+    async def source_files(self, *, owner_user_id: UUID, project_id: UUID, revision_id: UUID):
+        """Read verified bytes for owner-controlled download and isolated browser preview."""
+        snapshot = await self.source_revision(
+            owner_user_id=owner_user_id, project_id=project_id, revision_id=revision_id
+        )
+        if snapshot is None:
+            return None
+        _safe_storage_root(self._content_root)
+        files = []
+        total = 0
+        for entry in snapshot["files"]:
+            content = self._content_store.read(entry["storage_key"])
+            if (
+                content is None
+                or len(content) != entry["size_bytes"]
+                or hashlib.sha256(content).hexdigest() != entry["sha256_digest"]
+            ):
+                raise HTTPException(503, detail={"code": "WEB_SOURCE_CONTENT_UNAVAILABLE"})
+            total += len(content)
+            if total > 10_000_000:
+                raise HTTPException(413, detail={"code": "WEB_SOURCE_DOWNLOAD_TOO_LARGE"})
+            files.append((entry["normalized_path"], entry["media_type"], content))
+        return snapshot, files
 
     async def source_revision(
         self, *, owner_user_id: UUID, project_id: UUID, revision_id: UUID

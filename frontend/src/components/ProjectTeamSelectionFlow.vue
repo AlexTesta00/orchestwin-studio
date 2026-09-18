@@ -47,8 +47,7 @@ const { t, locale } = useI18n({
         contentHash: "Team content hash",
         constraintsHash: "Constraint hash",
         readiness: "Project readiness",
-        ready:
-          "Gate 2 approves the current team. The project is ready for the future main workflow.",
+        ready: "Gate 2 approves the current team. Continue with personas and User Twins below.",
         notStarted: "This status does not start the main workflow automatically.",
         constraintIssues: "The brief contains contradictory role signals.",
         teamEditor: "Agent catalog and current selection",
@@ -142,6 +141,12 @@ const { t, locale } = useI18n({
           ARTIFACT_SUPERSEDED: "Artifact superseded",
         },
         errors: {
+          gate_state_conflict:
+            "The gate changed during the request. Refresh the team and review its current state.",
+          PROVIDER_UNAVAILABLE:
+            "The proposal model is unavailable. Check model availability and try again.",
+          TIMEOUT: "The model exceeded the time limit. No proposal was substituted.",
+          invalid_request: "Check the decision and its reason (at most 2000 characters).",
           unexpected_error: "An unexpected error occurred.",
           unexpected_api_error: "The API returned an unexpected response.",
           team_proposal_not_found: "No team proposal was found.",
@@ -284,8 +289,7 @@ const { t, locale } = useI18n({
         contentHash: "Hash del contenuto del team",
         constraintsHash: "Hash dei vincoli",
         readiness: "Stato di preparazione del progetto",
-        ready:
-          "Gate 2 approva il team corrente. Il progetto è pronto per il futuro workflow principale.",
+        ready: "Gate 2 approva il team corrente. Prosegui con personas e User Twin qui sotto.",
         notStarted: "Questo stato non avvia automaticamente il workflow principale.",
         constraintIssues: "Il brief contiene segnali contraddittori relativi ai ruoli.",
         teamEditor: "Catalogo agenti e selezione corrente",
@@ -379,6 +383,13 @@ const { t, locale } = useI18n({
           ARTIFACT_SUPERSEDED: "Artefatto sostituito",
         },
         errors: {
+          gate_state_conflict:
+            "Il gate è cambiato durante la richiesta. Aggiorna il team e controlla lo stato corrente.",
+          PROVIDER_UNAVAILABLE:
+            "Il modello delle proposte non è disponibile. Verifica lo stato dei modelli e riprova.",
+          TIMEOUT:
+            "Il modello ha superato il tempo disponibile. Non è stata sostituita alcuna proposta.",
+          invalid_request: "Controlla la decisione e la motivazione (massimo 2000 caratteri).",
           unexpected_error: "Si è verificato un errore inatteso.",
           unexpected_api_error: "L'API ha restituito una risposta inattesa.",
           team_proposal_not_found: "Non è stata trovata alcuna proposta del team.",

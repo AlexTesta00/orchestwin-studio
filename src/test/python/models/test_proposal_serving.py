@@ -2,7 +2,7 @@
 
 import importlib.util
 import json
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -105,6 +105,34 @@ def test_serving_calls_generation_once_with_configured_sampling_and_keeps_raw_te
     assert response["choices"][0]["finish_reason"] == "stop"
     assert response["orchestwin_serving"]["output_repair_used"] is False
     assert response["orchestwin_serving"]["adapter_loaded"] is False
+
+
+def test_shared_model_disables_trained_adapter_only_during_proposals(tmp_path):
+    module = server_module()
+    state, payload = state_and_payload(tmp_path)
+    active = [True]
+
+    @contextmanager
+    def disabled():
+        active[0] = False
+        try:
+            yield
+        finally:
+            active[0] = True
+
+    state["model"].disable_adapter = disabled
+    original = state["model"].generate.return_value
+
+    def generate(**_):
+        assert active[0] is False
+        return original
+
+    state["model"].generate.side_effect = generate
+    state.update(shared_adapter_loaded=True, evaluator=False)
+    response = module.completion(state, payload)
+    assert active[0] is True
+    assert response["orchestwin_serving"]["adapter_loaded"] is True
+    assert response["orchestwin_serving"]["adapter_active"] is False
 
 
 @pytest.mark.parametrize("mutation", ["task", "identity", "budget", "context", "schema", "strict"])

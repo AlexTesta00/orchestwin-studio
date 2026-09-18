@@ -29,11 +29,6 @@ from orchestwin.models.proposal_generation import (
     wire_value,
 )
 from orchestwin.models.user_modeling import UserTwinProposalRequest
-from orchestwin.twins.epistemics import (
-    EpistemicStatus,
-    HumanValidationRequirement,
-    ObservationProvenance,
-)
 from src.test.python.models import test_model_proposals as fixtures
 
 
@@ -96,30 +91,9 @@ def stage_case(stage):
         result = asyncio.run(
             user.FakeDeterministicUserModelingAdapter().propose_user_twins(request)
         )
-        proposals = [
-            replace(
-                p,
-                profile=replace(
-                    p.profile,
-                    observations=tuple(
-                        replace(
-                            o,
-                            epistemic_status=EpistemicStatus.MODEL_INFERRED,
-                            human_validation=HumanValidationRequirement.REQUIRED,
-                            provenance=ObservationProvenance(
-                                persona.profile.observations[0].provenance.references
-                            ),
-                            rationale="Transfer grounded context.",
-                        )
-                        for o in p.profile.observations
-                    ),
-                ),
-            )
-            for p in result.proposals
-        ]
         return (
             request,
-            {"proposals": wire_value(proposals)},
+            fixtures.twin_draft_output(result.proposals),
             ModelUserModelingAdapter,
             "propose_user_twins",
             "USER_TWIN",

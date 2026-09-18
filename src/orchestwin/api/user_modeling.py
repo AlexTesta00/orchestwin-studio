@@ -923,6 +923,11 @@ class UserModelingGateApiPort(Protocol):
 class UserModelingQueryPort(Protocol):
     """Owner-scoped User Modeling read boundary."""
 
+    async def current_personas(
+        self, *, owner_user_id: UUID, project_id: UUID
+    ) -> tuple[PersonaProfileVersion, ...]:
+        """Return current persona versions before or after snapshot generation."""
+
     async def current_snapshot(
         self,
         *,
@@ -982,6 +987,13 @@ def create_user_modeling_router(
     )
 
     owner_user_id_dependency = Depends(dependencies.owner_user_id_dependency)
+
+    @router.get("/personas", response_model=tuple[PersonaVersionPayload, ...])
+    async def current_personas(project_id: UUID, owner_user_id: UUID = owner_user_id_dependency):
+        versions = await dependencies.queries.current_personas(
+            owner_user_id=owner_user_id, project_id=project_id
+        )
+        return tuple(PersonaVersionPayload.from_domain(version) for version in versions)
 
     @router.post(
         "/personas/proposals",

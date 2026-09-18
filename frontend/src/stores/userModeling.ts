@@ -309,21 +309,23 @@ export const useUserModelingStore = defineStore("userModeling", {
       try {
         const readiness = await userModelingApi.getReadiness(projectId, accessToken);
 
-        const [currentSnapshot, snapshotHistory, currentGate, gateEvents] = await Promise.all([
-          readiness.snapshot_exists
-            ? userModelingApi.getCurrentSnapshot(projectId, accessToken)
-            : Promise.resolve(null),
+        const [currentSnapshot, snapshotHistory, currentGate, gateEvents, personas] =
+          await Promise.all([
+            readiness.snapshot_exists
+              ? userModelingApi.getCurrentSnapshot(projectId, accessToken)
+              : Promise.resolve(null),
 
-          userModelingApi.getSnapshotHistory(projectId, accessToken),
+            userModelingApi.getSnapshotHistory(projectId, accessToken),
 
-          readiness.gate_exists
-            ? userModelingApi.getCurrentGate(projectId, accessToken)
-            : Promise.resolve(null),
+            readiness.gate_exists
+              ? userModelingApi.getCurrentGate(projectId, accessToken)
+              : Promise.resolve(null),
 
-          readiness.gate_exists
-            ? userModelingApi.getGateEvents(projectId, accessToken)
-            : Promise.resolve([]),
-        ]);
+            readiness.gate_exists
+              ? userModelingApi.getGateEvents(projectId, accessToken)
+              : Promise.resolve([]),
+            userModelingApi.getCurrentPersonas(projectId, accessToken),
+          ]);
 
         if (!this.isRequestCurrent(projectId, epoch)) {
           return;
@@ -343,6 +345,8 @@ export const useUserModelingStore = defineStore("userModeling", {
           this.personaVersions = [...currentSnapshot.snapshot.persona_versions];
 
           this.twinVersions = [...currentSnapshot.snapshot.twin_versions];
+        } else {
+          this.personaVersions = [...personas];
         }
       } catch (error) {
         this.captureError(error, projectId, epoch);

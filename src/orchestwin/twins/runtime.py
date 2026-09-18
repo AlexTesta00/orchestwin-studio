@@ -25,7 +25,10 @@ from orchestwin.twins.application import (
     GovernedUserModelingContext,
     LocalUserModelingApplicationService,
 )
-from orchestwin.twins.persistence.repositories import SqlAlchemyUserModelingSnapshotRepository
+from orchestwin.twins.persistence.repositories import (
+    SqlAlchemyPersonaVersionRepository,
+    SqlAlchemyUserModelingSnapshotRepository,
+)
 from orchestwin.twins.persistence.uow import SqlAlchemyUserModelingUnitOfWork
 from orchestwin.twins.revision_application import LocalUserTwinProfileRevisionService
 from orchestwin.twins.revision_persistence import SqlAlchemyUserTwinProfileDiffRepository
@@ -206,6 +209,14 @@ class SqlAlchemyUserModelingQueryService:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
+
+    async def current_personas(self, *, owner_user_id: UUID, project_id: UUID):
+        """Recover proposed/confirmed personas even before a twin snapshot exists."""
+        async with self._session_factory() as session:
+            return await SqlAlchemyPersonaVersionRepository(
+                session,
+                owner_user_id=owner_user_id,
+            ).list_current(project_id=project_id)
 
     async def current_snapshot(
         self,

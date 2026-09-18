@@ -8,6 +8,7 @@ import type {
   PersonaDecisionCommandPayload,
   PersonaDecisionRequest,
   PersonaProposalCommandPayload,
+  PersonaVersionPayload,
   ProfileRevisionCommandPayload,
   ProfileRevisionDecisionRequest,
   ProfileRevisionProposalRequest,
@@ -35,6 +36,7 @@ export interface UserModelingApiOptions {
 export class UserModelingApiError extends ApiRequestError {}
 
 export interface UserModelingApi {
+  getCurrentPersonas(projectId: string, accessToken: string): Promise<PersonaVersionPayload[]>;
   proposePersonas(projectId: string, accessToken: string): Promise<PersonaProposalCommandPayload>;
 
   decidePersona(
@@ -129,6 +131,8 @@ function extractErrorCode(payload: unknown): string | null {
 
   const detail = payload.detail;
 
+  if (typeof detail === "string") return detail;
+
   if (!isRecord(detail)) {
     return null;
   }
@@ -202,6 +206,23 @@ export function createUserModelingApi(options: UserModelingApiOptions = {}): Use
       );
     }
 
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "status" in payload &&
+      payload.status === "REJECTED"
+    ) {
+      const result = payload as Record<string, unknown>;
+      const code = [result.proposal_issue, result.candidate_issue, result.issue].find(
+        (value) => typeof value === "string",
+      ) as string | undefined;
+      throw new UserModelingApiError(code ?? "USER_MODELING_REJECTED", {
+        status: response.status,
+        code: code ?? "USER_MODELING_REJECTED",
+        payload,
+      });
+    }
+
     return payload as T;
   }
 
@@ -210,6 +231,9 @@ export function createUserModelingApi(options: UserModelingApiOptions = {}): Use
   }
 
   return {
+    getCurrentPersonas(projectId, accessToken) {
+      return requestJson(`${baseProjectPath(projectId)}/personas`, { method: "GET", accessToken });
+    },
     proposePersonas(projectId, accessToken) {
       return requestJson(`${baseProjectPath(projectId)}/personas/proposals`, {
         method: "POST",

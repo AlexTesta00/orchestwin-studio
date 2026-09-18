@@ -25,6 +25,7 @@ from orchestwin.evaluation.final_runtime import (
     FinalEvaluatorSettings,
     build_final_evaluator_runtime,
 )
+from orchestwin.evaluation.local_runtime import LocalEvaluatorRuntime, build_local_evaluator_runtime
 from orchestwin.models.architecture_runtime import ArchitectureRuntime, ArchitectureRuntimeMode
 from orchestwin.models.design_runtime import DesignRuntime, DesignRuntimeMode
 from orchestwin.models.model_proposals import (
@@ -57,13 +58,20 @@ class RealModelConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
     schema_version: int = Field(default=1, ge=1, le=1, strict=True)
     proposal_config_file: Path
-    final_evaluator_ready_file: Path
+    final_evaluator_ready_file: Path | None = None
+    final_evaluator_config_file: Path | None = None
 
     @model_validator(mode="after")
     def absolute_paths(self):
+        if (self.final_evaluator_ready_file is None) == (self.final_evaluator_config_file is None):
+            raise ValueError("select exactly one evaluator configuration")
         if any(
-            not path.is_absolute() or ".." in path.parts
-            for path in (self.proposal_config_file, self.final_evaluator_ready_file)
+            path is not None and (not path.is_absolute() or ".." in path.parts)
+            for path in (
+                self.proposal_config_file,
+                self.final_evaluator_ready_file,
+                self.final_evaluator_config_file,
+            )
         ):
             raise ValueError("absolute model configuration paths required")
         return self
@@ -150,7 +158,7 @@ def _proposal_health(config, token):
             and health["max_sequence_length"] > config.max_output_tokens
             and type(health.get("completed_generation_count")) is int
             and health["completed_generation_count"] >= 0
-            and health.get("adapter_loaded") is False
+            and (health.get("adapter_loaded") is False or health.get("adapter_active") is False)
             and health.get("training_executed") is False
             and health.get("fallback_policy") == "FAIL_CLOSED_NO_FAKE_FALLBACK"
         ):
@@ -165,7 +173,7 @@ def _proposal_health(config, token):
 @dataclass(frozen=True)
 class RealModelRuntime:
     proposal_configuration: ProposalModelConfiguration
-    final_evaluator: FinalEvaluatorRuntime
+    final_evaluator: FinalEvaluatorRuntime | LocalEvaluatorRuntime
     team: ModelTeamProposalAdapter
     user_modeling: UserModelingRuntime
     requirements: RequirementsRuntime
@@ -259,14 +267,24 @@ def build_real_model_runtime(path: Path | None):
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
         if _read(config.proposal_config_file) != proposal_raw:
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
-        final = build_final_evaluator_runtime(
-            FinalEvaluatorSettings(
-                enabled=True, ready_file=config.final_evaluator_ready_file, _env_file=None
+        final = (
+            build_local_evaluator_runtime(config.final_evaluator_config_file)
+            if config.final_evaluator_config_file
+            else build_final_evaluator_runtime(
+                FinalEvaluatorSettings(
+                    enabled=True, ready_file=config.final_evaluator_ready_file, _env_file=None
+                )
             )
         )
+        evaluator_identity = (
+            final.identity if config.final_evaluator_config_file else final.session.identity
+        )
+        evaluator_url = (
+            final.base_url if config.final_evaluator_config_file else final.session.base_url
+        )
         if (
-            proposal.identity.to_snapshot() == final.session.identity
-            or proposal.base_url == final.session.base_url
+            proposal.identity.to_snapshot() == evaluator_identity
+            or proposal.base_url == evaluator_url
         ):
             raise RealModelRuntimeError("SEPARATE_PROPOSAL_AND_EVALUATOR_IDENTITIES_REQUIRED")
         generation_lock = asyncio.Lock()

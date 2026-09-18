@@ -145,6 +145,35 @@ describe("User Modeling frontend state", () => {
     vi.restoreAllMocks();
   });
 
+  it("recovers saved personas before a User Twin snapshot exists", async () => {
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessWithoutSnapshot);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([personaVersion]);
+    const store = useUserModelingStore();
+    await store.load(PROJECT_ID, ACCESS_TOKEN);
+    expect(store.currentPersonas).toEqual([personaVersion]);
+  });
+
+  it("does not silently swallow a rejected model proposal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          fakeResponse({
+            status: "REJECTED",
+            proposal_issue: "INVALID_PROVIDER_OUTPUT",
+            versions: [],
+          }),
+        ),
+    );
+    const store = useUserModelingStore();
+    await expect(store.proposePersonas(PROJECT_ID, ACCESS_TOKEN)).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_OUTPUT",
+    });
+    expect(store.error?.code).toBe("INVALID_PROVIDER_OUTPUT");
+  });
+
   it("sends the authenticated request to the C12 readiness endpoint", async () => {
     const fetchMock = vi.fn(
       async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
@@ -187,7 +216,7 @@ describe("User Modeling frontend state", () => {
         return fakeResponse(readinessWithoutSnapshot);
       }
 
-      if (url.endsWith("/snapshots")) {
+      if (url.endsWith("/snapshots") || url.endsWith("/personas")) {
         return fakeResponse([]);
       }
 
@@ -216,7 +245,7 @@ describe("User Modeling frontend state", () => {
 
     expect(store.error).toBeNull();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("keeps proposed proto-personas in Pinia before a snapshot exists", async () => {
@@ -318,7 +347,7 @@ describe("User Modeling frontend state", () => {
         });
       }
 
-      if (url.endsWith("/snapshots")) {
+      if (url.endsWith("/snapshots") || url.endsWith("/personas")) {
         return fakeResponse([]);
       }
 

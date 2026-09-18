@@ -22,6 +22,8 @@ import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
+import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
+import ProjectWebPreview from "@/components/ProjectWebPreview.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
 import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
@@ -190,6 +192,29 @@ onUnmounted(() => {
 
       <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
 
+      <nav
+        class="flex flex-wrap gap-2 rounded-xl bg-slate-100 p-4"
+        :aria-label="locale === 'it' ? 'Fasi del progetto' : 'Project stages'"
+      >
+        <a
+          v-for="(step, index) in [
+            ['current-brief-title', 'Brief'],
+            ['studio-team', 'Team'],
+            ['studio-twins', 'User Twin'],
+            ['studio-requirements', locale === 'it' ? 'Requisiti' : 'Requirements'],
+            ['studio-design', 'Design'],
+            ['studio-architecture', locale === 'it' ? 'Architettura' : 'Architecture'],
+            ['studio-source', locale === 'it' ? 'Generazione' : 'Generation'],
+            ['studio-preview', locale === 'it' ? 'Risultato' : 'Result'],
+          ]"
+          :key="step[0]"
+          :href="`#${step[0]}`"
+          class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-200"
+        >
+          {{ index + 1 }}. {{ step[1] }}
+        </a>
+      </nav>
+
       <section class="grid gap-5" aria-labelledby="current-brief-title">
         <h2 id="current-brief-title" class="text-2xl font-black text-slate-950">
           {{ t("detail.currentBrief") }}
@@ -289,76 +314,126 @@ onUnmounted(() => {
       />
 
       <ProjectTeamSelectionFlow
+        id="studio-team"
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:team`"
         :project-id="projectId"
       />
 
+      <ProjectUserModelingFlow
+        id="studio-twins"
+        v-if="auth.accessToken"
+        :key="`${projectId}:user-modeling`"
+        :project-id="projectId"
+        :access-token="auth.accessToken"
+        :authorize="authorized"
+        :locale="locale === 'it' ? 'it' : 'en'"
+      />
+
       <ProjectRequirementsFlow
+        id="studio-requirements"
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:requirements`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
       <ProjectDesignFlow
+        id="studio-design"
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:design`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
       <ProjectArchitectureFlow
+        id="studio-architecture"
         :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
       <ProjectSourceGeneration
+        id="studio-source"
         v-if="project.mode === 'GREENFIELD_GENERATION'"
         :key="`${projectId}:source-generation`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
-      <ProjectJvmSourceReview
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
+      <ProjectWebPreview
+        id="studio-preview"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
-      <ProjectJvmEvidenceReview
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+      <details class="rounded-2xl border border-slate-200 bg-white p-6">
+        <summary class="cursor-pointer text-lg font-bold">
+          {{
+            locale === "it"
+              ? "Sorgenti, autorizzazioni ed evidenze JVM"
+              : "JVM sources, authorizations and evidence"
+          }}
+        </summary>
+        <div class="mt-6 space-y-6">
+          <ProjectJvmSourceReview
+            :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
+            :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
 
-      <ProjectExecutionLaunch
-        :project-id="projectId"
-        platform="jvm"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+          <ProjectJvmEvidenceReview
+            :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
+            :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
 
-      <ProjectWebSourceReview
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+          <ProjectExecutionLaunch
+            :project-id="projectId"
+            platform="jvm"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
+        </div>
+      </details>
 
-      <ProjectWebEvidenceReview
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+      <details class="rounded-2xl border border-slate-200 bg-white p-6">
+        <summary class="cursor-pointer text-lg font-bold">
+          {{
+            locale === "it"
+              ? "Sorgenti, autorizzazioni ed evidenze Web"
+              : "Web sources, authorizations and evidence"
+          }}
+        </summary>
+        <div class="mt-6 space-y-6">
+          <ProjectWebSourceReview
+            :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
+            :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
 
-      <ProjectExecutionLaunch
-        :project-id="projectId"
-        platform="web"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+          <ProjectWebEvidenceReview
+            :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
+            :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
 
-      <ProjectArtifactGraph
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
+          <ProjectExecutionLaunch
+            :project-id="projectId"
+            platform="web"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
+        </div>
+      </details>
+
+      <details class="rounded-2xl border border-slate-200 bg-white p-6">
+        <summary class="cursor-pointer text-lg font-bold">
+          {{ locale === "it" ? "Tracciabilità degli artefatti" : "Artifact traceability" }}
+        </summary>
+        <div class="mt-6">
+          <ProjectArtifactGraph
+            :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
+            :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
+        </div>
+      </details>
     </template>
   </main>
 </template>

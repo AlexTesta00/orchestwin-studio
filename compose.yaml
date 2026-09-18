@@ -85,7 +85,11 @@ services:
       ORCHESTWIN_AUTH_REFRESH_COOKIE_SECURE: "false"
       ORCHESTWIN_AUTH_REFRESH_COOKIE_SAME_SITE: lax
       ORCHESTWIN_AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS: "2592000"
-      ORCHESTWIN_TEAM_PROPOSAL_PROVIDER: "${ORCHESTWIN_TEAM_PROPOSAL_PROVIDER:-FAKE_DETERMINISTIC}"
+      ORCHESTWIN_MODEL_RUNTIME_MODE: REAL_REQUIRED
+      ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE: "${ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE:-/models/models.json}"
+    volumes:
+      - "${ORCHESTWIN_MODELS_ROOT:-./var/studio/models}:/models:ro"
+      - "./var/artifacts:/app/var/artifacts"
     depends_on:
       migrations:
         condition: service_completed_successfully

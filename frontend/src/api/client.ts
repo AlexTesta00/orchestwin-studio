@@ -53,6 +53,10 @@ async function errorDetail(response: Response): Promise<string> {
     if (isRecord(payload) && typeof payload.detail === "string") {
       return payload.detail;
     }
+    if (isRecord(payload) && isRecord(payload.detail)) {
+      if (typeof payload.detail.code === "string") return payload.detail.code;
+      if (typeof payload.detail.status === "string") return payload.detail.status;
+    }
   } catch {
     return "unexpected_api_error";
   }
@@ -573,7 +577,19 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
       return undefined as T;
     }
 
-    return (await response.json()) as T;
+    const payload: unknown = await response.json();
+    // Gate commands use 409 for typed domain results as well as HTTP errors.
+    if (!response.ok && isRecord(payload) && "detail" in payload) {
+      const detail = payload.detail;
+      const code =
+        typeof detail === "string"
+          ? detail
+          : isRecord(detail) && typeof detail.code === "string"
+            ? detail.code
+            : "unexpected_api_error";
+      throw new ApiError(response.status, code);
+    }
+    return payload as T;
   }
 }
 

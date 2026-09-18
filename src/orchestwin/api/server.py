@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -93,7 +94,16 @@ def run_server(options: ServerOptions) -> None:
 
 def main(arguments: Sequence[str] | None = None) -> None:
     """Parse command-line options and start the ASGI server."""
-    run_server(parse_server_options(arguments))
+    # Fixture adapters remain available only through explicit development setup.
+    mode_key = "ORCHESTWIN_MODEL_RUNTIME_MODE"
+    defaulted = mode_key not in os.environ
+    if defaulted:
+        os.environ[mode_key] = "REAL_REQUIRED"
+    try:
+        run_server(parse_server_options(arguments))
+    finally:
+        if defaulted:
+            os.environ.pop(mode_key, None)
 
 
 if __name__ == "__main__":

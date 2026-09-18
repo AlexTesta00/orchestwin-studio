@@ -34,9 +34,7 @@ from orchestwin.models.proposal_generation import (
 from orchestwin.models.structured_generation import ModelRuntimeIdentity
 from orchestwin.models.user_modeling import PersonaProposalRequest, UserTwinProposalRequest
 from orchestwin.twins.epistemics import (
-    EpistemicStatus,
     HumanValidationRequirement,
-    ObservationProvenance,
 )
 
 from . import test_fake_architecture as architecture_fixtures
@@ -247,8 +245,12 @@ def persona_input_output():
 
 def test_personas_preserve_exact_role_and_label_model_inferences(tmp_path):
     request, output = persona_input_output()
-    generator, _ = make_generator(tmp_path, output)
+    generator, transport = make_generator(tmp_path, output)
     result = asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    sent = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])
+    assert [item["candidate_content_hash"] for item in sent["context"]["candidates"]] == [
+        item.content_hash for item in request.candidates
+    ]
     assert result.provider_kind.value == "MODEL_ADAPTER"
     assert result.proposals[0].profile.confirmation_status.value == "PENDING_CONFIRMATION"
     assert request.candidates[0].role_observation in result.proposals[0].profile.observations
@@ -271,7 +273,29 @@ def test_personas_cannot_invent_empirical_support_or_candidate_hash(tmp_path):
         asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
 
 
-def test_twins_bind_confirmed_persona_and_current_context(tmp_path):
+def twin_draft_output(proposals):
+    return {
+        "proposals": [
+            {
+                "persona_id": str(proposal.persona_id),
+                "name": proposal.profile.name,
+                "observations": [
+                    {
+                        "observation_key": item.observation_key,
+                        "value": wire_value(item.value),
+                        "confidence": item.confidence.value,
+                        "rationale": "Transfer grounded persona context into the twin.",
+                    }
+                    for item in proposal.profile.observations
+                    if item.observation_key != "user_twin.age_range"
+                ],
+            }
+            for proposal in proposals
+        ]
+    }
+
+
+def twin_input_output():
     persona = user_fixtures.confirmed_persona_version()
     request = UserTwinProposalRequest(
         user_fixtures.PROJECT_ID,
@@ -284,32 +308,45 @@ def test_twins_bind_confirmed_persona_and_current_context(tmp_path):
     expected = asyncio.run(
         user_fixtures.FakeDeterministicUserModelingAdapter().propose_user_twins(request)
     )
-    references = persona.profile.observations[0].provenance.references
-    proposals = [
-        replace(
-            proposal,
-            profile=replace(
-                proposal.profile,
-                observations=tuple(
-                    replace(
-                        item,
-                        epistemic_status=EpistemicStatus.MODEL_INFERRED,
-                        human_validation=HumanValidationRequirement.REQUIRED,
-                        provenance=ObservationProvenance(references),
-                        rationale="Transfer grounded persona context into the twin.",
-                    )
-                    for item in proposal.profile.observations
-                ),
-            ),
-        )
-        for proposal in expected.proposals
-    ]
-    output = {"proposals": wire_value(proposals)}
+    return request, twin_draft_output(expected.proposals)
+
+
+def test_twins_bind_confirmed_persona_and_current_context(tmp_path):
+    request, output = twin_input_output()
     generator, _ = make_generator(tmp_path, output)
     result = asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
     assert result.provider_kind.value == "MODEL_ADAPTER"
     assert result.proposals[0].profile.validation_status.value == "PROJECT_GROUNDED_UT"
-    output["proposals"][0]["profile"]["agent_team_reference"]["content_hash"] = "f" * 64
+    assert result.proposals[0].profile.agent_team_reference == request.agent_team_reference
+    observation = result.proposals[0].profile.observations[0]
+    persona = request.persona_versions[0]
+    assert observation.provenance.references[0].source_id == f"persona:{persona.persona_id}"
+    assert observation.provenance.references[0].content_hash == persona.content_hash
+    assert observation.provenance.references[1].source_kind.value == "MODEL_OUTPUT"
+    assert all(
+        o.human_validation is HumanValidationRequirement.REQUIRED
+        for o in result.proposals[0].profile.observations
+    )
+    output["proposals"][0]["persona_id"] = str(uuid4())
+    with pytest.raises(ProposalGenerationError):
+        asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
+
+
+@pytest.mark.parametrize("change", ["approval", "provenance", "missing", "order", "confidence"])
+def test_compact_twin_drafts_cannot_bypass_profile_governance(tmp_path, change):
+    request, output = twin_input_output()
+    profile = output["proposals"][0]
+    if change == "approval":
+        profile["validation_status"] = "OWNER_APPROVED_UT"
+    elif change == "provenance":
+        profile["observations"][0]["provenance"] = {"references": []}
+    elif change == "missing":
+        profile["observations"].pop()
+    elif change == "order":
+        profile["observations"].reverse()
+    else:
+        profile["observations"][0]["confidence"] = 1.1
+    generator, _ = make_generator(tmp_path, output)
     with pytest.raises(ProposalGenerationError):
         asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
 

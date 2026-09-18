@@ -78,6 +78,7 @@ export const useTeamStore = defineStore("team", () => {
   }
 
   async function perform<T>(operation: () => Promise<T>): Promise<T | null> {
+    if (busy.value) return null;
     busy.value = true;
     errorDetail.value = null;
 

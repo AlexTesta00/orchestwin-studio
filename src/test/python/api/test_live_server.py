@@ -60,6 +60,7 @@ def build_server_environment() -> dict[str, str]:
         {
             "ORCHESTWIN_APPLICATION_NAME": "OrchesTwin Smoke Test API",
             "ORCHESTWIN_ENVIRONMENT": "test",
+            "ORCHESTWIN_MODEL_RUNTIME_MODE": "DEVELOPMENT_FIXTURES",
             "ORCHESTWIN_DEBUG": "false",
             "ORCHESTWIN_LOG_LEVEL": "INFO",
             "ORCHESTWIN_API_PREFIX": "/api/v1",

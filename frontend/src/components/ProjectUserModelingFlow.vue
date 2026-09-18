@@ -25,6 +25,7 @@ const props = withDefaults(
   defineProps<{
     projectId: string;
     accessToken: string;
+    authorize?: <T>(operation: (token: string) => Promise<T>) => Promise<T>;
     locale?: Locale;
     autoLoad?: boolean;
   }>(),
@@ -78,7 +79,6 @@ const multiValueFields = new Set<UserTwinField>([
   "expertise",
   "goals",
   "recurring_tasks",
-  "context_of_use",
   "information_needs",
   "decision_criteria",
   "preferred_vocabulary",
@@ -141,6 +141,8 @@ const messages = {
     intro: "Review personas and User Twins before requirements definition.",
 
     loading: "Updating User Modeling state…",
+    generating:
+      "Model generation in progress. This may take several minutes on a local GPU; keep this page open.",
 
     error: "User Modeling operation failed.",
 
@@ -277,6 +279,8 @@ const messages = {
     intro: "Revisiona personas e User Twin prima della definizione dei requisiti.",
 
     loading: "Aggiornamento dello stato User Modeling…",
+    generating:
+      "Generazione del modello in corso. Sulla GPU locale può richiedere diversi minuti; mantieni aperta questa pagina.",
 
     error: "Operazione User Modeling non riuscita.",
 
@@ -408,6 +412,34 @@ const messages = {
 } as const;
 
 const copy = computed(() => messages[props.locale]);
+
+const errorMessage = computed(() => {
+  const code = localError.value ?? store.error?.code ?? store.error?.message;
+  if (!code) return null;
+  const errors: Record<string, [string, string]> = {
+    INVALID_PROVIDER_OUTPUT: [
+      "The model returned an incomplete or invalid proposal. No artifact was accepted. You can try again.",
+      "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
+    ],
+    INCOMPLETE_OUTPUT: [
+      "The model reached its generation limit. Try again with a smaller scope.",
+      "Il modello ha raggiunto il limite di generazione. Riprova con un ambito più contenuto.",
+    ],
+    PROVIDER_UNAVAILABLE: [
+      "The local model is unavailable. Check model status above.",
+      "Il modello locale non è disponibile. Controlla lo stato dei modelli qui sopra.",
+    ],
+    TIMEOUT: [
+      "Model generation timed out. Check model availability before retrying.",
+      "La generazione ha superato il tempo disponibile. Controlla il modello prima di riprovare.",
+    ],
+    CONTEXT_BUDGET_EXCEEDED: [
+      "These profiles exceed the model context window. Use fewer target groups or configure a larger context.",
+      "Questi profili superano il contesto del modello. Riduci i gruppi target oppure configura un contesto maggiore.",
+    ],
+  };
+  return errors[code]?.[props.locale === "it" ? 1 : 0] ?? code;
+});
 
 const personas = computed(() => store.currentPersonas);
 
@@ -548,11 +580,11 @@ function gateActionRequiresReason(action: GateDecisionAction): boolean {
   return action === "REJECT" || action === "REQUEST_REVISION";
 }
 
-async function runAction(action: () => Promise<unknown>): Promise<boolean> {
+async function runAction(action: (token: string) => Promise<unknown>): Promise<boolean> {
   localError.value = null;
 
   try {
-    await action();
+    await (props.authorize ? props.authorize(action) : action(props.accessToken));
 
     return true;
   } catch (error) {
@@ -573,11 +605,11 @@ async function loadProject(): Promise<void> {
     return;
   }
 
-  await runAction(() => store.load(props.projectId, props.accessToken));
+  await runAction((token) => store.load(props.projectId, token));
 }
 
 async function proposePersonas(): Promise<void> {
-  await runAction(() => store.proposePersonas(props.projectId, props.accessToken));
+  await runAction((token) => store.proposePersonas(props.projectId, token));
 }
 
 async function decidePersona(
@@ -592,19 +624,19 @@ async function decidePersona(
     return;
   }
 
-  await runAction(() =>
+  await runAction((token) =>
     store.decidePersona(
       props.projectId,
       persona.persona_id,
       decision,
-      props.accessToken,
+      token,
       reason.length > 0 ? reason : null,
     ),
   );
 }
 
 async function generateTwins(): Promise<void> {
-  await runAction(() => store.generateSnapshot(props.projectId, props.accessToken));
+  await runAction((token) => store.generateSnapshot(props.projectId, token));
 }
 
 function startRevision(twin: UserTwinVersionPayload, observation: ProfileObservationPayload): void {
@@ -742,8 +774,8 @@ async function submitRevision(): Promise<void> {
     rationale: null,
   };
 
-  const applied = await runAction(() =>
-    store.proposeRevision(props.projectId, twinId, [replacement], props.accessToken),
+  const applied = await runAction((token) =>
+    store.proposeRevision(props.projectId, twinId, [replacement], token),
   );
 
   if (applied) {
@@ -763,19 +795,19 @@ async function decideDiff(
     return;
   }
 
-  await runAction(() =>
+  await runAction((token) =>
     store.decideRevision(
       props.projectId,
       diff.id,
       decision,
-      props.accessToken,
+      token,
       reason.length > 0 ? reason : null,
     ),
   );
 }
 
 async function submitGate(): Promise<void> {
-  await runAction(() => store.submitGate(props.projectId, props.accessToken));
+  await runAction((token) => store.submitGate(props.projectId, token));
 }
 
 async function decideGate(action: GateDecisionAction): Promise<void> {
@@ -787,8 +819,8 @@ async function decideGate(action: GateDecisionAction): Promise<void> {
     return;
   }
 
-  await runAction(() =>
-    store.decideGate(props.projectId, action, props.accessToken, reason.length > 0 ? reason : null),
+  await runAction((token) =>
+    store.decideGate(props.projectId, action, token, reason.length > 0 ? reason : null),
   );
 }
 
@@ -825,7 +857,11 @@ watch(
       </p>
 
       <p v-if="store.isBusy" class="mt-4 text-sm font-medium text-slate-600" role="status">
-        {{ copy.loading }}
+        {{
+          store.pending["propose-personas"] || store.pending["generate-snapshot"]
+            ? copy.generating
+            : copy.loading
+        }}
       </p>
 
       <div
@@ -833,7 +869,7 @@ watch(
         class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         role="alert"
       >
-        {{ localError ?? store.error?.message ?? copy.error }}
+        {{ errorMessage }}
       </div>
     </header>
 
