@@ -2,7 +2,13 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { defaultLocale, isSupportedLocale, supportedLocales, type SupportedLocale } from "@/i18n";
+import {
+  defaultLocale,
+  isSupportedLocale,
+  saveLocale,
+  supportedLocales,
+  type SupportedLocale,
+} from "@/i18n";
 
 const { locale, t } = useI18n({
   useScope: "global",
@@ -14,6 +20,7 @@ const selectedLocale = computed<SupportedLocale>({
   },
   set(value) {
     locale.value = value;
+    saveLocale(value);
     document.documentElement.lang = value;
   },
 });

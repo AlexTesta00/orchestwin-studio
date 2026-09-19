@@ -24,7 +24,7 @@ from orchestwin.projects.requirements_primitives import canonical_json, snapshot
 
 # Accommodate exact approved snapshots plus pinned manifests. The serving runtime
 # separately enforces its token window; oversized inputs are never truncated.
-MAX_CONTEXT_BYTES = 32768
+MAX_CONTEXT_BYTES = 131072
 REPAIR_OUTPUT_TOKEN_LIMIT = 4096
 
 

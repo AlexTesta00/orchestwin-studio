@@ -13,11 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
-from orchestwin.artifacts.architecture_packages import (
-    ArchitecturePlanningPackage,
-    create_architecture_grounding,
-)
-from orchestwin.artifacts.design_packages import DesignExplorationPackage, create_design_grounding
 from orchestwin.models.architecture import (
     ArchitectureProposalProviderKind,
     ArchitectureProposalResult,
@@ -63,7 +58,6 @@ from orchestwin.models.user_modeling import (
     UserModelingProposalStatus,
     UserTwinProposalResult,
 )
-from orchestwin.projects.requirements_specifications import RequirementsSpecification
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
     EpistemicStatus,
@@ -223,67 +217,29 @@ class ModelRequirementsAdapter:
     @_model_boundary
     async def propose(self, request):
         _require(AgentIdentifier.REQUIREMENTS_ANALYST in request.team.selected_agent_ids)
-        output = await self.generator.generate(
+        from orchestwin.models.requirements_drafts import (
+            RequirementsDraft,
+            bind_requirements,
+            requirements_context,
+        )
+
+        context, sources, twins = requirements_context(request)
+        draft = await self.generator.generate(
             task="requirements",
-            context=request,
-            output_type=RequirementsSpecification,
+            context=context,
+            output_type=RequirementsDraft,
             instruction=(
-                "Write requirements, user stories, acceptance criteria, scenarios, risks and "
-                "Definition of Done grounded in the supplied brief and User Twins. "
-                "Copy the exact project/context/catalog/twin references. Use unique UUIDs for "
-                "new artifacts, canonical code ordering and internally resolving references. "
-                "Do not invent source evidence or declare verification results."
+                "Write a concise complete requirements baseline in the brief's language. "
+                "Use codes REQ-001, USR-001, AC-001, SCN-001, RSK-001, DOD-001. "
+                "References use these codes, never UUIDs. Sources must be exact keys from "
+                "context.evidence; twins must be exact keys from context.twins. "
+                "Cover every brief requirement and each twin with a story and scenario. "
+                "Keep criteria concrete and testable. Include relevant risks and completion "
+                "conditions. All items are proposals, never executed tests or owner decisions. "
+                "Do not invent source evidence, identifiers, hashes or approval state."
             ),
         )
-        _require(
-            output.project_id == request.project_id
-            and output.project_brief_reference == request.brief.reference
-            and output.agent_team_reference == request.team.reference
-            and output.user_modeling_reference == request.user_modeling.reference
-            and output.catalog_version == request.catalog_version
-            and output.catalog_content_hash == request.catalog_content_hash
-            and output.user_twin_references == request.user_modeling.user_twin_references
-        )
-        # Domain validation resolves internal IDs; bind external evidence to this request too.
-        from orchestwin.models.proposal_generation import wire_value
-        from orchestwin.projects.requirements_primitives import RequirementSourceKind
-
-        brief_fields = wire_value(request.brief)
-        locators = {
-            name
-            for name, value in brief_fields.items()
-            if isinstance(value, str) and value and name not in request.brief.unknown_fields
-        }
-        locators.update(
-            f"{name}[{index}]"
-            for name, values in brief_fields.items()
-            if isinstance(values, list) and name != "unknown_fields"
-            for index in range(len(values))
-        )
-        for item in (*output.requirements, *output.risks):
-            for source in item.sources:
-                if source.kind is RequirementSourceKind.PROJECT_BRIEF:
-                    reference = request.brief.reference
-                    _require(
-                        source.source_id == str(reference.artifact_id)
-                        and source.source_version == reference.version_number
-                        and source.content_hash == reference.content_hash
-                        and source.locator in locators
-                    )
-                elif source.kind is RequirementSourceKind.USER_TWIN:
-                    _require(
-                        any(
-                            source.source_id == str(twin.twin_id)
-                            and source.source_version == twin.version_number
-                            and source.content_hash == twin.content_hash
-                            and source.locator
-                            in {item.observation_key for item in twin_input.observations}
-                            for twin_input in request.user_modeling.user_twins
-                            for twin in (twin_input.reference,)
-                        )
-                    )
-                else:
-                    _require(False)
+        output = bind_requirements(draft, request, sources, twins)
         return RequirementsProposalResult(
             status=RequirementsProposalStatus.PROPOSED,
             provider_kind=RequirementsProposalProviderKind.MODEL_ADAPTER,
@@ -300,52 +256,26 @@ class ModelDesignAdapter:
     @_model_boundary
     async def propose(self, request):
         _require(AgentIdentifier.UX_UI_DESIGNER in request.team.selected_agent_ids)
-        output = await self.generator.generate(
+        from orchestwin.models.design_drafts import DesignDraft, bind_design, design_context
+
+        context, twins = design_context(request)
+        draft = await self.generator.generate(
             task="design",
-            context={
-                "request": request,
-                "grounding": create_design_grounding(request.requirements.version),
-            },
-            output_type=DesignExplorationPackage,
+            context=context,
+            output_type=DesignDraft,
             instruction=(
-                "Produce distinct traceable design alternatives and explicitly synthetic User Twin "
-                "critiques. Copy the supplied grounding exactly. Include a recommendation, concerns "
-                "and open questions. owner_selected_alternative_id and prototype must be null. "
-                "Use unique UUIDs and canonical ordering; evidence references must resolve to "
-                "the supplied observations. Never simulate an owner decision or empirical study."
+                "Propose exactly two distinct design approaches in the requirements' language. "
+                "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
+                "DRK-001 for concerns; every code must be unique. References use supplied "
+                "requirement/story/criterion codes and T1/T2 twin keys. Include one synthetic "
+                "critique for EVERY alternative/twin pair; cite exact observation_keys from "
+                "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
+                "Do not invent empirical evidence, owner selection, approval or a prototype."
             ),
         )
-        _require(
-            output.project_id == request.project_id
-            and output.grounding == create_design_grounding(request.requirements.version)
-            and output.owner_selected_alternative_id is None
-            and output.prototype is None
+        output = bind_design(
+            draft, request, twins, lambda code: _model_reference(self.generator, code)
         )
-        critiques = []
-        for critique in output.critiques:
-            twin = next(
-                item
-                for item in request.user_modeling.user_twins
-                if item.reference == critique.user_twin_reference
-            )
-            references = {
-                reference
-                for observation in twin.observations
-                for reference in observation.provenance.references
-            }
-            _require(set(critique.provenance.references) <= references)
-            critiques.append(
-                replace(
-                    critique,
-                    provenance=ObservationProvenance.from_references(
-                        (
-                            *critique.provenance.references,
-                            _model_reference(self.generator, critique.code),
-                        )
-                    ),
-                )
-            )
-        output = replace(output, critiques=tuple(critiques))
         return DesignProposalResult(
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
@@ -366,19 +296,9 @@ class ModelArchitectureAdapter:
             <= set(request.team.selected_agent_ids)
             and request.design.ready_for_architecture
         )
-        grounding = create_architecture_grounding(request.design.version)
-        output = await self.generator.generate(
-            task="architecture",
-            context={"request": request, "grounding": grounding},
-            output_type=ArchitecturePlanningPackage,
-            instruction=(
-                "Produce a concrete software architecture and planned tests for the approved "
-                "design, prototype and requirements. Copy the supplied grounding exactly. "
-                "Use unique UUIDs, canonical ordering and resolving component/test references. "
-                "Tests are plans only; do not claim execution, passing checks or Level D evidence."
-            ),
-        )
-        _require(output.project_id == request.project_id and output.grounding == grounding)
+        from orchestwin.models.architecture_generation import generate_architecture
+
+        output = await generate_architecture(self.generator, request)
         return ArchitectureProposalResult(
             status=ArchitectureProposalStatus.PROPOSED,
             provider_kind=ArchitectureProposalProviderKind.MODEL_ADAPTER,

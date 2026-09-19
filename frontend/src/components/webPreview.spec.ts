@@ -17,6 +17,19 @@ function content(html: string): PreviewContent {
   };
 }
 describe("generated Web preview", () => {
+  it("preserves DOM-ready ordering of deferred classic scripts", () => {
+    const doc = new DOMParser().parseFromString(
+      buildWebPreview(
+        content(
+          '<html><head><script defer src="app.js"></script></head><body><output>0</output></body></html>',
+        ),
+      ),
+      "text/html",
+    );
+    expect(doc.head.querySelector("script")).toBeNull();
+    expect(doc.body.lastElementChild?.tagName).toBe("SCRIPT");
+    expect(doc.body.lastElementChild?.hasAttribute("defer")).toBe(false);
+  });
   it("resolves original local assets and prepends a restrictive policy", () => {
     const result = buildWebPreview(
       content(

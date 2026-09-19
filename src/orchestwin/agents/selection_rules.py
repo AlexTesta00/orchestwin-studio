@@ -397,6 +397,13 @@ _BASELINE_MANDATORY_REASONS: Final[
 
 
 _USER_INTERFACE_MARKERS: Final = (
+    "html",
+    "css",
+    "interfaccia",
+    "calcolatrice web",
+    "applicazione web",
+    "sito web",
+    "schermata",
     "user interface",
     "graphical interface",
     "dashboard",
@@ -499,6 +506,12 @@ _SECURITY_MARKERS: Final = (
 
 
 _ACCESSIBILITY_MARKERS: Final = (
+    "accessibile",
+    "accessibili",
+    "accessibilita",
+    "tastiera",
+    "lettore di schermo",
+    "contrasto",
     "accessibility",
     "wcag",
     "screen reader",
@@ -510,6 +523,8 @@ _ACCESSIBILITY_MARKERS: Final = (
 
 
 _NO_USER_INTERFACE_MARKERS: Final = (
+    "senza interfaccia",
+    "nessuna interfaccia",
     "headless",
     "api only",
     "backend only",
@@ -521,6 +536,8 @@ _NO_USER_INTERFACE_MARKERS: Final = (
 
 
 _NO_FRONTEND_MARKERS: Final = (
+    "nessun frontend",
+    "senza frontend",
     "no frontend",
     "without frontend",
     "api only",
@@ -533,6 +550,14 @@ _NO_FRONTEND_MARKERS: Final = (
 
 
 _NO_BACKEND_MARKERS: Final = (
+    "nessun backend o database",
+    "senza backend o database",
+    "nessun backend",
+    "senza backend",
+    "nessun database",
+    "senza database",
+    "nessun server",
+    "senza server",
     "no backend",
     "without backend",
     "frontend only",

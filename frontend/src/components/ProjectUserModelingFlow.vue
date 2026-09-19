@@ -457,7 +457,7 @@ const confirmedPersonas = computed(() =>
 
 const canGenerateTwins = computed(
   () =>
-    store.currentSnapshot === null &&
+    (store.currentSnapshot === null || store.readiness?.context_current === false) &&
     personas.value.length > 0 &&
     pendingPersonas.value.length === 0 &&
     confirmedPersonas.value.length > 0,
@@ -998,7 +998,17 @@ watch(
         </article>
       </div>
 
-      <div v-if="store.currentSnapshot === null" class="mt-5">
+      <div
+        v-if="store.currentSnapshot === null || store.readiness?.context_current === false"
+        class="mt-5"
+      >
+        <p v-if="store.readiness?.context_current === false" role="status">
+          {{
+            locale === "it"
+              ? "Brief o team sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire."
+              : "The brief or team changed: generate and approve a new User Twin version before continuing."
+          }}
+        </p>
         <button
           type="button"
           class="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { apiClient } from "@/api/client";
+import { ApiRequestError } from "@/api/requestError";
+import { generationProgress, modelFeedback } from "./modelFeedback";
 import { executionApi, type ExecutionApi } from "@/api/execution";
 import {
   sourceGenerationApi,
@@ -28,6 +30,7 @@ const architecture = useArchitectureStore();
 const web = useWebExecutionStore();
 const jvm = useJvmExecutionStore();
 const profiles = ref<ExecutionProfilePayload[]>([]);
+const profilesLoading = ref(true);
 const target = ref<ExecutionTarget>("WEB_STATIC");
 const frontendLanguage = ref<"JAVASCRIPT" | "TYPESCRIPT">("TYPESCRIPT");
 const backendLanguage = ref<"JAVASCRIPT" | "TYPESCRIPT">("TYPESCRIPT");
@@ -80,8 +83,9 @@ const copy = computed(() =>
         exists:
           "Esiste già una revisione: usa le evidenze di esecuzione per proporre una riparazione.",
         unavailable: "Il profilo selezionato non è disponibile.",
+        loadingProfiles: "Caricamento dei profili disponibili…",
         generate: "Genera sorgenti e test",
-        busy: "Generazione in corso…",
+        busy: generationProgress("it"),
         created: "Revisione generata",
         failed:
           "Generazione non completata. Controlla lo stato del modello e aggiorna le revisioni prima di riprovare.",
@@ -100,8 +104,9 @@ const copy = computed(() =>
         waiting: "Approve the architecture to generate sources.",
         exists: "A source revision already exists. Use execution evidence to propose a repair.",
         unavailable: "The selected profile is unavailable.",
+        loadingProfiles: "Loading available profiles…",
         generate: "Generate sources and tests",
-        busy: "Generating…",
+        busy: generationProgress("en"),
         created: "Generated revision",
         failed:
           "Generation did not complete. Check the model and refresh source revisions before retrying.",
@@ -115,11 +120,14 @@ function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
 }
 async function loadProfiles() {
   const currentEpoch = epoch;
+  profilesLoading.value = true;
   try {
     const values = await authorized((token) => (props.catalogApi ?? executionApi).profiles(token));
     if (currentEpoch === epoch) profiles.value = values;
   } catch {
     if (currentEpoch === epoch) error.value = copy.value.unavailable;
+  } finally {
+    if (currentEpoch === epoch) profilesLoading.value = false;
   }
 }
 async function generate() {
@@ -152,12 +160,15 @@ async function generate() {
     generatedVersions.value[selectedPlatform] = revision.version_number;
     const store = selectedPlatform === "web" ? web : jvm;
     await store.loadProject(project, authorized);
-  } catch {
+  } catch (failure) {
     if (currentEpoch === epoch)
       error.value =
         generatedVersions.value[selectedPlatform] !== undefined
           ? copy.value.refreshFailed
-          : copy.value.failed;
+          : (modelFeedback(
+              failure instanceof ApiRequestError ? failure.code : null,
+              props.locale,
+            ) ?? copy.value.failed);
   } finally {
     if (currentEpoch === epoch) pending.value = false;
   }
@@ -212,6 +223,7 @@ onUnmounted(() => {
         </select>
       </label>
       <p v-if="hasSource" role="status">{{ copy.exists }}</p>
+      <p v-else-if="profilesLoading" role="status">{{ copy.loadingProfiles }}</p>
       <p v-else-if="!profile" role="status">{{ copy.unavailable }}</p>
       <p v-else-if="profile.capability_status === 'DESIGN_ONLY_LEVEL_C'">{{ copy.levelC }}</p>
       <button

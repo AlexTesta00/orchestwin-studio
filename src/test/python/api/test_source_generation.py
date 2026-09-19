@@ -72,9 +72,14 @@ def test_invalid_target_configuration_is_an_admission_error(platform, options):
 
 def test_oversized_context_is_rejected_without_truncating():
     with pytest.raises(HTTPException) as error:
-        _bounded_context({"requirements": "x" * 32768})
+        _bounded_context({"requirements": "x" * 131072})
     assert error.value.status_code == 422
     assert error.value.detail["code"] == "SOURCE_CONTEXT_LIMIT_EXCEEDED"
+
+
+def test_complete_approved_context_can_exceed_the_old_byte_limit():
+    context = {"requirements": "x" * 20000, "architecture": "y" * 20000}
+    assert _bounded_context(context) is context
 
 
 def test_real_source_cannot_publish_without_an_evidence_store():

@@ -515,6 +515,13 @@ class LocalUserModelingApplicationService:
             version=next_version,
         )
 
+    async def snapshot_context_is_current(self, *, owner_user_id, project_id, snapshot):
+        context = await self._governance.load_current(
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+        )
+        return snapshot is not None and snapshot_matches_context(snapshot, context)
+
     @evidence_application
     async def generate_grounded_snapshot(
         self,
@@ -544,12 +551,14 @@ class LocalUserModelingApplicationService:
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
-            if current_snapshot is not None:
+            if current_snapshot is not None and snapshot_matches_context(current_snapshot, context):
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.SNAPSHOT_ALREADY_EXISTS),
                 )
 
+            base_snapshot_id = None if current_snapshot is None else current_snapshot.id
+            base_version = None if current_snapshot is None else current_snapshot.version_number
             persona_versions = await uow.personas.list_current(project_id=(project_id))
 
         (
@@ -606,7 +615,7 @@ class LocalUserModelingApplicationService:
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
-            if current_snapshot is not None:
+            if (None if current_snapshot is None else current_snapshot.id) != base_snapshot_id:
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.CONTEXT_CHANGED),
@@ -666,8 +675,8 @@ class LocalUserModelingApplicationService:
             snapshot_version = UserModelingSnapshotVersion(
                 id=self._uuid_factory(),
                 project_id=project_id,
-                version_number=1,
-                based_on_version_number=None,
+                version_number=1 if base_version is None else base_version + 1,
+                based_on_version_number=base_version,
                 snapshot=snapshot,
                 content_hash=(snapshot.content_hash),
                 created_by_user_id=(owner_user_id),
@@ -1027,3 +1036,16 @@ def _is_sha256_digest(
 def _utc_now() -> datetime:
     """Return the current UTC timestamp."""
     return datetime.now(UTC)
+
+
+def snapshot_matches_context(snapshot_version, context):
+    """An old approved snapshot cannot authorize a changed brief or team."""
+    if context is None or _governance_issue(context) is not None:
+        return False
+    snapshot = snapshot_version.snapshot
+    return (
+        snapshot.project_brief_reference == context.brief_reference
+        and snapshot.agent_team_reference == context.team_reference
+        and snapshot.catalog_version == context.catalog_version
+        and snapshot.catalog_content_hash == context.catalog_content_hash
+    )

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { modelFeedback, generationProgress } from "./modelFeedback";
 import { computed, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
@@ -21,12 +22,14 @@ const props = withDefaults(
     projectId: string;
     locale?: Locale;
     autoLoad?: boolean;
+    prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: DesignApi;
   }>(),
   {
     locale: "en",
     autoLoad: true,
+    prerequisiteReady: true,
   },
 );
 
@@ -192,7 +195,11 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     await operation();
     return true;
   } catch (error) {
-    localError.value = error instanceof Error ? error.message : copy.value.loadError;
+    localError.value =
+      modelFeedback(store.error?.code, props.locale) ??
+      (error instanceof Error
+        ? (modelFeedback(error.message, props.locale) ?? error.message)
+        : copy.value.loadError);
     return false;
   }
 }
@@ -206,6 +213,7 @@ async function load(): Promise<void> {
 }
 
 async function generate(): Promise<void> {
+  if (!props.prerequisiteReady || store.isBusy) return;
   await run(() => store.generate(props.projectId, authorizedRequest, api.value));
 }
 
@@ -316,7 +324,7 @@ watch(
     </p>
 
     <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
-      {{ copy.loading }}
+      {{ store.pending.generate ? generationProgress(locale) : copy.loading }}
     </p>
 
     <p
@@ -324,15 +332,27 @@ watch(
       class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
       role="alert"
     >
-      {{ localError ?? store.error?.message ?? copy.loadError }}
+      {{
+        localError ??
+        modelFeedback(store.error?.code, locale) ??
+        store.error?.message ??
+        copy.loadError
+      }}
     </p>
 
     <template v-if="current === null">
       <p class="m-0 text-slate-600">{{ copy.noPackage }}</p>
+      <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
+        {{
+          locale === "it"
+            ? "Approva i requisiti al Gate 4 per generare le alternative."
+            : "Approve requirements at Gate 4 to generate alternatives."
+        }}
+      </p>
       <button
         type="button"
         class="justify-self-start rounded-xl bg-indigo-700 px-5 py-3 font-black text-white hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-400"
-        :disabled="store.isBusy"
+        :disabled="store.isBusy || !prerequisiteReady"
         @click="generate"
       >
         {{ copy.generate }}

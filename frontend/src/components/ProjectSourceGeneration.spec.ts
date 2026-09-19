@@ -10,6 +10,7 @@ import type {
 } from "@/types/architecture";
 import type { ExecutionProfilePayload } from "@/types/execution";
 import type { GeneratedSource, SourceGenerationApi } from "@/api/sourceGeneration";
+import { SourceGenerationApiError } from "@/api/sourceGeneration";
 import ProjectSourceGeneration from "./ProjectSourceGeneration.vue";
 
 function setup(approved = true) {
@@ -51,6 +52,22 @@ function setup(approved = true) {
 }
 
 describe("source generation", () => {
+  it("explains a rejected model output and leaves retry available", async () => {
+    const { wrapper, api } = setup();
+    await wrapper.setProps({ locale: "it" });
+    vi.mocked(api.source).mockRejectedValue(
+      new SourceGenerationApiError("Source generation request failed", {
+        status: 502,
+        code: "INVALID_PROVIDER_OUTPUT",
+        payload: null,
+      }),
+    );
+    await flushPromises();
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Il modello ha restituito una proposta non valida");
+    expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeUndefined();
+  });
   it("requires the approved architecture before making a model request", async () => {
     const { wrapper, api } = setup(false);
     await flushPromises();

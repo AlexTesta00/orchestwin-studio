@@ -116,7 +116,9 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         )
         assert child_ctx["source_step"]["parent_generation_id"] == str(parent)
         assert child_ctx["source_step"]["ordinal"] == ordinal
-        assert len(child_ctx["completed_files"]) == ordinal - 1
+        assert [f["normalized_path"] for f in child_ctx["completed_files"]] == (
+            [] if ordinal == 1 else ["app.js"]
+        )
         assert store.events[child][-1][1]["status"] == "SOURCE_FILE_GENERATED"
     assert store.events[parent][-1][0] == "APPLICATION_RESULT"
 

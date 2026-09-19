@@ -45,6 +45,7 @@ class ProposalEvidenceScope:
     result: object | None = None
     accepted_hashes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     observed_events: set[str] = field(default_factory=set)
+    related_generations: list[dict] = field(default_factory=list)
 
     async def begin(self, request):
         if self.request is not None:
@@ -183,6 +184,11 @@ async def retain_adapter_result(result=None, *, error=None):
         {
             "result": wire_value(result),
             "generated_content_hashes": hashes,
+            **(
+                {"related_generations": scope.related_generations}
+                if scope.related_generations
+                else {}
+            ),
             **(
                 {"source_binding": result.source_binding}
                 if hasattr(result, "source_binding")

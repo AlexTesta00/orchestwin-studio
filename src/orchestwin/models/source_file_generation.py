@@ -34,7 +34,7 @@ PROTOCOL = "SOURCE_FILES_V2_TEXT"
 MANIFEST_BUDGET = 3200
 FILE_BUDGET = 4096
 MAX_FILES = 8
-MANIFEST_CONTRACT = "SOURCE_MANIFEST_V9_ACCEPTANCE_INPUTS"
+MANIFEST_CONTRACT = "SOURCE_MANIFEST_V11_SHARED_FIELD_SCHEMAS"
 
 
 class PlannedFile(_Output):
@@ -273,6 +273,8 @@ def _file_instruction(planned):
         "Do not repeat the HTML page when writing scripts, tests, JSON, CSS or JVM code. "
         "Implement the approved business statements repeated in work_order; read the complete implementation_contract for all remaining conditions and relationships. "
         "Implement every observable_postcondition in manifest.acceptance_checks through its public interface. "
+        "Implement product behavior, but leave human studies, owner approvals and external verification pending. "
+        "Never add dummy functions or passing tests that claim those activities occurred. "
         "A scenario's expected_outcome is required behavior, including any read-back or retrieval operation; returning an identifier alone does not implement retrieval. "
         "The example names in pinned build paths do not define the business requirements. "
     )
@@ -303,6 +305,8 @@ def _static_file_instruction(planned):
             "Export the public functions inside if (typeof module !== 'undefined') for Node tests. "
             "Use module.exports = { ... } in that guard. This is a classic browser script: never use import or export statements. "
             "Put every document/window reference inside if (typeof document !== 'undefined') for the browser. "
+            "Bind DOM handlers after DOMContentLoaded or after the HTML controls exist. "
+            "Use explicit arithmetic operations, never eval or Function. Do not require localStorage, network requests or external resources. "
         )
     return ""
 
@@ -419,12 +423,17 @@ async def generate_source_files(generator, *, task, context):
         task=task,
         context=root_context,
         output_type=_coverage_manifest_type(target, entrypoint, work_order),
-        max_output_tokens=MANIFEST_BUDGET,
+        max_output_tokens=min(
+            generator.configuration.max_output_tokens,
+            max(MANIFEST_BUDGET, 1400 + 140 * len(work_order["statements"])),
+        ),
         instruction="Plan the business behavior in work_order, using the complete approved artifacts for all conditions. Pinned example package names are launcher metadata, not the requested application. "
         "First fill behavior_plan with the actual inputs and validation, state ownership and lifetime, and observable outputs required by work_order. A plan is a proposal, not evidence that behavior exists. "
         "For EACH work_order statement, fill the corresponding acceptance_checks entry with the callable public interface and observable postcondition that satisfies it. "
         "Include scenario expected_outcome as well as acceptance criteria. If an outcome requires retrieval, expose a read method returning the stored data, not just an identifier. "
         "A required field in the approved design requires validation before changing state; include its invalid-input postcondition. "
+        "Keep each acceptance check to one concise interface and one concrete postcondition. Reference dictionaries are lossless aliases for repeated artifact identifiers, never application data. "
+        "For obligations requiring human studies or external review, identify the review procedure with MANUAL_REVIEW: and keep it pending; do not invent a callable that claims verification occurred. "
         "Then plan file names, responsibilities and exact public interfaces that implement that behavior. No source code. "
         "Rationale and each purpose must be one short sentence, preferably under 80 characters. "
         "Define exact callable signatures, return types and shared state ownership in interface, not file names. List project files imported or consumed in depends_on; use [] for independent files. Order dependencies before consumers. Tests depend on their actual implementation, and HTML depends on its script. "
@@ -446,6 +455,10 @@ async def generate_source_files(generator, *, task, context):
             "manifest_hash": manifest_hash,
             "file": planned.model_dump(),
         }
+        dependencies = set(planned.depends_on)
+        for dependency in reversed(manifest.files):
+            if dependency.normalized_path in dependencies:
+                dependencies.update(dependency.depends_on)
         child_context = {
             "project_id": context["project_id"],
             "generation_protocol": PROTOCOL,
@@ -456,7 +469,9 @@ async def generate_source_files(generator, *, task, context):
             "build_recipes": context.get("build_recipes", {}),
             "entrypoint_contract": entrypoint,
             "completed_files": [
-                {"normalized_path": f.normalized_path, "content": f.content} for f in files
+                {"normalized_path": f.normalized_path, "content": f.content}
+                for f in files
+                if f.normalized_path in dependencies
             ],
             "work_order": work_order,
         }

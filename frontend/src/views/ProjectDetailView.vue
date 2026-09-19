@@ -27,10 +27,31 @@ import ProjectWebPreview from "@/components/ProjectWebPreview.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
 import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
+import { useTeamStore } from "@/stores/team";
+import { useUserModelingStore } from "@/stores/userModeling";
+import { useRequirementsStore } from "@/stores/requirements";
+import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
 const auth = useAuthStore();
+const team = useTeamStore();
+const modeling = useUserModelingStore();
+const requirements = useRequirementsStore();
+const design = useDesignStore();
+// Reload downstream state when its approved inputs change on this page.
+const teamContext = computed(
+  () => `${currentBrief.value?.id}:${team.currentVersion?.id}:${team.gate?.status}`,
+);
+const twinContext = computed(
+  () => `${teamContext.value}:${modeling.currentSnapshot?.id}:${modeling.currentGate?.status}`,
+);
+const requirementsContext = computed(
+  () => `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`,
+);
+const designContext = computed(
+  () => `${requirementsContext.value}:${design.current?.id}:${design.gate?.status}`,
+);
 
 const { t, locale } = useI18n({
   useScope: "local",
@@ -322,7 +343,7 @@ onUnmounted(() => {
       <ProjectUserModelingFlow
         id="studio-twins"
         v-if="auth.accessToken"
-        :key="`${projectId}:user-modeling`"
+        :key="`${projectId}:${teamContext}:user-modeling`"
         :project-id="projectId"
         :access-token="auth.accessToken"
         :authorize="authorized"
@@ -330,22 +351,25 @@ onUnmounted(() => {
       />
 
       <ProjectRequirementsFlow
+        :prerequisite-ready="modeling.isReadyForRequirements"
         id="studio-requirements"
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:requirements`"
+        :key="`${projectId}:${twinContext}:requirements`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
       <ProjectDesignFlow
+        :prerequisite-ready="requirements.isReadyForDesign"
         id="studio-design"
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:design`"
+        :key="`${projectId}:${requirementsContext}:design`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />
 
       <ProjectArchitectureFlow
+        :prerequisite-ready="design.isReadyForArchitecture"
         id="studio-architecture"
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:architecture`"
+        :key="`${projectId}:${designContext}:architecture`"
         :project-id="projectId"
         :locale="locale === 'it' ? 'it' : 'en'"
       />

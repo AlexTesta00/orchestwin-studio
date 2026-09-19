@@ -34,7 +34,10 @@ def isolated_environment(monkeypatch, tmp_path):
 
 def test_standard_factory_registers_modeling_routes_with_the_custom_api_prefix():
     bundle = SimpleNamespace(
-        commands=object(), revisions=object(), queries=object(), gates=object()
+        commands=SimpleNamespace(snapshot_context_is_current=AsyncMock(return_value=True)),
+        revisions=object(),
+        queries=object(),
+        gates=object(),
     )
     runtime = ApplicationRuntime(user_modeling_services=bundle)
     app = create_app(
@@ -62,7 +65,12 @@ def test_standard_factory_registers_modeling_routes_with_the_custom_api_prefix()
 def test_standard_factory_preserves_authenticated_owner_scope():
     queries = SimpleNamespace(snapshot_history=AsyncMock(return_value=()))
     identity = SimpleNamespace(current_user=AsyncMock(return_value=SimpleNamespace(id=OWNER)))
-    bundle = SimpleNamespace(commands=object(), revisions=object(), queries=queries, gates=object())
+    bundle = SimpleNamespace(
+        commands=SimpleNamespace(snapshot_context_is_current=AsyncMock(return_value=True)),
+        revisions=object(),
+        queries=queries,
+        gates=object(),
+    )
     app = create_app(
         ApplicationSettings(_env_file=None),
         runtime=ApplicationRuntime(identity_service=identity, user_modeling_services=bundle),

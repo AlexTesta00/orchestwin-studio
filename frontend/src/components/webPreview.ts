@@ -44,11 +44,18 @@ export function buildWebPreview(content: PreviewContent): string {
   }
   for (const script of doc.querySelectorAll<HTMLScriptElement>("script[src]")) {
     const source = text(find(script.getAttribute("src") ?? ""));
+    // Inline classic scripts ignore defer. Keep their DOM-ready ordering when
+    // packaging the original local resource into the isolated document.
+    const deferred = script.hasAttribute("defer") && script.type !== "module";
     script.removeAttribute("src");
     script.removeAttribute("integrity");
     script.removeAttribute("crossorigin");
     // Preserve literal closing tags in JavaScript strings across srcdoc parsing.
     script.textContent = source.replace(/<\/script/gi, "<\\/script");
+    if (deferred) {
+      script.removeAttribute("defer");
+      doc.body.append(script);
+    }
   }
   for (const element of doc.querySelectorAll("img[src], source[src], audio[src], video[src]")) {
     const src = element.getAttribute("src") ?? "";

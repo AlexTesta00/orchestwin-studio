@@ -26,7 +26,6 @@ from orchestwin.models.proposal_evidence import (
 from orchestwin.models.proposal_generation import (
     ProposalGenerationError,
     build_proposal_generator,
-    wire_value,
 )
 from orchestwin.models.user_modeling import UserTwinProposalRequest
 from src.test.python.models import test_model_proposals as fixtures
@@ -123,7 +122,9 @@ def stage_case(stage):
                 for c in value.critiques
             ),
         )
-    return request, wire_value(value), adapter, "propose", stage.upper()
+    from .draft_fixtures import proposal_draft
+
+    return request, proposal_draft(stage, value, request), adapter, "propose", stage.upper()
 
 
 @pytest.mark.parametrize(

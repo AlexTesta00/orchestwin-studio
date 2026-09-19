@@ -1252,3 +1252,35 @@ def test_second_initial_snapshot_generation_is_rejected() -> None:
     assert second.issue is (UserModelingApplicationIssueCode.SNAPSHOT_ALREADY_EXISTS)
 
     assert proposals.twin_calls == 1
+
+
+def test_changed_team_allows_new_snapshot_without_reusing_old_approval():
+    from orchestwin.twins.application import snapshot_matches_context
+
+    context = ready_context()
+    service, governance, _, store, _ = build_service(context)
+
+    async def run():
+        await propose_and_confirm(service)
+        first = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert first.snapshot_version is not None
+        changed = changed_team_context(context)
+        governance.set_contexts((changed,))
+        assert not snapshot_matches_context(first.snapshot_version, changed)
+        second = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert second.snapshot_version is not None
+        assert second.snapshot_version.version_number == 2
+        assert second.snapshot_version.based_on_version_number == 1
+        assert second.snapshot_version.snapshot.agent_team_reference == changed.team_reference
+        assert snapshot_matches_context(second.snapshot_version, changed)
+        assert all(
+            t.profile.validation_status is UserTwinLifecycleStatus.PROJECT_GROUNDED_UT
+            for t in second.twin_versions
+        )
+        assert len(store.snapshots[PROJECT_ID]) == 2
+
+    asyncio.run(run())

@@ -99,3 +99,28 @@ def test_behavior_changes_cannot_collapse_to_the_same_model_input(path, new_valu
         node = node[key]
     node[path[-1]] = new_value
     assert implementation_contract(original) != implementation_contract(changed)
+
+
+def test_reference_dictionary_is_lossless_and_does_not_rewrite_business_text():
+    from orchestwin.models.source_context import compact_implementation_references
+
+    identifier = "12345678-1234-1234-1234-123456789abc"
+    original = approved_context()
+    original["requirements"]["content"]["requirements"] = [
+        {"id": identifier, "statement": identifier},
+    ]
+    original["architecture"]["content"]["requirement_ids"] = [identifier] * 10
+    encoded = compact_implementation_references(original)
+    alias, value = next(iter(encoded["reference_aliases"].items()))
+    assert value == identifier
+    assert encoded["requirements"]["content"]["requirements"][0]["statement"] == identifier
+    assert encoded["architecture"]["content"]["requirement_ids"] == [alias] * 10
+    assert encoded["design"]["reference"] == original["design"]["reference"]
+    contract = implementation_contract(encoded)
+    assert contract["reference_aliases"][alias] == identifier
+    assert original["architecture"]["content"]["requirement_ids"] == [identifier] * 10
+    encoded["architecture"]["content"]["requirement_ids"] = [
+        contract["reference_aliases"][x]
+        for x in encoded["architecture"]["content"]["requirement_ids"]
+    ]
+    assert encoded["architecture"]["content"] == original["architecture"]["content"]

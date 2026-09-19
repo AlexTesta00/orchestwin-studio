@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { modelFeedback, generationProgress } from "./modelFeedback";
 import { computed, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
@@ -26,12 +27,14 @@ const props = withDefaults(
     projectId: string;
     locale?: Locale;
     autoLoad?: boolean;
+    prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: RequirementsApi;
   }>(),
   {
     locale: "en",
     autoLoad: true,
+    prerequisiteReady: true,
   },
 );
 
@@ -218,7 +221,11 @@ async function run(operation: () => Promise<unknown>): Promise<boolean> {
     await operation();
     return true;
   } catch (error) {
-    localError.value = error instanceof Error ? error.message : copy.value.loadError;
+    localError.value =
+      modelFeedback(store.error?.code, props.locale) ??
+      (error instanceof Error
+        ? (modelFeedback(error.message, props.locale) ?? error.message)
+        : copy.value.loadError);
     return false;
   }
 }
@@ -232,6 +239,7 @@ async function load(): Promise<void> {
 }
 
 async function generate(): Promise<void> {
+  if (!props.prerequisiteReady || store.isBusy) return;
   await run(() => store.generate(props.projectId, authorizedRequest, api.value));
 }
 
@@ -422,14 +430,19 @@ watch(
         {{ copy.intro }}
       </p>
       <p v-if="store.isBusy" class="m-0 text-sm font-semibold text-slate-600" role="status">
-        {{ copy.loading }}
+        {{ store.pending.generate ? generationProgress(locale) : copy.loading }}
       </p>
       <p
         v-if="localError !== null || store.error !== null"
         class="m-0 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800"
         role="alert"
       >
-        {{ localError ?? store.error?.message ?? copy.loadError }}
+        {{
+          localError ??
+          modelFeedback(store.error?.code, locale) ??
+          store.error?.message ??
+          copy.loadError
+        }}
       </p>
     </header>
 
@@ -440,10 +453,17 @@ watch(
       <p class="m-0 text-slate-600">
         {{ copy.noSpecification }}
       </p>
+      <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
+        {{
+          locale === "it"
+            ? "Approva lo snapshot User Twin al Gate 3 per generare i requisiti."
+            : "Approve the User Twin snapshot at Gate 3 to generate requirements."
+        }}
+      </p>
       <button
         type="button"
         class="w-fit rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
-        :disabled="store.isBusy"
+        :disabled="store.isBusy || !prerequisiteReady"
         data-testid="generate-requirements"
         @click="generate"
       >

@@ -250,6 +250,6 @@ def test_jvm_generates_only_selected_language_roots_and_preserves_fixed_manifest
 
 def test_oversized_context_never_calls_provider(tmp_path):
     ctx = context()
-    ctx["unexpectedly_large_artifact"] = "x" * 32769
+    ctx["unexpectedly_large_artifact"] = "x" * 131073
     with pytest.raises(ProposalGenerationError, match="SOURCE_CONTEXT_LIMIT_EXCEEDED"):
         run_proposal(tmp_path, "web-source", output(), ctx)

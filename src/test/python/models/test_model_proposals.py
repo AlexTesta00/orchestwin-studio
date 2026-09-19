@@ -56,6 +56,25 @@ class CompletionTransport:
         identity = self.identity.to_snapshot()
         if self.drift:
             identity["runtime_id"] = "different-runtime"
+        output = self.output
+        context = json.loads(kwargs["payload"]["messages"][1]["content"])["context"]
+        if context.get("architecture_phase") in {"STRUCTURE", "DETAILS"}:
+            from orchestwin.models.architecture_drafts import (
+                ArchitectureDetailsDraft,
+                ArchitectureDraft,
+                ArchitectureStructureDraft,
+            )
+
+            selected = (
+                ArchitectureStructureDraft
+                if context["architecture_phase"] == "STRUCTURE"
+                else ArchitectureDetailsDraft
+            )
+            output = {
+                key: value
+                for key, value in output.items()
+                if key in selected.model_fields or key not in ArchitectureDraft.model_fields
+            }
         payload = {
             "id": "synthetic-completion",
             "model_identity": identity,
@@ -63,7 +82,7 @@ class CompletionTransport:
                 {
                     "finish_reason": self.finish,
                     "message": {
-                        "content": json.dumps(self.output),
+                        "content": json.dumps(output),
                         "role": "assistant",
                     },
                 }
@@ -190,23 +209,58 @@ def test_stage_deserializes_real_contract_and_binds_context(tmp_path, stage):
                 for critique in expected.critiques
             ),
         )
-    output = wire_value(expected)
+    from .draft_fixtures import proposal_draft
+
+    output = proposal_draft(stage, expected, request)
     generator, transport = make_generator(tmp_path, output)
     result = asyncio.run(adapter_type(generator).propose(request))
     actual = getattr(result, output_key)
-    if stage == "design":
-        assert replace(actual, critiques=expected.critiques) == expected
+    if stage == "requirements":
+        assert actual.project_brief_reference == request.brief.reference
+        assert [x.statement for x in actual.requirements] == [
+            x.statement for x in expected.requirements
+        ]
+        assert [x.sources for x in actual.requirements] == [
+            x.sources for x in expected.requirements
+        ]
+    elif stage == "design":
+        assert actual.grounding == expected.grounding
+        assert [x.summary for x in actual.alternatives] == [
+            x.summary for x in expected.alternatives
+        ]
+        assert actual.owner_selected_alternative_id is None
+        assert actual.prototype is None
         assert all(
-            item.provenance.references[-1].source_id == generator.provider_id
-            for item in actual.critiques
+            any(ref.source_id == generator.provider_id for ref in x.provenance.references)
+            for x in actual.critiques
         )
     else:
-        assert actual == expected
+        assert actual.grounding == expected.grounding
+        assert actual.architecture.summary == expected.architecture.summary
+        assert [x.objective for x in actual.test_plan.test_cases] == [
+            x.objective for x in expected.test_plan.test_cases
+        ]
     assert result.provider_kind.value == "MODEL_ADAPTER"
-    assert len(transport.calls) == 1
+    assert len(transport.calls) == (2 if stage == "architecture" else 1)
     output["project_id"] = str(uuid4())
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
         asyncio.run(adapter_type(generator).propose(request))
+
+
+def test_architecture_self_connection_is_rejected_without_silent_repair(tmp_path):
+    from .draft_fixtures import proposal_draft
+
+    request = architecture_fixtures.proposal_request()
+    package = asyncio.run(
+        architecture_fixtures.FakeDeterministicArchitectureAdapter().propose(request)
+    ).package
+    output = proposal_draft("architecture", package, request)
+    connection = output["connections"][0]
+    connection["target_component_id"] = connection["source_component_id"]
+    generator, transport = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelArchitectureAdapter(generator).propose(request))
+    assert len(transport.calls) == 2
 
 
 def test_nested_extra_fields_are_rejected(tmp_path):
@@ -214,7 +268,9 @@ def test_nested_extra_fields_are_rejected(tmp_path):
     expected = asyncio.run(
         requirements_fixtures.FakeDeterministicRequirementsAdapter().propose(request)
     )
-    output = wire_value(expected.specification)
+    from .draft_fixtures import proposal_draft
+
+    output = proposal_draft("requirements", expected.specification, request)
     output["requirements"][0]["fabricated_evidence"] = "passes"
     generator, _ = make_generator(tmp_path, output)
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
@@ -405,3 +461,48 @@ def test_model_configuration_rejects_unbound_endpoints(tmp_path, url):
     values["base_url"] = url
     with pytest.raises(ValueError):
         ProposalModelConfiguration(**values)
+
+
+@pytest.mark.parametrize("stage", ["requirements", "design", "architecture"])
+def test_compact_planning_requests_remain_bound_to_project_and_exact_context(tmp_path, stage):
+    from .draft_fixtures import proposal_draft
+
+    source, adapter_type, key = {
+        "requirements": (requirements_fixtures, ModelRequirementsAdapter, "specification"),
+        "design": (design_fixtures, ModelDesignAdapter, "package"),
+        "architecture": (architecture_fixtures, ModelArchitectureAdapter, "package"),
+    }[stage]
+    request = source.proposal_request()
+    expected = getattr(
+        asyncio.run(getattr(source, f"FakeDeterministic{stage.title()}Adapter")().propose(request)),
+        key,
+    )
+    generator, transport = make_generator(tmp_path, proposal_draft(stage, expected, request))
+    asyncio.run(adapter_type(generator).propose(request))
+    context = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])["context"]
+    assert context["project_id"] == str(request.project_id)
+    assert context["governed_request_hash"] == request.content_hash
+
+
+@pytest.mark.parametrize("change", ["source", "twin", "internal_link", "owner_claim", "duplicate"])
+def test_requirements_drafts_reject_invented_evidence_links_and_approval(tmp_path, change):
+    from .draft_fixtures import proposal_draft
+
+    request = requirements_fixtures.proposal_request()
+    expected = asyncio.run(
+        requirements_fixtures.FakeDeterministicRequirementsAdapter().propose(request)
+    ).specification
+    output = proposal_draft("requirements", expected, request)
+    if change == "source":
+        output["requirements"][0]["sources"] = ["brief:invented"]
+    elif change == "twin":
+        output["user_stories"][0]["twin"] = "T99"
+    elif change == "internal_link":
+        output["user_stories"][0]["requirements"] = ["REQ-999"]
+    elif change == "owner_claim":
+        output["risks"][0]["review_status"] = "OWNER_ACKNOWLEDGED"
+    else:
+        output["requirements"].append(output["requirements"][0])
+    generator, _ = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelRequirementsAdapter(generator).propose(request))

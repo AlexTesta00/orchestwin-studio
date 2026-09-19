@@ -26,6 +26,7 @@ from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.repair_diagnostics import failure_log_context
+from orchestwin.models.source_context import compact_implementation_references
 from orchestwin.models.source_proposals import MAX_CONTEXT_BYTES, file_entry
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.projects.requirements_persistence import (
@@ -328,7 +329,7 @@ class ModelSourceApplication:
             for path, content in sorted(fixed.items())
         ]
         context.update(_build_context(fixed))
-        return _bounded_context(context)
+        return _bounded_context(compact_implementation_references(context))
 
     async def repair_context(self, *, owner_user_id, project_id, platform, execution_id, body):
         module = web_repair if platform == "web" else jvm_repair

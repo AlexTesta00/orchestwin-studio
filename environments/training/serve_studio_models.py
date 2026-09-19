@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import serve_proposal_model as serving
 from evaluator_candidate_worker import inference_model, verify_adapter
+from studio_inference_memory import configure_interactive_generation
 
 from orchestwin.models.structured_generation import ModelRuntimeIdentity
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
@@ -41,6 +42,10 @@ def main():
     output = args.output.absolute()
     output.mkdir(parents=True, exist_ok=False)
     os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", WANDB_DISABLED="true")
+    # Long prefill and paged decode interleave large temporary allocations with
+    # persistent KV buffers. Use CUDA's stream-ordered pool to avoid native
+    # allocator fragmentation; expandable segments are unavailable on WSL.
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "backend:cudaMallocAsync")
     os.chdir(serving.ROOT / "environments/training")
     # Profile batches include the complete schema and their immutable provenance.
     # This interactive limit is separate from the frozen qualification server.
@@ -49,6 +54,7 @@ def main():
     torch, base, tokenizer, evidence = serving.load_model()
     from peft import PeftModel
     from unsloth import FastLanguageModel
+    from unsloth.models.llama import KV_CACHE_INCREMENT
 
     model = inference_model(
         base,
@@ -56,6 +62,7 @@ def main():
         load_adapter=PeftModel.from_pretrained,
         prepare_inference=FastLanguageModel.for_inference,
     )
+    configure_interactive_generation(torch, model, cache_increment=KV_CACHE_INCREMENT)
     processor = serving.build_schema_processor_factory(tokenizer, torch, model.config.vocab_size)
     lock = threading.BoundedSemaphore(1)
     token = secrets.token_urlsafe(48)
@@ -72,12 +79,17 @@ def main():
             "loader": evidence,
             "adapter_files": hashes if adapted else {},
             "server_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "memory_helper_sha256": hashlib.sha256(
+                Path(__file__).with_name("studio_inference_memory.py").read_bytes()
+            ).hexdigest(),
             "generation_sha256": hashlib.sha256(Path(serving.__file__).read_bytes()).hexdigest(),
             "model": serving.MODEL,
             "revision": serving.REVISION,
             "max_sequence": serving.MAX_SEQUENCE,
             "max_output": 2048 if adapted else serving.MAX_OUTPUT,
             "max_generation_seconds": 1140,
+            "memory_policy": "REQUEST_BOUNDED_LAYER_KV_REUSE_V6",
+            "cuda_allocator": os.environ["PYTORCH_ALLOC_CONF"],
             "training_executed": False,
         }
         identity = ModelRuntimeIdentity(

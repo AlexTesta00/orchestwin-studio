@@ -159,6 +159,7 @@ def create_runtime_user_modeling_router(services: UserModelingServices | None) -
     else:
         dependencies = UserModelingApiDependencies(
             commands=services.commands,
+            context_check=services.commands.snapshot_context_is_current,
             revisions=services.revisions,
             queries=services.queries,
             gates=UserModelingGateApiAdapter(services.gates),

@@ -143,6 +143,7 @@ def test_gate_history_reads_only_the_owned_current_gate(has_gate):
 def bundle():
     return SimpleNamespace(
         commands=SimpleNamespace(
+            snapshot_context_is_current=AsyncMock(return_value=True),
             propose_personas=AsyncMock(
                 return_value=(
                     PersonaProposalApplicationResult(
@@ -150,7 +151,7 @@ def bundle():
                         issue=UserModelingApplicationIssueCode.BRIEF_APPROVAL_REQUIRED,
                     )
                 )
-            )
+            ),
         ),
         revisions=object(),
         queries=SimpleNamespace(

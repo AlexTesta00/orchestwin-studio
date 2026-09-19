@@ -1,3 +1,4 @@
+import { createPinia } from "pinia";
 import { reactive } from "vue";
 import { createI18n } from "vue-i18n";
 import { flushPromises, shallowMount } from "@vue/test-utils";
@@ -46,7 +47,7 @@ describe("project route requests", () => {
         id === "first" ? oldRequest : project(id),
       );
       const wrapper = shallowMount(ProjectDetailView, {
-        global: { plugins: [createI18n({ legacy: false, locale: "en" })] },
+        global: { plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })] },
       });
       state.route.params.projectId = "second";
       await flushPromises();

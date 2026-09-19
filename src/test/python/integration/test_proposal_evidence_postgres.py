@@ -468,7 +468,6 @@ def test_actual_twin_service_binds_complete_snapshot_atomically(
 ):
     from orchestwin.agents.selection_rules import determine_team_constraints
     from orchestwin.models.fake_team_proposals import FakeDeterministicTeamProposalAdapter
-    from orchestwin.models.proposal_generation import wire_value
     from orchestwin.models.team_proposals import TeamProposalRequest
     from orchestwin.twins.application import LocalUserModelingApplicationService
     from orchestwin.twins.runtime import ManagedUserModelingUnitOfWorkFactory
@@ -513,13 +512,6 @@ def test_actual_twin_service_binds_complete_snapshot_atomically(
                 await repo.append(persona)
             team_ref = VersionedArtifactReference(team.id, team.version_number, team.content_hash)
             governed = replace(context, team_reference=team_ref, approved_team_reference=team_ref)
-            profile = output["proposals"][0]["profile"]
-            profile.update(
-                project_brief_reference=wire_value(governed.brief_reference),
-                agent_team_reference=wire_value(team_ref),
-                catalog_version=governed.catalog_version,
-                catalog_content_hash=governed.catalog_content_hash,
-            )
             generator, _ = audited_generator(tmp_path, output)
             store = SqlAlchemyProposalEvidenceStore(runtime.session_factory)
             service = LocalUserModelingApplicationService(

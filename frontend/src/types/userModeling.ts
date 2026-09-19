@@ -341,6 +341,7 @@ export interface UserModelingReadinessPayload {
   gate_status: HumanGateStatus | null;
 
   approved_current_snapshot: boolean;
+  context_current?: boolean;
   workflow_state: UserModelingWorkflowState;
 
   twins: EffectiveTwinLifecyclePayload[];
