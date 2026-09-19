@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from "vue";
 
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import UserModelingProvenanceInspector from "./UserModelingProvenanceInspector.vue";
+import TwinIdentity from "./TwinIdentity.vue";
+import { workflowStatusLabel } from "./workflowLabels";
 
 import { useUserModelingStore } from "../stores/userModeling";
 
@@ -134,29 +136,30 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
 
 const messages = {
   en: {
-    eyebrow: "User Modeling · Gate 3",
+    eyebrow: "Understand your users",
 
-    title: "User Twins review and approval",
+    title: "Who will use your product?",
 
-    intro: "Review personas and User Twins before requirements definition.",
+    intro:
+      "Review the proposed user profiles. Their digital representatives, called User Twins, will help explore the product from different perspectives.",
 
-    loading: "Updating User Modeling state…",
-    generating:
-      "Model generation in progress. This may take several minutes on a local GPU; keep this page open.",
+    loading: "Updating user profiles…",
+    generating: "Preparing the profiles. This may take a few minutes; keep this page open.",
 
     error: "User Modeling operation failed.",
 
-    personas: "Personas and proto-personas",
+    personas: "Proposed user profiles",
 
-    proposePersonas: "Propose personas",
+    proposePersonas: "Suggest user profiles",
 
     noPersonas: "No personas have been proposed yet.",
 
-    protoWarning: "System-proposed personas remain proto-personas until the owner confirms them.",
+    protoWarning:
+      "These profiles are suggestions. Confirm that they represent your audience before continuing.",
 
-    confirm: "Confirm persona",
+    confirm: "Confirm this profile",
 
-    reject: "Reject persona",
+    reject: "Reject this profile",
 
     rejectionReason: "Reason for rejection",
 
@@ -168,14 +171,18 @@ const messages = {
 
     pending: "Pending confirmation",
 
-    generateTwins: "Generate User Twins",
+    generateTwins: "Create their User Twins",
 
     generationHint:
-      "At least one persona must be confirmed and no proto-persona may remain pending.",
+      "Confirm at least one profile and review every remaining suggestion before continuing.",
 
-    twins: "User Twins",
+    twins: "Your users' digital representatives",
 
-    snapshot: "User Modeling snapshot",
+    snapshot: "User profiles",
+    technicalDetails: "Technical details and sources",
+    profileDetails: "View profile",
+    evidenceDetails: "Why we think this",
+    knowledgeSource: "Where does this information come from?",
 
     version: "Version",
 
@@ -185,8 +192,7 @@ const messages = {
 
     edit: "Propose revision",
 
-    observationUnavailable:
-      "This observation cannot be edited through the current typed profile contract.",
+    observationUnavailable: "This information is read-only.",
 
     revision: "Profile revision",
 
@@ -201,13 +207,13 @@ const messages = {
     humanValidated: "Human validated",
 
     humanValidatedWarning:
-      "Use Human validated only when recording an actual human review. Gate 3 approval alone is not human-validation evidence.",
+      "Choose Human validated only if a person has checked this information. Approving a profile alone does not verify its assumptions.",
 
-    proposeRevision: "Create profile diff",
+    proposeRevision: "Propose this change",
 
     cancel: "Cancel",
 
-    diffs: "Profile diffs",
+    diffs: "Suggested profile changes",
 
     proposedDiff: "Proposed",
 
@@ -219,19 +225,19 @@ const messages = {
 
     after: "After",
 
-    approveDiff: "Approve diff",
+    approveDiff: "Approve change",
 
-    rejectDiff: "Reject diff",
+    rejectDiff: "Reject change",
 
     diffReason: "Decision reason",
 
-    gate: "Gate 3 · User Modeling approval",
+    gate: "Confirm your user profiles",
 
-    gateStatus: "Gate status",
+    gateStatus: "Approval",
 
-    submitGate: "Submit current snapshot",
+    submitGate: "Review these profiles for approval",
 
-    approveGate: "Approve Gate 3",
+    approveGate: "Approve user profiles",
 
     rejectGate: "Reject",
 
@@ -241,20 +247,20 @@ const messages = {
 
     resume: "Resume",
 
-    cancelGate: "Cancel gate",
+    cancelGate: "Cancel approval",
 
-    gateReason: "Gate decision reason",
+    gateReason: "Reason for your decision",
 
     gateMethodology:
-      "Gate 3 approval changes the effective lifecycle to OWNER_APPROVED_UT for the exact approved snapshot. It does not create HUMAN_VALIDATED or EMPIRICALLY_SUPPORTED evidence.",
+      "Your approval allows the project to use these profiles. It does not mean their assumptions have been verified with real users.",
 
-    currentSnapshotApproved: "The current User Modeling snapshot is owner approved.",
+    currentSnapshotApproved: "You have approved these user profiles.",
 
     ready: "Ready for requirements definition.",
 
-    notReady: "User Modeling still requires owner review.",
+    notReady: "Review and approve your user profiles to continue.",
 
-    stale: "The previous Gate 3 decision does not approve the current snapshot.",
+    stale: "The profiles have changed since your last approval. Review them again.",
 
     unknown: "Unknown",
 
@@ -272,30 +278,31 @@ const messages = {
   },
 
   it: {
-    eyebrow: "User Modeling · Gate 3",
+    eyebrow: "Conosci i tuoi utenti",
 
-    title: "Revisione e approvazione degli User Twin",
+    title: "Chi userà il tuo prodotto?",
 
-    intro: "Revisiona personas e User Twin prima della definizione dei requisiti.",
+    intro:
+      "Controlla i profili proposti. I loro rappresentanti digitali, chiamati User Twin, aiuteranno a esplorare il prodotto da punti di vista diversi.",
 
-    loading: "Aggiornamento dello stato User Modeling…",
+    loading: "Aggiornamento dei profili…",
     generating:
-      "Generazione del modello in corso. Sulla GPU locale può richiedere diversi minuti; mantieni aperta questa pagina.",
+      "Preparazione dei profili in corso. Può richiedere alcuni minuti; mantieni aperta questa pagina.",
 
     error: "Operazione User Modeling non riuscita.",
 
-    personas: "Personas e proto-personas",
+    personas: "Profili degli utenti proposti",
 
-    proposePersonas: "Proponi personas",
+    proposePersonas: "Proponi i profili degli utenti",
 
     noPersonas: "Non è stata ancora proposta alcuna persona.",
 
     protoWarning:
-      "Le personas proposte dal sistema restano proto-personas finché il proprietario non le conferma.",
+      "Questi profili sono proposte. Conferma che rappresentino il tuo pubblico prima di proseguire.",
 
-    confirm: "Conferma persona",
+    confirm: "Conferma questo profilo",
 
-    reject: "Rifiuta persona",
+    reject: "Rifiuta questo profilo",
 
     rejectionReason: "Motivo del rifiuto",
 
@@ -307,14 +314,18 @@ const messages = {
 
     pending: "In attesa di conferma",
 
-    generateTwins: "Genera User Twin",
+    generateTwins: "Crea i loro User Twin",
 
     generationHint:
-      "Almeno una persona deve essere confermata e nessuna proto-persona può restare in attesa.",
+      "Conferma almeno un profilo e valuta tutte le altre proposte prima di proseguire.",
 
-    twins: "User Twin",
+    twins: "I rappresentanti digitali dei tuoi utenti",
 
-    snapshot: "Snapshot User Modeling",
+    snapshot: "Profili degli utenti",
+    technicalDetails: "Dettagli tecnici e fonti",
+    profileDetails: "Vedi il profilo",
+    evidenceDetails: "Da dove nasce questa informazione",
+    knowledgeSource: "Da dove proviene questa informazione?",
 
     version: "Versione",
 
@@ -324,8 +335,7 @@ const messages = {
 
     edit: "Proponi revisione",
 
-    observationUnavailable:
-      "Questa osservazione non può essere modificata tramite il contratto tipizzato corrente.",
+    observationUnavailable: "Questa informazione è di sola lettura.",
 
     revision: "Revisione del profilo",
 
@@ -340,13 +350,13 @@ const messages = {
     humanValidated: "Validato da una persona",
 
     humanValidatedWarning:
-      "Usa Validato da una persona solo quando stai registrando una reale revisione umana. L'approvazione Gate 3 da sola non costituisce evidenza di human validation.",
+      "Scegli Validato da una persona solo se qualcuno ha verificato questa informazione. Approvare il profilo, da solo, non conferma le sue ipotesi.",
 
-    proposeRevision: "Crea ProfileDiff",
+    proposeRevision: "Proponi questa modifica",
 
     cancel: "Annulla",
 
-    diffs: "ProfileDiff",
+    diffs: "Modifiche proposte ai profili",
 
     proposedDiff: "Proposta",
 
@@ -358,19 +368,19 @@ const messages = {
 
     after: "Dopo",
 
-    approveDiff: "Approva diff",
+    approveDiff: "Approva modifica",
 
-    rejectDiff: "Rifiuta diff",
+    rejectDiff: "Rifiuta modifica",
 
     diffReason: "Motivazione della decisione",
 
-    gate: "Gate 3 · Approvazione User Modeling",
+    gate: "Conferma i profili degli utenti",
 
-    gateStatus: "Stato gate",
+    gateStatus: "Approvazione",
 
-    submitGate: "Invia snapshot corrente",
+    submitGate: "Porta questi profili all'approvazione",
 
-    approveGate: "Approva Gate 3",
+    approveGate: "Approva i profili degli utenti",
 
     rejectGate: "Rifiuta",
 
@@ -380,20 +390,20 @@ const messages = {
 
     resume: "Riprendi",
 
-    cancelGate: "Annulla gate",
+    cancelGate: "Annulla approvazione",
 
-    gateReason: "Motivazione decisione Gate",
+    gateReason: "Motivazione della decisione",
 
     gateMethodology:
-      "L'approvazione Gate 3 modifica il lifecycle effettivo in OWNER_APPROVED_UT esclusivamente per lo snapshot approvato. Non crea evidenza HUMAN_VALIDATED o EMPIRICALLY_SUPPORTED.",
+      "La tua approvazione permette al progetto di usare questi profili. Non significa che le loro ipotesi siano state verificate con utenti reali.",
 
-    currentSnapshotApproved: "Lo snapshot User Modeling corrente è approvato dal proprietario.",
+    currentSnapshotApproved: "Hai approvato questi profili degli utenti.",
 
     ready: "Pronto per la definizione dei requisiti.",
 
-    notReady: "Lo User Modeling richiede ancora una revisione del proprietario.",
+    notReady: "Controlla e approva i profili degli utenti per proseguire.",
 
-    stale: "La precedente decisione Gate 3 non approva lo snapshot corrente.",
+    stale: "I profili sono cambiati dalla tua ultima approvazione. Controllali di nuovo.",
 
     unknown: "Sconosciuto",
 
@@ -566,6 +576,39 @@ function effectiveLifecycle(twin: UserTwinVersionPayload): string {
   );
 
   return lifecycle?.effective_status ?? twin.profile.validation_status;
+}
+
+function profileDescription(observations: ProfileObservationPayload[]): string | undefined {
+  const role = observations.find((observation) => observationField(observation) === "role");
+  return role && ["TEXT", "ITEMS"].includes(role.value.kind) ? formatObservation(role) : undefined;
+}
+
+function observationSummary(observation: ProfileObservationPayload): string {
+  const labels = {
+    MODEL_INFERRED: ["Ipotesi del modello", "Model suggestion"],
+    UNSUPPORTED_ASSUMPTION: ["Ipotesi da verificare", "Unverified assumption"],
+    USER_PROVIDED: ["Informazione fornita dall'utente", "Provided by a user"],
+    HUMAN_VALIDATED: ["Verificato da una persona", "Reviewed by a person"],
+    EMPIRICALLY_SUPPORTED: ["Supportato da osservazioni reali", "Supported by real observations"],
+  };
+  const label = labels[observation.epistemic_status][props.locale === "it" ? 0 : 1];
+  return observation.human_validation === "REQUIRED"
+    ? `${label} · ${props.locale === "it" ? "da verificare" : "needs review"}`
+    : (label ?? copy.value.unknown);
+}
+
+function lifecycleLabel(twin: UserTwinVersionPayload): string {
+  const labels: Record<string, readonly [string, string]> = {
+    PROTO_UT: ["Prima proposta", "Initial proposal"],
+    PROJECT_GROUNDED_UT: ["Basato sul progetto", "Based on the project"],
+    OWNER_APPROVED_UT: ["Profilo approvato", "Approved profile"],
+    EMPIRICALLY_GROUNDED_UT: ["Basato su osservazioni reali", "Based on real observations"],
+    EMPIRICALLY_VALIDATED_UT: [
+      "Verificato con osservazioni reali",
+      "Validated with real observations",
+    ],
+  };
+  return labels[effectiveLifecycle(twin)]?.[props.locale === "it" ? 0 : 1] ?? copy.value.unknown;
 }
 
 function personaReason(personaId: string): string {
@@ -873,16 +916,27 @@ watch(
       </div>
     </header>
 
-    <section
+    <details
       class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
       aria-labelledby="personas-heading"
+      data-testid="starting-personas"
+      :open="
+        twins.length === 0 ||
+        store.readiness?.context_current === false ||
+        personas.some((persona) => persona.profile.confirmation_status === 'PENDING_CONFIRMATION')
+      "
     >
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <summary id="personas-heading" class="cursor-pointer text-base font-semibold text-slate-950">
+        {{
+          twins.length > 0
+            ? locale === "it"
+              ? "Profili di partenza"
+              : "Starting profiles"
+            : copy.personas
+        }}
+      </summary>
+      <div class="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 id="personas-heading" class="text-lg font-bold text-slate-950">
-            {{ copy.personas }}
-          </h3>
-
           <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
             {{ copy.protoWarning }}
           </p>
@@ -912,47 +966,74 @@ watch(
         >
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h4 class="font-semibold text-slate-950">
-                {{ persona.profile.name }}
+              <h4>
+                <TwinIdentity
+                  :identity-key="persona.persona_id"
+                  :name="persona.profile.name"
+                  :description="profileDescription(persona.profile.observations)"
+                  :locale="locale"
+                />
               </h4>
 
               <p class="mt-1 text-xs font-medium tracking-wide text-slate-500 uppercase">
-                {{ persona.profile.kind }}
-                ·
                 {{ personaStatusLabel(persona) }}
                 · v{{ persona.version_number }}
               </p>
             </div>
           </div>
 
-          <div class="mt-4 space-y-3">
-            <div
-              v-for="observation in persona.profile.observations"
-              :key="observation.observation_key"
-              class="rounded-lg bg-slate-50 p-3"
-            >
-              <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {{ observation.observation_key }}
-              </p>
+          <details
+            class="mt-4"
+            :open="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'"
+          >
+            <summary class="cursor-pointer text-sm font-semibold text-slate-600">
+              {{ copy.profileDetails }}
+            </summary>
+            <div class="mt-3 space-y-3">
+              <div
+                v-for="observation in persona.profile.observations"
+                :key="observation.observation_key"
+                class="rounded-lg bg-slate-50 p-3"
+              >
+                <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                  {{
+                    observationField(observation)
+                      ? fieldLabel(observationField(observation) as UserTwinField)
+                      : locale === "it"
+                        ? "Informazione sul profilo"
+                        : "Profile information"
+                  }}
+                </p>
 
-              <p class="mt-1 text-sm text-slate-900">
-                {{ formatObservation(observation) }}
-              </p>
+                <p class="mt-1 text-sm text-slate-900">
+                  {{ formatObservation(observation) }}
+                </p>
 
-              <div class="mt-3">
-                <UserModelingEpistemicBadge
-                  :status="observation.epistemic_status"
-                  :confidence="observation.confidence"
-                  :human-validation="observation.human_validation"
-                  :locale="locale"
-                />
-              </div>
+                <p class="mt-2 text-xs text-slate-600">{{ observationSummary(observation) }}</p>
+                <details class="mt-3">
+                  <summary class="cursor-pointer text-xs font-medium text-slate-500">
+                    {{ copy.evidenceDetails }}
+                  </summary>
+                  <div class="mt-3">
+                    <UserModelingEpistemicBadge
+                      :status="observation.epistemic_status"
+                      :confidence="observation.confidence"
+                      :human-validation="observation.human_validation"
+                      :locale="locale"
+                    />
+                  </div>
 
-              <div class="mt-3">
-                <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
+                  <div class="mt-3">
+                    <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
+                  </div>
+                </details>
               </div>
             </div>
-          </div>
+          </details>
+          <details class="mt-3 text-xs text-slate-500" data-testid="persona-technical-details">
+            <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+            <p class="mt-2">{{ persona.profile.kind }} · {{ persona.persona_id }}</p>
+          </details>
 
           <div
             v-if="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'"
@@ -1023,7 +1104,7 @@ watch(
           {{ copy.generationHint }}
         </p>
       </div>
-    </section>
+    </details>
 
     <section
       v-if="store.currentSnapshot !== null"
@@ -1044,9 +1125,12 @@ watch(
           </p>
         </div>
 
-        <code class="max-w-full rounded-md bg-slate-100 px-2 py-1 text-xs break-all text-slate-500">
-          {{ store.currentSnapshot.content_hash }}
-        </code>
+        <details class="max-w-full text-xs text-slate-500" data-testid="profiles-technical-details">
+          <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+          <code class="mt-2 block break-all">
+            {{ store.currentSnapshot.content_hash }}
+          </code>
+        </details>
       </div>
 
       <div class="mt-5 grid gap-5">
@@ -1057,81 +1141,105 @@ watch(
         >
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h4 class="text-base font-bold text-slate-950">
-                {{ twin.profile.name }}
+              <h4>
+                <TwinIdentity
+                  :identity-key="twin.profile.persona_reference.persona_id"
+                  :name="twin.profile.name"
+                  :description="profileDescription(twin.profile.observations)"
+                  :locale="locale"
+                />
               </h4>
+              <p class="mt-2 text-xs font-medium text-slate-600">{{ lifecycleLabel(twin) }}</p>
 
-              <dl class="mt-2 grid gap-1 text-xs text-slate-600">
-                <div>
-                  <dt class="inline font-semibold">{{ copy.persistedLifecycle }}:</dt>
+              <details class="mt-2 text-xs text-slate-500" data-testid="twin-technical-details">
+                <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+                <dl class="mt-2 grid gap-1 text-xs text-slate-600">
+                  <div>
+                    <dt class="inline font-semibold">{{ copy.persistedLifecycle }}:</dt>
 
-                  <dd class="inline">
-                    {{ twin.profile.validation_status }}
-                  </dd>
-                </div>
+                    <dd class="inline">
+                      {{ twin.profile.validation_status }}
+                    </dd>
+                  </div>
 
-                <div>
-                  <dt class="inline font-semibold">{{ copy.effectiveLifecycle }}:</dt>
+                  <div>
+                    <dt class="inline font-semibold">{{ copy.effectiveLifecycle }}:</dt>
 
-                  <dd class="inline" data-testid="effective-lifecycle">
-                    {{ effectiveLifecycle(twin) }}
-                  </dd>
-                </div>
-              </dl>
+                    <dd class="inline" data-testid="effective-lifecycle">
+                      {{ effectiveLifecycle(twin) }}
+                    </dd>
+                  </div>
+                </dl>
+              </details>
             </div>
           </div>
 
-          <div class="mt-5 grid gap-4">
-            <article
-              v-for="observation in twin.profile.observations"
-              :key="observation.observation_key"
-              class="rounded-xl border border-slate-200 bg-slate-50 p-4"
-            >
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h5 class="text-sm font-semibold text-slate-900">
-                    {{
-                      observationField(observation) !== null
-                        ? fieldLabel(observationField(observation) as UserTwinField)
-                        : observation.observation_key
-                    }}
-                  </h5>
+          <details
+            class="mt-4"
+            :open="!store.readiness?.approved_current_snapshot"
+            data-testid="twin-profile-details"
+          >
+            <summary class="cursor-pointer text-sm font-semibold text-slate-600">
+              {{ copy.profileDetails }}
+            </summary>
+            <div class="mt-3 grid gap-4">
+              <article
+                v-for="observation in twin.profile.observations"
+                :key="observation.observation_key"
+                class="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h5 class="text-sm font-semibold text-slate-900">
+                      {{
+                        observationField(observation) !== null
+                          ? fieldLabel(observationField(observation) as UserTwinField)
+                          : observation.observation_key
+                      }}
+                    </h5>
 
-                  <p class="mt-1 text-sm leading-6 whitespace-pre-line text-slate-700">
-                    {{ formatObservation(observation) }}
-                  </p>
+                    <p class="mt-1 text-sm leading-6 whitespace-pre-line text-slate-700">
+                      {{ formatObservation(observation) }}
+                    </p>
+                  </div>
+
+                  <button
+                    v-if="observationField(observation) !== null"
+                    type="button"
+                    class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    :disabled="store.isBusy"
+                    data-testid="edit-twin-observation"
+                    @click="startRevision(twin, observation)"
+                  >
+                    {{ copy.edit }}
+                  </button>
+
+                  <span v-else class="text-xs text-slate-500">
+                    {{ copy.observationUnavailable }}
+                  </span>
                 </div>
 
-                <button
-                  v-if="observationField(observation) !== null"
-                  type="button"
-                  class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                  :disabled="store.isBusy"
-                  data-testid="edit-twin-observation"
-                  @click="startRevision(twin, observation)"
-                >
-                  {{ copy.edit }}
-                </button>
+                <p class="mt-2 text-xs text-slate-600">{{ observationSummary(observation) }}</p>
+                <details class="mt-3">
+                  <summary class="cursor-pointer text-xs font-medium text-slate-500">
+                    {{ copy.evidenceDetails }}
+                  </summary>
+                  <div class="mt-3">
+                    <UserModelingEpistemicBadge
+                      :status="observation.epistemic_status"
+                      :confidence="observation.confidence"
+                      :human-validation="observation.human_validation"
+                      :locale="locale"
+                    />
+                  </div>
 
-                <span v-else class="text-xs text-slate-500">
-                  {{ copy.observationUnavailable }}
-                </span>
-              </div>
-
-              <div class="mt-3">
-                <UserModelingEpistemicBadge
-                  :status="observation.epistemic_status"
-                  :confidence="observation.confidence"
-                  :human-validation="observation.human_validation"
-                  :locale="locale"
-                />
-              </div>
-
-              <div class="mt-3">
-                <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
-              </div>
-            </article>
-          </div>
+                  <div class="mt-3">
+                    <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
+                  </div>
+                </details>
+              </article>
+            </div>
+          </details>
         </article>
       </div>
 
@@ -1174,7 +1282,7 @@ watch(
         </p>
 
         <fieldset class="mt-4 space-y-2">
-          <legend class="text-sm font-semibold text-slate-700">Epistemic status</legend>
+          <legend class="text-sm font-semibold text-slate-700">{{ copy.knowledgeSource }}</legend>
 
           <label class="flex items-center gap-2 text-sm text-slate-700">
             <input v-model="revisionEpistemicStatus" type="radio" value="USER_PROVIDED" />
@@ -1232,9 +1340,12 @@ watch(
           class="rounded-xl border border-slate-200 p-4"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <code class="text-xs text-slate-500">
-              {{ diff.id }}
-            </code>
+            <details class="text-xs text-slate-500">
+              <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+              <code class="mt-2 block break-all">
+                {{ diff.id }}
+              </code>
+            </details>
 
             <span
               class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
@@ -1355,18 +1466,17 @@ watch(
           <dt class="inline font-semibold">{{ copy.gateStatus }}:</dt>
 
           <dd class="inline">
-            {{ store.currentGate?.status ?? "—" }}
-          </dd>
-        </div>
-
-        <div>
-          <dt class="inline font-semibold">Workflow:</dt>
-
-          <dd class="inline">
-            {{ store.readiness?.workflow_state ?? "—" }}
+            {{ workflowStatusLabel(store.currentGate?.status, locale) }}
           </dd>
         </div>
       </dl>
+
+      <details class="mt-3 text-xs text-slate-500">
+        <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+        <p class="mt-2">
+          {{ store.currentGate?.status ?? "—" }} · {{ store.readiness?.workflow_state ?? "—" }}
+        </p>
+      </details>
 
       <p
         v-if="store.readiness?.approved_current_snapshot"

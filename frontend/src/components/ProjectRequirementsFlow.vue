@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import TwinIdentity from "./TwinIdentity.vue";
 import { modelFeedback, generationProgress } from "./modelFeedback";
+import { workflowStatusLabel } from "./workflowLabels";
 import { computed, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
@@ -53,26 +55,26 @@ const edit = reactive({
 
 const messages = {
   en: {
-    eyebrow: "Requirements · Gate 4",
-    title: "Requirements and Definition of Done",
+    eyebrow: "Your app's features",
+    title: "What your app should do",
     intro:
-      "Review the specification grounded in the approved Brief, Agent Team, and User Modeling snapshot.",
+      "Review the features proposed for your users. Edit anything that needs changing, then approve to continue.",
     loading: "Updating Requirements state…",
-    generate: "Generate requirements specification",
-    noSpecification: "No requirements specification has been generated yet.",
+    generate: "Propose the features",
+    noSpecification: "The team is ready to turn your idea into a list of features.",
     version: "Version",
-    current: "Current specification",
-    requirements: "Requirements",
-    userStories: "User stories",
-    criteria: "Acceptance criteria",
+    current: "Proposed features",
+    requirements: "Features and needs",
+    userStories: "How people will use the app",
+    criteria: "How we will check the result",
     scenarios: "Usage scenarios",
     risks: "Project risks",
-    done: "Definition of Done",
+    done: "When the app is ready",
     edit: "Propose revision",
-    saveRevision: "Create specification diff",
+    saveRevision: "Review changes",
     cancel: "Cancel",
     titleLabel: "Title",
-    statementLabel: "Statement",
+    statementLabel: "Description",
     kindLabel: "Kind",
     priorityLabel: "Priority",
     sources: "Sources",
@@ -85,53 +87,62 @@ const messages = {
     mitigation: "Mitigation",
     condition: "Condition",
     none: "None",
-    diffs: "Reviewable specification diffs",
+    diffs: "Changes to review",
     proposed: "Proposed",
     approved: "Approved",
     rejected: "Rejected",
     before: "Before",
     after: "After",
-    approveDiff: "Approve diff",
-    rejectDiff: "Reject diff",
+    approveDiff: "Apply changes",
+    rejectDiff: "Discard changes",
     reason: "Decision reason",
     reasonRequired: "A reason is required for rejection or revision.",
-    invalidEdit: "Enter a normalized title and statement before proposing the revision.",
-    gate: "Gate 4 · Requirements approval",
-    gateStatus: "Gate status",
-    submitGate: "Submit current specification",
-    approveGate: "Approve Gate 4",
+    invalidEdit: "Enter a title and description before proposing changes.",
+    gate: "Confirm the features",
+    gateStatus: "Status",
+    submitGate: "Prepare for approval",
+    approveGate: "Approve features",
     rejectGate: "Reject",
     requestRevision: "Request revision",
     pause: "Pause",
     resume: "Resume",
-    cancelGate: "Cancel gate",
-    ready: "Ready for design exploration.",
+    cancelGate: "Cancel approval",
+    ready: "The features are approved. Continue to your app's look.",
     notReady: "Requirements approval is still required.",
     methodology:
       "Gate 4 approves the exact specification ID, version, and content hash. A later version requires a new approval.",
     loadError: "The Requirements stage could not be loaded.",
+    audit: "Sources and version details",
+    history: "Compare previous versions",
+    functional: "Feature",
+    quality: "Quality",
+    constraint: "Constraint",
+    must: "Essential",
+    should: "Important",
+    could: "Optional",
+    later: "For later",
   },
   it: {
-    eyebrow: "Requisiti · Gate 4",
-    title: "Requisiti e Definition of Done",
+    eyebrow: "Le funzionalità della tua app",
+    title: "Cosa deve fare la tua app",
     intro:
-      "Revisiona la specifica fondata su Project Brief, Agent Team e snapshot User Modeling approvati.",
+      "Controlla le funzionalità proposte per i tuoi utenti. Modifica ciò che serve, poi approva per continuare.",
     loading: "Aggiornamento dello stato dei requisiti…",
-    generate: "Genera la specifica dei requisiti",
-    noSpecification: "Non è stata ancora generata alcuna specifica dei requisiti.",
+    generate: "Proponi le funzionalità",
+    noSpecification: "Il team è pronto a trasformare la tua idea in un elenco di funzionalità.",
     version: "Versione",
-    current: "Specifica corrente",
-    requirements: "Requisiti",
-    userStories: "User story",
-    criteria: "Criteri di accettazione",
+    current: "Funzionalità proposte",
+    requirements: "Funzionalità ed esigenze",
+    userStories: "Come verrà usata l'app",
+    criteria: "Come controlleremo il risultato",
     scenarios: "Scenari d'uso",
     risks: "Rischi di progetto",
-    done: "Definition of Done",
+    done: "Quando l'app sarà pronta",
     edit: "Proponi revisione",
-    saveRevision: "Crea diff della specifica",
+    saveRevision: "Controlla le modifiche",
     cancel: "Annulla",
     titleLabel: "Titolo",
-    statementLabel: "Dichiarazione",
+    statementLabel: "Descrizione",
     kindLabel: "Tipo",
     priorityLabel: "Priorità",
     sources: "Fonti",
@@ -144,35 +155,57 @@ const messages = {
     mitigation: "Mitigazione",
     condition: "Condizione",
     none: "Nessuno",
-    diffs: "Diff della specifica da revisionare",
+    diffs: "Modifiche da valutare",
     proposed: "Proposta",
     approved: "Approvata",
     rejected: "Rifiutata",
     before: "Prima",
     after: "Dopo",
-    approveDiff: "Approva diff",
-    rejectDiff: "Rifiuta diff",
+    approveDiff: "Applica modifiche",
+    rejectDiff: "Scarta modifiche",
     reason: "Motivazione della decisione",
     reasonRequired: "Per rifiuto o richiesta di revisione è necessaria una motivazione.",
-    invalidEdit: "Inserisci titolo e dichiarazione normalizzati prima della revisione.",
-    gate: "Gate 4 · Approvazione requisiti",
-    gateStatus: "Stato gate",
-    submitGate: "Invia la specifica corrente",
-    approveGate: "Approva Gate 4",
+    invalidEdit: "Inserisci un titolo e una descrizione prima di proporre le modifiche.",
+    gate: "Conferma le funzionalità",
+    gateStatus: "Stato",
+    submitGate: "Prepara per l'approvazione",
+    approveGate: "Approva le funzionalità",
     rejectGate: "Rifiuta",
     requestRevision: "Richiedi revisione",
     pause: "Pausa",
     resume: "Riprendi",
-    cancelGate: "Annulla gate",
-    ready: "Pronto per l'esplorazione del design.",
+    cancelGate: "Annulla approvazione",
+    ready: "Le funzionalità sono approvate. Continua con l'aspetto della tua app.",
     notReady: "È ancora necessaria l'approvazione dei requisiti.",
     methodology:
       "Gate 4 approva ID, versione e hash esatti della specifica. Una versione successiva richiede una nuova approvazione.",
     loadError: "Non è stato possibile caricare la fase dei requisiti.",
+    audit: "Fonti e dettagli di versione",
+    history: "Confronta le versioni precedenti",
+    functional: "Funzionalità",
+    quality: "Qualità",
+    constraint: "Vincolo",
+    must: "Essenziale",
+    should: "Importante",
+    could: "Facoltativo",
+    later: "Per il futuro",
   },
 } as const;
 
 const copy = computed(() => messages[props.locale]);
+const kindLabel = (kind: RequirementKind): string =>
+  ({
+    FUNCTIONAL: copy.value.functional,
+    NON_FUNCTIONAL: copy.value.quality,
+    CONSTRAINT: copy.value.constraint,
+  })[kind];
+const priorityLabel = (priority: RequirementPriority): string =>
+  ({
+    MUST: copy.value.must,
+    SHOULD: copy.value.should,
+    COULD: copy.value.could,
+    WONT_FOR_NOW: copy.value.later,
+  })[priority];
 const api = computed(() => props.api ?? requirementsApi);
 const current = computed(() => store.current);
 const specification = computed<RequirementsSpecificationPayload | null>(
@@ -420,10 +453,11 @@ watch(
 <template>
   <section class="grid gap-6" aria-labelledby="requirements-flow-title">
     <header class="grid gap-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <TwinIdentity role="REQUIREMENTS_ANALYST" :locale="locale" compact />
       <p class="m-0 text-xs font-bold tracking-[0.16em] text-slate-500 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="requirements-flow-title" class="text-2xl font-black text-slate-950">
+      <h2 id="requirements-flow-title" class="text-xl font-bold text-slate-950">
         {{ copy.title }}
       </h2>
       <p class="m-0 max-w-4xl text-sm leading-6 text-slate-600">
@@ -456,8 +490,8 @@ watch(
       <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
         {{
           locale === "it"
-            ? "Approva lo snapshot User Twin al Gate 3 per generare i requisiti."
-            : "Approve the User Twin snapshot at Gate 3 to generate requirements."
+            ? "Approva i profili degli utenti per definire le funzionalità."
+            : "Approve the user profiles to define the features."
         }}
       </p>
       <button
@@ -482,9 +516,10 @@ watch(
               {{ copy.version }} {{ current.version_number }}
             </p>
           </div>
-          <code class="max-w-full rounded bg-slate-100 px-2 py-1 text-xs break-all text-slate-500">
-            {{ current.content_hash }}
-          </code>
+          <details class="max-w-full text-xs text-slate-500">
+            <summary class="cursor-pointer">{{ copy.audit }}</summary>
+            <code class="break-all">{{ current.content_hash }}</code>
+          </details>
         </div>
 
         <section class="grid gap-3" aria-labelledby="requirements-list-title">
@@ -499,7 +534,7 @@ watch(
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="m-0 text-xs font-bold tracking-wide text-slate-500 uppercase">
-                  {{ requirement.code }} · {{ requirement.kind }} · {{ requirement.priority }}
+                  {{ kindLabel(requirement.kind) }} · {{ priorityLabel(requirement.priority) }}
                 </p>
                 <h5 class="mt-1 font-black text-slate-950">
                   {{ requirement.title }}
@@ -517,14 +552,18 @@ watch(
                 {{ copy.edit }}
               </button>
             </div>
-            <p class="m-0 text-xs text-slate-500">
-              {{ copy.sources }}:
-              {{ formatRequirementSources(requirement) }}
-            </p>
-            <p class="m-0 text-xs text-slate-500">
-              {{ copy.twins }}:
-              {{ formatRequirementTwins(requirement) }}
-            </p>
+            <details class="text-xs text-slate-500">
+              <summary class="cursor-pointer">{{ copy.sources }}</summary>
+              <p class="my-2">{{ requirement.code }}</p>
+              <p class="m-0 text-xs text-slate-500">
+                {{ copy.sources }}:
+                {{ formatRequirementSources(requirement) }}
+              </p>
+              <p class="m-0 text-xs text-slate-500">
+                {{ copy.twins }}:
+                {{ formatRequirementTwins(requirement) }}
+              </p>
+            </details>
           </article>
         </section>
 
@@ -550,18 +589,18 @@ watch(
             <label class="grid gap-1 text-sm font-bold text-slate-700">
               {{ copy.kindLabel }}
               <select v-model="edit.kind" class="rounded-lg border border-slate-300 px-3 py-2">
-                <option value="FUNCTIONAL">FUNCTIONAL</option>
-                <option value="NON_FUNCTIONAL">NON_FUNCTIONAL</option>
-                <option value="CONSTRAINT">CONSTRAINT</option>
+                <option value="FUNCTIONAL">{{ copy.functional }}</option>
+                <option value="NON_FUNCTIONAL">{{ copy.quality }}</option>
+                <option value="CONSTRAINT">{{ copy.constraint }}</option>
               </select>
             </label>
             <label class="grid gap-1 text-sm font-bold text-slate-700">
               {{ copy.priorityLabel }}
               <select v-model="edit.priority" class="rounded-lg border border-slate-300 px-3 py-2">
-                <option value="MUST">MUST</option>
-                <option value="SHOULD">SHOULD</option>
-                <option value="COULD">COULD</option>
-                <option value="WONT_FOR_NOW">WONT_FOR_NOW</option>
+                <option value="MUST">{{ copy.must }}</option>
+                <option value="SHOULD">{{ copy.should }}</option>
+                <option value="COULD">{{ copy.could }}</option>
+                <option value="WONT_FOR_NOW">{{ copy.later }}</option>
               </select>
             </label>
           </div>
@@ -583,8 +622,10 @@ watch(
           </div>
         </form>
 
-        <section class="grid gap-3">
-          <h4 class="text-lg font-black text-slate-950">{{ copy.userStories }}</h4>
+        <details class="rounded-xl border border-slate-200 p-3">
+          <summary class="cursor-pointer font-semibold text-slate-950">
+            {{ copy.userStories }}
+          </summary>
           <article
             v-for="story in specification.user_stories"
             :key="story.id"
@@ -594,10 +635,10 @@ watch(
             <p class="mt-2 text-sm text-slate-700">{{ copy.goal }}: {{ story.goal }}</p>
             <p class="m-0 text-sm text-slate-700">{{ copy.benefit }}: {{ story.benefit }}</p>
           </article>
-        </section>
+        </details>
 
-        <section class="grid gap-3">
-          <h4 class="text-lg font-black text-slate-950">{{ copy.criteria }}</h4>
+        <details class="rounded-xl border border-slate-200 p-3">
+          <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.criteria }}</summary>
           <article
             v-for="criterion in specification.acceptance_criteria"
             :key="criterion.id"
@@ -609,10 +650,12 @@ watch(
               {{ copy.verification }}: {{ criterion.verification_method }}
             </p>
           </article>
-        </section>
+        </details>
 
-        <section class="grid gap-3">
-          <h4 class="text-lg font-black text-slate-950">{{ copy.scenarios }}</h4>
+        <details class="rounded-xl border border-slate-200 p-3">
+          <summary class="cursor-pointer font-semibold text-slate-950">
+            {{ copy.scenarios }}
+          </summary>
           <article
             v-for="scenario in specification.scenarios"
             :key="scenario.id"
@@ -627,10 +670,12 @@ watch(
               {{ copy.outcome }}: {{ scenario.expected_outcome }}
             </p>
           </article>
-        </section>
+        </details>
 
-        <section class="grid gap-3">
-          <h4 class="text-lg font-black text-slate-950">{{ copy.risks }}</h4>
+        <details class="rounded-xl border border-slate-200 p-3">
+          <summary class="cursor-pointer font-semibold text-slate-950">
+            {{ copy.risks }} ({{ specification.risks.length }})
+          </summary>
           <p v-if="specification.risks.length === 0" class="m-0 text-sm text-slate-500">
             {{ copy.none }}
           </p>
@@ -643,10 +688,10 @@ watch(
             <p class="mt-2 text-sm text-slate-700">{{ risk.summary }}</p>
             <p class="m-0 text-sm text-slate-700">{{ copy.mitigation }}: {{ risk.mitigation }}</p>
           </article>
-        </section>
+        </details>
 
-        <section class="grid gap-3">
-          <h4 class="text-lg font-black text-slate-950">{{ copy.done }}</h4>
+        <details class="rounded-xl border border-slate-200 p-3">
+          <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.done }}</summary>
           <article
             v-for="item in specification.definition_of_done"
             :key="item.id"
@@ -658,21 +703,25 @@ watch(
               {{ copy.condition }}: {{ item.condition }}
             </p>
           </article>
-        </section>
+        </details>
       </section>
 
-      <section
+      <details
         v-if="diffs.length > 0"
+        :open="diffs.some((diff) => diff.status === 'PROPOSED')"
         class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
       >
-        <h3 class="text-xl font-black text-slate-950">{{ copy.diffs }}</h3>
+        <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.diffs }}</summary>
         <article
           v-for="diff in diffs"
           :key="diff.id"
           class="grid gap-4 rounded-xl border border-slate-200 p-4"
         >
           <div class="flex flex-wrap justify-between gap-2">
-            <code class="text-xs text-slate-500">{{ diff.id }}</code>
+            <details class="text-xs text-slate-500">
+              <summary class="cursor-pointer">{{ copy.audit }}</summary>
+              <code class="break-all">{{ diff.id }}</code>
+            </details>
             <strong>{{ diffStatusLabel(diff.status) }}</strong>
           </div>
           <div
@@ -722,24 +771,31 @@ watch(
             </div>
           </div>
         </article>
-      </section>
+      </details>
 
-      <RequirementsVersionComparison :versions="store.history" :locale="locale" />
+      <details class="rounded-xl border border-slate-200 bg-white p-4">
+        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.history }}</summary>
+        <div class="mt-4 grid gap-4">
+          <RequirementsVersionComparison :versions="store.history" :locale="locale" />
 
-      <RequirementsTraceabilityView
-        v-if="store.traceability !== null && store.coverage !== null"
-        :traceability="store.traceability"
-        :coverage="store.coverage"
-        :locale="locale"
-      />
+          <RequirementsTraceabilityView
+            v-if="store.traceability !== null && store.coverage !== null"
+            :traceability="store.traceability"
+            :coverage="store.coverage"
+            :locale="locale"
+          />
+        </div>
+      </details>
 
       <section class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 class="text-xl font-black text-slate-950">{{ copy.gate }}</h3>
-        <p class="m-0 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-          {{ copy.methodology }}
-        </p>
+        <details class="text-xs text-slate-500">
+          <summary class="cursor-pointer">{{ copy.audit }}</summary>
+          <p class="mt-2">{{ copy.methodology }}</p>
+        </details>
         <p class="m-0 text-sm text-slate-700">
-          {{ copy.gateStatus }}: <strong>{{ store.gate?.status ?? "—" }}</strong>
+          {{ copy.gateStatus }}:
+          <strong>{{ workflowStatusLabel(store.gate?.status, locale) }}</strong>
         </p>
         <p
           class="m-0 text-sm font-black"

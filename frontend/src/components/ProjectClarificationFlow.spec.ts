@@ -6,10 +6,12 @@ import { ApiError } from "@/api/client";
 import type {
   ClarificationAnswerInput,
   ClarificationRoundResponse,
+  HumanGateResponse,
   ProjectWorkflowApi,
 } from "@/api/workflow-contracts";
 import { createAppI18n } from "@/i18n";
 import type { AuthorizedRequest } from "@/stores/clarification";
+import { useClarificationStore } from "@/stores/clarification";
 
 import ProjectClarificationFlow from "./ProjectClarificationFlow.vue";
 
@@ -179,5 +181,40 @@ describe("ProjectClarificationFlow", () => {
     ]);
 
     expect(wrapper.text()).toContain("Another clarification round is required");
+
+    // An approved idea is complete, but editing it must allow a fresh approval.
+    const store = useClarificationStore();
+    store.gate = {
+      id: "gate-id",
+      project_id: PROJECT_ID,
+      owner_user_id: "owner-id",
+      gate_type: "PROJECT_BRIEF",
+      status: "APPROVED",
+      artifact: {
+        project_id: PROJECT_ID,
+        gate_type: "PROJECT_BRIEF",
+        artifact_id: "brief-1",
+        version: 1,
+        content_hash: "hash-1",
+      },
+      iteration: 1,
+      max_iterations: 5,
+      event_sequence: 1,
+      created_at: ROUND.created_at,
+      updated_at: ROUND.created_at,
+      resume_status: null,
+    } satisfies HumanGateResponse;
+    await wrapper.setProps({
+      currentBrief: { id: "brief-1", version_number: 1, content_hash: "hash-1" },
+    });
+    const approval = wrapper.get('[aria-labelledby="brief-gate-title"]');
+    expect(approval.findAll("button")).toHaveLength(0);
+    expect(approval.findAll("textarea")).toHaveLength(0);
+
+    await wrapper.setProps({
+      currentBrief: { id: "brief-2", version_number: 2, content_hash: "hash-2" },
+    });
+    expect(approval.get("button").text()).toBe("Prepare for approval");
+    expect(approval.findAll("textarea")).toHaveLength(0);
   });
 });

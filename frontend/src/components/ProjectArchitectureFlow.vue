@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TwinIdentity from "./TwinIdentity.vue";
 import { modelFeedback, generationProgress } from "./modelFeedback";
 import { computed, reactive, ref, watch } from "vue";
 
@@ -13,6 +14,7 @@ import type {
 } from "../types/architecture";
 import ArchitecturePlanReview from "./ArchitecturePlanReview.vue";
 import { buildArchitecturePackageRevision } from "./architecturePlanning";
+import { workflowStatusLabel } from "./workflowLabels";
 
 type Locale = "en" | "it";
 
@@ -41,86 +43,89 @@ const diffReasons = reactive<Record<string, string>>({});
 
 const messages = {
   en: {
-    eyebrow: "Architecture and test planning · Gate 6",
-    title: "Architecture Package and implementation readiness",
+    eyebrow: "Your solution",
+    title: "How we will build your app",
     intro:
-      "Review the architecture, its exact approved grounding, the traceable test plan, owner-controlled revisions, and Gate 6.",
+      "Review the proposed solution and the checks planned for your app, then confirm to start building.",
     methodology:
       "Gate 6 approves one exact Architecture Package ID, version, and content hash. The decision authorizes the next workflow stage but does not validate simulated user behavior.",
-    loading: "Updating Architecture state…",
-    generate: "Generate architecture and test plan",
-    noPackage: "No Architecture Package has been generated yet.",
+    loading: "Updating the solution…",
+    generate: "Prepare the solution",
+    noPackage: "The team is ready to plan how to build your app.",
     version: "Version",
     contentHash: "Content hash",
     createdAt: "Created {date}",
-    revision: "Owner-controlled revision",
+    revision: "Questions to resolve",
     revisionHelp:
-      "Edit the package-level open questions. The change becomes an immutable diff and is applied only after owner approval.",
+      "Add or edit the questions the team should resolve. You will review the changes before applying them.",
     questionsLabel: "One open question per line",
-    proposeRevision: "Propose Architecture Package revision",
-    pendingRevision: "Decide the current proposed diff before creating another revision.",
-    noChanges: "Change at least one package-level open question before proposing a revision.",
-    diffs: "Architecture Package diffs",
-    noDiffs: "No Architecture Package diff is waiting for review.",
+    proposeRevision: "Review these changes",
+    pendingRevision: "Review the pending changes before proposing more.",
+    noChanges: "Edit at least one question before proposing changes.",
+    diffs: "Changes to review",
+    noDiffs: "No changes are waiting for review.",
     changes: "Changes",
     reason: "Decision reason",
-    approveDiff: "Approve diff",
-    rejectDiff: "Reject diff",
-    reasonRequired: "A reason is required for rejection or a Gate 6 revision request.",
-    gate: "Gate 6 · Architecture and test plan approval",
-    gateStatus: "Gate status",
-    submitGate: "Submit current Architecture Package",
-    approveGate: "Approve Gate 6",
+    approveDiff: "Apply changes",
+    rejectDiff: "Discard changes",
+    reasonRequired: "A reason is required to reject or request changes.",
+    gate: "Confirm the solution",
+    gateStatus: "Status",
+    submitGate: "Prepare for approval",
+    approveGate: "Approve solution",
     rejectGate: "Reject",
     requestRevision: "Request revision",
     pause: "Pause",
     resume: "Resume",
-    cancelGate: "Cancel gate",
-    ready: "Ready for implementation.",
-    notReady: "Architecture and test plan approval is still required.",
-    history: "Architecture Package history",
+    cancelGate: "Cancel approval",
+    ready: "The solution is approved. You can now create your app.",
+    notReady: "Review and approve the solution to continue.",
+    history: "Previous versions",
+    technical: "Technical plan and checks",
+    audit: "Version and decision details",
     loadError: "The Architecture stage could not be loaded.",
   },
   it: {
-    eyebrow: "Architettura e piano di test · Gate 6",
-    title: "Architecture Package e readiness per l'implementazione",
+    eyebrow: "La tua soluzione",
+    title: "Come realizzeremo la tua app",
     intro:
-      "Revisiona l'architettura, il grounding approvato esatto, il piano di test tracciabile, le revisioni controllate dal proprietario e il Gate 6.",
+      "Esamina la soluzione proposta e le verifiche previste, poi conferma per iniziare a creare la tua app.",
     methodology:
       "Il Gate 6 approva ID, versione e hash esatti dell'Architecture Package. La decisione autorizza la fase successiva del workflow, ma non valida il comportamento simulato degli utenti.",
-    loading: "Aggiornamento dello stato dell'architettura…",
-    generate: "Genera architettura e piano di test",
-    noPackage: "Non è stato ancora generato alcun Architecture Package.",
+    loading: "Aggiornamento della soluzione…",
+    generate: "Prepara la soluzione",
+    noPackage: "Il team è pronto a pianificare come realizzare la tua app.",
     version: "Versione",
     contentHash: "Hash del contenuto",
     createdAt: "Creata {date}",
-    revision: "Revisione controllata dal proprietario",
+    revision: "Domande da risolvere",
     revisionHelp:
-      "Modifica le domande aperte a livello di package. La modifica diventa un diff immutabile e viene applicata solo dopo l'approvazione del proprietario.",
+      "Aggiungi o modifica le domande da chiarire con il team. Potrai controllare le modifiche prima di applicarle.",
     questionsLabel: "Una domanda aperta per riga",
-    proposeRevision: "Proponi revisione dell'Architecture Package",
-    pendingRevision: "Decidi il diff proposto corrente prima di creare un'altra revisione.",
-    noChanges: "Modifica almeno una domanda aperta del package prima di proporre la revisione.",
-    diffs: "Diff dell'Architecture Package",
-    noDiffs: "Nessun diff dell'Architecture Package è in attesa di revisione.",
+    proposeRevision: "Controlla le modifiche",
+    pendingRevision: "Valuta le modifiche in attesa prima di proporne altre.",
+    noChanges: "Modifica almeno una domanda prima di proporre una revisione.",
+    diffs: "Modifiche da valutare",
+    noDiffs: "Nessuna modifica in attesa di una decisione.",
     changes: "Modifiche",
     reason: "Motivazione della decisione",
-    approveDiff: "Approva diff",
-    rejectDiff: "Rifiuta diff",
-    reasonRequired:
-      "Per il rifiuto o per una richiesta di revisione del Gate 6 è necessaria una motivazione.",
-    gate: "Gate 6 · Approvazione architettura e piano di test",
-    gateStatus: "Stato gate",
-    submitGate: "Invia l'Architecture Package corrente",
-    approveGate: "Approva Gate 6",
+    approveDiff: "Applica modifiche",
+    rejectDiff: "Scarta modifiche",
+    reasonRequired: "Scrivi una motivazione per rifiutare o richiedere modifiche.",
+    gate: "Conferma la soluzione",
+    gateStatus: "Stato",
+    submitGate: "Prepara per l'approvazione",
+    approveGate: "Approva la soluzione",
     rejectGate: "Rifiuta",
     requestRevision: "Richiedi revisione",
     pause: "Pausa",
     resume: "Riprendi",
-    cancelGate: "Annulla gate",
-    ready: "Pronto per l'implementazione.",
-    notReady: "È ancora necessaria l'approvazione di architettura e piano di test.",
-    history: "Cronologia Architecture Package",
+    cancelGate: "Annulla approvazione",
+    ready: "La soluzione è approvata. Ora puoi creare la tua app.",
+    notReady: "Controlla e approva la soluzione per continuare.",
+    history: "Versioni precedenti",
+    technical: "Piano tecnico e verifiche",
+    audit: "Dettagli di versione e decisioni",
     loadError: "Non è stato possibile caricare la fase di architettura.",
   },
 } as const;
@@ -296,20 +301,17 @@ watch(
 
 <template>
   <section
-    class="grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"
+    class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
     data-testid="project-architecture-flow"
   >
     <header class="grid gap-2">
+      <TwinIdentity role="SOFTWARE_ARCHITECT" :locale="locale" compact />
       <p class="m-0 text-xs font-black tracking-widest text-violet-700 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 class="text-2xl font-black text-slate-950">{{ copy.title }}</h2>
+      <h2 class="text-xl font-bold text-slate-950">{{ copy.title }}</h2>
       <p class="m-0 max-w-4xl text-slate-600">{{ copy.intro }}</p>
     </header>
-
-    <p class="m-0 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
-      {{ copy.methodology }}
-    </p>
 
     <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
       {{ store.pending.generate ? generationProgress(locale) : copy.loading }}
@@ -333,8 +335,8 @@ watch(
       <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
         {{
           locale === "it"
-            ? "Seleziona il design e approvalo al Gate 5 per generare l’architettura."
-            : "Select and approve the design at Gate 5 to generate the architecture."
+            ? "Scegli e approva l'aspetto della tua app per continuare."
+            : "Choose and approve your app's design to continue."
         }}
       </p>
       <button
@@ -348,7 +350,9 @@ watch(
     </div>
 
     <template v-else>
-      <div class="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+      <details class="rounded-xl border border-slate-200 p-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.audit }}</summary>
+        <p class="my-3 text-slate-600">{{ copy.methodology }}</p>
         <p class="m-0 font-black text-slate-900">{{ copy.version }} {{ current.version_number }}</p>
         <p class="m-0 text-slate-600">
           {{ copy.createdAt.replace("{date}", formatDate(current.created_at)) }}
@@ -356,59 +360,96 @@ watch(
         <p class="m-0 text-xs break-all text-slate-500">
           {{ copy.contentHash }}: <code>{{ current.content_hash }}</code>
         </p>
-      </div>
+      </details>
 
-      <ArchitecturePlanReview :package-value="current.package" :locale="locale" />
-
-      <section class="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-        <div class="grid gap-1">
-          <h3 class="text-xl font-black text-slate-950">{{ copy.revision }}</h3>
-          <p class="m-0 text-sm text-slate-600">{{ copy.revisionHelp }}</p>
-        </div>
-        <label class="grid gap-2 font-bold text-slate-900">
-          {{ copy.questionsLabel }}
-          <textarea
-            v-model="openQuestionsDraft"
-            class="min-h-32 rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
-            :disabled="pendingDiff !== null || store.isBusy"
-          />
-        </label>
-        <button
-          type="button"
-          class="justify-self-start rounded-xl bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="pendingDiff !== null || store.isBusy"
-          @click="proposeRevision"
-        >
-          {{ copy.proposeRevision }}
-        </button>
+      <section class="grid gap-2 rounded-xl bg-slate-50 p-4">
+        <h3 class="font-semibold text-slate-950">{{ current.package.architecture.title }}</h3>
+        <p class="m-0 text-sm leading-6 text-slate-700">
+          {{ current.package.architecture.summary }}
+        </p>
+        <p class="m-0 text-sm leading-6 text-slate-600">{{ current.package.test_plan.strategy }}</p>
       </section>
+      <details
+        class="rounded-xl border border-slate-200 p-3"
+        data-testid="architecture-technical-details"
+      >
+        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.technical }}</summary>
+        <div class="mt-4">
+          <ArchitecturePlanReview :package-value="current.package" :locale="locale" />
+        </div>
+      </details>
 
-      <section class="grid gap-4" aria-labelledby="architecture-diff-title">
-        <h3 id="architecture-diff-title" class="text-xl font-black text-slate-950">
+      <details class="rounded-xl border border-slate-200 p-4">
+        <summary class="cursor-pointer font-semibold text-slate-900">{{ copy.revision }}</summary>
+        <div class="mt-4 grid gap-4">
+          <p class="m-0 text-sm text-slate-600">{{ copy.revisionHelp }}</p>
+          <label class="grid gap-2 font-bold text-slate-900">
+            {{ copy.questionsLabel }}
+            <textarea
+              v-model="openQuestionsDraft"
+              class="min-h-32 rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+              :disabled="pendingDiff !== null || store.isBusy"
+            />
+          </label>
+          <button
+            type="button"
+            class="justify-self-start rounded-xl bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="pendingDiff !== null || store.isBusy"
+            @click="proposeRevision"
+          >
+            {{ copy.proposeRevision }}
+          </button>
+        </div>
+      </details>
+
+      <details
+        v-if="store.diffHistory.length"
+        :open="pendingDiff !== null"
+        class="rounded-xl border border-slate-200 p-4"
+      >
+        <summary id="architecture-diff-title" class="cursor-pointer font-semibold text-slate-950">
           {{ copy.diffs }}
-        </h3>
+        </summary>
         <p v-if="store.diffHistory.length === 0" class="m-0 text-slate-600">
           {{ copy.noDiffs }}
         </p>
         <article
           v-for="diff in store.diffHistory"
           :key="diff.id"
-          class="grid gap-4 rounded-2xl border border-slate-200 p-5"
+          class="mt-4 grid gap-4 rounded-xl border border-slate-200 p-4"
         >
           <div class="grid gap-1">
-            <p class="m-0 text-xs font-bold break-all text-slate-500">{{ diff.id }}</p>
             <p class="m-0 font-black text-slate-950">
-              {{ diff.status }} · {{ copy.changes }}: {{ diff.changes.length }}
+              {{ workflowStatusLabel(diff.status, locale) }} · {{ copy.changes }}:
+              {{ diff.changes.length }}
             </p>
           </div>
-          <ul class="list-disc pl-5 text-sm text-slate-700">
-            <li
-              v-for="change in diff.changes"
-              :key="`${change.artifact_kind}:${change.artifact_id}`"
-            >
-              {{ change.kind }} · {{ change.artifact_kind }} · {{ change.artifact_id }}
-            </li>
-          </ul>
+          <div
+            v-if="diff.changes.some((change) => change.artifact_kind === 'OPEN_QUESTIONS')"
+            class="grid gap-2 text-sm text-slate-700"
+          >
+            <strong>{{ copy.revision }}</strong>
+            <ul v-if="diff.proposed_package.open_questions.length" class="list-disc pl-5">
+              <li v-for="question in diff.proposed_package.open_questions" :key="question">
+                {{ question }}
+              </li>
+            </ul>
+            <p v-else class="m-0">
+              {{ locale === "it" ? "Nessuna domanda rimasta." : "No remaining questions." }}
+            </p>
+          </div>
+          <details class="text-sm text-slate-600">
+            <summary class="cursor-pointer">{{ copy.audit }}</summary>
+            <p class="text-xs break-all">{{ diff.id }} · {{ diff.status }}</p>
+            <ul class="list-disc pl-5 text-sm text-slate-700">
+              <li
+                v-for="change in diff.changes"
+                :key="`${change.artifact_kind}:${change.artifact_id}`"
+              >
+                {{ change.kind }} · {{ change.artifact_kind }} · {{ change.artifact_id }}
+              </li>
+            </ul>
+          </details>
           <template v-if="diff.status === 'PROPOSED'">
             <label class="grid gap-2 font-bold text-slate-900">
               {{ copy.reason }}
@@ -435,13 +476,13 @@ watch(
             </div>
           </template>
         </article>
-      </section>
+      </details>
 
       <section class="grid gap-4 rounded-2xl border border-violet-200 bg-violet-50 p-5">
         <div class="grid gap-1">
           <h3 class="text-xl font-black text-violet-950">{{ copy.gate }}</h3>
           <p class="m-0 font-bold text-violet-900">
-            {{ copy.gateStatus }}: {{ store.gate?.status ?? "NOT_SUBMITTED" }}
+            {{ copy.gateStatus }}: {{ workflowStatusLabel(store.gate?.status, locale) }}
           </p>
         </div>
 
@@ -519,11 +560,14 @@ watch(
         </p>
       </section>
 
-      <section class="grid gap-3" aria-labelledby="architecture-history-title">
-        <h3 id="architecture-history-title" class="text-xl font-black text-slate-950">
+      <details class="rounded-xl border border-slate-200 p-4">
+        <summary
+          id="architecture-history-title"
+          class="cursor-pointer font-semibold text-slate-700"
+        >
           {{ copy.history }}
-        </h3>
-        <ol class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        </summary>
+        <ol class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <li
             v-for="version in store.history"
             :key="version.id"
@@ -536,7 +580,7 @@ watch(
             <code class="text-xs break-all text-slate-500">{{ version.content_hash }}</code>
           </li>
         </ol>
-      </section>
+      </details>
     </template>
   </section>
 </template>

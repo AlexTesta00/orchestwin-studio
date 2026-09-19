@@ -13,7 +13,7 @@ const emit = defineEmits<{
   submit: [brief: ProjectBriefInput];
 }>();
 
-const { t } = useI18n({
+const { t, locale } = useI18n({
   useScope: "global",
 });
 
@@ -40,6 +40,50 @@ const listFields = [
 
 type TextField = (typeof textFields)[number];
 type ListField = (typeof listFields)[number];
+
+const fieldGroups = computed(() => [
+  {
+    title: locale.value === "it" ? "La tua idea" : "Your idea",
+    essential: true,
+    fields: [
+      "name",
+      "description",
+      "problem",
+      "goals",
+      "target_users",
+      "functional_requirements",
+    ] as BriefField[],
+  },
+  {
+    title: locale.value === "it" ? "Altri dettagli del progetto" : "More project details",
+    essential: false,
+    fields: [
+      "domain",
+      "temporal_constraints",
+      "budget",
+      "technical_constraints",
+      "non_functional_requirements",
+      "risks",
+      "stakeholders",
+      "available_artifacts",
+      "definition_of_done",
+    ] as BriefField[],
+  },
+]);
+
+function isListField(field: BriefField): field is ListField {
+  return listFields.includes(field as ListField);
+}
+
+function fieldValue(field: BriefField): string {
+  return isListField(field) ? listValues[field] : textValues[field as TextField];
+}
+
+function updateField(field: BriefField, event: Event): void {
+  const value = (event.target as HTMLTextAreaElement).value;
+  if (isListField(field)) listValues[field] = value;
+  else textValues[field as TextField] = value;
+}
 
 const textValues = reactive<Record<TextField, string>>({
   name: "",
@@ -157,7 +201,7 @@ function submit(): void {
 </script>
 
 <template>
-  <form class="grid gap-8" @submit.prevent="submit">
+  <form class="grid gap-5" @submit.prevent="submit">
     <div
       class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
       role="status"
@@ -169,78 +213,53 @@ function submit(): void {
       }}
     </div>
 
-    <fieldset class="grid gap-5">
-      <legend class="text-xl font-black text-slate-950">
-        {{ t("brief.textFields") }}
-      </legend>
-
-      <div
-        v-for="field in textFields"
-        :key="field"
-        class="grid gap-2 rounded-xl border border-slate-200 p-4"
+    <component
+      :is="group.essential ? 'fieldset' : 'details'"
+      v-for="group in fieldGroups"
+      :key="group.title"
+      class="rounded-xl border border-slate-200 p-4"
+      :data-testid="group.essential ? 'brief-essentials' : 'brief-additional-details'"
+    >
+      <component
+        :is="group.essential ? 'legend' : 'summary'"
+        class="font-semibold text-slate-950"
+        :class="{ 'cursor-pointer': !group.essential }"
       >
-        <label class="font-bold text-slate-800" :for="`brief-${field}`">
-          {{ t(`brief.fields.${field}`) }}
-        </label>
-
-        <textarea
-          :id="`brief-${field}`"
-          v-model="textValues[field]"
-          class="min-h-24 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:outline-none"
-          :disabled="isUnknown(field)"
-        ></textarea>
-
-        <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            :checked="isUnknown(field)"
-            :data-testid="`brief-${field}-unknown`"
-            @change="onUnknownChange(field, $event)"
-          />
-
-          {{ t("brief.markUnknown") }}
-        </label>
+        {{ group.title }}
+      </component>
+      <div class="mt-4 grid gap-5 sm:grid-cols-2">
+        <div v-for="field in group.fields" :key="field" class="grid gap-2">
+          <label class="text-sm font-semibold text-slate-800" :for="`brief-${field}`">
+            {{ t(`brief.fields.${field}`) }}
+          </label>
+          <textarea
+            :id="`brief-${field}`"
+            :value="fieldValue(field)"
+            :rows="field === 'name' ? 1 : 3"
+            class="rounded-lg border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:outline-none"
+            :disabled="isUnknown(field)"
+            :aria-describedby="isListField(field) ? `brief-${field}-hint` : undefined"
+            @input="updateField(field, $event)"
+          ></textarea>
+          <p
+            v-if="isListField(field)"
+            :id="`brief-${field}-hint`"
+            class="m-0 text-xs text-slate-500"
+          >
+            {{ t("brief.oneItemPerLine") }}
+          </p>
+          <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              :checked="isUnknown(field)"
+              :data-testid="`brief-${field}-unknown`"
+              @change="onUnknownChange(field, $event)"
+            />
+            {{ t("brief.markUnknown") }}
+          </label>
+        </div>
       </div>
-    </fieldset>
-
-    <fieldset class="grid gap-5">
-      <legend class="text-xl font-black text-slate-950">
-        {{ t("brief.listFields") }}
-      </legend>
-
-      <div
-        v-for="field in listFields"
-        :key="field"
-        class="grid gap-2 rounded-xl border border-slate-200 p-4"
-      >
-        <label class="font-bold text-slate-800" :for="`brief-${field}`">
-          {{ t(`brief.fields.${field}`) }}
-        </label>
-
-        <textarea
-          :id="`brief-${field}`"
-          v-model="listValues[field]"
-          class="min-h-32 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:outline-none"
-          :disabled="isUnknown(field)"
-          :aria-describedby="`brief-${field}-hint`"
-        ></textarea>
-
-        <p :id="`brief-${field}-hint`" class="m-0 text-sm text-slate-600">
-          {{ t("brief.oneItemPerLine") }}
-        </p>
-
-        <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            :checked="isUnknown(field)"
-            :data-testid="`brief-${field}-unknown`"
-            @change="onUnknownChange(field, $event)"
-          />
-
-          {{ t("brief.markUnknown") }}
-        </label>
-      </div>
-    </fieldset>
+    </component>
 
     <button
       class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-sm hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"

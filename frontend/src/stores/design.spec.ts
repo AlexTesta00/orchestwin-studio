@@ -199,6 +199,12 @@ const authorize: AuthorizedRequest = <T>(operation: (accessToken: string) => Pro
   operation("access-token");
 
 class FakeDesignApi implements DesignApi {
+  async generateMockup(): Promise<never> {
+    throw new Error("not used by store tests");
+  }
+  async currentMockup() {
+    return null;
+  }
   readinessResult: DesignReadinessPayload = READINESS_EMPTY;
   historyResult: DesignPackageVersionPayload[] = [];
   diffsResult: DesignPackageDiffPayload[] = [];

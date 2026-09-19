@@ -9,7 +9,7 @@ import type { ProjectMode } from "@/api/contracts";
 import { useAuthStore } from "@/stores/auth";
 import { useProjectsStore } from "@/stores/projects";
 
-const { t } = useI18n({
+const { t, te } = useI18n({
   useScope: "global",
 });
 const router = useRouter();
@@ -45,20 +45,20 @@ async function createProject(): Promise<void> {
 </script>
 
 <template>
-  <section class="grid gap-10" aria-labelledby="projects-title">
-    <header class="grid max-w-3xl gap-4">
+  <section class="grid gap-6" aria-labelledby="projects-title">
+    <header class="grid max-w-3xl gap-2">
       <p class="m-0 text-sm font-black tracking-[0.12em] text-slate-600 uppercase">
         {{ t("projects.eyebrow") }}
       </p>
 
       <h1
         id="projects-title"
-        class="m-0 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl"
+        class="m-0 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"
       >
         {{ t("projects.title") }}
       </h1>
 
-      <p class="m-0 text-lg leading-7 text-slate-600">
+      <p class="m-0 text-sm leading-6 text-slate-600">
         {{ t("projects.description") }}
       </p>
     </header>
@@ -68,14 +68,20 @@ async function createProject(): Promise<void> {
       class="rounded-xl border border-red-300 bg-red-50 p-4 font-semibold text-red-900"
       role="alert"
     >
-      {{ t(`projects.errors.${errorDetail}`) }}
+      {{
+        t(
+          te(`projects.errors.${errorDetail}`)
+            ? `projects.errors.${errorDetail}`
+            : "projects.errors.unexpected_error",
+        )
+      }}
     </div>
 
     <section
       class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       aria-labelledby="create-project-title"
     >
-      <h2 id="create-project-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="create-project-title" class="m-0 text-lg font-bold text-slate-950">
         {{ t("projects.create.title") }}
       </h2>
 
@@ -128,7 +134,7 @@ async function createProject(): Promise<void> {
     </section>
 
     <section class="grid gap-5" aria-labelledby="project-list-title">
-      <h2 id="project-list-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="project-list-title" class="m-0 text-lg font-bold text-slate-950">
         {{ t("projects.listTitle") }}
       </h2>
 
@@ -156,7 +162,7 @@ async function createProject(): Promise<void> {
               },
             }"
           >
-            <span class="text-xl font-black">
+            <span class="text-lg font-bold">
               {{ project.display_name }}
             </span>
 

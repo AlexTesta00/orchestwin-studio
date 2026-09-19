@@ -1,4 +1,4 @@
-import { buildSelectedDesignPackage } from "../components/designPrototype";
+import { buildSelectedDesignPackage } from "./prototypeFixtures";
 import type {
   DesignPackageDiffPayload,
   DesignPackagePayload,

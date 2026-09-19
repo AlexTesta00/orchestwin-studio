@@ -20,22 +20,22 @@ let mounted = true;
 const copy = computed(() =>
   props.locale === "it"
     ? {
-        title: "Stato dei modelli",
-        ready: "I modelli sono disponibili per le richieste.",
-        development: "Modalità di sviluppo: il runtime completo dei modelli non è configurato.",
-        unavailable:
-          "I modelli non sono disponibili. La disponibilità non attesta la qualità delle risposte.",
-        unknown: "Stato dei modelli non disponibile.",
+        title: "Disponibilità degli assistenti",
+        ready: "Gli assistenti AI sono collegati e pronti a ricevere richieste.",
+        development:
+          "Questo ambiente usa simulazioni di sviluppo. Gli assistenti AI reali non sono collegati.",
+        unavailable: "Gli assistenti AI non sono al momento raggiungibili. Riprova tra poco.",
+        unknown: "Non è stato possibile verificare la disponibilità degli assistenti.",
         refresh: "Verifica disponibilità",
         checking: "Verifica in corso…",
       }
     : {
-        title: "Model status",
-        ready: "The models are available for requests.",
-        development: "Development mode: the complete model runtime is not configured.",
-        unavailable:
-          "The models are unavailable. Availability does not establish response quality.",
-        unknown: "Model status unavailable.",
+        title: "Assistant availability",
+        ready: "The AI assistants are connected and ready for requests.",
+        development:
+          "This environment uses development simulations. Real AI assistants are not connected.",
+        unavailable: "The AI assistants cannot be reached right now. Try again shortly.",
+        unknown: "Could not check assistant availability.",
         refresh: "Check availability",
         checking: "Checking…",
       },

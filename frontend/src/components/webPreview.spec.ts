@@ -52,6 +52,31 @@ describe("generated Web preview", () => {
       "PREVIEW_RESOURCE_MISSING",
     );
   });
+  it("retains native forms and handlers while forbidding all submission destinations", () => {
+    const input = content(
+      '<meta http-equiv="Content-Security-Policy" content="form-action *"><form action="https://external.example/send" method="post"><input name="value" required><button type="submit" formaction="/api/submit">Calculate</button><output></output></form><script src="app.js"></script>',
+    );
+    input.files[1]!.base64 = btoa(
+      "document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); document.querySelector('output').textContent = 'Calculated'; });",
+    );
+    const doc = new DOMParser().parseFromString(buildWebPreview(input), "text/html");
+    const policies = doc.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
+    expect(policies).toHaveLength(1);
+    expect(doc.head.firstElementChild).toBe(policies[0]);
+    const directives = policies[0]!
+      .getAttribute("content")!
+      .split(";")
+      .map((item) => item.trim());
+    expect(directives).toContain("form-action 'none'");
+    expect(directives).toContain("connect-src 'none'");
+    expect(directives).toContain("frame-src 'none'");
+    expect(directives).toContain("default-src 'none'");
+    expect(doc.querySelector("input[required]")).not.toBeNull();
+    expect(doc.querySelector('button[type="submit"]')).not.toBeNull();
+    expect(doc.querySelector("script")?.textContent).toContain("event.preventDefault()");
+    expect(doc.querySelector("form")?.getAttribute("action")).toBe("https://external.example/send");
+    expect(doc.querySelector("button")?.getAttribute("formaction")).toBe("/api/submit");
+  });
   it("keeps closing-tag text inside a generated script instead of changing the document", () => {
     const input = content('<output></output><script src="app.js"></script>');
     input.files[1]!.base64 = btoa(

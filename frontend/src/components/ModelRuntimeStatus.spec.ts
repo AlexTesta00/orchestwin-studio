@@ -17,10 +17,10 @@ describe("model runtime status", () => {
       global: { plugins: [createPinia()] },
     });
     await flushPromises();
-    expect(wrapper.text()).toContain("complete model runtime is not configured");
+    expect(wrapper.text()).toContain("Real AI assistants are not connected");
     await wrapper.get("button").trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("models are available for requests");
+    expect(wrapper.text()).toContain("assistants are connected and ready");
     expect(query).toHaveBeenCalledTimes(2);
   });
 });

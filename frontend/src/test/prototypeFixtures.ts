@@ -1,3 +1,4 @@
+// Synthetic fixture builder; the application uses audited model mockup generation.
 import type {
   DeclarativePrototypePayload,
   DesignAlternativePayload,

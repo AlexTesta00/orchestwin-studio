@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
 import type {
-  AgentCatalogEntryResponse,
   AgentIdentifier,
   AgentTeamApi,
   AgentTeamGateDecisionAction,
@@ -16,6 +15,7 @@ import type {
 import type { HumanGateEventResponse } from "@/api/workflow-contracts";
 import { useAuthStore } from "@/stores/auth";
 import { type TeamAuthorizedRequest, useTeamStore } from "@/stores/team";
+import TwinIdentity from "./TwinIdentity.vue";
 
 const props = defineProps<{
   projectId: string;
@@ -31,12 +31,12 @@ const { t, locale } = useI18n({
   messages: {
     en: {
       flow: {
-        title: "Agent Team selection and approval",
+        title: "Your project team",
         intro:
-          "Review deterministic constraints, adjust compatible specialists, and approve the exact team version.",
-        loading: "Updating Agent Team workflow…",
-        refresh: "Refresh team workflow",
-        generate: "Generate team proposal",
+          "Meet the specialists who will help build your idea. Review the team, make changes if needed, then approve it.",
+        loading: "Updating your team…",
+        refresh: "Refresh",
+        generate: "Suggest a team",
         noProposal: "No team proposal has been generated.",
         currentProposal: "Current team proposal",
         version: "Version {number}",
@@ -46,24 +46,26 @@ const { t, locale } = useI18n({
         catalogVersion: "Agent catalog version",
         contentHash: "Team content hash",
         constraintsHash: "Constraint hash",
-        readiness: "Project readiness",
-        ready: "Gate 2 approves the current team. Continue with personas and User Twins below.",
-        notStarted: "This status does not start the main workflow automatically.",
+        readiness: "Next step",
+        ready: "Your team is approved. Continue by getting to know your users.",
+        notStarted: "You decide when to continue.",
         constraintIssues: "The brief contains contradictory role signals.",
-        teamEditor: "Agent catalog and current selection",
+        teamEditor: "Meet your specialists",
         teamEditorIntro:
-          "Mandatory roles cannot be removed. Impossible or conflicting roles cannot be added.",
+          "Essential roles are already included. You can add other specialists where they are useful.",
+        technicalDetails: "Technical details and sources",
+        roleDetails: "Why this role is included",
         selected: "Selected",
         notSelected: "Not selected",
-        ownerRationale: "Owner rationale",
+        ownerRationale: "Why would you like this specialist?",
         rationalePlaceholder: "Explain why this optional role should be added.",
         rationaleRequired: "Every newly added optional role requires an owner rationale.",
-        saveTeam: "Save team as a new version",
+        saveTeam: "Save team changes",
         proposalHistory: "Team proposal history",
         noHistory: "No team proposal version is available.",
-        gateTitle: "Gate 2 — Agent Team",
+        gateTitle: "Confirm your team",
         noGate: "The Agent Team has not been submitted for approval.",
-        submitGate: "Submit current team for approval",
+        submitGate: "Review this team for approval",
         gateReason: "Decision rationale",
         approve: "Approve",
         reject: "Reject",
@@ -72,7 +74,7 @@ const { t, locale } = useI18n({
         resume: "Resume",
         cancel: "Cancel",
         gateReasonRequired: "Reject and request-revision actions require a rationale.",
-        eventHistory: "Gate 2 audit history",
+        eventHistory: "Previous decisions",
         noEvents: "No Gate 2 event has been recorded.",
         evidenceFields: "Brief fields",
         evidenceTerms: "Matched terms",
@@ -82,16 +84,16 @@ const { t, locale } = useI18n({
         latestOperation: "Latest operation: {status}",
         error: "Agent Team error: {detail}",
         constraints: {
-          MANDATORY: "Mandatory",
+          MANDATORY: "Essential",
           OPTIONAL: "Optional",
-          IMPOSSIBLE: "Impossible",
+          IMPOSSIBLE: "Not available for this project",
           CONFLICT: "Conflict",
           NOT_EVALUATED: "Not evaluated",
         },
         sources: {
-          DETERMINISTIC_MANDATORY: "Deterministic mandatory role",
-          PROPOSER_SUGGESTED: "Proposal adapter suggestion",
-          OWNER_ADDED: "Added by the owner",
+          DETERMINISTIC_MANDATORY: "Required by the project",
+          PROPOSER_SUGGESTED: "Suggested by the model",
+          OWNER_ADDED: "Added by you",
         },
         revisions: {
           PROPOSER_GENERATED: "Generated proposal",
@@ -130,7 +132,7 @@ const { t, locale } = useI18n({
           BRIEF_APPROVAL_REQUIRED: "Project Brief approval required",
           TEAM_PROPOSAL_REQUIRED: "Team proposal required",
           TEAM_APPROVAL_REQUIRED: "Agent Team approval required",
-          READY_FOR_MAIN_WORKFLOW: "Ready for the main workflow",
+          READY_FOR_MAIN_WORKFLOW: "Team approved",
           SUBMIT: "Submitted",
           APPROVE: "Approved",
           REJECT: "Rejected",
@@ -198,87 +200,15 @@ const { t, locale } = useI18n({
           SYSTEM_INTEGRATION: "System integration",
         },
       },
-      agentCatalog: {
-        roles: {
-          workflow_orchestrator: {
-            name: "Workflow Orchestrator",
-            description: "Coordinates governed workflow transitions and typed artifacts.",
-          },
-          intake_clarification_agent: {
-            name: "Intake and Clarification Agent",
-            description: "Guides Project Brief intake and focused clarification.",
-          },
-          team_selector: {
-            name: "Team Selector",
-            description: "Builds typed team proposals from deterministic constraints.",
-          },
-          human_gate_controller: {
-            name: "Human Gate Controller",
-            description: "Enforces explicit owner approval and audit events.",
-          },
-          artifact_manager: {
-            name: "Artifact Manager",
-            description: "Manages immutable artifacts, versions, and provenance.",
-          },
-          sandbox_controller: {
-            name: "Sandbox Controller",
-            description: "Controls isolated execution and validated operations.",
-          },
-          requirements_analyst: {
-            name: "Requirements Analyst",
-            description: "Structures requirements, acceptance criteria, and scope.",
-          },
-          ux_researcher_user_modeler: {
-            name: "UX Researcher / User Modeler",
-            description: "Models users, contexts, goals, and evidence needs.",
-          },
-          ux_ui_designer: {
-            name: "UX/UI Designer",
-            description: "Explores interaction flows and accessible interface design.",
-          },
-          software_architect: {
-            name: "Software Architect",
-            description: "Defines architecture boundaries, technologies, and trade-offs.",
-          },
-          frontend_engineer: {
-            name: "Frontend Engineer",
-            description: "Implements browser-based user interfaces.",
-          },
-          backend_engineer: {
-            name: "Backend Engineer",
-            description: "Implements APIs, persistence, and server-side behavior.",
-          },
-          mobile_engineer: {
-            name: "Mobile Engineer",
-            description: "Implements native or cross-platform mobile applications.",
-          },
-          qa_test_engineer: {
-            name: "QA/Test Engineer",
-            description: "Defines and executes automated quality strategies.",
-          },
-          security_reviewer: {
-            name: "Security Reviewer",
-            description: "Reviews authentication, authorization, privacy, and risks.",
-          },
-          accessibility_reviewer: {
-            name: "Accessibility Reviewer",
-            description: "Reviews accessibility requirements and interaction barriers.",
-          },
-          integration_engineer: {
-            name: "Integration Engineer",
-            description: "Coordinates external services and brownfield integration.",
-          },
-        },
-      },
     },
     it: {
       flow: {
-        title: "Selezione e approvazione dell'Agent Team",
+        title: "Il team del tuo progetto",
         intro:
-          "Esamina i vincoli deterministici, modifica gli specialisti compatibili e approva la versione esatta del team.",
-        loading: "Aggiornamento del workflow Agent Team…",
-        refresh: "Aggiorna workflow del team",
-        generate: "Genera proposta del team",
+          "Conosci gli specialisti che ti aiuteranno a realizzare la tua idea. Controlla il team, personalizzalo se serve e approvalo.",
+        loading: "Aggiornamento del team…",
+        refresh: "Aggiorna",
+        generate: "Proponi un team",
         noProposal: "Non è stata ancora generata una proposta del team.",
         currentProposal: "Proposta corrente del team",
         version: "Versione {number}",
@@ -288,24 +218,26 @@ const { t, locale } = useI18n({
         catalogVersion: "Versione del catalogo agenti",
         contentHash: "Hash del contenuto del team",
         constraintsHash: "Hash dei vincoli",
-        readiness: "Stato di preparazione del progetto",
-        ready: "Gate 2 approva il team corrente. Prosegui con personas e User Twin qui sotto.",
-        notStarted: "Questo stato non avvia automaticamente il workflow principale.",
+        readiness: "Il prossimo passo",
+        ready: "Il team è approvato. Prosegui per conoscere gli utenti del prodotto.",
+        notStarted: "Sei tu a decidere quando proseguire.",
         constraintIssues: "Il brief contiene segnali contraddittori relativi ai ruoli.",
-        teamEditor: "Catalogo agenti e selezione corrente",
+        teamEditor: "Conosci i tuoi specialisti",
         teamEditorIntro:
-          "I ruoli obbligatori non possono essere rimossi. I ruoli impossibili o in conflitto non possono essere aggiunti.",
+          "I ruoli essenziali sono già inclusi. Puoi aggiungere altri specialisti quando sono utili al progetto.",
+        technicalDetails: "Dettagli tecnici e fonti",
+        roleDetails: "Perché questo ruolo è incluso",
         selected: "Selezionato",
         notSelected: "Non selezionato",
-        ownerRationale: "Motivazione dell'owner",
+        ownerRationale: "Perché vuoi questo specialista?",
         rationalePlaceholder: "Spiega perché questo ruolo opzionale deve essere aggiunto.",
         rationaleRequired: "Ogni nuovo ruolo opzionale richiede una motivazione dell'owner.",
-        saveTeam: "Salva il team come nuova versione",
+        saveTeam: "Salva le modifiche al team",
         proposalHistory: "Cronologia delle proposte del team",
         noHistory: "Non è disponibile alcuna versione della proposta del team.",
-        gateTitle: "Gate 2 — Agent Team",
+        gateTitle: "Conferma il tuo team",
         noGate: "L'Agent Team non è ancora stato sottoposto ad approvazione.",
-        submitGate: "Sottoponi il team corrente ad approvazione",
+        submitGate: "Porta questo team all'approvazione",
         gateReason: "Motivazione della decisione",
         approve: "Approva",
         reject: "Rifiuta",
@@ -314,7 +246,7 @@ const { t, locale } = useI18n({
         resume: "Riprendi",
         cancel: "Annulla",
         gateReasonRequired: "Rifiuto e richiesta di revisione richiedono una motivazione.",
-        eventHistory: "Cronologia audit di Gate 2",
+        eventHistory: "Decisioni precedenti",
         noEvents: "Non è stato ancora registrato alcun evento Gate 2.",
         evidenceFields: "Campi del brief",
         evidenceTerms: "Termini rilevati",
@@ -324,16 +256,16 @@ const { t, locale } = useI18n({
         latestOperation: "Ultima operazione: {status}",
         error: "Errore dell'Agent Team: {detail}",
         constraints: {
-          MANDATORY: "Obbligatorio",
+          MANDATORY: "Essenziale",
           OPTIONAL: "Opzionale",
-          IMPOSSIBLE: "Impossibile",
+          IMPOSSIBLE: "Non disponibile per questo progetto",
           CONFLICT: "Conflitto",
           NOT_EVALUATED: "Non valutato",
         },
         sources: {
-          DETERMINISTIC_MANDATORY: "Ruolo obbligatorio deterministico",
-          PROPOSER_SUGGESTED: "Suggerito dal proposal adapter",
-          OWNER_ADDED: "Aggiunto dall'owner",
+          DETERMINISTIC_MANDATORY: "Richiesto dal progetto",
+          PROPOSER_SUGGESTED: "Suggerito dal modello",
+          OWNER_ADDED: "Aggiunto da te",
         },
         revisions: {
           PROPOSER_GENERATED: "Proposta generata",
@@ -372,7 +304,7 @@ const { t, locale } = useI18n({
           BRIEF_APPROVAL_REQUIRED: "È richiesta l'approvazione del Project Brief",
           TEAM_PROPOSAL_REQUIRED: "È richiesta una proposta del team",
           TEAM_APPROVAL_REQUIRED: "È richiesta l'approvazione dell'Agent Team",
-          READY_FOR_MAIN_WORKFLOW: "Pronto per il workflow principale",
+          READY_FOR_MAIN_WORKFLOW: "Team approvato",
           SUBMIT: "Sottoposto",
           APPROVE: "Approvato",
           REJECT: "Rifiutato",
@@ -441,78 +373,6 @@ const { t, locale } = useI18n({
           SYSTEM_INTEGRATION: "Integrazione dei sistemi",
         },
       },
-      agentCatalog: {
-        roles: {
-          workflow_orchestrator: {
-            name: "Workflow Orchestrator",
-            description: "Coordina transizioni governate e artefatti tipizzati.",
-          },
-          intake_clarification_agent: {
-            name: "Intake and Clarification Agent",
-            description: "Guida l'acquisizione e la chiarificazione del Project Brief.",
-          },
-          team_selector: {
-            name: "Team Selector",
-            description: "Costruisce proposte tipizzate a partire dai vincoli deterministici.",
-          },
-          human_gate_controller: {
-            name: "Human Gate Controller",
-            description: "Applica approvazioni esplicite e audit degli eventi.",
-          },
-          artifact_manager: {
-            name: "Artifact Manager",
-            description: "Gestisce artefatti immutabili, versioni e provenienza.",
-          },
-          sandbox_controller: {
-            name: "Sandbox Controller",
-            description: "Controlla esecuzioni isolate e operazioni validate.",
-          },
-          requirements_analyst: {
-            name: "Requirements Analyst",
-            description: "Struttura requisiti, criteri di accettazione e ambito.",
-          },
-          ux_researcher_user_modeler: {
-            name: "UX Researcher / User Modeler",
-            description: "Modella utenti, contesti, obiettivi e necessità di evidenza.",
-          },
-          ux_ui_designer: {
-            name: "UX/UI Designer",
-            description: "Esplora flussi di interazione e interfacce accessibili.",
-          },
-          software_architect: {
-            name: "Software Architect",
-            description: "Definisce confini architetturali, tecnologie e trade-off.",
-          },
-          frontend_engineer: {
-            name: "Frontend Engineer",
-            description: "Implementa interfacce utente per browser.",
-          },
-          backend_engineer: {
-            name: "Backend Engineer",
-            description: "Implementa API, persistenza e comportamento server-side.",
-          },
-          mobile_engineer: {
-            name: "Mobile Engineer",
-            description: "Implementa applicazioni mobile native o multipiattaforma.",
-          },
-          qa_test_engineer: {
-            name: "QA/Test Engineer",
-            description: "Definisce ed esegue strategie di qualità automatizzate.",
-          },
-          security_reviewer: {
-            name: "Security Reviewer",
-            description: "Esamina autenticazione, autorizzazione, privacy e rischi.",
-          },
-          accessibility_reviewer: {
-            name: "Accessibility Reviewer",
-            description: "Esamina requisiti di accessibilità e barriere di interazione.",
-          },
-          integration_engineer: {
-            name: "Integration Engineer",
-            description: "Coordina servizi esterni e integrazione brownfield.",
-          },
-        },
-      },
     },
   },
 });
@@ -520,11 +380,37 @@ const { t, locale } = useI18n({
 const resolvedApi = computed(() => props.api ?? apiClient);
 
 const selectedDraft = ref<Partial<Record<AgentIdentifier, boolean>>>({});
+const showAllRoles = ref(false);
 const rationaleDraft = ref<Partial<Record<AgentIdentifier, string>>>({});
 const gateReason = ref("");
 const localError = ref<string | null>(null);
 
 const initialSelected = computed(() => new Set(store.currentVersion?.selected_agent_ids ?? []));
+const hasTeamChanges = computed(() => {
+  if (store.currentVersion === null) return false;
+  const selected = selectedAgentIds();
+  return (
+    selected.length !== initialSelected.value.size ||
+    selected.some((id) => !initialSelected.value.has(id))
+  );
+});
+const gateTargetsCurrentVersion = computed(() => {
+  const version = store.currentVersion;
+  const artifact = store.gate?.artifact;
+  return (
+    version !== null &&
+    artifact !== undefined &&
+    artifact.artifact_id === version.id &&
+    artifact.version === version.version_number &&
+    artifact.content_hash === version.content_hash
+  );
+});
+const canSubmitGate = computed(() => {
+  if (store.currentVersion === null) return false;
+  if (store.gate === null) return true;
+  if (["CANCELLED", "PAUSED_NEEDS_HUMAN"].includes(store.gate.status)) return false;
+  return !gateTargetsCurrentVersion.value || store.gate.status === "DRAFT";
+});
 
 const latestOperationStatus = computed(
   () =>
@@ -614,14 +500,6 @@ function reasonText(reason: TeamSelectionReasonResponse): string {
 
 function errorText(detail: string): string {
   return translatedOrFallback(`flow.errors.${detail}`, detail);
-}
-
-function roleName(entry: AgentCatalogEntryResponse): string {
-  return translatedOrFallback(entry.name_key, humanize(entry.agent_id));
-}
-
-function roleDescription(entry: AgentCatalogEntryResponse): string {
-  return translatedOrFallback(entry.description_key, roleName(entry));
 }
 
 function formatDate(value: string): string {
@@ -717,6 +595,7 @@ function ownerRationales(): readonly OwnerAgentRationaleInput[] | null {
 }
 
 async function saveTeam(): Promise<void> {
+  if (store.busy || !hasTeamChanges.value) return;
   localError.value = null;
 
   const rationales = ownerRationales();
@@ -770,7 +649,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 </script>
 
 <template>
-  <section class="grid gap-8" aria-labelledby="team-selection-title">
+  <section class="grid gap-4" aria-labelledby="team-selection-title">
     <header class="grid gap-2">
       <h2 id="team-selection-title" class="text-2xl font-black text-slate-950">
         {{ t("flow.title") }}
@@ -781,7 +660,17 @@ function eventLabel(event: HumanGateEventResponse): string {
       </p>
     </header>
 
-    <div class="min-h-6" aria-live="polite" aria-atomic="true">
+    <div
+      :class="{
+        'sr-only':
+          !store.busy &&
+          localError === null &&
+          store.errorDetail === null &&
+          latestOperationStatus === null,
+      }"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <p v-if="store.busy" class="m-0 text-sm font-semibold text-slate-700">
         {{ t("flow.loading") }}
       </p>
@@ -830,68 +719,51 @@ function eventLabel(event: HumanGateEventResponse): string {
       </button>
     </div>
 
-    <section
-      class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      aria-labelledby="project-readiness-title"
+    <p
+      v-if="store.readiness !== null"
+      class="m-0 text-sm font-medium"
+      :class="
+        store.readiness.status === 'READY_FOR_MAIN_WORKFLOW' ? 'text-emerald-700' : 'text-amber-800'
+      "
     >
-      <h3 id="project-readiness-title" class="text-xl font-black text-slate-950">
-        {{ t("flow.readiness") }}
-      </h3>
+      {{
+        store.readiness.status === "READY_FOR_MAIN_WORKFLOW"
+          ? t("flow.ready")
+          : statusText(store.readiness.status)
+      }}
+    </p>
 
-      <p
-        v-if="store.readiness !== null"
-        class="m-0 text-lg font-black"
-        :class="
-          store.readiness.status === 'READY_FOR_MAIN_WORKFLOW'
-            ? 'text-emerald-700'
-            : 'text-amber-800'
-        "
-      >
-        {{ statusText(store.readiness.status) }}
-      </p>
-
-      <p v-if="store.readiness?.status === 'READY_FOR_MAIN_WORKFLOW'" class="m-0 text-slate-700">
-        {{ t("flow.ready") }}
-      </p>
-
-      <p class="m-0 text-sm text-slate-600">
-        {{ t("flow.notStarted") }}
-      </p>
-    </section>
-
-    <section
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      aria-labelledby="current-team-proposal-title"
+    <details
+      v-if="store.currentVersion !== null"
+      data-testid="team-technical-details"
+      class="text-sm text-slate-500"
     >
-      <template v-if="store.currentVersion !== null">
-        <header class="grid gap-2">
-          <h3 id="current-team-proposal-title" class="text-xl font-black text-slate-950">
-            {{ t("flow.currentProposal") }}
-          </h3>
+      <summary class="cursor-pointer font-medium">
+        {{ t("flow.version", { number: store.currentVersion.version_number }) }} ·
+        {{ t("flow.technicalDetails") }}
+      </summary>
+      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+        <p class="m-0 font-medium text-slate-800">
+          {{
+            t("flow.version", {
+              number: store.currentVersion.version_number,
+            })
+          }}
+          ·
+          {{ revisionText(store.currentVersion.revision_kind) }}
+        </p>
 
-          <p class="m-0 font-bold text-slate-800">
-            {{
-              t("flow.version", {
-                number: store.currentVersion.version_number,
-              })
-            }}
-            ·
-            {{ revisionText(store.currentVersion.revision_kind) }}
-          </p>
-
-          <p
-            v-if="store.currentVersion.based_on_version_number !== null"
-            class="m-0 text-sm text-slate-600"
-          >
-            {{
-              t("flow.basedOn", {
-                number: store.currentVersion.based_on_version_number,
-              })
-            }}
-          </p>
-        </header>
-
-        <dl class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <p
+          v-if="store.currentVersion.based_on_version_number !== null"
+          class="m-0 text-sm text-slate-600"
+        >
+          {{
+            t("flow.basedOn", {
+              number: store.currentVersion.based_on_version_number,
+            })
+          }}
+        </p>
+        <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div class="grid gap-1">
             <dt class="font-black text-slate-800">
               {{ t("flow.provider") }}
@@ -939,12 +811,9 @@ function eventLabel(event: HumanGateEventResponse): string {
             </dd>
           </div>
         </dl>
-      </template>
-
-      <p v-else id="current-team-proposal-title" class="m-0 text-slate-600">
-        {{ t("flow.noProposal") }}
-      </p>
-    </section>
+      </div>
+    </details>
+    <p v-else class="m-0 text-sm text-slate-600">{{ t("flow.noProposal") }}</p>
 
     <section
       v-if="store.lastGeneration?.issues.length || store.currentVersion?.constraint_issues.length"
@@ -984,25 +853,43 @@ function eventLabel(event: HumanGateEventResponse): string {
           {{ t("flow.teamEditorIntro") }}
         </p>
 
-        <div class="grid gap-4 lg:grid-cols-2">
+        <button
+          v-if="store.currentVersion !== null"
+          type="button"
+          class="justify-self-start text-sm font-semibold text-indigo-700 hover:underline"
+          :aria-expanded="showAllRoles"
+          aria-controls="team-role-cards"
+          @click="showAllRoles = !showAllRoles"
+        >
+          {{
+            showAllRoles
+              ? locale === "it"
+                ? "Mostra solo gli specialisti scelti"
+                : "Show selected specialists"
+              : locale === "it"
+                ? "Altri specialisti e supporto al progetto"
+                : "Other specialists and project support"
+          }}
+        </button>
+
+        <div id="team-role-cards" class="grid gap-4 lg:grid-cols-2">
           <article
             v-for="entry in store.catalog?.agents ?? []"
             :key="entry.agent_id"
+            v-show="
+              showAllRoles ||
+              store.currentVersion === null ||
+              (entry.kind === 'SPECIALIST' && isSelected(entry.agent_id))
+            "
             class="grid gap-4 rounded-xl border border-slate-200 p-4"
           >
             <header class="flex items-start justify-between gap-4">
-              <div class="grid gap-1">
-                <h4 class="font-black text-slate-950">
-                  {{ roleName(entry) }}
-                </h4>
-
-                <p class="m-0 text-sm text-slate-600">
-                  {{ roleDescription(entry) }}
-                </p>
-              </div>
+              <h4 :id="`team-role-${entry.agent_id}`" class="min-w-0">
+                <TwinIdentity :role="entry.agent_id" :locale="locale === 'it' ? 'it' : 'en'" />
+              </h4>
 
               <span
-                class="shrink-0 rounded-full px-3 py-1 text-xs font-black"
+                class="rounded-full px-2 py-1 text-xs font-semibold"
                 :class="{
                   'bg-emerald-100 text-emerald-800':
                     constraintFor(entry.agent_id)?.kind === 'MANDATORY',
@@ -1023,6 +910,7 @@ function eventLabel(event: HumanGateEventResponse): string {
               <input
                 type="checkbox"
                 :data-testid="`role-${entry.agent_id}`"
+                :aria-labelledby="`team-role-${entry.agent_id}`"
                 :checked="isSelected(entry.agent_id)"
                 :disabled="!canEditRole(entry.agent_id)"
                 @change="setSelected(entry.agent_id, $event)"
@@ -1031,51 +919,56 @@ function eventLabel(event: HumanGateEventResponse): string {
               {{ isSelected(entry.agent_id) ? t("flow.selected") : t("flow.notSelected") }}
             </label>
 
-            <div v-if="entry.capabilities.length > 0" class="grid gap-2">
-              <p class="m-0 text-sm font-black text-slate-800">
-                {{ t("flow.capabilities") }}
-              </p>
-
-              <ul class="flex flex-wrap gap-2">
-                <li
-                  v-for="capability in entry.capabilities"
-                  :key="capability"
-                  class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
-                >
-                  {{ capabilityText(capability) }}
-                </li>
-              </ul>
-            </div>
-
-            <div v-if="constraintFor(entry.agent_id)?.reasons.length" class="grid gap-3">
-              <div
-                v-for="reason in constraintFor(entry.agent_id)?.reasons ?? []"
-                :key="reason.code"
-                class="rounded-lg bg-slate-50 p-3 text-sm"
-              >
-                <p class="m-0 font-black text-slate-800">
-                  {{ reasonText(reason) }}
+            <details class="text-sm">
+              <summary class="cursor-pointer font-medium text-slate-600">
+                {{ t("flow.roleDetails") }}
+              </summary>
+              <div v-if="entry.capabilities.length > 0" class="mt-3 grid gap-2">
+                <p class="m-0 text-sm font-black text-slate-800">
+                  {{ t("flow.capabilities") }}
                 </p>
 
-                <p v-if="reason.evidence.fields.length > 0" class="m-0 mt-2 text-slate-600">
-                  {{ t("flow.evidenceFields") }}:
-                  {{ reason.evidence.fields.join(", ") }}
-                </p>
-
-                <p v-if="reason.evidence.terms.length > 0" class="m-0 mt-1 text-slate-600">
-                  {{ t("flow.evidenceTerms") }}:
-                  {{ reason.evidence.terms.join(", ") }}
-                </p>
+                <ul class="flex flex-wrap gap-2">
+                  <li
+                    v-for="capability in entry.capabilities"
+                    :key="capability"
+                    class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                  >
+                    {{ capabilityText(capability) }}
+                  </li>
+                </ul>
               </div>
-            </div>
 
-            <p
-              v-if="memberFor(entry.agent_id) !== null"
-              class="m-0 text-sm font-semibold text-slate-700"
-            >
-              {{ t("flow.source") }}:
-              {{ sourceText(memberFor(entry.agent_id)?.source ?? "") }}
-            </p>
+              <div v-if="constraintFor(entry.agent_id)?.reasons.length" class="grid gap-3">
+                <div
+                  v-for="reason in constraintFor(entry.agent_id)?.reasons ?? []"
+                  :key="reason.code"
+                  class="rounded-lg bg-slate-50 p-3 text-sm"
+                >
+                  <p class="m-0 font-black text-slate-800">
+                    {{ reasonText(reason) }}
+                  </p>
+
+                  <p v-if="reason.evidence.fields.length > 0" class="m-0 mt-2 text-slate-600">
+                    {{ t("flow.evidenceFields") }}:
+                    {{ reason.evidence.fields.join(", ") }}
+                  </p>
+
+                  <p v-if="reason.evidence.terms.length > 0" class="m-0 mt-1 text-slate-600">
+                    {{ t("flow.evidenceTerms") }}:
+                    {{ reason.evidence.terms.join(", ") }}
+                  </p>
+                </div>
+              </div>
+
+              <p
+                v-if="memberFor(entry.agent_id) !== null"
+                class="m-0 text-sm font-semibold text-slate-700"
+              >
+                {{ t("flow.source") }}:
+                {{ sourceText(memberFor(entry.agent_id)?.source ?? "") }}
+              </p>
+            </details>
 
             <label
               v-if="requiresRationale(entry.agent_id)"
@@ -1099,19 +992,23 @@ function eventLabel(event: HumanGateEventResponse): string {
         v-if="store.currentVersion !== null"
         type="submit"
         class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
+        :disabled="store.busy || !hasTeamChanges"
+        data-testid="save-team-changes"
       >
         {{ t("flow.saveTeam") }}
       </button>
     </form>
 
-    <section
+    <details
       class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
       aria-labelledby="team-proposal-history-title"
     >
-      <h3 id="team-proposal-history-title" class="text-xl font-black text-slate-950">
+      <summary
+        id="team-proposal-history-title"
+        class="cursor-pointer text-sm font-semibold text-slate-600"
+      >
         {{ t("flow.proposalHistory") }}
-      </h3>
+      </summary>
 
       <ol v-if="store.history.length > 0" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <li
@@ -1149,7 +1046,7 @@ function eventLabel(event: HumanGateEventResponse): string {
       <p v-else class="m-0 text-slate-600">
         {{ t("flow.noHistory") }}
       </p>
-    </section>
+    </details>
 
     <section
       class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -1175,10 +1072,6 @@ function eventLabel(event: HumanGateEventResponse): string {
                 number: store.gate.artifact.version,
               })
             }}
-            ·
-            <code>
-              {{ store.gate.artifact.content_hash.slice(0, 12) }}
-            </code>
           </p>
         </template>
 
@@ -1188,25 +1081,36 @@ function eventLabel(event: HumanGateEventResponse): string {
       </header>
 
       <button
+        v-if="canSubmitGate"
         type="button"
         class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy || store.currentVersion === null"
+        data-testid="submit-team-gate"
         @click="submitGate"
       >
         {{ t("flow.submitGate") }}
       </button>
 
       <template v-if="store.gate !== null">
-        <label class="grid gap-2 font-bold text-slate-800">
+        <label
+          v-if="
+            gateTargetsCurrentVersion && ['PENDING_APPROVAL', 'PAUSED'].includes(store.gate.status)
+          "
+          class="grid gap-2 font-bold text-slate-800"
+        >
           {{ t("flow.gateReason") }}
 
           <textarea
             v-model="gateReason"
+            data-testid="team-gate-reason"
             class="min-h-24 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
           ></textarea>
         </label>
 
-        <div v-if="store.gate.status === 'PENDING_APPROVAL'" class="flex flex-wrap gap-3">
+        <div
+          v-if="gateTargetsCurrentVersion && store.gate.status === 'PENDING_APPROVAL'"
+          class="flex flex-wrap gap-3"
+        >
           <button
             type="button"
             class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
@@ -1275,10 +1179,10 @@ function eventLabel(event: HumanGateEventResponse): string {
         </button>
       </template>
 
-      <div class="grid gap-3">
-        <h4 class="text-lg font-black text-slate-900">
+      <details class="grid gap-3">
+        <summary class="cursor-pointer text-sm font-semibold text-slate-600">
           {{ t("flow.eventHistory") }}
-        </h4>
+        </summary>
 
         <ol v-if="store.gateEvents.length > 0" class="grid gap-3">
           <li
@@ -1307,7 +1211,7 @@ function eventLabel(event: HumanGateEventResponse): string {
         <p v-else class="m-0 text-slate-600">
           {{ t("flow.noEvents") }}
         </p>
-      </div>
+      </details>
     </section>
   </section>
 </template>

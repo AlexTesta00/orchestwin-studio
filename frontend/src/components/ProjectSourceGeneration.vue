@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { apiClient } from "@/api/client";
 import { ApiRequestError } from "@/api/requestError";
 import { generationProgress, modelFeedback } from "./modelFeedback";
+import TwinIdentity from "./TwinIdentity.vue";
 import { executionApi, type ExecutionApi } from "@/api/execution";
 import {
   sourceGenerationApi,
@@ -73,18 +74,22 @@ const usesBackend = computed(() => ["WEB_NODE_EXPRESS", "WEB_VUE_NODE"].includes
 const copy = computed(() =>
   props.locale === "it"
     ? {
-        title: "Genera l’implementazione",
+        title: "Crea la tua applicazione",
+        settings: "Opzioni per lo sviluppo",
+        selection: "Formato scelto",
+        previewHint: "La versione web semplice si può provare direttamente qui.",
+        otherHint: "Questo formato richiede strumenti di sviluppo esterni per essere provato.",
         target: "Tecnologia",
         frontend: "Linguaggio frontend",
         backend: "Linguaggio backend",
         intro:
-          "Il modello genera sorgenti e test dall’architettura approvata. Potrai revisionarli prima di autorizzarne l’esecuzione.",
-        waiting: "Approva l’architettura per generare il sorgente.",
+          "Gli assistenti realizzano una prima versione seguendo le scelte che hai approvato. La versione web semplice si potrà aprire e provare nel passaggio successivo.",
+        waiting: "Approva la soluzione nel passaggio precedente per continuare.",
         exists:
-          "Esiste già una revisione: usa le evidenze di esecuzione per proporre una riparazione.",
+          "La tua applicazione è già disponibile. Apri il passaggio Risultato per consultarla.",
         unavailable: "Il profilo selezionato non è disponibile.",
         loadingProfiles: "Caricamento dei profili disponibili…",
-        generate: "Genera sorgenti e test",
+        generate: "Crea applicazione",
         busy: generationProgress("it"),
         created: "Revisione generata",
         failed:
@@ -92,27 +97,32 @@ const copy = computed(() =>
         refreshFailed:
           "I sorgenti sono stati salvati, ma non è stato possibile aggiornare la revisione. Ricarica la pagina per visualizzarli.",
         levelC:
-          "Questo profilo permette la progettazione; non è qualificato per l’esecuzione Level D.",
+          "Potrai provare un’anteprima. La verifica completa dell’applicazione non è ancora disponibile per questo formato.",
       }
     : {
-        title: "Generate the implementation",
+        title: "Create your application",
+        settings: "Development options",
+        selection: "Selected format",
+        previewHint: "The simple web version can be tried right here.",
+        otherHint: "This format needs external development tools to be tried.",
         target: "Technology",
         frontend: "Frontend language",
         backend: "Backend language",
         intro:
-          "The model generates sources and tests from the approved architecture. Review them before authorizing execution.",
-        waiting: "Approve the architecture to generate sources.",
-        exists: "A source revision already exists. Use execution evidence to propose a repair.",
+          "The assistants build a first version from your approved choices. You can open and try the simple web version in the next step.",
+        waiting: "Approve the solution in the previous step to continue.",
+        exists: "Your application is already available. Open the Result step to view it.",
         unavailable: "The selected profile is unavailable.",
         loadingProfiles: "Loading available profiles…",
-        generate: "Generate sources and tests",
+        generate: "Create application",
         busy: generationProgress("en"),
         created: "Generated revision",
         failed:
           "Generation did not complete. Check the model and refresh source revisions before retrying.",
         refreshFailed:
           "Sources were saved, but source review could not refresh. Reload the page to view them.",
-        levelC: "This profile supports design; it is not qualified for Level D execution.",
+        levelC:
+          "You can try a preview. Full application verification is not yet available for this format.",
       },
 );
 function authorized<T>(operation: (token: string) => Promise<T>): Promise<T> {
@@ -196,32 +206,57 @@ onUnmounted(() => {
     aria-labelledby="source-generation-title"
     :aria-busy="pending"
   >
-    <h2 id="source-generation-title" class="text-2xl font-black">{{ copy.title }}</h2>
-    <p>{{ copy.intro }}</p>
+    <TwinIdentity
+      :role="platform === 'web' ? 'FRONTEND_ENGINEER' : 'BACKEND_ENGINEER'"
+      :locale="locale"
+      compact
+    />
+    <h2 id="source-generation-title" class="text-xl font-bold">{{ copy.title }}</h2>
+    <p class="text-sm leading-6 text-slate-600">{{ copy.intro }}</p>
     <p v-if="!approved" role="status">{{ copy.waiting }}</p>
     <form class="space-y-3" @submit.prevent="generate">
-      <label class="block"
-        >{{ copy.target }}
-        <select v-model="target" class="ml-3 rounded border p-2" :disabled="pending">
-          <option v-for="option in targets" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-      <label v-if="usesFrontend" class="block"
-        >{{ copy.frontend }}
-        <select v-model="frontendLanguage" class="ml-3 rounded border p-2" :disabled="pending">
-          <option>JAVASCRIPT</option>
-          <option>TYPESCRIPT</option>
-        </select>
-      </label>
-      <label v-if="usesBackend" class="block"
-        >{{ copy.backend }}
-        <select v-model="backendLanguage" class="ml-3 rounded border p-2" :disabled="pending">
-          <option>JAVASCRIPT</option>
-          <option>TYPESCRIPT</option>
-        </select>
-      </label>
+      <div class="rounded-xl bg-indigo-50 p-4 text-sm text-indigo-950">
+        <p class="font-semibold">
+          {{ copy.selection }}:
+          {{
+            target === "WEB_STATIC"
+              ? locale === "it"
+                ? "Web semplice"
+                : "Simple web"
+              : targets.find((option) => option.value === target)?.label
+          }}
+        </p>
+        <p class="mt-1 text-indigo-800">
+          {{ target === "WEB_STATIC" ? copy.previewHint : copy.otherHint }}
+        </p>
+      </div>
+      <details class="rounded-xl border border-slate-200 p-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-slate-600">{{ copy.settings }}</summary>
+        <div class="mt-3 space-y-3">
+          <label class="block"
+            >{{ copy.target }}
+            <select v-model="target" class="ml-3 rounded border p-2" :disabled="pending">
+              <option v-for="option in targets" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label v-if="usesFrontend" class="block"
+            >{{ copy.frontend }}
+            <select v-model="frontendLanguage" class="ml-3 rounded border p-2" :disabled="pending">
+              <option>JAVASCRIPT</option>
+              <option>TYPESCRIPT</option>
+            </select>
+          </label>
+          <label v-if="usesBackend" class="block"
+            >{{ copy.backend }}
+            <select v-model="backendLanguage" class="ml-3 rounded border p-2" :disabled="pending">
+              <option>JAVASCRIPT</option>
+              <option>TYPESCRIPT</option>
+            </select>
+          </label>
+        </div>
+      </details>
       <p v-if="hasSource" role="status">{{ copy.exists }}</p>
       <p v-else-if="profilesLoading" role="status">{{ copy.loadingProfiles }}</p>
       <p v-else-if="!profile" role="status">{{ copy.unavailable }}</p>

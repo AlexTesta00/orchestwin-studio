@@ -83,7 +83,12 @@ export interface WebSourceRevisionPayload {
   based_on: WebSourceRevisionReferencePayload | null;
   target_selection: WebTargetSelectionPayload;
   validation_scope_hash: string;
-  origin: "GENERATED_PLAN" | "IMPORTED_BROWNFIELD" | "REPAIR_CHANGE_SET" | "DETERMINISTIC_FIXTURE";
+  origin:
+    | "GENERATED_PLAN"
+    | "IMPORTED_BROWNFIELD"
+    | "REPAIR_CHANGE_SET"
+    | "OWNER_EDIT"
+    | "DETERMINISTIC_FIXTURE";
   files: WebSourceFilePayload[];
   provenance_references: WebSourceProvenancePayload[];
   related_failure_signature: string | null;

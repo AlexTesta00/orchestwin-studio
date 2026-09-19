@@ -32,6 +32,10 @@ import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
+import { useClarificationStore } from "@/stores/clarification";
+import { useArchitectureStore } from "@/stores/architecture";
+import { useWebExecutionStore } from "@/stores/webExecution";
+import { useJvmExecutionStore } from "@/stores/jvmExecution";
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -39,9 +43,14 @@ const team = useTeamStore();
 const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
 const design = useDesignStore();
+const clarification = useClarificationStore();
+const architecture = useArchitectureStore();
+const web = useWebExecutionStore();
+const jvm = useJvmExecutionStore();
 // Reload downstream state when its approved inputs change on this page.
+const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
-  () => `${currentBrief.value?.id}:${team.currentVersion?.id}:${team.gate?.status}`,
+  () => `${briefContext.value}:${team.currentVersion?.id}:${team.gate?.status}`,
 );
 const twinContext = computed(
   () => `${teamContext.value}:${modeling.currentSnapshot?.id}:${modeling.currentGate?.status}`,
@@ -62,9 +71,9 @@ const { t, locale } = useI18n({
         loadError: "The project could not be loaded.",
         saveError: "The Project Brief version could not be saved.",
         mode: "Mode",
-        currentBrief: "Current Project Brief",
-        noBrief: "No Project Brief version has been created.",
-        versionHistory: "Brief version history",
+        currentBrief: "Your idea",
+        noBrief: "Describe what you would like to create to get started.",
+        versionHistory: "Previous descriptions",
         noVersions: "No Project Brief version is available.",
         version: "Version {number}",
         createdAt: "Created {date}",
@@ -77,9 +86,9 @@ const { t, locale } = useI18n({
         loadError: "Non è stato possibile caricare il progetto.",
         saveError: "Non è stato possibile salvare la versione del Project Brief.",
         mode: "Modalità",
-        currentBrief: "Project Brief corrente",
-        noBrief: "Non è stata ancora creata una versione del Project Brief.",
-        versionHistory: "Cronologia versioni del brief",
+        currentBrief: "La tua idea",
+        noBrief: "Descrivi cosa vuoi realizzare per iniziare.",
+        versionHistory: "Descrizioni precedenti",
         noVersions: "Non è disponibile alcuna versione del Project Brief.",
         version: "Versione {number}",
         createdAt: "Creata {date}",
@@ -96,6 +105,7 @@ const briefHistory = ref<readonly ProjectBriefVersionResponse[]>([]);
 const loading = ref(true);
 const saving = ref(false);
 const errorDetail = ref<string | null>(null);
+const selectedStage = ref<number | null>(null);
 let projectEpoch = 0;
 
 const projectId = computed(() => {
@@ -107,6 +117,127 @@ const projectId = computed(() => {
 
   return value ?? "";
 });
+
+function approved(
+  gate: { status: string; artifact: { artifact_id: string; content_hash: string } } | null,
+  version: { id: string; content_hash: string } | null,
+): boolean {
+  return !!(
+    gate?.status === "APPROVED" &&
+    version &&
+    gate.artifact.artifact_id === version.id &&
+    gate.artifact.content_hash === version.content_hash
+  );
+}
+
+const hasWebSource = computed(
+  () => web.activeProjectId === projectId.value && web.currentSourceRevision !== null,
+);
+const hasJvmSource = computed(
+  () => jvm.activeProjectId === projectId.value && jvm.currentSourceRevision !== null,
+);
+const completedStages = computed(() => [
+  clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
+  team.projectId === projectId.value &&
+    team.readiness?.status === "READY_FOR_MAIN_WORKFLOW" &&
+    team.currentVersion?.brief_version_number === currentBrief.value?.version_number &&
+    team.currentVersion?.brief_content_hash === currentBrief.value?.content_hash &&
+    approved(team.gate, team.currentVersion),
+  modeling.projectId === projectId.value &&
+    modeling.isReadyForRequirements &&
+    approved(modeling.currentGate, modeling.currentSnapshot),
+  requirements.projectId === projectId.value &&
+    requirements.isReadyForDesign &&
+    approved(requirements.gate, requirements.current),
+  design.projectId === projectId.value &&
+    design.isReadyForArchitecture &&
+    approved(design.gate, design.current),
+  architecture.projectId === projectId.value &&
+    architecture.isReadyForImplementation &&
+    approved(architecture.gate, architecture.current),
+  hasWebSource.value || hasJvmSource.value,
+]);
+const currentStage = computed(() => {
+  const incomplete = completedStages.value.findIndex((complete) => !complete);
+  return incomplete < 0 ? 7 : incomplete;
+});
+const activeStage = computed(() =>
+  Math.min(selectedStage.value ?? currentStage.value, currentStage.value),
+);
+const stageLabels = computed(() =>
+  locale.value === "it"
+    ? ["Idea", "Team", "Utenti", "Funzionalità", "Aspetto", "Soluzione", "Creazione", "Risultato"]
+    : ["Idea", "Team", "Users", "Features", "Look & feel", "Solution", "Creation", "Result"],
+);
+const stageDescriptions = computed(() =>
+  locale.value === "it"
+    ? [
+        "Racconta cosa vuoi realizzare e per chi.",
+        "Scegli gli assistenti che lavoreranno al tuo progetto.",
+        "Conosci i profili simulati delle persone che useranno il prodotto.",
+        "Decidi cosa deve fare la tua applicazione.",
+        "Esplora le schermate e scegli l’esperienza da realizzare.",
+        "Rivedi come verrà costruita la soluzione.",
+        "Trasforma le scelte approvate in una prima applicazione.",
+        "Prova la tua applicazione e confrontala con le scelte fatte.",
+      ]
+    : [
+        "Describe what you want to create and who it is for.",
+        "Choose the assistants who will work on your project.",
+        "Meet the simulated profiles of the people who will use your product.",
+        "Decide what your application needs to do.",
+        "Explore the screens and choose the experience to build.",
+        "Review how your solution will be built.",
+        "Turn your approved choices into a first application.",
+        "Try your application and compare it with your choices.",
+      ],
+);
+const visibleStages = computed(() => stageLabels.value.slice(0, currentStage.value + 1));
+const activeVersion = computed(
+  () =>
+    [
+      currentBrief.value?.version_number,
+      team.currentVersion?.version_number,
+      modeling.currentSnapshot?.version_number,
+      requirements.current?.version_number,
+      design.current?.version_number,
+      architecture.current?.version_number,
+      hasWebSource.value
+        ? web.currentSourceRevision?.version_number
+        : jvm.currentSourceRevision?.version_number,
+    ][activeStage.value],
+);
+
+watch(currentStage, (next, previous) => {
+  // Follow progress unless the owner deliberately revisited an earlier stage.
+  if (
+    selectedStage.value === previous ||
+    (selectedStage.value !== null && selectedStage.value > next)
+  ) {
+    selectedStage.value = null;
+  }
+});
+
+watch(
+  () => [
+    clarification.lastRoundAnswer?.brief_version,
+    clarification.lastAssumptionDecision?.brief_version,
+  ],
+  (versions) => {
+    for (const version of versions) {
+      if (
+        version?.project_id === projectId.value &&
+        version.version_number > (currentBrief.value?.version_number ?? 0)
+      ) {
+        currentBrief.value = version;
+        briefHistory.value = [
+          ...briefHistory.value.filter((item) => item.id !== version.id),
+          version,
+        ];
+      }
+    }
+  },
+);
 
 function errorCode(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -130,6 +261,7 @@ async function authorized<T>(operation: (accessToken: string) => Promise<T>): Pr
 async function loadProject(): Promise<void> {
   const id = projectId.value;
   const epoch = ++projectEpoch;
+  selectedStage.value = null;
   project.value = null;
   currentBrief.value = null;
   briefHistory.value = [];
@@ -186,11 +318,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="mx-auto grid w-full max-w-7xl gap-10 px-4 py-8 sm:px-6 lg:px-8">
-    <p v-if="loading" class="m-0 text-slate-700" aria-live="polite">
-      {{ t("detail.loading") }}
-    </p>
-
+  <div class="studio-workspace mx-auto grid w-full max-w-5xl gap-5">
+    <p v-if="loading" class="m-0 text-slate-700" aria-live="polite">{{ t("detail.loading") }}</p>
     <p
       v-else-if="errorDetail !== null"
       class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
@@ -200,264 +329,346 @@ onUnmounted(() => {
     </p>
 
     <template v-else-if="project !== null">
-      <header class="grid gap-3 border-b border-slate-200 pb-8">
-        <h1 class="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-          {{ project.display_name }}
-        </h1>
-
-        <p class="m-0 text-sm font-semibold tracking-wide text-slate-600 uppercase">
-          {{ t("detail.mode") }}:
-          {{ project.mode }}
-        </p>
+      <header
+        class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            {{ locale === "it" ? "Il tuo progetto" : "Your project" }}
+          </p>
+          <h1 class="m-0 text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
+            {{ project.display_name }}
+          </h1>
+        </div>
+        <span class="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+          {{ locale === "it" ? "L’AI propone, decidi tu" : "AI proposes, you decide" }}
+        </span>
       </header>
 
-      <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
-
       <nav
-        class="flex flex-wrap gap-2 rounded-xl bg-slate-100 p-4"
+        class="flex flex-wrap gap-1.5"
         :aria-label="locale === 'it' ? 'Fasi del progetto' : 'Project stages'"
+        data-testid="project-stage-navigation"
       >
-        <a
-          v-for="(step, index) in [
-            ['current-brief-title', 'Brief'],
-            ['studio-team', 'Team'],
-            ['studio-twins', 'User Twin'],
-            ['studio-requirements', locale === 'it' ? 'Requisiti' : 'Requirements'],
-            ['studio-design', 'Design'],
-            ['studio-architecture', locale === 'it' ? 'Architettura' : 'Architecture'],
-            ['studio-source', locale === 'it' ? 'Generazione' : 'Generation'],
-            ['studio-preview', locale === 'it' ? 'Risultato' : 'Result'],
-          ]"
-          :key="step[0]"
-          :href="`#${step[0]}`"
-          class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-200"
+        <button
+          v-for="(label, index) in visibleStages"
+          :key="index"
+          type="button"
+          :aria-current="activeStage === index ? 'step' : undefined"
+          :aria-controls="`studio-stage-${index}`"
+          :data-stage="index"
+          class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          :class="
+            activeStage === index
+              ? 'border-slate-950 bg-slate-950 text-white'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
+          "
+          @click="selectedStage = index"
         >
-          {{ index + 1 }}. {{ step[1] }}
-        </a>
+          <span aria-hidden="true">{{ index < currentStage ? "✓" : `${index + 1}.` }}</span>
+          {{ label }}
+          <span v-if="index < currentStage" class="sr-only">{{
+            locale === "it" ? "completato" : "completed"
+          }}</span>
+        </button>
       </nav>
 
-      <section class="grid gap-5" aria-labelledby="current-brief-title">
-        <h2 id="current-brief-title" class="text-2xl font-black text-slate-950">
-          {{ t("detail.currentBrief") }}
-        </h2>
-
-        <div
-          v-if="currentBrief !== null"
-          class="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4"
-        >
-          <p class="m-0 font-bold text-slate-900">
-            {{
-              t("detail.version", {
-                number: currentBrief.version_number,
-              })
-            }}
-          </p>
-
-          <p class="m-0 text-sm text-slate-600">
-            {{
-              t("detail.createdAt", {
-                date: formatDate(currentBrief.created_at),
-              })
-            }}
-          </p>
-
-          <p class="m-0 text-xs break-all text-slate-500">
-            {{ t("detail.contentHash") }}:
-            <code>
-              {{ currentBrief.content_hash }}
-            </code>
-          </p>
-        </div>
-
-        <p v-else class="m-0 text-slate-600">
-          {{ t("detail.noBrief") }}
-        </p>
-
-        <ProjectBriefEditor
-          :key="currentBrief?.version_number ?? 0"
-          :initial="currentBrief?.brief ?? null"
-          :busy="saving"
-          @submit="saveBrief"
-        />
-      </section>
-
-      <section class="grid gap-4" aria-labelledby="brief-history-title">
-        <h2 id="brief-history-title" class="text-2xl font-black text-slate-950">
-          {{ t("detail.versionHistory") }}
-        </h2>
-
-        <ol v-if="briefHistory.length > 0" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <li
-            v-for="version in briefHistory"
-            :key="version.id"
-            class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <p class="m-0 font-black text-slate-900">
+      <div
+        class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-100 px-4 py-3"
+        aria-live="polite"
+      >
+        <div class="min-w-0">
+          <p class="m-0 text-sm text-slate-700">
+            <strong>{{ stageLabels[activeStage] }}</strong>
+            <span v-if="activeStage < currentStage">
+              · {{ locale === "it" ? "Completato" : "Completed"
+              }}<template v-if="activeVersion"> · v{{ activeVersion }}</template></span
+            >
+            <span v-else>
+              ·
               {{
-                t("detail.version", {
-                  number: version.version_number,
-                })
+                locale === "it"
+                  ? activeStage === 7
+                    ? "Pronto da aprire"
+                    : "Passaggio corrente"
+                  : activeStage === 7
+                    ? "Ready to open"
+                    : "Current step"
+              }}</span
+            >
+          </p>
+          <p class="mt-1 mb-0 text-sm text-slate-500">{{ stageDescriptions[activeStage] }}</p>
+        </div>
+        <button
+          v-if="activeStage < currentStage"
+          type="button"
+          class="text-sm font-semibold text-indigo-700 underline-offset-4 hover:underline"
+          @click="selectedStage = null"
+        >
+          {{ locale === "it" ? "Continua con" : "Continue to" }} {{ stageLabels[currentStage] }} →
+        </button>
+        <span v-else-if="activeStage < 7" class="text-xs text-slate-500">{{
+          locale === "it"
+            ? "Il prossimo passaggio si sblocca dopo l’approvazione."
+            : "The next step unlocks after approval."
+        }}</span>
+      </div>
+
+      <!-- Keep the flows mounted: their read-only loaders hydrate saved work and their
+           context keys refresh dependent approvals. Only the selected panel is exposed. -->
+      <div
+        id="studio-stage-0"
+        v-show="activeStage === 0"
+        class="grid gap-5"
+        data-testid="stage-brief"
+      >
+        <section
+          class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5"
+          aria-labelledby="current-brief-title"
+        >
+          <h2 id="current-brief-title" class="m-0 text-lg font-bold text-slate-950">
+            {{ t("detail.currentBrief") }}
+          </h2>
+          <p v-if="currentBrief" class="m-0 text-sm leading-relaxed text-slate-600">
+            {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
+          </p>
+          <p v-else class="m-0 text-sm text-slate-600">{{ t("detail.noBrief") }}</p>
+          <details :open="currentBrief === null">
+            <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
+              {{
+                locale === "it"
+                  ? currentBrief
+                    ? "Modifica la descrizione"
+                    : "Descrivi la tua idea"
+                  : currentBrief
+                    ? "Edit description"
+                    : "Describe your idea"
               }}
-            </p>
-
-            <p class="m-0 text-sm text-slate-600">
-              {{ formatDate(version.created_at) }}
-            </p>
-
-            <code class="text-xs break-all text-slate-500">
-              {{ version.content_hash }}
-            </code>
-          </li>
-        </ol>
-
-        <p v-else class="m-0 text-slate-600">
-          {{ t("detail.noVersions") }}
+            </summary>
+            <div class="mt-4">
+              <ProjectBriefEditor
+                :key="currentBrief?.version_number ?? 0"
+                :initial="currentBrief?.brief ?? null"
+                :busy="saving"
+                @submit="saveBrief"
+              />
+            </div>
+          </details>
+          <details v-if="briefHistory.length" class="border-t border-slate-100 pt-3">
+            <summary class="cursor-pointer text-xs font-semibold text-slate-500">
+              {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
+            </summary>
+            <ol class="mt-3 grid gap-2">
+              <li
+                v-for="version in briefHistory"
+                :key="version.id"
+                class="grid gap-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-500"
+              >
+                <strong class="text-slate-700"
+                  >{{ t("detail.version", { number: version.version_number }) }} ·
+                  {{ formatDate(version.created_at) }}</strong
+                >
+                <code class="break-all">{{ version.content_hash }}</code>
+              </li>
+            </ol>
+          </details>
+        </section>
+        <ProjectBrownfieldSourceFlow
+          v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
+          :key="`${projectId}:brownfield-source`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+        <ProjectSandboxGovernanceFlow
+          v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
+          :key="`${projectId}:sandbox-governance`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+        <ProjectClarificationFlow
+          v-show="currentBrief !== null"
+          :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
+          :project-id="projectId"
+          :current-brief="currentBrief"
+        />
+      </div>
+      <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
+        <ProjectTeamSelectionFlow
+          id="studio-team"
+          :key="`${projectId}:${briefContext}:team`"
+          :project-id="projectId"
+        />
+      </div>
+      <div id="studio-stage-2" v-show="activeStage === 2" data-testid="stage-twins">
+        <ProjectUserModelingFlow
+          id="studio-twins"
+          v-if="auth.accessToken"
+          :key="`${projectId}:${teamContext}:user-modeling`"
+          :project-id="projectId"
+          :access-token="auth.accessToken"
+          :authorize="authorized"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+      </div>
+      <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">
+        <ProjectRequirementsFlow
+          id="studio-requirements"
+          :prerequisite-ready="modeling.isReadyForRequirements"
+          :key="`${projectId}:${twinContext}:requirements`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+      </div>
+      <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
+        <ProjectDesignFlow
+          id="studio-design"
+          @show-result="selectedStage = 7"
+          :prerequisite-ready="requirements.isReadyForDesign"
+          :key="`${projectId}:${requirementsContext}:design`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+      </div>
+      <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-architecture">
+        <ProjectArchitectureFlow
+          id="studio-architecture"
+          :prerequisite-ready="design.isReadyForArchitecture"
+          :key="`${projectId}:${designContext}:architecture`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+      </div>
+      <div id="studio-stage-6" v-show="activeStage === 6" data-testid="stage-source">
+        <ProjectSourceGeneration
+          id="studio-source"
+          v-if="project.mode === 'GREENFIELD_GENERATION'"
+          :key="`${projectId}:source-generation`"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+        <p v-else class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+          {{
+            locale === "it"
+              ? "Consulta i sorgenti importati e autorizza la verifica nei dettagli tecnici."
+              : "Review imported sources and authorize verification in the technical details."
+          }}
         </p>
-      </section>
-
-      <ProjectBrownfieldSourceFlow
-        v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-        :key="`${projectId}:brownfield-source`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectSandboxGovernanceFlow
-        v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-        :key="`${projectId}:sandbox-governance`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectClarificationFlow
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
-        :project-id="projectId"
-      />
-
-      <ProjectTeamSelectionFlow
-        id="studio-team"
-        :key="`${projectId}:${currentBrief?.version_number ?? 0}:team`"
-        :project-id="projectId"
-      />
-
-      <ProjectUserModelingFlow
-        id="studio-twins"
-        v-if="auth.accessToken"
-        :key="`${projectId}:${teamContext}:user-modeling`"
-        :project-id="projectId"
-        :access-token="auth.accessToken"
-        :authorize="authorized"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectRequirementsFlow
-        :prerequisite-ready="modeling.isReadyForRequirements"
-        id="studio-requirements"
-        :key="`${projectId}:${twinContext}:requirements`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectDesignFlow
-        :prerequisite-ready="requirements.isReadyForDesign"
-        id="studio-design"
-        :key="`${projectId}:${requirementsContext}:design`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectArchitectureFlow
-        :prerequisite-ready="design.isReadyForArchitecture"
-        id="studio-architecture"
-        :key="`${projectId}:${designContext}:architecture`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectSourceGeneration
-        id="studio-source"
-        v-if="project.mode === 'GREENFIELD_GENERATION'"
-        :key="`${projectId}:source-generation`"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <ProjectWebPreview
-        id="studio-preview"
-        :project-id="projectId"
-        :locale="locale === 'it' ? 'it' : 'en'"
-      />
-
-      <details class="rounded-2xl border border-slate-200 bg-white p-6">
-        <summary class="cursor-pointer text-lg font-bold">
+      </div>
+      <div
+        id="studio-stage-7"
+        v-show="activeStage === 7"
+        class="grid gap-4"
+        data-testid="stage-result"
+      >
+        <ProjectWebPreview
+          id="studio-preview"
+          v-show="hasWebSource"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
+        <p
+          v-if="hasJvmSource && !hasWebSource"
+          class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600"
+        >
           {{
             locale === "it"
-              ? "Sorgenti, autorizzazioni ed evidenze JVM"
-              : "JVM sources, authorizations and evidence"
+              ? "Sorgenti JVM disponibili. Apri i dettagli tecnici per revisionarli e autorizzarne l’esecuzione."
+              : "JVM sources are available. Open technical details to review them and authorize execution."
           }}
+        </p>
+      </div>
+
+      <details
+        class="rounded-xl border border-slate-200 bg-white px-4 py-3"
+        data-testid="technical-details"
+      >
+        <summary class="cursor-pointer text-sm font-semibold text-slate-600">
+          {{ locale === "it" ? "Strumenti e dettagli del progetto" : "Project tools and details" }}
         </summary>
-        <div class="mt-6 space-y-6">
-          <ProjectJvmSourceReview
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-
-          <ProjectJvmEvidenceReview
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-
-          <ProjectExecutionLaunch
-            :project-id="projectId"
-            platform="jvm"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-      </details>
-
-      <details class="rounded-2xl border border-slate-200 bg-white p-6">
-        <summary class="cursor-pointer text-lg font-bold">
-          {{
-            locale === "it"
-              ? "Sorgenti, autorizzazioni ed evidenze Web"
-              : "Web sources, authorizations and evidence"
-          }}
-        </summary>
-        <div class="mt-6 space-y-6">
-          <ProjectWebSourceReview
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-
-          <ProjectWebEvidenceReview
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-
-          <ProjectExecutionLaunch
-            :project-id="projectId"
-            platform="web"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-      </details>
-
-      <details class="rounded-2xl border border-slate-200 bg-white p-6">
-        <summary class="cursor-pointer text-lg font-bold">
-          {{ locale === "it" ? "Tracciabilità degli artefatti" : "Artifact traceability" }}
-        </summary>
-        <div class="mt-6">
-          <ProjectArtifactGraph
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
+        <div class="mt-4 grid gap-4">
+          <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
+          <details class="rounded-xl border border-slate-200 p-4">
+            <summary class="cursor-pointer text-sm font-semibold">
+              {{
+                locale === "it"
+                  ? "Sorgenti, autorizzazioni ed evidenze Web"
+                  : "Web sources, authorizations and evidence"
+              }}
+            </summary>
+            <div class="mt-4 grid gap-4">
+              <ProjectWebSourceReview
+                :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
+                :project-id="projectId"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+              <ProjectWebEvidenceReview
+                :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
+                :project-id="projectId"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+              <ProjectExecutionLaunch
+                :project-id="projectId"
+                platform="web"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+            </div>
+          </details>
+          <details class="rounded-xl border border-slate-200 p-4">
+            <summary class="cursor-pointer text-sm font-semibold">
+              {{
+                locale === "it"
+                  ? "Sorgenti, autorizzazioni ed evidenze JVM"
+                  : "JVM sources, authorizations and evidence"
+              }}
+            </summary>
+            <div class="mt-4 grid gap-4">
+              <ProjectJvmSourceReview
+                :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
+                :project-id="projectId"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+              <ProjectJvmEvidenceReview
+                :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
+                :project-id="projectId"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+              <ProjectExecutionLaunch
+                :project-id="projectId"
+                platform="jvm"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+            </div>
+          </details>
+          <details class="rounded-xl border border-slate-200 p-4">
+            <summary class="cursor-pointer text-sm font-semibold">
+              {{ locale === "it" ? "Tracciabilità degli artefatti" : "Artifact traceability" }}
+            </summary>
+            <div class="mt-4">
+              <ProjectArtifactGraph
+                :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
+                :project-id="projectId"
+                :locale="locale === 'it' ? 'it' : 'en'"
+              />
+            </div>
+          </details>
         </div>
       </details>
     </template>
-  </main>
+  </div>
 </template>
+
+<style scoped>
+/* A single compact work area; long review content still remains available inside its stage. */
+.studio-workspace :deep(section.rounded-3xl) {
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+.studio-workspace :deep(h2) {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+.studio-workspace :deep(h3) {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+</style>
