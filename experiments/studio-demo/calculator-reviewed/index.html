@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calcolatore aritmetico</title>
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #f1f5f9; color: #1e293b; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    main { width: min(100% - 40px, 672px); margin: 20px auto; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px #0000000d; }
+    section { padding: 24px; }
+    h1 { margin: 0 0 20px; color: #020617; font-size: 20px; line-height: 28px; font-weight: 700; letter-spacing: -.025em; }
+    h1:focus { outline: none; }
+    form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    label { display: grid; gap: 6px; font-weight: 500; }
+    input, select { width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #fff; color: inherit; font: inherit; font-weight: 400; }
+    input:focus, select:focus { border-color: #6366f1; outline: 2px solid #c7d2fe; }
+    [aria-invalid="true"] { border-color: #b91c1c; }
+    button { cursor: pointer; font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; }
+    .calculate { grid-column: 1 / -1; min-height: 44px; border: 0; border-radius: 8px; padding: 10px 16px; background: #4338ca; color: #fff; font-weight: 600; }
+    .calculate:hover { background: #4f46e5; }
+    #error { grid-column: 1 / -1; margin: 0; color: #991b1b; }
+    .secondary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+    .secondary button { min-height: 28px; padding: 2px 0; border: 0; border-radius: 4px; background: transparent; color: #475569; font-size: 12px; }
+    .secondary button:hover { color: #4338ca; text-decoration: underline; }
+    .help { grid-column: 1 / -1; margin: -8px 0 0; color: #64748b; font-size: 11px; }
+    .result-content { display: grid; gap: 16px; }
+    #result { color: #475569; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; }
+    #return-menu { justify-self: start; border-radius: 4px; color: #4338ca; font-weight: 600; text-decoration: underline; }
+    @media (max-width: 639px) {
+      main { width: calc(100% - 24px); margin: 12px auto; }
+      section { padding: 20px; }
+      form { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <section id="menu" aria-labelledby="menu-title" data-screen-id="81c6ecd7-aab1-4397-8fda-36ad98032f35" data-design-screen="SCR-001">
+      <h1 id="menu-title" tabindex="-1">Calcolatore aritmetico</h1>
+      <form novalidate>
+        <label for="firstNumber">Inserisci il primo numero
+          <input id="firstNumber" name="firstNumber" data-design-element="ELM-001" type="text" inputmode="decimal" autocomplete="off" required aria-label="Inserisci il primo numero" aria-describedby="error">
+        </label>
+        <label for="secondNumber">Inserisci il secondo numero
+          <input id="secondNumber" name="secondNumber" data-design-element="ELM-002" type="text" inputmode="decimal" autocomplete="off" required aria-label="Inserisci il secondo numero" aria-describedby="error">
+        </label>
+        <label for="operation">Seleziona l'operazione
+          <select id="operation" name="operation" data-design-element="ELM-003" required aria-label="Seleziona l'operazione" aria-describedby="error">
+            <option value="" disabled selected>—</option>
+            <option>Addizione</option>
+            <option>Sottrazione</option>
+            <option>Moltiplicazione</option>
+            <option>Divisione</option>
+          </select>
+        </label>
+        <button class="calculate" data-design-element="ELM-004" data-design-target="SCR-002" type="submit">Calcola</button>
+        <p id="error" role="alert" hidden></p>
+        <div class="secondary" role="group" aria-label="Modifica numeri">
+          <button id="clear" type="button">Azzera tutto</button>
+          <button id="backspace" type="button">Cancella cifra</button>
+        </div>
+        <p class="help">Invio per calcolare · Esc per azzerare. Decimali con virgola o punto.</p>
+      </form>
+    </section>
+    <section id="result-screen" aria-labelledby="result-title" data-screen-id="20a72cfe-9162-47cc-99fe-de785583221f" data-design-screen="SCR-002" hidden>
+      <h1 id="result-title" tabindex="-1">Risultato dell'operazione</h1>
+      <div class="result-content">
+        <output id="result" data-design-element="ELM-005" for="firstNumber secondNumber operation" aria-live="polite"></output>
+        <a id="return-menu" href="#menu" data-design-element="ELM-006" data-design-target="SCR-001">Torna al menu</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

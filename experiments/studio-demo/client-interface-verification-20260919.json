@@ -1,0 +1,45 @@
+{
+  "scope": "Client-facing Studio interface and existing reviewed calculator; technical verification, not a human usability study",
+  "verified_on": "2026-09-19",
+  "base_git_commit": "77cbac0",
+  "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "source_revision_id": "acbb313b-a92d-4e0c-8403-05116a1ef4de",
+  "source_origin": "OWNER_EDIT",
+  "changes": [
+    "Bilingual client-facing navigation, introductory pages and project creation labels",
+    "Six essential initial brief fields, with additional details expandable",
+    "Distinct inline SVG identities for all 17 specialist roles and stable named identities for user twins",
+    "Approved source personas collapsed while current user-twin cards remain directly accessible",
+    "Version hashes, provenance, source editing and development options placed in expandable details",
+    "Approval submission suppressed for already approved exact artifact versions; changed versions remain reviewable",
+    "Unchanged team cannot be redundantly saved",
+    "Mockup structure rejection explains the issue and preserves unsaved source edits",
+    "Removed nested main landmark and excessive empty status spacing"
+  ],
+  "automated_checks": {
+    "frontend": { "files": 68, "passed": 243, "failed": 0 },
+    "frontend_typecheck": "PASSED",
+    "frontend_eslint": "PASSED",
+    "frontend_build": "PASSED",
+    "source_generation_and_design_contract": { "passed": 43, "failed": 0 },
+    "git_diff_check": "PASSED"
+  },
+  "browser_observations": [
+    "Saved project reopens at Result, completed stages remain revisitable",
+    "Team uses recognizable colored role symbols and simple explanations, technical metadata closed by default",
+    "Exact approved team has no duplicate approval action; unchanged team save is disabled",
+    "Chosen visual preview remains linked to source version 5",
+    "Result shows Try preview and Download project, with code editing in collapsed details",
+    "At a 390x844 browser viewport, document clientWidth and scrollWidth both equal 375px",
+    "The page has exactly one main landmark",
+    "The current calculator computes 9 + 3 = 12 inside the isolated preview after the UI rebuild",
+    "Temporary browser viewport override reset after responsive verification",
+    "API-only restart completed, model servers retained, /api/v1/health returned status ok"
+  ],
+  "limits": [
+    "These checks do not establish usability with real participants",
+    "Calculator revision remains an assisted edit of the model output",
+    "No model quality or Level D promotion is implied by client-interface checks",
+    "Source-generation prompt clarifications passed regression checks but require a new real-generation comparison before claiming an improvement"
+  ]
+}
