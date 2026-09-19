@@ -1,5 +1,6 @@
 """Bounded manifest then one audited, schema-constrained model call per file."""
 
+import asyncio
 import json
 import re
 from pathlib import PurePosixPath
@@ -18,6 +19,7 @@ from orchestwin.models.source_context import (
     implementation_contract,
     implementation_work_order,
 )
+from orchestwin.models.source_design_contract import validate_prototype_html
 from orchestwin.models.source_proposals import (
     MAX_CONTEXT_BYTES,
     SourceFile,
@@ -28,6 +30,7 @@ from orchestwin.models.source_proposals import (
     build_source_binding,
     file_entry,
 )
+from orchestwin.models.source_syntax import validate_source_syntax
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 PROTOCOL = "SOURCE_FILES_V2_TEXT"
@@ -293,19 +296,33 @@ def _static_file_instruction(planned):
         return (
             "Link app.js with a script src element so the actual page executes the implementation. "
             "Match its actual element IDs, field names and event bindings. "
+            "Preserve the exact approved prototype screens, interactive controls, labels, order, field names and select options. "
+            "Do not redesign a SELECT as operation buttons or merge a separate result screen into the input screen. "
+            "Give each screen container data-design-screen=its SCR code and each interactive element data-design-element=its ELM code. "
+            "For each prototype transition put data-design-target=the target SCR code on its trigger. "
+            "Set input/select name to field_name and required exactly as approved. Keep example results as dynamic outputs replaced by actual calculations. "
         )
     if planned.normalized_path.endswith(".test.cjs"):
         return (
-            "Use only require('node:test'), require('node:assert/strict') and require('./app.js'). "
+            "Use const test = require('node:test'); const assert = require('node:assert/strict'); "
+            "and import the actual exported functions with require('./app.js'). "
+            "A bare require call does not create a variable: explicitly bind every test and assertion helper you use. "
+            "Register every case with test(name, callback), after initializing all imports. "
+            "Let failed assertions fail the test runner; never catch assertions merely to log an error and continue. "
+            "Use assert.throws for expected invalid input, not a catch block that converts failure into success. "
             "Test exported pure functions. No DOM, jsdom, npm, eval or external library. "
         )
     if suffix in {".js", ".cjs"}:
         return (
             "Implement a testable business core with explicit state ownership, input validation and unique identifiers when required. Keep records across successive operations on the same service. A factory can return methods sharing one private store. Wire the browser to the same core. "
-            "Export the public functions inside if (typeof module !== 'undefined') for Node tests. "
-            "Use module.exports = { ... } in that guard. This is a classic browser script: never use import or export statements. "
+            "Declare the business functions at the script's top level, outside all Node-only guards, so the browser can call those same functions. "
+            "Only the module.exports assignment belongs inside if (typeof module !== 'undefined'). "
+            "Export references to the already defined functions with module.exports = { ... }; do not define the business core only inside that guard or inside the exports object. "
+            "This is a classic browser script: never use import or export statements. "
             "Put every document/window reference inside if (typeof document !== 'undefined') for the browser. "
             "Bind DOM handlers after DOMContentLoaded or after the HTML controls exist. "
+            "Convert form values to the approved public interface's parameter types in the DOM handler before calling the core. "
+            "Visible select labels and numeric values are different representations; preserve the approved units and function contract. "
             "Use explicit arithmetic operations, never eval or Function. Do not require localStorage, network requests or external resources. "
         )
     return ""
@@ -435,6 +452,8 @@ async def generate_source_files(generator, *, task, context):
         "Keep each acceptance check to one concise interface and one concrete postcondition. Reference dictionaries are lossless aliases for repeated artifact identifiers, never application data. "
         "For obligations requiring human studies or external review, identify the review procedure with MANUAL_REVIEW: and keep it pending; do not invent a callable that claims verification occurred. "
         "Then plan file names, responsibilities and exact public interfaces that implement that behavior. No source code. "
+        "If an approved statement specifies a callable signature, parameter type or unit, preserve it exactly. "
+        "Plan conversion from form text and select labels at the UI boundary rather than changing the business interface to match displayed labels. "
         "Rationale and each purpose must be one short sentence, preferably under 80 characters. "
         "Define exact callable signatures, return types and shared state ownership in interface, not file names. List project files imported or consumed in depends_on; use [] for independent files. Order dependencies before consumers. Tests depend on their actual implementation, and HTML depends on its script. "
         "For executable files interface contains real function or constructor signatures with parentheses; for HTML list concrete DOM IDs after DOM:. Never copy architecture labels as interfaces. Every normalized_path is a relative POSIX path, without a leading slash, drive letter or parent traversal. "
@@ -475,6 +494,30 @@ async def generate_source_files(generator, *, task, context):
             ],
             "work_order": work_order,
         }
+        item, accepted_step = await _generate_file(
+            generator,
+            task=task,
+            context=child_context,
+            planned=planned,
+            target=target,
+            entrypoint=entrypoint,
+        )
+        files.append(item)
+        steps.append(accepted_step)
+    output = SourceOutput(rationale=manifest.rationale, files=files)
+    return SourceProposal(
+        kind=task.upper().replace("-", "_"),
+        output=output,
+        source_binding=build_source_binding(task, context, output),
+        generation_steps=tuple(steps),
+    )
+
+
+async def _generate_file(generator, *, task, context, planned, target, entrypoint):
+    """Retain each attempt separately; allow one syntax-only regeneration."""
+    retry = None
+    for attempt in range(2):
+        child_context = {**context, **({"syntax_retry": retry} if retry else {})}
         if len(canonical_json(wire_value(child_context)).encode()) > MAX_CONTEXT_BYTES:
             raise ProposalGenerationError("SOURCE_FILE_CONTEXT_LIMIT_EXCEEDED")
         with child_proposal_evidence() as child:
@@ -492,7 +535,15 @@ async def generate_source_files(generator, *, task, context):
                     "semicolon, quote and brace in the content. Preserve readable source formatting. "
                     "Match the actual exported methods and types in completed_files; never invent an import. "
                     "Write only this file. No Markdown fences, prose or placeholders. "
-                    "Use only pinned dependencies and check actual behavior in tests.",
+                    "Use only pinned dependencies and check actual behavior in tests."
+                    + (
+                        " The previous attempt was rejected by a JavaScript syntax parser. "
+                        "Regenerate this complete file, including required imports and all closing "
+                        "quotes, parentheses and braces. Keep the approved behavior and actual "
+                        "interfaces. Do not omit code or replace it with placeholders."
+                        if retry
+                        else ""
+                    ),
                 )
                 item = SourceFile(
                     normalized_path=planned.normalized_path,
@@ -501,19 +552,25 @@ async def generate_source_files(generator, *, task, context):
                 )
                 _validate_files([item], task=task)
                 _validate_file_language(item)
+                if target == "WEB_STATIC":
+                    await asyncio.to_thread(validate_source_syntax, item)
+                    if item.normalized_path == "index.html":
+                        validate_prototype_html(
+                            item.content,
+                            context["implementation_contract"]["content"]
+                            .get("design", {})
+                            .get("prototype"),
+                        )
                 await child.event("ADAPTER_ACCEPTED", {"source_file": item.model_dump()})
                 await child.event("APPLICATION_RESULT", {"status": "SOURCE_FILE_GENERATED"})
-                steps.append(
-                    {
-                        "generation_id": str(child.request.request_id),
-                        "request_hash": child.request.content_hash,
-                        "ordinal": ordinal,
-                        "file": file_entry(
-                            item.normalized_path, item.content.encode(), item.media_type
-                        ),
-                    }
-                )
-                files.append(item)
+                return item, {
+                    "generation_id": str(child.request.request_id),
+                    "request_hash": child.request.content_hash,
+                    "ordinal": context["source_step"]["ordinal"],
+                    "file": file_entry(
+                        item.normalized_path, item.content.encode(), item.media_type
+                    ),
+                }
             except BaseException as error:
                 if not isinstance(error, ProposalEvidenceError):
                     if "ADAPTER_ACCEPTED" not in child.observed_events:
@@ -525,11 +582,19 @@ async def generate_source_files(generator, *, task, context):
                         "APPLICATION_RESULT",
                         {"status": "FAILED", "code": getattr(error, "code", type(error).__name__)},
                     )
+                if (
+                    attempt == 0
+                    and target == "WEB_STATIC"
+                    and isinstance(error, ProposalGenerationError)
+                    and error.code == "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+                    and child.request is not None
+                ):
+                    retry = {
+                        "attempt": 2,
+                        "previous_generation_id": str(child.request.request_id),
+                        "previous_request_hash": child.request.content_hash,
+                        "code": error.code,
+                    }
+                    continue
                 raise
-    output = SourceOutput(rationale=manifest.rationale, files=files)
-    return SourceProposal(
-        kind=task.upper().replace("-", "_"),
-        output=output,
-        source_binding=build_source_binding(task, context, output),
-        generation_steps=tuple(steps),
-    )
+    raise AssertionError("source retry loop must return or raise")

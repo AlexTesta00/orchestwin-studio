@@ -17,6 +17,7 @@ from orchestwin.api.auth import AuthApiSettings, create_auth_router
 from orchestwin.api.brownfield import create_brownfield_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
+from orchestwin.api.design_mockups import create_design_mockup_router
 from orchestwin.api.execution import create_execution_router
 from orchestwin.api.execution_launch import create_execution_launch_router
 from orchestwin.api.finalization import create_finalization_router
@@ -197,6 +198,7 @@ def create_app(
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
         create_requirements_router(),
         create_design_router(),
+        create_design_mockup_router(),
         create_architecture_router(),
         create_artifact_graph_router(),
         create_brownfield_router(),

@@ -123,6 +123,103 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     assert store.events[parent][-1][0] == "APPLICATION_RESULT"
 
 
+def test_syntax_retry_retains_rejected_file_and_accepts_only_new_audited_bytes(tmp_path):
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
+
+    def mutate(child_context, value):
+        if (
+            child_context.get("source_step", {}).get("ordinal") == 2
+            and "syntax_retry" not in child_context
+        ):
+            return {"content": "assert.equal(result, \\\n"}
+        return value
+
+    generator, transport = source_sequence_generator(tmp_path, payload, mutate=mutate)
+    result = execute(generator, ctx, store)
+    parent, core, rejected, accepted, html = store.requests
+    assert len(transport.calls) == 5
+    failed_events = store.events[rejected]
+    assert [
+        (kind, data.get("code"))
+        for kind, data, _ in failed_events
+        if kind in {"ADAPTER_REJECTED", "APPLICATION_RESULT"}
+    ] == [
+        ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+        ("APPLICATION_RESULT", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+    ]
+    assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in failed_events)
+    assert any(kind == "HTTP_RESPONSE" and raw for kind, _, raw in failed_events)
+    before = json.loads(store.requests[rejected][0].input_payload_json)["context"]
+    retried = json.loads(store.requests[accepted][0].input_payload_json)["context"]
+    retry = retried.pop("syntax_retry")
+    assert retried == before
+    assert retry == {
+        "attempt": 2,
+        "previous_generation_id": str(rejected),
+        "previous_request_hash": store.requests[rejected][0].content_hash,
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+    }
+    assert [step["generation_id"] for step in result.generation_steps] == list(
+        map(str, (core, accepted, html))
+    )
+    assert result.output.files[1].content == payload["files"][1]["content"]
+    assert any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[parent])
+
+
+def test_different_mockup_structure_is_rejected_before_file_acceptance(tmp_path):
+    from src.test.python.models.test_source_design_contract import PROTOTYPE
+
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
+    ctx["design"] = {"content": {"prototype": PROTOTYPE}}
+    generator, _ = source_sequence_generator(tmp_path, payload)
+    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+        execute(generator, ctx, store)
+    html = list(store.requests)[-1]
+    assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[html])
+    assert any(
+        kind == "ADAPTER_REJECTED" and data["code"] == "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+        for kind, data, _ in store.events[html]
+    )
+
+
+def test_repeated_syntax_failure_stops_after_one_retry_and_never_accepts_parent(tmp_path):
+    store = MemoryEvidence()
+
+    def mutate(child_context, value):
+        return {"content": "const value = ("} if child_context.get("source_step") else value
+
+    generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
+        execute(generator, context(), store)
+    assert len(transport.calls) == len(store.requests) == 3
+    for events in store.events.values():
+        assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in events)
+        assert events[-1][0] == "APPLICATION_RESULT" and events[-1][1]["status"] == "FAILED"
+
+
+@pytest.mark.parametrize(
+    "code", ["SOURCE_JAVASCRIPT_PARSER_UNAVAILABLE", "GENERATION_EVIDENCE_WRITE_FAILED"]
+)
+def test_syntax_retry_does_not_retry_parser_or_audit_failure(tmp_path, monkeypatch, code):
+    from orchestwin.models import source_file_generation
+
+    failure = (
+        ProposalEvidenceError(code)
+        if code == "GENERATION_EVIDENCE_WRITE_FAILED"
+        else ProposalGenerationError(code)
+    )
+
+    def checker(_):
+        raise failure
+
+    monkeypatch.setattr(source_file_generation, "validate_source_syntax", checker)
+    store = MemoryEvidence()
+    generator, transport = source_sequence_generator(tmp_path, complete_output())
+    with pytest.raises(type(failure), match=code):
+        execute(generator, context(), store)
+    assert len(transport.calls) == 2
+
+
 @pytest.mark.parametrize(
     "failure",
     [

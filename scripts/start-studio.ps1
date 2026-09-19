@@ -5,7 +5,10 @@ Set-Location -LiteralPath $repo
 $settings = Get-Content -LiteralPath $Configuration -Raw | ConvertFrom-Json
 $python = Join-Path $repo '.venv/Scripts/python.exe'
 $node = $settings.node
-if (-not (Test-Path -LiteralPath $node)) { throw 'Configure the Node executable in local-settings.json.' }
+if (-not (Test-Path -LiteralPath $node -PathType Leaf)) { throw 'Configure the Node executable in local-settings.json.' }
+$node = (Resolve-Path -LiteralPath $node).ProviderPath
+# The API uses this same selected Node binary for syntax-only source validation.
+$env:PATH = [IO.Path]::GetDirectoryName($node) + [IO.Path]::PathSeparator + $env:PATH
 foreach ($port in @(8000, 8080, 8787, 8788)) {
     if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
         throw "Port $port is already in use. Stop the previous Studio session first."

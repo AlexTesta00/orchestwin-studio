@@ -427,3 +427,583 @@ def test_real_domain_stores_readable_content_addressed_bytes(environment, monkey
     env.service.source_revision = AsyncMock(return_value=None)
     env.service._content_store = SimpleNamespace(read=Mock(side_effect=AssertionError))
     assert asyncio.run(env.service.source_files(**read_scope)) is None
+
+
+@pytest.fixture
+def design_reference_environment(environment, monkeypatch):
+    env = environment
+    design_id = UUID(int=55005)
+    env.design = SimpleNamespace(
+        id=design_id,
+        project_id=PROJECT,
+        version_number=2,
+        content_hash="b" * 64,
+        package=SimpleNamespace(
+            prototype=SimpleNamespace(to_snapshot=lambda: {"title": "Approved prototype"})
+        ),
+    )
+    env.architecture.package = SimpleNamespace(
+        grounding=SimpleNamespace(
+            design_package_reference=SimpleNamespace(
+                artifact_id=design_id, version_number=2, content_hash="b" * 64
+            )
+        )
+    )
+    env.arch_repository.get = AsyncMock(return_value=env.architecture)
+    env.design_repository = SimpleNamespace(
+        get=AsyncMock(return_value=env.design), current=AsyncMock(return_value=env.design)
+    )
+    monkeypatch.setattr(
+        sut, "SqlAlchemyDesignPackageRepository", Mock(return_value=env.design_repository)
+    )
+    env.source_snapshot = {
+        "id": str(REVISION),
+        "version_number": 4,
+        "content_hash": "c" * 64,
+        "origin": "OWNER_EDIT",
+        "provenance_references": [
+            {
+                "kind": "ARCHITECTURE",
+                "reference_id": f"architecture:{ARCHITECTURE}",
+                "version_number": 1,
+                "content_hash": HASH,
+            }
+        ],
+    }
+    env.service.source_revision = AsyncMock(return_value=env.source_snapshot)
+    return env
+
+
+def design_reference(env):
+    return asyncio.run(
+        env.service.source_design_reference(
+            owner_user_id=OWNER, project_id=PROJECT, revision_id=REVISION
+        )
+    )
+
+
+def test_source_design_reference_reads_exact_ancestor_not_newer_design(
+    design_reference_environment,
+):
+    env = design_reference_environment
+    env.design_repository.current.return_value = SimpleNamespace(
+        id=UUID(int=55006), version_number=3, content_hash="d" * 64
+    )
+    result = design_reference(env)
+    assert result["source"]["origin"] == "OWNER_EDIT"
+    assert result["source"]["revision_id"] == str(REVISION)
+    assert result["design"] == {
+        "artifact_id": str(env.design.id),
+        "version_number": 2,
+        "content_hash": "b" * 64,
+    }
+    assert result["prototype"] == {"title": "Approved prototype"}
+    assert result["current_design"]["version_number"] == 3
+    assert result["design_status"] == "STALE"
+    assert result["visual_conformance"] == "NOT_ASSESSED"
+    env.arch_repository.get.assert_awaited_once_with(project_id=PROJECT, version_id=ARCHITECTURE)
+    env.design_repository.get.assert_awaited_once_with(project_id=PROJECT, version_id=env.design.id)
+    sut.SqlAlchemyArchitecturePackageRepository.assert_called_once_with(
+        env.session, owner_user_id=OWNER
+    )
+    sut.SqlAlchemyDesignPackageRepository.assert_called_once_with(env.session, owner_user_id=OWNER)
+
+
+@pytest.mark.parametrize("has_current", [True, False])
+def test_source_design_reference_current_status_and_missing_prototype(
+    design_reference_environment, has_current
+):
+    env = design_reference_environment
+    env.design.package.prototype = None
+    if not has_current:
+        env.design_repository.current.return_value = None
+    result = design_reference(env)
+    assert result["prototype"] is None
+    assert result["design_status"] == ("CURRENT" if has_current else "UNAVAILABLE")
+
+
+def test_source_design_reference_does_not_resolve_unowned_source(design_reference_environment):
+    env = design_reference_environment
+    env.service.source_revision.return_value = None
+    assert design_reference(env) is None
+    env.service.source_revision.assert_awaited_once_with(
+        owner_user_id=OWNER, project_id=PROJECT, revision_id=REVISION
+    )
+    env.factory.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["missing", "duplicate", "wrong-prefix", "invalid-uuid"])
+def test_source_design_reference_rejects_ambiguous_or_malformed_ancestry(
+    design_reference_environment, failure
+):
+    env = design_reference_environment
+    references = env.source_snapshot["provenance_references"]
+    if failure == "missing":
+        references.clear()
+    elif failure == "duplicate":
+        references.append(dict(references[0]))
+    elif failure == "wrong-prefix":
+        references[0]["reference_id"] = f"design:{ARCHITECTURE}"
+    else:
+        references[0]["reference_id"] = "architecture:invalid"
+    with pytest.raises(HTTPException) as failure:
+        design_reference(env)
+    assert failure.value.status_code == 409
+    assert failure.value.detail["code"] == "WEB_SOURCE_DESIGN_REFERENCE_INVALID"
+    env.factory.assert_not_called()
+
+
+@pytest.mark.parametrize("artifact", ["architecture", "design"])
+@pytest.mark.parametrize(
+    "mismatch", ["missing", "id", "project_id", "version_number", "content_hash"]
+)
+def test_source_design_reference_refuses_mismatched_historical_artifacts(
+    design_reference_environment, artifact, mismatch
+):
+    env = design_reference_environment
+    item = getattr(env, artifact)
+    if mismatch == "missing":
+        repository = env.arch_repository if artifact == "architecture" else env.design_repository
+        repository.get.return_value = None
+    else:
+        setattr(
+            item,
+            mismatch,
+            {
+                "id": UUID(int=999),
+                "project_id": UUID(int=999),
+                "version_number": 99,
+                "content_hash": "e" * 64,
+            }[mismatch],
+        )
+    with pytest.raises(HTTPException) as failure:
+        design_reference(env)
+    assert failure.value.status_code == 409
+    assert failure.value.detail["code"] == "WEB_SOURCE_DESIGN_REFERENCE_UNAVAILABLE"
+    env.design_repository.current.assert_not_awaited()
+
+
+@pytest.fixture
+def owner_edit_environment(environment, monkeypatch, tmp_path):
+    env = environment
+    monkeypatch.setattr(sut, "create_web_source_plan", _REAL_PLAN_FACTORY)
+    monkeypatch.setattr(sut, "validate_web_source_plan", _REAL_VALIDATOR)
+    monkeypatch.setattr(sut, "create_web_source_revision", _REAL_REVISION_FACTORY)
+    env.service._content_root = tmp_path / "owner-edit-objects"
+    env.service._content_store = _REAL_STORE(env.service._content_root)
+    monkeypatch.setattr(sut, "bind_source_publication", AsyncMock(side_effect=AssertionError))
+    original = env.service._content_store.store(
+        normalized_path="index.html", content=b"<h1>Original</h1>", media_type="text/html"
+    )
+    env.base = _REAL_REVISION_FACTORY(
+        revision_id=REVISION,
+        project_id=PROJECT,
+        created_by_user_id=OWNER,
+        version_number=1,
+        based_on=None,
+        target=ExecutionTarget.WEB_STATIC,
+        language_configuration=sut.WebLanguageConfiguration(
+            frontend=WebImplementationLanguage.STATIC_ASSETS, backend=None
+        ),
+        layout=WebProjectLayout.SINGLE_ROOT,
+        origin=sut.WebSourceOrigin.GENERATED_PLAN,
+        files=(original,),
+        provenance_references=(
+            sut.WebSourceProvenanceReference(
+                sut.WebSourceProvenanceKind.ARCHITECTURE, f"architecture:{ARCHITECTURE}", 1, HASH
+            ),
+        ),
+        created_at=NOW,
+    )
+    env.revisions.current.return_value = env.base
+
+    async def append(revision):
+        env.revisions.current.return_value = revision
+        return SimpleNamespace(status=sut.WebSourceRevisionAppendStatus.APPENDED, revision=revision)
+
+    env.revisions.append.side_effect = append
+    return env
+
+
+def edit_command(env, **changes):
+    return SimpleNamespace(
+        **{
+            "base_revision_content_hash": env.base.content_hash,
+            "rationale": "Correct the calculator controls after owner review.",
+            "files": (WebSourcePlanFileCommand("index.html", "<h1>Corrected</h1>", "text/html"),),
+            **changes,
+        }
+    )
+
+
+def edit(env, command=None, revision_id=REVISION):
+    return asyncio.run(
+        env.service.edit_source_revision(
+            owner_user_id=OWNER,
+            project_id=PROJECT,
+            revision_id=revision_id,
+            command=command or edit_command(env),
+        )
+    )
+
+
+@pytest.fixture
+def owner_mockup_environment(owner_edit_environment, monkeypatch):
+    from orchestwin.api.design_mockups import MockupResult, MockupStatus, _payload
+    from orchestwin.models.design_mockups import MockupDraft, bind_mockup
+    from src.test.python.artifacts import design_fixtures
+    from src.test.python.models.test_design_mockups import draft_value
+
+    env = owner_edit_environment
+    base_design = design_fixtures.design_version()
+    prototype = bind_mockup(
+        MockupDraft.model_validate(draft_value()),
+        base_design.package.alternatives[0],
+        design_fixtures.requirements_version(),
+    )
+    package = replace(
+        base_design.package,
+        owner_selected_alternative_id=base_design.package.alternatives[0].id,
+        prototype=prototype,
+    )
+    env.mockup_id = UUID(int=55020)
+    env.design = SimpleNamespace(
+        id=base_design.id,
+        content_hash=base_design.content_hash,
+        version_number=2,
+        project_id=PROJECT,
+        package=base_design.package,
+    )
+    env.design_repository = SimpleNamespace(
+        current=AsyncMock(return_value=env.design), get=AsyncMock(return_value=env.design)
+    )
+    env.architecture.package = SimpleNamespace(
+        grounding=SimpleNamespace(
+            design_package_reference=SimpleNamespace(
+                artifact_id=env.design.id, version_number=2, content_hash=env.design.content_hash
+            )
+        )
+    )
+    env.arch_repository.get = AsyncMock(return_value=env.architecture)
+    monkeypatch.setattr(
+        sut, "SqlAlchemyDesignPackageRepository", Mock(return_value=env.design_repository)
+    )
+    env.mockup_result = _payload(
+        MockupResult(
+            MockupStatus.GENERATED, env.mockup_id, base_design.id, base_design.content_hash, package
+        )
+    )
+    context = {
+        "project_id": str(PROJECT),
+        "purpose": "DESIGN_MOCKUP",
+        "design_version_id": str(base_design.id),
+        "design_content_hash": base_design.content_hash,
+        "alternative": {"id": str(package.owner_selected_alternative_id)},
+    }
+    env.mockup_evidence = {
+        "request": {
+            "generation_id": str(env.mockup_id),
+            "project_id": str(PROJECT),
+            "owner_user_id": str(OWNER),
+            "request": {"input_payload_json": sut.canonical_json({"context": context})},
+        },
+        "observations": [
+            {
+                "kind": "ADAPTER_ACCEPTED",
+                "payload": {
+                    "result": env.mockup_result,
+                    "generated_content_hashes": {"DESIGN": [package.content_hash]},
+                },
+            }
+        ],
+    }
+    env.evidence_store = SimpleNamespace(get_owned=AsyncMock(return_value=env.mockup_evidence))
+    monkeypatch.setattr(
+        sut, "SqlAlchemyProposalEvidenceStore", Mock(return_value=env.evidence_store)
+    )
+    env.mockup_html = """<section data-design-screen="SCR-001">
+      <label for="name">Nome</label><input id="name" name="name" required data-design-element="ELM-001">
+      <button data-design-element="ELM-002" data-design-target="SCR-002">Continua</button></section>
+      <section data-design-screen="SCR-002"><p>Esempio di prenotazione confermata</p>
+      <a href="#" data-design-element="ELM-004" data-design-target="SCR-001">Indietro</a></section>"""
+    return env
+
+
+def mockup_edit_command(env, **changes):
+    return edit_command(
+        env,
+        **{
+            "mockup_generation_id": env.mockup_id,
+            "files": (WebSourcePlanFileCommand("index.html", env.mockup_html, "text/html"),),
+            **changes,
+        },
+    )
+
+
+def test_owner_edit_binds_exact_mockup_and_retrieves_it_after_current_design_changes(
+    owner_mockup_environment,
+):
+    env = owner_mockup_environment
+    result = edit(env, mockup_edit_command(env))
+    assert result.status is sut.WebApiCommandStatus.SOURCE_REVISION_CREATED
+    reference = result.snapshot["owner_edit"]["visual_reference"]
+    assert reference["generation_id"] == str(env.mockup_id)
+    assert reference["prototype_id"] == env.mockup_result["package"]["prototype"]["id"]
+    env.evidence_store.get_owned.assert_awaited_once_with(
+        owner_user_id=OWNER, project_id=PROJECT, generation_id=env.mockup_id
+    )
+    env.service.source_revision = AsyncMock(return_value=result.snapshot)
+    env.design_repository.current.return_value = SimpleNamespace(
+        id=UUID(int=99), version_number=3, content_hash="f" * 64
+    )
+    response = design_reference(env)
+    assert response["owner_mockup"]["generation_id"] == str(env.mockup_id)
+    assert response["owner_mockup"]["prototype"] == env.mockup_result["package"]["prototype"]
+    assert response["structure_contract"] == "VERIFIED"
+    assert response["visual_conformance"] == "NOT_ASSESSED"
+    assert response["design_status"] == "STALE"
+
+
+@pytest.mark.parametrize(
+    "failure", ["unowned", "owner", "project", "generation", "hash", "not-mockup", "prototype"]
+)
+def test_owner_edit_rejects_unowned_or_forged_mockup_before_writing(
+    owner_mockup_environment, failure
+):
+    env = owner_mockup_environment
+    if failure == "unowned":
+        env.evidence_store.get_owned.return_value = None
+    elif failure in {"owner", "project", "generation"}:
+        env.mockup_evidence["request"][
+            {"owner": "owner_user_id", "project": "project_id", "generation": "generation_id"}[
+                failure
+            ]
+        ] = str(UUID(int=99))
+    elif failure == "hash":
+        env.mockup_evidence["observations"][0]["payload"]["generated_content_hashes"]["DESIGN"] = [
+            "f" * 64
+        ]
+    elif failure == "not-mockup":
+        env.mockup_evidence["request"]["request"]["input_payload_json"] = sut.canonical_json(
+            {"context": {"purpose": "OTHER"}}
+        )
+    else:
+        env.mockup_result["package"]["prototype"]["screens"][0]["elements"][0]["required"] = False
+    with pytest.raises(HTTPException) as failure:
+        edit(env, mockup_edit_command(env))
+    assert failure.value.detail["code"] == "WEB_SOURCE_MOCKUP_REFERENCE_INVALID"
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_rejects_mockup_based_on_stale_design(owner_mockup_environment):
+    env = owner_mockup_environment
+    env.design.content_hash = "f" * 64
+    result = edit(env, mockup_edit_command(env))
+    assert result.message == "WEB_SOURCE_MOCKUP_CONTEXT_CHANGED"
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_requires_selected_mockup_fields_before_binding(owner_mockup_environment):
+    env = owner_mockup_environment
+    env.mockup_html = env.mockup_html.replace(" required ", " ")
+    result = edit(env, mockup_edit_command(env))
+    assert result.message == "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    env.revisions.append.assert_not_called()
+
+
+def test_source_design_reference_rejects_tampered_mockup_binding(owner_mockup_environment):
+    env = owner_mockup_environment
+    result = edit(env, mockup_edit_command(env))
+    result.snapshot["owner_edit"]["visual_reference"]["prototype_content_hash"] = "f" * 64
+    env.service.source_revision = AsyncMock(return_value=result.snapshot)
+    with pytest.raises(HTTPException) as failure:
+        design_reference(env)
+    assert failure.value.detail["code"] == "WEB_SOURCE_MOCKUP_REFERENCE_INVALID"
+
+
+def test_following_owner_edit_retains_mockup_and_enforces_structure(owner_mockup_environment):
+    env = owner_mockup_environment
+    first = edit(env, mockup_edit_command(env))
+    result = edit(
+        env,
+        edit_command(env, base_revision_content_hash=first.snapshot["content_hash"]),
+        revision_id=UUID(first.snapshot["id"]),
+    )
+    assert result.message == "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    result = edit(
+        env,
+        edit_command(
+            env,
+            base_revision_content_hash=first.snapshot["content_hash"],
+            files=(
+                WebSourcePlanFileCommand(
+                    "index.html", env.mockup_html + "<!-- reviewed -->", "text/html"
+                ),
+            ),
+        ),
+        revision_id=UUID(first.snapshot["id"]),
+    )
+    assert result.status is sut.WebApiCommandStatus.SOURCE_REVISION_CREATED
+    assert (
+        result.snapshot["owner_edit"]["visual_reference"]
+        == first.snapshot["owner_edit"]["visual_reference"]
+    )
+
+
+def test_owner_edit_appends_exact_lineage_and_verifiable_rationale_without_model_claim(
+    owner_edit_environment,
+):
+    env = owner_edit_environment
+    before = env.base.to_snapshot()
+    result = edit(env)
+    snapshot = result.snapshot
+    assert result.status is sut.WebApiCommandStatus.SOURCE_REVISION_CREATED
+    assert snapshot["origin"] == "OWNER_EDIT" and snapshot["version_number"] == 2
+    assert snapshot["based_on"] == env.base.reference.to_snapshot()
+    assert snapshot["related_failure_signature"] is None
+    assert "model_generation_id" not in snapshot
+    assert snapshot["owner_edit"]["rationale"] == edit_command(env).rationale
+    assert snapshot["owner_edit"]["base_revision"] == env.base.reference.to_snapshot()
+    assert env.base.to_snapshot() == before
+    assert env.service._content_store.read(env.base.files[0].storage_key) == b"<h1>Original</h1>"
+    persisted = env.revisions.append.call_args.args[0]
+    assert "owner_edit" not in persisted.to_snapshot()
+    assert env.service._api_snapshot(persisted) == snapshot
+    owner_ref = next(
+        ref
+        for ref in persisted.provenance_references
+        if ref.kind is sut.WebSourceProvenanceKind.OWNER_DECISION
+    )
+    assert owner_ref.reference_id == f"source-edit:{persisted.id}"
+    assert owner_ref.version_number == 2
+    sut.bind_source_publication.assert_not_called()
+    query = env.session.scalar.call_args.args[0].compile(dialect=postgresql.dialect())
+    assert "FOR UPDATE" in str(query) and OWNER in query.params.values()
+
+
+@pytest.mark.parametrize("mismatch", ["hash", "revision"])
+def test_owner_edit_stale_base_never_appends(owner_edit_environment, mismatch):
+    env = owner_edit_environment
+    result = (
+        edit(env, edit_command(env, base_revision_content_hash="b" * 64))
+        if mismatch == "hash"
+        else edit(env, revision_id=UUID(int=1))
+    )
+    assert result.status is sut.WebApiCommandStatus.CONFLICT
+    assert result.message == "WEB_SOURCE_EDIT_STALE_BASE"
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_cannot_read_or_modify_another_owners_project(owner_edit_environment):
+    env = owner_edit_environment
+    env.session.scalar.return_value = None
+    assert edit(env).status is sut.WebApiCommandStatus.NOT_FOUND
+    env.revisions.current.assert_not_called()
+    env.revisions.append.assert_not_called()
+
+
+@pytest.mark.parametrize("mismatch", ["approval", "version", "architecture", "owner", "project"])
+def test_owner_edit_requires_exact_current_approved_architecture(owner_edit_environment, mismatch):
+    env = owner_edit_environment
+    if mismatch == "approval":
+        env.gate.status = sut.HumanGateStatus.PENDING_APPROVAL
+    elif mismatch == "version":
+        env.gate.artifact = replace(env.gate.artifact, version=2)
+    elif mismatch == "architecture":
+        env.architecture.content_hash = "b" * 64
+        env.gate.artifact = replace(env.gate.artifact, content_hash="b" * 64)
+    elif mismatch == "owner":
+        env.gate.owner_user_id = UUID(int=1)
+    else:
+        env.architecture.project_id = UUID(int=1)
+    assert edit(env).status is sut.WebApiCommandStatus.APPROVAL_REQUIRED
+    env.revisions.append.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".env",
+        "../outside.html",
+        "C:/bad.html",
+        "index.html:stream",
+        "node_modules/x.js",
+        "script.js",
+    ],
+)
+def test_owner_edit_rejects_unsafe_paths_or_missing_entry(owner_edit_environment, path):
+    env = owner_edit_environment
+    result = edit(
+        env, edit_command(env, files=(WebSourcePlanFileCommand(path, "content", "text/plain"),))
+    )
+    assert result.status is sut.WebApiCommandStatus.INVALID
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_rejects_invalid_javascript_without_writing_or_execution(
+    owner_edit_environment, monkeypatch
+):
+    env = owner_edit_environment
+    checker = Mock(side_effect=sut.ProposalGenerationError("SOURCE_JAVASCRIPT_SYNTAX_INVALID"))
+    monkeypatch.setattr(sut, "validate_source_syntax", checker)
+    store = Mock(wraps=env.service._content_store.store)
+    monkeypatch.setattr(env.service._content_store, "store", store)
+    result = edit(env)
+    assert result.status is sut.WebApiCommandStatus.INVALID
+    assert result.message == "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+    store.assert_not_called()
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_parser_unavailable_returns_503(owner_edit_environment, monkeypatch):
+    env = owner_edit_environment
+    monkeypatch.setattr(
+        sut,
+        "validate_source_syntax",
+        Mock(side_effect=sut.ProposalGenerationError("SOURCE_JAVASCRIPT_PARSER_UNAVAILABLE")),
+    )
+    with pytest.raises(HTTPException) as error:
+        edit(env)
+    assert error.value.status_code == 503
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_noop_is_not_a_new_revision(owner_edit_environment):
+    env = owner_edit_environment
+    result = edit(
+        env,
+        edit_command(
+            env, files=(WebSourcePlanFileCommand("index.html", "<h1>Original</h1>", "text/html"),)
+        ),
+    )
+    assert result.status is sut.WebApiCommandStatus.CONFLICT
+    assert result.message == "WEB_SOURCE_EDIT_UNCHANGED"
+    env.revisions.append.assert_not_called()
+
+
+def test_owner_edit_audit_tampering_is_not_exposed_as_verified(owner_edit_environment, monkeypatch):
+    env = owner_edit_environment
+    edit(env)
+    revision = env.revisions.append.call_args.args[0]
+    monkeypatch.setattr(env.service._content_store, "read", lambda _: b'{"rationale":"forged"}')
+    with pytest.raises(HTTPException) as error:
+        env.service._api_snapshot(revision)
+    assert error.value.status_code == 503
+    assert error.value.detail["code"] == "WEB_SOURCE_EDIT_AUDIT_UNAVAILABLE"
+
+
+def test_owner_edit_preserves_audit_on_each_successive_revision(owner_edit_environment):
+    env = owner_edit_environment
+    first = edit(env).snapshot
+    v2 = env.revisions.current.return_value
+    second = edit(
+        env,
+        edit_command(
+            env,
+            base_revision_content_hash=v2.content_hash,
+            files=(WebSourcePlanFileCommand("index.html", "<h1>Third</h1>", "text/html"),),
+        ),
+        revision_id=v2.id,
+    ).snapshot
+    assert second["version_number"] == 3 and second["based_on"] == v2.reference.to_snapshot()
+    assert env.service._api_snapshot(v2) == first

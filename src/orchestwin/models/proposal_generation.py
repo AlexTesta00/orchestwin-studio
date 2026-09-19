@@ -210,6 +210,8 @@ class ProposalGenerator:
             "design": 5,
             "architecture": 7,
         }.get(task, 1)
+        if task == "design" and serialized_context.get("purpose") == "DESIGN_MOCKUP":
+            contract_version = 6
         schema = create_structured_json_schema(
             schema_id=f"proposal-{task}-v{contract_version}",
             version_number=contract_version,

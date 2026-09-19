@@ -97,6 +97,51 @@ class SqlAlchemyProposalEvidenceStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._sessions = session_factory
 
+    async def latest_design_mockup(
+        self,
+        *,
+        owner_user_id,
+        project_id,
+        design_content_hash,
+        alternative_id,
+    ):
+        """Recover the newest accepted visual draft for this exact design context."""
+        from sqlalchemy.dialects.postgresql import JSONB
+
+        context = sa.func.model_source_context(GENERATIONS.c.snapshot_json)
+        event = sa.cast(EVENTS.c.snapshot_json, JSONB)
+        query = (
+            sa.select(
+                EVENTS,
+                GENERATIONS.c.snapshot_json.label("request_snapshot_json"),
+                GENERATIONS.c.content_hash.label("request_evidence_hash"),
+            )
+            .join(GENERATIONS, GENERATIONS.c.id == EVENTS.c.generation_id)
+            .join(ProjectRecord, ProjectRecord.id == GENERATIONS.c.project_id)
+            .where(
+                *_owned(owner_user_id, project_id),
+                GENERATIONS.c.owner_user_id == owner_user_id,
+                EVENTS.c.kind == "ADAPTER_ACCEPTED",
+                context.op("->>")("purpose") == "DESIGN_MOCKUP",
+                context.op("->>")("design_content_hash") == design_content_hash,
+                context.op("->")("alternative").op("->>")("id") == str(alternative_id),
+            )
+            .order_by(event["recorded_at"].astext.desc())
+            .limit(1)
+        )
+        async with self._sessions() as session:
+            row = (await session.execute(query)).mappings().first()
+            if row is None:
+                return None
+            _verify(
+                {
+                    "snapshot_json": row["request_snapshot_json"],
+                    "content_hash": row["request_evidence_hash"],
+                }
+            )
+            snapshot = _verify(row)
+            return snapshot["payload"]["result"]
+
     async def begin(self, *, owner_user_id, project_id, request):
         context = json.loads(request.input_payload_json)["context"]
         if "request" in context:

@@ -7,10 +7,27 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.web_execution import WebSourceApiService, web_source_api_service_dependency
 from orchestwin.identity.domain import UserAccount
+
+
+class WebSourceEditFile(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    normalized_path: str = Field(min_length=1, max_length=240)
+    content: str = Field(max_length=32768)
+    media_type: str = Field(min_length=1, max_length=80)
+
+
+class WebSourceEditBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    base_revision_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    rationale: str = Field(min_length=1, max_length=1000)
+    files: list[WebSourceEditFile] = Field(min_length=1, max_length=48)
+    mockup_generation_id: UUID | None = None
 
 
 def create_web_preview_router():
@@ -26,6 +43,37 @@ def create_web_preview_router():
         if result is None:
             raise HTTPException(404, detail={"code": "WEB_SOURCE_NOT_FOUND"})
         return result
+
+    @router.post("/projects/{project_id}/web-source-revisions/{revision_id}/edits")
+    async def edit(
+        project_id: UUID,
+        revision_id: UUID,
+        body: WebSourceEditBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[WebSourceApiService, Depends(web_source_api_service_dependency)],
+    ):
+        operation = getattr(service, "edit_source_revision", None)
+        if operation is None:
+            raise HTTPException(503, detail={"code": "WEB_SOURCE_EDIT_UNAVAILABLE"})
+        result = await operation(
+            owner_user_id=user.id,
+            project_id=project_id,
+            revision_id=revision_id,
+            command=body,
+        )
+        return JSONResponse(
+            status_code={
+                "SOURCE_REVISION_CREATED": 201,
+                "NOT_FOUND": 404,
+                "INVALID": 422,
+            }.get(result.status.value, 409),
+            content={
+                "status": result.status.value,
+                "snapshot": result.snapshot,
+                "message": result.message,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.get("/projects/{project_id}/web-source-revisions/{revision_id}/content")
     async def content(
@@ -52,6 +100,26 @@ def create_web_preview_router():
                 for name, media, data in entries
             ],
         }
+
+    @router.get("/projects/{project_id}/web-source-revisions/{revision_id}/design-reference")
+    async def design_reference(
+        project_id: UUID,
+        revision_id: UUID,
+        response: Response,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[WebSourceApiService, Depends(web_source_api_service_dependency)],
+    ):
+        operation = getattr(service, "source_design_reference", None)
+        if operation is None:
+            raise HTTPException(503, detail={"code": "WEB_SOURCE_DESIGN_REFERENCE_UNAVAILABLE"})
+        result = await operation(
+            owner_user_id=user.id, project_id=project_id, revision_id=revision_id
+        )
+        if result is None:
+            raise HTTPException(404, detail={"code": "WEB_SOURCE_NOT_FOUND"})
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return result
 
     @router.get("/projects/{project_id}/web-source-revisions/{revision_id}/download")
     async def download(

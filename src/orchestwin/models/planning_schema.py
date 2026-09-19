@@ -53,6 +53,8 @@ def constrain_planning_schema(schema, context, task):
             elif name == "sources":
                 target.update(type="string", enum=list(context["evidence"]))
     if task == "design":
+        if context.get("purpose") == "DESIGN_MOCKUP":
+            return
         schema["properties"]["recommendation"].update(reference("DES"))
 
         schema["properties"]["alternatives"] = _fixed_array(

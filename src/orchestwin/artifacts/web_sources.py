@@ -31,6 +31,7 @@ class WebSourceOrigin(StrEnum):
     GENERATED_PLAN = "GENERATED_PLAN"
     IMPORTED_BROWNFIELD = "IMPORTED_BROWNFIELD"
     REPAIR_CHANGE_SET = "REPAIR_CHANGE_SET"
+    OWNER_EDIT = "OWNER_EDIT"
     DETERMINISTIC_FIXTURE = "DETERMINISTIC_FIXTURE"
 
 
@@ -168,6 +169,16 @@ class WebSourceRevision:
                 raise ValueError("repair revision requires a predecessor and failure signature")
         elif self.related_failure_signature is not None:
             raise ValueError("only repair revisions may reference a failure signature")
+        if self.origin is WebSourceOrigin.OWNER_EDIT:
+            decisions = tuple(
+                ref
+                for ref in self.provenance_references
+                if ref.kind is WebSourceProvenanceKind.OWNER_DECISION
+                and ref.reference_id == f"source-edit:{self.id}"
+                and ref.version_number == self.version_number
+            )
+            if self.based_on is None or len(decisions) != 1:
+                raise ValueError("owner edit requires a predecessor and exact owner decision")
 
     @property
     def source_tree_hash(self) -> str:
