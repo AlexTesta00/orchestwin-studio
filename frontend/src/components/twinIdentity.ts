@@ -122,7 +122,7 @@ const roles: Record<AgentIdentifier, RoleIdentity> = {
   },
 };
 
-export const identityAccents = {
+const identityAccents = {
   indigo: "bg-indigo-50 text-indigo-700 ring-indigo-200",
   sky: "bg-sky-50 text-sky-700 ring-sky-200",
   violet: "bg-violet-50 text-violet-700 ring-violet-200",

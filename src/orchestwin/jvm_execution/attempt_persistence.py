@@ -330,25 +330,6 @@ class SqlAlchemyJvmExecutionAttemptRepository:
         return None if row is None else jvm_execution_attempt_from_record(row)
 
 
-class JvmExecutionAttemptUnitOfWork(Protocol):
-    """Transactional boundary for JVM execution-attempt persistence."""
-
-    attempts: JvmExecutionAttemptRepository
-
-    async def __aenter__(self) -> Self: ...
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None: ...
-
-    async def commit(self) -> None: ...
-
-    async def rollback(self) -> None: ...
-
-
 class SqlAlchemyJvmExecutionAttemptUnitOfWork:
     """Async SQLAlchemy transaction coordinator for JVM attempts."""
 

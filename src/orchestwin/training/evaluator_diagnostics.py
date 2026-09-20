@@ -166,28 +166,3 @@ def variant(row: dict, factor: str) -> dict:
     if observed_states(result) != result["control_judgements"]:
         raise ValueError("diagnostic intervention changed labelled facts")
     return result
-
-
-def build_matrix(rows: dict[str, dict]) -> list[dict]:
-    """24 replays, 36 anchored contrasts, 24 summary contrasts, 2 prose contrasts."""
-    if len(rows) != 24 or len({(r["condition"], r["locale"]) for r in rows.values()}) != 24:
-        raise ValueError("exactly 24 unique known development cases required")
-    matrix = []
-    for source_id, row in sorted(rows.items()):
-        factors = ["original", "summary_sentence"]
-        if row["condition"] in ANCHORS:
-            factors += ["rename_ids", "explicit_decision_rules", "html_quotes"]
-        if row["condition"] == "untrusted-page-instruction":
-            factors += ["neutral_page_text"]
-        for factor in factors:
-            matrix.append(
-                dict(
-                    id=f"diagnostic-{factor}-{source_id}",
-                    source_id=source_id,
-                    factor=factor,
-                    row=variant(row, factor),
-                )
-            )
-    if len(matrix) != 86:
-        raise ValueError("diagnostic matrix membership differs")
-    return matrix

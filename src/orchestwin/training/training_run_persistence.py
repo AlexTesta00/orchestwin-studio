@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import (
@@ -289,16 +288,6 @@ class TrainingRunStoreResult:
         }
         if successful != (self.training_run is not None):
             raise ValueError("training run store result shape is inconsistent")
-
-
-class TrainingRunRepository(Protocol):
-    """Owner-bound append-only training run repository."""
-
-    async def append(self, outcome: QloraTrainingOutcome) -> TrainingRunStoreResult: ...
-
-    async def get_owned(self, *, run_id: UUID) -> StoredTrainingRun | None: ...
-
-    async def history(self) -> tuple[StoredTrainingRun, ...]: ...
 
 
 class InMemoryTrainingRunRepository:

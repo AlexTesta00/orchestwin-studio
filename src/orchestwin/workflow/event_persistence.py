@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import (
@@ -98,25 +97,6 @@ class WorkflowEventAppendResult:
         }
         if successful != (self.event is not None):
             raise ValueError("workflow event append result shape is inconsistent")
-
-
-class WorkflowEventRepository(Protocol):
-    """Owner-bound event persistence port used by workflow services and SSE."""
-
-    async def append(
-        self,
-        event: WorkflowEvent,
-        *,
-        expected_previous_sequence: int,
-    ) -> WorkflowEventAppendResult: ...
-
-    async def list_after(
-        self,
-        *,
-        run_id: UUID,
-        after_sequence: int = 0,
-        limit: int = 100,
-    ) -> tuple[WorkflowEvent, ...]: ...
 
 
 class InMemoryWorkflowEventRepository:
