@@ -165,7 +165,7 @@ class LocalExecutionQueryService:
 
 
 @dataclass(frozen=True, slots=True)
-class Sprint07ServiceBundle:
+class BrownfieldServiceBundle:
     """Runtime adapters introduced by the Sprint 07 bounded context."""
 
     brownfield: BrownfieldRuntimeService
@@ -174,10 +174,10 @@ class Sprint07ServiceBundle:
     profile_registry: ExecutionProfileRegistry
 
 
-def build_sprint07_services(
+def build_brownfield_services(
     settings: ApplicationSettings,
     session_factory: async_sessionmaker[AsyncSession],
-) -> Sprint07ServiceBundle:
+) -> BrownfieldServiceBundle:
     """Compose safe filesystem and PostgreSQL adapters without starting Docker."""
     registry = create_builtin_execution_profile_registry()
     intake = LocalBrownfieldSourceIntakeService(
@@ -208,7 +208,7 @@ def build_sprint07_services(
         unit_of_work_factory=SqlAlchemyHighImpactApprovalUnitOfWorkFactory(session_factory),
         policy=policy,
     )
-    return Sprint07ServiceBundle(
+    return BrownfieldServiceBundle(
         brownfield=brownfield,
         execution_queries=execution_queries,
         high_impact=high_impact,

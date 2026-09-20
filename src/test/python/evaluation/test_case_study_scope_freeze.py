@@ -18,7 +18,7 @@ _FORBIDDEN_MOBILE_TOKENS = (
 )
 
 
-def test_sprint12_scope_is_frozen_to_web_and_jvm_technologies() -> None:
+def test_case_study_scope_is_frozen_to_web_and_jvm_technologies() -> None:
     payload = json.loads(_SCOPE_PATH.read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == 1
@@ -48,7 +48,7 @@ def test_sprint12_scope_is_frozen_to_web_and_jvm_technologies() -> None:
     assert payload["native_mobile_artifacts_required"] is False
 
 
-def test_sprint12_scope_contains_no_stale_mobile_profile_language() -> None:
+def test_case_study_scope_contains_no_stale_mobile_profile_language() -> None:
     raw = _SCOPE_PATH.read_text(encoding="utf-8").lower()
 
     assert all(token not in raw for token in _FORBIDDEN_MOBILE_TOKENS)

@@ -30,7 +30,7 @@ INPUT_PATHS = (
     PROXY_PATH,
     PROBE_PATH,
     "src/orchestwin/jvm_execution/dependency_network.py",
-    "scripts/sprint12_bootstrap_jvm_dependency_network.py",
+    "scripts/bootstrap_jvm_dependency_network.py",
     "src/orchestwin/jvm_execution/dependency_setup.py",
     "src/orchestwin/jvm_execution/policy.py",
     "src/orchestwin/jvm_execution/targets.py",

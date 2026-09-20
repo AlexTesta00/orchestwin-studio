@@ -12,7 +12,7 @@ import pytest
 from orchestwin.evaluation.case_artifact_capture import CaseStudyEvidenceMapEntry
 from orchestwin.evaluation.case_campaign import build_formal_case_campaign_plan
 from orchestwin.evaluation.case_harvest_pipeline import harvest_case_study_workspace_evidence
-from orchestwin.evaluation.case_harvest_validation import verify_sprint12_case_harvest_contract
+from orchestwin.evaluation.case_harvest_validation import verify_case_harvest_contract
 from orchestwin.evaluation.case_metric_bindings import (
     METRIC_FIELD_TYPES,
     CaseMetricBinding,
@@ -74,7 +74,7 @@ def _write_fixture_sources(workspace, definition, workflow_run_id):
 
 
 def test_harvest_contract_preserves_revised_scope_and_conservative_claims() -> None:
-    summary = verify_sprint12_case_harvest_contract(REPO_ROOT)
+    summary = verify_case_harvest_contract(REPO_ROOT)
     assert summary.formal_case_ids == (
         "web-calculator",
         "hotel-management-web",

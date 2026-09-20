@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from orchestwin.evaluation.case_execution_validation import (
-    verify_sprint12_case_execution_pipeline,
+    verify_case_execution_pipeline,
 )
 
 
@@ -29,7 +29,7 @@ def main() -> int:
     parser.add_argument("--platform-commit")
     arguments = parser.parse_args()
     platform_commit = arguments.platform_commit or _platform_commit(arguments.repo_root)
-    summary = verify_sprint12_case_execution_pipeline(
+    summary = verify_case_execution_pipeline(
         arguments.repo_root,
         platform_commit=platform_commit,
     )

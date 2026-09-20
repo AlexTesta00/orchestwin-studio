@@ -6,11 +6,11 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from orchestwin.evaluation.matrix_validation import verify_sprint12_evaluation_matrix
+from orchestwin.evaluation.matrix_validation import verify_evaluation_matrix
 
 
 @dataclass(frozen=True, slots=True)
-class Sprint12EvidencePipelineSummary:
+class CaseEvidencePipelineSummary:
     """Inspectable scope and protocol summary without fabricated run results."""
 
     formal_case_ids: tuple[str, ...]
@@ -45,9 +45,9 @@ class Sprint12EvidencePipelineSummary:
         }
 
 
-def verify_sprint12_evidence_pipeline(repo_root: Path) -> Sprint12EvidencePipelineSummary:
+def verify_evidence_pipeline(repo_root: Path) -> CaseEvidencePipelineSummary:
     """Verify frozen contracts before any real case run or external expert collection."""
-    matrix = verify_sprint12_evaluation_matrix(repo_root)
+    matrix = verify_evaluation_matrix(repo_root)
     case_dir = repo_root / "experiments" / "case-studies"
     run_contract = json.loads((case_dir / "case-run-contract-v1.json").read_text(encoding="utf-8"))
     expert_protocol = json.loads(
@@ -98,7 +98,7 @@ def verify_sprint12_evidence_pipeline(repo_root: Path) -> Sprint12EvidencePipeli
     if not interpretation["descriptive_analysis_only"]:
         raise ValueError("Sprint 12 expert analysis must remain descriptive")
 
-    return Sprint12EvidencePipelineSummary(
+    return CaseEvidencePipelineSummary(
         formal_case_ids=matrix.formal_case_ids,
         case_run_contract_version=run_contract["schema_version"],
         expert_protocol_id=expert_protocol["protocol_id"],

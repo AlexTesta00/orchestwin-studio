@@ -8,7 +8,7 @@ from pathlib import Path
 MIGRATION = Path("src/orchestwin/persistence/migrations/versions/0020_web_source_revisions.py")
 
 
-def test_migration_extends_the_single_sprint07_head() -> None:
+def test_migration_extends_the_single_brownfield_head() -> None:
     tree = ast.parse(MIGRATION.read_text(encoding="utf-8"))
     assignments = {
         node.target.id: ast.literal_eval(node.value)

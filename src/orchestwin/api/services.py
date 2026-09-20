@@ -32,6 +32,7 @@ from orchestwin.api.architecture import (
 )
 from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.brownfield import BrownfieldApiService
+from orchestwin.api.brownfield_runtime import build_brownfield_services
 from orchestwin.api.design import (
     DesignGateService,
     DesignGenerationService,
@@ -53,7 +54,6 @@ from orchestwin.api.jvm_execution import (
     JvmSourceApiService,
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
-from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import (
@@ -324,7 +324,7 @@ def create_default_runtime(
         database_runtime.session_factory,
         **({"proposal_runtime": real_models.architecture} if real_models is not None else {}),
     )
-    sprint07 = build_sprint07_services(
+    brownfield = build_brownfield_services(
         resolved_settings,
         database_runtime.session_factory,
     )
@@ -358,9 +358,9 @@ def create_default_runtime(
         artifact_graph_query_service=SqlAlchemyArtifactGraphQueryService(
             database_runtime.session_factory
         ),
-        brownfield_service=sprint07.brownfield,
-        execution_query_service=sprint07.execution_queries,
-        high_impact_service=sprint07.high_impact,
+        brownfield_service=brownfield.brownfield,
+        execution_query_service=brownfield.execution_queries,
+        high_impact_service=brownfield.high_impact,
         static_inspection_service=build_static_inspection_service(
             database_runtime.session_factory, resolved_settings
         ),

@@ -33,7 +33,7 @@ INPUT_PATHS = (
     PROXY_PATH,
     PROBE_PATH,
     "src/orchestwin/web_execution/dependency_network.py",
-    "scripts/sprint12_bootstrap_web_dependency_network.py",
+    "scripts/bootstrap_web_dependency_network.py",
 )
 PROXY_HOST = "owdep-proxy"
 PROXY_PORT = 3128

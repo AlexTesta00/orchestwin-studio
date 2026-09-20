@@ -12,7 +12,7 @@ from orchestwin.evaluation.case_artifact_capture import CaseStudyEvidenceMapEntr
 from orchestwin.evaluation.case_campaign import build_formal_case_campaign_plan
 from orchestwin.evaluation.case_environment import create_case_study_environment_identity
 from orchestwin.evaluation.case_execution_validation import (
-    verify_sprint12_case_execution_pipeline,
+    verify_case_execution_pipeline,
 )
 from orchestwin.evaluation.case_finalization import finalize_case_study_run
 from orchestwin.evaluation.case_metrics import CaseStudyMeasurement
@@ -79,7 +79,7 @@ def _fixture_evidence(definition, evidence_dir: Path):
 
 
 def test_execution_pipeline_summary_preserves_revised_scope_and_evidence_boundaries() -> None:
-    summary = verify_sprint12_case_execution_pipeline(
+    summary = verify_case_execution_pipeline(
         REPO_ROOT,
         platform_commit=PLATFORM_COMMIT,
     )
