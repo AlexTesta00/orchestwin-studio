@@ -1,6 +1,7 @@
 """Interactive evaluator selection never substitutes base inference for the adapter."""
 
 import json
+import os
 from dataclasses import replace
 
 import pytest
@@ -30,6 +31,10 @@ def configuration(tmp_path):
 
 
 def test_local_adapter_can_replace_evaluator_without_changing_proposal_role(tmp_path, monkeypatch):
+    # This composition fixture owns its settings; CI configures fake adapters for other tests.
+    for name in tuple(os.environ):
+        if name.startswith("ORCHESTWIN_"):
+            monkeypatch.delenv(name)
     monkeypatch.chdir(tmp_path)
     path, base = configuration(tmp_path)
     proposal = tmp_path / "proposal.json"

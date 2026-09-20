@@ -1,6 +1,6 @@
 """Prepare or independently verify a generated console calculator.
 
-Only generate-development calls the model; no command trains, edits generated
+Only generate-development and repair-development call the model; no command trains, edits generated
 sources, approves gates or publishes Level D. Governed checks require the exact execution
 receipt; development probes retain a separate receipt and never publish to the API.
 Only pinned local Docker images execute application code.
@@ -55,6 +55,30 @@ INPUTS = (
     ("infinity", "Infinity", "+", "2"),
     ("unsupported-operation", "4", "%", "2"),
 )
+V2_ADDITIONAL_INPUTS = (
+    ("tiny-positive-divisor", "1", "/", "0.0000000000000001"),
+    ("tiny-negative-divisor", "1", "/", "-0.0000000000000001"),
+    ("tiny-comma-divisor", "1", "/", "0,0000000000000001"),
+    ("tiny-nonzero-result", "0.0000000000000001", "/", "1"),
+    ("tiny-signed-result", "-0.0000000000000001", "*", "2"),
+    ("signed-plus-input", "+2", "+", "3"),
+    ("leading-decimal", ".5", "+", ",25"),
+    ("operation-whitespace", "2", " + ", "3"),
+    ("partial-numeric-input", "12abc", "+", "3"),
+    ("internal-whitespace", "1 2", "+", "3"),
+    ("duplicate-decimal", "1.2.3", "+", "3"),
+    ("mixed-decimal-separators", "1,2.3", "+", "3"),
+    ("hexadecimal-number", "0x10", "+", "3"),
+    ("empty-operation", "2", "", "3"),
+)
+
+
+def inputs(version=1):
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("UNSUPPORTED_CALCULATOR_CONTRACT_VERSION")
+    return INPUTS if version == 1 else INPUTS + V2_ADDITIONAL_INPUTS
+
+
 NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:[.,][0-9]+)?|[.,][0-9]+)")
 JAVA_PROBE = r"""
 import java.lang.reflect.*;
@@ -115,9 +139,10 @@ def expected(left, operation, right):
     return {"kind": "VALUE", "value": str(result)}
 
 
-def contract(target):
+def contract(target, version=1):
+    selected_inputs = inputs(version)
     profile, main_class, language_version, build_version = PROFILES[target]
-    return {
+    result = {
         "schema_version": 1,
         "purpose": "INDEPENDENT_GENERATED_JVM_CALCULATOR_CHECK",
         "target": target,
@@ -148,7 +173,7 @@ def contract(target):
                 "right": right,
                 "expected": expected(left, op, right),
             }
-            for name, left, op, right in INPUTS
+            for name, left, op, right in selected_inputs
         ],
         "prerequisites": [
             "Generate fresh sources from these approved requirements using the selected real model.",
@@ -158,6 +183,21 @@ def contract(target):
         ],
         "claims": {"executed": False, "graphical_preview": False, "level_d_publication": False},
     }
+    if version == 2:
+        result.update(
+            schema_version=2,
+            oracle_version="CALCULATOR_V2_SMALL_DECIMALS_AND_STRICT_INPUTS",
+            supersedes_contract_sha256=hashlib.sha256(canonical(contract(target))).hexdigest(),
+        )
+        result["approved_requirement_text"] += (
+            " Every finite nonzero divisor, including arbitrarily small decimal values, is valid; "
+            "do not approximate nonzero values as zero. Trim the operation as well as operands. "
+            "Reject partial numeric strings, internal whitespace, repeated or mixed decimal "
+            "separators and hexadecimal notation. Preserve meaningful tests for each behavior."
+        )
+        for case in result["checks"]:
+            case["expected"] = expected(case["left"], case["operation"].strip(), case["right"])
+    return result
 
 
 def read_snapshot(path):
@@ -207,7 +247,8 @@ def check_binding(source, attempt, target, jar_data):
         raise ValueError("APPLICATION_JAR_NOT_IN_EXECUTION_EVIDENCE")
 
 
-def evaluate_output(text, nonce):
+def evaluate_output(text, nonce, version=1):
+    selected_inputs = inputs(version)
     observations = {}
     for line in text.splitlines():
         if not line.startswith(nonce):
@@ -216,10 +257,12 @@ def evaluate_output(text, nonce):
         if len(cells) not in {3, 4} or cells[0] in observations:
             raise ValueError("INVALID_OR_DUPLICATE_PROBE_RESULT")
         observations[cells[0]] = cells[1:]
-    if set(observations) != {row[0] for row in INPUTS}:
+    if set(observations) != {row[0] for row in selected_inputs}:
         raise ValueError("INCOMPLETE_PROBE_RESULTS")
     results = []
-    for name, left, op, right in INPUTS:
+    for name, left, op, right in selected_inputs:
+        if version == 2:
+            op = op.strip()
         wanted, actual = expected(left, op, right), observations[name]
         passed = False
         observation = {"kind": actual[0]}
@@ -229,7 +272,12 @@ def evaluate_output(text, nonce):
             passed = (
                 wanted["kind"] == "VALUE"
                 and math.isfinite(value)
-                and math.isclose(value, float(wanted["value"]), abs_tol=1e-12, rel_tol=1e-12)
+                and math.isclose(
+                    value,
+                    float(wanted["value"]),
+                    abs_tol=1e-12 if version == 1 else 0,
+                    rel_tol=1e-12,
+                )
             )
         elif actual[0] == "ERROR" and len(actual) == 3:
             error_type, message = (
@@ -347,6 +395,8 @@ async def verify(args):
 
 async def verify_jar_bundle(args, *, source, app_data, binding):
     """Check an already bound bundle; each caller must establish its provenance first."""
+    version = getattr(args, "contract_version", 1)
+    selected_contract = contract(args.target, version)
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", args.image):
         raise ValueError("PINNED_LOCAL_IMAGE_ID_REQUIRED")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", args.docker_context):
@@ -369,7 +419,7 @@ async def verify_jar_bundle(args, *, source, app_data, binding):
         dependencies.append({"name": path.name, "mounted_name": destination, **identity(raw)})
     (bundle / "CalculatorProbe.java").write_text(JAVA_PROBE, encoding="utf-8")
     (bundle / "cases.tsv").write_text(
-        "\n".join("\t".join(row) for row in INPUTS) + "\n", encoding="utf-8"
+        "\n".join("\t".join(row) for row in inputs(version)) + "\n", encoding="utf-8"
     )
     nonce = f"ORCHESTWIN_{uuid4().hex}_"
     classpath = ":".join(
@@ -434,7 +484,11 @@ async def verify_jar_bundle(args, *, source, app_data, binding):
         )
     failure = None
     try:
-        cases = evaluate_output(records[0]["stdout"], nonce) if records[0]["exit_code"] == 0 else []
+        cases = (
+            evaluate_output(records[0]["stdout"], nonce, version)
+            if records[0]["exit_code"] == 0
+            else []
+        )
     except ValueError as error:
         cases, failure = [], str(error)
     passed = (
@@ -456,7 +510,8 @@ async def verify_jar_bundle(args, *, source, app_data, binding):
         "application_jar": identity(app_data),
         "runtime_dependencies": dependencies,
         "image_id": args.image,
-        "contract_hash": hashlib.sha256(canonical(contract(args.target))).hexdigest(),
+        "contract_hash": hashlib.sha256(canonical(selected_contract)).hexdigest(),
+        "contract_version": version,
         "probe_hash": hashlib.sha256(JAVA_PROBE.encode()).hexdigest(),
         "checks": cases,
         "probe_failure": failure,
@@ -482,6 +537,7 @@ def main(argv=None):
         "contract", help="Print the generation requirement and checks only"
     )
     prepare.add_argument("--target", choices=PROFILES, required=True)
+    prepare.add_argument("--contract-version", type=int, choices=(1, 2), default=1)
     preflight = commands.add_parser(
         "readiness", help="Inspect runner inputs without executing apps"
     )
@@ -500,6 +556,7 @@ def main(argv=None):
         help="Compile exact model-generated sources in isolation; no governed publication",
     )
     development.add_argument("--target", choices=PROFILES, required=True)
+    development.add_argument("--contract-version", type=int, choices=(1, 2), default=1)
     for option in (
         "configuration",
         "source-revision",
@@ -515,9 +572,20 @@ def main(argv=None):
     generation.add_argument("--target", choices=PROFILES, required=True)
     for option in ("configuration", "runtime-config", "output"):
         generation.add_argument(f"--{option}", type=Path, required=True)
+    repair_plan = commands.add_parser(
+        "prepare-repair", help="Freeze verified failed inputs; no inference"
+    )
+    repair_plan.add_argument("--target", choices=PROFILES, required=True)
+    for option in ("configuration", "generation-directory", "execution-directory", "output"):
+        repair_plan.add_argument(f"--{option}", type=Path, required=True)
+    repair = commands.add_parser(
+        "repair-development", help="One real model repair from frozen inputs"
+    )
+    for option in ("prepared-input", "runtime-config", "output"):
+        repair.add_argument(f"--{option}", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.action == "contract":
-        print(json.dumps(contract(args.target), indent=2))
+        print(json.dumps(contract(args.target, args.contract_version), indent=2))
         return 0
     try:
         options = {"loop_factory": asyncio.SelectorEventLoop} if sys.platform == "win32" else {}
@@ -525,7 +593,15 @@ def main(argv=None):
             result = asyncio.run(readiness(args.configuration), **options)
             print(json.dumps(result, indent=2))
             return 0 if result["runtime_inputs_ready"] else 1
-        if args.action == "development-probe":
+        if args.action == "prepare-repair":
+            from scripts.jvm_calculator_repair import prepare_repair
+
+            report = prepare_repair(args)
+        elif args.action == "repair-development":
+            from scripts.jvm_calculator_repair import repair_development
+
+            report = asyncio.run(repair_development(args), **options)
+        elif args.action == "development-probe":
             from scripts.jvm_calculator_development_probe import development_probe
 
             report = asyncio.run(development_probe(args), **options)

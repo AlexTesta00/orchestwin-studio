@@ -1,0 +1,451 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-20T09:59:42.113356+00:00",
+  "status": "FAILED_DESIGN_CONTRACT_AFTER_ONE_RETRY",
+  "scope": "REAL_MODEL_GUI_DIAGNOSTIC_NOT_LEVEL_D",
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "git_head": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "root_generation_id": "5d907a90-8d5d-4c4c-ab7b-10eef4403cc4",
+  "model_identity": {
+    "adapter_id": null,
+    "adapter_sha256": null,
+    "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+    "provider_id": "local-proposal-model",
+    "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+    "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+  },
+  "precision": "bf16",
+  "source_protocol": "CURRENT_LOCAL_CLIENT_WITH_0044_DESIGN_RETRY",
+  "inference_calls": 5,
+  "manual_source_edits": false,
+  "complete_source_revisions": 0,
+  "generated_unit_tests_executed": true,
+  "autonomous_success": false,
+  "model_promoted": false,
+  "level_d_publication": false,
+  "retry_limit_respected": true,
+  "generations": [
+    {
+      "actual_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "application_result": {
+        "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "status": "FAILED"
+      },
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_REJECTED",
+        "APPLICATION_RESULT"
+      ],
+      "expected_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "finish_reason": "stop",
+      "http_elapsed_milliseconds": 417073,
+      "id": "5d907a90-8d5d-4c4c-ab7b-10eef4403cc4",
+      "identity_matches": true,
+      "output_characters": 8335,
+      "prompt_version_ref": "proposal-web-source-v1",
+      "raw_response_is_JSON": true,
+      "raw_response_sha256": "93bf791e7326f2cd4c46cf67dde939f72a918f3592f3bd15022a0ea7f282290e",
+      "request_evidence_sha256": "4eb4b698c9e95417e8ab276c1a84e0108a5bea301de79f4ba872cf5ef6712944",
+      "schema_id": "proposal-web-source-v1",
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 416392,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "741d991f14df0744bd85b73e5a6a55a5ca13f4de37461d510b540467aa668a7a",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "task": "proposal-web-source-v1",
+      "temperature": 0.6,
+      "trailing_whitespace_characters": 0,
+      "usage": {
+        "completion_tokens": 1942,
+        "prompt_tokens": 18981,
+        "total_tokens": 20923
+      }
+    },
+    {
+      "actual_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "application_result": {
+        "status": "SOURCE_FILE_GENERATED"
+      },
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_ACCEPTED",
+        "APPLICATION_RESULT"
+      ],
+      "expected_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "finish_reason": "stop",
+      "generated_content_hashes": {},
+      "http_elapsed_milliseconds": 266102,
+      "id": "d3b11c59-3d25-49c3-be0a-c66dc2041043",
+      "identity_matches": true,
+      "output_characters": 5645,
+      "prompt_version_ref": "proposal-web-source-v1",
+      "raw_response_is_JSON": true,
+      "raw_response_sha256": "ebaea0793574fa42d150dcf4a3759a3cfaa8fa4eddccbe2f77f94e0a81595013",
+      "request_evidence_sha256": "5466f3df0765fccc0c5c73081861773ab4d8c31003b277b74ad89aa86a96883b",
+      "schema_id": "proposal-web-source-v1",
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 265661,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "cb1bdfb5d4103ee6d42aa9a2c1fc9220d0124095f6a3fb8b94c0cbeb5e48e833",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "task": "proposal-web-source-v1",
+      "temperature": 0.6,
+      "trailing_whitespace_characters": 0,
+      "usage": {
+        "completion_tokens": 1489,
+        "prompt_tokens": 16941,
+        "total_tokens": 18430
+      }
+    },
+    {
+      "actual_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "application_result": {
+        "status": "SOURCE_FILE_GENERATED"
+      },
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_ACCEPTED",
+        "APPLICATION_RESULT"
+      ],
+      "expected_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "finish_reason": "stop",
+      "generated_content_hashes": {},
+      "http_elapsed_milliseconds": 234566,
+      "id": "1af7e1bc-0b83-4e08-bbea-0a9f6f0cc154",
+      "identity_matches": true,
+      "output_characters": 4461,
+      "prompt_version_ref": "proposal-web-source-v1",
+      "raw_response_is_JSON": true,
+      "raw_response_sha256": "3e2caee313a4bf0b941c2d7dce3b6ac222425292ed316a7c1704e962101170a3",
+      "request_evidence_sha256": "fd3e3eef5f49390388773851cdc3ec4d79da59c4ad94654214bfd3e95f5bf4fb",
+      "schema_id": "proposal-web-source-v1",
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 234208,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "3f75da38a8f62f8ac120043c772669da329dc3a4573c1a7f48f531148be2e5e1",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "task": "proposal-web-source-v1",
+      "temperature": 0.6,
+      "trailing_whitespace_characters": 0,
+      "usage": {
+        "completion_tokens": 1242,
+        "prompt_tokens": 18289,
+        "total_tokens": 19531
+      }
+    },
+    {
+      "actual_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "application_result": {
+        "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "status": "FAILED"
+      },
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_REJECTED",
+        "APPLICATION_RESULT"
+      ],
+      "expected_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "finish_reason": "stop",
+      "http_elapsed_milliseconds": 237976,
+      "id": "dbb05f85-3a7d-49d6-80f0-2763ea4b8208",
+      "identity_matches": true,
+      "output_characters": 4507,
+      "prompt_version_ref": "proposal-web-source-v1",
+      "raw_response_is_JSON": true,
+      "raw_response_sha256": "3bd91c170a605f9413440930af947a9b01d8a62e71f2be1565ea1100676c23d8",
+      "request_evidence_sha256": "1b6da838c3d6ff617787370ae1a8c8a37c1951d7546539edca6847cb64c96922",
+      "schema_id": "proposal-web-source-v1",
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 237630,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "08384ba20e1b4aac34a752e924b0360395766818a0ed1b17f42ec935070ebb08",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "task": "proposal-web-source-v1",
+      "temperature": 0.6,
+      "trailing_whitespace_characters": 0,
+      "usage": {
+        "completion_tokens": 1224,
+        "prompt_tokens": 18250,
+        "total_tokens": 19474
+      }
+    },
+    {
+      "actual_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "application_result": {
+        "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "status": "FAILED"
+      },
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_REJECTED",
+        "APPLICATION_RESULT"
+      ],
+      "expected_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+      },
+      "finish_reason": "stop",
+      "http_elapsed_milliseconds": 299961,
+      "id": "d20085a2-9c35-44f5-87af-ab6a4252e3bb",
+      "identity_matches": true,
+      "output_characters": 5619,
+      "prompt_version_ref": "proposal-web-source-v1",
+      "raw_response_is_JSON": true,
+      "raw_response_sha256": "21b51b132f9032ba9138d8ed44b2c43a3fb9c7b1aa7638e99b1181827372570c",
+      "request_evidence_sha256": "6505b198a2178e72ef2f751af0bd41ea6182d1405dd53820fe1951780d63c1a0",
+      "schema_id": "proposal-web-source-v1",
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 299512,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "5ac8d1075ee8f5b4aa91c32ed0e02d54941e758e364b450c06d506c48897dcf7",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "task": "proposal-web-source-v1",
+      "temperature": 0.6,
+      "trailing_whitespace_characters": 0,
+      "usage": {
+        "completion_tokens": 1549,
+        "prompt_tokens": 19397,
+        "total_tokens": 20946
+      }
+    }
+  ],
+  "rejections": [
+    {
+      "generation_id": "5d907a90-8d5d-4c4c-ab7b-10eef4403cc4",
+      "at": "2026-09-20T09:54:54.523116+00:00",
+      "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "diagnostic": null
+    },
+    {
+      "generation_id": "dbb05f85-3a7d-49d6-80f0-2763ea4b8208",
+      "at": "2026-09-20T09:49:54.421638+00:00",
+      "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "diagnostic": {
+        "element": "ELM-002",
+        "expected": "Primo numero",
+        "reason": "APPROVED_ACCESSIBLE_LABEL_REQUIRED",
+        "screen": "SCR-001"
+      }
+    },
+    {
+      "generation_id": "d20085a2-9c35-44f5-87af-ab6a4252e3bb",
+      "at": "2026-09-20T09:54:54.502442+00:00",
+      "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "diagnostic": {
+        "actual_count": 2,
+        "attribute": "data-design-element",
+        "reason": "EXACTLY_ONE_MARKER_REQUIRED",
+        "value": "ELM-002"
+      }
+    }
+  ],
+  "gui_observation": {
+    "method": "CUA_EXISTING_AUTHENTICATED_TAB",
+    "message": "Il sorgente modifica i controlli o le schermate del mockup scelto. Nessuna revisione è stata salvata: conserva il design selezionato prima di riprovare.",
+    "generation_button_enabled_again": true,
+    "preview_available": false
+  },
+  "browser_acceptance": {
+    "frozen_cases_path": "experiments/studio-demo/calculator-acceptance-cases-20260919.json",
+    "sha256": "db35d60b3575c66a2c3f07213f2035aac22a9048478171e4653b3d10ddf30eeb",
+    "planned": 17,
+    "executed": 0,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 17,
+    "reason": "NO_COMPLETE_SOURCE_REVISION"
+  },
+  "evidence_snapshot": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260920-01\\after-resume-bf16-01",
+    "manifest_sha256": "64326c54049060db676431bab1901a6a7ff1c992f2fefb45559caa2de39e6c0d",
+    "files_verified": 345,
+    "missing_objects": []
+  },
+  "limits": [
+    "One calculator diagnostic, not a benchmark or holdout result.",
+    "After GUI rejection, unchanged app.js/app.test.cjs were executed as a separate isolated fragment probe: 0/16 passed because expected functions were not exported; this is not a complete-app or browser result.",
+    "Native failed HTML and all prior attempts are retained; no generated file was repaired by the operator.",
+    "Different live client and prompts from earlier diagnostics; no controlled speedup or causal comparison is claimed."
+  ],
+  "next_work": [
+    "Complete the three already prepared JVM repair diagnostics within the existing cloud allowance.",
+    "Improve source integration and design compliance before any model promotion or further training.",
+    "Keep Web Level D blocked until the exact CI correction is committed and pushed by the owner."
+  ],
+  "usage": {
+    "prompt_tokens": 91858,
+    "completion_tokens": 7446
+  },
+  "supplementary_native_fragment_probe": {
+    "scope": "SUPPLEMENTARY_NATIVE_JS_FRAGMENT_PROBE_NOT_LEVEL_D",
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260920-01\\partial-js-probe-01",
+    "report_sha256": "7fae9c28bc4d1f77ab041439a7fd6acfab2280cddb73c2992773f4c107da0a06",
+    "summary_sha256": "fe6fb5e8e95e0d27cd09e3e0b191b99c13b64a448d8596b54bcbdbf15f5ea16a",
+    "counts": {
+      "tests": 16,
+      "pass": 0,
+      "fail": 16,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "source_log_sha256": "49a9be0802d8e6b85cd8cd6c55fd2d0400055a25bd94a7f4fe8c5831d61b4785",
+    "parser": "NODE_SPEC_REPORTER_SUMMARY",
+    "arithmetic_assertions_reached": false,
+    "reason": "Every test fails resolving an expected exported function.",
+    "static_review_additional_issue": "Two generated assertions require opposite boolean results for validateInput(''); this contradiction was not reached during execution.",
+    "exit_code": 1,
+    "cleanup_confirmed": true,
+    "original_sources_unchanged": true,
+    "source_revision_created": false,
+    "browser_cases_executed": 0
+  }
+}

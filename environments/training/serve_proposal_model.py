@@ -167,6 +167,7 @@ def health_snapshot(state):
         "supported_tasks": supported_tasks(state),
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
+        "precision": state.get("precision", "4bit"),
         "generation_watchdog": f"COOPERATIVE_{state.get('max_generation_seconds', MAX_GENERATION_SECONDS)}_SECONDS_NOT_HARD_GPU_PREEMPTION",
         "schema_decoding": SCHEMA_DECODING,
         "schema_decoder_version": LLGUIDANCE_VERSION,
@@ -197,7 +198,7 @@ def selected_model(repository: str | None, revision: str | None) -> tuple[str, s
     return repository, revision
 
 
-def load_model(repository=MODEL, revision=REVISION):
+def load_model(repository=MODEL, revision=REVISION, *, precision="4bit"):
     """Reuse the tested exact-revision loader, always with network disabled."""
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -216,6 +217,7 @@ def load_model(repository=MODEL, revision=REVISION):
             "generation": {"seed": 42, "max_sequence_length": MAX_SEQUENCE},
         },
         network_authorized=False,
+        precision=precision,
     )
     if getattr(model, "peft_config", None) or evidence["observed_model_revision"] != revision:
         raise RuntimeError("exact base-model identity was not observed")
@@ -324,6 +326,7 @@ def completion(state, payload):
             "model_visible_messages_sha256": snapshot_content_hash(messages),
             "max_sequence_length": MAX_SEQUENCE,
             "max_output_tokens": MAX_OUTPUT,
+            "precision": state.get("precision", "4bit"),
             "output_repair_used": False,
             "adapter_loaded": state.get("shared_adapter_loaded", False),
             "adapter_active": adapter_selection(state) is not None,
@@ -451,6 +454,7 @@ def main():
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--model-repository")
     parser.add_argument("--model-revision")
+    parser.add_argument("--precision", choices=("4bit", "bf16"), default="4bit")
     parser.add_argument("--proposer-adapter", type=Path)
     parser.add_argument("--proposer-weights-sha256")
     parser.add_argument("--proposer-config-sha256")
@@ -477,7 +481,11 @@ def main():
     # training boundary, not beside application source or evaluation reports.
     os.chdir(ROOT / "environments/training")
     print("Loading the exact cached proposal base model (offline).", flush=True)
-    torch, model, tokenizer, evidence = load_model(repository, revision)
+    torch, model, tokenizer, evidence = (
+        load_model(repository, revision)
+        if args.precision == "4bit"
+        else load_model(repository, revision, precision=args.precision)
+    )
     if adapter_files:
         from peft import PeftModel
         from unsloth import FastLanguageModel
@@ -507,7 +515,8 @@ def main():
         "max_sequence": MAX_SEQUENCE,
         "max_output": MAX_OUTPUT,
         "max_generation_seconds": args.generation_timeout_seconds,
-        "load_in_4bit": True,
+        "load_in_4bit": args.precision == "4bit",
+        "precision": args.precision,
         "loader_evidence": evidence,
         "adapter_loaded": bool(adapter_files),
         "adapter_files": adapter_files,
@@ -547,6 +556,7 @@ def main():
         stream.write(token)
     token_file.chmod(0o600)
     state = {
+        "precision": args.precision,
         "torch": torch,
         "model": model,
         "tokenizer": tokenizer,

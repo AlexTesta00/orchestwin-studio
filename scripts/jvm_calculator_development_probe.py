@@ -83,7 +83,7 @@ def validate_hash(value, *, omitted=()):
 def source_revision(source, target):
     """Reconstruct the domain object, checking every serialized field, not just hashes."""
     source = {k: v for k, v in source.items() if k != "model_generation_id"}
-    if source["origin"] != "GENERATED_PLAN":
+    if source["origin"] not in {"GENERATED_PLAN", "REPAIR_CHANGE_SET"}:
         raise ValueError("MODEL_GENERATED_SOURCE_REQUIRED")
     previous = source["based_on"]
     revision = create_jvm_source_revision(
@@ -101,13 +101,14 @@ def source_revision(source, target):
             }
         ),
         target=ExecutionTarget(target),
-        origin=JvmSourceOrigin.GENERATED_PLAN,
+        origin=JvmSourceOrigin(source["origin"]),
         files=tuple(JvmSourceFileEntry(**entry) for entry in source["files"]),
         provenance_references=tuple(
             JvmSourceProvenanceReference(**{**ref, "kind": JvmSourceProvenanceKind(ref["kind"])})
             for ref in source["provenance_references"]
         ),
         created_at=datetime.fromisoformat(source["created_at"]),
+        related_failure_signature=source.get("related_failure_signature"),
     )
     if revision.to_snapshot() != source:
         raise ValueError("SOURCE_REVISION_SNAPSHOT_MISMATCH")
@@ -147,14 +148,14 @@ def read_sources(revision, root):
     return contents
 
 
-def validate_generation_record(record):
+def validate_generation_record(record, *, task_id="proposal-jvm-source-v1"):
     request = record["request"]
     if digest(request) != record["content_hash"]:
         raise ValueError("GENERATION_REQUEST_HASH_MISMATCH")
     generation_id = request["generation_id"]
     UUID(generation_id)
     inner = request["request"]
-    if inner["request_id"] != generation_id or inner["task_id"] != "proposal-jvm-source-v1":
+    if inner["request_id"] != generation_id or inner["task_id"] != task_id:
         raise ValueError("JVM_MODEL_REQUEST_REQUIRED")
     expected_identity = ModelRuntimeIdentity(**inner["expected_identity"])
     inner_payload = {
@@ -206,6 +207,10 @@ def validate_generation_record(record):
 
 def check_generation_binding(source, evidence):
     """Accept an API export or an explicitly unpublished local generation envelope."""
+    if source["origin"] == "REPAIR_CHANGE_SET":
+        from scripts.jvm_calculator_repair import check_repair_binding
+
+        return check_repair_binding(source, evidence)
     offline = evidence.get("scope") == SCOPE
     if offline:
         validate_hash(evidence)
@@ -395,6 +400,9 @@ async def development_probe(args):
     source = revision.to_snapshot()
     evidence = read_snapshot(args.generation_evidence)
     binding = check_generation_binding(source, evidence)
+    contract_version = getattr(args, "contract_version", 1)
+    if source["origin"] == "REPAIR_CHANGE_SET" and contract_version != 2:
+        raise ValueError("REPAIRED_CALCULATOR_REQUIRES_CONTRACT_V2")
     source_root, output = args.source_root.absolute(), args.output.absolute()
     roots = (source_root, output, configuration.workspaces_root)
     for index, root in enumerate(roots):
@@ -425,6 +433,7 @@ async def development_probe(args):
         "image_id": image,
         "dependency_network_manifest_hash": configuration.dependency_network_manifest_hash,
         "capability_status": execution_contract.validation.capability_status.value,
+        "independent_contract_version": contract_version,
         "phase_results": [],
         "checks": [],
         "cleanup_confirmed": False,
@@ -486,6 +495,7 @@ async def development_probe(args):
                     docker_context=configuration.docker_context,
                     runtime_jar=runtime_jars,
                     output=output / "independent-checks",
+                    contract_version=contract_version,
                 ),
                 source=source,
                 app_data=app_data,

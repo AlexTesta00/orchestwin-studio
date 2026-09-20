@@ -3,6 +3,7 @@
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -374,6 +375,11 @@ def test_shared_launcher_writes_consistent_source_identity_and_separate_credenti
     """Exercise startup composition with synthetic loaders; no model/GPU inference."""
     from orchestwin.models.real_runtime import build_real_model_runtime
 
+    # The generated manifest is the only configuration under test, including in CI.
+    for name in tuple(os.environ):
+        if name.startswith("ORCHESTWIN_"):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
     module = studio_module(monkeypatch)
     output = tmp_path / "session"
     args = [

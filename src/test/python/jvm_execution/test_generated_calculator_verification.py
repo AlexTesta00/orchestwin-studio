@@ -11,9 +11,11 @@ import pytest
 from scripts import verify_generated_jvm_calculator as verifier
 
 
-def observed(**replacements):
+def observed(version=1, **replacements):
     rows = []
-    for name, left, operation, right in verifier.INPUTS:
+    for name, left, operation, right in verifier.inputs(version):
+        if version == 2:
+            operation = operation.strip()
         expected = verifier.expected(left, operation, right)
         if expected["kind"] == "VALUE":
             value = f"VALUE\t{expected['value']}"
@@ -32,6 +34,39 @@ def test_decimal_oracle_and_all_expected_results():
     results = verifier.evaluate_output(observed(), "nonce-")
     assert len(results) == 20
     assert all(result["passed"] for result in results)
+
+
+@pytest.mark.parametrize(
+    "target,hash_value",
+    [
+        ("JVM_JAVA", "bb0c0fd5c553994d50c869e12da5bf8f91a6c490a45f8447cae8fbf82da82998"),
+        ("JVM_KOTLIN", "f6db29493814a1e1f04eb61aa4a9b8d86d01479026e65d77244875517cfa73c2"),
+        ("JVM_SCALA", "83fe0476b87a995249a28a2e72db0dabe57f5e9e3f521f099f604e9f8c1bacad"),
+    ],
+)
+def test_historical_v1_contract_hashes_are_unchanged(target, hash_value):
+    assert hashlib.sha256(verifier.canonical(verifier.contract(target))).hexdigest() == hash_value
+    newer = verifier.contract(target, 2)
+    assert newer["supersedes_contract_sha256"] == hash_value
+    assert len(newer["checks"]) == 34
+
+
+def test_v2_detects_small_divisor_bug_and_does_not_tolerate_zero_for_small_results():
+    assert all(item["passed"] for item in verifier.evaluate_output(observed(2), "nonce-", 2))
+    wrong = observed(
+        2,
+        **{
+            "tiny-positive-divisor": "ERROR\tamF2YS5sYW5nLkFyaXRobWV0aWNFeGNlcHRpb24=\temVybw==",
+            "tiny-nonzero-result": "VALUE\t0",
+        },
+    )
+    results = verifier.evaluate_output(wrong, "nonce-", 2)
+    assert {item["id"] for item in results if not item["passed"]} == {
+        "tiny-positive-divisor",
+        "tiny-nonzero-result",
+    }
+    with pytest.raises(ValueError, match="INCOMPLETE"):
+        verifier.evaluate_output(observed(), "nonce-", 2)
 
 
 @pytest.mark.parametrize(

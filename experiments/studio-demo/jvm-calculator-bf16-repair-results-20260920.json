@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "status": "COMPLETED_DIAGNOSTIC_NO_REPAIRED_PIPELINE_PASSED",
+  "recorded_at": "2026-09-20T10:12:22.945808+00:00",
+  "scope": "DEVELOPMENT_CONSOLE_MODEL_PROBE_NOT_LEVEL_D",
+  "previous_paused_report": {
+    "path": "experiments/studio-demo/jvm-calculator-real-repair-20260920.json",
+    "sha256": "b5f2382d0ba8207bfceb39d705e5e6d2372420d817ff9d4a26cda8fd3c3b3262",
+    "bytes": 9546
+  },
+  "model_calls": 3,
+  "accepted_revisions": 2,
+  "complete_pipelines_passed": 0,
+  "independent_oracle_version": 2,
+  "independent_cases_planned": 102,
+  "independent_cases_executed": 0,
+  "independent_cases_not_run": 102,
+  "operator_source_edits": false,
+  "model_promoted": false,
+  "new_training_performed": false,
+  "level_d_publication": false,
+  "database_publication": false,
+  "historical_files_verified_unchanged": 140,
+  "historical_baseline": {
+    "path": "var/studio/jvm-real-repair-audit-20260920-01/historical-files-before.json",
+    "sha256": "3d4499d37b4c7ced68a9e518d16ba7533547fd09f162133abcdb662b0012c4c8",
+    "bytes": 31886
+  },
+  "results": [
+    {
+      "target": "JVM_KOTLIN",
+      "model_calls": 1,
+      "generation_accepted": true,
+      "generation_report": {
+        "path": "var/studio/jvm-kotlin-repair-01/report.json",
+        "sha256": "e48de442372d684d689d4edcf68ea14791389d69f53be49fe051956b5461d219",
+        "bytes": 1164
+      },
+      "native_record": {
+        "path": "var/studio/jvm-kotlin-repair-01/model-evidence/493c44ce-6c86-43f1-bfc8-cd371330847a.json",
+        "sha256": "3e085ff7d1697c6a79cedfc639788dedeca3d6600fba81e60eae2589dec16c40",
+        "bytes": 98530
+      },
+      "raw_response_sha256": "2a780a29676284d95169ffca445e7d7fef8c97f6a1fec964e60061e77c1b1f9e",
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_ACCEPTED",
+        "APPLICATION_RESULT"
+      ],
+      "usage": {
+        "completion_tokens": 1212,
+        "prompt_tokens": 9922,
+        "total_tokens": 11134
+      },
+      "finish_reason": "stop",
+      "model_identity": {
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 186701,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "f1e5d5205427e913d8bd267616fecc4436fc41a228808705248420fd991f5155",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "source_edited_by_operator": false,
+      "independent_checks_planned": 34,
+      "independent_checks_executed": 0,
+      "pipeline_passed": false,
+      "source_revision": {
+        "revision_id": "73117ed9-df92-4ff3-8bad-d5b0cde1bd0e",
+        "project_id": "7e7c13c8-5431-4f4d-be92-15ad8f1f8d74",
+        "version_number": 2,
+        "content_hash": "3cd44456f54b01a97774cdfa5e8f97063c5212a5662c96ab145903c79dd5f056",
+        "source_tree_hash": "a0eb9a1c62b6b2ebc1d2de2a1380021288a777c0a43ef22d7780d7cc9aadab7e"
+      },
+      "execution_report": {
+        "path": "var/studio/jvm-kotlin-repair-execution-01/report.json",
+        "sha256": "532aea66f37d55d069be96986bde5bc515ce25d9fdb89999827c9b8de04aae71",
+        "bytes": 9835
+      },
+      "execution_completed_at": "2026-09-20T10:06:28.767378+00:00",
+      "phases": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_category": null,
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_category": null,
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "PASSED",
+          "failure_category": null,
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "FAILED",
+          "failure_category": "BUILD",
+          "findings": [
+            {
+              "code": "GRADLE_BUILD_FAILED",
+              "message": "Gradle reported a failed build.",
+              "source_tool": "gradle",
+              "location": null
+            },
+            {
+              "code": "KT_COMPILATION_ERROR",
+              "message": "Unresolved reference 'test'.",
+              "source_tool": "gradle-kotlin-compiler",
+              "location": "src/main/kotlin/org/orchestwin/calculator/Main.kt:3:15"
+            },
+            {
+              "code": "KT_COMPILATION_ERROR",
+              "message": "Unresolved reference 'test'.",
+              "source_tool": "gradle-kotlin-compiler",
+              "location": "src/main/kotlin/org/orchestwin/calculator/Main.kt:4:15"
+            }
+          ]
+        }
+      ],
+      "failure": "DEVELOPMENT_PHASE_FAILED:BUILD",
+      "cleanup_confirmed": true,
+      "generated_sources_unchanged": true
+    },
+    {
+      "target": "JVM_SCALA",
+      "model_calls": 1,
+      "generation_accepted": true,
+      "generation_report": {
+        "path": "var/studio/jvm-scala-repair-01/report.json",
+        "sha256": "2452571c0d1253db28452f3367b323390482e31a4e1ad85be547bdfdbaab81ff",
+        "bytes": 1164
+      },
+      "native_record": {
+        "path": "var/studio/jvm-scala-repair-01/model-evidence/0d75a73b-28c9-4952-9d00-c1731790756a.json",
+        "sha256": "311cd0b0b64d5416aa4a8ba3f5e54416a8c5f10b348c1cef009d5385567741a9",
+        "bytes": 77425
+      },
+      "raw_response_sha256": "61dc60c07dacf0a77fb7b82997bddcc7ae57b01ab3d3a83f576a182316e31521",
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_ACCEPTED",
+        "APPLICATION_RESULT"
+      ],
+      "usage": {
+        "completion_tokens": 631,
+        "prompt_tokens": 7613,
+        "total_tokens": 8244
+      },
+      "finish_reason": "stop",
+      "model_identity": {
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 94207,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "a49f98b999bcdedcc16d1c494a54283dd6dfa31fff1af45048ba95058d64c074",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "source_edited_by_operator": false,
+      "independent_checks_planned": 34,
+      "independent_checks_executed": 0,
+      "pipeline_passed": false,
+      "source_revision": {
+        "revision_id": "86b75516-0a9c-4008-9bf4-5a2e8e3ee8c3",
+        "project_id": "7b0ead04-a488-4429-b571-0bc3f2bcd9d3",
+        "version_number": 2,
+        "content_hash": "66d32fad65cab0467c816c670cf7ab58b7784cde3e88adf52bd20168dc75911a",
+        "source_tree_hash": "026c112746a401762d611ef1cd5926d1e39784cc90447d333b9eaa8f0a5a6628"
+      },
+      "execution_report": {
+        "path": "var/studio/jvm-scala-repair-execution-01/report.json",
+        "sha256": "a3179dae7d8673d65c4302221091157c696a70b4eae93fbcb078273505b3ca35",
+        "bytes": 9399
+      },
+      "execution_completed_at": "2026-09-20T10:08:11.544941+00:00",
+      "phases": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_category": null,
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_category": null,
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "FAILED",
+          "failure_category": "STATIC_CHECK",
+          "findings": [
+            {
+              "code": "SCALA_E007",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:36:32"
+            },
+            {
+              "code": "SCALA_E007",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:47:6"
+            },
+            {
+              "code": "SCALA_E007",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:49:6"
+            },
+            {
+              "code": "SCALA_E008",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:46:33"
+            },
+            {
+              "code": "SCALA_E024",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:65:11"
+            },
+            {
+              "code": "SCALA_E119",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:65:41"
+            },
+            {
+              "code": "SCALA_E172",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:14:29"
+            },
+            {
+              "code": "SCALA_E172",
+              "message": "Scala 3 compiler reported a typed error.",
+              "source_tool": "scala3-compiler",
+              "location": "src/main/scala/org/orchestwin/greeting/Main.scala:14:8"
+            }
+          ]
+        }
+      ],
+      "failure": "DEVELOPMENT_PHASE_FAILED:STATIC_CHECKS",
+      "cleanup_confirmed": true,
+      "generated_sources_unchanged": true
+    },
+    {
+      "target": "JVM_JAVA",
+      "model_calls": 1,
+      "generation_accepted": false,
+      "generation_report": {
+        "path": "var/studio/jvm-java-repair-01/report.json",
+        "sha256": "4928dcc347ba0ecbbb61550aad043393e52cb23ec5fc491c19a7a6709cc2fe47",
+        "bytes": 1076
+      },
+      "native_record": {
+        "path": "var/studio/jvm-java-repair-01/model-evidence/09c48527-5fd7-489b-839d-f8c456241d52.json",
+        "sha256": "f7a9eacd9ddd0a93c23c63e4a1be20835594a5e40da732117bd09bd22cb70784",
+        "bytes": 85307
+      },
+      "raw_response_sha256": "a297dadb12b708c02ab5ad69f924128108741a14e09400353b1f11f4c89b2192",
+      "events": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT",
+        "ADAPTER_REJECTED",
+        "APPLICATION_RESULT"
+      ],
+      "usage": {
+        "completion_tokens": 1462,
+        "prompt_tokens": 9530,
+        "total_tokens": 10992
+      },
+      "finish_reason": "stop",
+      "model_identity": {
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-2a9ec8f5-a406-4dfc-bf10-b2da4b2d01aa",
+        "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+        "configuration_sha256": "61484706b9c6519c427e3409b2fe0660eaa7bf6712e82cbbb0cf8bb014f92208",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 220432,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "d41cf70288754daa28efb6d3894d7bc3fc408fd91d27b273c11aab8d3494efd9",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "source_edited_by_operator": false,
+      "independent_checks_planned": 34,
+      "independent_checks_executed": 0,
+      "pipeline_passed": false,
+      "failure": "ProposalGenerationError:INVALID_PROVIDER_OUTPUT",
+      "diagnosis": {
+        "scope": "READ_ONLY_NATIVE_RESPONSE_DIAGNOSIS",
+        "generation_record_sha256": "f7a9eacd9ddd0a93c23c63e4a1be20835594a5e40da732117bd09bd22cb70784",
+        "typed_schema_valid": true,
+        "binding_error": "repair must change content",
+        "changes": [
+          {
+            "path": "src/main/java/org/orchestwin/greeting/Main.java",
+            "operation": "REPLACE",
+            "identical_to_base": true
+          },
+          {
+            "path": "src/test/java/org/orchestwin/greeting/MainTest.java",
+            "operation": "REPLACE",
+            "identical_to_base": true
+          }
+        ],
+        "source_written_or_changed": false,
+        "model_retried": false,
+        "response_accepted": false
+      },
+      "execution_started": false
+    }
+  ],
+  "archive": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-repair-results-20260920-01\\native-evidence.zip",
+    "sha256": "b39d886d9af43322b0f43ca496de2ee59abf885e8b61f0cf52ec5583352e6d77",
+    "bytes": 8893221
+  },
+  "archive_manifest": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-repair-results-20260920-01\\manifest.json",
+    "sha256": "f7d9e6de79caee93641ad8f04ebe13519361cfe66e960fe91ea598594a475539",
+    "bytes": 15056
+  },
+  "cloud_shutdown": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-source-resume-2f25d13-20260920-02\\shutdown-verified.json",
+    "sha256": "99aa09c088ed0b6a02466c47af98d05ca2e781d1dd53e12a108ee372beb53a05",
+    "bytes": 510
+  },
+  "local_api_restoration": {
+    "path": "var/studio/resume-20260920-01/api-restoration-receipt.json",
+    "sha256": "d04cef5a3e19e512ac8e86b00a65270343a15d052cd160087b433de56aa032aa",
+    "bytes": 446
+  },
+  "limits": [
+    "One bounded repair per original failure; no retries or manually corrected generated code.",
+    "Kotlin and Scala stopped before TEST/RUN; no independent oracle cases were executed.",
+    "Java returned two unchanged replacement files, so no revision or execution was created.",
+    "The existing formal JVM Level D qualification is unaffected and does not certify these applications."
+  ],
+  "next_work": [
+    "Use the preserved native failures to improve the proposal/repair task and training examples.",
+    "Require successful independent compilation and behavior before promoting a proposer.",
+    "Keep the formal Web campaign separate and pending owner CI commit/push."
+  ]
+}

@@ -176,7 +176,12 @@ def source_output(target):
         ExecutionTarget.JVM_SCALA: "src/main/scala/org/orchestwin/greeting/Main.scala",
     }[target]
     content = {
-        ExecutionTarget.WEB_STATIC: "<!doctype html><title>Fixture</title><h1>Fixture</h1>",
+        ExecutionTarget.WEB_STATIC: (
+            '<!doctype html><title>Fixture</title><section data-design-screen="SCR-001">'
+            '<input name="guest_name" required aria-label="Guest name" data-design-element="ELM-001">'
+            '<button data-design-element="ELM-002" data-design-target="SCR-002">Save reservation</button>'
+            '</section><section data-design-screen="SCR-002"><p>Reservation saved</p></section>'
+        ),
         ExecutionTarget.JVM_JAVA: 'package org.orchestwin.greeting; public class Main { public static void main(String[] args) { System.out.println("Fixture"); } }',
         ExecutionTarget.JVM_KOTLIN: 'package org.orchestwin.calculator\nfun main() { println("Fixture") }',
         ExecutionTarget.JVM_SCALA: 'package org.orchestwin.greeting\nobject Main { def main(args: Array[String]): Unit = println("Fixture") }',

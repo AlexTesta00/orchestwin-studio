@@ -249,3 +249,94 @@ def test_runtime_v2_and_loader_policy_are_bound_to_the_configuration_digest() ->
         "loader_policy": {**module._loader_policy(), "use_exact_model_name": False},
     }
     assert identity.configuration_sha256 != snapshot_content_hash(changed)
+
+
+def _bf16_runtime(monkeypatch):
+    module = _runner()
+    request = _request()
+    torch, tokenizer, fast_model, calls = _fake_runtime(request)
+    torch.bfloat16 = "torch.bfloat16"
+    torch.cuda.current_device = lambda: 0
+    original_loader = fast_model.from_pretrained
+    parameter = SimpleNamespace(
+        device=SimpleNamespace(type="cuda", index=0),
+        dtype=torch.bfloat16,
+        numel=lambda: 1000,
+    )
+    model, _ = original_loader()
+    calls.clear()
+    model.parameters = lambda: iter([parameter])
+    model.hf_device_map = {"": 0}
+    monkeypatch.setattr(
+        module, "_load_runtime_dependencies", lambda: (torch, tokenizer, fast_model)
+    )
+    return module, request, model, parameter, calls
+
+
+def test_explicit_bf16_keeps_exact_offline_loading_and_verifies_cuda_storage(monkeypatch):
+    module, request, _, _, calls = _bf16_runtime(monkeypatch)
+    _, _, _, evidence = module._load_model(request, network_authorized=False, precision="bf16")
+    assert calls[0]["dtype"] == "torch.bfloat16"
+    assert calls[0]["load_in_4bit"] is False
+    assert calls[0]["device_map"] == {"": 0}
+    assert calls[0]["revision"] == request["model_revision"]
+    assert calls[0]["local_files_only"] is True
+    assert calls[0]["fast_inference"] is False
+    assert calls[0]["use_exact_model_name"] is True
+    assert calls[0]["trust_remote_code"] is False
+    assert evidence["loader_policy"]["policy_id"] == "unsloth-exact-revision-bf16-v1"
+    assert evidence["precision_observation"] == {
+        "precision": "bf16",
+        "parameter_dtype": "torch.bfloat16",
+        "parameter_count": 1000,
+        "parameter_tensor_count": 1,
+        "device": "cuda:0",
+        "load_in_4bit_observed": False,
+        "offloaded_parameters": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "quantized",
+        "four_bit",
+        "quant_state",
+        "cpu",
+        "meta",
+        "other_gpu",
+        "map_disk",
+        "map_cpu",
+        "fp32",
+        "empty",
+    ],
+)
+def test_bf16_rejects_unobserved_precision_or_offload_without_retry(monkeypatch, mutation):
+    module, request, model, parameter, calls = _bf16_runtime(monkeypatch)
+    if mutation == "quantized":
+        model.is_quantized = True
+    elif mutation == "four_bit":
+        model.is_loaded_in_4bit = True
+    elif mutation == "quant_state":
+        parameter.quant_state = object()
+    elif mutation in ("cpu", "meta"):
+        parameter.device.type = mutation
+    elif mutation == "other_gpu":
+        parameter.device.index = 1
+    elif mutation.startswith("map_"):
+        model.hf_device_map = {"": mutation.removeprefix("map_")}
+    elif mutation == "fp32":
+        parameter.dtype = "torch.float32"
+    else:
+        model.parameters = lambda: iter([])
+    with pytest.raises(module.ModelSpikeIdentityError, match="BF16"):
+        module._load_model(request, network_authorized=False, precision="bf16")
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("precision", ["auto", "fp16", "int8", "BF16", None])
+def test_unknown_precision_is_rejected_before_loading(monkeypatch, precision):
+    module = _runner()
+    monkeypatch.setattr(module, "_load_runtime_dependencies", lambda: pytest.fail("must not load"))
+    with pytest.raises(module.ModelSpikeInputError, match="precision"):
+        module._load_model(_request(), network_authorized=False, precision=precision)

@@ -102,13 +102,21 @@ def validate_prototype_html(content, prototype):
     document = _Document()
     document.feed(content)
 
-    def require(condition):
+    def require(condition, reason, **details):
         if not condition:
-            raise ProposalGenerationError("SOURCE_DESIGN_STRUCTURE_MISMATCH")
+            error = ProposalGenerationError("SOURCE_DESIGN_STRUCTURE_MISMATCH")
+            error.diagnostic = {"reason": reason, **details}
+            raise error
 
     def one(attribute, value):
         nodes = [node for node in document.nodes if node.attrs.get(attribute) == value]
-        require(len(nodes) == 1)
+        require(
+            len(nodes) == 1,
+            "EXACTLY_ONE_MARKER_REQUIRED",
+            attribute=attribute,
+            value=value,
+            actual_count=len(nodes),
+        )
         return nodes[0]
 
     def inside(node, ancestor):
@@ -119,7 +127,7 @@ def validate_prototype_html(content, prototype):
         return False
 
     identifiers = [node.attrs["id"] for node in document.nodes if "id" in node.attrs]
-    require(len(identifiers) == len(set(identifiers)))
+    require(len(identifiers) == len(set(identifiers)), "HTML_IDS_MUST_BE_UNIQUE")
     screens = {screen["id"]: screen for screen in prototype["screens"]}
     transitions = {edge["trigger_element_id"]: edge for edge in prototype.get("transitions", [])}
     for screen in screens.values():
@@ -130,18 +138,35 @@ def validate_prototype_html(content, prototype):
             if kind not in _TAGS and kind != "TEXT":
                 continue
             node = one("data-design-element", element["code"])
-            require(inside(node, container))
-            require(node.tag in _TEXT_TAGS if kind == "TEXT" else node.tag == _TAGS[kind])
+            details = {"element": element["code"], "screen": screen["code"]}
+            require(inside(node, container), "ELEMENT_IN_APPROVED_SCREEN_REQUIRED", **details)
+            require(
+                node.tag in _TEXT_TAGS if kind == "TEXT" else node.tag == _TAGS[kind],
+                "APPROVED_CONTROL_KIND_REQUIRED",
+                expected_kind=kind,
+                actual_tag=node.tag,
+                **details,
+            )
             position = document.nodes.index(node)
-            require(position > previous)
+            require(position > previous, "APPROVED_ELEMENT_ORDER_REQUIRED", **details)
             previous = position
             if kind == "TEXT":
                 # Dynamic results need the approved location, not placeholder text.
                 continue
             label = element.get("accessible_name") or element["content"]
             if kind in {"TEXT_INPUT", "SELECT"}:
-                require(node.attrs.get("name") == element["field_name"])
-                require(("required" in node.attrs) == element.get("required", False))
+                require(
+                    node.attrs.get("name") == element["field_name"],
+                    "APPROVED_FIELD_NAME_REQUIRED",
+                    expected=element["field_name"],
+                    **details,
+                )
+                require(
+                    ("required" in node.attrs) == element.get("required", False),
+                    "APPROVED_REQUIRED_ATTRIBUTE_REQUIRED",
+                    expected=element.get("required", False),
+                    **details,
+                )
                 labels = [
                     x.label_content()
                     for x in document.nodes
@@ -151,19 +176,37 @@ def validate_prototype_html(content, prototype):
                         or inside(node, x)
                     )
                 ]
-                require(node.attrs.get("aria-label") == label or label in labels)
+                require(
+                    node.attrs.get("aria-label") == label or label in labels,
+                    "APPROVED_ACCESSIBLE_LABEL_REQUIRED",
+                    expected=label,
+                    **details,
+                )
                 if kind == "SELECT":
                     options = [
                         x.content()
                         for x in node.children
                         if x.tag == "option" and "disabled" not in x.attrs
                     ]
-                    require(options == list(element["options"]))
+                    require(
+                        options == list(element["options"]),
+                        "APPROVED_SELECT_OPTIONS_REQUIRED",
+                        expected=list(element["options"]),
+                        **details,
+                    )
             else:
-                require(node.attrs.get("aria-label", node.content()) == label)
+                require(
+                    node.attrs.get("aria-label", node.content()) == label,
+                    "APPROVED_ACCESSIBLE_LABEL_REQUIRED",
+                    expected=label,
+                    **details,
+                )
                 edge = transitions.get(element["id"])
                 if edge:
                     require(
                         node.attrs.get("data-design-target")
-                        == screens[edge["target_screen_id"]]["code"]
+                        == screens[edge["target_screen_id"]]["code"],
+                        "APPROVED_TRANSITION_TARGET_REQUIRED",
+                        expected=screens[edge["target_screen_id"]]["code"],
+                        **details,
                     )
