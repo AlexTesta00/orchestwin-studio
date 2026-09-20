@@ -1,6 +1,7 @@
 """Synthetic multi-call responses test lineage and failure boundaries, not code quality."""
 
 import asyncio
+import hashlib
 import json
 from uuid import UUID, uuid4
 
@@ -8,8 +9,19 @@ import pytest
 
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
-from orchestwin.models.source_file_generation import FILE_BUDGET, MANIFEST_BUDGET
+from orchestwin.models.source_file_generation import (
+    FILE_BUDGET,
+    MANIFEST_BUDGET,
+    MANIFEST_CONTRACT,
+    STATIC_RUNTIME_CONTRACT,
+    SYNTAX_EXCERPT_CHARACTERS,
+    _file_instruction,
+    _manifest_observation_instruction,
+    _syntax_retry_feedback,
+    _syntax_retry_instruction,
+)
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter
+from orchestwin.models.source_syntax import SourceSyntaxError
 from src.test.python.models.test_proposal_evidence import Command, MemoryEvidence, audited_generator
 from src.test.python.models.test_source_proposals import context, output
 
@@ -107,10 +119,15 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         FILE_BUDGET,
     ]
     assert result.output.files[0].content == payload["files"][0]["content"]
+    assert (
+        json.loads(store.requests[parent][0].input_payload_json)["context"]["runtime_contract"]
+        == STATIC_RUNTIME_CONTRACT
+    )
     assert [s["generation_id"] for s in result.generation_steps] == list(map(str, children))
     for ordinal, child in enumerate(children, 1):
         request = store.requests[child][0]
         child_ctx = json.loads(request.input_payload_json)["context"]
+        assert child_ctx["runtime_contract"] == STATIC_RUNTIME_CONTRACT
         assert child_ctx["manifest"]["behavior_plan"]["observable_outputs"] == (
             "Return the fixture value."
         )
@@ -159,11 +176,212 @@ def test_syntax_retry_retains_rejected_file_and_accepts_only_new_audited_bytes(t
         "previous_request_hash": store.requests[rejected][0].content_hash,
         "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
     }
+    feedback = json.loads(
+        store.requests[accepted][0].system_instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]
+    )
+    previous_content = "assert.equal(result, \\\n"
+    assert (
+        feedback["previous_source_sha256"] == hashlib.sha256(previous_content.encode()).hexdigest()
+    )
+    assert feedback["source_excerpt"]["text"] == previous_content
+    assert feedback["source_excerpt"]["truncated"] is False
+    assert feedback["diagnostic"]["reason"] == "INVALID_OR_UNEXPECTED_TOKEN"
+    assert feedback["diagnostic"]["line"] == 1
     assert [step["generation_id"] for step in result.generation_steps] == list(
         map(str, (core, accepted, html))
     )
     assert result.output.files[1].content == payload["files"][1]["content"]
     assert any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[parent])
+
+
+@pytest.mark.parametrize(
+    "interface",
+    [
+        "export const calculate = (a, b) => { ... };",
+        "import calculate from './app.js';",
+        "function calculate(a, b) { return a + b; }",
+    ],
+)
+def test_static_manifest_cannot_carry_module_declarations_or_implementation_bodies(
+    tmp_path, interface
+):
+    def mutate(ctx, value):
+        if "source_step" not in ctx:
+            value["files"][0]["interface"] = interface
+        return value
+
+    store = MemoryEvidence()
+    generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    with pytest.raises(ProposalGenerationError):
+        execute(generator, context(), store)
+    assert len(transport.calls) == 1
+    assert not any(
+        kind == "ADAPTER_ACCEPTED" for events in store.events.values() for kind, _, _ in events
+    )
+
+
+def test_module_mismatch_retry_receives_original_excerpt_and_exact_diagnostic(tmp_path):
+    previous = "// Original Unicode: è\n\nexport const calculate = (a, b) => a + b;"
+
+    def mutate(ctx, value):
+        if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
+            return {"content": previous}
+        return value
+
+    store = MemoryEvidence()
+    generator, _ = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    execute(generator, context(), store)
+    _parent, rejected, accepted, *_ = store.requests
+    prompt = store.requests[accepted][0].system_instruction
+    feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
+    assert feedback["diagnostic"]["reason"] == "ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT"
+    assert feedback["diagnostic"]["line"] == 3
+    assert feedback["source_excerpt"]["text"] == previous
+    assert feedback["previous_source_sha256"] == hashlib.sha256(previous.encode()).hexdigest()
+    assert "no ES-module import/export declarations" in prompt
+    assert "SYNTAX_RETRY_FEEDBACK_JSON=" not in store.requests[rejected][0].system_instruction
+
+
+def test_indented_unicode_source_feedback_roundtrips_in_a_valid_audited_retry_request(tmp_path):
+    previous = (
+        "// Original source with Unicode whitespace: \u00a0\n"
+        "const test = require('node:test');\n"
+        "const assert = require('node:assert/strict');\n"
+        "test('sample', () => {\n"
+        "    assert.equal(1, 1, 'L''errore');\n"
+        "});\n"
+    )
+
+    def mutate(ctx, value):
+        if ctx.get("source_step", {}).get("ordinal") == 2 and "syntax_retry" not in ctx:
+            return {"content": previous}
+        return value
+
+    store = MemoryEvidence()
+    generator, _ = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    execute(generator, context(), store)
+    _parent, _core, rejected, accepted, _html = store.requests
+    prompt = store.requests[accepted][0].system_instruction
+    assert " ".join(prompt.split()) == prompt
+    feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
+    assert feedback["source_excerpt"]["text"] == previous
+    assert feedback["previous_source_sha256"] == hashlib.sha256(previous.encode()).hexdigest()
+    assert feedback["diagnostic"]["line"] == 5
+    assert feedback["source_excerpt"]["truncated"] is False
+    assert store.events[rejected][-1][1]["status"] == "FAILED"
+    assert store.events[accepted][-1][1]["status"] == "SOURCE_FILE_GENERATED"
+
+
+def test_observable_browser_witnesses_do_not_require_fake_quality_functions(tmp_path):
+    def mutate(ctx, value):
+        if "source_step" not in ctx:
+            for check in value["acceptance_checks"]:
+                check["public_interface"] = (
+                    "BROWSER: focus actual controls and inspect rendered state"
+                )
+        return value
+
+    store = MemoryEvidence()
+    generator, _ = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    execute(generator, context(), store)
+    parent, core, tests, _html = store.requests
+    planning_prompt = store.requests[parent][0].system_instruction
+    core_prompt = store.requests[core][0].system_instruction
+    test_prompt = store.requests[tests][0].system_instruction
+    assert "do not invent one callable per requirement" in planning_prompt
+    assert "DOM control/event/visible property prefixed BROWSER:" in planning_prompt
+    for prompt in (planning_prompt, core_prompt, test_prompt):
+        assert "must come from real HTML, CSS" in prompt
+        assert "independent browser observations" in prompt
+        assert "isAccessible/isOffline-style functions returning true" in prompt
+        assert "actual core and CLI behavior" not in prompt
+    assert "switch the approved screen containers and preserve input state" in core_prompt
+    assert "never SQL-style doubled apostrophes" in test_prompt
+    assert "must remain unverified by this Node-only test" in test_prompt
+    assert "callable public interface and observable postcondition" not in planning_prompt
+    assert any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[parent])
+
+
+@pytest.mark.parametrize(
+    "target", ["WEB_STATIC", "WEB_VUE", "WEB_NODE_EXPRESS", "WEB_PHP", "WEB_VUE_NODE"]
+)
+def test_all_web_profiles_preserve_browser_observation_scope(target):
+    from types import SimpleNamespace
+
+    planning = _manifest_observation_instruction(target)
+    implementation = _file_instruction(
+        SimpleNamespace(normalized_path="app.js", media_type="text/javascript"), target
+    )
+    assert "BROWSER:" in planning
+    for prompt in (planning, implementation):
+        assert "must come from real HTML, CSS" in prompt
+        assert "independent browser observations" in prompt
+        assert "isAccessible/isOffline-style functions returning true" in prompt
+        assert "actual core and CLI behavior" not in prompt
+        # CommonJS restrictions belong to the WEB_STATIC-specific instruction;
+        # the general Web quality contract must not impose them on other stacks.
+        assert "no ES-module import/export" not in prompt
+
+
+def test_escaped_unicode_feedback_respects_the_normalized_request_text_budget(tmp_path):
+    previous = "const value = (" + "\U0001f600" * 1000
+
+    def mutate(ctx, value):
+        if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
+            return {"content": previous}
+        return value
+
+    store = MemoryEvidence()
+    generator, _ = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
+    execute(generator, context(), store)
+    _parent, _rejected, accepted, *_ = store.requests
+    prompt = store.requests[accepted][0].system_instruction
+    assert len(prompt) <= 16000 and " ".join(prompt.split()) == prompt
+    feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
+    excerpt = feedback["source_excerpt"]
+    assert excerpt["text"] == previous[excerpt["start_character"] : excerpt["end_character"]]
+    assert excerpt["truncated"] and len(excerpt["text"]) <= SYNTAX_EXCERPT_CHARACTERS
+
+
+def test_retry_excerpt_is_bounded_and_is_an_exact_slice_around_the_reported_line():
+    from types import SimpleNamespace
+
+    content = "// header è\n" * 100 + "export const value = 1;\n" + "// tail\n" * 2000
+    feedback = _syntax_retry_feedback(
+        SimpleNamespace(normalized_path="app.js", content=content),
+        SourceSyntaxError(reason="ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT", line=101),
+    )
+    excerpt = feedback["source_excerpt"]
+    assert len(excerpt["text"]) <= SYNTAX_EXCERPT_CHARACTERS
+    assert excerpt["text"] == content[excerpt["start_character"] : excerpt["end_character"]]
+    assert "export const value" in excerpt["text"] and excerpt["truncated"]
+    assert feedback["previous_source_characters"] == len(content)
+    assert feedback["previous_source_sha256"] == hashlib.sha256(content.encode()).hexdigest()
+
+
+def test_long_preceding_line_does_not_hide_the_actual_failure_from_retry_excerpt():
+    from types import SimpleNamespace
+
+    content = "//" + "x" * 8000 + "\nexport const value = 1;\n"
+    feedback = _syntax_retry_feedback(
+        SimpleNamespace(normalized_path="app.js", content=content),
+        SourceSyntaxError(reason="ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT", line=2),
+    )
+    excerpt = feedback["source_excerpt"]
+    assert "export const value" in excerpt["text"]
+    assert len(excerpt["text"]) <= SYNTAX_EXCERPT_CHARACTERS and excerpt["truncated"]
+    assert excerpt["text"] == content[excerpt["start_character"] : excerpt["end_character"]]
+
+
+def test_retry_guidance_preserves_es_modules_for_other_execution_targets():
+    feedback = {"diagnostic": {"input_type": "module", "reason": "UNEXPECTED_END_OF_INPUT"}}
+    instruction = _syntax_retry_instruction(feedback, "WEB_VITE")
+    assert "no ES-module import/export declarations" not in instruction
+    assert "valid ES-module declarations remain allowed" in instruction
+    assert json.loads(instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]) == feedback
+    assert "no ES-module import/export declarations" in _syntax_retry_instruction(
+        feedback, "WEB_STATIC"
+    )
 
 
 def test_different_mockup_structure_is_rejected_before_file_acceptance(tmp_path):
@@ -336,6 +554,23 @@ def test_pinned_entrypoint_is_required_before_file_calls(tmp_path, target, recip
     parent_context = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])["context"]
     assert parent_context["entrypoint_contract"]["package"] == package
     assert parent_context["entrypoint_contract"]["normalized_path"] == "src/main/" + path
+    assert (
+        parent_context["manifest_contract"]
+        == MANIFEST_CONTRACT
+        == ("SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION")
+    )
+    # The actual audited manifest and both source requests must agree with the
+    # JVM console profile, while retaining the shared ban on self-certification.
+    for call in transport.calls:
+        prompt = call["payload"]["messages"][0]["content"]
+        assert "BROWSER:" not in prompt
+        assert "must come from real HTML, CSS" not in prompt
+        assert "independent browser observations" not in prompt
+        assert "isAccessible/isOffline-style functions returning true" in prompt
+        assert "actual core and CLI behavior" in prompt
+    assert (
+        "observable console input/output" in transport.calls[0]["payload"]["messages"][0]["content"]
+    )
     child_call = transport.calls[1]["payload"]["messages"]
     assert "src/main/" + path in child_call[0]["content"]
     assert (

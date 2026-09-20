@@ -22,6 +22,29 @@ _VOID = {
     "wbr",
 }
 _TAGS = {"TEXT_INPUT": "input", "SELECT": "select", "BUTTON": "button", "LINK": "a"}
+_TEXT_TAGS = {
+    "caption",
+    "dd",
+    "div",
+    "dt",
+    "figcaption",
+    "li",
+    "span",
+    "p",
+    "output",
+    "pre",
+    "small",
+    "strong",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "td",
+    "th",
+}
 
 
 @dataclass(eq=False)
@@ -95,6 +118,8 @@ def validate_prototype_html(content, prototype):
             node = node.parent
         return False
 
+    identifiers = [node.attrs["id"] for node in document.nodes if "id" in node.attrs]
+    require(len(identifiers) == len(set(identifiers)))
     screens = {screen["id"]: screen for screen in prototype["screens"]}
     transitions = {edge["trigger_element_id"]: edge for edge in prototype.get("transitions", [])}
     for screen in screens.values():
@@ -102,13 +127,17 @@ def validate_prototype_html(content, prototype):
         previous = -1
         for element in screen.get("elements", []):
             kind = element["kind"]
-            if kind not in _TAGS:
+            if kind not in _TAGS and kind != "TEXT":
                 continue
             node = one("data-design-element", element["code"])
-            require(inside(node, container) and node.tag == _TAGS[kind])
+            require(inside(node, container))
+            require(node.tag in _TEXT_TAGS if kind == "TEXT" else node.tag == _TAGS[kind])
             position = document.nodes.index(node)
             require(position > previous)
             previous = position
+            if kind == "TEXT":
+                # Dynamic results need the approved location, not placeholder text.
+                continue
             label = element.get("accessible_name") or element["content"]
             if kind in {"TEXT_INPUT", "SELECT"}:
                 require(node.attrs.get("name") == element["field_name"])

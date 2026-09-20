@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T19:41:34.337643+00:00",
+  "status": "V14_FRESH_MODEL_TRIAL_FAILED_NO_COMPLETE_SOURCE_REVISION",
+  "manifest_contract": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION",
+  "classification": "DEVELOPMENT_CONTRACT_AND_RETRY_FIX_NOT_MODEL_PROMOTION",
+  "trigger_diagnosis": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-terminal-diagnosis.json",
+    "sha256": "5fba0cbea8d6d548ed3e126e2fb32b6900060169b3d0b3b9973829adc013c257"
+  },
+  "changes": [
+    "Traceability remains complete and ordered, but each statement may reference a real core operation or BROWSER: observation; no new function is required per quality/scenario.",
+    "UI qualities must be implemented through HTML/CSS/events/local assets and independently observed; quality flags and self-certified completion are not evidence.",
+    "The browser instruction requires real field reads, calculation calls, visible results/errors, screen changes and state preservation; comments and console.log are not implementations.",
+    "Test instructions require independently derived results and valid JavaScript escaping, prohibit quality flags/function-existence tests as proof of UI behavior, and preserve independent browser obligations.",
+    "Implementation files describe exported signatures; test files describe framework registration such as test(name,callback); HTML describes DOM identities.",
+    "Retry feedback encodes whitespace reversibly inside JSON to satisfy the unchanged normalized-text contract. The decoded excerpt is identical to source bytes, with full hash and explicit offsets/truncation; no source repair or validator weakening occurs."
+  ],
+  "feedback_limits": {
+    "maximum_source_characters": 768,
+    "unicode_escaping_worst_case_tested": true,
+    "system_instruction_limit_unchanged": 16000,
+    "syntax_retry_context_and_DB_schema_unchanged": true
+  },
+  "validation": {
+    "targeted_tests": {
+      "passed": 48,
+      "failed": 0,
+      "elapsed_seconds": 3.58,
+      "command": ".venv/Scripts/python.exe -B -m pytest src/test/python/models/test_source_syntax.py src/test/python/models/test_source_file_generation.py -q -p no:cacheprovider --basetemp var/studio/source-v14-tests-02"
+    },
+    "final_instruction_review_rerun": {
+      "passed": 42,
+      "failed": 0,
+      "elapsed_seconds": 2.77,
+      "scope": "test_source_file_generation.py; six source_syntax tests and source_syntax.py were unchanged after the earlier green48-test run"
+    },
+    "ruff": "PASSED",
+    "native_schema": "The JSON schema is unchanged from V13; the existing llguidance1.8.0 schema receipt is preserved. V14 changes instructions and retry serialization only.",
+    "offline_real_failure_replay": "Original test source still fails Node --check. Old excerpt serialization fails request normalization; fixed reversible serialization builds a valid request without model calls."
+  },
+  "source_sha256": {
+    "src\\orchestwin\\models\\source_file_generation.py": "658cc516f44c554a3b609687fd46839e1542bf7c16f8c6016e8da84a0c956314",
+    "src\\test\\python\\models\\test_source_file_generation.py": "70dabd2e2c9590b0e493031fa24b1bf3bb246bfd511c0dd62e30b8dc13c6750c"
+  },
+  "next_step": "Retain the terminal negative Web result and separately identified assisted demonstration; no additional base-model retry or promotion. JVM evaluation is a separate activity.",
+  "limitations": [
+    "The one fresh V14 trial failed. Passing contract regressions did not qualify the proposer; full browser acceptance was not executed because no complete source revision was produced.",
+    "The causal relationship between old planning instructions and self-verification stubs is a diagnosis to test, not an established experiment.",
+    "No cloud resources, paid training, model promotion or direct modification of model-generated sources occurred."
+  ],
+  "database_writes": 0,
+  "inference_calls": 0,
+  "prior_status": "V14_GENERAL_CORRECTION_VERIFIED_AWAITING_ONE_FRESH_MODEL_TRIAL",
+  "terminal_trial": {
+    "final_report": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\studio-demo\\new-project-real-model-diagnosis-20260919.json",
+      "sha256": "2c52127d3bd88397564fbe3ab2aac1fbf5c85a6a2d20c3986b44b8d4302e4e58"
+    },
+    "snapshot_manifest": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\final-project-snapshot-02\\manifest.json",
+      "sha256": "911115827d671fb8ca79dd880f7e6a94a9def605d5ce42529e3cae8f0b5e72ff"
+    },
+    "parent_generation_id": "d1b71aba-33d1-428f-a6be-41ef8559603a",
+    "app_generation_id": "1ec37f3c-4b96-4c0b-afdb-8143eaf74d7d",
+    "test_generation_id": "2a52f998-5fd9-49b5-8f14-4d0ca18b2c2e",
+    "app_status": "SYNTAX_ACCEPTED_BUT_SEMANTICALLY_INADEQUATE_AND_ISOLATED_IMPORT_FAILED",
+    "test_status": "INCOMPLETE_OUTPUT_4096_TOKENS_FINISH_LENGTH_SCHEMA_INCOMPLETE",
+    "test_native_generation_milliseconds": 612179,
+    "test_http_elapsed_milliseconds": 655088,
+    "html_generated": false,
+    "source_revision_count": 0,
+    "frozen_acceptance_cases_executed": 0,
+    "model_promoted": false,
+    "semantic_review": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v14-app-semantic-review.json",
+      "sha256": "a89b695dc4f742457a76602d012f171cd58b087cfd38b311daf0fa0d043f3209"
+    },
+    "isolated_probe": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v14-app-js-commonjs-probe\\receipt.json",
+      "sha256": "08f17389f727482c7fca33e999e2d85afb20437c791042d6c37d4821585e6b80"
+    }
+  },
+  "reporting_note": "The original database_writes and inference_calls counters below describe correction/verification work before the trial. The later GUI trial is explicitly identified above and in the linked final report.",
+  "post_trial_v15_scope_correction": {
+    "observed_at_utc": "2026-09-19T20:17:59.348966+00:00",
+    "manifest_contract": "SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION",
+    "classification": "POST_TRIAL_PROMPT_COMPATIBILITY_AND_STATIC_MARKUP_CORRECTIONS_NOT_NEW_MODEL_EVIDENCE",
+    "scope_fix": {
+      "cause": "V14 unconditionally required HTML/CSS and browser observations even for JVM source files, contradicting the pinned CLI profile.",
+      "change": "Only WEB_STATIC, WEB_VUE, WEB_NODE_EXPRESS, WEB_PHP and WEB_VUE_NODE receive HTML/CSS/browser witnesses. JVM source and manifest instructions refer to core/CLI behavior. All targets retain the prohibition on unconditional quality predicates and self-certified completion.",
+      "actual_audited_requests_checked": [
+        "JVM_JAVA manifest/main/test",
+        "JVM_KOTLIN manifest/main/test",
+        "JVM_SCALA manifest/main/test",
+        "WEB_STATIC manifest/core/test"
+      ],
+      "all_five_web_profiles_scope_checked": true,
+      "schema_changed": false,
+      "source_generated_by_model_changed": false,
+      "sealed_datasets_changed": false,
+      "future_curriculum_capture": "proposer_prepare imports MANIFEST_CONTRACT dynamically; future captures will record V15. Historical captured messages are not rewritten."
+    },
+    "text_container_correction": {
+      "review_reproduction_before_fix": {
+        "prototype": {
+          "screens": [
+            {
+              "id": "one",
+              "code": "SCR-001",
+              "elements": [
+                {
+                  "id": "line",
+                  "code": "ELM-001",
+                  "kind": "TEXT",
+                  "content": "Elemento"
+                }
+              ]
+            }
+          ],
+          "transitions": []
+        },
+        "html": "<section data-design-screen=\"SCR-001\"><ul><li data-design-element=\"ELM-001\">Elemento</li></ul></section>",
+        "actual": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "expected": "Accept a noninteractive text-bearing element with the unique marker in its approved screen.",
+        "control": "An otherwise identical p element was accepted; td and figcaption were also rejected before the fix."
+      },
+      "implemented_by": "PARENT_AGENT",
+      "additional_semantic_containers": [
+        "caption",
+        "dd",
+        "dt",
+        "figcaption",
+        "li",
+        "td",
+        "th"
+      ],
+      "unchanged_requirements": [
+        "exact unique marker",
+        "approved screen",
+        "approved order",
+        "unique HTML IDs",
+        "reject script and interactive elements as TEXT"
+      ],
+      "tests": {
+        "passed": 31,
+        "failed": 0,
+        "elapsed_seconds": 0.47,
+        "performed_by": "PARENT_AGENT",
+        "command": ".venv/Scripts/python.exe -m pytest -q -p no:cacheprovider src/test/python/models/test_source_design_contract.py",
+        "not_repeated_by_reporting_agent": true
+      }
+    },
+    "verification": {
+      "passed": 139,
+      "failed": 0,
+      "elapsed_seconds": 6.86,
+      "command": ".venv/Scripts/python.exe -B -m pytest src/test/python/models/test_source_file_generation.py src/test/python/models/test_source_syntax.py src/test/python/training/test_proposer_curriculum.py -q -p no:cacheprovider --basetemp var/studio/source-v15-compat-tests-01",
+      "ruff": "PASSED",
+      "inference_calls": 0,
+      "api_restarts": 0,
+      "database_writes": 0
+    },
+    "source_sha256": {
+      "src/orchestwin/models/source_file_generation.py": "4cf06e9489e0516d0a3d09f62476ac2893146e98f0519ebfc32f1e2bb4196f9d",
+      "src/test/python/models/test_source_file_generation.py": "0ac6f76a01ab20ef21cf2507992e74135850c29b388bf225246f170e94691c83",
+      "src/orchestwin/models/source_design_contract.py": "eda86a0574a14f27575ec14a6ef5e852a0d91103affbffa6bd86035f45b3aa5c",
+      "src/test/python/models/test_source_design_contract.py": "9cbbef552671eb1918177c9fb2fc2dc9a2d1cadcfe0c625d69ac97e76eb56896"
+    },
+    "limits": [
+      "The terminal V14 outcome and linked original receipts above remain unchanged and negative.",
+      "No successful V15 application generation or model promotion is established by these synthetic regression tests.",
+      "Kotlin/Scala inference already in flight under the previous prompt cannot be attributed to V15.",
+      "This correction does not remove or reinterpret the eight semantic blockers in the V14 native app.js."
+    ]
+  },
+  "post_review_runtime_activation": {
+    "observed_at_utc": "2026-09-19T22:24:27.184340+00:00",
+    "api_session_process": {
+      "id": 19124,
+      "started": "2026-09-19T22:23:44.3098106Z"
+    },
+    "api_health": {
+      "status": "ok"
+    },
+    "manifest_contract": "SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION",
+    "source_module_sha256": "4cf06e9489e0516d0a3d09f62476ac2893146e98f0519ebfc32f1e2bb4196f9d",
+    "prototype_validator_sha256": "eda86a0574a14f27575ec14a6ef5e852a0d91103affbffa6bd86035f45b3aa5c",
+    "model_servers_restarted": false,
+    "new_web_inference_performed": false,
+    "claim": "API restarted after reviewed source changes; health is availability evidence, not generated-application quality."
+  }
+}

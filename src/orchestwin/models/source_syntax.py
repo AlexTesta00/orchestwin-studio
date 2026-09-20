@@ -1,12 +1,47 @@
 """Parse JavaScript without executing generated code or declaring tests passed."""
 
 import os
+import re
 import shutil
 import subprocess
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
 
 from orchestwin.models.proposal_generation import ProposalGenerationError
+
+
+class SourceSyntaxError(ProposalGenerationError):
+    """A bounded parser diagnostic without generated text or process stderr."""
+
+    def __init__(self, *, reason, module=False, line=None, parser="node --check"):
+        super().__init__("SOURCE_JAVASCRIPT_SYNTAX_INVALID")
+        self.diagnostic = {
+            "parser": parser,
+            "input_type": "module" if module else "commonjs",
+            "reason": reason,
+            "line": line,
+        }
+
+
+def _syntax_diagnostic(stderr, *, module):
+    text = stderr.decode("utf-8", errors="replace")
+    reasons = {
+        "Unexpected token 'export'": "ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT",
+        "Cannot use import statement outside a module": "ES_MODULE_IMPORT_IN_CLASSIC_SCRIPT",
+        "Unexpected end of input": "UNEXPECTED_END_OF_INPUT",
+        "Invalid or unexpected token": "INVALID_OR_UNEXPECTED_TOKEN",
+    }
+    messages = set(text.splitlines())
+    reason = next(
+        (code for message, code in reasons.items() if "SyntaxError: " + message in messages),
+        "JAVASCRIPT_PARSE_ERROR",
+    )
+    if module and reason.startswith("ES_MODULE_"):
+        reason = "JAVASCRIPT_PARSE_ERROR"
+    position = re.search(r"^\[stdin\]:(\d+)\s*$", text, re.MULTILINE)
+    return SourceSyntaxError(
+        reason=reason, module=module, line=int(position[1]) if position else None
+    )
 
 
 class _InlineScripts(HTMLParser):
@@ -55,7 +90,7 @@ def validate_source_syntax(item):
         parser = _InlineScripts()
         parser.feed(item.content)
         if parser.current is not None:
-            raise ProposalGenerationError("SOURCE_JAVASCRIPT_SYNTAX_INVALID")
+            raise SourceSyntaxError(reason="UNCLOSED_INLINE_SCRIPT", parser="html.parser")
         scripts = parser.scripts
     if not scripts:
         return
@@ -81,4 +116,4 @@ def validate_source_syntax(item):
         except (OSError, subprocess.TimeoutExpired) as error:
             raise ProposalGenerationError("SOURCE_JAVASCRIPT_PARSER_UNAVAILABLE") from error
         if result.returncode != 0:
-            raise ProposalGenerationError("SOURCE_JAVASCRIPT_SYNTAX_INVALID")
+            raise _syntax_diagnostic(result.stderr, module=module)

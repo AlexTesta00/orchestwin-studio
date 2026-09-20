@@ -88,3 +88,83 @@ def test_rejects_control_moved_to_another_screen():
     moved = moved.replace("<button ", '</section><section data-design-screen="SCR-002"><button ')
     with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
         validate_prototype_html(moved, PROTOTYPE)
+
+
+def result_prototype():
+    prototype = deepcopy(PROTOTYPE)
+    prototype["screens"][1]["elements"].insert(
+        0, {"id": "output", "code": "ELM-005", "kind": "TEXT", "content": "Dynamic result"}
+    )
+    return prototype
+
+
+@pytest.mark.parametrize(
+    "tag,value", [("output", ""), ("p", "12"), ("span", "Saved"), ("pre", "[]")]
+)
+def test_accepts_dynamic_result_without_requiring_placeholder_text(tag, value):
+    html = HTML.replace(
+        "<output>0</output>", f'<{tag} data-design-element="ELM-005">{value}</{tag}>'
+    )
+    validate_prototype_html(html, result_prototype())
+
+
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<ul><li data-design-element="ELM-005">12</li></ul>',
+        '<dl><dt data-design-element="ELM-005">Result</dt><dd>12</dd></dl>',
+        '<dl><dt>Result</dt><dd data-design-element="ELM-005">12</dd></dl>',
+        '<table><tr><td data-design-element="ELM-005">12</td></tr></table>',
+        '<table><tr><th data-design-element="ELM-005">Result</th></tr></table>',
+        '<table><caption data-design-element="ELM-005">Result</caption></table>',
+        '<figure><figcaption data-design-element="ELM-005">12</figcaption></figure>',
+    ],
+)
+def test_accepts_semantic_text_containers_in_the_selected_screen(markup):
+    validate_prototype_html(HTML.replace("<output>0</output>", markup), result_prototype())
+
+
+@pytest.mark.parametrize(
+    "result_markup",
+    [
+        "<output>0</output>",
+        '<output data-design-element="ELM-005">0</output><p data-design-element="ELM-005">0</p>',
+        '<a data-design-element="ELM-005">0</a>',
+        '<script data-design-element="ELM-005">0</script>',
+    ],
+)
+def test_rejects_missing_duplicate_or_nontext_result_marker(result_markup):
+    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+        validate_prototype_html(
+            HTML.replace("<output>0</output>", result_markup), result_prototype()
+        )
+
+
+def test_rejects_result_marker_in_wrong_screen():
+    html = HTML.replace("<output>0</output>", "").replace(
+        "</section>", '<output data-design-element="ELM-005">0</output></section>', 1
+    )
+    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+        validate_prototype_html(html, result_prototype())
+
+
+def test_rejects_result_after_back_when_mockup_places_it_before():
+    html = HTML.replace("<output>0</output>", "").replace(
+        "</a>", '</a><output data-design-element="ELM-005">0</output>'
+    )
+    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+        validate_prototype_html(html, result_prototype())
+
+
+@pytest.mark.parametrize(
+    "extra", ['<p id="number">Other</p>', '<a id="back">Back</a><a id="back">Again</a>']
+)
+def test_rejects_duplicate_html_ids_even_on_extra_controls(extra):
+    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+        validate_prototype_html(HTML + extra, PROTOTYPE)
+
+
+def test_accepts_unique_html_ids_on_extra_controls():
+    validate_prototype_html(
+        HTML + '<p id="error">Invalid input</p><span id="hint">Help</span>', PROTOTYPE
+    )
