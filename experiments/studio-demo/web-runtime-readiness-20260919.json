@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "status": "REAL_WEB_RUNTIME_CONFIGURED_API_RESTARTED_FORMAL_QUALIFICATION_BLOCKED_BY_CI",
+  "observed_at_utc": "2026-09-19T18:58:21.838524+00:00",
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "application_database_probe": "READ_ONLY_TRANSACTION",
+  "web_catalog_records": 0,
+  "profile_status": "DESIGN_ONLY_LEVEL_C",
+  "missing_evidence": [
+    "evidence:any"
+  ],
+  "frontend_warning_condition": "profile.capability_status === 'DESIGN_ONLY_LEVEL_C'",
+  "runtime_at_diagnosis": {
+    "enabled": false,
+    "runner_manifest": null
+  },
+  "runtime_prepared": {
+    "configuration_path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\web-runtime.json",
+    "configuration_sha256": "464460336156be196a26bd933302b3a55b57ef1e58b2d9513cd0f55cc8fcb201",
+    "enabled": true,
+    "controlled_network": null,
+    "scope": "WEB_STATIC with no external dependencies",
+    "api_restarted": true
+  },
+  "bootstrap": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-d82bb48-20260919-01\\runners\\manifest.json",
+    "content_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+    "platform_commit": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+    "status": "IMAGES_BUILT_PROBES_RECORDED",
+    "started_at": "2026-09-19T18:51:06.195479+00:00",
+    "finished_at": "2026-09-19T18:51:15.945067+00:00",
+    "runners": [
+      {
+        "kind": "NODE",
+        "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+        "recipe_content_hash": "c9064bc999963310eb12bf1af15221f98b2cd659cf5363309c5a35f3f1f74939",
+        "cleanup_confirmed": true
+      },
+      {
+        "kind": "PHP",
+        "image_id": "sha256:fede10c87fcdc4eb723c78776f01d09c93a19031d23c245c4218f97a3c57ac73",
+        "recipe_content_hash": "e7fec9d2e23d38a4e8984592a5c2d569a8484a49c1981824cf819c4cd457a4f5",
+        "cleanup_confirmed": true
+      },
+      {
+        "kind": "BROWSER",
+        "image_id": "sha256:e35d531601b5f89701fd11b62c46428296248a10c601881b0b46baaf26f5a8df",
+        "recipe_content_hash": "87f2c3067f7432b03828cbb1d993a518e754f8981f5973b643b4111750be3f31",
+        "cleanup_confirmed": true
+      }
+    ],
+    "recipes_match_current_working_tree": true
+  },
+  "ci": {
+    "current_commit": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+    "status": "INCOMPLETE",
+    "issue": "CI_MATCHING_RUN_MISSING",
+    "latest_verified_success_commit": "21033febe9bfb961c0d5419b98c29fe8e29fb43a",
+    "run_id": 35155232382,
+    "runtime_modules_compared": 148,
+    "changed_imported_modules": [
+      "src/orchestwin/api/web_source_runtime.py",
+      "src/orchestwin/artifacts/web_sources.py",
+      "src/orchestwin/models/planning_schema.py",
+      "src/orchestwin/models/profile_schema.py",
+      "src/orchestwin/models/proposal_evidence.py",
+      "src/orchestwin/models/proposal_evidence_persistence.py",
+      "src/orchestwin/models/proposal_generation.py",
+      "src/orchestwin/models/source_design_contract.py",
+      "src/orchestwin/models/source_schema.py",
+      "src/orchestwin/models/source_syntax.py",
+      "src/orchestwin/workflow/persistence/repositories.py"
+    ],
+    "old_commit_reused_for_current_qualification": false
+  },
+  "formal_protocol": {
+    "requires_all_profiles": true,
+    "profiles": 5,
+    "language_fixtures": 8,
+    "initial_case_projects": 24,
+    "expected_complete_evidence_records": 52,
+    "web_static_only_publication_supported": false
+  },
+  "fixture_campaign_started": false,
+  "evidence_published": false,
+  "level_d_validated": false,
+  "jvm_qualification_started": false,
+  "next_step": "Complete development demo using actual generated source; qualify new clean user commit after its CI passes.",
+  "updated_at_utc": "2026-09-19T19:20:37.112014+00:00",
+  "loader_integration": {
+    "status": "IMPLEMENTED_VALIDATED_APPLICATION_API_RESTARTED_EXECUTION_PENDING",
+    "files": [
+      {
+        "path": "scripts/studio_runtime.py",
+        "sha256": "48e942a64f52959f39b143636e453273402252e29733637239c77237dedf6310",
+        "size_bytes": 5643
+      },
+      {
+        "path": "src/test/python/web_execution/test_studio_web_configuration.py",
+        "sha256": "4931d14e648c1c40f63383ce6ac6f90baf4c20de523d3b4d1f2fd004f9278175",
+        "size_bytes": 5615
+      },
+      {
+        "path": "src/test/python/jvm_execution/test_studio_jvm_configuration.py",
+        "sha256": "694f0e5ff20491c224ab332382b537eb04f94b90d9dbbd14a51c2a6ab6deffba",
+        "size_bytes": 2112
+      }
+    ],
+    "default_configuration": "var/studio/web-runtime.json",
+    "explicit_option": "--web-runtime",
+    "behavior": [
+      "Validate with GovernedWebSettings and no dotenv file.",
+      "Reject unknown fields before changing environment.",
+      "Serialize the controlled network as JSON; clear fields explicitly set to null.",
+      "Missing optional configuration disables Web execution and clears stale Web settings.",
+      "Preserve the independently selected JVM and real model configuration.",
+      "Load actual runner settings without changing profile validation evidence or bypassing gates."
+    ],
+    "tests": {
+      "command": ".venv/Scripts/python.exe -m pytest -q -p no:cacheprovider src/test/python/web_execution/test_studio_web_configuration.py src/test/python/jvm_execution/test_studio_jvm_configuration.py --basetemp var/studio/test-web-runtime-loader-20260919",
+      "passed": 12,
+      "failed": 0,
+      "web_cases": 8,
+      "jvm_cases": 4,
+      "scope": "Configuration admission, environment round trip, stale lease clearing, failure before mutation, and native launcher wiring; no model inference or runner execution."
+    },
+    "lint_and_format": {
+      "ruff_check": "PASSED",
+      "ruff_format": "PASSED",
+      "paths": [
+        "scripts/studio_runtime.py",
+        "src/test/python/web_execution/test_studio_web_configuration.py"
+      ]
+    },
+    "actual_configuration_probe": {
+      "process": "SEPARATE_SHORT_LIVED_PYTHON_PROCESS",
+      "operation": "configure_web(); GovernedWebSettings(_env_file=None)",
+      "enabled": true,
+      "runner_manifest_exists": true,
+      "repo_root": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio",
+      "controlled_network": null,
+      "execution_started": false,
+      "catalog_modified": false,
+      "running_application_environment_changed": false
+    },
+    "application_api_restarted": true,
+    "application_api_runtime_active_verified": false,
+    "bootstrap_manifest_unchanged": true,
+    "qualification_still_blocked_by": "CI_MATCHING_RUN_MISSING"
+  },
+  "api_restart": {
+    "process_id": 32384,
+    "process_name": "python",
+    "process_start_observed_at": "2026-09-19T19:15:59.3460047+00:00",
+    "performed_by": "root task",
+    "startup_log": "var/studio/logs/api.stderr.log",
+    "startup_log_sha256_at_observation": "c2590e7ce81f6b8a9da6089a34bdee73f2f69f996f89f845558c5fac59bb80d6",
+    "startup_log_size_at_observation": 202,
+    "startup_complete": true,
+    "loopback_endpoint": "http://127.0.0.1:8000",
+    "configuration_selection": "The native launcher configure(models, ...) invokes configure_web() and selects the prepared var/studio/web-runtime.json by default.",
+    "configuration_contents_verified_in_separate_process": true,
+    "root_reported_gui_source_generation": "V13 generation started through the GUI at approximately 19:22 UTC; result not verified here.",
+    "runner_execution_observed": false,
+    "live_api_internal_settings_introspected": false,
+    "scope_limit": "Startup logs verify the API restarted successfully; no governed Web phase or Level D catalog publication has been observed by this check."
+  }
+}

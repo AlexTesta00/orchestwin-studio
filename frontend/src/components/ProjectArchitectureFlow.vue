@@ -367,7 +367,6 @@ watch(
         <p class="m-0 text-sm leading-6 text-slate-700">
           {{ current.package.architecture.summary }}
         </p>
-        <p class="m-0 text-sm leading-6 text-slate-600">{{ current.package.test_plan.strategy }}</p>
       </section>
       <details
         class="rounded-xl border border-slate-200 p-3"

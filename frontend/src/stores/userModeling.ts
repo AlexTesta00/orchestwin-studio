@@ -36,6 +36,7 @@ export interface UserModelingStoreError {
 interface UserModelingState {
   projectId: string | null;
   projectEpoch: number;
+  readSequence: number;
 
   personaVersions: PersonaVersionPayload[];
   twinVersions: UserTwinVersionPayload[];
@@ -165,6 +166,7 @@ export const useUserModelingStore = defineStore("userModeling", {
   state: (): UserModelingState => ({
     projectId: null,
     projectEpoch: 0,
+    readSequence: 0,
 
     personaVersions: [],
     twinVersions: [],
@@ -253,6 +255,7 @@ export const useUserModelingStore = defineStore("userModeling", {
     },
 
     beginOperation(operation: UserModelingOperation): void {
+      if (operation !== "load") this.readSequence += 1;
       this.pending[operation] = true;
       this.error = null;
     },
@@ -263,6 +266,7 @@ export const useUserModelingStore = defineStore("userModeling", {
       }
 
       this.pending[operation] = false;
+      if (operation !== "load") this.readSequence += 1;
     },
 
     captureError(error: unknown, projectId: string, epoch: number): void {
@@ -274,6 +278,7 @@ export const useUserModelingStore = defineStore("userModeling", {
     },
 
     applySnapshot(snapshot: UserModelingSnapshotVersionPayload): void {
+      this.readSequence += 1;
       this.currentSnapshot = snapshot;
 
       this.personaVersions = [...snapshot.snapshot.persona_versions];
@@ -284,6 +289,7 @@ export const useUserModelingStore = defineStore("userModeling", {
     },
 
     applyGateResult(result: GateCommandPayload): void {
+      this.readSequence += 1;
       if (result.gate !== null) {
         this.currentGate = result.gate;
       }
@@ -292,9 +298,10 @@ export const useUserModelingStore = defineStore("userModeling", {
     },
 
     async refreshReadiness(projectId: string, accessToken: string, epoch: number): Promise<void> {
+      const sequence = ++this.readSequence;
       const readiness = await userModelingApi.getReadiness(projectId, accessToken);
 
-      if (this.isRequestCurrent(projectId, epoch)) {
+      if (this.isRequestCurrent(projectId, epoch) && sequence === this.readSequence) {
         this.readiness = readiness;
       }
     },
@@ -305,6 +312,7 @@ export const useUserModelingStore = defineStore("userModeling", {
       const epoch = this.projectEpoch;
 
       this.beginOperation("load");
+      const sequence = ++this.readSequence;
 
       try {
         const readiness = await userModelingApi.getReadiness(projectId, accessToken);
@@ -327,7 +335,9 @@ export const useUserModelingStore = defineStore("userModeling", {
             userModelingApi.getCurrentPersonas(projectId, accessToken),
           ]);
 
-        if (!this.isRequestCurrent(projectId, epoch)) {
+        // A token refresh can start this load while a gate command is being retried.
+        // Its pre-command snapshot must not replace the command's newer state.
+        if (!this.isRequestCurrent(projectId, epoch) || sequence !== this.readSequence) {
           return;
         }
 

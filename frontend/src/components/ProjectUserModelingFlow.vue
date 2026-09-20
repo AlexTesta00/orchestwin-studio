@@ -432,8 +432,8 @@ const errorMessage = computed(() => {
       "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
     ],
     INCOMPLETE_OUTPUT: [
-      "The model reached its generation limit. Try again with a smaller scope.",
-      "Il modello ha raggiunto il limite di generazione. Riprova con un ambito più contenuto.",
+      "The assistant did not complete its response. Your project has been preserved. You can try again.",
+      "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
     ],
     PROVIDER_UNAVAILABLE: [
       "The local model is unavailable. Check model status above.",

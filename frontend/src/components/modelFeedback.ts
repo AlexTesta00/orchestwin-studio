@@ -32,8 +32,8 @@ const messages: Record<string, [string, string]> = {
     "Il modello ha restituito una proposta non valida. Il progetto è invariato. Puoi riprovare.",
   ],
   INCOMPLETE_OUTPUT: [
-    "The model stopped before completing the proposal within its time or token budget. Check model status before retrying.",
-    "Il modello non ha completato la proposta entro il limite di tempo o token. Controlla lo stato dei modelli prima di riprovare.",
+    "The assistant did not complete its response. Your project has been preserved. You can try again.",
+    "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
   ],
   CONTEXT_BUDGET_EXCEEDED: [
     "The project exceeds the model context window. Reduce the scope or configure a larger context.",

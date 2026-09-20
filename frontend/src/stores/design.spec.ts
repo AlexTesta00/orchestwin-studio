@@ -359,6 +359,37 @@ describe("Design store", () => {
     expect(store.isBusy).toBe(false);
   });
 
+  it("does not let an older load clear a newly submitted gate", async () => {
+    const store = useDesignStore();
+    const api = new FakeDesignApi();
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const historyStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let first = true;
+    api.history = async () => {
+      if (first) {
+        first = false;
+        started();
+        await waiting;
+        return [];
+      }
+      return [VERSION];
+    };
+    const staleLoad = store.load(PROJECT_ID, authorize, api);
+    await historyStarted;
+    await store.submitGate(PROJECT_ID, authorize, api);
+    release();
+    await staleLoad;
+    expect(store.gate).toEqual(PENDING_GATE);
+    expect(store.current).toEqual(VERSION);
+    expect(store.readiness?.status).toBe("DESIGN_APPROVAL_REQUIRED");
+  });
+
   it("generates a package and derives recommended and selected alternatives", async () => {
     const store = useDesignStore();
     const api = new FakeDesignApi();

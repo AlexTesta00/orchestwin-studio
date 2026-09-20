@@ -1,0 +1,781 @@
+{
+  "schema_version": 1,
+  "report_type": "JVM_LEVEL_D_PROFILE_QUALIFICATION_AND_PUBLICATION",
+  "recorded_at": "2026-09-19T22:31:00.237424+00:00",
+  "status": "VERIFIED_AND_PUBLISHED",
+  "evidence_root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/jvm-leveld-d82bb48-20260919-02",
+  "platform_commit": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "clean_checkout": "C:\\Users\\alext\\.codex\\worktrees\\jvm-leveld-validation-d82bb48\\orchestwin-studio",
+  "scope": "Pinned Java/Kotlin/Scala CLI single-module execution profiles, formal golden fixtures and governance contracts. This report does not qualify model-generated calculators.",
+  "web_prerequisite_order": {
+    "released_at": "2026-09-19T20:10:03.944821+00:00",
+    "authority": "PARENT_EXPLICIT_RELEASE_AFTER_WEB_STEP5_NEGATIVE_OUTCOME",
+    "web_step5_outcome": "FAILED_INCOMPLETE_OUTPUT_NOT_PROMOTED",
+    "web_scope": "Real V14 source generation failed; assisted v5 browser checks are separate and are not evidence that the model succeeded.",
+    "formal_jvm_scope": "Pinned JVM runtime, recipes, golden fixtures and protocol checks from clean committed d82bb48. No generated calculator/model quality qualification.",
+    "user_commit_performed_by_agent": false,
+    "controller_sha256": "864cceaa8f9e2045809153b4857c585e373f7e4b2dad6f3c6341209ee1f79b84",
+    "separate_development_network_preserved": true,
+    "retry_authority": "PARENT_AUTHORIZED_NEW_IMMUTABLE_ATTEMPT_AFTER_REPRODUCED_TCP_READINESS_FIX",
+    "failed_previous_run": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-leveld-d82bb48-20260919-01",
+    "previous_evidence_preserved": true
+  },
+  "first_attempt": {
+    "root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/jvm-leveld-d82bb48-20260919-01",
+    "status": "FAILED_BEFORE_GOLDEN_FIXTURES",
+    "error_type": "OperationalError",
+    "root_cause_reproduced": "Unix pg_isready accepted the transient initdb server before the mapped TCP endpoint accepted a connection.",
+    "original_result_sha256": "6a083133207fa99fcefcca5fb9ba2c99fef8a4d2668a2c5543d07a7be5aae5a2",
+    "original_evidence_preserved": true,
+    "all_owned_databases_and_networks_removed": true,
+    "result_cleanup_status_note": "Original result retains REVIEW_REQUIRED because a run error occurred; the independently retained cleanup receipts confirm all owned resources were removed."
+  },
+  "recovery": {
+    "new_root_and_fresh_networks": true,
+    "readiness": "Bounded authenticated SELECT 1 over the exact loopback mapped TCP endpoint before migrations.",
+    "diagnostic_receipt": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/jvm-readiness-diagnostic-20260919/receipt.json",
+    "diagnostic_sha256": "779ddd35816f2c5656e0bb7491f54ef1d7ddfde1b38ccfad8f67c86f492aec53",
+    "controller_checks": [
+      "retries_transient_tcp_startup_using_exact_authenticated_mapped_endpoint",
+      "persistent_failure_stops_at_bound_before_migrations",
+      "wrong_query_or_non_tcp_backend_rejected",
+      "subprocess_imports_resolve_to_clean_worktree_despite_shared_editable_venv"
+    ],
+    "no_production_library_change": true,
+    "reused_runner_rebuild_receipts": "Same original clean recipes and image identities; actual rebuild/filesystem receipts copied byte-for-byte, with reuse provenance and fresh live image verification."
+  },
+  "contracts": {
+    "runs": [
+      {
+        "scope": "unit",
+        "passed": 677,
+        "skipped": 5,
+        "junit_sha256": "4b634f2eda68dfc4bc1a973d01a07819f5b62919b532e53729f403d8e4164b36"
+      },
+      {
+        "scope": "linux",
+        "passed": 8,
+        "junit_sha256": "23c088ef76a74b3707cf36b27c0ec5e7ddb528a5e4b564667791cf071b0117c8"
+      },
+      {
+        "scope": "postgresql",
+        "passed": 55,
+        "junit_sha256": "d001433a54484bc2dd2c24de03908b140a6c07ff2eba5cfc29759f19080458c0"
+      }
+    ],
+    "unique_passed_cases": 737,
+    "platform_skips_all_covered_elsewhere": true
+  },
+  "qualification": {
+    "attempts": 21,
+    "successful_attempts": 9,
+    "expected_failed_attempts": 12,
+    "approved_operations": 24,
+    "phase_containers_removed": 125,
+    "profiles": [
+      {
+        "approved_operations": 8,
+        "attempts": 7,
+        "expected_failed_attempts": 4,
+        "phase_containers_removed": 42,
+        "profile_id": "jvm.java-gradle",
+        "records": 17,
+        "successful_attempts": 3,
+        "target": "JVM_JAVA",
+        "attempt_outcomes": [
+          {
+            "fixture": "compile_failure",
+            "operation": "initial",
+            "attempt_id": "4044b3d6-dee0-4b69-8c86-d09f1d73c5ed",
+            "content_hash": "05eb911ca8afb1be5dd249be60ac659c4b6d08150eaba4782ee0bb82962e1277",
+            "status": "FAILED",
+            "started_at": "2026-09-19T20:24:17.436676+00:00",
+            "completed_at": "2026-09-19T20:27:41.677715+00:00",
+            "failed_phases": [
+              {
+                "phase": "BUILD",
+                "status": "FAILED",
+                "failure_category": "BUILD",
+                "failure_code": "JAVA_COMPILATION_ERROR",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "TEST",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/compile_failure/initial/attempt.json",
+            "source_sha256": "6d10c0e3e4e97b7265326643fe5654f5338e719a28891c6e77ec775823c3c009"
+          },
+          {
+            "fixture": "compile_failure",
+            "operation": "rerun",
+            "attempt_id": "7036fec4-e0dd-481f-a141-dba979c19981",
+            "content_hash": "c6eb3df8fb6a4754598b0fa70ace46225166747301de6afb216fa162de453754",
+            "status": "PASSED",
+            "started_at": "2026-09-19T20:27:42.239394+00:00",
+            "completed_at": "2026-09-19T20:32:14.166578+00:00",
+            "failed_phases": [],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/compile_failure/rerun/attempt.json",
+            "source_sha256": "48c25c657937e2c23c7b17cf6c3b0727a7bd7643f58b344f88491d1cbc483a01"
+          },
+          {
+            "fixture": "positive",
+            "operation": "initial",
+            "attempt_id": "a0b6dfa6-5e6a-440f-8d43-b65ac3f8c1df",
+            "content_hash": "f8091b90ee28fe89b14c9d748e31471666ed06db159b4d14c649a1a9983b06f5",
+            "status": "PASSED",
+            "started_at": "2026-09-19T20:12:47.416501+00:00",
+            "completed_at": "2026-09-19T20:19:22.313197+00:00",
+            "failed_phases": [],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/positive/initial/attempt.json",
+            "source_sha256": "ce78d458543e1b6718217b3d4afa457bf8c87296fee7f224da3a83c737201fe0"
+          },
+          {
+            "fixture": "positive",
+            "operation": "repeat",
+            "attempt_id": "086fb6d2-0d02-4c43-be67-2891429f1dc4",
+            "content_hash": "ccc1cf04a7343765e36687400814dd6e765ccb54a3b5eeb0884004917a7d967b",
+            "status": "PASSED",
+            "started_at": "2026-09-19T20:19:22.848789+00:00",
+            "completed_at": "2026-09-19T20:24:17.077347+00:00",
+            "failed_phases": [],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/positive/repeat/attempt.json",
+            "source_sha256": "f8bb58fd5178d0c1090397f427a93a23b25f0b916b1ce871f2b6e4ab6e281563"
+          },
+          {
+            "fixture": "runtime_failure",
+            "operation": "initial",
+            "attempt_id": "a855c488-dbda-45b3-9712-535680b4d4fd",
+            "content_hash": "ab2f994019ac907ec80e4b8d26e7300590d148b432cc66685219dda9ed064357",
+            "status": "FAILED",
+            "started_at": "2026-09-19T20:36:07.606943+00:00",
+            "completed_at": "2026-09-19T20:40:19.933541+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "FAILED",
+                "failure_category": "RUNTIME",
+                "failure_code": "GRADLE_BUILD_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/runtime_failure/initial/attempt.json",
+            "source_sha256": "cbc91c197f226aa6fd06285f7a8456346f15c2c0c86d24c85830a0c33c3deaec"
+          },
+          {
+            "fixture": "test_failure",
+            "operation": "initial",
+            "attempt_id": "d44de574-dc9b-4282-ae29-457b2d11a0f7",
+            "content_hash": "aa8dd3705da603fa76d5eed31580be532c8bd77f1a14dd8a8b135854dd7b0c0a",
+            "status": "FAILED",
+            "started_at": "2026-09-19T20:32:14.512602+00:00",
+            "completed_at": "2026-09-19T20:36:07.268747+00:00",
+            "failed_phases": [
+              {
+                "phase": "TEST",
+                "status": "FAILED",
+                "failure_category": "TEST",
+                "failure_code": "JVM_TEST_CASE_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/test_failure/initial/attempt.json",
+            "source_sha256": "27856ead8dd6a0c9679e50dae7810c92681f2182820d94560e1073572cc85cae"
+          },
+          {
+            "fixture": "timeout",
+            "operation": "initial",
+            "attempt_id": "53cd9d88-3f1c-4eb7-88a6-a7c7cec3ab12",
+            "content_hash": "60c2858e27f65ce2feee5e0af2e7d6e0c2706c760f67fac52d6bf8a705092791",
+            "status": "FAILED",
+            "started_at": "2026-09-19T20:40:20.291029+00:00",
+            "completed_at": "2026-09-19T20:49:14.547983+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "TIMED_OUT",
+                "failure_category": "TIMEOUT",
+                "failure_code": "JVM_COMMAND_TIMEOUT",
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_JAVA/campaign/JVM_JAVA/timeout/initial/attempt.json",
+            "source_sha256": "5e1564be2ab6d9f18d0cc21536079dfc58764f09483ef23f5354e53b679871f5"
+          }
+        ],
+        "network_cleanup": {
+          "status": "REMOVED",
+          "remaining_resources": 0,
+          "failures": 0,
+          "receipt_sha256": "b7344ad8e9063793202246d73b1a1633da695513b2126c6775268c8c4a0f9ede"
+        }
+      },
+      {
+        "approved_operations": 8,
+        "attempts": 7,
+        "expected_failed_attempts": 4,
+        "phase_containers_removed": 42,
+        "profile_id": "jvm.kotlin-gradle",
+        "records": 17,
+        "successful_attempts": 3,
+        "target": "JVM_KOTLIN",
+        "attempt_outcomes": [
+          {
+            "fixture": "compile_failure",
+            "operation": "initial",
+            "attempt_id": "cdd09dc5-969b-4ddc-9f09-aad2e48cb600",
+            "content_hash": "1c6ce9f330e8afdd52495eab2071c66971b29d5adc4d8b54353eaad3545f0dd1",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:03:43.302922+00:00",
+            "completed_at": "2026-09-19T21:09:13.761131+00:00",
+            "failed_phases": [
+              {
+                "phase": "BUILD",
+                "status": "FAILED",
+                "failure_category": "BUILD",
+                "failure_code": "KT_COMPILATION_ERROR",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "TEST",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/compile_failure/initial/attempt.json",
+            "source_sha256": "06b87e2e2f4c6be83e9e4ac957c582769bfd54325496a22b05db49849eb04d05"
+          },
+          {
+            "fixture": "compile_failure",
+            "operation": "rerun",
+            "attempt_id": "ab065809-fe90-4c0e-9c25-79aca1a78a9c",
+            "content_hash": "64dff29fde97ff165e1a33f1a0f8dce06e78115e46ab873ce22e7cbc74b73ede",
+            "status": "PASSED",
+            "started_at": "2026-09-19T21:09:14.336182+00:00",
+            "completed_at": "2026-09-19T21:16:29.411401+00:00",
+            "failed_phases": [],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/compile_failure/rerun/attempt.json",
+            "source_sha256": "1783ab16ff16858ce477b832cd4a15628b294db214c55d0a4cd7aa0f3a3fcb60"
+          },
+          {
+            "fixture": "positive",
+            "operation": "initial",
+            "attempt_id": "1b1af6fc-ecad-4d21-9e4a-67711bdc00cf",
+            "content_hash": "bb6f3b4cb8b9b63191d462162b24ee3448304dff46d5c8c55a866c762c0ca146",
+            "status": "PASSED",
+            "started_at": "2026-09-19T20:49:15.922299+00:00",
+            "completed_at": "2026-09-19T20:56:29.421085+00:00",
+            "failed_phases": [],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/positive/initial/attempt.json",
+            "source_sha256": "410c367961b91fc65fe2f11d3dcfc930da9aadc225c48216adde7737ac5c94c6"
+          },
+          {
+            "fixture": "positive",
+            "operation": "repeat",
+            "attempt_id": "043ddca9-876e-465a-8f0a-ee6abc2eff79",
+            "content_hash": "c01d8f511cbd19a05d1e19dadd647deb6c781b3d05980f8942425897a97817c9",
+            "status": "PASSED",
+            "started_at": "2026-09-19T20:56:29.741920+00:00",
+            "completed_at": "2026-09-19T21:03:42.925833+00:00",
+            "failed_phases": [],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/positive/repeat/attempt.json",
+            "source_sha256": "a740545a3fcb2f76449a437bf565e15b2918565ee49b75a69606e9917d3fd24d"
+          },
+          {
+            "fixture": "runtime_failure",
+            "operation": "initial",
+            "attempt_id": "0920a900-8475-48ee-9106-d6cd96fddf4c",
+            "content_hash": "f244db564e98a0487f07ac6d326fe4ffbe78472ff1dc0aceffd01e98e9737181",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:22:56.183145+00:00",
+            "completed_at": "2026-09-19T21:29:48.593979+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "FAILED",
+                "failure_category": "RUNTIME",
+                "failure_code": "GRADLE_BUILD_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/runtime_failure/initial/attempt.json",
+            "source_sha256": "893fe5816308cdad46923f835ba66ab1dc744cbb193fecf404dc485b517761a0"
+          },
+          {
+            "fixture": "test_failure",
+            "operation": "initial",
+            "attempt_id": "49890f81-25c6-4862-b080-2ccdda38feb1",
+            "content_hash": "052bf6761f6ac23b69d72d7e1dc7638c07e275b7c2241cbc87d420846fadb0f2",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:16:29.777641+00:00",
+            "completed_at": "2026-09-19T21:22:55.751457+00:00",
+            "failed_phases": [
+              {
+                "phase": "TEST",
+                "status": "FAILED",
+                "failure_category": "TEST",
+                "failure_code": "JVM_TEST_CASE_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/test_failure/initial/attempt.json",
+            "source_sha256": "ecb1f2b14e49cc2097cc149c123f804d5728bf3b1ae23eab1e3dd24e8d21650c"
+          },
+          {
+            "fixture": "timeout",
+            "operation": "initial",
+            "attempt_id": "5b8a6613-66ae-4223-8405-674adc2d2f3e",
+            "content_hash": "5f148118f0f00263eb611e0af4b19352f8077ad26c77ae24567d9b39753141ab",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:29:48.939456+00:00",
+            "completed_at": "2026-09-19T21:41:13.216272+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "TIMED_OUT",
+                "failure_category": "TIMEOUT",
+                "failure_code": "JVM_COMMAND_TIMEOUT",
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_KOTLIN/campaign/JVM_KOTLIN/timeout/initial/attempt.json",
+            "source_sha256": "6fc5b7babfb9f3622bbfcddace622bafc438dcbc992053a145c384a0f70c160e"
+          }
+        ],
+        "network_cleanup": {
+          "status": "REMOVED",
+          "remaining_resources": 0,
+          "failures": 0,
+          "receipt_sha256": "ccd76fda99daeeebaa4198c1e4f04f3a16b3b58739707176ce73c1a99a03c99f"
+        }
+      },
+      {
+        "approved_operations": 8,
+        "attempts": 7,
+        "expected_failed_attempts": 4,
+        "phase_containers_removed": 41,
+        "profile_id": "jvm.scala-sbt",
+        "records": 17,
+        "successful_attempts": 3,
+        "target": "JVM_SCALA",
+        "attempt_outcomes": [
+          {
+            "fixture": "compile_failure",
+            "operation": "initial",
+            "attempt_id": "e24e92a1-b29f-4b73-a6d4-b9dcf5a2caa6",
+            "content_hash": "188d840be8863105972e9ab894bc80ffee7674b108625edf7f07f5c754669446",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:45:38.240291+00:00",
+            "completed_at": "2026-09-19T21:46:50.736684+00:00",
+            "failed_phases": [
+              {
+                "phase": "STATIC_CHECKS",
+                "status": "FAILED",
+                "failure_category": "STATIC_CHECK",
+                "failure_code": "SCALA_E103",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "BUILD",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "TEST",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/compile_failure/initial/attempt.json",
+            "source_sha256": "57dd828e8f24e96b3f71e0095c361ce5a0cf28cb1473b8e7db09e03d79f828f2"
+          },
+          {
+            "fixture": "compile_failure",
+            "operation": "rerun",
+            "attempt_id": "a4064ca0-b563-43cd-a695-cd7c4c6622c1",
+            "content_hash": "9eca3970faa1d384e5f5a1692e38cad3792bc59ca81d8b88ae703232c8b41a7c",
+            "status": "PASSED",
+            "started_at": "2026-09-19T21:46:51.260245+00:00",
+            "completed_at": "2026-09-19T21:49:01.677290+00:00",
+            "failed_phases": [],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/compile_failure/rerun/attempt.json",
+            "source_sha256": "83a40b8b56c17cc7efd2d4e4f2c30e081ea48811f46ac1052f0665ccba10b75a"
+          },
+          {
+            "fixture": "positive",
+            "operation": "initial",
+            "attempt_id": "a03aa3ea-42df-49dc-b1f5-fbfb23459194",
+            "content_hash": "17948e082b347c747dbdcb026f6d1bae9995859a453caa7cc45d0ca32c7a3bc0",
+            "status": "PASSED",
+            "started_at": "2026-09-19T21:41:15.894858+00:00",
+            "completed_at": "2026-09-19T21:43:28.068703+00:00",
+            "failed_phases": [],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/positive/initial/attempt.json",
+            "source_sha256": "3fefc725b54ec4d8ae023e56bd61503f30102cc338faab274f0509dac5e3cabe"
+          },
+          {
+            "fixture": "positive",
+            "operation": "repeat",
+            "attempt_id": "fa8ffbec-1e41-43c8-bc36-39ee2ac32288",
+            "content_hash": "4fa7973f99c0d60a67f9f07404935f627efd5275da9a5f58568fab417cae587b",
+            "status": "PASSED",
+            "started_at": "2026-09-19T21:43:28.326412+00:00",
+            "completed_at": "2026-09-19T21:45:37.961107+00:00",
+            "failed_phases": [],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/positive/repeat/attempt.json",
+            "source_sha256": "752f4a533b3d5da6e4fb6157e9f1a11505355cd3fae224df792f74129add84f4"
+          },
+          {
+            "fixture": "runtime_failure",
+            "operation": "initial",
+            "attempt_id": "172fa40e-cf74-4b53-8ce7-e80652a0e3f6",
+            "content_hash": "70cbc2c7f391ed350ac09344c1d74d281e17c14d2ad2b9b33deb350344c901ff",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:50:46.447452+00:00",
+            "completed_at": "2026-09-19T21:52:44.310076+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "FAILED",
+                "failure_category": "RUNTIME",
+                "failure_code": "JVM_COMMAND_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/runtime_failure/initial/attempt.json",
+            "source_sha256": "4292c9c9e6518be613703873191b03c3d313bd4192ff0f00aeba178b768a05b3"
+          },
+          {
+            "fixture": "test_failure",
+            "operation": "initial",
+            "attempt_id": "071347a1-c0d8-45b6-810e-49e73ac630d5",
+            "content_hash": "96a9c18bd33f68f8bf0474122a218ce042aad02eec573fa7bf8b75912a8dbb3e",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:49:01.962603+00:00",
+            "completed_at": "2026-09-19T21:50:46.166148+00:00",
+            "failed_phases": [
+              {
+                "phase": "TEST",
+                "status": "FAILED",
+                "failure_category": "TEST",
+                "failure_code": "JVM_TEST_CASE_FAILED",
+                "exit_codes": [
+                  1
+                ]
+              },
+              {
+                "phase": "RUN",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/test_failure/initial/attempt.json",
+            "source_sha256": "f4f4df6fe361937342f42c36de789af547bc701ccb940388af6a0448161d3b5a"
+          },
+          {
+            "fixture": "timeout",
+            "operation": "initial",
+            "attempt_id": "b8b91362-f94f-48dc-a3a8-92bdbee77cc8",
+            "content_hash": "8fd94ac2290a5ce4b89ca59e89eca88e003430ec0853f9e9783d899299dc710d",
+            "status": "FAILED",
+            "started_at": "2026-09-19T21:52:44.605368+00:00",
+            "completed_at": "2026-09-19T21:59:31.760499+00:00",
+            "failed_phases": [
+              {
+                "phase": "RUN",
+                "status": "TIMED_OUT",
+                "failure_category": "TIMEOUT",
+                "failure_code": "JVM_COMMAND_TIMEOUT",
+                "exit_codes": []
+              },
+              {
+                "phase": "COLLECT_ARTIFACTS",
+                "status": "NOT_RUN",
+                "failure_category": null,
+                "failure_code": null,
+                "exit_codes": []
+              }
+            ],
+            "source": "JVM_SCALA/campaign/JVM_SCALA/timeout/initial/attempt.json",
+            "source_sha256": "ea0677d1efe1a4a5a1b7c0012265bbdac13521665ffca70eda4d8077177d9def"
+          }
+        ],
+        "network_cleanup": {
+          "status": "REMOVED",
+          "remaining_resources": 0,
+          "failures": 0,
+          "receipt_sha256": "acb754308d268b78a09cfea6b7b1983c302de0963136d0434e84a6d8bdc85b15"
+        }
+      }
+    ]
+  },
+  "seal_and_verification": {
+    "package_hash": "94ef317c1d233c9afd2c5335f32558ee92bf45782c2a0807863cff77ccebe8fa",
+    "catalog_hash": "4dfeab23d7b24d09f4e632df8f2ba497f898e46381d090b87f3fdf865135be9e",
+    "records": 51,
+    "package_verified_before_publication": true,
+    "promotions": [
+      {
+        "profile_id": "jvm.java-gradle",
+        "status": "ELIGIBLE",
+        "missing_requirements": []
+      },
+      {
+        "profile_id": "jvm.kotlin-gradle",
+        "status": "ELIGIBLE",
+        "missing_requirements": []
+      },
+      {
+        "profile_id": "jvm.scala-sbt",
+        "status": "ELIGIBLE",
+        "missing_requirements": []
+      }
+    ]
+  },
+  "publication": {
+    "database_published": true,
+    "connection_scope": {
+      "host": "127.0.0.1",
+      "port": 15432,
+      "database": "orchestwin"
+    },
+    "credentials_retained": false,
+    "schema_migrated": false,
+    "method": "Original clean-checkout publish_catalog: independently verifies exact package, atomically appends evidence, checks stored eligibility before transaction commit.",
+    "publisher_source": "C:\\Users\\alext\\.codex\\worktrees\\jvm-leveld-validation-d82bb48\\orchestwin-studio\\src\\orchestwin\\jvm_execution\\validation_harvest.py",
+    "publisher_sha256": "32fed9d63ff9f1854821ce6769870d87e18ffccc75a5439ffe524944930f84b1",
+    "first_wrapper_invocation": {
+      "status": "FAILED",
+      "native_stdout_sha256": "1a5141d927d198e76d31f870cc3f49f22a3ac9df3f45dc1e08f1c914be0d7563",
+      "database_rows_after_failure": 0,
+      "reason_detail": "Wrapper reported only RuntimeError; no evidence bypass was used. The same clean library publisher subsequently succeeded directly.",
+      "native_receipt_preserved": true
+    },
+    "database_evidence_counts": [
+      {
+        "profile_id": "jvm.java-gradle",
+        "total": 17,
+        "passed": 17
+      },
+      {
+        "profile_id": "jvm.kotlin-gradle",
+        "total": 17,
+        "passed": 17
+      },
+      {
+        "profile_id": "jvm.scala-sbt",
+        "total": 17,
+        "passed": 17
+      }
+    ]
+  },
+  "live_api": {
+    "url": "http://127.0.0.1:8000/api/v1/execution-profiles",
+    "http_status": 200,
+    "response_sha256": "5f8202f9a007c0a3ec6614c4bdb17181f038f9107745c4d0c8645a8d4e13f081",
+    "profiles": [
+      {
+        "profile_id": "JVM_JAVA",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "runtime_availability": "NOT_CHECKED",
+        "evidence_refs": 17
+      },
+      {
+        "profile_id": "JVM_KOTLIN",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "runtime_availability": "NOT_CHECKED",
+        "evidence_refs": 17
+      },
+      {
+        "profile_id": "JVM_SCALA",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "runtime_availability": "NOT_CHECKED",
+        "evidence_refs": 17
+      }
+    ]
+  },
+  "cleanup": {
+    "collection_status": "REMOVED",
+    "disposable_databases_removed": 2,
+    "formal_network_groups_removed": 3,
+    "phase_containers_removed": 125,
+    "development_network_untouched": true,
+    "other_agent_development_probe_resources_not_owned_by_this_campaign": true
+  },
+  "compatibility": {
+    "scoped_files_checked": 94,
+    "current_scoped_files_unchanged_since_preflight": true,
+    "runtime_recipe_changes_from_clean": [],
+    "historical_metadata_line_endings_only": [
+      "infra/jvm-runners/fixture-dependencies.lock.json"
+    ],
+    "preflight_receipt_sha256": "ad616f20a616ac711d94084833afbf862e4dc65ceeed0d62dcd204ad59a71631"
+  },
+  "controller_source_sha256": {
+    "orchestrate.py": "864cceaa8f9e2045809153b4857c585e373f7e4b2dad6f3c6341209ee1f79b84",
+    "linux_contract_entry.py": "d3ad1ad8cc9251791309ca5958b39a59d6e3b17df669e01cd4bd47f1e2a6b219",
+    "prepare_networks.py": "ce5cb742558b973dc9047673b4ce58e24ead0841238fbaa374a66e692c51f3aa",
+    "check_tcp_readiness.py": "a554e64e68352bf09cbc8cd1edcb09fb8b3d16fdbf2baa451a904da98638a0fe",
+    "publish_verified_catalog.py": "bed933fa8389e35676dcfd0e59a86a83ffb62fbc0de6e6e01c050cde9d19534a"
+  },
+  "proof_sha256": {
+    "preparation.json": "cf81844b81be3314b22ab689bf68eeb2b06feea221c104d92d110bbb55eb75eb",
+    "collection-started.json": "10e217ba728e746ac29bcb1f390d8a29d19b6b32686a851ab7f7aabc9961df2f",
+    "result.json": "7559c1af04b565cb8a426741312636a58f483129f1cdbcea8d6ae3851a81874c",
+    "contract-tests.json": "19697184b087390aebc01fd27fb1e30b93af7edd132dd898f4e42f302e744f3d",
+    "seal-result.json": "60e9a2de3d9e78593dd9bba8890ec01bbbbb216e0133ff0f53450d224eda1d94",
+    "publication.json": "9f30feaab7418b3760319eec8a101b77d9a244c1ed6e47a5bb8418c213fd473d",
+    "publication-direct-result.json": "ba64b834527215a15a4a47ccf7bfd4dd588c7ff2e1ac0cab5e301f367f58a1ea",
+    "live-api-profile-catalog.json": "5f8202f9a007c0a3ec6614c4bdb17181f038f9107745c4d0c8645a8d4e13f081",
+    "prerequisite-reuse.json": "48b55a7e382627fb2c0a15ac8e62d9ed0c9be3cb88d82099a4189e1205f33cde",
+    "release-after-web-step5.json": "c700ab6eafa7900671cf560779747bb2905eef177ef1dc3f2ed2857d93bbbf05",
+    "tcp-readiness-checks.json": "1f76e8678f4e2c0544787d846765396478a93dfd0a019318f510da5066960544"
+  },
+  "limitations": [
+    "Runtime availability is checked separately for each governed execution; the API snapshot explicitly reports NOT_CHECKED.",
+    "The current local development network is separate from the removed formal qualification networks.",
+    "No source-model capability, generated-calculator functional correctness, frontend end-to-end success or Web Level D qualification is inferred.",
+    "The initial Web generation failed; the assisted demo and independently generated JVM calculator probes have separate evidence.",
+    "No commits, push, model training or cloud spending were performed by this qualification task."
+  ]
+}

@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 import { useUserModelingStore } from "./userModeling";
-import type { PersonaVersionPayload, UserModelingReadinessPayload } from "../types/userModeling";
+import type {
+  HumanGatePayload,
+  PersonaVersionPayload,
+  UserModelingReadinessPayload,
+} from "../types/userModeling";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -154,18 +158,73 @@ describe("User Modeling frontend state", () => {
     expect(store.currentPersonas).toEqual([personaVersion]);
   });
 
+  it("preserves a submitted gate when a token-refresh load finishes afterward", async () => {
+    const submitted: HumanGatePayload = {
+      id: "gate-three",
+      project_id: PROJECT_ID,
+      owner_user_id: OWNER_ID,
+      gate_type: "USER_MODELING",
+      artifact: {
+        project_id: PROJECT_ID,
+        gate_type: "USER_MODELING",
+        artifact_id: "snapshot-one",
+        version: 1,
+        content_hash: "c".repeat(64),
+      },
+      iteration: 1,
+      max_iterations: 3,
+      status: "PENDING_APPROVAL",
+      event_sequence: 1,
+      created_at: CREATED_AT,
+      updated_at: CREATED_AT,
+    };
+    const afterSubmit = {
+      ...readinessWithoutSnapshot,
+      gate_exists: true,
+      gate_id: submitted.id,
+      gate_status: submitted.status,
+    };
+    const submitResponse = createDeferred();
+    const staleHistory = createDeferred();
+    const historyStarted = createDeferred();
+    vi.spyOn(userModelingApi, "submitGate").mockImplementation(async () => {
+      await submitResponse.promise;
+      return { outcome: "APPLIED", gate: submitted, events: [], issue: null };
+    });
+    vi.spyOn(userModelingApi, "getReadiness")
+      .mockResolvedValueOnce(readinessWithoutSnapshot)
+      .mockResolvedValue(afterSubmit);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockImplementation(async () => {
+      historyStarted.resolve();
+      await staleHistory.promise;
+      return [];
+    });
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([personaVersion]);
+    const store = useUserModelingStore();
+    const submit = store.submitGate(PROJECT_ID, ACCESS_TOKEN);
+    // Token renewal starts a load while the retried POST is still in flight.
+    const staleLoad = store.load(PROJECT_ID, "renewed-token");
+    await historyStarted.promise;
+    submitResponse.resolve();
+    await submit;
+    expect(store.currentGate?.status).toBe("PENDING_APPROVAL");
+    staleHistory.resolve();
+    await staleLoad;
+    expect(store.currentGate).toEqual(submitted);
+    expect(store.readiness).toEqual(afterSubmit);
+    expect(store.isBusy).toBe(false);
+  });
+
   it("does not silently swallow a rejected model proposal", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          fakeResponse({
-            status: "REJECTED",
-            proposal_issue: "INVALID_PROVIDER_OUTPUT",
-            versions: [],
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        fakeResponse({
+          status: "REJECTED",
+          proposal_issue: "INVALID_PROVIDER_OUTPUT",
+          versions: [],
+        }),
+      ),
     );
     const store = useUserModelingStore();
     await expect(store.proposePersonas(PROJECT_ID, ACCESS_TOKEN)).rejects.toMatchObject({

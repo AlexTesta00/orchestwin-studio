@@ -103,6 +103,38 @@ describe("Architecture store", () => {
     expect(store.pendingDiffs).toEqual([ARCHITECTURE_DIFF]);
   });
 
+  it("does not let an older load clear a newly submitted gate", async () => {
+    const store = useArchitectureStore();
+    const api = fakeApi();
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const historyStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let first = true;
+    api.readiness = async () =>
+      first ? { ...ARCHITECTURE_READINESS, gate: null } : ARCHITECTURE_READINESS;
+    api.history = async () => {
+      if (first) {
+        first = false;
+        started();
+        await waiting;
+        return [];
+      }
+      return [ARCHITECTURE_VERSION];
+    };
+    const staleLoad = store.load(ARCHITECTURE_PROJECT_ID, authorize, api);
+    await historyStarted;
+    await store.submitGate(ARCHITECTURE_PROJECT_ID, authorize, api);
+    release();
+    await staleLoad;
+    expect(store.gate).toEqual(PENDING_ARCHITECTURE_GATE);
+    expect(store.history).toEqual([ARCHITECTURE_VERSION]);
+  });
+
   it("discards a stale response after the active project changes", async () => {
     let resolveReadiness!: (value: ArchitectureReadinessPayload) => void;
     const delayedReadiness = new Promise<ArchitectureReadinessPayload>((resolve) => {

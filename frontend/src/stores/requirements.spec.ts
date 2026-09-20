@@ -252,6 +252,44 @@ describe("Requirements store", () => {
     expect(store.coverage).toEqual(COVERAGE);
   });
 
+  it("does not let an older load erase a newly generated specification", async () => {
+    const store = useRequirementsStore();
+    const api = new FakeRequirementsApi();
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const historyStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let first = true;
+    api.history = async () => {
+      if (first) {
+        first = false;
+        started();
+        await waiting;
+        return [];
+      }
+      return [VERSION];
+    };
+    const staleLoad = store.load(PROJECT_ID, authorize, api);
+    await historyStarted;
+    api.readinessResult = {
+      status: "REQUIREMENTS_APPROVAL_REQUIRED",
+      version: VERSION,
+      gate: null,
+      approved_current_specification: false,
+    };
+    await store.generate(PROJECT_ID, authorize, api);
+    release();
+    await staleLoad;
+    expect(store.current).toEqual(VERSION);
+    expect(store.traceability).toEqual(TRACEABILITY);
+    expect(store.coverage).toEqual(COVERAGE);
+    expect(store.readiness?.status).toBe("REQUIREMENTS_APPROVAL_REQUIRED");
+  });
+
   it("ignores a stale load after another project becomes active", async () => {
     const store = useRequirementsStore();
     const api = new FakeRequirementsApi();

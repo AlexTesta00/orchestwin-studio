@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "scope": "DEVELOPMENT_GUI_ACCEPTANCE_NOT_FORMAL_THESIS_QUALIFICATION",
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "diagnostic_project_id": "69dcb4cd-38dc-43b5-952b-630328033cf0",
+  "project_selection_note": "The final fresh GUI project uses the same business brief and unchanged 17 acceptance cases; the diagnostic project preserves the pre-fix persona observations. No source generation occurred before this project selection.",
+  "frozen_before_source_generation": true,
+  "basis": "Approved brief entered through the GUI; expected results are independently calculated.",
+  "oracles_sent_to_model": false,
+  "brief_contains_some_example_calculations": true,
+  "numeric_tolerance": 0.000001,
+  "cases": [
+    {"id": "addition", "left": "9", "operation": "Addizione", "right": "3", "expected_result": 12},
+    {"id": "subtraction", "left": "9", "operation": "Sottrazione", "right": "3", "expected_result": 6},
+    {"id": "multiplication", "left": "9", "operation": "Moltiplicazione", "right": "3", "expected_result": 27},
+    {"id": "division", "left": "9", "operation": "Divisione", "right": "3", "expected_result": 3},
+    {"id": "mixed-decimal-separators", "left": "1,5", "operation": "Addizione", "right": "2.5", "expected_result": 4},
+    {"id": "negative-multiplication", "left": "-2", "operation": "Moltiplicazione", "right": "3", "expected_result": -6},
+    {"id": "negative-subtraction", "left": "-4", "operation": "Sottrazione", "right": "-7", "expected_result": 3},
+    {"id": "fractional-result", "left": "1", "operation": "Divisione", "right": "4", "expected_result": 0.25},
+    {"id": "zero-numerator", "left": "0", "operation": "Divisione", "right": "5", "expected_result": 0},
+    {"id": "division-by-zero", "left": "9", "operation": "Divisione", "right": "0", "expected": "Visible understandable error; remain on form; no nonfinite result"},
+    {"id": "empty-left", "left": "", "operation": "Addizione", "right": "3", "expected": "Visible validation feedback; no navigation to result"},
+    {"id": "empty-right", "left": "9", "operation": "Addizione", "right": "", "expected": "Visible validation feedback; no navigation to result"},
+    {"id": "invalid-numeric-text", "left": "12abc", "operation": "Addizione", "right": "3", "expected": "Reject invalid input or browser field validation; never calculate 15"},
+    {"id": "back-preserves-input", "expected": "After a successful calculation, Back returns to the form with both inputs and operation unchanged"},
+    {"id": "mockup-alignment", "expected": "Approved controls, accessible names, options, order and two screen transitions match the applied Design Package"},
+    {"id": "keyboard", "expected": "Inputs, operation menu and calculate/back controls are operable with the keyboard"},
+    {"id": "mobile", "expected": "At a 390px viewport the form and result remain readable, usable and free of horizontal page overflow"}
+  ]
+}
