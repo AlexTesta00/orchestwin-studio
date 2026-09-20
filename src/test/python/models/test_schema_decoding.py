@@ -70,3 +70,16 @@ def test_schema_order_matches_canonical_wire_order_without_changing_the_input(mo
     again = sys.modules["llguidance"].LLMatcher.grammar_from_json_schema.call_args.args[0]
     assert list(again) == list(compiled)
     assert list(again["properties"]) == list(compiled["properties"])
+
+
+def test_structural_whitespace_is_bounded_at_grammar_compilation(monkeypatch):
+    create, _ = factory(monkeypatch)
+    schema = {"type": "object", "x-guidance": {"whitespace_pattern": r"\s+"}}
+    create(schema, 2)
+    call = sys.modules["llguidance"].LLMatcher.grammar_from_json_schema.call_args
+    assert call.kwargs["overrides"] == {
+        "whitespace_flexible": True,
+        "whitespace_pattern": r"[\x20\x0A\x0D\x09]{1,8}",
+    }
+    assert schema["x-guidance"]["whitespace_pattern"] == r"\s+"
+    assert schema_decoding.POLICY == "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"

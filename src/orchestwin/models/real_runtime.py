@@ -39,7 +39,7 @@ from orchestwin.models.proposal_generation import (
     ProposalModelConfiguration,
     build_proposal_generator,
 )
-from orchestwin.models.proposal_tasks import TASKS
+from orchestwin.models.proposal_tasks import SOURCE_TASKS, TASKS
 from orchestwin.models.requirements_runtime import RequirementsRuntime, RequirementsRuntimeMode
 from orchestwin.models.schema_decoding import POLICY as SCHEMA_DECODING_POLICY
 from orchestwin.models.serialized_generation import SerializedGenerationPort
@@ -58,6 +58,7 @@ class RealModelConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
     schema_version: int = Field(default=1, ge=1, le=1, strict=True)
     proposal_config_file: Path
+    source_proposal_config_file: Path | None = None
     final_evaluator_ready_file: Path | None = None
     final_evaluator_config_file: Path | None = None
 
@@ -69,6 +70,7 @@ class RealModelConfiguration(BaseModel):
             path is not None and (not path.is_absolute() or ".." in path.parts)
             for path in (
                 self.proposal_config_file,
+                self.source_proposal_config_file,
                 self.final_evaluator_ready_file,
                 self.final_evaluator_config_file,
             )
@@ -87,6 +89,7 @@ class _Overrides(BaseSettings):
     design_mode: str | None = None
     architecture_mode: str | None = None
     proposal_model_config_file: Path | None = None
+    source_proposal_model_config_file: Path | None = None
     team_proposal_model_config_file: Path | None = None
     user_modeling_model_config_file: Path | None = None
     requirements_model_config_file: Path | None = None
@@ -103,6 +106,8 @@ class _Overrides(BaseSettings):
                 valid = value is True
             elif field_name == "final_evaluator_ready_file":
                 valid = value == config.final_evaluator_ready_file
+            elif field_name == "source_proposal_model_config_file":
+                valid = value == config.source_proposal_config_file
             elif field_name.endswith("config_file"):
                 valid = value == config.proposal_config_file
             else:
@@ -128,7 +133,7 @@ def _read(path, maximum=32768):
     return raw
 
 
-def _proposal_health(config, token):
+def _proposal_health(config, token, supported_tasks=TASKS):
     endpoint = urlsplit(config.base_url)
     connection = http.client.HTTPConnection(endpoint.hostname, endpoint.port, timeout=10)
     try:
@@ -149,7 +154,7 @@ def _proposal_health(config, token):
             and health.get("status") == "READY"
             and health.get("model_name") == config.model_name
             and health.get("model_identity") == config.identity.to_snapshot()
-            and health.get("supported_tasks") == sorted(TASKS)
+            and health.get("supported_tasks") == sorted(supported_tasks)
             and health.get("schema_decoding") == SCHEMA_DECODING_POLICY
             and health.get("schema_decoder_version") == "1.8.0"
             and type(health.get("max_output_tokens")) is int
@@ -158,7 +163,7 @@ def _proposal_health(config, token):
             and health["max_sequence_length"] > config.max_output_tokens
             and type(health.get("completed_generation_count")) is int
             and health["completed_generation_count"] >= 0
-            and (health.get("adapter_loaded") is False or health.get("adapter_active") is False)
+            and _proposal_adapter_matches(config, health)
             and health.get("training_executed") is False
             and health.get("fallback_policy") == "FAIL_CLOSED_NO_FAKE_FALLBACK"
         ):
@@ -168,6 +173,50 @@ def _proposal_health(config, token):
         raise RealModelRuntimeError("PROPOSAL_HEALTH_UNAVAILABLE") from None
     finally:
         connection.close()
+
+
+def _proposal_adapter_matches(config, health):
+    """An adapted identity requires its own explicitly selected proposer adapter.
+
+    A shared evaluator adapter can be resident for an unadapted proposer, but
+    must be disabled on that endpoint. Neither role can impersonate the other.
+    """
+    adapted = config.identity.adapter_id is not None
+    if adapted:
+        return (
+            config.identity.adapter_sha256 is not None
+            and health.get("adapter_loaded") is True
+            and health.get("adapter_active") is True
+            and health.get("adapter_name") == "proposer"
+            and health.get("adapter_role") == "proposal"
+        )
+    return (
+        config.identity.adapter_sha256 is None
+        and health.get("adapter_active") is False
+        and type(health.get("adapter_loaded")) is bool
+        and health.get("adapter_name") is None
+        and health.get("adapter_role") is None
+    )
+
+
+def _assert_sealed_files(sealed_files):
+    try:
+        for path, digest in sealed_files:
+            if hashlib.sha256(_read(path)).hexdigest() != digest:
+                raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
+    except OSError:
+        raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_UNAVAILABLE") from None
+
+
+class _ConfigurationSealedPort:
+    """Recheck the selected files after taking the shared inference lock."""
+
+    def __init__(self, port, sealed_files):
+        self._port, self._files = port, sealed_files
+
+    async def generate(self, request):
+        _assert_sealed_files(self._files)
+        return await self._port.generate(request)
 
 
 @dataclass(frozen=True)
@@ -182,26 +231,34 @@ class RealModelRuntime:
     sources: ModelSourceProposalAdapter
     _files: tuple[tuple[Path, str], ...] = field(repr=False)
     _token: str = field(repr=False)
+    source_proposal_configuration: ProposalModelConfiguration | None = None
+    _source_token: str | None = field(default=None, repr=False)
 
     def _assert_unchanged(self):
-        try:
-            for path, digest in self._files:
-                if hashlib.sha256(_read(path)).hexdigest() != digest:
-                    raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
-        except OSError:
-            raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_UNAVAILABLE") from None
+        _assert_sealed_files(self._files)
 
     async def check_readiness(self, session_factory):
         """Fresh authenticated health and schema checks, without model inference."""
         self._assert_unchanged()
-        checks = await asyncio.gather(
+        operations = [
             asyncio.to_thread(_proposal_health, self.proposal_configuration, self._token),
             self.final_evaluator.check_health(),
             _check_schema(session_factory),
-            return_exceptions=True,
-        )
+        ]
+        names = ["proposals", "evaluator", "database"]
+        if self.source_proposal_configuration is not None:
+            names.append("sources")
+            operations.append(
+                asyncio.to_thread(
+                    _proposal_health,
+                    self.source_proposal_configuration,
+                    self._source_token,
+                    SOURCE_TASKS,
+                )
+            )
+        checks = await asyncio.gather(*operations, return_exceptions=True)
         components = {}
-        for name, value in zip(("proposals", "evaluator", "database"), checks, strict=True):
+        for name, value in zip(names, checks, strict=True):
             if isinstance(value, BaseException):
                 components[name] = {
                     "ready": False,
@@ -211,7 +268,7 @@ class RealModelRuntime:
                 }
             else:
                 components[name] = {"ready": True, "observation": value}
-        return {
+        report = {
             "mode": "REAL_REQUIRED",
             "ready": all(c["ready"] for c in components.values()),
             "components": components,
@@ -223,6 +280,12 @@ class RealModelRuntime:
             "semantic_quality_qualified": False,
             "formal_campaign_ready": False,
         }
+        if self.source_proposal_configuration is not None:
+            report.update(
+                source_proposal_tasks=sorted(SOURCE_TASKS),
+                source_proposal_temperature=self.source_proposal_configuration.temperature,
+            )
+        return report
 
 
 async def _check_schema(session_factory):
@@ -267,6 +330,33 @@ def build_real_model_runtime(path: Path | None):
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
         if _read(config.proposal_config_file) != proposal_raw:
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
+        source_generator = generator
+        source = None
+        source_token = None
+        sealed_files = [
+            (path, raw),
+            (config.proposal_config_file, proposal_raw),
+            (proposal.token_file, token_raw),
+        ]
+        if config.source_proposal_config_file is not None:
+            source_raw = _read(config.source_proposal_config_file)
+            source_generator = build_proposal_generator(config.source_proposal_config_file)
+            source = source_generator.configuration
+            if source.temperature <= 0:
+                raise RealModelRuntimeError("SAMPLED_SOURCE_PROPOSAL_MODEL_REQUIRED")
+            source_token_raw = _read(source.token_file, 4096)
+            source_token = source_token_raw.decode("ascii")
+            if (
+                source_generator.port._bearer_token != source_token
+                or _read(config.source_proposal_config_file) != source_raw
+            ):
+                raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
+            sealed_files.extend(
+                (
+                    (config.source_proposal_config_file, source_raw),
+                    (source.token_file, source_token_raw),
+                )
+            )
         final = (
             build_local_evaluator_runtime(config.final_evaluator_config_file)
             if config.final_evaluator_config_file
@@ -287,8 +377,28 @@ def build_real_model_runtime(path: Path | None):
             or proposal.base_url == evaluator_url
         ):
             raise RealModelRuntimeError("SEPARATE_PROPOSAL_AND_EVALUATOR_IDENTITIES_REQUIRED")
+        if source is not None:
+            evaluator_token = (
+                final.token if config.final_evaluator_config_file else final.session.token
+            )
+            if (
+                source.base_url in (proposal.base_url, evaluator_url)
+                or source.identity.to_snapshot()
+                in (proposal.identity.to_snapshot(), evaluator_identity)
+                or source_token in (token_raw.decode("ascii"), evaluator_token)
+            ):
+                raise RealModelRuntimeError("SEPARATE_SOURCE_PROPOSAL_RUNTIME_REQUIRED")
         generation_lock = asyncio.Lock()
-        generator.port = SerializedGenerationPort(generator.port, generation_lock)
+        sealed_hashes = tuple(
+            (p, hashlib.sha256(content).hexdigest()) for p, content in sealed_files
+        )
+        generator.port = SerializedGenerationPort(
+            _ConfigurationSealedPort(generator.port, sealed_hashes), generation_lock
+        )
+        if source is not None:
+            source_generator.port = SerializedGenerationPort(
+                _ConfigurationSealedPort(source_generator.port, sealed_hashes), generation_lock
+            )
         final = replace(final, generation_lock=generation_lock)
         return RealModelRuntime(
             proposal,
@@ -304,16 +414,11 @@ def build_real_model_runtime(path: Path | None):
             ArchitectureRuntime(
                 ArchitectureRuntimeMode.MODEL_ADAPTER, ModelArchitectureAdapter(generator)
             ),
-            ModelSourceProposalAdapter(generator),
-            tuple(
-                (p, hashlib.sha256(content).hexdigest())
-                for p, content in (
-                    (path, raw),
-                    (config.proposal_config_file, proposal_raw),
-                    (proposal.token_file, token_raw),
-                )
-            ),
+            ModelSourceProposalAdapter(source_generator),
+            sealed_hashes,
             token_raw.decode("ascii"),
+            source,
+            source_token,
         )
     except RealModelRuntimeError:
         raise

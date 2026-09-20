@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T19:43:12.660070+00:00",
+  "scope": "READ_ONLY_LOCAL_MODEL_CONFIGURATION_HEALTH_AND_COMPOSITION_AUDIT",
+  "status": "PASSED",
+  "model_runtime_mode": {
+    "derived_from_launcher": "REAL_REQUIRED",
+    "authenticated_live_api_mode_read": false,
+    "live_api_mode": null,
+    "basis": "The active session selects models.json; scripts/studio_runtime.py configure(models) sets REAL_REQUIRED and the absolute configuration file before API startup."
+  },
+  "active_session": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\active-session.json",
+    "sha256": "60061c9c6ab2d804575066de842af3a4cb1d077bdefab660715f7f40c07fad84",
+    "session": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/base-schema-v3-20260919-01",
+    "api_launcher_pid": 6648,
+    "api_launcher_started_at_utc": "2026-09-19T19:39:32.2060489Z",
+    "api_server_pid_from_startup_log": 28920,
+    "server_process_started_at_utc": "2026-09-19T19:39:32.2534594Z",
+    "startup_complete": true,
+    "startup_log_sha256_at_observation": "399333e237878b05bbd7c024c13fe6c599ce87600c7c831eeee404cda9888342"
+  },
+  "selected_configuration_files": [
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\base-schema-v3-20260919-01\\models.json",
+      "sha256": "bff66d09c79e6343ad7c7c0ebbf1ae6c8702c921a2ac30a55e246712be8aa41d",
+      "size_bytes": 287
+    },
+    {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/base-schema-v3-20260919-01/proposal.json",
+      "sha256": "b447f36c52b28479b6a031544da4ebe567b7f8e4e8fceb597dd0a50b55fb80a0",
+      "size_bytes": 781
+    },
+    {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/base-schema-v3-20260919-01/evaluator.json",
+      "sha256": "33788e207789ab0133239fd1d3ea06f8094af390ce1636a0f8f393dba41b083f",
+      "size_bytes": 881
+    }
+  ],
+  "proposal": {
+    "endpoint": "http://127.0.0.1:8787",
+    "model_name": "orchestwin-proposal",
+    "identity": {
+      "provider_id": "local-studio-model",
+      "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+      "adapter_id": null,
+      "adapter_sha256": null
+    },
+    "temperature": 0.6,
+    "max_output_tokens": 8192,
+    "timeout_seconds": 1200
+  },
+  "source": {
+    "selection": "SAME_REAL_PROPOSAL_GENERATOR",
+    "dedicated_source_configuration": null,
+    "same_generator_object_as_team": true,
+    "model": {
+      "endpoint": "http://127.0.0.1:8787",
+      "model_name": "orchestwin-proposal",
+      "identity": {
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "temperature": 0.6,
+      "max_output_tokens": 8192,
+      "timeout_seconds": 1200
+    }
+  },
+  "evaluator": {
+    "endpoint": "http://127.0.0.1:8788",
+    "model_name": "orchestwin-evaluator",
+    "identity": {
+      "provider_id": "local-studio-model",
+      "runtime_id": "evaluator-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "b8a425fdd01c1c7336c1801376ff7744b9bc27232fa388fa97ed81075782ff0a",
+      "adapter_id": "interactive-evaluator-348db82f063b713d",
+      "adapter_sha256": "ad8d5a222a869b85e7eaa83fad1270c55f2f4ed6e0615ecdde76502335131520"
+    },
+    "temperature": 0.0,
+    "max_output_tokens": 2048,
+    "timeout_seconds": 1200
+  },
+  "selected_adapter_classes": {
+    "team": "ModelTeamProposalAdapter",
+    "user_modeling": "ModelUserModelingAdapter",
+    "requirements": "ModelRequirementsAdapter",
+    "design": "ModelDesignAdapter",
+    "architecture": "ModelArchitectureAdapter",
+    "sources": "ModelSourceProposalAdapter",
+    "evaluator_runtime": "LocalEvaluatorRuntime"
+  },
+  "proposal_stage_modes": {
+    "user_modeling": "MODEL_ADAPTER",
+    "requirements": "MODEL_ADAPTER",
+    "design": "MODEL_ADAPTER",
+    "architecture": "MODEL_ADAPTER"
+  },
+  "authenticated_native_health_gets": {
+    "proposer": {
+      "health_contract_version": 2,
+      "status": "READY",
+      "model_name": "orchestwin-proposal",
+      "model_identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "supported_tasks": [
+        "architecture",
+        "design",
+        "jvm-repair",
+        "jvm-source",
+        "personas",
+        "requirements",
+        "team",
+        "user-twins",
+        "web-repair",
+        "web-source"
+      ],
+      "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3",
+      "schema_decoder_version": "1.8.0",
+      "max_output_tokens": 8192,
+      "max_sequence_length": 24576,
+      "completed_generation_count": 17,
+      "adapter_loaded": true,
+      "adapter_active": false,
+      "adapter_name": null,
+      "adapter_role": null,
+      "training_executed": false,
+      "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK"
+    },
+    "evaluator": {
+      "health_contract_version": 2,
+      "status": "READY",
+      "model_name": "orchestwin-evaluator",
+      "model_identity": {
+        "adapter_id": "interactive-evaluator-348db82f063b713d",
+        "adapter_sha256": "ad8d5a222a869b85e7eaa83fad1270c55f2f4ed6e0615ecdde76502335131520",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "b8a425fdd01c1c7336c1801376ff7744b9bc27232fa388fa97ed81075782ff0a",
+        "provider_id": "local-studio-model",
+        "runtime_id": "evaluator-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "supported_tasks": [
+        "user-twin-evaluation"
+      ],
+      "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3",
+      "schema_decoder_version": "1.8.0",
+      "max_output_tokens": 8192,
+      "max_sequence_length": 24576,
+      "completed_generation_count": 0,
+      "adapter_loaded": true,
+      "adapter_active": true,
+      "adapter_name": "default",
+      "adapter_role": "evaluator",
+      "training_executed": false,
+      "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK"
+    }
+  },
+  "fallback_review": {
+    "fake_adapter_selected": false,
+    "fake_fallback_found_in_selected_real_path": false,
+    "unavailable_or_identity_mismatched_models": "Fail closed; no conversion to successful fake proposals.",
+    "real_runtime_checks": [
+      "Non-real configuration conflicts are rejected; production environment requires REAL_REQUIRED.",
+      "Team and all proposal stages receive explicit real model adapters.",
+      "Source generation and mockups reject an absent real runtime instead of building fixtures.",
+      "Proposal responses must have provider OPENAI_COMPATIBLE_LOCAL and match the selected immutable identity.",
+      "Authenticated native health must declare FAIL_CLOSED_NO_FAKE_FALLBACK."
+    ],
+    "deterministic_domain_rules": "Mandatory team membership, hashes, source validation and gates remain deterministic governance rules; these are not inference providers.",
+    "evaluator_temperature_zero": "The trained evaluator uses a real adapter and controlled decoding at temperature 0; it is not a fake adapter.",
+    "fixture_adapters_retained_for_tests_and_explicit_development_mode": true
+  },
+  "reviewed_source_sha256": {
+    "scripts/studio_runtime.py": "48e942a64f52959f39b143636e453273402252e29733637239c77237dedf6310",
+    "src/orchestwin/config.py": "3ee1966cbda497d294082a30a7e3a63328f76ff4475f36aede48382253694a38",
+    "src/orchestwin/api/services.py": "de24f49e79d5fb3de4cb1bad3b645022daee8c5468656acd2a0e3d7ca1fb2223",
+    "src/orchestwin/api/model_runtime.py": "54510c1ff5f9fb0efdb5b2f1b1da440f8d4534c16d598d0761ec1ce70f0d51d7",
+    "src/orchestwin/api/source_generation.py": "811115b2787329eea09059f1f40e1263b5d043cca562a0914a9bab9c8751fb9a",
+    "src/orchestwin/api/design_mockups.py": "8eda093e13564886ea0c2a413ad177b4248202afae51c219cc0d757867923c6f",
+    "src/orchestwin/models/real_runtime.py": "41bc04b0e6227093e0c9bfd74c564b645c2af99e27dd539f3baa0e37d692f2d2",
+    "src/orchestwin/models/proposal_generation.py": "f829f95bdccabf9d048ebeaff0abcb1e4f96ad7c5b279d0ac5cade8722313f98",
+    "src/orchestwin/evaluation/local_runtime.py": "f3b9e228a711d74b08201127c4a1123f616d0f9e285f9de77a0b70220e2e8767",
+    "scripts/start-studio.ps1": "e5ee8e86f105aaa3f2d355aaa2870c07eb1e91aa5fb6e3126b6af5ce6c7540e8",
+    "src/orchestwin/api/server.py": "6002c825457af861cd697936a50a7ccd36951903dfac087eb5d39fde76120330",
+    "src/orchestwin/api/app.py": "6436df940e6347ee0ee034a172fcfece9303a989aa989e7db13583ce737a1c97",
+    "src/orchestwin/models/runtime.py": "f64e15b0529c15e52c616a49a77d92f6f722770ae8aea890d7d10f900f5bf467",
+    "src/orchestwin/models/user_modeling_runtime.py": "38b94479da1a75e222faa2621e96fdc54c724a05f09503eaa8eea44a8aabf1f8",
+    "compose.yaml": "d9b15526ee88ee237d1d7a74a753a57db2cb91487d105cea6277636e0b5822f6",
+    "compose.local.yaml": "d34408d1bd7b18f928bba8630e9ebccc41d1272eb9c0bd80551975df719a6bda",
+    "compose.models.yaml": "1b7691e1ae10fc770ba0fbfce61ce10e9a7920f57d227945d47b6cd1823a8d37",
+    "compose.studio.yaml": "72619d40618e5a3e88ad280798655f668ff74dbfbfbaeeacdf43ae58bde4de4f",
+    "Dockerfile": "b976c403056c0ae32c73cb580204b0d6fb32472f40d013f781b34c3066ce8df4"
+  },
+  "issues": [],
+  "inference_calls": 0,
+  "database_queries": 0,
+  "application_restarted": false,
+  "jvm_execution_started": false,
+  "dataset_modified": false,
+  "credentials_recorded": false,
+  "limitations": [
+    "The current API process mode was derived from its selected launcher/configuration, not read from the authenticated API readiness endpoint.",
+    "Runtime object construction and native health GETs validate selection and identity, not model quality or completion of the in-flight V14 calculator generation.",
+    "The selected proposer/source is the unadapted 4B base model; the separately trained evaluator adapter is not a source-generation fine-tune.",
+    "This audit does not qualify Level D or replace independent calculator behavior checks."
+  ],
+  "updated_at_utc": "2026-09-19T19:44:32.520909+00:00",
+  "entrypoint_missing_real_configuration_review": {
+    "scope": "Static control-flow review; no launcher, deployment or missing-model experiment executed.",
+    "desktop_standard": {
+      "entry": "scripts/start-studio.ps1",
+      "silent_fake_fallback": false,
+      "behavior": "Missing local settings or invalid adapter inputs stop startup. The launcher waits for the real model configuration, requires a passing readiness check, then invokes studio_runtime.py api --models. Missing model files fail closed when building the real runtime.",
+      "references": [
+        {
+          "path": "scripts/start-studio.ps1",
+          "lines": [
+            5,
+            80,
+            85,
+            86
+          ]
+        },
+        {
+          "path": "scripts/studio_runtime.py",
+          "lines": [
+            97,
+            98,
+            113,
+            114
+          ]
+        }
+      ]
+    },
+    "compose_standard": {
+      "entry": "compose.yaml -> Dockerfile ENTRYPOINT orchestwin-api",
+      "silent_fake_fallback": false,
+      "behavior": "Compose explicitly sets REAL_REQUIRED and a model configuration path, mounted read-only. An absent /models/models.json yields REAL_MODEL_CONFIGURATION_FILE_REQUIRED; no fixture fallback is selected. Endpoint/container connectivity was not exercised by this audit.",
+      "references": [
+        {
+          "path": "compose.yaml",
+          "lines": [
+            88,
+            89,
+            91
+          ]
+        },
+        {
+          "path": "Dockerfile",
+          "lines": [
+            85
+          ]
+        },
+        {
+          "path": "src/orchestwin/models/real_runtime.py",
+          "lines": [
+            128,
+            319
+          ]
+        }
+      ]
+    },
+    "packaged_api_entrypoint": {
+      "entry": "orchestwin-api / python -m orchestwin.api.server",
+      "silent_fake_fallback_when_mode_unset": false,
+      "behavior": "The CLI sets REAL_REQUIRED when MODEL_RUNTIME_MODE is absent. A conflicting non-real mode with a selected real config fails, and environment=production requires REAL_REQUIRED.",
+      "references": [
+        {
+          "path": "src/orchestwin/api/server.py",
+          "lines": [
+            98,
+            99,
+            100,
+            101
+          ]
+        },
+        {
+          "path": "src/orchestwin/api/services.py",
+          "lines": [
+            256,
+            257,
+            258,
+            259,
+            260
+          ]
+        }
+      ]
+    },
+    "lower_level_development_factory": {
+      "entry": "Direct create_app()/uvicorn factory bypassing orchestwin-api",
+      "condition": "With default development environment, no model mode/config selected and valid database/auth settings, ApplicationSettings defaults to DEVELOPMENT_FIXTURES and create_default_runtime selects the legacy deterministic proposal adapters.",
+      "reachable_in_current_standard_desktop_or_compose_configuration": false,
+      "reachable_when_environment_is_production": false,
+      "scope": "A deliberate lower-level development/test entry remains; the repository is not globally free of fake adapters.",
+      "references": [
+        {
+          "path": "src/orchestwin/config.py",
+          "lines": [
+            59,
+            61,
+            62
+          ]
+        },
+        {
+          "path": "src/orchestwin/api/app.py",
+          "lines": [
+            57
+          ]
+        },
+        {
+          "path": "src/orchestwin/api/services.py",
+          "lines": [
+            256,
+            257,
+            259,
+            260,
+            267,
+            278
+          ]
+        },
+        {
+          "path": "src/orchestwin/models/runtime.py",
+          "lines": [
+            45,
+            61,
+            62
+          ]
+        },
+        {
+          "path": "src/orchestwin/models/user_modeling_runtime.py",
+          "lines": [
+            38,
+            63,
+            64
+          ]
+        }
+      ]
+    },
+    "production_fake_fallback_found": false,
+    "deployment_changes_performed": false
+  }
+}

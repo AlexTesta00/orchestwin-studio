@@ -3,7 +3,8 @@
 
 Uses the existing WSL/Unsloth environment and an exact cached base revision.
 JSON schemas constrain token selection; the application still validates outputs.
-This operator does not load the specialized final-evaluator LoRA adapter.
+An optional proposer adapter must be explicitly selected with both file hashes.
+The specialized final-evaluator adapter is never used for proposal requests.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import sys
 import threading
 import time
 import traceback
-from contextlib import nullcontext
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
@@ -27,7 +28,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from orchestwin.models.proposal_tasks import TASKS  # noqa: E402
+from orchestwin.models.proposal_tasks import SOURCE_TASKS, TASKS  # noqa: E402
 from orchestwin.models.schema_decoding import (  # noqa: E402
     POLICY as SCHEMA_DECODING,
 )
@@ -52,13 +53,118 @@ MAX_GENERATION_SECONDS = 120
 MAX_BODY = 2_000_000
 
 
+def adapter_selection(state):
+    """The endpoint's declared selection, not the shared model's idle adapter."""
+    name = state.get("adapter_name")
+    if name is None and state.get("shared_adapter_loaded") and state.get("evaluator"):
+        name = "default"
+    identity = state["identity"]
+    if name is not None:
+        expected = "default" if state.get("evaluator") else "proposer"
+        if (
+            name != expected
+            or not state.get("shared_adapter_loaded")
+            or identity.adapter_id is None
+            or identity.adapter_sha256 is None
+            or name not in getattr(state["model"], "peft_config", {})
+        ):
+            raise ValueError("ADAPTER_ROLE_OR_IDENTITY_MISMATCH")
+    elif identity.adapter_id is not None or identity.adapter_sha256 is not None:
+        raise ValueError("ADAPTER_IDENTITY_WITHOUT_SELECTION")
+    return name
+
+
+@contextmanager
+def selected_adapter(state):
+    """Select under the shared request lock and restore even after generation fails.
+
+    PEFT set_adapter can enable gradients; freezing after every switch keeps both
+    serving roles inference-only. A proposer without a selected adapter disables
+    every loaded adapter for its entire forward pass.
+    """
+    model = state["model"]
+    selected = adapter_selection(state)
+    loaded = state.get("shared_adapter_loaded", False)
+    if not loaded:
+        if selected is not None:
+            raise ValueError("ADAPTER_SELECTION_WITHOUT_LOADED_MODEL")
+        yield
+        return
+    if selected is None:
+        with model.disable_adapter():
+            yield
+        return
+    previous = list(model.active_adapters)
+    if len(previous) != 1 or selected not in model.peft_config:
+        raise ValueError("ADAPTER_SELECTION_MISMATCH")
+    try:
+        model.set_adapter(selected)
+        model.requires_grad_(False)
+        if model.active_adapters != [selected]:
+            raise ValueError("ADAPTER_SELECTION_MISMATCH")
+        yield
+    finally:
+        model.set_adapter(previous[0])
+        model.requires_grad_(False)
+        if model.active_adapters != previous:
+            raise ValueError("ADAPTER_RESTORATION_FAILED")
+
+
+def verify_proposer_adapter(
+    path, weights_hash, config_hash, *, repository=MODEL, revision=REVISION
+):
+    """Verify explicit regular files and model compatibility before any GPU load."""
+    supplied = (path, weights_hash, config_hash)
+    if not any(value is not None for value in supplied):
+        return {}
+    if not all(value is not None for value in supplied):
+        raise ValueError("PROPOSER_ADAPTER_PATH_AND_HASHES_REQUIRED")
+    if any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in supplied[1:]):
+        raise ValueError("PROPOSER_ADAPTER_HASH_INVALID")
+    path = Path(path).resolve(strict=True)
+    files = {"adapter_model.safetensors": weights_hash, "adapter_config.json": config_hash}
+    for name, expected in files.items():
+        item = path / name
+        if item.is_symlink() or not item.is_file():
+            raise ValueError("PROPOSER_ADAPTER_FILE_INVALID")
+        with item.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
+                raise ValueError("PROPOSER_ADAPTER_HASH_MISMATCH")
+    raw = (path / "adapter_config.json").read_bytes()
+    if len(raw) > 1_000_000:
+        raise ValueError("PROPOSER_ADAPTER_CONFIGURATION_INVALID")
+    config = strict_json_object(raw)
+    if (
+        config.get("base_model_name_or_path") != repository
+        or config.get("peft_type") != "LORA"
+        or config.get("task_type") != "CAUSAL_LM"
+        or config.get("revision") not in (None, revision)
+    ):
+        raise ValueError("PROPOSER_ADAPTER_BASE_OR_TYPE_MISMATCH")
+    return files
+
+
+def supported_tasks(state):
+    """Admission and health must expose the same explicit endpoint capabilities."""
+    if state.get("evaluator"):
+        expected = ["user-twin-evaluation"]
+        if state.get("supported_tasks", expected) != expected:
+            raise ValueError("TASK_CONFIGURATION_MISMATCH")
+        return expected
+    tasks = state.get("supported_tasks", sorted(TASKS))
+    if tasks not in (sorted(TASKS), sorted(SOURCE_TASKS)):
+        raise ValueError("TASK_CONFIGURATION_MISMATCH")
+    return tasks
+
+
 def health_snapshot(state):
+    selected = adapter_selection(state)
     return {
         "health_contract_version": 2,
         "status": "READY",
         "model_name": state["model_name"],
         "model_identity": state["identity"].to_snapshot(),
-        "supported_tasks": state.get("supported_tasks", sorted(TASKS)),
+        "supported_tasks": supported_tasks(state),
         "max_sequence_length": MAX_SEQUENCE,
         "max_output_tokens": MAX_OUTPUT,
         "generation_watchdog": f"COOPERATIVE_{state.get('max_generation_seconds', MAX_GENERATION_SECONDS)}_SECONDS_NOT_HARD_GPU_PREEMPTION",
@@ -66,7 +172,11 @@ def health_snapshot(state):
         "schema_decoder_version": LLGUIDANCE_VERSION,
         "completed_generation_count": state["completed_generation_count"],
         "adapter_loaded": state.get("shared_adapter_loaded", False),
-        "adapter_active": state.get("evaluator", False),
+        "adapter_active": selected is not None,
+        "adapter_name": selected,
+        "adapter_role": ("evaluator" if state.get("evaluator") else "proposal")
+        if selected
+        else None,
         "training_executed": False,
         "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK",
     }
@@ -119,7 +229,12 @@ def completion(state, payload):
     if metadata.get("expected_model_identity") != state["identity"].to_snapshot():
         raise ValueError("IDENTITY_MISMATCH")
     evaluator = state.get("evaluator", False)
-    tasks = {"user-twin-evaluation-v1"} if evaluator else {f"proposal-{task}-v1" for task in TASKS}
+    capabilities = supported_tasks(state)
+    tasks = (
+        {"user-twin-evaluation-v1"}
+        if evaluator
+        else {f"proposal-{task}-v1" for task in capabilities}
+    )
     if metadata.get("orchestwin_task_id") not in tasks:
         raise ValueError("TASK_REJECTED")
     messages = payload.get("messages")
@@ -136,6 +251,8 @@ def completion(state, payload):
         raise ValueError("TOKEN_BUDGET_REJECTED")
     if type(temperature) not in (float, int) or not 0 <= temperature <= 2:
         raise ValueError("TEMPERATURE_REJECTED")
+    if capabilities == sorted(SOURCE_TASKS) and temperature <= 0:
+        raise ValueError("SAMPLED_SOURCE_PROPOSAL_REQUIRED")
     response_format = payload.get("response_format", {})
     specification = response_format.get("json_schema", {})
     schema = specification.get("schema")
@@ -167,12 +284,7 @@ def completion(state, payload):
     options = {"do_sample": temperature > 0}
     if temperature > 0:
         options["temperature"] = temperature
-    adapter_context = (
-        model.disable_adapter()
-        if state.get("shared_adapter_loaded") and not evaluator
-        else nullcontext()
-    )
-    with adapter_context, torch.inference_mode():
+    with selected_adapter(state), torch.inference_mode():
         generated = model.generate(
             **inputs,
             max_new_tokens=maximum,
@@ -210,9 +322,15 @@ def completion(state, payload):
         },
         "orchestwin_serving": {
             "model_visible_messages_sha256": snapshot_content_hash(messages),
+            "max_sequence_length": MAX_SEQUENCE,
+            "max_output_tokens": MAX_OUTPUT,
             "output_repair_used": False,
             "adapter_loaded": state.get("shared_adapter_loaded", False),
-            "adapter_active": evaluator,
+            "adapter_active": adapter_selection(state) is not None,
+            "adapter_name": adapter_selection(state),
+            "adapter_role": ("evaluator" if evaluator else "proposal")
+            if adapter_selection(state)
+            else None,
             "generation_wall_time_budget_seconds": generation_seconds,
             "generation_wall_time_milliseconds": round((time.perf_counter() - started) * 1000),
             "schema_decoding": SCHEMA_DECODING,
@@ -314,17 +432,44 @@ def generation_timeout(value):
     return seconds
 
 
+def context_limits(sequence: int, output: int) -> tuple[int, int]:
+    if (
+        type(sequence) is not int
+        or type(output) is not int
+        or not 1024 <= sequence <= 131072
+        or not 128 <= output <= 16384
+        or output >= sequence
+    ):
+        raise ValueError("MODEL_CONTEXT_LIMITS_INVALID")
+    return sequence, output
+
+
 def main():
+    global MAX_SEQUENCE, MAX_OUTPUT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--model-repository")
     parser.add_argument("--model-revision")
+    parser.add_argument("--proposer-adapter", type=Path)
+    parser.add_argument("--proposer-weights-sha256")
+    parser.add_argument("--proposer-config-sha256")
+    parser.add_argument("--source-only", action="store_true")
+    parser.add_argument("--max-sequence-length", type=int, default=MAX_SEQUENCE)
+    parser.add_argument("--max-output-tokens", type=int, default=MAX_OUTPUT)
     parser.add_argument(
         "--generation-timeout-seconds", type=generation_timeout, default=MAX_GENERATION_SECONDS
     )
     args = parser.parse_args()
+    MAX_SEQUENCE, MAX_OUTPUT = context_limits(args.max_sequence_length, args.max_output_tokens)
     repository, revision = selected_model(args.model_repository, args.model_revision)
+    adapter_files = verify_proposer_adapter(
+        args.proposer_adapter,
+        args.proposer_weights_sha256,
+        args.proposer_config_sha256,
+        repository=repository,
+        revision=revision,
+    )
     directory = args.output_directory.resolve()
     # New directory per launch; never overwrite previous credentials or observations.
     directory.mkdir(mode=0o700, parents=False, exist_ok=False)
@@ -333,10 +478,30 @@ def main():
     os.chdir(ROOT / "environments/training")
     print("Loading the exact cached proposal base model (offline).", flush=True)
     torch, model, tokenizer, evidence = load_model(repository, revision)
+    if adapter_files:
+        from peft import PeftModel
+        from unsloth import FastLanguageModel
+
+        model = PeftModel.from_pretrained(
+            model,
+            args.proposer_adapter,
+            adapter_name="proposer",
+            is_trainable=False,
+            local_files_only=True,
+        )
+        FastLanguageModel.for_inference(model)
+        model.requires_grad_(False)
+        verify_proposer_adapter(
+            args.proposer_adapter,
+            args.proposer_weights_sha256,
+            args.proposer_config_sha256,
+            repository=repository,
+            revision=revision,
+        )
     schema_processor = build_schema_processor_factory(tokenizer, torch, model.config.vocab_size)
     configuration = {
         "runtime_id": f"proposal-base-{uuid4()}",
-        "supported_tasks": sorted(TASKS),
+        "supported_tasks": sorted(SOURCE_TASKS if args.source_only else TASKS),
         "model": repository,
         "revision": revision,
         "max_sequence": MAX_SEQUENCE,
@@ -344,7 +509,9 @@ def main():
         "max_generation_seconds": args.generation_timeout_seconds,
         "load_in_4bit": True,
         "loader_evidence": evidence,
-        "adapter_loaded": False,
+        "adapter_loaded": bool(adapter_files),
+        "adapter_files": adapter_files,
+        "adapter_name": "proposer" if adapter_files else None,
         "network_authorized": False,
         "server_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "schema_decoding": SCHEMA_DECODING,
@@ -369,6 +536,10 @@ def main():
         base_model_revision=revision,
         tokenizer_revision=revision,
         configuration_sha256=snapshot_content_hash(configuration),
+        adapter_id="interactive-proposer-" + args.proposer_weights_sha256[:16]
+        if adapter_files
+        else None,
+        adapter_sha256=snapshot_content_hash(adapter_files) if adapter_files else None,
     )
     token = secrets.token_urlsafe(48)
     token_file = directory / "access-token.secret"
@@ -387,6 +558,9 @@ def main():
         "slot": threading.BoundedSemaphore(1),
         "completed_generation_count": 0,
         "max_generation_seconds": args.generation_timeout_seconds,
+        "shared_adapter_loaded": bool(adapter_files),
+        "adapter_name": "proposer" if adapter_files else None,
+        "supported_tasks": configuration["supported_tasks"],
     }
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(state, token))
     server.daemon_threads = True
