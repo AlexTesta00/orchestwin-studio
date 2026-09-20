@@ -70,7 +70,7 @@ def runtime_identity():
     )
 
 
-def train(args):
+def train(args, *, max_sequence=MAX_SEQUENCE, additional_sources=()):
     if not args.authorize_cloud_training:
         raise ValueError("explicit cloud training authorization flag required")
     if not os.environ.get("RUNPOD_POD_ID"):
@@ -84,7 +84,7 @@ def train(args):
     ):
         raise ValueError("a fresh cloud budget guard bound to this run is required")
     policy = TrainingPolicy(**json.loads(args.policy.read_bytes()))
-    dataset = TokenDataset(args.cache.resolve())
+    dataset = TokenDataset(args.cache.resolve(), max_sequence=max_sequence)
     runtime = runtime_identity()
     sources = {
         name: digest(DIRECTORY / name)
@@ -92,9 +92,10 @@ def train(args):
             "run_complete_evaluator.py",
             "complete_training_runtime.py",
             "complete_training_data.py",
+            *additional_sources,
         )
     }
-    value = contract(args.cache, policy, runtime, sources)
+    value = contract(args.cache, policy, runtime, sources, max_sequence=max_sequence)
     previous = None
     if args.resume:
         if json.loads((args.output / "contract.json").read_bytes()) != value:
@@ -125,7 +126,7 @@ def train(args):
     model, loaded_tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
         revision=REVISION,
-        max_seq_length=MAX_SEQUENCE,
+        max_seq_length=max_sequence,
         dtype=torch.bfloat16,
         load_in_4bit=True,
         use_exact_model_name=True,

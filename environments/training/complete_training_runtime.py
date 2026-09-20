@@ -244,14 +244,14 @@ def training_arguments(output, policy, *, cpu=False):
     )
 
 
-def contract(cache, policy, runtime, sources):
+def contract(cache, policy, runtime, sources, *, max_sequence=MAX_SEQUENCE):
     return dict(
         version=1,
         cache_manifest_sha256=digest(Path(cache) / "cache.json"),
         training_policy=asdict(policy),
         runtime=runtime,
         sources=sources,
-        max_sequence=MAX_SEQUENCE,
+        max_sequence=max_sequence,
         loss="ALL_COMPLETION_TOKENS_INCLUDING_EOS",
         sampler=dict(policy="PYTHON_SHUFFLE_WITHOUT_REPLACEMENT_PER_EPOCH", seed=SEED),
         packing=False,

@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T16:48:43.984500+00:00",
+  "scope": "PROPOSER_COMPLETION_ONLY_TRAINING_PILOT_NOT_MODEL_QUALIFICATION",
+  "status": "REJECTED_AFTER_DIAGNOSTIC_COMPARE",
+  "base_commit": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "working_tree_modified": true,
+  "model": "Qwen/Qwen3-4B-Instruct-2507",
+  "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+  "dataset": {
+    "curriculum_id": "verified-proposer-web-source-v1",
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "manifest_sha256": "987714f1dc2cda2ad0579146c697c9aa590c5236c1f137781e4e0cae55e0f339",
+    "train_sha256": "ff1b36c9eab95fb1cef848d928fa3a2f422d957cd1f83ae63c3c295aa0349716",
+    "database_sha256": "0cece4a026d4577f40c9d66030b80c8a5a1a29b46d32475128ca835acad355ed",
+    "rows": 240,
+    "total_tokens": 782072,
+    "completion_tokens": 113380,
+    "max_sequence": 8192,
+    "min_tokens": 2741,
+    "max_tokens": 3958,
+    "selected_groups": [
+      "angle-complement",
+      "binomial-square",
+      "capacity-booking",
+      "circular-sector",
+      "compound-growth",
+      "cylinder",
+      "density",
+      "discount",
+      "duration",
+      "electrical-energy",
+      "fuel-efficiency",
+      "integer-division",
+      "length-conversion",
+      "linear-proportion",
+      "loyalty-points",
+      "mass-conversion",
+      "named-counters",
+      "percentage-change",
+      "powers-roots",
+      "ratio-comparison",
+      "rectangle",
+      "right-triangle",
+      "running-pace",
+      "shopping-quantities",
+      "simple-interest",
+      "speed-distance",
+      "square-prism",
+      "stock-inventory",
+      "task-priorities",
+      "two-value-means"
+    ],
+    "semantic_families": {
+      "rectangle": 8,
+      "right-triangle": 8,
+      "circular-sector": 8,
+      "cylinder": 8,
+      "square-prism": 8,
+      "linear-proportion": 8,
+      "binomial-square": 8,
+      "ratio-comparison": 8,
+      "percentage-change": 8,
+      "simple-interest": 8,
+      "compound-growth": 8,
+      "discount": 8,
+      "length-conversion": 8,
+      "mass-conversion": 8,
+      "speed-distance": 8,
+      "duration": 8,
+      "electrical-energy": 8,
+      "density": 8,
+      "fuel-efficiency": 8,
+      "running-pace": 8,
+      "two-value-means": 8,
+      "integer-division": 8,
+      "powers-roots": 8,
+      "angle-complement": 8,
+      "stock-inventory": 8,
+      "loyalty-points": 8,
+      "capacity-booking": 8,
+      "shopping-quantities": 8,
+      "task-priorities": 8,
+      "named-counters": 8
+    },
+    "locales": {
+      "en": 120,
+      "it": 120
+    },
+    "stages": {
+      "manifest": 60,
+      "app.js": 60,
+      "app.test.cjs": 60,
+      "index.html": 60
+    },
+    "completion_only": true,
+    "truncation": false,
+    "validation_read": false,
+    "final_cases_read": false,
+    "operator_sha256": "fe153bda254bcce15abec59cbd24af99b2c5efe99b41915a96fbb2d9d9ecf6b7"
+  },
+  "policy": {
+    "max_steps": 120,
+    "batch_size": 1,
+    "accumulation": 4,
+    "learning_rate": 5e-05,
+    "rank": 16,
+    "alpha": 32,
+    "save_steps": 30,
+    "max_active_seconds": 3600
+  },
+  "runtime": {
+    "python": "3.13.15",
+    "packages": {
+      "accelerate": "1.14.0",
+      "bitsandbytes": "0.50.2",
+      "peft": "0.20.0",
+      "safetensors": "0.8.0",
+      "tokenizers": "0.22.2",
+      "torch": "2.11.0",
+      "transformers": "5.5.0",
+      "triton": "3.6.0",
+      "unsloth": "2026.8.22",
+      "unsloth-zoo": "2026.8.16"
+    },
+    "cuda": "13.0",
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "vram": 101975851008,
+    "lock_sha256": "fcd551c5c136ba0c6266d131b41a10ae48b13477dc7269f786a29f7db14d073b"
+  },
+  "training": {
+    "status": "TRAINED_CANDIDATE_NOT_SELECTED",
+    "reason": null,
+    "global_step": 120,
+    "max_steps": 120,
+    "metrics": {
+      "train_runtime": 259.3588,
+      "train_samples_per_second": 1.851,
+      "train_steps_per_second": 0.463,
+      "train_loss": 0.2606051058198015,
+      "epoch": 2.0
+    },
+    "active_seconds": 261.1805511920247,
+    "checkpoint": "/workspace/proposer-pilot-d82bb48-20260919-01/result/checkpoints/checkpoint-120",
+    "peak_reserved_bytes": 15242100736,
+    "contract_sha256": "a3f89d65b60b03272030d204b1c37831a6ef0e756554f57110646afd4cb35a4e",
+    "final_cases_inferred": false,
+    "adapter_sha256": "c9c13082532797cfd0e0f8cc72b077d9ed50d3b5868eb26b0bea0ebe736065da"
+  },
+  "contract_sha256": "a3f89d65b60b03272030d204b1c37831a6ef0e756554f57110646afd4cb35a4e",
+  "adapter": {
+    "weights_sha256": "c9c13082532797cfd0e0f8cc72b077d9ed50d3b5868eb26b0bea0ebe736065da",
+    "config_sha256": "082da03cecb04537a6e0b32b3b7517fdaf93d79436c3a5056f286a8e50e30835",
+    "local_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\proposer-pilot-d82bb48-20260919-01\\recovered\\result\\adapter"
+  },
+  "retrieval": {
+    "status": "ARCHIVE_AND_ARTIFACT_HASHES_VERIFIED",
+    "files": 22,
+    "archive_sha256": "3a425f78ecceefbeec8b8f8827dde0b674fe7cb69b8f0182062300f500c10f62",
+    "adapter_sha256": "c9c13082532797cfd0e0f8cc72b077d9ed50d3b5868eb26b0bea0ebe736065da",
+    "production_selected": false
+  },
+  "pod": {
+    "id": "gwjsfcgwic1mn1",
+    "observed_status": "EXITED",
+    "hourly_price_usd": 2.09,
+    "allowance_usd": 6.6,
+    "volume_retained": "pwdbxu66v4"
+  },
+  "training_inputs_archive_sha256": "cc25cd11e5f7e0fb3b18848700263025561ecc480e090e4a98f793730e0c102a",
+  "sources": {
+    "run_complete_evaluator.py": "8e215ffb16fff542b442987f24f4b42cf1c7161ead4cf5c302c424e7c4b13960",
+    "complete_training_runtime.py": "2321a6e2f7eb3fce9a404bf8bc9d6279891ed5ba1ea8214b94eccb46bf845006",
+    "complete_training_data.py": "db20922f1aa4955e21dee9ccf4f89699dcac5f51df2158c82ec4b3b795aada82",
+    "run_proposer.py": "b7ccd25fdbc65fcd43c53152eb53152f69cb38544341f3180b80433c90c92454",
+    "proposer_training_data.py": "fe153bda254bcce15abec59cbd24af99b2c5efe99b41915a96fbb2d9d9ecf6b7"
+  },
+  "final_cases_inferred": false,
+  "production_selected": false,
+  "quality_evidence": "FAILED_MATCHED_DEVELOPMENT_COMPARISON_NOT_PROMOTED",
+  "limitations": [
+    "Synthetic compact reference curriculum derived from two code templates and one layout.",
+    "Training loss is not application correctness or generalization evidence.",
+    "Semantic held-out examples and independent probe oracles were excluded from the training bundle.",
+    "Base and candidate sampling comparison must be reported as a limited diagnostic, not formal thesis qualification."
+  ],
+  "posthoc_known_limitations": [
+    {
+      "recorded_at_utc": "2026-09-19T17:09:57.973287+00:00",
+      "kind": "STATIC_DESIGN_MARKER_ADMISSION_GAP",
+      "finding": "All 76 frozen v1 reference bundles omit the result TEXT marker ELM-005. The earlier validator skipped TEXT elements, so historical admission did not enforce that marker.",
+      "frozen_dataset_cache_bundle_and_results_changed": false,
+      "new_validator_replay": {
+        "path": "experiments/model-proposals/prototype-validator-replay-20260919.json",
+        "sha256": "64e9d493a56f8f3cbfc8f7db75563718ae020cb2f9477536e31f3e71428de242"
+      },
+      "future_generator_change": "Only future generated references receive the missing marker; no replacement v1 dataset or retraining has been produced.",
+      "interpretation": "Historical reference admission and training completion are preserved; neither establishes model correctness or qualification under the revised validator.",
+      "instruction_scope": "Historical V11 instructed markers only on interactive elements; subsequent V12 explicitly includes TEXT. Missing TEXT markers under revised validation are not attributed to disobeying the original V11 instruction."
+    }
+  ],
+  "comparison_report": {
+    "path": "experiments/model-proposals/proposer-candidate-comparison-20260919.json",
+    "sha256": "d0f433ebf07eab4599928281fe9dfaa815a3c981dfe4cffe6cfee33589fe067e"
+  }
+}

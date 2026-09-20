@@ -1,0 +1,240 @@
+{
+  "schema": "PROPOSER_DATASET_VERIFICATION_V3",
+  "generated_at": "2026-09-19T19:24:14.098252+00:00",
+  "status": "REFERENCE_ADMISSION_PASSED_NOT_TRAINED",
+  "curriculum_id": "verified-proposer-web-source-v1",
+  "dataset": {
+    "path": "environments/training/artifacts/proposer-web-v3-20260919-verified",
+    "dataset_version": 3,
+    "manifest_sha256": "bfbf1127bbd20d8db08ad04900cf70f1fa3628e686575675066aabe4a9c27f81",
+    "source_generation_protocol": "SOURCE_FILES_V2_TEXT",
+    "source_manifest_contract": "SOURCE_MANIFEST_V13_STATIC_MODULE_CONTRACT",
+    "files": {
+      "train.jsonl": {
+        "sha256": "7b42ce55f389d928c67a49ba4f73b304353b73133eb914b53707ae567ee23370",
+        "rows": 240,
+        "size_bytes": 3739729
+      },
+      "validation.jsonl": {
+        "sha256": "c9489881313445c584560b7067ef9cd9d5a02186f3d8c21de2ac18d46f947c60",
+        "rows": 64,
+        "size_bytes": 991588
+      }
+    },
+    "rows": 304,
+    "reference_bundles": 76,
+    "provenance": "SYNTHETIC_ENGINEER_AUTHORED"
+  },
+  "frozen_predecessor": {
+    "path": "environments/training/artifacts/proposer-web-v2-20260919-verified",
+    "dataset_version": 2,
+    "source_manifest_contract": "SOURCE_MANIFEST_V12_COMPLETE_PROTOTYPE_MARKERS",
+    "manifest_sha256": "6a767d8d73d1c00eda273cc4362720bb29137776d3cbd396e5add7c086f41b2d",
+    "files": {
+      "train.jsonl": {
+        "sha256": "d8822f21fc8f9fc0095fba602d06bf3eeaadc4b1e71bc4a20ab974717270910f",
+        "rows": 240,
+        "size_bytes": 3624769
+      },
+      "validation.jsonl": {
+        "sha256": "c47502ae0c05f262e18e5225790c77008f32ec552f513509f7159733fa4cae14",
+        "rows": 64,
+        "size_bytes": 961232
+      }
+    },
+    "all_files_unchanged": true,
+    "files_compared": 387,
+    "before_snapshot_sha256": "ae47b903e84d75bf159e3f7f7d83493d2ff6d556c55814bb89612ae0b2d06c82"
+  },
+  "differences": {
+    "same_row_ids_metadata_and_split": true,
+    "message_changes_by_role": {
+      "system": 76,
+      "user": 304,
+      "assistant": 16
+    },
+    "assistant_manifest_changes": 16,
+    "assistant_changed_row_ids": [
+      "stock-inventory-en-manifest",
+      "stock-inventory-it-manifest",
+      "loyalty-points-en-manifest",
+      "loyalty-points-it-manifest",
+      "capacity-booking-en-manifest",
+      "capacity-booking-it-manifest",
+      "shopping-quantities-en-manifest",
+      "shopping-quantities-it-manifest",
+      "task-priorities-en-manifest",
+      "task-priorities-it-manifest",
+      "named-counters-en-manifest",
+      "named-counters-it-manifest",
+      "reading-progress-en-manifest",
+      "reading-progress-it-manifest",
+      "team-votes-en-manifest",
+      "team-votes-it-manifest"
+    ],
+    "assistant_change_scope": "Only the stateful app.js manifest interface changes from object type body to createService(): object; readNumber(raw: string): number. Full service semantics remain in business context and acceptance checks.",
+    "prompt_change_scope": "Production V13 source messages include the fixed classic-script/CommonJS runtime contract and callable-signature constraints.",
+    "reference_code_tests_prototypes_oracles_byte_identical": true,
+    "unchanged_reference_files": 380,
+    "v2_not_relabelled": "V2 remains a V12 artifact. Its 16 stateful manifest interfaces are incompatible with the newer V13 signature grammar; no historical evidence is changed."
+  },
+  "scope": {
+    "semantic_family_splits": {
+      "train": [
+        "rectangle",
+        "right-triangle",
+        "circular-sector",
+        "cylinder",
+        "square-prism",
+        "linear-proportion",
+        "binomial-square",
+        "ratio-comparison",
+        "percentage-change",
+        "simple-interest",
+        "compound-growth",
+        "discount",
+        "length-conversion",
+        "mass-conversion",
+        "speed-distance",
+        "duration",
+        "electrical-energy",
+        "density",
+        "fuel-efficiency",
+        "running-pace",
+        "two-value-means",
+        "integer-division",
+        "powers-roots",
+        "angle-complement",
+        "stock-inventory",
+        "loyalty-points",
+        "capacity-booking",
+        "shopping-quantities",
+        "task-priorities",
+        "named-counters"
+      ],
+      "validation": [
+        "trapezoid",
+        "sphere-shell",
+        "volume-conversion",
+        "recipe-scaling",
+        "break-even",
+        "fraction-complement",
+        "reading-progress",
+        "team-votes"
+      ]
+    },
+    "excluded_semantic_families": [
+      "guest-list",
+      "expense-split",
+      "expense-splitting",
+      "sales-tax",
+      "temperature"
+    ],
+    "locales": [
+      "en",
+      "it"
+    ],
+    "template_diversity": {
+      "numeric_business_families": 30,
+      "stateful_business_families": 8,
+      "core_generators": 2,
+      "shared_form_layouts": 1
+    },
+    "benchmarks_included": false,
+    "gui_calculator_data_included": false
+  },
+  "verification": {
+    "production_capture_schema_syntax_design_contract": "All 304 rows admitted by the production source-generation capture; all 76 reference bundles admitted by syntax and prototype checks.",
+    "unit_tests": {
+      "tests": 86,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/proposer-dataset-v3-20260919/tests.xml",
+      "junit_sha256": "54a95585014857ffa6304d86dade2570e3f3b6e549022504a6e939bb5dc64b6c"
+    },
+    "docker": {
+      "image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+      "bundles": 76,
+      "all_passed": true,
+      "evidence_sha256": "402b37d91292d643a10008f504c62bf2bade6e879f7440869741ef565a0f21e1",
+      "network": "none",
+      "read_only": true,
+      "limits": "512MiB/2CPU/128pids",
+      "oracle_scope": "Literal expected values, state isolation, failure atomicity, classic-browser VM and DOM event double; not real rendered-browser proof",
+      "node_test_totals": {
+        "tests": 380,
+        "pass": 380,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "stdout_path": "environments/training/artifacts/proposer-web-v3-20260919-verified/docker-verification.stdout.json"
+    }
+  },
+  "source_sha256": {
+    "environments/training/proposer_prepare.py": "5ec84074082713c6295fba50386d64d81ce0d9e23a4991e68ca2d768a52e9acc",
+    "environments/training/proposer_curriculum.py": "c81304cbd579cd41d085bcd413af9f0c7b589a4388068b90431e7d1f16acc05a",
+    "src/test/python/training/test_proposer_curriculum.py": "79749002f2cd6ea82ff8f26751b0555bf6341d670099760fd50832dc751e2c47",
+    "src/orchestwin/models/source_file_generation.py": "62198d38a939733322b730ac11b57e93e141132a04afa952525a49e5abb2cbfe",
+    "src/orchestwin/models/proposal_generation.py": "f829f95bdccabf9d048ebeaff0abcb1e4f96ad7c5b279d0ac5cade8722313f98",
+    "src/orchestwin/models/source_context.py": "58d14e86a49c47305246479bcfe158a029113943ad22ab84f75cbfc6064f9d97",
+    "src/orchestwin/models/source_design_contract.py": "ec0af7c89b80a9b1410e1c5fd28d5050c0f31a32da514c115e10ae88671d2802",
+    "src/orchestwin/models/source_syntax.py": "30c26ed3f81b15d358a955a3eaa2ba0e783947f5f954c94d61dfb3a764fbef44",
+    "src/orchestwin/models/source_proposals.py": "98c30aa1f1510e7ac561567e57cf9e509fd9fc9134cb75964e25ed1913783379"
+  },
+  "activity": {
+    "model_inference": false,
+    "training": false,
+    "tokenization": false,
+    "cloud": false,
+    "jvm_execution": false
+  },
+  "limitations": [
+    "Compact synthetic development curriculum; not a large or representative production dataset.",
+    "Translated examples share a semantic family and never cross splits.",
+    "Distinct business families reuse two core generators and one form layout; family count is not architectural diversity.",
+    "Reference Node tests and independent execution oracles share engineer-authored specifications; neither demonstrates model capability.",
+    "Manifest wording follows production V13 prompts captured when this dataset was created. Production has since advanced to V14; this frozen dataset does not claim current prompt alignment or human project approval.",
+    "Requires tokenizer audit without truncation before training; no held-out qualification cases are included.",
+    "This is a compatibility and reference-correctness receipt, not model performance evidence, training approval, Level D qualification, or rendered-browser acceptance.",
+    "A fresh tokenizer audit without truncation is still required before any future training on V3."
+  ],
+  "later_production_compatibility": {
+    "checked_at": "2026-09-19T19:44:50.734806+00:00",
+    "production_contract_at_check": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION",
+    "dataset_contract_unchanged": "SOURCE_MANIFEST_V13_STATIC_MODULE_CONTRACT",
+    "historical_dataset_only": true,
+    "current_prompt_alignment_claimed": false,
+    "dataset_regenerated": false,
+    "dataset_artifact_hashes_unchanged": true,
+    "verified_reference_files": 380,
+    "compatibility_scope": "Current V14 curriculum capture, token-cache unit tests and web-probe unit tests pass. This does not rewrite or certify prompt equality for the frozen V13 messages and does not run a training tokenization audit.",
+    "tests": {
+      "tests": 100,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "junit_path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/proposer-v14-compatibility-20260919/tests-final.xml",
+    "junit_sha256": "97183e46c7bb4ed232282f951c4d0d8b1c35630564738ffa96bc1d2ba827d7fa",
+    "initial_test_invocation": {
+      "status": "HARNESS_DIRECTORY_ERROR",
+      "cause": "The external basetemp parent did not yet exist. Retried after the JUnit writer created it. No source changes were required.",
+      "junit_path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/proposer-v14-compatibility-20260919/tests.xml",
+      "junit_sha256": "272f2bbb2acd9d645d93dc8580ff32c094dec3f9177ebf26d83c0850f6747ea9"
+    },
+    "source_sha256": {
+      "src/orchestwin/models/source_file_generation.py": "658cc516f44c554a3b609687fd46839e1542bf7c16f8c6016e8da84a0c956314",
+      "src/orchestwin/models/proposal_generation.py": "f829f95bdccabf9d048ebeaff0abcb1e4f96ad7c5b279d0ac5cade8722313f98",
+      "environments/training/proposer_prepare.py": "5ec84074082713c6295fba50386d64d81ce0d9e23a4991e68ca2d768a52e9acc",
+      "environments/training/proposer_training_data.py": "fe153bda254bcce15abec59cbd24af99b2c5efe99b41915a96fbb2d9d9ecf6b7",
+      "environments/training/probe_web_proposer.py": "cb04c5ab6d54b3f502f5efedef802d10a251971ae34cffdd4f842555d37b7936",
+      "src/test/python/training/test_proposer_curriculum.py": "79749002f2cd6ea82ff8f26751b0555bf6341d670099760fd50832dc751e2c47",
+      "src/test/python/training/test_proposer_training_cache.py": "399503c00f357af0183df345c75805273b0f9b37b40c970cd26dd4549bea9b02",
+      "src/test/python/training/test_proposer_web_probe.py": "81104958d0dd345bc101b79483f92fbc86b528128377cc3f963ffa86abaa08a5"
+    },
+    "prior_verification_report_sha256": "7f4339e090ec78aefb7611eba5550f871d7b008debdd28b25ca6a612b7590a8d"
+  }
+}

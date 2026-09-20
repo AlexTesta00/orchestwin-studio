@@ -192,13 +192,13 @@ def prepare_cache(data, output, manifest_sha256, tokenizer, *, group_limit=None)
 class TokenDataset:
     """Map-style dataset: only one token sequence is materialized per lookup."""
 
-    def __init__(self, directory):
+    def __init__(self, directory, *, max_sequence=MAX_SEQUENCE):
         self.directory = Path(directory)
         self.metadata = json.loads((self.directory / "cache.json").read_bytes())
         if (self.metadata["model"], self.metadata["revision"], self.metadata["max_sequence"]) != (
             MODEL,
             REVISION,
-            MAX_SEQUENCE,
+            max_sequence,
         ):
             raise ValueError("token cache model or context mismatch")
         path = self.directory / "train.sqlite"
