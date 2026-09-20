@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic_settings import (
     BaseSettings,
@@ -22,6 +23,7 @@ class UserModelingRuntimeMode(StrEnum):
     """User Modeling proposal runtimes supported in the current milestone."""
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
+    MODEL_ADAPTER = "MODEL_ADAPTER"
 
 
 class UserModelingRuntimeSettings(BaseSettings):
@@ -34,6 +36,7 @@ class UserModelingRuntimeSettings(BaseSettings):
     )
 
     mode: UserModelingRuntimeMode = UserModelingRuntimeMode.FAKE_DETERMINISTIC
+    model_config_file: Path | None = None
 
 
 @dataclass(
@@ -51,6 +54,12 @@ def build_user_modeling_proposal_port(
     settings: UserModelingRuntimeSettings,
 ) -> UserModelingProposalPort:
     """Build the configured User Modeling proposal provider."""
+    if settings.mode is UserModelingRuntimeMode.MODEL_ADAPTER:
+        from orchestwin.models.model_proposals import ModelUserModelingAdapter
+        from orchestwin.models.proposal_generation import build_proposal_generator
+
+        return ModelUserModelingAdapter(build_proposal_generator(settings.model_config_file))
+
     if settings.mode is UserModelingRuntimeMode.FAKE_DETERMINISTIC:
         return FakeDeterministicUserModelingAdapter()
 

@@ -131,12 +131,6 @@ def _load_fixture_module(name: str) -> ModuleType:
 DESIGN_FIXTURES, ARCHITECTURE_FIXTURES = load_fixture_modules()
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset owner-scoped data while preserving the migrated schema."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 def iterator_factory(values):
     """Return one deterministic zero-argument factory over supplied values."""
     iterator = iter(values)
@@ -247,8 +241,6 @@ async def run_integration_scenario() -> None:
     runtime = create_database_runtime(database_settings)
 
     try:
-        await truncate_application_data(runtime)
-
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory),
             password_service=Argon2PasswordService(),
@@ -604,7 +596,6 @@ async def run_integration_scenario() -> None:
         )
         assert revision == scripts.get_current_head()
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

@@ -122,8 +122,16 @@ def _gradle_phase(
 ) -> JvmPhasePlan:
     scope = jvm_scope_for(selection.target)
     arguments_by_phase: dict[JvmExecutionPhase, tuple[str, ...]] = {
-        JvmExecutionPhase.VALIDATE: ("--version", "--no-daemon"),
-        JvmExecutionPhase.SETUP: ("dependencies", "--no-daemon"),
+        JvmExecutionPhase.VALIDATE: ("--version", "--offline", "--no-daemon"),
+        JvmExecutionPhase.SETUP: (
+            "--init-script",
+            "/opt/orchestwin/resolve-dependencies.gradle.kts",
+            "orchestwinResolveDependencies",
+            "--dependency-verification",
+            "strict",
+            "--no-daemon",
+            "--console=plain",
+        ),
         JvmExecutionPhase.STATIC_CHECKS: (
             "check",
             "--offline",
@@ -167,7 +175,12 @@ def _gradle_phase(
         ),
         output_parser_id="jvm.gradle",
         artifact_patterns=artifacts_by_phase.get(phase, frozenset()),
-        timeout_seconds=600 if phase in {JvmExecutionPhase.BUILD, JvmExecutionPhase.TEST} else 300,
+        # Cold Kotlin plugin/artifact resolution approached the old five-minute
+        # bound even on successful runs. Keep SETUP within the existing runner
+        # ceiling while leaving the shorter offline/run limits unchanged.
+        timeout_seconds=600
+        if phase in {JvmExecutionPhase.SETUP, JvmExecutionPhase.BUILD, JvmExecutionPhase.TEST}
+        else 300,
     )
     return JvmPhasePlan(
         phase=phase,
@@ -187,14 +200,15 @@ def _sbt_phase(
     phase: JvmExecutionPhase,
 ) -> JvmPhasePlan:
     scope = jvm_scope_for(selection.target)
-    task_by_phase: dict[JvmExecutionPhase, str] = {
-        JvmExecutionPhase.VALIDATE: "sbtVersion",
-        JvmExecutionPhase.SETUP: "update",
-        JvmExecutionPhase.STATIC_CHECKS: "compile",
-        JvmExecutionPhase.BUILD: "package",
-        JvmExecutionPhase.TEST: "test",
-        JvmExecutionPhase.RUN: "run",
-        JvmExecutionPhase.COLLECT_ARTIFACTS: "show fullClasspath",
+    tasks_by_phase: dict[JvmExecutionPhase, tuple[str, ...]] = {
+        # Booting sbt itself downloads artifacts; VALIDATE must stay offline.
+        JvmExecutionPhase.VALIDATE: ("--script-version",),
+        JvmExecutionPhase.SETUP: ("update", "scalaInstance", "scalaCompilerBridgeBinaryJar"),
+        JvmExecutionPhase.STATIC_CHECKS: ("compile",),
+        JvmExecutionPhase.BUILD: ("package",),
+        JvmExecutionPhase.TEST: ("test",),
+        JvmExecutionPhase.RUN: ("run",),
+        JvmExecutionPhase.COLLECT_ARTIFACTS: ("show fullClasspath",),
     }
     artifacts_by_phase: dict[JvmExecutionPhase, frozenset[str]] = {
         JvmExecutionPhase.BUILD: frozenset({"target/scala-*/*.jar"}),
@@ -214,7 +228,7 @@ def _sbt_phase(
     command = _command(
         command_id=f"jvm.{phase.value.lower()}.sbt",
         executable="sbt",
-        arguments=("-batch", "-no-colors", task_by_phase[phase]),
+        arguments=("-batch", "-no-colors", *tasks_by_phase[phase]),
         network_mode=(
             CommandNetworkMode.CONTROLLED
             if phase is JvmExecutionPhase.SETUP

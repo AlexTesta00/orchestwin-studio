@@ -1,0 +1,6 @@
+# Native Windows API and WSL inference; PostgreSQL remains local to this computer.
+services:
+  database:
+    networks: [data, edge]
+    ports:
+      - "127.0.0.1:15432:5432"

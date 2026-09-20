@@ -56,8 +56,8 @@ def test_runtime_provider_is_loaded_from_environment(
     assert settings.provider is (TeamProposalRuntimeProvider.FAKE_DETERMINISTIC)
 
 
-def test_unimplemented_model_adapter_fails_fast() -> None:
-    """Avoid claiming a live-model capability without an adapter."""
+def test_unconfigured_model_adapter_fails_fast() -> None:
+    """Require explicit configuration before constructing the live-model adapter."""
     settings = TeamProposalRuntimeSettings(
         provider=(TeamProposalRuntimeProvider.MODEL_ADAPTER),
         _env_file=None,

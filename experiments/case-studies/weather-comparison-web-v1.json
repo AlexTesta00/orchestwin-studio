@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "case_id": "weather-comparison-web",
+  "version": 1,
+  "title": "Weather Provider Comparison Web Application",
+  "family": "WEB",
+  "execution_profile": "WEB_VUE_NODE",
+  "technologies": ["HTML", "CSS", "JavaScript", "Vue", "Node.js", "Express"],
+  "project_brief": "Create a responsive weather comparison application that presents normalized forecasts from multiple provider adapters. The formal case must use deterministic mocked provider responses, clearly show provider source and observation or forecast timestamps, communicate unavailable or conflicting values, and expose the comparison through an accessible Vue interface backed by a Node.js Express API.",
+  "user_twin_roles": ["general weather-information user"],
+  "constraints": [
+    "Use deterministic mocked provider adapters for the formal evaluation run",
+    "Do not require production API subscriptions",
+    "Show source and timestamp information for compared values",
+    "Represent missing or conflicting provider data explicitly",
+    "Use JavaScript across browser and server application code"
+  ],
+  "definition_of_done": [
+    {
+      "criterion_id": "WEATHER-001",
+      "description": "Approved requirements define at least two provider adapters, normalized comparison fields, source attribution, timestamps, and missing-data behavior.",
+      "evidence": ["REQUIREMENTS", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "WEATHER-002",
+      "description": "Frontend and server install and build steps complete under the WEB_VUE_NODE profile.",
+      "evidence": ["BUILD_REPORT"]
+    },
+    {
+      "criterion_id": "WEATHER-003",
+      "description": "Server tests validate provider normalization, conflicting values, unavailable data, and deterministic mocked responses.",
+      "evidence": ["TEST_REPORT"]
+    },
+    {
+      "criterion_id": "WEATHER-004",
+      "description": "Browser tests verify city selection and a readable side-by-side provider comparison including source and timestamp details.",
+      "evidence": ["TEST_REPORT", "RUNTIME_REPORT"]
+    },
+    {
+      "criterion_id": "WEATHER-005",
+      "description": "Automated accessibility evidence contains no unresolved critical violation in the evaluated comparison flow.",
+      "evidence": ["ACCESSIBILITY_REPORT"]
+    },
+    {
+      "criterion_id": "WEATHER-006",
+      "description": "Synthetic User Twin findings preserve provenance, uncertainty, and simulated-feedback status.",
+      "evidence": ["USER_TWIN_FINDINGS"]
+    },
+    {
+      "criterion_id": "WEATHER-007",
+      "description": "Any repair revision is bounded and linked to the evidence that triggered it.",
+      "evidence": ["REPAIR_HISTORY", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "WEATHER-008",
+      "description": "The final approved package preserves source, deterministic evidence, screenshots, and export metadata.",
+      "evidence": ["SCREENSHOT", "FINAL_EXPORT"]
+    }
+  ]
+}

@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
 )
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
+)
 from orchestwin.models.requirements import (
     RequirementsBriefInput,
     RequirementsTeamInput,
@@ -18,6 +22,7 @@ from orchestwin.models.requirements import (
     RequirementsUserTwinInput,
 )
 from orchestwin.models.requirements_runtime import (
+    RequirementsRuntime,
     RequirementsRuntimeMode,
     RequirementsRuntimeSettings,
     build_requirements_runtime,
@@ -73,6 +78,7 @@ class ManagedRequirementsUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyRequirementsUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -396,7 +402,12 @@ def _user_modeling_input(user_modeling_version) -> RequirementsUserModelingInput
                     content_hash=version.content_hash,
                     name=version.profile.name,
                 ),
-                observations=version.profile.observations,
+                observations=tuple(
+                    sorted(
+                        version.profile.observations,
+                        key=lambda observation: observation.observation_key,
+                    )
+                ),
             )
             for version in user_modeling_version.snapshot.twin_versions
         ),
@@ -417,15 +428,20 @@ class RequirementsServices:
 def build_requirements_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: RequirementsRuntimeSettings | None = None,
+    *,
+    proposal_runtime: RequirementsRuntime | None = None,
 ) -> RequirementsServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 4."""
-    runtime = build_requirements_runtime(settings)
+    runtime = (
+        proposal_runtime if proposal_runtime is not None else build_requirements_runtime(settings)
+    )
     command_uow_factory = ManagedRequirementsUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyRequirementsGateUnitOfWorkFactory(session_factory)
 
     return RequirementsServices(
         runtime_mode=runtime.mode,
         generation=LocalRequirementsGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyRequirementsGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

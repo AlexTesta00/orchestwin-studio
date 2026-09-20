@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "protocol_id": "s12-expert-base-adapter-v1",
+  "reviewer_aliases": [
+    "E1",
+    "E2",
+    "E3",
+    "E4"
+  ],
+  "pair_count": 60,
+  "ratings_per_pair": 2,
+  "ratings_per_reviewer": 30,
+  "rubric_items": [
+    "Requirements completeness",
+    "Architecture coherence",
+    "Code quality",
+    "Test quality",
+    "UI usability",
+    "Accessibility attention",
+    "Provenance and traceability",
+    "User Twin usefulness",
+    "Process transparency",
+    "Human controllability",
+    "Overall usefulness"
+  ],
+  "blinding": {
+    "model_identity_hidden": true,
+    "candidate_order_randomized": true,
+    "identity_key_stored_separately": true,
+    "decode_only_after_collection_complete": true
+  },
+  "collection": {
+    "same_rubric_for_all_pairs": true,
+    "raw_ratings_preserved": true,
+    "raw_comments_preserved": true,
+    "prompt_or_model_tuning_after_collection_starts": false
+  },
+  "interpretation": {
+    "descriptive_analysis_only": true,
+    "expert_judgment_is_target_user_evidence": false,
+    "real_user_behavior_validated": false,
+    "empirical_user_evidence_created": false,
+    "frozen_training_feedback_allowed": false
+  }
+}

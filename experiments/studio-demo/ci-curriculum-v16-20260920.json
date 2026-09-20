@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-20T13:33:42.238423+00:00",
+  "scope": "LOCAL_CI_CORRECTION_NOT_REMOTE_CI_PASS_OR_LEVEL_D",
+  "base_commit": "8549f08a22dd17874aad55ad7825cf0d65c55603",
+  "status": "LOCAL_REGRESSION_PASSED_USER_COMMIT_PUSH_REQUIRED",
+  "remote_ci": {
+    "run_id": 35512097447,
+    "url": "https://github.com/AlexTesta00/orchestwin-studio/actions/runs/35512097447",
+    "conclusion": "failure",
+    "affected_jobs": [
+      "Test (ubuntu-24.04)",
+      "Test (macos-14)",
+      "Test (windows-2025)"
+    ],
+    "ubuntu_result": {
+      "failed": 4,
+      "passed": 4763,
+      "skipped": 40,
+      "deselected": 210
+    },
+    "cause": "Synthetic proposer reference manifests still used the pre-V16 JavaScript-first order. Production correctly rejected them."
+  },
+  "changes": [
+    {
+      "path": "environments/training/proposer_prepare.py",
+      "sha256": "e3631c7e488d5ba103c859175f48c93b73cccfeed330d149581f934b2db0cec6"
+    },
+    {
+      "path": "src/test/python/training/test_proposer_curriculum.py",
+      "sha256": "05cdea597f7c4c77d6ae19b4b4695f94fbbe555ad95bacd7e326302fb8930b53"
+    },
+    {
+      "path": "src/test/python/web_execution/test_validation_command.py",
+      "sha256": "35f95c5ae4ec39aa044916939c0582fb4cfd1d64a21401bb42d78dc738bb5b68"
+    }
+  ],
+  "corrections": [
+    "Prepare references in HTML, JavaScript, test order, with HTML as the JavaScript dependency. Do not relax V16 production validation.",
+    "Capture production messages for all 38 curriculum families in both locales; verify exact dependency bytes and preservation of synthetic/no-inference provenance.",
+    "Exercise abrupt death of the actual OS-lock owner instead of killing only a Windows virtualenv launcher. No production lock changes."
+  ],
+  "local_regression": {
+    "command": "python -m pytest -q -m \"not integration\" -p no:cacheprovider --basetemp=<external-new-directory>",
+    "passed": 4826,
+    "failed": 0,
+    "skipped": 56,
+    "deselected": 210,
+    "seconds": 368.21,
+    "log": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/backend-v16-8549-04.log",
+    "log_sha256": "4db08640b91ee154e59c9ee8f26a9d84e26ad5526f97a6b4def37d6f7add7653",
+    "working_tree_note": "Includes one additional oracle-isolation test for the separate cross-project diagnostic; that test and its cases belong to a separate commit.",
+    "integration_tests_run_in_this_change": false
+  },
+  "targeted_regression": {
+    "passed": 185,
+    "failed": 0,
+    "seconds": 25.3,
+    "log": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/pytest-curriculum-lock-8549-03.log",
+    "log_sha256": "63374df6179eea77383dc951a531e7fb2997714da4d90ff670440637b9a3202d"
+  },
+  "earlier_attempts": [
+    {
+      "log": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/backend-v16-8549-01.log",
+      "failed": 62,
+      "cause": "Operator selected basetemp inside repository; dataset safety guards correctly rejected those paths."
+    },
+    {
+      "log": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/backend-v16-8549-02.log",
+      "failed": 1,
+      "cause": "Windows virtualenv launcher death did not ensure lock-owner death; corrected in final test."
+    }
+  ],
+  "ruff_check": "PASSED",
+  "ruff_format_check": "PASSED",
+  "frozen_datasets_modified": false,
+  "model_inference_claimed_by_tests": false,
+  "remote_ci_after_fix": "PENDING_USER_COMMIT_PUSH",
+  "level_d_campaign_started": false,
+  "git_write_operations_performed": false
+}

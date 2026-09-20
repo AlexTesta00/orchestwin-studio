@@ -1,5 +1,7 @@
 """Tests for the OrchesTwin ASGI server entry point."""
 
+import os
+import sys
 from importlib.metadata import entry_points
 
 import pytest
@@ -84,6 +86,7 @@ def test_run_server_uses_the_application_factory(
     assert captured_arguments == {
         "application": APPLICATION_IMPORT,
         "factory": True,
+        "loop": "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
         "host": "0.0.0.0",
         "port": 9000,
         "log_level": DEFAULT_LOG_LEVEL,
@@ -99,3 +102,18 @@ def test_package_exposes_the_api_console_script() -> None:
     ]
 
     assert [entry_point.value for entry_point in matching_scripts] == ["orchestwin.api.server:main"]
+
+
+def test_cli_defaults_to_real_models_without_overriding_explicit_test_mode(monkeypatch):
+    from orchestwin.api.server import main
+
+    monkeypatch.delenv("ORCHESTWIN_MODEL_RUNTIME_MODE", raising=False)
+    observed = []
+    monkeypatch.setattr(
+        "orchestwin.api.server.run_server",
+        lambda _: observed.append(os.environ["ORCHESTWIN_MODEL_RUNTIME_MODE"]),
+    )
+    main([])
+    monkeypatch.setenv("ORCHESTWIN_MODEL_RUNTIME_MODE", "DEVELOPMENT_FIXTURES")
+    main([])
+    assert observed == ["REAL_REQUIRED", "DEVELOPMENT_FIXTURES"]

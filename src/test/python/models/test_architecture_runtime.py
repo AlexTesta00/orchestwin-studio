@@ -42,6 +42,6 @@ def test_unknown_architecture_runtime_mode_is_rejected(
         ArchitectureRuntimeSettings()
 
 
-def test_sprint_six_runtime_exposes_no_provider_credentials() -> None:
-    """Keep the current deterministic runtime free from unused secret fields."""
-    assert set(ArchitectureRuntimeSettings.model_fields) == {"mode"}
+def test_runtime_exposes_config_path_without_provider_credentials() -> None:
+    """Expose only mode and a non-secret configuration path."""
+    assert set(ArchitectureRuntimeSettings.model_fields) == {"mode", "model_config_file"}

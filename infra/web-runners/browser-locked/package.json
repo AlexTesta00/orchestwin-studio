@@ -1,0 +1,11 @@
+{
+  "name": "@orchestwin/browser-automation-runner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned tooling for trusted offline browser infrastructure probes.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "axe-core": "4.13.0",
+    "playwright": "1.62.1"
+  }
+}

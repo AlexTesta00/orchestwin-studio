@@ -1,0 +1,663 @@
+{
+  "schema_version": 1,
+  "campaign_id": "curriculum-bc1b724-20260915-01",
+  "phase": "LARGE_COMPLETE_INTERFACE_DATASET_PREPARATION",
+  "status": "PREPARATION_VERIFIED_TRAINING_NOT_STARTED",
+  "base_repository_commit": "bc1b7249f12c90d1c0dc513fb234a9353c6d8964",
+  "source_sha256": {
+    "environments/training/prepare_complete_evaluator.py": "b53c0caa1bd6365e4ced57ffcf9f8beb818ed2d503b4a6de7d58fe11dc4cdcd4",
+    "environments/training/audit_complete_evaluator.py": "5ac5730ec5ad76bb4a77cd8e3572f1743490ac74c11a959a6f025be9998ac75f",
+    "src/orchestwin/training/complete_interface_curriculum.py": "0570a1e3365c43c67e701039160b087dd743b55f61a8c22d4ca6d272a1256776",
+    "src/orchestwin/training/complete_interface_fixtures.py": "03b9bf008e7a7657090f48304611287750d83c29424be65c41367b402eb5eee4",
+    "src/orchestwin/training/complete_interface_validation.py": "de89391afaae8c3a4e532453c8b3b9cfd100203b744bb73d2d9f812357a14cd3",
+    "src/test/python/training/test_complete_interface_curriculum.py": "c6c819c2bd52f9fc16255736b4625a0ace6c59669cdee8ff3ddfeeaa1fe354db",
+    "src/test/python/training/test_complete_evaluator_token_audit.py": "14e2a53c456d1df91902786df24434b4864fdab27fd903373eb8bef9b1644ee0"
+  },
+  "motivation": "Previous adapter passed narrow native validation but failed broader complete-page and per-control semantic checks. Prepare counterfactual multi-control supervision before further model training.",
+  "dataset": {
+    "curriculum_id": "grounded-evaluator-complete-interface-v3",
+    "seed": 2026091503,
+    "groups_requested": {
+      "train": 1800,
+      "validation": 96,
+      "test": 96
+    },
+    "total_rows": 69972,
+    "files": {
+      "train.jsonl": {
+        "rows": 63420,
+        "size_bytes": 814261317,
+        "sha256": "0a61bc04e095d6b93a53fb60c149090f50ffaf3e175c3ea9d8672259d47b1b57"
+      },
+      "validation.jsonl": {
+        "rows": 3280,
+        "size_bytes": 42341774,
+        "sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e"
+      },
+      "test.jsonl": {
+        "rows": 3272,
+        "size_bytes": 42698638,
+        "sha256": "5eb85b64c12fa7b5ba335725d895134ea5b65188811bd89920065e6842f5326e"
+      }
+    },
+    "statistics": {
+      "train": {
+        "broad_rows": 59964,
+        "retention_rows": 3456,
+        "generated_broad_rows": 62400,
+        "removed_id_only_or_repeated_semantic_inputs": 2436,
+        "judgement_counts": {
+          "MISSING": 31146,
+          "PARTIAL": 21502,
+          "INSUFFICIENT": 6028,
+          "PRESENT": 4744
+        },
+        "broad_control_states": {
+          "MISSING": 68364,
+          "PRESENT": 94704,
+          "INSUFFICIENT": 37684
+        },
+        "broad_control_families": {
+          "button_name": 59964,
+          "image_text": 26530,
+          "input_label": 59964,
+          "heading": 27556,
+          "error_guidance": 26738
+        },
+        "broad_target_counts": {
+          "3": 18708,
+          "2": 10198,
+          "4": 31058
+        },
+        "conditions": {
+          "complete": 33586,
+          "partial": 21502,
+          "content_unavailable": 2134,
+          "form_absent": 2742
+        },
+        "service_families": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "structure_families": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      "validation": {
+        "broad_rows": 3280,
+        "retention_rows": 0,
+        "generated_broad_rows": 3328,
+        "removed_id_only_or_repeated_semantic_inputs": 48,
+        "judgement_counts": {
+          "MISSING": 1600,
+          "INSUFFICIENT": 336,
+          "PARTIAL": 1152,
+          "PRESENT": 192
+        },
+        "broad_control_states": {
+          "PRESENT": 5056,
+          "MISSING": 3648,
+          "INSUFFICIENT": 2202
+        },
+        "broad_control_families": {
+          "button_name": 3280,
+          "error_guidance": 1534,
+          "input_label": 3280,
+          "heading": 1442,
+          "image_text": 1370
+        },
+        "broad_target_counts": {
+          "3": 1022,
+          "2": 596,
+          "4": 1662
+        },
+        "conditions": {
+          "complete": 1792,
+          "content_unavailable": 160,
+          "partial": 1152,
+          "form_absent": 176
+        },
+        "service_families": [
+          12,
+          13,
+          14
+        ],
+        "structure_families": [
+          8,
+          9
+        ]
+      },
+      "test": {
+        "broad_rows": 3272,
+        "retention_rows": 0,
+        "generated_broad_rows": 3328,
+        "removed_id_only_or_repeated_semantic_inputs": 56,
+        "judgement_counts": {
+          "INSUFFICIENT": 330,
+          "PARTIAL": 1150,
+          "MISSING": 1600,
+          "PRESENT": 192
+        },
+        "broad_control_states": {
+          "INSUFFICIENT": 2186,
+          "PRESENT": 5056,
+          "MISSING": 3646
+        },
+        "broad_control_families": {
+          "heading": 1594,
+          "input_label": 3272,
+          "error_guidance": 1382,
+          "button_name": 3272,
+          "image_text": 1368
+        },
+        "broad_target_counts": {
+          "4": 1664,
+          "3": 1016,
+          "2": 592
+        },
+        "conditions": {
+          "content_unavailable": 154,
+          "partial": 1150,
+          "complete": 1792,
+          "form_absent": 176
+        },
+        "service_families": [
+          15,
+          16,
+          17
+        ],
+        "structure_families": [
+          10,
+          11
+        ]
+      }
+    },
+    "native_domain_validated_rows": 69972,
+    "independently_checked_broad_rows": 66516,
+    "excluded_normalized_duplicates": 2540,
+    "split_policy": "Complete counterfactual groups and both translations stay in one split; broad service phrases and layout families are held out together. Repeated semantic inputs after identifier normalization are removed within a split and forbidden across splits.",
+    "normalized_prompt_overlap_cross_splits": false,
+    "retention_source": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\retraining-0f784d4-20260914-01\\data",
+      "manifest_sha256": "cbfc59fb3b5776123038198f192f8e9d33f8b08b1ed5276eb19ec8bc672de7f9",
+      "train_sha256": "1275d50d7aeaeccea4670e9c2f9b13016e80a837d5dc7ab8772c60d87c6cf7cc",
+      "rows": 3456,
+      "validation_and_test_copied": false
+    },
+    "supervision": "Full completion targets; old three-state decision-token masking is incompatible with multi-control and partial-evidence examples.",
+    "sampling_policy": "Combinatorial corpus, not a natural prevalence estimate. Choose training sampling using validation, and report any oversampling separately from unique dataset rows."
+  },
+  "annotation_review": {
+    "review_type": "CODEX_STATIC_SEMANTIC_REVIEW_OF_SYNTHETIC_ANNOTATIONS",
+    "reviewed_rows": 20,
+    "independent_groups": 4,
+    "human_expert_review": false,
+    "sample_sha256": "053c4a53a1c79dae984f44c3cefd5e05c1e2e1ba41ce28ce74cb0ad4d20f5de6",
+    "method": "Read complete HTML and target answers for the first example of each split/locale/aggregate state, plus four-control examples containing a heading. No test answers were selected.",
+    "splits": [
+      "train",
+      "validation"
+    ],
+    "locales": [
+      "en",
+      "it"
+    ],
+    "covered_criteria": [
+      "button_name",
+      "error_guidance",
+      "heading",
+      "image_text",
+      "input_label"
+    ],
+    "covered_structures": [
+      1,
+      4,
+      8,
+      9
+    ],
+    "selection_is_representative_random_sample": false,
+    "observed_label_errors": [],
+    "observations": [
+      "Whitespace-only labels and empty referenced button names produce findings only for the selected defective controls.",
+      "Correct associated labels, nonempty aria-label and multi-ID aria-labelledby names do not produce findings.",
+      "Unrelated help controls and page headings are not evidence for the selected controls.",
+      "Partially absent targets produce evidence gaps while remaining present targets are assessed; full absence or unavailable HTML produces abstention.",
+      "Recommended repairs address the identified missing property. User impact is conditional and explicitly not observed.",
+      "Confidence 0.7 and severity major are fixed synthetic conventions; they are not calibrated probabilities or expert severity judgments."
+    ],
+    "limitations": [
+      "Twenty related examples from four groups cannot establish corpus-wide semantic accuracy or real-world generalization.",
+      "The curriculum tests requested static properties, not general accessibility conformance, rendered behavior or complete user-twin capability.",
+      "Native-domain and independent HTML-oracle checks cover all rows separately; those are engineering checks, not expert validation."
+    ],
+    "reviewed": [
+      {
+        "split": "train",
+        "row": 1,
+        "row_sha256": "7afddafcedd1670d3bf83a5bbd5cc0130261ec9fe72753ebe36f0c9222590065",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 2,
+        "row_sha256": "09b24caac03fa4931f7ce34b15340249de7d4eb371b7e82a78030f478c0f2dd3",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 3,
+        "row_sha256": "89b6c6f4ac9ada1952476f762fff925414fa98fb5e2f394855b0d16124775358",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 4,
+        "row_sha256": "eb42513d7fb760898c15a96618192bff1f36715dd3a7dfde72f055aa7f9626b0",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 6,
+        "row_sha256": "35acb1733896999bb6f5a69d8f9ec1e9904033f85dab39c45d68b3c57f713b46",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 9,
+        "row_sha256": "e2df61e3cde3ad53255bd0aff689fb08abdd3edc1007c4fd7a995be07c274558",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 20,
+        "row_sha256": "47bd91c6539738ae1db0399eb6cd624b82b554cd00a7dbe35ac714013a4330b9",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 28,
+        "row_sha256": "170eb6142014f3a7b4a93fc9545ed76248a27fc4b26e70b789b051666aff7194",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 294,
+        "row_sha256": "e9402af55fcea384f617ced6dbd97d6fa997c83392789b68f66db8c2bab4c0ff",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "train",
+        "row": 296,
+        "row_sha256": "a727c9e5f564086358f3edac19d30e0de6effe99861148129903ae7b7b393482",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 1,
+        "row_sha256": "7196c42d98c8b4938fd0c0b3b8b5a2b26e8a3cc73f1ed352169bf498f48d7078",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 2,
+        "row_sha256": "23fb57f6df7eb6f613b3fd27083640451817838c1bb3de7aba5be07e90bfd4f5",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 4,
+        "row_sha256": "80246ba7d07e7ad0a31f7194398de82535944c9854c4bcff9a6905d22366b599",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 5,
+        "row_sha256": "348495c23d01dda85a9f78c0db5acda8baca19923309e70310beb2d48b93a12f",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 6,
+        "row_sha256": "243851b7b7334bcbe081109085708144e31a0f3d310b6596ebe1d3438d525b21",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 8,
+        "row_sha256": "4dcfd4b4f03bce8abf4263c8f645b6ab40bf6461b1b804b68aff47ad0f4c8ebe",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 10,
+        "row_sha256": "4284321d37602dda869ef9280832f13f1e02d483519fc02825a345b5ad71dc1e",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 19,
+        "row_sha256": "89ac97adbbca01340d36640f719dfea825d56958f2e91c821290db5f6547d1df",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 201,
+        "row_sha256": "e4efd80634e7f2c5fbd538a11fe25019e9b607324ad90333fe2c51e2fda9d46c",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      },
+      {
+        "split": "validation",
+        "row": 202,
+        "row_sha256": "31a89795fa4020bcdf19bc2d8bce10751b91d26399ce84ad53d1b7457ad1433a",
+        "result": "NO_OBSERVED_CONTRADICTION_WITH_REQUESTED_STATIC_CHECKS"
+      }
+    ]
+  },
+  "integrity": {
+    "source_pins_match": {
+      "environments/training/prepare_complete_evaluator.py": true,
+      "src/orchestwin/training/complete_interface_curriculum.py": true,
+      "src/orchestwin/training/complete_interface_fixtures.py": true,
+      "src/orchestwin/training/complete_interface_validation.py": true,
+      "src/orchestwin/training/grounded_evaluator_curriculum.py": true,
+      "src/orchestwin/training/relational_evaluator_curriculum.py": true,
+      "src/orchestwin/training/evaluator_assessment.py": true
+    },
+    "retention_suffix_sha256": "1275d50d7aeaeccea4670e9c2f9b13016e80a837d5dc7ab8772c60d87c6cf7cc",
+    "retention_byte_for_byte": true,
+    "protected_prior_test_sha256": "15d5996956d0851f493524fce1aea625bc28084e5e1ef9ef284c7a8737ae591c",
+    "protected_cases_inferred": false
+  },
+  "tokenizer_audit": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "max_sequence": 6144,
+    "output_reserve": 2048,
+    "dataset_manifest_sha256": "477af12816ade32b2f9dec51fcfb125fe2b0e6dd2a1321f4a43b795b8b57c3d9",
+    "operator_sha256": "5ac5730ec5ad76bb4a77cd8e3572f1743490ac74c11a959a6f025be9998ac75f",
+    "truncation": false,
+    "completion_boundary_checked": true,
+    "eos_checked": true,
+    "model_weights_loaded": false,
+    "training_executed": false,
+    "final_cases_inferred": false,
+    "splits": {
+      "train": {
+        "rows": 63420,
+        "total_tokens": 222575836,
+        "prompt_tokens": 196176271,
+        "completion_tokens": 26399565,
+        "min_tokens": 1895,
+        "max_tokens": 4753,
+        "mean_tokens": 3509.5527593818983,
+        "p95_tokens": 4247,
+        "p99_tokens": 4437,
+        "max_prompt_tokens": 3507,
+        "max_completion_tokens": 1350
+      },
+      "validation": {
+        "rows": 3280,
+        "total_tokens": 11593599,
+        "prompt_tokens": 10203975,
+        "completion_tokens": 1389624,
+        "min_tokens": 2148,
+        "max_tokens": 4703,
+        "mean_tokens": 3534.6338414634147,
+        "p95_tokens": 4265,
+        "p99_tokens": 4428,
+        "max_prompt_tokens": 3435,
+        "max_completion_tokens": 1329
+      },
+      "test": {
+        "rows": 3272,
+        "total_tokens": 11718790,
+        "prompt_tokens": 10324952,
+        "completion_tokens": 1393838,
+        "min_tokens": 2147,
+        "max_tokens": 4797,
+        "mean_tokens": 3581.53728606357,
+        "p95_tokens": 4318,
+        "p99_tokens": 4515,
+        "max_prompt_tokens": 3514,
+        "max_completion_tokens": 1337
+      }
+    },
+    "reference_tokenization": {
+      "rows": 3456,
+      "total_tokens": 9365163,
+      "prompt_tokens": 8847483,
+      "completion_tokens": 517680,
+      "min_tokens": 1895,
+      "max_tokens": 3234,
+      "mean_tokens": 2709.8272569444443,
+      "p95_tokens": 3136,
+      "p99_tokens": 3192,
+      "max_prompt_tokens": 2867,
+      "max_completion_tokens": 395
+    },
+    "reference_training_result_sha256": "b405ba344e4efc225799b5f75ab5607da281b76d9d36776034d2c3267fa09afe",
+    "estimate": {
+      "method": "PRIOR_LOCAL_TRAINING_TIME_SCALED_BY_COMPLETE_SEQUENCE_TOKENS",
+      "reference_rows": 3456,
+      "reference_tokens": 9365163,
+      "reference_reported_seconds": [
+        17122.354223848,
+        18975.2622
+      ],
+      "current_rows": 63420,
+      "token_ratio": 23.766360072964027,
+      "nominal_one_epoch_hours": [
+        113.03778771689113,
+        125.27025386780655
+      ],
+      "includes_validation_or_checkpoint_overhead": false,
+      "measured_new_training_throughput": false,
+      "limitation": "Planning estimate only: longer sequences, full-completion supervision, memory pressure, sampler policy and checkpointing can change throughput. Measure a pilot before committing to the full run; hours do not predict quality."
+    }
+  },
+  "verification": {
+    "training_test_suite": {
+      "tests": 497,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "passed": 488
+    },
+    "full_suite_ran_before_tokenizer_api_fix": true,
+    "targeted_suite_after_api_fix": {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 6
+    },
+    "skipped_reason": "Nine Windows symlink-dependent cases unavailable in this environment.",
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED",
+    "git_diff_check": "PASSED",
+    "first_audit_attempt": {
+      "status": "FAILED_BEFORE_FIRST_SUCCESSFUL_ROW",
+      "cause": "Transformers chat-template API returned a BatchEncoding mapping by default; code assumed a list of token IDs.",
+      "correction": "Explicit return_dict=False for both template calls; regression stub preserves the real default mapping behavior.",
+      "resumed_as": "token-audit-02",
+      "dataset_content_changed": false
+    }
+  },
+  "training_plan": {
+    "status": "PREPARED_NOT_STARTED_AWAITING_USER_COMMIT",
+    "dataset_manifest_sha256": "477af12816ade32b2f9dec51fcfb125fe2b0e6dd2a1321f4a43b795b8b57c3d9",
+    "scope": "Candidate QLoRA evaluator training; no production selection or formal-case inference.",
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "proposed_start": "Fresh adapter on pinned base; retain previous adapter unchanged as paired baseline.",
+    "user_commit_required_before_next_phase": true,
+    "next_phase_prerequisites": [
+      "Verify the user commit contains this dataset preparation and evidence report.",
+      "Implement and verify a streaming v3 training operator with exact audited prompt/completion boundaries and full completion supervision. The legacy v2 three-state decision mask is incompatible.",
+      "Pin dependencies, operator bytes, seeds, data hashes, sampler and validation schedule before training.",
+      "Use bounded-memory tokenization/caching, shuffled groups and unpadded length buckets; do not load the whole 900 MB corpus into Python objects.",
+      "Define training-only stratified sampling, accounting for rare all-correct examples, four aggregate states, language and control families. Report sampled presentations separately from unique rows.",
+      "Preserve disjoint validation/test groups; use validation only for checkpoint and sampling choices. Keep new test and previous 108 cases without model inference until the independent final evaluation gate.",
+      "Measure memory and recent tokens/second with a short local pilot before estimating or starting a multi-day run; never truncate audited examples to fit memory."
+    ],
+    "initial_training_review_window_hours": [
+      12,
+      24
+    ],
+    "window_meaning": "Engineering checkpoint review, not a promised sufficient duration or an already running job.",
+    "continuation_rule": "Continue only while held-out validation precision/recall and correct abstention improve without protocol regressions. Freeze exact selection thresholds and strata before gradient updates; stop on nonfinite loss or repeated memory failures.",
+    "evaluation_measures": [
+      "Native schema and domain acceptance with unsupported empirical claims counted as errors.",
+      "Per-control finding precision and recall; all-correct false-positive rate.",
+      "Correct partial-evidence handling and full-abstention behavior.",
+      "Whole-group counterfactual consistency, broken down by control family, language, structure and service family.",
+      "Paired comparison against the pinned base and previous adapter, with human review of errors and cluster-aware uncertainty."
+    ],
+    "final_test_policy": "Freeze checkpoint and selection protocol before one-time model inference on fresh held-out test data. No production adoption solely from synthetic labels.",
+    "progress_interval_minutes": 120,
+    "progress_channel": "Gmail, authorized recipient stored only in private automation configuration",
+    "automation_status": "PAUSED_UNTIL_TRAINING_REGISTRATION_AND_LAUNCH",
+    "training_executed": false,
+    "verified_tokenization": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit-02\\tokenization.json",
+      "size_bytes": 2814,
+      "sha256": "543ac1e30ea057466e05be40d4230ac78ea1c92a3a23b0ed3099367f5745d83e"
+    },
+    "nominal_full_epoch_estimate": {
+      "method": "PRIOR_LOCAL_TRAINING_TIME_SCALED_BY_COMPLETE_SEQUENCE_TOKENS",
+      "reference_rows": 3456,
+      "reference_tokens": 9365163,
+      "reference_reported_seconds": [
+        17122.354223848,
+        18975.2622
+      ],
+      "current_rows": 63420,
+      "token_ratio": 23.766360072964027,
+      "nominal_one_epoch_hours": [
+        113.03778771689113,
+        125.27025386780655
+      ],
+      "includes_validation_or_checkpoint_overhead": false,
+      "measured_new_training_throughput": false,
+      "limitation": "Planning estimate only: longer sequences, full-completion supervision, memory pressure, sampler policy and checkpointing can change throughput. Measure a pilot before committing to the full run; hours do not predict quality."
+    }
+  },
+  "monitoring": {
+    "automation_id": "controlla-training-orchestwin",
+    "interval_minutes": 120,
+    "status": "PAUSED",
+    "channel": "Gmail",
+    "authenticated_account_and_user_recipient_verified": true,
+    "recipient_stored_in_repository": false,
+    "activation": "After the user commit and verified registration of an actual training process.",
+    "local_execution_requires_host_and_app_running": true
+  },
+  "evidence": [
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\data\\manifest.json",
+      "size_bytes": 6875,
+      "sha256": "477af12816ade32b2f9dec51fcfb125fe2b0e6dd2a1321f4a43b795b8b57c3d9"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\data\\deduplicated.jsonl",
+      "size_bytes": 552866,
+      "sha256": "87948b3b4de2d8d1a41c3212b1a4e26f8af64f6fe7945c26c5fa04a23dc32fb2"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit-02\\tokenization.json",
+      "size_bytes": 2814,
+      "sha256": "543ac1e30ea057466e05be40d4230ac78ea1c92a3a23b0ed3099367f5745d83e"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit-02\\operator.py",
+      "size_bytes": 8415,
+      "sha256": "5ac5730ec5ad76bb4a77cd8e3572f1743490ac74c11a959a6f025be9998ac75f"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\annotation-review-sample.json",
+      "size_bytes": 60188,
+      "sha256": "053c4a53a1c79dae984f44c3cefd5e05c1e2e1ba41ce28ce74cb0ad4d20f5de6"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\annotation-review.json",
+      "size_bytes": 6525,
+      "sha256": "28301d871bfb3385153d52c71bd2480f91993d7793b038dfb27d3d88fdd8f60c"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\integrity.json",
+      "size_bytes": 793,
+      "sha256": "6128061dfbf200239dc37445174fffa2ff9f2c5b2d45fe9c83d5b7a61b1c7629"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\training-plan.json",
+      "size_bytes": 4220,
+      "sha256": "399924888e18eb4a5cdc3a1e391272c29cfac17184663a4ac91711225a9a5577"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\tests.xml",
+      "size_bytes": 84143,
+      "sha256": "b40011a4703881ce3f3fa0493194310bc2d8d20a1c624fe30ce43d7bbc04188c"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit-tests.xml",
+      "size_bytes": 1358,
+      "sha256": "c700762756e130db1af4f7ec840e6bd4d0aa2e4633a6768ddc30b276fffd2822"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\export.log",
+      "size_bytes": 5709,
+      "sha256": "18ecc4a7045af8e327cc4cfc15c8eb4eb28d9ef15a974a8e82c6c12d0e7efcff"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit\\operator.py",
+      "size_bytes": 8349,
+      "sha256": "ea439dd72d98768ccaa74b2982bd8ebe23eb8ca73e0215f828ec28655872331a"
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\token-audit.log",
+      "size_bytes": 1611,
+      "sha256": "3d0a43043d45f30aa9054d09b44e174aa7310e0fefdc6fa36950c06ff4952381"
+    }
+  ],
+  "boundaries": {
+    "training_executed": false,
+    "new_model_weights": false,
+    "model_inference_executed": false,
+    "model_selected_for_production": false,
+    "formal_case_used": false,
+    "old_reserved_108_inferred": false,
+    "new_test_inferred": false,
+    "human_expert_labels": false,
+    "empirical_validation": false,
+    "database_mutations": false,
+    "commits_created": false,
+    "new_markdown_files": false
+  },
+  "limitations": [
+    "Closed static HTML grammar; not the complete accessible-name algorithm or a browser audit.",
+    "Template-derived synthetic labels are not expert or real-user observations.",
+    "Row count is not a count of independent real-world scenarios.",
+    "Independent inference and semantic review are required after training; old 108 reserved cases remain separate.",
+    "The dataset is synthetic and closed-grammar; its size alone does not establish independent real-world diversity or model quality.",
+    "The existing legacy v2 trainer does not accept the v3 partial-evidence curriculum. A streaming v3 operator and measured memory pilot are required before launching training.",
+    "Nominal hours are a linear token-scaled planning range from two inconsistent recorded prior timings, not a confidence interval; validation, checkpoint overhead and changed sequence/memory costs are excluded.",
+    "Fixed target confidence and severity are uncalibrated synthetic conventions. Human review and fresh held-out inference are still required."
+  ]
+}

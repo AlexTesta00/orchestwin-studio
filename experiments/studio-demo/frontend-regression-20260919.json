@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T19:20:37.112014+00:00",
+  "repository_head": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "scope": "COMPLETE_FRONTEND_REGRESSION_AFTER_ARCHITECTURE_PRESENTATION_CHANGE",
+  "status": "PASSED",
+  "architecture_change": "Remove only the duplicated top-level test strategy; complete strategy remains inside the existing technical details panel.",
+  "source_inputs": {
+    "files": 177,
+    "manifest": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\source-inputs.json",
+    "manifest_sha256": "2df11a8beedb45059d1ee2ae474dcc69d6de11befe0af501154a7fd2a63a8dfd",
+    "all_inputs_unchanged_after_checks": true
+  },
+  "changed_frontend_source_sha256": {
+    "frontend/src/components/ProjectArchitectureFlow.vue": "b80ec3f4c2a38c77ef826e1b9a0a807a6039253e3be797949df7826426f5e317",
+    "frontend/src/components/ProjectUserModelingFlow.vue": "9e5fc04c822a00c81abc629d1b21f4ad81cb4bbeb6b2e15ae51182ce75662794",
+    "frontend/src/components/modelFeedback.ts": "1f3782aad485fda2fd1e1a1a0203aeea4031ac6395b32e61f8977972a8a51677",
+    "frontend/src/stores/architecture.spec.ts": "c8ce6ab72c5382cf6797dc450575baf0ef5dab01810f43706bdc994e7043cb99",
+    "frontend/src/stores/architecture.ts": "252df95cf56bcc6c0ab1c719a2e70265b5ed64dedd914176edddbe1e8b1771c1",
+    "frontend/src/stores/design.spec.ts": "19550ba0ddc325586e69c06685bcf0c2db71a9642b8a1e746d433a7cf0d237dc",
+    "frontend/src/stores/design.ts": "ff9cd048addcf111230c2e7b1ef91d54992e80cb9c51723f49a6d7ad23a440e3",
+    "frontend/src/stores/requirements.spec.ts": "e9f72fe4ab999eec37a21f9c87fc865f281dcab68e0b3d5feb2fe6abf80cee4c",
+    "frontend/src/stores/requirements.ts": "fb066161b346ba09fada03b48f30cb2e430ff9762d6452759ee5e46d32548a48",
+    "frontend/src/stores/userModeling.spec.ts": "fde83c01707d3554006e4b2b2477099898aa41684380b5f57b797eccbf75409f",
+    "frontend/src/stores/userModeling.ts": "10b99e1e33b985358f52ac975707feefc89e89b4449285d30b0e6e1838ec9b48"
+  },
+  "checks": {
+    "vitest": {
+      "exit_code": 0,
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2 --reporter=json --outputFile=<evidence>/vitest.json",
+      "cwd": "frontend",
+      "log": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\vitest.log",
+      "log_sha256": "63951c5d5bbd5a996bc361b0c730544e23ad12854d096594ff996bced3d51319"
+    },
+    "typecheck-app": {
+      "exit_code": 0,
+      "command": "node node_modules/vue-tsc/bin/vue-tsc.js --noEmit --project tsconfig.json",
+      "cwd": "frontend",
+      "log": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\typecheck-app.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "typecheck-node": {
+      "exit_code": 0,
+      "command": "node node_modules/typescript/bin/tsc --noEmit --project tsconfig.node.json",
+      "cwd": "frontend",
+      "log": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\typecheck-node.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "eslint": {
+      "exit_code": 0,
+      "command": "node node_modules/eslint/bin/eslint.js src vite.config.ts eslint.config.mjs prettier.config.mjs --max-warnings=0",
+      "cwd": "frontend",
+      "log": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\eslint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "prettier": {
+      "exit_code": 0,
+      "command": "node node_modules/prettier/bin/prettier.cjs --check \"src/**/*.{ts,vue,css}\" index.html vite.config.ts eslint.config.mjs prettier.config.mjs",
+      "cwd": "frontend",
+      "log": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\prettier.log",
+      "log_sha256": "f20510a9da4717c51c4cffee6d0dd88d6c9a723d0a83711d01216f5b48961283"
+    }
+  },
+  "vitest": {
+    "files": 68,
+    "test_suites_in_json": 137,
+    "passed": 247,
+    "failed": 0,
+    "skipped": 0,
+    "report": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\frontend-final-20260919-01\\vitest.json",
+    "report_sha256": "6fa468b84c83c767f4f31cbb639e182c6efa65a7fba53bca934b20bee38d0fcc"
+  },
+  "bundle_rebuilt": false,
+  "application_reloaded": false,
+  "model_inference_started": false,
+  "jvm_execution_started": false,
+  "commit_performed": false,
+  "limitations": [
+    "Regression and static checks do not establish a successful final calculator generation or human usability.",
+    "No browser or API restart was performed for these checks; an in-flight model generation was left running.",
+    "No Level D qualification or evidence publication follows from this report."
+  ]
+}

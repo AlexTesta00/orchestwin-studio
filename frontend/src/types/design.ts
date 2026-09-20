@@ -348,6 +348,20 @@ export interface DesignRevisionRequest {
   package: DesignPackagePayload;
 }
 
+export interface DesignMockupRequest {
+  design_version_id: UUID;
+  design_content_hash: string;
+  alternative_id: UUID;
+}
+
+export interface DesignMockupPayload {
+  status: "MOCKUP_GENERATED";
+  generation_id: UUID;
+  design_version_id: UUID;
+  design_content_hash: string;
+  package: DesignPackagePayload;
+}
+
 export interface DesignRevisionDecisionRequest {
   decision: DesignRevisionDecision;
   reason?: string | null;

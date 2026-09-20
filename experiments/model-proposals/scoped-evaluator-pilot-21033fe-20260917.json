@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "status": "SCOPED_PILOT_TRAINING_STARTED_MATCHED_SCREEN_PENDING",
+  "recorded_unix": 1789624580.1136534,
+  "baseline_git_head": "21033febe9bfb961c0d5419b98c29fe8e29fb43a",
+  "scope": "BOUNDED_TRAINING_AND_MATCHED_DEVELOPMENT_INFERENCE",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-pilot-21033fe-20260917-01",
+  "cloud": {
+    "provider": "Runpod",
+    "gpu_id": "a9snm01sdh90pw",
+    "gpu_name": "orchestwin-scoped-pilot-21033fe-20260917",
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "gpu_memory_mib": 97887,
+    "gpu_hourly_usd": 2.09,
+    "watchdog_id": "s6hre5532jvtry",
+    "watchdog_hourly_usd": 0.06,
+    "network_volume_id": "pwdbxu66v4",
+    "data_center": "US-MO-2",
+    "supervisor_pid": 978,
+    "launch_unix": 1789624158.6506536,
+    "run_directory": "/workspace/scoped-pilot-results-21033fe-01",
+    "control_directory": "/workspace/scoped-pilot-21033fe-01",
+    "allocation_note": "The stopped qualification Pod could not restart because its host lacked capacity. A new Pod with the same GPU class, price, image and existing volume was allocated."
+  },
+  "budget": {
+    "phase_combined_compute_ceiling_usd": 25,
+    "gpu_lease_allowance_usd": 19.8,
+    "watchdog_and_gpu_rate_ceiling_usd": 2.28,
+    "phase_window_hours": 9,
+    "storage_reserve_usd": 20,
+    "opening_balance_usd": 148.4341057819,
+    "campaign_ceiling_usd": 200,
+    "deadline_unix": 1789656195.4503589,
+    "shutdown": "Pod-local supervisor plus independent CPU watchdog; storage retained after compute stops."
+  },
+  "training": {
+    "dataset_manifest_sha256": "2e2f35f8230122535c11122418da43c21fa524d9c70b0fcfea64e7f48d9690d2",
+    "rows": 2600,
+    "total_sequence_tokens": 8286581,
+    "max_steps": 650,
+    "epochs": 1,
+    "initialization": "FRESH_LORA_FROM_PINNED_BASE",
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "policy": {
+      "max_steps": 650,
+      "batch_size": 1,
+      "accumulation": 4,
+      "learning_rate": 0.0001,
+      "rank": 16,
+      "alpha": 32,
+      "save_steps": 100,
+      "max_active_seconds": 7200
+    },
+    "observed_progress": {
+      "stage": "TRAINING",
+      "reason": null,
+      "global_step": 58,
+      "max_steps": 650,
+      "active_seconds": 153.96954692574218,
+      "session_seconds": 153.95978917973116,
+      "session_steps": 58,
+      "seconds_per_step": 2.654479123788468,
+      "eta_seconds": 1571.4516412827732,
+      "updated_unix": 1789624565.428541,
+      "contract_sha256": "240ab7bc16e2679c9ed432f79d6e0557e55ce307677cdb47c618da313f2202ba"
+    },
+    "completed": false
+  },
+  "development_screen": {
+    "variants": [
+      "base_without_adapter",
+      "previous_candidate",
+      "scoped_pilot"
+    ],
+    "paired_inputs": 342,
+    "total_inferences": 1026,
+    "cohorts": {
+      "scope_development": 160,
+      "retention_development": 158,
+      "known_challenge_regression": 24
+    },
+    "same_messages_for_all_variants": true,
+    "decoding": "schema constrained greedy, temperature 0, 2048 output tokens",
+    "labels_uploaded": false,
+    "raw_outputs_repaired": false,
+    "independent_qualification": false,
+    "scoring_version": "scoped-evaluator-development-v1",
+    "old_qualification_protocol_changed": false,
+    "all_narratives_still_require_review": true
+  },
+  "verification": {
+    "tests_passed": 57,
+    "native_requests_verified": 1026,
+    "unchanged_unique_paired_inputs": 342,
+    "synthetic_gold_scoring_passed": 318,
+    "ruff": "PASS",
+    "working_sources_match_uploaded_snapshot": true,
+    "training_cache_hash_verified": true,
+    "remote_bundle_and_previous_adapter_hash_verified": true
+  },
+  "notifications": {
+    "channel": "Gmail",
+    "recipient": "alextesta68@gmail.com",
+    "interval_hours": 5,
+    "completion_email": true,
+    "sender": "OWNED_CLOUD_SUPERVISOR",
+    "app_automation_id": "controlla-training-orchestwin",
+    "app_automation_interval_hours": 5
+  },
+  "files": {
+    "bundle/manifest.json": {
+      "sha256": "7898f37c586e5daa7abbe6f430dbf18a432dba7753837364d8f55ca1baff8d99",
+      "bytes": 5761
+    },
+    "bundle/source-inventory.json": {
+      "sha256": "02dac5bc0477e9c517595d3baeba0411f47d55aa6963fcc76be80e1883ac3e28",
+      "bytes": 776
+    },
+    "bundle/protocol.json": {
+      "sha256": "2d26fd5d6d90a45cd3faa5a5ad283dcd9da754a1d559a9e79257fa67fcc4ea8e",
+      "bytes": 4713
+    },
+    "cases.json": {
+      "sha256": "62d7bbcde395a9603b3c6c3540d6822fd447e150b6511354c5cdba127eb25925",
+      "bytes": 11126229
+    },
+    "batches.json": {
+      "sha256": "04b691d39893c82fc237e87586e38bfff5fd3a722a084bc295551560dcd6fb1a",
+      "bytes": 44685
+    },
+    "labels-local-only.json": {
+      "sha256": "b401cf1aa35d37bd8349e356fcc126b6b881637ffba58cb61afa669f3ae152ea",
+      "bytes": 13189728
+    },
+    "resume-02/transfer.json": {
+      "sha256": "d28fed431f6136d6c1ea4048ed2021e449dc6e8fc1bb36c5349cc4f70be1d290",
+      "bytes": 192
+    },
+    "resume-02/latest-status.json": {
+      "sha256": "b4c5b167b660b02cc136c98841593e527157fcfae3a032d36c533bfa804198e9",
+      "bytes": 1668
+    },
+    "resume-02/start.json": {
+      "sha256": "744f01d333d952eb406a666c33e7c5f639b49395cbdc80fe937e13dcb4e0aea2",
+      "bytes": 113
+    },
+    "resume-02/lease.json": {
+      "sha256": "a8a656a0f86bfeba29876c3449ab7df7b367ce0fca14ce90db6e0cc1c9852433",
+      "bytes": 299
+    },
+    "resume-02/watchdog-config.json": {
+      "sha256": "0c49f9fb7a6cb0f9223eb10b57c1f34d8136995fb0062d30d396628617eec8ad",
+      "bytes": 409
+    },
+    "resume-02/gold-scoring-verification.json": {
+      "sha256": "4aa5b097cda30b22fbd0b01597be6a2b5568a7ba646d52b3ef63a44681dd9f57",
+      "bytes": 310
+    },
+    "scoring-tests.xml": {
+      "sha256": "e1c1e7a69e4cfcb467b335612cca964c8f33ec5354f2b66213654589f076d7b8",
+      "bytes": 5231
+    },
+    "guard-tests.xml": {
+      "sha256": "a21277af44fbcf344594907da8add3f4cd7b11795ff4f5ab2447b151aff9a279",
+      "bytes": 4374
+    },
+    "screen-plan-tests.xml": {
+      "sha256": "91aff0dbec851a89f9d962a0e936fd4249821e0c8c7c3a2c3829dbe4667e0bfe",
+      "bytes": 456
+    },
+    "recover_results.py": {
+      "sha256": "088e5d094dfa7ac55149c8950672ea6722125ff4ad173aa119e7e4a02e005548",
+      "bytes": 3997
+    },
+    "assess_results.py": {
+      "sha256": "9eac2184f08430db2a87b3357053e8778dac89c107b75b7c04141c5f429896e3",
+      "bytes": 2840
+    }
+  },
+  "code_files": {
+    "environments/training/evaluator_candidate_worker.py": {
+      "sha256": "9603016196d9ccc5f7868bbcf8e1c2cd887a86f32431118ae08b073bbcf982ae",
+      "bytes": 10319
+    },
+    "environments/training/run_cloud_training_job.py": {
+      "sha256": "3a5d750a7f27b1896fe057fb57e1b57f9215352892819b37e8cd34288a3fd6cc",
+      "bytes": 13619
+    },
+    "src/orchestwin/training/scoped_evaluator_scoring.py": {
+      "sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+      "bytes": 3635
+    },
+    "src/test/python/training/test_evaluator_candidate_worker.py": {
+      "sha256": "62d8e78da951c8de8b0e36bea296dbe851903f55393db8258cca48f8e5bfb3d0",
+      "bytes": 5033
+    },
+    "src/test/python/training/test_scoped_evaluator_scoring.py": {
+      "sha256": "a88c33f78867a69f4ff3cc4e58b922e4e1d29eacc85d090965e30f7533ba781d",
+      "bytes": 3392
+    },
+    "src/test/python/training/test_complete_cloud_training.py": {
+      "sha256": "11b5c953b2c58ffd59eb4524a30ad3072ed949d66bd368c177285645c833a1d2",
+      "bytes": 17143
+    }
+  },
+  "limits": [
+    "Launch and training progress are not evidence of improved model quality.",
+    "Training and screen inputs are synthetic development material; known challenge cases are no longer unseen qualification cases.",
+    "The matched screen must finish, retain verified raw outputs and pass engineering narrative review before considering further development.",
+    "Expert validation, calibrated confidence/severity, empirical user evidence and fresh independent qualification remain outstanding."
+  ],
+  "promotion": false,
+  "reserved_test_files_opened": false,
+  "database_writes": false,
+  "commits_performed": false,
+  "suggested_commit": "feat(evaluation): launch bounded scoped pilot and matched model comparison"
+}

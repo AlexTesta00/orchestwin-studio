@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-20T10:53:35.818678+00:00",
+  "platform_commit": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "status": "CI_AND_RUNNER_PREPARATION_VERIFIED_WAITING_OWNER",
+  "ci_report": "experiments/studio-demo/ci-sprint12-closure-20260920.json",
+  "clean_checkout": "C:/Users/alext/.codex/worktrees/sprint12-web-qualification/orchestwin-studio",
+  "configuration": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-0b12093-20260920-01\\configuration.json",
+  "runners": {
+    "manifest": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-0b12093-20260920-01\\runners\\manifest.json",
+    "sha256": "30e8ed17d247c5f331a7da2baab5800f879cf45f70698129d16c6e19a2e20517",
+    "content_hash": "d154ccf9a079f451b29beb38acebc3a6e47518f97709d5a23a16e0ea73ade8ce",
+    "status": "IMAGES_BUILT_PROBES_RECORDED"
+  },
+  "network": {
+    "manifest": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-0b12093-20260920-01\\network\\manifest.json",
+    "sha256": "2d33cbc9430d23d4541759c2ee5c04e6bfa6bd2b2a208406291d3ec9f774c5b8",
+    "content_hash": "8e16b6df97b81e0ceded3ede35b8ab779ac02fd95bcb36e0cde914333d46498e",
+    "status": "READY",
+    "current_status": "REMOVED_AFTER_PREPARATION",
+    "reprovision_required_before_campaign": true,
+    "removal_receipt": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-0b12093-20260920-01\\network\\removal-fe7832f331f846b4a0c132c0bc923af9\\manifest.json",
+    "removal_content_hash": "0c6f187df274af97b279ecb191f6c18acc8a25d8f65845174bebf6c7c7843471"
+  },
+  "profiles": 5,
+  "fixture_configurations": 8,
+  "planned_attempts": 32,
+  "completed_attempts": 0,
+  "published": false,
+  "owner_confirmation": "PENDING"
+}

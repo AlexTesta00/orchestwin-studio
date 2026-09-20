@@ -1,0 +1,702 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-14T10:51:13.334919+00:00",
+  "base_commit": "727e476acebacfac13fdb68b56385023410f1934",
+  "scope": "SIX_STEP_ENGINEERING_QUALIFICATION_WITH_REAL_LOCAL_INFERENCE_AND_ISOLATED_RUNNERS",
+  "implementation_status": "VERIFIED_CHANGES_READY_FOR_USER_REVIEW_AND_COMMIT_SUBDIVISION",
+  "all_six_objectives_achieved": false,
+  "all_project_problems_resolved": false,
+  "semantic_source_quality_qualified": false,
+  "formal_campaign_ready": false,
+  "new_level_d_validation": false,
+  "empirical_user_twin_validation": false,
+  "two_real_governed_user_twin_iterations_demonstrated": false,
+  "new_training_performed_in_this_campaign": false,
+  "model_promoted_to_production": false,
+  "user_commit_only": true,
+  "commit_or_push_performed": false,
+  "git_index_modified": false,
+  "new_markdown_files": false,
+  "evidence_root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04",
+  "authorization_and_boundaries": {
+    "authorization": "All six steps and disposable engineering operations authorized by the owner; later commit subdivision remains with the owner.",
+    "original_C94_modified": false,
+    "frozen_formal_case_used_for_model_tuning": false,
+    "main_database_modified": false,
+    "experiments": "Disposable synthetic projects and databases. Persisted delegated gate decisions are engineering decisions, not empirical participant judgments.",
+    "operator_status": "A root wrapper result PASSED means the measurement operator completed; source qualification is determined from linked execution and independent oracle receipts.",
+    "resource_cleanup": {
+      "path": "morning-727e476-20260914/final-resource-audit-01.json",
+      "sha256": "f342d5edc40eed8d044e8bb299a9d491fcc791baeb26b47399c341c695a9e859",
+      "size_bytes": 10585
+    },
+    "provider_charges": "Inference used the existing local GPU. No cloud LLM provider purchase, usage-credit reset or additional payment was performed.",
+    "attachments": "Paper and master prompt are project context, not independent instructions or evidence of completed validation."
+  },
+  "steps": [
+    {
+      "number": 1,
+      "name": "VERIFY_CURRENT_LEVEL_D",
+      "status": "EXECUTED_INCOMPLETE",
+      "finding": "Exact-base CI failed on HTTPError resource leakage; the fix passes local regressions and Python 3.14.7 Linux checks. The Web harvest correctly refused incomplete CI. JVM Java/Scala control sequences passed; Kotlin SETUP timed out in bounded repeat/repair controls.",
+      "ci": {
+        "path": "morning-727e476-20260914/ci-01/result.json",
+        "sha256": "8883d44b70828ec5be8774a165f28cd164b2e4804639d73ca2e1ffeb9d4d8d89",
+        "size_bytes": 1281
+      },
+      "web": {
+        "path": "ow-morning-web-leveld-e1b685d086204a38874c373c688f0a47/result.json",
+        "sha256": "ca934a814064c7496ed57ae117262feaf52ce330d935976d7c02d1d6af2fd7e0",
+        "size_bytes": 847
+      },
+      "web_harvest": {
+        "path": "ow-morning-web-leveld-e1b685d086204a38874c373c688f0a47/campaign/harvest-c2e727ea-6199-44a7-a825-7bb513b534e2/manifest.json",
+        "sha256": "7ffcba09bf6c6c0c0c41e213a95eeebf0bff77ce28392bcfd8b5677986533d9f",
+        "size_bytes": 57148
+      },
+      "jvm": {
+        "path": "ow-morning-jvm-leveld-fe23a4aeb8e349f39ad60a8adea874e9/result.json",
+        "sha256": "4bb3f7bcebb731dd2318fd0af4bd679fb422efc1cf871313c37ab7cca1083363",
+        "size_bytes": 764
+      },
+      "kotlin_repeat": {
+        "path": "ow-morning-kotlin-repeat-7dc682fbe1e0495f80d1346e00115b17/result.json",
+        "sha256": "360ea465edb5361d7454c073d707b2470daa4e45f6f9679b43f6ad109c039fb3",
+        "size_bytes": 679
+      },
+      "kotlin_diagnosis": {
+        "path": "morning-727e476-20260914/kotlin-setup-diagnostics-02.json",
+        "sha256": "031863b56bbc87ea84d3b8f53ec439363abc076e2c9330dce1cbecabe64928cd",
+        "size_bytes": 18554
+      }
+    },
+    {
+      "number": 2,
+      "name": "IMPROVE_REAL_SOURCE_GENERATION",
+      "status": "ENGINEERING_FIXES_VERIFIED_QUALITY_GATE_FAILED",
+      "finding": "Complete exact source text, pinned ordered manifests, explicit behavior plans and complete approved work orders are persisted and tested. Successful source publication increased, but the full application business requirements remain unsatisfied.",
+      "integrity": {
+        "path": "morning-727e476-20260914/source-integrity-audit-01/result.json",
+        "sha256": "196172d8cf8815424fe9902be6ede390448decfadeed20ba3770c43873c73cf7",
+        "size_bytes": 28628
+      }
+    },
+    {
+      "number": 3,
+      "name": "REAL_GOVERNED_REPAIR_CYCLE",
+      "status": "BOUNDED_PROPOSALS_EVALUATED_NO_ACCEPTABLE_APPLY",
+      "finding": "Three real proposals yielded an incomplete output, unchanged source, and a replacement deleting every test assertion. The concrete third proposal was rejected in the persisted gate; applying it returned HTTP 409 and preserved the original source.",
+      "rejection": {
+        "path": "ow-morning-repair-rejected-baceae726a884c90b85606998b8bbfda/rejection-result.json",
+        "sha256": "c5c192a137c1c0a0a3f0b307d70b387a8a9c9ac6400dc395e39ff800fba8c7c0",
+        "size_bytes": 308
+      }
+    },
+    {
+      "number": 4,
+      "name": "QUALIFY_WEB_JAVA_KOTLIN_SCALA",
+      "status": "EXECUTED_NO_FULL_APPLICATION_QUALIFIED",
+      "finding": "16 published sources were actually executed. Two passed their own runner checks but failed independent business assessment. No source is declared functionally qualified.",
+      "executions": {
+        "path": "morning-727e476-20260914/source-execution-integrity-01.json",
+        "sha256": "0848b36ef82ddb4d5adc9fadaac310ce2892364b193fd69f055871598d12a246",
+        "size_bytes": 13201
+      }
+    },
+    {
+      "number": 5,
+      "name": "FRESH_EVALUATOR_VALIDATION",
+      "status": "COMPARISON_COMPLETED",
+      "finding": "Base, unchanged S67 and the prior decision candidate evaluated the same 36 fresh synthetic cases under identical inference settings. Detailed predeclared thresholds and observed outcomes are retained; no automatic promotion.",
+      "comparison": {
+        "path": "morning-727e476-20260914/fresh-evaluator-comparison-01.json",
+        "sha256": "ab696dd03c6242640585d71a95d877268c77365cdeda2efc23f8ea5dca784717",
+        "size_bytes": 68358
+      }
+    },
+    {
+      "number": 6,
+      "name": "RESUME_FORMAL_CASE_AND_PREPARE_HUMAN_VALIDATION",
+      "status": "PREREQUISITES_CHECKED_RESUMPTION_BLOCKED",
+      "finding": "The formal continuation was not started because preceding engineering gates failed. Original C94 remains frozen. Existing launch and campaign contracts were checked without accessing the application database; real human validation and the two-iteration User Twin demonstration remain outstanding.",
+      "readiness": {
+        "path": "morning-727e476-20260914/formal-readiness-final-02.json",
+        "sha256": "cd87a44b4c1465c1913bbc1839e9fd3013d24f0ebc00b9e94a47e0b75e8a77bd",
+        "size_bytes": 2001
+      }
+    }
+  ],
+  "implemented_changes": [
+    {
+      "area": "http_transport",
+      "change": "Close HTTPError response resources in both the local provider transport and serving smoke verification; retain redirect and proxy restrictions."
+    },
+    {
+      "area": "source_generation",
+      "change": "SOURCE_FILES_V2_TEXT retains exact complete UTF-8 content up to 32768 bytes; V7 manifests require a model-authored behavior plan, ordered pinned paths, dependencies and callable interfaces. Complete approved semantic content and an explicit business work order remain in the input."
+    },
+    {
+      "area": "persistence",
+      "change": "Migration 0041 accepts and checks exact V2 parent/child evidence while preserving historical V1 validation; online/offline SQL and guarded downgrade are covered. The application database was not migrated."
+    },
+    {
+      "area": "legacy_diagnosis",
+      "change": "Keep an explicit historical V1 decoder in the diagnosis operator so old line-array evidence is not reinterpreted as V2."
+    },
+    {
+      "area": "inference_bound",
+      "change": "Expose a validated 30..540 second generation limit, record it in runtime identity and health, and set HTTP timeout above it. The model generation deadline is cooperative, not a process-kill guarantee."
+    },
+    {
+      "area": "repair_grounding",
+      "change": "Attach bounded verified stdout/stderr excerpts from the exact owned failed attempt. Verify storage key, size, SHA-256 and UTF-8; refuse missing or altered configured evidence before model inference. Preserve normalized findings and full retained logs."
+    }
+  ],
+  "verification": {
+    "suites_overlap_do_not_sum": true,
+    "receipts": [
+      {
+        "label": "python-3.14.7-linux-http-resources",
+        "scope": "Exact CI Python version on Linux with resource warnings treated as errors.",
+        "passed": 6,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0,
+        "receipt": {
+          "path": "ow-morning-jvm-leveld-fe23a4aeb8e349f39ad60a8adea874e9/linux-http-fix-02/output/pytest.xml",
+          "sha256": "27ea25e827c8eae392dabd3541b671c8e6cd260b772879f60ed0942a3bcac204",
+          "size_bytes": 1257
+        }
+      },
+      {
+        "label": "whole-backend-final",
+        "scope": "Final implementation; 187 PostgreSQL tests deselected and covered separately. Skips remain explicit; no aggregate across overlapping suites.",
+        "passed": 3977,
+        "skipped": 46,
+        "failed": 0,
+        "errors": 0,
+        "receipt": {
+          "path": "morning-727e476-20260914/backend-regression-04.xml",
+          "sha256": "93db18f9e83702727e937aa13e11cbe4ddafc35541e8f7c1756264de9afdca18",
+          "size_bytes": 676005
+        }
+      },
+      {
+        "label": "whole-postgres-earlier",
+        "scope": "Whole integration suite before the last source/repair additions; final changed PostgreSQL scope covered by the next receipt.",
+        "passed": 181,
+        "skipped": 2,
+        "failed": 0,
+        "errors": 0,
+        "receipt": {
+          "path": "ow-morning-integration-1a5cd7f69f6a4db8856ece9276f6be33/pytest.xml",
+          "sha256": "48b83d8af156f33c846afe92a1e275f3a7c851f45ee32cce98bb4a790af9b153",
+          "size_bytes": 34254
+        }
+      },
+      {
+        "label": "final-source-protocol-and-repair-postgres",
+        "scope": "Final migration, source protocol, atomic evidence, source generation and verified missing-log refusal.",
+        "passed": 44,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0,
+        "receipt": {
+          "path": "ow-morning-source-sql-9c67bc4f4f944b4b8935af2639fc66a6/pytest.xml",
+          "sha256": "581eba89aa99294c740732ca078c04106bf924f071d23ca1053d1cb7d6daa25d",
+          "size_bytes": 7989
+        }
+      }
+    ],
+    "ruff_and_diff": {
+      "path": "morning-727e476-20260914/final-static-checks-01.json",
+      "sha256": "331b972633226e225e7c1fb13f17b71b34096fe0a56b8894011dc36a8eca99c5",
+      "size_bytes": 1444
+    },
+    "scope_limit": "Final changed code is covered by the full backend and final targeted PostgreSQL suites. No frontend implementation changed in this campaign; prior frontend evidence is retained, not claimed as a fresh run."
+  },
+  "source_qualification": {
+    "input_alignment": {
+      "path": "morning-727e476-20260914/source-input-alignment-review-01.json",
+      "sha256": "2905689776b067c06bf518f57c8279f1444f41fb526b22698b01a1ef1a6c5a90",
+      "size_bytes": 2026
+    },
+    "upstream_provenance": "Approved deterministic synthetic fixture artifacts; only source/repair generation used the live proposal provider. This does not establish a complete real-provider requirements/design/architecture workflow.",
+    "trial_unit": "Five exploratory conditions on ONE synthetic reservation use case, each targeting WEB_STATIC/JVM_JAVA/JVM_KOTLIN/JVM_SCALA. These are not 20 independent real-world projects.",
+    "selected_trials": 20,
+    "audited_source_model_calls": 65,
+    "published_source_revisions": 16,
+    "real_execution_attempts": 16,
+    "runner_passed": 2,
+    "business_qualified": 0,
+    "independent_requirements": [
+      "Two valid guests yield distinct nonempty reservation identifiers.",
+      "Guest records remain retrievable.",
+      "Empty and whitespace-only guest input is rejected without corrupting earlier records.",
+      "Web pointer and keyboard actions reach the same application behavior.",
+      "JVM no-argument launch is finite and demonstrates valid behavior."
+    ],
+    "conditions": [
+      {
+        "candidate": 1,
+        "source_root": "ow-morning-source-6b755ca0c69a4c68b346ad6a226e5460",
+        "source_contract": "EXPLORATORY_V1_LINES",
+        "model": "Qwen3-4B-Instruct-2507",
+        "published": 1,
+        "executed": 1,
+        "runner_passed": 0
+      },
+      {
+        "candidate": 2,
+        "source_root": "ow-morning-source-ba729b0fa469439d9ee44693ba6d91cd",
+        "source_contract": "V2_TEXT_ENUM_PATHS",
+        "model": "Qwen3-4B-Instruct-2507",
+        "published": 3,
+        "executed": 3,
+        "runner_passed": 0
+      },
+      {
+        "candidate": 3,
+        "source_root": "ow-morning-source-4b21e4866fac4a029055e42bc7dd8a6a",
+        "source_contract": "V2_TEXT_ORDERED_MANIFEST",
+        "model": "Qwen2.5-Coder-7B-Instruct",
+        "published": 4,
+        "executed": 4,
+        "runner_passed": 1
+      },
+      {
+        "candidate": 4,
+        "source_root": "ow-morning-source-433ae9149efa48359b348df7ce71cd64",
+        "source_contract": "V6_EXPLICIT_WORK_ORDER",
+        "model": "Qwen2.5-Coder-7B-Instruct",
+        "published": 4,
+        "executed": 4,
+        "runner_passed": 0
+      },
+      {
+        "candidate": 5,
+        "source_root": "ow-morning-source-a7df773ec3544e06a54185d7c5286128",
+        "source_contract": "V7_BEHAVIOR_PLAN",
+        "model": "Qwen2.5-Coder-7B-Instruct",
+        "published": 4,
+        "executed": 4,
+        "runner_passed": 1
+      }
+    ],
+    "protocols": [
+      {
+        "path": "morning-727e476-20260914/source-qualification-protocol-01.json",
+        "sha256": "1848db25eea5717a85ca5f47e0bfe3f39b0c55dbe8ee9dd8e6a0facfb569b6af",
+        "size_bytes": 1582
+      },
+      {
+        "path": "morning-727e476-20260914/source-qualification-protocol-02.json",
+        "sha256": "523bf0105cd7e46b0f6350c4560899e63b26a74f82d6e291395173c51336ad9f",
+        "size_bytes": 2160
+      },
+      {
+        "path": "morning-727e476-20260914/source-qualification-protocol-03.json",
+        "sha256": "917b0a5b62062ffa2dbae830a3d007b5051c01e7e48dcbd97afaeb7c850ddd66",
+        "size_bytes": 2206
+      },
+      {
+        "path": "morning-727e476-20260914/source-qualification-protocol-04.json",
+        "sha256": "020c8e21a08420a9765170a532130ba5f1218b5b9aae433234c9711bb0b534a0",
+        "size_bytes": 2245
+      },
+      {
+        "path": "morning-727e476-20260914/source-qualification-protocol-05.json",
+        "sha256": "1ea784843565769d7e67e1964161ddb84753835edd3945207e0523b8d173690b",
+        "size_bytes": 2243
+      }
+    ],
+    "positive_runner_counterexamples": [
+      {
+        "candidate": 3,
+        "target": "JVM_KOTLIN",
+        "attempt_id": "b4b2c942-5899-47dd-8064-a804aed84124",
+        "finding": "Arithmetic calculator APIs satisfy self-generated tests but implement the wrong approved reservation domain.",
+        "oracle": {
+          "path": "morning-727e476-20260914/kotlin-independent-oracle-01/result.json",
+          "sha256": "feec544d1732b4781636034869dbe1376d3f40dc725f4e56be4bc29c50b353d8",
+          "size_bytes": 180
+        }
+      },
+      {
+        "candidate": 5,
+        "target": "JVM_JAVA",
+        "attempt_id": "447d6074-e102-46a3-b0e9-cf9407bf7f1f",
+        "finding": "Identifier generation and blank-input rejection pass; no guest record storage or retrieval is implemented.",
+        "oracle": {
+          "path": "morning-727e476-20260914/java-independent-oracle-01/result.json",
+          "sha256": "26018cd6172f05786044c241a9668992a78fcf6e9498e2585e97521e253bdd2b",
+          "size_bytes": 86
+        }
+      }
+    ],
+    "isolated_core_probe": {
+      "finding": "A separate short-prompt JavaScript core passed unchanged business assertions after correcting a valid CommonJS export binding in the oracle. This is a limited capacity probe, not full application qualification or proof that training is unnecessary.",
+      "result": {
+        "path": "morning-727e476-20260914/short-source-9b8418a8e7a44adfa41762eff9f0c049/export-binding-followup/result.json",
+        "sha256": "430311ce1d879561350d0e8da3346ca1c709e7e14913c59a61b1cf6d5afeaf5f",
+        "size_bytes": 669
+      }
+    },
+    "harness_and_infrastructure_limits": [
+      "The current bounded generator pins Static Web to three files and JVM to two files. Larger application layouts require a separately validated extension of this protocol.",
+      "Earlier Web admission probes omitted a keyboard assertion or used browser_routes instead of declared_routes. Those HTTP 422 records are retained separately and excluded from real execution counts; corrected follow-ups produced actual failed attempts.",
+      "Candidate 2 Kotlin BUILD included an infrastructure permission error when hashing MainKt.class; it is not classified as a pure model compilation failure.",
+      "Independent Web oracle bindings and JVM reflection/source inspection were reviewed for alternative valid interfaces; no complete business API was found. No method-name-only failure is treated as full functional proof.",
+      "Self-generated tests were never replaced or weakened to turn a failed qualification into success."
+    ]
+  },
+  "repair_qualification": {
+    "real_inference_proposals": 3,
+    "accepted_safe_repairs": 0,
+    "applied_model_repairs": 0,
+    "successful_model_repair_reruns": 0,
+    "proposals": [
+      {
+        "root": "ow-morning-repairs-f43903f43e1341278463669cbc2e8d73",
+        "outcome": "INCOMPLETE_OUTPUT",
+        "http_status": 502,
+        "finding": "Only an opening JSON brace was produced under the bounded 4B request."
+      },
+      {
+        "root": "ow-morning-repairs-a2ffa8e4a3214f188e61c2d324b22999",
+        "outcome": "INVALID_PROVIDER_OUTPUT",
+        "http_status": 502,
+        "finding": "The coder returned the original source unchanged; independent binding replay rejected repair must change content."
+      },
+      {
+        "root": "ow-morning-repairs-d3b2b2e1d09b43d395f577254a615e3c",
+        "outcome": "TECHNICALLY_VALID_BUT_UNSAFE_REJECTED",
+        "http_status": 201,
+        "finding": "With verified compiler logs, the coder replaced the five-test suite with two unapproved ScalaTest imports and no assertions."
+      }
+    ],
+    "rejected_operation_id": "a80c6f06-43ca-45af-9d6f-d4604dfd592c",
+    "rejected_content_hash": "ead74e21c7dd6bcb02ff632a3b5b38e02d6b9a6d253a7cf746f337eceebdec1d",
+    "exact_source_preserved": "f66394d63ff64d74ade2a3b51a588b0da3ab937d8b8b958ee247927ab92d8555",
+    "gate_status": "REJECTED",
+    "rejected_apply_http_status": 409,
+    "review": {
+      "path": "ow-morning-repairs-d3b2b2e1d09b43d395f577254a615e3c/engineering-review.json",
+      "sha256": "32c2db142d370258246105ea8e271923c7edd2488a5ade2a7a063c58178f09ed",
+      "size_bytes": 826
+    },
+    "persisted_result": {
+      "path": "ow-morning-repair-rejected-baceae726a884c90b85606998b8bbfda/rejection-result.json",
+      "sha256": "c5c192a137c1c0a0a3f0b307d70b387a8a9c9ac6400dc395e39ff800fba8c7c0",
+      "size_bytes": 308
+    },
+    "harness_limit": "The first rejection fixture returned HTTP 503 because its JVM operation store was not configured. The corrected disposable fixture persisted the same exact rejection; both records are retained."
+  },
+  "evaluator_comparison": {
+    "dataset": {
+      "path": "morning-727e476-20260914/fresh-evaluator-data-01/manifest.json",
+      "sha256": "7ee5ccba02438088c08820f18c186be44b3acf3a3780f43005d68f552b2ef625",
+      "size_bytes": 1840
+    },
+    "cases_per_model": 36,
+    "total_real_inferences": 108,
+    "prior_training_group_overlap": 0,
+    "training_in_this_campaign": false,
+    "candidate_origin": "Prior project review decision-focused QLoRA run; this campaign only evaluates the unchanged candidate.",
+    "same_inference": {
+      "decoding": "PROMPTED_UNCONSTRAINED_STRICT_VALIDATION",
+      "do_sample": false,
+      "max_new_tokens": 900,
+      "max_time_seconds": 120,
+      "max_sequence_length": 4096,
+      "output_repair": false
+    },
+    "predeclared_threshold": {
+      "minimum_primary_per_state": 10,
+      "cases_per_state": 12,
+      "minimum_exact_criterion_in_missing": 10,
+      "all_emitted_references_must_be_valid": true
+    },
+    "models": [
+      {
+        "model": "base",
+        "primary_and_domain_per_state": {
+          "INSUFFICIENT": 0,
+          "MISSING": 0,
+          "PRESENT": 0
+        },
+        "exact_criterion_and_cardinality_in_missing": 9,
+        "all_emitted_references_valid": false,
+        "eligible_for_broader_engineering_validation": false,
+        "selected_for_production": false,
+        "protocol": {
+          "path": "morning-727e476-20260914/fresh-evaluator-base-01/protocol.json",
+          "sha256": "b5e23b1bc8277669a0c64ebe8a64fa77a34cfa24e1e63030fc25017bf816b0c5",
+          "size_bytes": 1308
+        },
+        "adapter_identity": null,
+        "primary_passed": 0,
+        "domain_accepted": 0,
+        "primary_and_domain_passed": 0,
+        "unjustified_empirical_findings": 30,
+        "findings_without_human_validation_requirement": 31,
+        "result": {
+          "path": "morning-727e476-20260914/fresh-evaluator-base-01/evaluation-result.json",
+          "sha256": "2392d44fd00e1459d611355f75235675202dbae23fd047de7377f829b4b9ae8d",
+          "size_bytes": 14156
+        },
+        "process": {
+          "path": "morning-727e476-20260914/fresh-evaluator-base-01-process.json",
+          "sha256": "95b1df3c4d17f7bd2c9510d64252a254ed9198d1317f293a6169a5769db798bb",
+          "size_bytes": 33
+        }
+      },
+      {
+        "model": "s67",
+        "primary_and_domain_per_state": {
+          "INSUFFICIENT": 0,
+          "MISSING": 6,
+          "PRESENT": 0
+        },
+        "exact_criterion_and_cardinality_in_missing": 6,
+        "all_emitted_references_valid": false,
+        "eligible_for_broader_engineering_validation": false,
+        "selected_for_production": false,
+        "protocol": {
+          "path": "morning-727e476-20260914/fresh-evaluator-s67-01/protocol.json",
+          "sha256": "0278eb02f2d43e5bb68f403cbf35872d0bf3bc87f014d6ade99fa1515fe1d2d4",
+          "size_bytes": 1472
+        },
+        "adapter_identity": {
+          "path": "morning-727e476-20260914/fresh-evaluator-s67-01/adapter-identity.json",
+          "sha256": "4c9e1774fec4814a952113bcd4097a4530b4eb30e4815221b9bcb3d7c853e2b3",
+          "size_bytes": 194
+        },
+        "primary_passed": 6,
+        "domain_accepted": 20,
+        "primary_and_domain_passed": 6,
+        "unjustified_empirical_findings": 0,
+        "findings_without_human_validation_requirement": 14,
+        "result": {
+          "path": "morning-727e476-20260914/fresh-evaluator-s67-01/evaluation-result.json",
+          "sha256": "2535dfa70685ebf96e2a83177dab27d0ba6686d7be69e0e823089b0afe16cb6b",
+          "size_bytes": 14261
+        },
+        "process": {
+          "path": "morning-727e476-20260914/fresh-evaluator-s67-01-process.json",
+          "sha256": "2abadaa11fc658ec1b4d7ae26ce76114beb6101007899a70c07381b86186a1bd",
+          "size_bytes": 32
+        }
+      },
+      {
+        "model": "candidate",
+        "primary_and_domain_per_state": {
+          "INSUFFICIENT": 0,
+          "MISSING": 7,
+          "PRESENT": 12
+        },
+        "exact_criterion_and_cardinality_in_missing": 6,
+        "all_emitted_references_valid": false,
+        "eligible_for_broader_engineering_validation": false,
+        "selected_for_production": false,
+        "protocol": {
+          "path": "morning-727e476-20260914/fresh-evaluator-candidate-01/protocol.json",
+          "sha256": "ca3b497ce4137a4067505543b216665e0bb5572781af22276f07b9b4293a2c53",
+          "size_bytes": 1457
+        },
+        "adapter_identity": {
+          "path": "morning-727e476-20260914/fresh-evaluator-candidate-01/adapter-identity.json",
+          "sha256": "425c2a9e09bd1de2a4f57701abce8be5d250429043ff244b486952282739d584",
+          "size_bytes": 194
+        },
+        "primary_passed": 19,
+        "domain_accepted": 35,
+        "primary_and_domain_passed": 19,
+        "unjustified_empirical_findings": 0,
+        "findings_without_human_validation_requirement": 0,
+        "result": {
+          "path": "morning-727e476-20260914/fresh-evaluator-candidate-01/evaluation-result.json",
+          "sha256": "bdc934e33f3f9cc53dd4c368e844b4e3d54a9ed11b71f56c37d81cbc5a62c991",
+          "size_bytes": 14285
+        },
+        "process": {
+          "path": "morning-727e476-20260914/fresh-evaluator-candidate-01-process.json",
+          "sha256": "3d5caf49ef140a47db79c645ccc7f7b9bb74d4a8f939f19a23b1e7a1353a7e4a",
+          "size_bytes": 38
+        }
+      }
+    ],
+    "production_promotion": false,
+    "limitations": [
+      "Primary judgement/provenance checks and domain acceptance are distinct from the separately reported exact criterion/cardinality check; a primary pass alone is not full qualification.",
+      "Secondary epistemic counters include only outputs that first pass strict JSON/schema validation; invalid or incomplete JSON is retained as a separate failure.",
+      "Six synthetic fixture families, two locales and three counterfactual states. This is not comprehensive accessibility conformance, human behavior evidence, or broad domain generalization.",
+      "Fresh case identities and DOM structures differ from prior data, while the high-level task families remain related.",
+      "Greedy decoding is used only to make the model comparison controlled; it does not replace the real proposal providers with deterministic fake adapters.",
+      "Benchmark decisions do not demonstrate multi-User-Twin orchestration or automatic weight updates through dialogue."
+    ],
+    "comparison": {
+      "path": "morning-727e476-20260914/fresh-evaluator-comparison-01.json",
+      "sha256": "ab696dd03c6242640585d71a95d877268c77365cdeda2efc23f8ea5dca784717",
+      "size_bytes": 68358
+    }
+  },
+  "historical_and_formal_evidence": {
+    "historical_jvm_package": {
+      "path": "experiments/runner-validation/jvm-level-d-v1.json",
+      "sha256": "f8c2748b93c8affe35b88481ea10e6e94c6d2e81c425029c9ecaa6fd917a0c58",
+      "size_bytes": 6689
+    },
+    "prior_project_review": {
+      "path": "experiments/model-proposals/project-review-20260914.json",
+      "sha256": "07fbe4952d3df050599d0300a383ab2d1b7572a83902aa9fe8184965741b93b2",
+      "size_bytes": 17358
+    },
+    "launch_contract": {
+      "path": "experiments/case-studies/formal-run-launch-contract-v1.json",
+      "sha256": "f76b4ae05bc6fe3d72f3df0671a142058c3d3e95c6a9745d57b335395040169c",
+      "size_bytes": 1041
+    },
+    "campaign_contract": {
+      "path": "experiments/case-studies/case-execution-campaign-v1.json",
+      "sha256": "b2c3e8ce206490eabf70651c42503a1d77b2d12300a9181270e935554ac16d75",
+      "size_bytes": 939
+    },
+    "expert_protocol_checked": {
+      "path": "experiments/case-studies/expert-evaluation-protocol-v1.json",
+      "sha256": "653dd614ccda114ff32e8142b40a889a12913a7eb85410f0b157d022486f6419",
+      "size_bytes": 1178
+    },
+    "expert_validation_scope": "The existing protocol specifies blinded descriptive expert judgments and explicitly does not establish target-user behavior. No ratings, participants or empirical results were fabricated or collected by this campaign.",
+    "paper_iteration_readiness": {
+      "path": "morning-727e476-20260914/paper-iteration-readiness-01.json",
+      "sha256": "3767f40832eaacb94f4dd471bdd54d69940d84bbf1dcee7db813e9d9fe51c0d3",
+      "size_bytes": 1888
+    },
+    "scope": "Historical validation remains evidence for its original scope and commit. Registration in the execution profile catalog does not confer a new Level D validation."
+  },
+  "remaining_work_in_order": [
+    "Owner reviews and subdivides the verified changes into commits, pushes, and obtains successful CI evidence for the exact resulting commit.",
+    "Diagnose and resolve bounded Kotlin dependency preparation instability without weakening pinned runner boundaries; complete and seal new Web/JVM qualification where applicable.",
+    "Build a separately reviewed source/repair curriculum and independent held-out business suite; use verified examples and never accepted-but-unqualified generated outputs as training truth. The observed failures justify focused development but do not yet identify a uniquely necessary training solution.",
+    "Require a genuinely safe real model repair, exact gate approval, unchanged independent assertions, and a successful governed rerun.",
+    "Complete broader evaluator checks and two linked independent User Twin evaluation/aggregation/design-revision cycles before formal claims.",
+    "Start a new formal continuation and collect real participant validation only after the preceding gates pass; preserve original C94."
+  ],
+  "suggested_user_commit_groups": [
+    {
+      "title": "fix(models): close local HTTP error responses",
+      "scope": "Local transport, serving smoke helper and HTTP resource regression tests."
+    },
+    {
+      "title": "feat(models): preserve exact source text and explicit implementation plans",
+      "scope": "V2 text protocol, V7 manifests, approved work order, migration 0041, historical decoder, generation time bound and associated tests."
+    },
+    {
+      "title": "fix(models): ground repairs in verified failure logs",
+      "scope": "API diagnostic binding, verified excerpt helper, repair prompt and missing/changed evidence regressions."
+    },
+    {
+      "title": "test(evaluation): record real model qualification evidence",
+      "scope": "This JSON report and its immutable external evidence references."
+    }
+  ],
+  "commit_partition_note": "test_model_source_generation_postgres.py contains both source-protocol and repair-log hunks; the owner can split those hunks when staging. No staging or commit was performed by the agent.",
+  "implementation_files": [
+    {
+      "path": "environments/training/diagnose_source_generation.py",
+      "sha256": "a4d3d7627a2f13d076cbc426f004b401a0f3bffcaa76b2faff42a91566dd3179",
+      "size_bytes": 17221
+    },
+    {
+      "path": "environments/training/serve_proposal_model.py",
+      "sha256": "fe239f5775c96368b6ca87953e38e3f5387215d474ebc45a0643f5563428c780",
+      "size_bytes": 16195
+    },
+    {
+      "path": "environments/training/verify_qlora_smoke_serving.py",
+      "sha256": "53786589ee1d398c585f9c3ca20acd4a392a4bf5448518a72d7a4691bef4e995",
+      "size_bytes": 18237
+    },
+    {
+      "path": "src/orchestwin/api/source_generation.py",
+      "sha256": "1e1e5b1a00dd7640f6f7a38c1ba23a147817e7a675bc1dc3ac79a3275097731b",
+      "size_bytes": 24677
+    },
+    {
+      "path": "src/orchestwin/models/openai_compatible.py",
+      "sha256": "ca904729b06ed5a73089a9a6498e3589676624e63ba04ac0abb29b57d380d76c",
+      "size_bytes": 19490
+    },
+    {
+      "path": "src/orchestwin/models/repair_diagnostics.py",
+      "sha256": "7008af710a8212f3bc0423e09cac5dfd6475d7afcf68129446fb9d4a1e1dfc45",
+      "size_bytes": 2167
+    },
+    {
+      "path": "src/orchestwin/models/source_context.py",
+      "sha256": "433634db11b1b528a183b46e934814fc7904f38113190f38ea22fdd726b4098d",
+      "size_bytes": 2329
+    },
+    {
+      "path": "src/orchestwin/models/source_file_generation.py",
+      "sha256": "22b52f12593f3b957075c85c391e8dcdff70ebed0ec4d220477d2e60f55b836c",
+      "size_bytes": 23510
+    },
+    {
+      "path": "src/orchestwin/models/source_proposals.py",
+      "sha256": "f18a6b4479180eb09da6b3cf2c66e69d9c1cfeca3d67cba77003fc7b660404eb",
+      "size_bytes": 13085
+    },
+    {
+      "path": "src/orchestwin/persistence/migrations/versions/0041_source_text_evidence.py",
+      "sha256": "fb64396bc265ea5ece9526c2483219121c00c00d9e810545ac7ac033a71b0bef",
+      "size_bytes": 3593
+    },
+    {
+      "path": "src/test/python/integration/test_model_source_generation_postgres.py",
+      "sha256": "0d68f3fb0e810e4163d89c74c2afed13545189c9759a906a343d86b6b4bfbdb7",
+      "size_bytes": 32185
+    },
+    {
+      "path": "src/test/python/integration/test_source_text_protocol_postgres.py",
+      "sha256": "b305e6520151490f2cb149a97700aafc2fec2941ae6155c14e6501b8638084e6",
+      "size_bytes": 5467
+    },
+    {
+      "path": "src/test/python/models/test_local_model_http_transport.py",
+      "sha256": "9d0f6213f2c4e1cea55a1804fd6e9ecf316617ad4329c92532ab69eb2024c7f9",
+      "size_bytes": 3321
+    },
+    {
+      "path": "src/test/python/models/test_proposal_serving.py",
+      "sha256": "387ae0096af708d986d46d70d15a815c0d816f2deead885d08e2dedd247533a3",
+      "size_bytes": 6989
+    },
+    {
+      "path": "src/test/python/models/test_repair_diagnostics.py",
+      "sha256": "e0ab29643ce53d2e6926b36db45cde5b6bfff9b8427142799bc320008f016f34",
+      "size_bytes": 2870
+    },
+    {
+      "path": "src/test/python/models/test_source_context.py",
+      "sha256": "144202a234662ca06996a3b017961cb9e24b1eef6078ca5945bdc15ed1eda257",
+      "size_bytes": 3347
+    },
+    {
+      "path": "src/test/python/models/test_source_diagnosis.py",
+      "sha256": "9c57db1f696181ba0f4d3c05a86d0692618aaec17a9a98e6b7e2dd181eae21ce",
+      "size_bytes": 3637
+    },
+    {
+      "path": "src/test/python/models/test_source_file_generation.py",
+      "sha256": "2114eb37426f8ac5484e266f936a0aa66e81ff1cd9328ed7639d97537cc36e02",
+      "size_bytes": 12070
+    }
+  ],
+  "evidence_index": {
+    "path": "morning-727e476-20260914/final-evidence-index-01.json",
+    "sha256": "d022273804a5a41ae33a6b9fc25881a584c58a3c6a24cc3ab3b0330261086306",
+    "size_bytes": 51273
+  }
+}

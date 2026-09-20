@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -340,6 +341,84 @@ def test_normalization_rejects_sandbox_evidence_for_another_plan() -> None:
 
     with pytest.raises(ValueError, match="another Web command plan"):
         normalize_web_command_phase(phase_plan(plan), runs=(mismatched,))
+
+
+def multi_plan_phase() -> WebPhasePlan:
+    return replace(
+        phase_plan(command_plan()),
+        command_plans=tuple(
+            replace(command_plan(), plan_id=f"web.test.{root}")
+            for root in ("backend", "frontend", "shared")
+        ),
+    )
+
+
+def completed_run(plan: CommandPlan, *, passed: bool) -> SandboxRunEvidence:
+    return sandbox_run(
+        plan,
+        run_status=SandboxRunStatus.SUCCEEDED if passed else SandboxRunStatus.FAILED,
+        command_status=SandboxCommandStatus.SUCCEEDED if passed else SandboxCommandStatus.FAILED,
+        failure_message=None if passed else "Deterministic test assertion failed.",
+        exit_code=0 if passed else 1,
+    )
+
+
+@pytest.mark.parametrize("prefix_length", [1, 2])
+def test_failed_command_plan_prefix_preserves_only_observed_evidence(prefix_length: int) -> None:
+    phase = multi_plan_phase()
+    executed = phase.command_plans[:prefix_length]
+    runs = tuple(
+        completed_run(plan, passed=index < prefix_length - 1) for index, plan in enumerate(executed)
+    )
+
+    result = normalize_web_command_phase(phase, runs=runs)
+
+    assert result.status is WebPhaseResultStatus.FAILED
+    assert result.failure_category is WebFailureCategory.TEST
+    assert result.failure_code == "TEST_VITEST_V1_FAILED"
+    assert result.command_plan_hashes == tuple(sorted(plan.content_hash for plan in executed))
+    assert result.exit_codes == (*(0 for _ in range(prefix_length - 1)), 1)
+    assert result.stdout_refs and result.stderr_refs
+    assert result.normalized_summary == "Deterministic test assertion failed."
+
+
+def test_complete_successful_multi_plan_phase_preserves_all_observed_hashes() -> None:
+    phase = multi_plan_phase()
+
+    result = normalize_web_command_phase(
+        phase, runs=tuple(completed_run(plan, passed=True) for plan in phase.command_plans)
+    )
+
+    assert result.status is WebPhaseResultStatus.PASSED
+    assert result.command_plan_hashes == tuple(
+        sorted(plan.content_hash for plan in phase.command_plans)
+    )
+    assert result.exit_codes == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    [
+        (),
+        ((0, True),),
+        ((1, False),),
+        ((0, True), (2, False)),
+        ((1, True), (0, False)),
+        ((0, False), (1, True)),
+        ((0, False), (1, False), (2, False)),
+        ((0, True), (1, True), (2, True), (2, False)),
+    ],
+)
+def test_incomplete_success_holes_reordering_and_execution_after_failure_are_rejected(
+    sequence: tuple[tuple[int, bool], ...],
+) -> None:
+    phase = multi_plan_phase()
+    runs = tuple(
+        completed_run(phase.command_plans[index], passed=passed) for index, passed in sequence
+    )
+
+    with pytest.raises(ValueError):
+        normalize_web_command_phase(phase, runs=runs)
 
 
 def test_failure_message_normalization_rejects_empty_content() -> None:

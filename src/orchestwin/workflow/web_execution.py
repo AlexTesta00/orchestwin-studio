@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
@@ -186,6 +187,18 @@ class WebPhaseExecutionPort(Protocol):
     ) -> WebPhaseResult: ...
 
 
+class WebPhaseLifecyclePort(Protocol):
+    """Finalize attempt resources and return actual artifact collection evidence."""
+
+    async def finalize(self) -> WebPhaseResult | None: ...
+
+
+class WebPhaseAttemptBindingPort(Protocol):
+    """Bind evidence to the authorized attempt before execution starts."""
+
+    def bind_attempt(self, attempt_id: UUID) -> None: ...
+
+
 class WebExecutionClock(Protocol):
     def now(self) -> datetime: ...
 
@@ -205,12 +218,16 @@ class LocalGovernedWebExecutionService:
         phase_executor: WebPhaseExecutionPort,
         clock: WebExecutionClock,
         ids: WebExecutionIdProvider,
+        phase_lifecycle: WebPhaseLifecyclePort | None = None,
+        phase_attempt_binding: WebPhaseAttemptBindingPort | None = None,
     ) -> None:
         self._registry = registry
         self._attempts = attempts
         self._phase_executor = phase_executor
         self._clock = clock
         self._ids = ids
+        self._phase_lifecycle = phase_lifecycle
+        self._phase_attempt_binding = phase_attempt_binding
 
     async def execute(self, request: WebExecutionRequest) -> WebExecutionServiceResult:
         profile = self._registry.find(request.profile_id, request.profile_version)
@@ -268,6 +285,9 @@ class LocalGovernedWebExecutionService:
         rerun_issue = _rerun_issue(request, current=current)
         if rerun_issue is not None:
             return _failed(WebExecutionServiceStatus.RERUN_INVALID, rerun_issue)
+        attempt_id = self._ids.new_id()
+        if self._phase_attempt_binding is not None:
+            self._phase_attempt_binding.bind_attempt(attempt_id)
         phases_to_execute = (
             tuple(WebExecutionPhase) if request.rerun_phases is None else request.rerun_phases
         )
@@ -280,32 +300,38 @@ class LocalGovernedWebExecutionService:
             if current is None
             else {result.phase: result for result in current.report.phase_results}
         )
-        for phase_plan in contract.execution_plan.phases:
-            phase = phase_plan.phase
-            if failed:
-                results.append(_not_run_result(phase, "A previous Web phase failed."))
-                continue
-            if phase not in phases_to_execute:
-                previous = previous_results.get(phase)
-                if previous is None:
-                    return _failed(
-                        WebExecutionServiceStatus.RERUN_INVALID,
-                        "Rerun cannot reuse a phase without previous evidence.",
-                    )
-                results.append(previous)
-                continue
-            if phase_plan.execution_kind is WebPhaseExecutionKind.NO_OP:
-                results.append(create_web_no_op_phase_result(phase_plan))
-                continue
-            result = await self._phase_executor.execute(
-                phase_plan,
-                contract=contract,
-            )
-            if result.phase is not phase:
-                raise ValueError("Web phase executor returned evidence for another phase")
-            results.append(result)
-            executed_phases.append(phase)
-            failed = result.is_failure
+        try:
+            for phase_plan in contract.execution_plan.phases:
+                phase = phase_plan.phase
+                if failed:
+                    results.append(_not_run_result(phase, "A previous Web phase failed."))
+                    continue
+                if phase not in phases_to_execute:
+                    previous = previous_results.get(phase)
+                    if previous is None:
+                        return _failed(
+                            WebExecutionServiceStatus.RERUN_INVALID,
+                            "Rerun cannot reuse a phase without previous evidence.",
+                        )
+                    results.append(previous)
+                    continue
+                if phase_plan.execution_kind is WebPhaseExecutionKind.NO_OP:
+                    results.append(create_web_no_op_phase_result(phase_plan))
+                    continue
+                result = await self._phase_executor.execute(
+                    phase_plan,
+                    contract=contract,
+                )
+                if result.phase is not phase:
+                    raise ValueError("Web phase executor returned evidence for another phase")
+                results.append(result)
+                executed_phases.append(phase)
+                failed = result.is_failure
+        finally:
+            if self._phase_lifecycle is not None:
+                finalized = await _finalize_phase_lifecycle(self._phase_lifecycle)
+                if finalized is not None:
+                    _record_finalization(results, executed_phases, finalized)
 
         report = WebExecutionReport(
             source_revision_content_hash=request.source_revision.content_hash,
@@ -318,7 +344,7 @@ class LocalGovernedWebExecutionService:
         )
         completed_at = self._clock.now()
         attempt = WebExecutionAttempt(
-            id=self._ids.new_id(),
+            id=attempt_id,
             project_id=request.project_id,
             created_by_user_id=request.owner_user_id,
             attempt_number=1 if current is None else current.attempt_number + 1,
@@ -347,6 +373,86 @@ class LocalGovernedWebExecutionService:
             attempt=append_result.attempt,
             message="Web execution attempt and terminal evidence were recorded.",
         )
+
+
+async def _finalize_phase_lifecycle(lifecycle: WebPhaseLifecyclePort) -> WebPhaseResult | None:
+    """Drain cleanup even across repeated cancellation, then propagate cancellation."""
+    cleanup = asyncio.create_task(lifecycle.finalize())
+    cancelled = False
+    try:
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled = True
+        return cleanup.result()
+    finally:
+        if cancelled:
+            raise asyncio.CancelledError
+
+
+def _record_finalization(
+    results: list[WebPhaseResult],
+    executed_phases: list[WebExecutionPhase],
+    finalized: WebPhaseResult,
+) -> None:
+    phase = WebExecutionPhase.COLLECT_ARTIFACTS
+    if (
+        finalized.phase is not phase
+        or finalized.started_at is None
+        or finalized.status
+        in {
+            WebPhaseResultStatus.SKIPPED,
+            WebPhaseResultStatus.NOT_RUN,
+            WebPhaseResultStatus.POLICY_BLOCKED,
+        }
+    ):
+        raise ValueError("Web lifecycle must return actual artifact collection evidence")
+    previous = next((item for item in results if item.phase is phase), None)
+    if previous is not None and previous.is_failure and not finalized.is_failure:
+        # Successful resource cleanup cannot erase a collection failure already observed.
+        finalized = replace(
+            finalized,
+            status=(
+                WebPhaseResultStatus.FAILED
+                if previous.status is WebPhaseResultStatus.POLICY_BLOCKED
+                else previous.status
+            ),
+            failure_category=previous.failure_category,
+            failure_code=previous.failure_code,
+            normalized_summary=previous.normalized_summary,
+            command_plan_hashes=tuple(
+                sorted(set(previous.command_plan_hashes + finalized.command_plan_hashes))
+            ),
+            exit_codes=previous.exit_codes + finalized.exit_codes,
+            stdout_refs=tuple(sorted(set(previous.stdout_refs + finalized.stdout_refs))),
+            stderr_refs=tuple(sorted(set(previous.stderr_refs + finalized.stderr_refs))),
+            artifact_refs=tuple(sorted(set(previous.artifact_refs + finalized.artifact_refs))),
+            findings=tuple(
+                sorted(
+                    set(previous.findings + finalized.findings),
+                    key=lambda item: (
+                        item.code,
+                        item.source_tool,
+                        item.location or "",
+                        item.message,
+                    ),
+                )
+            ),
+            started_at=min(
+                value for value in (previous.started_at, finalized.started_at) if value is not None
+            ),
+            completed_at=max(
+                value
+                for value in (previous.completed_at, finalized.completed_at)
+                if value is not None
+            ),
+        )
+    results[:] = [item for item in results if item.phase is not phase] + [finalized]
+    if phase not in executed_phases:
+        executed_phases.append(phase)
+    order = {item: index for index, item in enumerate(WebExecutionPhase)}
+    executed_phases.sort(key=order.__getitem__)
 
 
 def _uses_controlled_network(contract: WebProfileContract) -> bool:

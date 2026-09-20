@@ -1,0 +1,336 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-20T07:52:42.850445+00:00",
+  "status": "USER_INTERRUPTED_PARTIAL_DIAGNOSTIC_NO_FINAL_COMPARISON",
+  "scope": "Preserved partial engineering diagnostic, interrupted on explicit user request. No performance or model-quality conclusion.",
+  "run_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01",
+  "protocol": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\protocol.json",
+    "sha256": "4dc9808edcb67d23fcb8186fa0d5ed334b6154cf78cb4fd4a361a277a9f29530",
+    "bytes": 14881
+  },
+  "four_bit_reference": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\model-proposals\\coder-source-diagnostic-20260920.json",
+    "sha256": "331877a4338630c93e48485e3347e4a523a4fb69e593c5b714364e19b8ace254",
+    "bytes": 31791
+  },
+  "precision_report": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\studio-demo\\coder-serving-precision-diagnosis-20260920.json",
+    "sha256": "e53d183ddac0fc8b5b29d36eb1d845d160030f2d7896e6d5b6ebba52d7868ce4",
+    "bytes": 17121
+  },
+  "offline_collector": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-source-trial-2f25d13-20260920-01\\build_bf16_comparison.py",
+    "sha256": "d15550eb079a4f0619c406e5017cb6b17b1788c2598077d9a50771129fcb28a0",
+    "bytes": 17569
+  },
+  "completed_native_responses_visible_at_interruption": [
+    {
+      "case": "expense-split-it-20260919",
+      "generation_id": "197c365c-308f-406d-9f89-a03adab2e4bc",
+      "file": "app.test.cjs",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\197c365c-308f-406d-9f89-a03adab2e4bc\\HTTP_RESPONSE.bin",
+        "sha256": "a7ef87510292427270c2e6bf78df43b117d12543ce82481c6ff7f1cfe5703a8c",
+        "bytes": 3217
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\197c365c-308f-406d-9f89-a03adab2e4bc\\request.json",
+        "sha256": "281eab6f943f654e1f66c319ba659bd16a37845ffae1f12d36447c6c65b23d55",
+        "bytes": 17929
+      },
+      "usage": {
+        "completion_tokens": 653,
+        "prompt_tokens": 3992,
+        "total_tokens": 4645
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 83824,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "31b5349921051f28a7879da79cc2c5000de795a2b73edcde8aaea39bff9ac03a",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "expense-split-it-20260919",
+      "generation_id": "1af9d8bd-6b74-406d-9400-815432ea5cd6",
+      "file": "manifest",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\1af9d8bd-6b74-406d-9400-815432ea5cd6\\HTTP_RESPONSE.bin",
+        "sha256": "57bed428492f446ba09fed8a26c8a21883f0069eec262ed166ffded7a016aab9",
+        "bytes": 4470
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\1af9d8bd-6b74-406d-9400-815432ea5cd6\\request.json",
+        "sha256": "528f1a1efefa2039aa3518400d6e1dca5474bf8f52a6485dc16fe7c342c8d718",
+        "bytes": 26774
+      },
+      "usage": {
+        "completion_tokens": 829,
+        "prompt_tokens": 4417,
+        "total_tokens": 5246
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 100799,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "c3e79ad65af58c8e0c1689da7453836a000af69ace6a16d4a77abe02cdbe87d2",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "expense-split-it-20260919",
+      "generation_id": "ed66ed38-4b5c-4102-9f70-005c6b1e2617",
+      "file": "app.js",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\ed66ed38-4b5c-4102-9f70-005c6b1e2617\\HTTP_RESPONSE.bin",
+        "sha256": "f00e2d27b0f5fb7373c3c0a47bea7c4723562114e3bc8be23f343e86828e6a01",
+        "bytes": 4681
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\expense-split-it-20260919\\ed66ed38-4b5c-4102-9f70-005c6b1e2617\\request.json",
+        "sha256": "510d6adf78b5e7f29c059a2f352bafb5eb9c0fe0220b03793d548b7b4c67af0b",
+        "bytes": 14797
+      },
+      "usage": {
+        "completion_tokens": 886,
+        "prompt_tokens": 3164,
+        "total_tokens": 4050
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 133247,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "744dc74d9352bcadcb23678f7665c1266b7b6cedd0fadafd22ef8f7314d0fedc",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "guest-list-en-20260919",
+      "generation_id": "151abf19-bc4b-4664-a624-e355fa4985fc",
+      "file": "app.test.cjs",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\151abf19-bc4b-4664-a624-e355fa4985fc\\HTTP_RESPONSE.bin",
+        "sha256": "051658ab6332e0a85130bbd13331974c2ed979c317637d2694575a9aa49f4f6d",
+        "bytes": 5471
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\151abf19-bc4b-4664-a624-e355fa4985fc\\request.json",
+        "sha256": "9981b0fcdd36cec070bf414ff8ffdcb63bf6be5c6996f5f3efccf8b6123f9295",
+        "bytes": 17186
+      },
+      "usage": {
+        "completion_tokens": 1292,
+        "prompt_tokens": 3349,
+        "total_tokens": 4641
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 190043,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "bd3cced00c314ad2a6b05e46a06ffe2f27d6cd22741ce0ffcb83bed485b5ec65",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "guest-list-en-20260919",
+      "generation_id": "286ad56f-40cc-4c6c-b602-7f2e158f5a9b",
+      "file": "app.test.cjs",
+      "syntax_retry": true,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\286ad56f-40cc-4c6c-b602-7f2e158f5a9b\\HTTP_RESPONSE.bin",
+        "sha256": "e9480c209a7f19f8ef66b7fc0b043f858a16cf6f89c00174743b858407478e65",
+        "bytes": 4685
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\286ad56f-40cc-4c6c-b602-7f2e158f5a9b\\request.json",
+        "sha256": "d8c9725e98103a87c6b37e396004b99989b1401841352fbf014079d1f9392624",
+        "bytes": 19807
+      },
+      "usage": {
+        "completion_tokens": 1082,
+        "prompt_tokens": 4479,
+        "total_tokens": 5561
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 140996,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "10db2e627763e88ae3b6bfea3831c04159611c074ff8590f53c54e5638ed0fde",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "guest-list-en-20260919",
+      "generation_id": "4c16d3f6-bffc-4746-9201-6cfdcb45101a",
+      "file": "manifest",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\4c16d3f6-bffc-4746-9201-6cfdcb45101a\\HTTP_RESPONSE.bin",
+        "sha256": "9f471d5b3efbbe9e88c0192e7b0787191c914dd900d3feac62dcb0b836ba2608",
+        "bytes": 4783
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\4c16d3f6-bffc-4746-9201-6cfdcb45101a\\request.json",
+        "sha256": "c6549df9b7dec48956db927d1f1b85739db638f6939efa485b222c8edde0a07c",
+        "bytes": 25253
+      },
+      "usage": {
+        "completion_tokens": 760,
+        "prompt_tokens": 3923,
+        "total_tokens": 4683
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 163974,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "e9cd8e28ef0fa8439efc6223aa43f1e588ab3b3ea694d1913d6792cb05d41d81",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "guest-list-en-20260919",
+      "generation_id": "8226253c-500f-48c0-8f51-7f9911c3b743",
+      "file": "index.html",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\8226253c-500f-48c0-8f51-7f9911c3b743\\HTTP_RESPONSE.bin",
+        "sha256": "ec61b771559cb669b848c391826bc1e96249d8796eb3c1bd4ad1b73bca64cbbb",
+        "bytes": 2685
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\8226253c-500f-48c0-8f51-7f9911c3b743\\request.json",
+        "sha256": "3f4427165093a9617e7915b70451d4f49f69cdc8d3b5570808cfda91b47eafd2",
+        "bytes": 16723
+      },
+      "usage": {
+        "completion_tokens": 465,
+        "prompt_tokens": 3276,
+        "total_tokens": 3741
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 74399,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "788d2f8142f253e7aee493e1c7e49fc735f5b950882d8806b75853c92d95b02f",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    },
+    {
+      "case": "guest-list-en-20260919",
+      "generation_id": "cdf26bfa-ba1a-4540-b8ed-f3df5eb28cf5",
+      "file": "app.js",
+      "syntax_retry": false,
+      "raw_response": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\cdf26bfa-ba1a-4540-b8ed-f3df5eb28cf5\\HTTP_RESPONSE.bin",
+        "sha256": "c4807f8444fff767e8c974043119bfa8485b38ed514756bb4624931d30ff202d",
+        "bytes": 4012
+      },
+      "request": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\cdf26bfa-ba1a-4540-b8ed-f3df5eb28cf5\\request.json",
+        "sha256": "0df026d8b76d289ae122ab5747680a1ead05e03bb0bcd0abad5db8ad05c032bc",
+        "bytes": 14674
+      },
+      "usage": {
+        "completion_tokens": 697,
+        "prompt_tokens": 2697,
+        "total_tokens": 3394
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 111263,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "911ffce2cb6b758840250b0effb651ff586fa020fd116b40cbe06ea4ae510fe4",
+        "output_repair_used": false,
+        "precision": "bf16",
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      }
+    }
+  ],
+  "completed_case_results": [
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-bf16-diagnostic-20260920-01\\guest-list-en-20260919\\result.json",
+      "sha256": "4e61093a898c63571bfe8f199e2bb0358f4e8020dc03a59d41455924cc0816a6",
+      "bytes": 1218
+    }
+  ],
+  "no_completion_claim": true,
+  "production_promotion": false,
+  "new_inferences_by_review": 0,
+  "generated_source_modifications": 0,
+  "interruption_owner": "Root cancels diagnostic process and stops pod; shutdown receipt remains root-owned.",
+  "resume": "Start from preserved receipts. The offline collector requires a completed native report plus evidence manifest and must not certify this interrupted run as complete. Any resumed model experiment must use a new output directory and current authorization.",
+  "limitations": [
+    "Partial observation, no final comparison or causal speed claim.",
+    "Existing responses and failed attempts remain byte-exact.",
+    "One stochastic sample per reused case; new project/provenance UUIDs and downstream model outputs differ between precisions.",
+    "No browser verification, no Level D qualification, no training or promotion."
+  ]
+}

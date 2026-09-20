@@ -382,13 +382,18 @@ def normalize_web_command_phase(
     runs: tuple[SandboxRunEvidence, ...],
     findings: tuple[WebNormalizedFinding, ...] = (),
 ) -> WebPhaseResult:
-    """Normalize exact sandbox runs for one command-backed phase without losing raw logs."""
+    """Normalize a complete run sequence or its observed prefix ending in failure."""
     if phase_plan.execution_kind is not WebPhaseExecutionKind.COMMAND_PLANS:
         raise ValueError("sandbox normalization requires a command-backed Web phase")
-    if len(runs) != len(phase_plan.command_plans):
-        raise ValueError("Web phase requires one sandbox run for each command plan")
+    if not runs or len(runs) > len(phase_plan.command_plans):
+        raise ValueError("Web phase requires a non-empty prefix of its command-plan runs")
+    if any(run.status is not SandboxRunStatus.SUCCEEDED for run in runs[:-1]):
+        raise ValueError("Web phase must stop after the first failed command-plan run")
+    if len(runs) < len(phase_plan.command_plans) and runs[-1].status is SandboxRunStatus.SUCCEEDED:
+        raise ValueError("incomplete Web phase run evidence must end in failure")
 
-    for plan, run in zip(phase_plan.command_plans, runs, strict=True):
+    executed_plans = phase_plan.command_plans[: len(runs)]
+    for plan, run in zip(executed_plans, runs, strict=True):
         if run.plan_id != plan.plan_id or run.plan_content_hash != plan.content_hash:
             raise ValueError("sandbox evidence targets another Web command plan")
         if run.profile_id != plan.profile_id or run.profile_version != plan.profile_version:
@@ -421,7 +426,7 @@ def normalize_web_command_phase(
     return WebPhaseResult(
         phase=phase_plan.phase,
         status=status,
-        command_plan_hashes=tuple(sorted(plan.content_hash for plan in phase_plan.command_plans)),
+        command_plan_hashes=tuple(sorted(run.plan_content_hash for run in runs)),
         started_at=min(run.started_at for run in runs),
         completed_at=max(run.finished_at for run in runs),
         exit_codes=tuple(

@@ -1,0 +1,407 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-14T04:09:08.883283+00:00",
+  "base_commit": "cc2ad696dc07ad3c9314cd34ab498d2a02518591",
+  "scope": "PROJECT_REVIEW_IMPLEMENTATION_AND_EXPLORATORY_SYNTHETIC_MODEL_DIAGNOSIS",
+  "implementation_status": "READY_FOR_USER_REVIEW_AND_SINGLE_COMMIT",
+  "all_project_problems_resolved": false,
+  "semantic_source_quality_qualified": false,
+  "formal_campaign_ready": false,
+  "new_level_d_validation": false,
+  "empirical_user_twin_validation": false,
+  "user_commit_only": true,
+  "commit_or_push_performed": false,
+  "new_markdown_files": false,
+  "evidence_root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04",
+  "scope_boundaries": {
+    "frozen_case_c94_used": false,
+    "main_database_modified": false,
+    "databases": "DISPOSABLE_SYNTHETIC_TEST_DATABASES_ONLY",
+    "review_method": "Whole tracked-tree inventory and AST analysis, targeted code review, complete available backend/frontend regression suites, database integration and real model/runner probes. This is not a claim of manual review of every line.",
+    "paper": "The attached paper describes the conceptual system; its empirical placeholders are not completed by these synthetic probes.",
+    "attachments_are_context_not_additional_authorization": true,
+    "historical_evidence": "Preserved. phase-6-v1.json records the earlier diagnosis before these changes and must not be interpreted as the final state."
+  },
+  "implemented_fixes": [
+    {
+      "area": "source_grounding",
+      "change": "Preserve complete approved semantic content and stable references; resolve exact approved architecture inputs and exact execution/source provenance for repair."
+    },
+    {
+      "area": "source_contracts",
+      "change": "Require test source paths in manifests, use coherent file prompts, reject invalid paths and prevent repairs from deleting all existing test sources."
+    },
+    {
+      "area": "execution_and_evidence",
+      "change": "Run actual Static Web Node tests, reject empty file-only TAP success and retain real test failures; prepare, review, approve and start exact governed operations from the UI."
+    },
+    {
+      "area": "provider",
+      "change": "Canonical schema decoding, explicit truncated-output/context-window failures, bounded repair output reservation, exact pinned alternate model identity and restricted local HTTP transport."
+    },
+    {
+      "area": "jvm_repair",
+      "change": "Use native JVM source validation and permit repository application/octet-stream metadata for text repair commands while retaining UTF-8 string, NUL, path and size checks."
+    },
+    {
+      "area": "frontend",
+      "change": "Share API errors so expired-token refresh works consistently; remove ten duplicate error classes, lazy-load routes, expose generation/repair/readiness and correct Web runner request shape."
+    },
+    {
+      "area": "training",
+      "change": "Add reproducible grouped counterfactual synthetic curriculum, completion and decision-focused supervision, and verify per-example loss normalization on the installed training stack."
+    }
+  ],
+  "refactoring_limits": [
+    "No broad deletion of historical migrations, evidence, fixtures or deterministic test adapters: their role remains necessary.",
+    "Source-test presence and successful self-generated tests cannot prove business requirements or detect all weakened assertions.",
+    "The runtime readiness indicator reports configuration and availability, not validated model quality."
+  ],
+  "tests": {
+    "suites_overlap_do_not_sum": true,
+    "receipts": [
+      {
+        "label": "whole-backend-final",
+        "file": "whole-backend-final.xml",
+        "sha256": "78c068a6027e168d67842b6c22c733a2d20e205c253bedfd60d4e75da5e8d3e1",
+        "tests": 4000,
+        "passed": 3953,
+        "skipped": 47,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "whole-postgres",
+        "file": "whole-postgres.xml",
+        "sha256": "423b8cde457d44a14087cb6255a7808ee037fc5f377079ce72201ca71214e851",
+        "tests": 179,
+        "passed": 177,
+        "skipped": 2,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "changed-source-and-repair-postgres",
+        "file": "changed-source-and-repair-postgres.xml",
+        "sha256": "d1d467fe805a7946a78347d6aa779c342ede723a5cda5e400475fe62c610cc72",
+        "tests": 36,
+        "passed": 36,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "updated-api-and-web",
+        "file": "updated-api-and-web.xml",
+        "sha256": "841aa27677f05e7c5eab7d26f672ef08d0205e1c21f74bf0105eef36605b7795",
+        "tests": 1431,
+        "passed": 1400,
+        "skipped": 31,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "models-and-source-contracts",
+        "file": "models-and-source-contracts.xml",
+        "sha256": "a4cad08b21c8aebfa8d99963e16684bcb199e74e00221a83c5c0c96abacbeab2",
+        "tests": 392,
+        "passed": 392,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "decision-training-and-loss-configuration",
+        "file": "decision-training-and-loss-configuration.xml",
+        "sha256": "fa8143a8623cb4949d8b610ec57d569583a58059b62bcad86a68f10d645fe9dd",
+        "tests": 25,
+        "passed": 25,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "real-web-runner-boundaries",
+        "file": "real-web-runner-boundaries.xml",
+        "sha256": "902e89a5de638f67b6ef26eb918251ad820b7036714384c460dd90dee7a8b085",
+        "tests": 23,
+        "passed": 23,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "real-node-tests-final",
+        "file": "real-node-tests-final.xml",
+        "sha256": "68b3aaabad53aa1972a1efa49f5b1ba4a65b10e01f2e982b9183e51b483cd51f",
+        "tests": 8,
+        "passed": 8,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "whole-frontend-final",
+        "file": "whole-frontend-final.xml",
+        "sha256": "b0cf2675c0a1d1532a4dffc42eb6686a29582d1a7d3cc349f1cf0143ba4c5894",
+        "tests": 196,
+        "passed": 196,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "canonical-schema-decoder",
+        "file": "canonical-schema-decoder.xml",
+        "sha256": "6af0839aea85111a0fe8e91f621659e089bca445cc4baa1c27f95f5af9572e60",
+        "tests": 55,
+        "passed": 55,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      },
+      {
+        "label": "model-repair-test-retention",
+        "file": "model-repair-test-retention.xml",
+        "sha256": "1e546a151f0ba12d64fd0e16f7591e00882f0f7c18a2f28a3cec739338552820",
+        "tests": 48,
+        "passed": 48,
+        "skipped": 0,
+        "failed": 0,
+        "errors": 0
+      }
+    ],
+    "frontend_quality_and_build": {
+      "path": "project-review-20260913/frontend-final-03/result.json",
+      "sha256": "c6cc58f7334e5b301ab6546b70fe34558d09e35b8cbc784241484e064232bdaa",
+      "size_bytes": 167
+    },
+    "posix_checks": {
+      "path": "project-review-20260913/posix-boundaries.json",
+      "sha256": "9cf087692750fce0a43133d24e05a6c9d7ccd9cad142a37d24a469af4dff873e",
+      "size_bytes": 1209
+    },
+    "static_checks": {
+      "path": "project-review-20260913/static-checks-final.json",
+      "sha256": "109d171a6a55946b8f9b7c68b1819e735820da52e006cff5c6bc45cbb09d019e",
+      "size_bytes": 865
+    },
+    "postgres_cleanup": {
+      "path": "ow-project-review-integration-c47a1bd60c1147f2900b86d0ba5dba3e/result.json",
+      "sha256": "0ed228eae36c3b2aff756cd90c246a45832899e7efc1f03461a3e339148a0814",
+      "size_bytes": 908
+    },
+    "skip_limitations": "47 tests skipped in the final Windows nonintegration run and 2 in PostgreSQL; selected real Docker and Linux filesystem probes provide separate evidence, not blanket coverage of every skipped condition. The final nonintegration invocation could not discover PHP; the preceding whole run passed that unchanged test."
+  },
+  "source_models": {
+    "condition": "Fresh current pipeline, one synthetic sample for each of four targets and each of two pinned models.",
+    "results": [
+      {
+        "model": "Qwen3-4B-Instruct-2507",
+        "published": 4,
+        "functionally_qualified": 0,
+        "total": 4,
+        "successful_http_generation_calls": 19
+      },
+      {
+        "model": "Qwen2.5-Coder-7B-Instruct",
+        "published": 1,
+        "functionally_qualified": 0,
+        "total": 4,
+        "successful_http_generation_calls": 7
+      }
+    ],
+    "decision": "NO_SOURCE_MODEL_QUALIFIED_FOR_FORMAL_CAMPAIGN",
+    "interpretation": "Five published source artifacts out of eight requests are not five correct applications. None qualified. Coder JVM requests were truncated at the runtime budget, so they do not constitute three compiled-program failures.",
+    "repair_result": "Real repair requests exposed a context reservation bug and a JVM MIME mismatch. Both implementation defects were corrected. Exact recorded Java output now passes both validators in read-only replay; Kotlin is still rejected for an unchanged replacement. Neither repair was applied or executed.",
+    "source_model_fine_tuning": "NOT_PERFORMED; no validated coding-repair curriculum was established by this review."
+  },
+  "evaluator": {
+    "curriculum": {
+      "synthetic_only": true,
+      "train": 864,
+      "validation": 144,
+      "test": 144,
+      "grouped_states_and_translations": true,
+      "families": 6
+    },
+    "matched_prompted_primary_comparison": {
+      "base": {
+        "passed": 0,
+        "total": 36
+      },
+      "s67": {
+        "passed": 15,
+        "total": 36
+      },
+      "completion_candidate": {
+        "passed": 24,
+        "total": 36
+      }
+    },
+    "primary_score_meaning": "Combined contract, judgement, references, epistemic/human-validation, abstention and EOS checks; this is not pure judgement accuracy or user-twin fidelity.",
+    "completion_candidate_decision": "REJECTED: all 12 missing-problem cases were missed despite 24/36 aggregate success.",
+    "interrupted_experiment": "Decision-focused training 01 stopped without exporting an adapter after detecting incorrect relative loss normalization. Corrected training 02 restarted from the original base, not from the interrupted checkpoint.",
+    "completed_training_runs": 2,
+    "decision_training_steps": 216,
+    "decision_candidate": {
+      "per_state": [
+        {
+          "judgement": "INSUFFICIENT",
+          "primary_passed": 12,
+          "primary_and_domain_passed": 12,
+          "total": 12,
+          "minimum_required": 10
+        },
+        {
+          "judgement": "MISSING",
+          "primary_passed": 12,
+          "primary_and_domain_passed": 12,
+          "total": 12,
+          "minimum_required": 10
+        },
+        {
+          "judgement": "PRESENT",
+          "primary_passed": 12,
+          "primary_and_domain_passed": 12,
+          "total": 12,
+          "minimum_required": 10
+        }
+      ],
+      "secondary_content_checks": {
+        "finding_cardinality_matches_narrow_oracle": 36,
+        "criterion_matches_synthetic_target_in_missing_cases": 11,
+        "missing_cases": 12,
+        "note": "Additional diagnostics; the predeclared primary/domain threshold is unchanged. No prose-quality or realistic user-behavior claim follows."
+      },
+      "eligible_for_broader_engineering_validation": true,
+      "decision": "REQUIRES_BROADER_VALIDATION_NO_AUTOMATIC_PROMOTION"
+    },
+    "production_adapter_changed": false,
+    "limitations": [
+      "Same 36 cases used for the preceding exploratory comparison; these are not a fresh confirmatory test.",
+      "Synthetic HTML contracts cover six narrow families and cannot establish realistic user behavior or user-twin fidelity.",
+      "The aggregate score does not replace per-state sensitivity and specificity.",
+      "The same 36 synthetic cases were examined during diagnosis; this is an exploratory comparison, not a new confirmatory benchmark.",
+      "The prompted comparison is not qualification of the production HTTP evaluator runtime."
+    ]
+  },
+  "remaining_acceptance_work": [
+    "Obtain applications that pass independent requirements checks through the complete governed pipeline; retain failed attempts and use bounded reviewed repairs.",
+    "Validate evaluator sensitivity, specificity, grounding and abstention on fresh varied cases before selecting any replacement adapter.",
+    "Validate realistic user-twin behavior with human evidence and the thesis protocol; synthetic HTML contracts cannot establish this.",
+    "Resume the frozen formal case only after the required qualification and explicit case-specific workflow conditions are met."
+  ],
+  "evidence": [
+    {
+      "path": "project-review-20260913/inputs.json",
+      "sha256": "f796a65c0f538dc665ddd778f5ee3d1f92e12105c223496676a6a12179651bdd",
+      "size_bytes": 393
+    },
+    {
+      "path": "project-review-20260913/backend-structure.json",
+      "sha256": "98c3d9198bdc51fc5ceb5d0f17996c1c270f42c59ebf141730a19d7800a03fe0",
+      "size_bytes": 37080
+    },
+    {
+      "path": "project-review-20260913/test-receipts-final-04/index.json",
+      "sha256": "7aa3acc2a222e650dcdd94bcc2691dfe7b3dc02e308b40f42cf40fd676f84f4b",
+      "size_bytes": 3378
+    },
+    {
+      "path": "project-review-20260913/evaluator-curriculum-audit.json",
+      "sha256": "17c3c3f2d22b75fb9e8395768c03f95b0641bf8d74c13d4be9d131b230123ae9",
+      "size_bytes": 11610
+    },
+    {
+      "path": "project-review-20260913/evaluator-calibration-data-01/manifest.json",
+      "sha256": "dfeda9d4b69ca0fca030676c131c1faf7463b31173ff0948a1b47a87cabd8650",
+      "size_bytes": 1769
+    },
+    {
+      "path": "project-review-20260913/evaluator-comparison-summary.json",
+      "sha256": "e42e966de9c0f2cbb3ae2388f2b227675fcf9e679c0bb57e923ae5bb7eefd7cf",
+      "size_bytes": 12121
+    },
+    {
+      "path": "project-review-20260913/evaluator-domain-validation.json",
+      "sha256": "5e818510c43711affbe1c80671c1aad1b82e1d35af73bef372032dfd9909e072",
+      "size_bytes": 60811
+    },
+    {
+      "path": "project-review-20260913/evaluator-final-selection.json",
+      "sha256": "c93ab315ea8b4f53abc8a25481abbe92af5e258b32d6f1758103a842b2f250bb",
+      "size_bytes": 2806
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-candidate-01/evaluation-result.json",
+      "sha256": "748700d366b3e9d51c6e81ac1405a60b90f9f721e046df281af16ab31ca38819",
+      "size_bytes": 14211
+    },
+    {
+      "path": "project-review-20260913/evaluator-domain-validation-decision.json",
+      "sha256": "79746dbd7036754d612d0c4c95b99eb384992d4655364394c1484ad963bca146",
+      "size_bytes": 21028
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-training-02/training-result.json",
+      "sha256": "9c78a8c083599e9cb0357692318fceb1d7bf89192c40ab47c8370883d148024f",
+      "size_bytes": 540
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-training-02/loss-normalization.json",
+      "sha256": "883ee5e77021a8b9e9f15b7fa8b3633f6a99f91c7f70fecbeff2fa4c4acc231d",
+      "size_bytes": 272
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-protocol.json",
+      "sha256": "e9e2d9d40cb39d59f83872a82599ac7b0787f40868d36c38833accbecf112f6a",
+      "size_bytes": 1254
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-protocol-amendment-02.json",
+      "sha256": "2ae43abe4c5386c12a2367e2642b11bbbaf48d171d157513acb3c095ee43c27e",
+      "size_bytes": 611
+    },
+    {
+      "path": "project-review-20260913/evaluator-decision-protocol-amendment-03.json",
+      "sha256": "27ba8326e20842722ae2719cfb2d7010ffc135fd5ccb51aa08481e3a3e70127c",
+      "size_bytes": 1811
+    },
+    {
+      "path": "project-review-20260913/decision-loss-normalization-probe-03/result.json",
+      "sha256": "e35a0445199a191b7e0236a5092911ea5b390dd635738a430c95bc216a33b047",
+      "size_bytes": 1411
+    },
+    {
+      "path": "project-review-20260913/current-source-acceptance-protocol.json",
+      "sha256": "4e7f52f3c5a91b79075967eea23acb87561812e94386736d7d5277e9847d39b9",
+      "size_bytes": 1956
+    },
+    {
+      "path": "project-review-20260913/current-source-comparison-summary.json",
+      "sha256": "a3bdde9aefd6aba579379608788a28d0efc4d16511ff5a33918773b6157dda01",
+      "size_bytes": 51629
+    },
+    {
+      "path": "project-review-20260913/repair-context-preflight.json",
+      "sha256": "846a01b9efc306184ffb1f15a2faf64ffe01e6db61ad45fd330d0d2607c6033a",
+      "size_bytes": 1009
+    },
+    {
+      "path": "project-review-20260913/repair-output-replay-02.json",
+      "sha256": "9f9656e5454b106bad67c4ad484f166ce4aebdcd6dd340e4364dff9addd52ebf",
+      "size_bytes": 4317
+    },
+    {
+      "path": "project-review-20260913/node-skipped-suite-replay.json",
+      "sha256": "e03a87a80343b93f8cc20bd2d2d366dd03c5f935d0d3c124e83836ed88dbd114",
+      "size_bytes": 369
+    },
+    {
+      "path": "project-review-20260913/resource-cleanup-final.json",
+      "sha256": "c1311877ecc05546b50fd7668e92bf64b075c439165d2288c90f00ebb66d092d",
+      "size_bytes": 4735
+    }
+  ]
+}

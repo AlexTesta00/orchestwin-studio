@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T19:17:08.541289+00:00",
+  "status": "V13_LIVE_PACKAGE_FAILED_AFTER_MANIFEST_AND_ONE_SYNTAX_ACCEPTED_FILE",
+  "classification": "DEVELOPMENT_DIAGNOSTIC_AND_SYNTHETIC_REGRESSION_NOT_MODEL_PROMOTION",
+  "manifest_contract": "SOURCE_MANIFEST_V13_STATIC_MODULE_CONTRACT",
+  "runtime_contract": {
+    "javascript_mode": "CLASSIC_SCRIPT_COMMONJS_COMPATIBLE",
+    "browser_loading": "classic script src=app.js",
+    "node_exports": "guarded module.exports of top-level functions",
+    "test_loading": "require('./app.js') with node:test and node:assert/strict",
+    "forbidden_module_declarations": [
+      "import",
+      "export"
+    ]
+  },
+  "trigger": {
+    "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+    "manifest_generation": "e5e3690c-1824-4009-8a98-32cad9090d62",
+    "failed_file_generations": [
+      "2d516486-917c-4422-b5a1-e90de69df501",
+      "1164021d-4c31-40ec-95a8-82d30810b483"
+    ],
+    "planned_files": 3,
+    "accepted_files": 0,
+    "failure": "Both native app.js outputs contain export declarations at line3. Node --check commonjs fails; the same bytes pass module parsing. The selected profile requires classic script/CommonJS; no false positive was found."
+  },
+  "immutable_diagnosis": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-syntax-diagnostic-01\\report.json",
+    "sha256": "8476951e4b6592c4b99b03a0b87a8925c4aeaa462c57fd46c75788a71051d77f",
+    "original_files_verified": 21,
+    "no_generated_source_execution": true
+  },
+  "changes": [
+    "STATIC manifest interfaces are schema-constrained callable signatures, excluding module declarations, assignments and source bodies before decoding. Non-static/JVM planned-file interfaces retain their previous grammar.",
+    "Manifest and child requests carry an explicit policy-owned classic/CommonJS runtime contract. The manifest contract advances to V13; every V12 prototype screen/element marker and binding instruction remains present.",
+    "Node parser failures retain only a safe reason code, input mode and line number; no raw stderr, source text or process paths are exposed as diagnostic fields.",
+    "One existing syntax retry receives the safe diagnostic and an unchanged bounded prior-source excerpt/hash in its audited system_instruction. The existing four-field syntax_retry context and DB lineage contract remain unchanged; no migration or evidence rewriting is needed.",
+    "The CommonJS instruction is conditional on WEB_STATIC. Other execution targets preserve the actual parser input mode and permit valid ES-module declarations."
+  ],
+  "retry_excerpt": {
+    "maximum_characters": 2048,
+    "exact_source_slice": true,
+    "full_source_sha256_included": true,
+    "start_end_offsets_included": true,
+    "truncation_explicit": true,
+    "failure_line_prioritized_even_after_long_lines": true,
+    "full_native_original_retained": true
+  },
+  "validation": {
+    "focused": {
+      "command": ".venv/Scripts/python.exe -B -m pytest src/test/python/models/test_source_syntax.py src/test/python/models/test_source_file_generation.py -q -p no:cacheprovider --basetemp var/studio/source-module-contract-tests-02",
+      "passed": 45,
+      "failed": 0,
+      "elapsed_seconds": 3.14,
+      "includes_actual_node_checks": true
+    },
+    "regression": {
+      "command": ".venv/Scripts/python.exe -B -m pytest src/test/python/models/test_source_schema.py src/test/python/models/test_source_context.py src/test/python/models/test_source_proposals.py src/test/python/models/test_source_design_contract.py -q -p no:cacheprovider --basetemp var/studio/source-module-regression-tests-01",
+      "passed": 72,
+      "failed": 0,
+      "elapsed_seconds": 0.72
+    },
+    "ruff": "PASSED on both changed application modules and both targeted test modules",
+    "native_decoder": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-native-receipt.json",
+      "sha256": "51fc80e680be6a6115acdccda5ecc348217ec6c7caa95cbb9dc0563d94957d3c",
+      "llguidance_version": "1.8.0",
+      "policy": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3",
+      "cases": 4,
+      "original_esm_manifest_masked": true,
+      "final_schema_equals_native_tested_schema": true,
+      "model_loaded": false,
+      "gpu_used": false
+    },
+    "database_scope": "No DB mutation or migration performed. Exact existing retry-context shape and equality outside syntax_retry are covered by the audited request unit regression; PostgreSQL integration tests were not rerun in this bounded fix."
+  },
+  "source_sha256": {
+    "src\\orchestwin\\models\\source_file_generation.py": "62198d38a939733322b730ac11b57e93e141132a04afa952525a49e5abb2cbfe",
+    "src\\orchestwin\\models\\source_syntax.py": "30c26ed3f81b15d358a955a3eaa2ba0e783947f5f954c94d61dfb3a764fbef44",
+    "src\\test\\python\\models\\test_source_file_generation.py": "3f95533b2ef971c220d45f226cc8680e13904b705778ce795e7fccb0fb3adaff",
+    "src\\test\\python\\models\\test_source_syntax.py": "0addf1b28faf0f164ee608ff5970e8fdb5d1cf1e5b98fdb78891cc4c9cf8a480"
+  },
+  "limitations": [
+    "Historical manifest and both failed app.js responses remain rejected and unchanged. No source revision or accepted file was fabricated.",
+    "The grammar test signature fixture is synthetic and is not corrected model evidence or a promoted model.",
+    "Syntax correctness cannot establish behavior. Static inspection of the rejected outputs also found absent browser bindings, self-reporting verification functions and numeric-string inconsistencies; real core/browser oracles remain necessary.",
+    "This change does not claim that the 4B proposer is qualified or that a fresh complete application has succeeded. It makes the runtime contract and bounded regeneration feedback explicit."
+  ],
+  "inference_calls_by_this_fix": 0,
+  "database_writes_by_this_fix": 0,
+  "model_training_or_promotion": false,
+  "live_manifest_check": {
+    "schema_version": 1,
+    "observed_at_utc": "2026-09-19T19:25:03.588426+00:00",
+    "classification": "LIVE_MANIFEST_ONLY_PARENT_SOURCE_OPERATION_STILL_INFLIGHT",
+    "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+    "generation_id": "d7f8aa5e-1289-45bb-8596-8f1d50348fec",
+    "manifest_export": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-manifest\\manifest.json",
+      "sha256": "f49a8f429d9afe3a388ad83ee69aca942de12768f685e0336d57cb71d37627a6",
+      "files_verified": 5,
+      "snapshot_event_kinds": [
+        "HTTP_REQUEST",
+        "HTTP_RESPONSE",
+        "PROVIDER_RESULT"
+      ]
+    },
+    "raw_http_sha256": "48a5db2c42df54e88aef5aef1c0bde926514fe3a5e836e058fc050c84dcb0702",
+    "provider_success_content_hash": "031a872740d011268cd35b921215f541ba642c0c318e86e1f61031c72b489d07",
+    "canonical_manifest_payload_sha256": "b37e13f1ffc1e564bed45267d3afb275787754449c8caf82c911be95c097b59e",
+    "request_content_hash": "c43c0a6ec3f97f686af4b22c9cc525b4817aa510a5779be20c79bd32e95997dd",
+    "request_schema_content_hash": "1a7a95a3bd1cea68f0bd15b7898d5be3ab251d5f45693ae7782f0ff1abf8874b",
+    "manifest_contract": "SOURCE_MANIFEST_V13_STATIC_MODULE_CONTRACT",
+    "runtime_contract": {
+      "browser_loading": "classic script src=app.js",
+      "forbidden_module_declarations": [
+        "import",
+        "export"
+      ],
+      "javascript_mode": "CLASSIC_SCRIPT_COMMONJS_COMPATIBLE",
+      "node_exports": "guarded module.exports of top-level functions",
+      "test_loading": "require('./app.js') with node:test and node:assert/strict"
+    },
+    "runtime_contract_exact_match": true,
+    "identity": {
+      "adapter_id": null,
+      "adapter_sha256": null,
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+      "provider_id": "local-studio-model",
+      "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+    },
+    "request_native_provider_identity_match": true,
+    "serving": {
+      "adapter_active": false,
+      "adapter_loaded": true,
+      "adapter_name": null,
+      "adapter_role": null,
+      "generation_wall_time_budget_seconds": 1140,
+      "generation_wall_time_milliseconds": 311224,
+      "max_output_tokens": 8192,
+      "max_sequence_length": 24576,
+      "model_visible_messages_sha256": "42f3502b29a62ff9ddef2c441e13e9ff12b7643311f926e4d860eb74ec69089a",
+      "output_repair_used": false,
+      "schema_complete": true,
+      "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+    },
+    "usage": {
+      "completion_tokens": 2052,
+      "prompt_tokens": 18845,
+      "total_tokens": 20897
+    },
+    "http_elapsed_milliseconds": 329808,
+    "native_generation_milliseconds": 311224,
+    "temperature": 0.6,
+    "finish_reason": "stop",
+    "manifest_validation": {
+      "actual_final_v13_pydantic_schema_valid": true,
+      "file_order_and_dependencies_valid": true,
+      "static_callable_signature_shape_valid": true,
+      "static_interfaces_contain_no_module_declarations_or_source_bodies": true,
+      "approved_statement_references_complete_and_ordered": true,
+      "acceptance_check_count": 20
+    },
+    "planned_files": [
+      {
+        "depends_on": [],
+        "interface": "functioncalculate(num1: string, num2: string, operation: string): number; functionvalidateInput(num1: string, num2: string): boolean; functiondisplayResult(num1: string, num2: string, operation: string, result: number): void; functiongoBack(operation: string, num1: string, num2: string): void; functionisKeyboardAccessible(): boolean; functionisMobileFriendly(): boolean; functionisMinimalAndInIta()",
+        "media_type": "text/javascript",
+        "normalized_path": "app.js",
+        "purpose": "Implementazione del core della calcolatrice con funzioni di calcolo, validazione e interfaccia utente in JavaScript (ES6"
+      },
+      {
+        "depends_on": [
+          "app.js"
+        ],
+        "interface": "functiontestCalculate(): void; functiontestValidationError(): void; functiontestOfflineFunctionality(): void; functiontestAccessibility(): void; functiontestGoBack(): void",
+        "media_type": "text/javascript",
+        "normalized_path": "app.test.cjs",
+        "purpose": "Test automatizzati del comportamento della calcolatrice"
+      },
+      {
+        "depends_on": [
+          "app.js"
+        ],
+        "interface": "functionrenderInitialScreen(): void; functionrenderResultScreen(result: number, operation: string, num1: string, num2: string): void; functionrenderErrorScreen(message: string): void",
+        "media_type": "text/html",
+        "normalized_path": "index.html",
+        "purpose": "HTML statico con layout in italiano, schermata iniziale e schermata risultato"
+      }
+    ],
+    "not_observed": [
+      "accepted_source_files",
+      "saved_source_revision",
+      "executed_core_tests",
+      "browser_behavior",
+      "completed_parent_application_result"
+    ],
+    "limitations": [
+      "This export seals only the completed native manifest response. The parent source command and a child app.js request were still in progress; no ADAPTER_ACCEPTED or APPLICATION_RESULT event is present in this snapshot.",
+      "The model chose unusual but syntactically permitted callable identifiers such as functioncalculate. The HTML interface lists functionrender signatures instead of the requested concrete DOM IDs. These prompt-quality limitations are preserved unchanged.",
+      "The plan still names self-verification functions for accessibility and mobile usability. A callable name or plan does not establish those properties; independent browser and arithmetic oracles remain necessary.",
+      "One stochastic manifest at temperature0.6 is not a model promotion, full application result, training evaluation or isolated performance benchmark."
+    ],
+    "collector_database_writes": 0,
+    "collector_inference_calls": 0,
+    "original_outputs_modified": false,
+    "verification_receipt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-manifest-live-verification.json",
+      "sha256": "d3844a1bd0b00eadc4365c06950d9ac6e00dc6ac88af9f6c9aaf6bdd5873a543"
+    }
+  },
+  "live_terminal_result": {
+    "receipt": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-terminal-diagnosis.json",
+    "sha256": "5fba0cbea8d6d548ed3e126e2fb32b6900060169b3d0b3b9973829adc013c257",
+    "source_package_complete": false,
+    "source_revisions_published": 0,
+    "model_defects_and_engine_retry_defect_distinguished": true,
+    "engine_retry_defect_corrected_in": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION"
+  }
+}

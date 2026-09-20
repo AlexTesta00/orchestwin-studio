@@ -117,7 +117,7 @@ export const useArtifactGraphStore = defineStore("artifactGraph", {
       projectId: string,
       authorize: AuthorizedRequest,
       api: ArtifactGraphApi = artifactGraphApi,
-    ): Promise<CrossStageArtifactGraphPayload> {
+    ): Promise<CrossStageArtifactGraphPayload | null> {
       this.activateProject(projectId);
       const epoch = this.projectEpoch;
       this.begin("load");
@@ -131,6 +131,10 @@ export const useArtifactGraphStore = defineStore("artifactGraph", {
 
         return graph;
       } catch (error) {
+        if (error instanceof ArtifactGraphApiError && error.status === 404) {
+          if (this.isCurrent(projectId, epoch)) this.graph = null;
+          return null;
+        }
         this.capture(error, projectId, epoch);
         throw error;
       } finally {

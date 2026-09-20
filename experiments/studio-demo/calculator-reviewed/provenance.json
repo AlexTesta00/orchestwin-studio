@@ -1,0 +1,28 @@
+{
+  "purpose": "Working calculator aligned with the model-generated mockup at the owner's explicit request",
+  "origin": "ASSISTED_OWNER_EDIT",
+  "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "model_base_revision_id": "db5ce0e9-f570-450e-bdb2-6fab338fa6ee",
+  "model_base_content_hash": "329fa256160559ecca69b551c855441f94b1f2832a8c6db236d9ca46ec0e4149",
+  "rationale": "Adapt the reviewed calculator implementation to the real model mockup: exact screen titles, input labels and field names, operation selector, calculate transition and separate result screen with return navigation. The result uses the current numbers instead of the mockup example. Keep the original model source revision and mockup unchanged. Assisted correction, not autonomous model output or Level D evidence.",
+  "source_files": [
+    "app.js",
+    "app.test.cjs",
+    "index.html"
+  ],
+  "human_study": "NOT_PERFORMED",
+  "level_d_qualification": "NOT_CLAIMED",
+  "target_mockup": {
+    "generation_id": "7fa6afb5-a454-40bc-8d1d-8af1a4f6c5f7",
+    "design_version_id": "059623c8-25f5-4a79-b701-42b47975a766",
+    "design_content_hash": "6997d0371b85aab036a255ec96d96e9e187a464cf1cd42ae9bcba32282b52900",
+    "prototype_id": "86cab827-697a-408d-9989-edc76f37fa07",
+    "prototype_sha256": "709c648f2988f67705ec5a8f968ae2169ad8f1f16f35651b71f890f5f6b1808f",
+    "prototype_hash_serialization": "UTF-8 JSON, ensure_ascii=false, sorted object keys, compact separators",
+    "artifact_file_sha256": "36d48ec9ba409a2caa54a903c33537ebb77ea0380038067dfb5c01a64a674e80"
+  },
+  "retained_brief_controls": [
+    "Secondary clear and delete-character buttons",
+    "Enter submits; Escape resets; native Tab and Backspace behavior"
+  ]
+}

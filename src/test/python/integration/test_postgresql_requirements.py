@@ -87,12 +87,6 @@ TWIN_ID = UUID("00000000-0000-4000-8000-000000000160")
 BASE_TIME = datetime(2026, 8, 18, 11, 0, tzinfo=UTC)
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset user-owned application data while preserving Alembic state."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 def context_reference(
     kind: RequirementsContextKind,
     ordinal: int,
@@ -228,8 +222,6 @@ async def run_integration_scenario() -> None:
     runtime = create_database_runtime(database_settings)
 
     try:
-        await truncate_application_data(runtime)
-
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory),
             password_service=Argon2PasswordService(),
@@ -448,7 +440,6 @@ async def run_integration_scenario() -> None:
 
         assert revision == scripts.get_current_head()
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

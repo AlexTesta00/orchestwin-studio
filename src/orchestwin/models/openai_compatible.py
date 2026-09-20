@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import socket
 import time
@@ -10,8 +11,9 @@ from dataclasses import dataclass
 from typing import Final, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
@@ -97,6 +99,8 @@ class OpenAICompatibleLocalConfig:
             raise ValueError("local model base URL must use HTTP or HTTPS with a hostname")
         if parsed.query or parsed.fragment:
             raise ValueError("local model base URL cannot contain a query or fragment")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("model endpoint credentials must use the explicit bearer token")
         if not self.allow_non_loopback and not _is_loopback_host(parsed.hostname):
             raise ValueError("non-loopback model endpoints require explicit authorization")
         if self.base_url.endswith("/"):
@@ -118,6 +122,11 @@ class OpenAICompatibleLocalConfig:
     @property
     def completion_url(self) -> str:
         return f"{self.base_url}{self.completion_path}"
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class UrllibOpenAICompatibleTransport:
@@ -157,12 +166,16 @@ class UrllibOpenAICompatibleTransport:
         )
         started = time.perf_counter()
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            # Keep the configured destination and credentials bound to one request.
+            with build_opener(ProxyHandler({}), _NoRedirect()).open(
+                request, timeout=timeout_seconds
+            ) as response:
                 response_body = response.read(_MAX_RESPONSE_BYTES + 1)
                 status_code = int(response.status)
         except HTTPError as error:
-            response_body = error.read(_MAX_RESPONSE_BYTES + 1)
-            status_code = int(error.code)
+            with error:
+                response_body = error.read(_MAX_RESPONSE_BYTES + 1)
+                status_code = int(error.code)
         except TimeoutError as error:
             raise OpenAICompatibleTimeoutError("local model request timed out") from error
         except URLError as error:
@@ -241,7 +254,7 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
                 retryable=True,
             )
         if response.status_code >= 400:
-            return _http_failure(response.status_code)
+            return _http_failure(response.status_code, response.body)
         try:
             payload = _parse_response_payload(response.body)
             actual_identity = _parse_runtime_identity(payload.get("model_identity"))
@@ -274,6 +287,12 @@ class OpenAICompatibleLocalStructuredAdapter(StructuredGenerationPort):
                 usage=usage,
                 finish_reason=finish_reason,
                 provider_request_id=provider_request_id,
+            )
+        except _IncompleteCompletion:
+            return self._failure(
+                StructuredGenerationFailureCode.INCOMPLETE_OUTPUT,
+                "The local model stopped at a generation limit; no partial output was accepted.",
+                retryable=False,
             )
         except (json.JSONDecodeError, TypeError, ValueError):
             return self._failure(
@@ -324,13 +343,16 @@ def _request_payload(
         "metadata": {
             "orchestwin_request_id": str(request.request_id),
             "orchestwin_request_hash": request.content_hash,
+            "orchestwin_task_id": request.task_id,
+            "orchestwin_prompt_version_ref": request.prompt_version_ref,
+            "allowed_evidence_refs": list(request.allowed_evidence_refs),
             "expected_model_identity": request.expected_identity.to_snapshot(),
         },
     }
 
 
 def _parse_response_payload(body: bytes) -> dict[str, object]:
-    parsed = json.loads(body.decode("utf-8"))
+    parsed = strict_json_object(body)
     if not isinstance(parsed, dict):
         raise ValueError("completion response must be an object")
     return parsed
@@ -349,6 +371,10 @@ def _parse_runtime_identity(value: object) -> ModelRuntimeIdentity:
         adapter_id=_optional_string(value, "adapter_id"),
         adapter_sha256=_optional_string(value, "adapter_sha256"),
     )
+
+
+class _IncompleteCompletion(ValueError):
+    """A reported generation limit takes precedence over parsing truncated JSON."""
 
 
 def _parse_success(
@@ -371,7 +397,9 @@ def _parse_success(
     if not isinstance(message, dict):
         raise ValueError("completion message must be an object")
     content = message.get("content")
-    output_payload = json.loads(content) if isinstance(content, str) else content
+    if isinstance(content, (str, dict)) and choice.get("finish_reason") == "length":
+        raise _IncompleteCompletion
+    output_payload = strict_json_object(content) if isinstance(content, str) else content
     if not isinstance(output_payload, dict):
         raise ValueError("completion content must be a JSON object")
     finish_value = choice.get("finish_reason")
@@ -416,8 +444,20 @@ def _non_negative_integer(values: dict[str, object], key: str) -> int:
     return value
 
 
-def _http_failure(status_code: int) -> StructuredGenerationResult:
-    if status_code in {401, 403}:
+def _http_failure(status_code: int, body: bytes) -> StructuredGenerationResult:
+    try:
+        context_exceeded = (
+            status_code == 422
+            and len(body) < 256
+            and strict_json_object(body) == {"error": "CONTEXT_BUDGET_EXCEEDED"}
+        )
+    except (ValueError, UnicodeError):
+        context_exceeded = False
+    if context_exceeded:
+        code = StructuredGenerationFailureCode.CONTEXT_BUDGET_EXCEEDED
+        message = "The complete input and requested output exceed the local model context window."
+        retryable = False
+    elif status_code in {401, 403}:
         code = StructuredGenerationFailureCode.AUTHENTICATION_FAILED
         message = "The local model endpoint rejected authentication."
         retryable = False
@@ -451,5 +491,9 @@ def _http_failure(status_code: int) -> StructuredGenerationResult:
 
 
 def _is_loopback_host(hostname: str) -> bool:
-    normalized = hostname.casefold()
-    return normalized == "localhost" or normalized == "::1" or normalized.startswith("127.")
+    if hostname.casefold() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False

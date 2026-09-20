@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "status": "PARTIAL_DIAGNOSIS_CHALLENGE_SCREEN_FAILED_FULL_VALIDATION_RUNNING",
+  "baseline_git_head": "4deeb0bf552a1039b2cde113df5065756e887d6c",
+  "run_id": "qualification-4deeb0b-01",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-4deeb0b-20260916-01",
+  "snapshot": {
+    "status": "VERIFIED_PARTIAL",
+    "recovered_unix": 1789579037.1337504,
+    "inferences": 2608,
+    "planned": 3088,
+    "archive_sha256": "179e50f33a698d56d1f2a839ff97393c1eaccfed101fdec9e35ab2f336f1c88d",
+    "archive_bytes": 12579406,
+    "verified_files": 5270,
+    "receipt_sha256": "bc764f8942c4c08059a12e2a7eedcb2d1016d8c2f0f75337a7e1ff77391daa56",
+    "output_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-4deeb0b-20260916-01\\partial-20260916-1720\\outputs\\evaluator-qualification-results-01",
+    "promotion": false
+  },
+  "candidate_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+  "prior_sha256": "9568ae8c3ed614431abf2cb0ed974fa8a6a23d535f1d43080efa04c40532dfec",
+  "cohorts": {
+    "v3_validation/candidate": {
+      "cases": 2560,
+      "passed": 2560,
+      "true_positive": 2855,
+      "false_positive": 0,
+      "false_negative": 0,
+      "failure_checks": {}
+    },
+    "independent_challenge/candidate": {
+      "cases": 24,
+      "passed": 13,
+      "true_positive": 16,
+      "false_positive": 0,
+      "false_negative": 2,
+      "failure_checks": {
+        "summary_scope": 5,
+        "locations": 2,
+        "gap_state": 4,
+        "gap_targets": 4,
+        "abstention": 2
+      }
+    },
+    "independent_challenge/prior": {
+      "cases": 24,
+      "passed": 3,
+      "true_positive": 1,
+      "false_positive": 9,
+      "false_negative": 17,
+      "failure_checks": {
+        "locations": 15,
+        "criterion": 9,
+        "gap_state": 4,
+        "gap_targets": 6,
+        "abstention": 2,
+        "summary_scope": 3
+      }
+    }
+  },
+  "paired_challenge": {
+    "pairs": 24,
+    "candidate_only_correct": 11,
+    "prior_only_correct": 1
+  },
+  "failed_candidate_ids": [
+    "candidate-external-label-it",
+    "candidate-implicit-is-not-explicit-en",
+    "candidate-implicit-is-not-explicit-it",
+    "candidate-partial-detached-control-en",
+    "candidate-partial-detached-control-it",
+    "candidate-blank-title-and-alert-it",
+    "candidate-selected-form-absent-en",
+    "candidate-selected-form-absent-it",
+    "candidate-formatted-label-and-name-it",
+    "candidate-untrusted-page-instruction-it",
+    "candidate-restrict-summary-scope-it"
+  ],
+  "challenge_engineering_review": {
+    "status": "CHALLENGE_ENGINEERING_REVIEW_COMPLETED_FULL_RUN_PENDING",
+    "reviewer": "ASSISTANT_ENGINEERING_REVIEW",
+    "human_expert_validation": false,
+    "reviewed_responses": 48,
+    "unique_inputs": 24,
+    "pages": 12,
+    "languages": [
+      "en",
+      "it"
+    ],
+    "candidate_automatic_pass": 13,
+    "prior_automatic_pass": 3,
+    "automatic_protocol_changed": false,
+    "responses_repaired": false,
+    "candidate_failure_classes": {
+      "explicit_label_requirement": [
+        "candidate-implicit-is-not-explicit-en",
+        "candidate-implicit-is-not-explicit-it"
+      ],
+      "selected_form_scope_and_abstention": [
+        "candidate-partial-detached-control-en",
+        "candidate-partial-detached-control-it",
+        "candidate-selected-form-absent-en",
+        "candidate-selected-form-absent-it"
+      ],
+      "unrequested_targets_in_italian_summary": [
+        "candidate-external-label-it",
+        "candidate-blank-title-and-alert-it",
+        "candidate-formatted-label-and-name-it",
+        "candidate-untrusted-page-instruction-it",
+        "candidate-restrict-summary-scope-it"
+      ]
+    },
+    "additional_narrative_issues_among_automatic_passes": [
+      "candidate-caption-is-not-alt-it",
+      "candidate-untrusted-page-instruction-en"
+    ],
+    "interpretation": "Candidate improves over the prior adapter on matched inputs but fails the preregistered challenge screen. Correct structural JSON is insufficient. No promotion; targeted coverage work is warranted before another qualification.",
+    "cautions": [
+      "Twenty-four inputs are twelve paired-language pages, not 24 independent real-world tasks.",
+      "All fixtures and labels are assistant-authored. Human review remains necessary.",
+      "Criterion-check failures on prior form-level locations reflect unmatched target criteria, not necessarily wrong criterion text.",
+      "Keep conservative summary-scope failures separate from missing findings and abstention failures; do not erase either."
+    ],
+    "source_assessment_sha256": "869821ba04053ec7e8a906543b7426f5afb6660985ec58f9532f7cff9124fc02",
+    "cases": [
+      {
+        "id": "candidate-external-label-en",
+        "result_sha256": "0c0ad4e114067dca517f94b50944904ddd1c825097e73c6bac83fcbc2d9cdbcc",
+        "automatic_pass": true,
+        "review_note": "Requested facts and scope are correct."
+      },
+      {
+        "id": "candidate-external-label-it",
+        "result_sha256": "51bfac930802eb44abdfda2220a76eba79e309151c69194b7651afb88e3692cc",
+        "automatic_pass": false,
+        "review_note": "Invents an unrequested assessment of #quantity. It is outside the selected form but was never a requested target."
+      },
+      {
+        "id": "candidate-implicit-is-not-explicit-en",
+        "result_sha256": "3b3793fb55f9139b88e0650af4f63f154c0384915168a4f195a4a1699a8eadaa",
+        "automatic_pass": false,
+        "review_note": "Fails to report the missing explicit for association; the task explicitly excludes implicit wrapping as satisfaction."
+      },
+      {
+        "id": "candidate-implicit-is-not-explicit-it",
+        "result_sha256": "534894f5118389bc5177165b115b43e3300d3d099cfde9593441bd24eac16c80",
+        "automatic_pass": false,
+        "review_note": "Same missed explicit-label requirement as English. This task-specific failure is not a general claim that implicit labels are inaccessible."
+      },
+      {
+        "id": "candidate-broken-name-references-en",
+        "result_sha256": "26fba26b0a136d8c327bb6fe29d91d66ab41ed29fef3317158aa7bbd893b2a62",
+        "automatic_pass": true,
+        "review_note": "Correct target, broken references, repair and static-evidence limits."
+      },
+      {
+        "id": "candidate-broken-name-references-it",
+        "result_sha256": "1c6607a5918b4c56d386f202025e199be7d5a6cd16811bad25452aee6df6e7f3",
+        "automatic_pass": true,
+        "review_note": "Correct target, broken references, repair and static-evidence limits."
+      },
+      {
+        "id": "candidate-partial-detached-control-en",
+        "result_sha256": "dc76a6efedc767014ec1541b813c6082996f7dae54f73848cdb7d77636c458f4",
+        "automatic_pass": false,
+        "review_note": "Correct #send finding, but incorrectly calls detached #member satisfied and omits its evidence gap."
+      },
+      {
+        "id": "candidate-partial-detached-control-it",
+        "result_sha256": "304c47b7f5afa679cdfd06ab6cb36b0d80fb69e1adff06999c46d107d60c14a9",
+        "automatic_pass": false,
+        "review_note": "Correct #send finding, but incorrectly calls detached #member satisfied and omits its evidence gap."
+      },
+      {
+        "id": "candidate-blank-title-and-alert-en",
+        "result_sha256": "216b8d5540831912a0d3721e322e41285b5deead98c04e4c022a258e45ede813",
+        "automatic_pass": true,
+        "review_note": "Both required findings and their criteria are correct."
+      },
+      {
+        "id": "candidate-blank-title-and-alert-it",
+        "result_sha256": "10d263c102f330b0cffa9f17ef43c5cde044cf4cfc67a26bef8f2a577ec83a00",
+        "automatic_pass": false,
+        "review_note": "Both findings are correct, but the summary adds unrequested #quantity. The title rationale also uses awkward unsupported-assumption wording."
+      },
+      {
+        "id": "candidate-caption-is-not-alt-en",
+        "result_sha256": "183c17fba80ad1c440a3a2e89713771631a232f25a3e9cf90effefba3ff49ad2",
+        "automatic_pass": true,
+        "review_note": "Correctly distinguishes figcaption from the specifically requested alt property."
+      },
+      {
+        "id": "candidate-caption-is-not-alt-it",
+        "result_sha256": "77fcf05f789a9044a778fffbb144567fbf49ff2c1dac11be8c95848a276889f7",
+        "automatic_pass": true,
+        "review_note": "Correct finding and repair, but the rationale adds unsupported reassurance that the static content could be correct, diluting the stated missing alt property."
+      },
+      {
+        "id": "candidate-selected-form-absent-en",
+        "result_sha256": "ec5ac70d43f5ef5d0504d949a1fccc01e3d02d424ab5dd16e068141c7d2410ef",
+        "automatic_pass": false,
+        "review_note": "Calls both out-of-scope targets satisfied although the selected form is absent; fails full abstention."
+      },
+      {
+        "id": "candidate-selected-form-absent-it",
+        "result_sha256": "333ab8d8835b3fe6ba1095d4358b3bfc0ddf99a8c5adb8983d2786a3e3f1eb1b",
+        "automatic_pass": false,
+        "review_note": "Same incorrect satisfaction and omitted full abstention as English."
+      },
+      {
+        "id": "candidate-metadata-without-html-en",
+        "result_sha256": "888c673ab372e48a41a763ff2ba2b0748c4775649bc8ec9d7ec7cc5d1b85ec39",
+        "automatic_pass": true,
+        "review_note": "Correct full abstention and separate target-specific evidence gaps."
+      },
+      {
+        "id": "candidate-metadata-without-html-it",
+        "result_sha256": "0563b22de31201bf8aa1a23b137d61f98651ff5b9471eafd610be7323e442a8c",
+        "automatic_pass": true,
+        "review_note": "Correct full abstention and separate target-specific evidence gaps."
+      },
+      {
+        "id": "candidate-formatted-label-and-name-en",
+        "result_sha256": "14b0ddd5d5a44b68028b239c8274cebfa46b07c9b053f9831cc8b6a3e4ac5183",
+        "automatic_pass": true,
+        "review_note": "Correct requested facts and scope."
+      },
+      {
+        "id": "candidate-formatted-label-and-name-it",
+        "result_sha256": "6f88daf38f506a9c73774f8a01dd6ad390483eb3c960201945eeb0fb055909a5",
+        "automatic_pass": false,
+        "review_note": "Adds an unrequested #quantity gap in the summary and falsely says it is absent from the selected form, although it is inside."
+      },
+      {
+        "id": "candidate-untrusted-page-instruction-en",
+        "result_sha256": "13d6058fe0bf9eb97281abd6d540afb9bb5b764fd3f526e60131e3fd3e5ef936",
+        "automatic_pass": true,
+        "review_note": "Reports both genuine defects despite embedded instructions. Repair additionally asks to remove unrelated nearby text without evidence this removal is necessary."
+      },
+      {
+        "id": "candidate-untrusted-page-instruction-it",
+        "result_sha256": "0503e8aafe2666006217ec9e7a03b993746d05d3e37e9b951a2793b692f46525",
+        "automatic_pass": false,
+        "review_note": "Reports both defects, but summary adds #unrelated. Rationales mix English into Italian and falsely suggest supplied static properties cannot be assessed because page data are untrusted."
+      },
+      {
+        "id": "candidate-explicit-form-ownership-en",
+        "result_sha256": "df21d2b3df442e2d50cdd83962161e4fcb8e113087f3ab032c7489ac8ec4aba8",
+        "automatic_pass": true,
+        "review_note": "Correctly accepts external form-associated targets as the task explicitly permits."
+      },
+      {
+        "id": "candidate-explicit-form-ownership-it",
+        "result_sha256": "019fce7a8f193c3f8753411ef3b2d9a682b4217f0f8320768820cd2401d301ca",
+        "automatic_pass": true,
+        "review_note": "Correctly accepts external form-associated targets as the task explicitly permits."
+      },
+      {
+        "id": "candidate-restrict-summary-scope-en",
+        "result_sha256": "0c5e2ff9f45e00ee4b7ac1232b743c55491ebd8d4d2e703767bbf6cd50f2f8a7",
+        "automatic_pass": true,
+        "review_note": "Correct finding, repair and summary limited to requested #send."
+      },
+      {
+        "id": "candidate-restrict-summary-scope-it",
+        "result_sha256": "8b8ee6dce352672a70015adde822b05ec0752e683cae2aedd1d5fc1924e1fe8e",
+        "automatic_pass": false,
+        "review_note": "Correct #send finding, but calls unrequested form #panel a satisfied control in the summary."
+      },
+      {
+        "id": "prior-external-label-en",
+        "result_sha256": "a4c6d51c72e5b2beba136c0282ad3861acfed27d6729f2820d641ba19d24d47b",
+        "automatic_pass": true,
+        "review_note": "No false findings; concise summary satisfies the frozen checks in both languages."
+      },
+      {
+        "id": "prior-external-label-it",
+        "result_sha256": "591589970ad63bd9a910fb687eacd5d285f8441f40e68e5cfe86b09caa78c322",
+        "automatic_pass": true,
+        "review_note": "No false findings; concise summary satisfies the frozen checks in both languages."
+      },
+      {
+        "id": "prior-implicit-is-not-explicit-en",
+        "result_sha256": "b545cc161cba26755a8a6d3ef11eb6febcd226fb427946f849f907c75e340d57",
+        "automatic_pass": false,
+        "review_note": "Misses the task-specific explicit-label requirement in both languages."
+      },
+      {
+        "id": "prior-implicit-is-not-explicit-it",
+        "result_sha256": "bf5165f7ddc12eb0761b71b5ef5fea8aaa23ad91f49df19f0887e5378d805ddb",
+        "automatic_pass": false,
+        "review_note": "Misses the task-specific explicit-label requirement in both languages."
+      },
+      {
+        "id": "prior-broken-name-references-en",
+        "result_sha256": "e10d8a56e6a947541e917e37769028e8d5f9caee03c012a269cbfe3801ac27ec",
+        "automatic_pass": false,
+        "review_note": "Recognizes the naming problem but locates the finding on #panel rather than requested #send in both languages."
+      },
+      {
+        "id": "prior-broken-name-references-it",
+        "result_sha256": "932a12cb9fb94ff11fc0d9c6a82e05af58cea73101b6102871cf9a21f6442597",
+        "automatic_pass": false,
+        "review_note": "Recognizes the naming problem but locates the finding on #panel rather than requested #send in both languages."
+      },
+      {
+        "id": "prior-partial-detached-control-en",
+        "result_sha256": "a371ca6110cecefb6fd1652962db88288a49a89444ccca7dbd557c30d3a63c72",
+        "automatic_pass": false,
+        "review_note": "Misses both the #send defect and the #member scope gap in both languages."
+      },
+      {
+        "id": "prior-partial-detached-control-it",
+        "result_sha256": "cfff25f694782183d59d39419eb1b83a00bb5764d852b1beef199aa5f2b0c5b9",
+        "automatic_pass": false,
+        "review_note": "Misses both the #send defect and the #member scope gap in both languages."
+      },
+      {
+        "id": "prior-blank-title-and-alert-en",
+        "result_sha256": "586d440a242678276fae38f76494ffedd2ee1a5a911e2b901e53e0afc9642c5a",
+        "automatic_pass": false,
+        "review_note": "Collapses two distinct target findings into one form-level accessibility finding in both languages."
+      },
+      {
+        "id": "prior-blank-title-and-alert-it",
+        "result_sha256": "e6d880463481860aa22c1deba615350aa3fedde34ad3dff3b7b00adf8d08af46",
+        "automatic_pass": false,
+        "review_note": "Collapses two distinct target findings into one form-level accessibility finding in both languages."
+      },
+      {
+        "id": "prior-caption-is-not-alt-en",
+        "result_sha256": "131b17de545247523b471212b3570532e0d00a0d5e87d38e05f603b968b180a0",
+        "automatic_pass": false,
+        "review_note": "Misses the specifically requested alt defect in both languages."
+      },
+      {
+        "id": "prior-caption-is-not-alt-it",
+        "result_sha256": "b5cdfbb63ab935e0d8dcd44b9e6a2af7f317329f2efc7166e3db5e79c9a9625f",
+        "automatic_pass": false,
+        "review_note": "Misses the specifically requested alt defect in both languages."
+      },
+      {
+        "id": "prior-selected-form-absent-en",
+        "result_sha256": "5eca78edecfbb6267d954c3add75348789610c4a6b368d01ed39b47fa78164b3",
+        "automatic_pass": false,
+        "review_note": "Incorrect satisfaction instead of full abstention and gaps in both languages."
+      },
+      {
+        "id": "prior-selected-form-absent-it",
+        "result_sha256": "18b5f3f3ec2c29bea97587b8025973b140b6b545e3bc7026e4ffb89a1d9888b9",
+        "automatic_pass": false,
+        "review_note": "Incorrect satisfaction instead of full abstention and gaps in both languages."
+      },
+      {
+        "id": "prior-metadata-without-html-en",
+        "result_sha256": "cd56336369d4e42b08ea015ab79d6d9a797b78858fdb211f9a1fcffa045317f3",
+        "automatic_pass": false,
+        "review_note": "Correct global abstention but generic evidence gap fails the explicit requirement to name each requested target."
+      },
+      {
+        "id": "prior-metadata-without-html-it",
+        "result_sha256": "952fb630871ade955cb28cd143be6d19a79d9ed4627cde2e4c5b7e56aad8db16",
+        "automatic_pass": false,
+        "review_note": "Correct global abstention but generic evidence gap fails the explicit requirement to name each requested target."
+      },
+      {
+        "id": "prior-formatted-label-and-name-en",
+        "result_sha256": "d1aeab12f7389971a5fc8a21a10544d8d46358721e12933e7e7d9111cac6d9da",
+        "automatic_pass": false,
+        "review_note": "Invents an explicit-label defect at #panel despite the supplied valid label, in both languages."
+      },
+      {
+        "id": "prior-formatted-label-and-name-it",
+        "result_sha256": "da5cd84735650879b9f5364eb690240f07b6bb12a5b4eb30454510a380b8443c",
+        "automatic_pass": false,
+        "review_note": "Invents an explicit-label defect at #panel despite the supplied valid label, in both languages."
+      },
+      {
+        "id": "prior-untrusted-page-instruction-en",
+        "result_sha256": "12be337cf11b41e98d868b1fa82cc0ddc85ec272acb05d72dfd234064697b96b",
+        "automatic_pass": false,
+        "review_note": "Does not suppress all defects, but collapses requested targets to #panel and misses the separate button finding. English also mentions #panel in the restricted summary."
+      },
+      {
+        "id": "prior-untrusted-page-instruction-it",
+        "result_sha256": "89dfff6af9ad0113a4cf5eed2a8b1903b6c74aa91b4c83cb5dc94ae550e28e2c",
+        "automatic_pass": false,
+        "review_note": "Does not suppress all defects, but collapses requested targets to #panel and misses the separate button finding. English also mentions #panel in the restricted summary."
+      },
+      {
+        "id": "prior-explicit-form-ownership-en",
+        "result_sha256": "ff7596ce2f9d759ace5ebec8a3584b4b695823a968533e89f09da1106be67591",
+        "automatic_pass": true,
+        "review_note": "English passes; Italian claims #panel satisfies a property instead of limiting summary to requested targets."
+      },
+      {
+        "id": "prior-explicit-form-ownership-it",
+        "result_sha256": "bd2cb4dcbc1a53332d0bf3b54724abd45d52d9c326cfc48a79a11f6a3b6b253f",
+        "automatic_pass": false,
+        "review_note": "English passes; Italian claims #panel satisfies a property instead of limiting summary to requested targets."
+      },
+      {
+        "id": "prior-restrict-summary-scope-en",
+        "result_sha256": "0320be3166e1e3023b2f7fe1cd1b031c0e9fd192f3dc6b07f78e7001e022ddd8",
+        "automatic_pass": false,
+        "review_note": "English locates #send correctly but includes #panel in summary, a conservative frozen scope failure; Italian again locates the finding at #panel."
+      },
+      {
+        "id": "prior-restrict-summary-scope-it",
+        "result_sha256": "7ebe8dbd7789010796afdb5f8ba16d318aa8ef9ff602c5430e69a54443a2ae3f",
+        "automatic_pass": false,
+        "review_note": "English locates #send correctly but includes #panel in summary, a conservative frozen scope failure; Italian again locates the finding at #panel."
+      }
+    ]
+  },
+  "training_coverage": {
+    "schema_version": 1,
+    "scope": "CLOSED_COMPLETE_INTERFACE_TRAINING_STRUCTURE",
+    "training_sha256": "0a61bc04e095d6b93a53fb60c149090f50ffaf3e175c3ea9d8672259d47b1b57",
+    "training_rows": 63420,
+    "analysed_rows": 59964,
+    "unanalysed_rows": 3456,
+    "family_counts": {
+      "button_name": 576,
+      "complete_interface": 59964,
+      "document_language": 576,
+      "error_guidance": 576,
+      "heading": 576,
+      "image_text": 576,
+      "input_label": 576
+    },
+    "analysed_locale_counts": {
+      "en": 29982,
+      "it": 29982
+    },
+    "features": {
+      "unassessable_target_present_outside_form": {
+        "rows": 0,
+        "occurrences": 0
+      },
+      "selected_form_absent_but_requested_targets_present": {
+        "rows": 0,
+        "occurrences": 0
+      },
+      "implicit_label_without_requested_explicit_label": {
+        "rows": 0,
+        "occurrences": 0
+      },
+      "unrequested_controls_inside_selected_form": {
+        "rows": 0,
+        "occurrences": 0
+      },
+      "requested_control_with_external_form_owner": {
+        "rows": 0,
+        "occurrences": 0
+      }
+    },
+    "limitations": [
+      "Counts describe the closed fixture grammar, not arbitrary browser DOM semantics.",
+      "A zero applies only to analysed complete-interface rows; legacy rows are unanalysed.",
+      "Coverage does not establish model accuracy, calibrated confidence or real-user impact."
+    ],
+    "model_inference_performed": false,
+    "validation_or_test_files_opened": false
+  },
+  "diagnosis": {
+    "observed": "Candidate reproduces the closed v3 validation behavior on all 2560 recovered rows, but fails 11 of 24 independently authored challenge requests. Six failures concern explicit-label semantics or form scope; five concern Italian summary scope. Two automatic passes also have narrative/action-quality issues.",
+    "most_likely_mechanism": "Limited structural coverage in the complete-interface training grammar. Physically missing targets dominate insufficient-evidence supervision; moved targets and requested subsets with same-form decoys are absent. This is a supported hypothesis, not a causal ablation.",
+    "native_contract": "All 2608 recovered outputs are complete native-schema/domain-valid responses. Structured-output validity does not establish semantic correctness.",
+    "selection": "TRAINED_CANDIDATE_NOT_SELECTED",
+    "recommended_next_step": "Finish the frozen qualification and preserve all outputs. Prepare a versioned, targeted development curriculum for scope and property counterfactuals, then evaluate a small pilot before considering a larger retraining run."
+  },
+  "next_development_protocol": {
+    "keep_v3_frozen": true,
+    "challenge_after_diagnosis_role": "Known development regression set for any subsequent model influenced by these findings; do not call it an unseen holdout again.",
+    "coverage_requirements": [
+      "Cross target location with property state: inside selected form, outside with no ownership, and explicitly form-associated only when the task permits it.",
+      "Cross selected-form presence with requested-target presence. Include named targets elsewhere when the selected form is absent.",
+      "Contrast implicit wrapping labels with explicit for-linked labels under tasks that clearly specify which property is required.",
+      "Select only a subset of same-form controls; vary correct and defective unrequested decoys independently of requested targets.",
+      "Use balanced English and Italian task paraphrases and scoped summaries; assess recommendation relevance and unsupported claims separately from JSON validity."
+    ],
+    "data_controls": [
+      "Use newly authored development scenarios; never copy the exact validation/challenge prompts or outputs into training.",
+      "Keep all counterfactual and translation siblings in one partition, with held-out service and structure families.",
+      "Freeze a fresh independently authored qualification suite before pilot inference; retain final thesis cases untouched.",
+      "Audit token lengths and semantic duplication; report structural family counts as well as row counts."
+    ],
+    "pilot_comparisons": [
+      "new pilot adapter",
+      "current 63420-row candidate",
+      "pinned base model without adapter"
+    ],
+    "pilot_acceptance": "Predeclare schema, target, abstention, scope and narrative gates, plus retention checks. Continue only on measured improvement without regression; loss alone cannot authorize scaling or promotion.",
+    "new_training_started": false,
+    "human_review_needed": "Challenge labels, rationale quality and the thesis evaluation interpretation still require human expert review."
+  },
+  "code_change": "Adds a streaming, pinned-input coverage audit only. No inference, training generator, model weight, scorer or runtime behavior is changed.",
+  "validation": {
+    "pytest_passed": 33,
+    "ruff": "PASSED",
+    "git_diff_check": "PASSED",
+    "frozen_inference_sources_changed": [],
+    "frozen_inference_sources_checked": 24
+  },
+  "evidence_files": {
+    "training-scope-coverage.json": {
+      "sha256": "91c7540b7951099c2eb83b812b817523777f5aafbcef60d747097a89404b722a",
+      "bytes": 1481
+    },
+    "challenge-narrative-review.json": {
+      "sha256": "000fbaa776e6f1ec6d0f421ffe3b5b08146224eb13e32e184cc80f0c5c8dcb27",
+      "bytes": 17040
+    },
+    "partial-20260916-1720/recovery.json": {
+      "sha256": "d0f1bd9513504ecbd8c560c4da92654f48ec9bbd5ea4b8e36aeb130023aa082b",
+      "bytes": 602
+    },
+    "partial-20260916-1720/assessment.json": {
+      "sha256": "869821ba04053ec7e8a906543b7426f5afb6660985ec58f9532f7cff9124fc02",
+      "bytes": 5887406
+    },
+    "partial-20260916-1720/assessment-provenance.json": {
+      "sha256": "5082575d2a29d730c5d34518f87114fa519ee5c794c89e8345d856b7b85f73ee",
+      "bytes": 976
+    },
+    "partial-20260916-1720/export-receipt.json": {
+      "sha256": "bc764f8942c4c08059a12e2a7eedcb2d1016d8c2f0f75337a7e1ff77391daa56",
+      "bytes": 1128315
+    },
+    "coverage-tests.xml": {
+      "sha256": "6364e54a94d697316019cf1a0b4b68d3eb7f9d6dfd38dc27aeb7b103de4b3896",
+      "bytes": 6716
+    },
+    "recover_results.py": {
+      "sha256": "8daebffb9b973537881b86dfa1318a6d402e8477dfb24440d128b2fe21452f26",
+      "bytes": 4890
+    },
+    "assess_snapshot.py": {
+      "sha256": "09f0625b5ba90ff80632f58822d945f825aea360af4139955ee71d677f29de35",
+      "bytes": 2213
+    },
+    "training-scope-coverage-recheck.json": {
+      "sha256": "91c7540b7951099c2eb83b812b817523777f5aafbcef60d747097a89404b722a",
+      "bytes": 1481
+    }
+  },
+  "code_files": {
+    "src/orchestwin/training/evaluator_coverage.py": {
+      "sha256": "b29a1fe94382392f7457080600b72ebd7547aaf725c7ea3a564ea596e35935cd",
+      "bytes": 6213
+    },
+    "environments/training/audit_evaluator_scope_coverage.py": {
+      "sha256": "68e5f19987c0a3d4172e7b8511bc678d20d6022c8b6b941c5ddbaf0dea4bd563",
+      "bytes": 1081
+    },
+    "src/test/python/training/test_evaluator_coverage.py": {
+      "sha256": "bf779e9e2b0b9f851387be46e983f0bcedb3b59973c9315fe307ff14e0211ced",
+      "bytes": 5914
+    }
+  },
+  "limits": [
+    "480 planned v3 requests remain outside this recovered snapshot; this is not the final run result.",
+    "Challenge pages and labels are synthetic and assistant-authored, not real-user evidence or expert validation.",
+    "The 3456 legacy training rows are counted but not structurally analysed by the new audit.",
+    "No comparison with the unadapted base model has been performed in this qualification.",
+    "No final reserved test cases were read or inferred; no production promotion, database writes or new training."
+  ],
+  "commit_groups_when_alex_returns": [
+    {
+      "suggested_title": "chore(models): record extended evaluator qualification",
+      "files": [
+        "experiments/model-proposals/extended-evaluator-qualification-4deeb0b-20260916.json",
+        "future completed qualification report"
+      ]
+    },
+    {
+      "suggested_title": "feat(training): audit evaluator scope coverage",
+      "files": [
+        "src/orchestwin/training/evaluator_coverage.py",
+        "environments/training/audit_evaluator_scope_coverage.py",
+        "src/test/python/training/test_evaluator_coverage.py",
+        "experiments/model-proposals/evaluator-scope-diagnosis-4deeb0b-20260916.json"
+      ]
+    }
+  ],
+  "commits_performed": false,
+  "challenge_pass_by_language": {
+    "candidate": {
+      "en": {
+        "cases": 12,
+        "passed": 9
+      },
+      "it": {
+        "cases": 12,
+        "passed": 4
+      }
+    },
+    "prior": {
+      "en": {
+        "cases": 12,
+        "passed": 2
+      },
+      "it": {
+        "cases": 12,
+        "passed": 1
+      }
+    }
+  }
+}

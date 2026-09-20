@@ -1,0 +1,16 @@
+{
+  "name": "orchestwin/level-d-php-fixture",
+  "description": "Repository-owned executable PHP fixture; no evidence claim.",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.4 <8.5"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "12.5.35"
+  },
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true
+  }
+}

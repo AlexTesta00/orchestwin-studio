@@ -1,0 +1,56 @@
+{
+  "scope": "Follow-up verification of the owner-selected mockup and assisted calculator source alignment; not an autonomous generation or Level D qualification",
+  "verified_on": "2026-09-19",
+  "base_git_commit": "77cbac0",
+  "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "source": {
+    "revision_id": "acbb313b-a92d-4e0c-8403-05116a1ef4de",
+    "version": 5,
+    "content_hash": "262a9d5b705a7971d5dbaaeca3ce69a4263bc57d07ae3855ea51bde96c1f1c2a",
+    "origin": "OWNER_EDIT",
+    "based_on_revision_id": "4061ff1f-fb53-4697-bd24-27244a86959d",
+    "original_model_revision_preserved": "db5ce0e9-f570-450e-bdb2-6fab338fa6ee",
+    "api_export_zip_crc_valid": true,
+    "api_export_files_equal_stored_revision_and_reviewed_sources": true
+  },
+  "owner_selected_mockup": {
+    "generation_id": "7fa6afb5-a454-40bc-8d1d-8af1a4f6c5f7",
+    "design_version_id": "059623c8-25f5-4a79-b701-42b47975a766",
+    "design_content_hash": "6997d0371b85aab036a255ec96d96e9e187a464cf1cd42ae9bcba32282b52900",
+    "prototype_id": "86cab827-697a-408d-9989-edc76f37fa07",
+    "prototype_content_hash": "709c648f2988f67705ec5a8f968ae2169ad8f1f16f35651b71f890f5f6b1808f",
+    "approved_design_and_architecture_changed": false,
+    "selection_recorded_in_owner_edit_decision": true,
+    "structure_contract": "VERIFIED",
+    "automated_pixel_conformance": "NOT_ASSESSED"
+  },
+  "automated_checks": {
+    "models_and_web_source_runtime": {"passed": 561, "skipped": 2, "failed": 0},
+    "skip_reason": "Torch unavailable in native Windows Python for two memory numerical tests",
+    "frontend_full_suite_before_final_copy_change": {"passed": 235, "failed": 0},
+    "frontend_focused_after_final_copy_change": {"passed": 17, "failed": 0},
+    "postgres_owner_mockup_integration": {"passed": 2, "failed": 0},
+    "exact_persisted_calculator_sources_node_tests": {"passed": 20, "failed": 0},
+    "frontend_typecheck": "PASSED",
+    "frontend_eslint": "PASSED",
+    "frontend_build": "PASSED"
+  },
+  "browser_observations": [
+    "Design identifies the exact owner-selected mockup for source v5 and keeps unrelated drafts separate",
+    "Implementation preserves the mockup's two input fields, operation select, Calculate button, separate result screen and return link",
+    "Empty inputs show a readable validation error",
+    "9 + 3 = 12; 9 - 3 = 6 through Enter; 9 * 3 = 27; 9 / 3 = 3",
+    "Return to menu retains entered values and operation",
+    "Division by zero shows an error and does not open the result screen",
+    "1,5 + 2.25 displays 1,5 + 2,25 = 3,75",
+    "Mobile preview body clientWidth and scrollWidth both 374px, with no horizontal overflow",
+    "Final frontend build reloaded and source v5 preview opened successfully"
+  ],
+  "limits": [
+    "Source v5 is an assisted owner edit, not unmodified autonomous model output",
+    "The static contract checks screens, controls, labels, ordering, options and navigation declarations; it does not prove pixel equality or runtime behavior",
+    "Visual and functional browser verification applies to this calculator revision",
+    "Mockup results remain illustrative; the implementation computes actual input values",
+    "No new training or Level D qualification was performed"
+  ]
+}

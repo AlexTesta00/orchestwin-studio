@@ -1,0 +1,1501 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T20:05:30.980894+00:00",
+  "classification": "DEVELOPMENT_GUI_REAL_MODEL_WORKFLOW_WITH_DELEGATED_APPROVALS_NOT_EMPIRICAL_QUALIFICATION",
+  "status": "AUTONOMOUS_WEB_GENERATION_FAILED_NO_RUNNABLE_NEW_SOURCE_REVISION",
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "selected_target": "WEB_STATIC",
+  "planned_step_5": {
+    "autonomous_calculator_completed": false,
+    "status": "NOT_ACHIEVED",
+    "next_actions": "Preserve the negative Web result; evaluate JVM separately. Do not rerun the same base model indefinitely or substitute assisted output for autonomous evidence."
+  },
+  "final_snapshot": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\final-project-snapshot-02\\manifest.json",
+    "sha256": "911115827d671fb8ca79dd880f7e6a94a9def605d5ce42529e3cae8f0b5e72ff",
+    "captured_at_utc": "2026-09-19T20:01:08.047629+00:00",
+    "files_verified": 280,
+    "model_generations": 18,
+    "model_events": 90,
+    "missing_objects": 0,
+    "verification": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\final-project-snapshot-02-verification.json",
+      "sha256": "6bb81d825f474245f04fffedda8e607ce99431289cb596a626e0faf544641648"
+    },
+    "database_transaction": "REPEATABLE READ READ ONLY"
+  },
+  "workflow": {
+    "description": "The parent agent operated the actual authenticated Studio GUI from project/brief through team, persona, user twin, requirements, interactive mockup and architecture. Real provider calls and immutable artifact/approval bindings are exported. Database evidence alone is not asserted to prove visual GUI interactions.",
+    "gates": [
+      {
+        "artifact_hash": "5abf825adf66c77e565c19861ad4b9de984fe47d2c27e8a58354e193d69cc153",
+        "artifact_id": "931f0d9f-e087-4f13-b4c0-3d3f0d51dc34",
+        "artifact_identity_verified": true,
+        "artifact_version": 1,
+        "gate_type": "PROJECT_BRIEF",
+        "id": "5f6492e6-60fd-456b-93b3-48c7be9feb68",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T17:51:05.857301+00:00",
+        "approval_reason": "Brief completo per verificare il percorso della calcolatrice dopo le correzioni al contesto e alla generazione.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      },
+      {
+        "artifact_hash": "ce2932c09d1293f3110c97c6345821462e0fb7c36caac5121069ca8b440eeb35",
+        "artifact_id": "8b02c00a-983d-4055-9712-e2e9d64c5876",
+        "artifact_identity_verified": true,
+        "artifact_version": 1,
+        "gate_type": "AGENT_TEAM",
+        "id": "5e02877c-5bb8-46ef-b8e0-a646fee15952",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T17:52:20.763528+00:00",
+        "approval_reason": "Team adatto alla calcolatrice statica: progettazione delle schermate, implementazione, qualità e accessibilità.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      },
+      {
+        "artifact_hash": "3e4b2f95a2f59dc5095375d27c432f456a0db9604760e3ad5a12ef362945cdb5",
+        "artifact_id": "75d07545-7dc9-462a-b1a9-39e216e2fec1",
+        "artifact_identity_verified": true,
+        "artifact_version": 1,
+        "gate_type": "USER_MODELING",
+        "id": "4861c8a2-6aab-4baf-8d03-cb70913f3959",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T18:07:52.379253+00:00",
+        "approval_reason": "Approvazione delegata per la demo di sviluppo. Obiettivi, accessibilità e uso offline sono coerenti con il brief. I campi sconosciuti e le assunzioni restano ipotesi non validate con utenti reali; gli input errati devono comunque essere gestiti come richiesto.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      },
+      {
+        "artifact_hash": "bac9a88a547dca62546fcd1bbfe58e239cb4c387e10fda7b5193348ee66de0c8",
+        "artifact_id": "43475a75-601a-4237-b8ea-04bda9d7aa5b",
+        "artifact_identity_verified": true,
+        "artifact_version": 2,
+        "gate_type": "REQUIREMENTS",
+        "id": "0f70a2e1-3da3-4646-8b32-617b4bc41b1a",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T18:15:32.792986+00:00",
+        "approval_reason": "Approvazione delegata per la demo: quattro operazioni, input decimali e negativi, errori chiari, risultato separato e ritorno con valori conservati. Offline significa dopo il caricamento iniziale, come specificato nel brief e nel requisito. I 17 controlli indipendenti restano da eseguire sul risultato reale.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      },
+      {
+        "artifact_hash": "823555e2b8a0746fe952ebde8e6ca8bcbb84ab7dc9fbab74f0e5c7adcfb605fd",
+        "artifact_id": "3275bb74-4de9-4607-8fe9-06f5c8919acb",
+        "artifact_identity_verified": true,
+        "artifact_version": 2,
+        "gate_type": "DESIGN",
+        "id": "67130083-52e5-4c2d-be4c-9c5246b0278c",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T18:37:19.981120+00:00",
+        "approval_reason": "Approvazione delegata del design della demo con mockup applicato. I controlli e le due schermate dovranno essere rispettati dal codice. La correttezza dei calcoli, il trattamento degli input e la navigazione da tastiera rimangono criteri obbligatori da verificare sull’applicazione eseguibile.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      },
+      {
+        "artifact_hash": "0bd47d58bdf8ca810fab2372b774d3f6c10186608ba3b4ca44e6abfbc8c32548",
+        "artifact_id": "cd87ed1e-deb4-4433-9d3d-921105ebd8b8",
+        "artifact_identity_verified": true,
+        "artifact_version": 1,
+        "gate_type": "ARCHITECTURE",
+        "id": "9cdf1e2b-a908-4cca-bf74-ea0476c44bee",
+        "status": "APPROVED",
+        "approved_at_utc": "2026-09-19T18:45:54.860183+00:00",
+        "approval_reason": "Approvazione delegata della separazione tra interfaccia e logica di calcolo. Per questa demo selezionerò Web semplice: HTML, CSS e JavaScript senza dipendenze esterne, come da brief; l’indicazione React è una proposta tecnologica, non il target scelto. Virgola e punto devono essere normalizzati senza accettare testo numerico parziale. I test descritti sono un piano, non prove eseguite: prima di dichiarare riuscita la demo sono necessari tutti i 17 controlli indipendenti.",
+        "approval_operator": "AGENT_DELEGATED_DEVELOPMENT_DEMO_NOT_EMPIRICAL_HUMAN_RESEARCH"
+      }
+    ],
+    "model_artifact_links": [
+      {
+        "artifact_content_hash": "ea8e4d81671c3f51db6bd3976a2c063a547c9da69016a7fbad5ecf42cc9eca6e",
+        "artifact_identity_verified": true,
+        "artifact_kind": "PERSONA",
+        "artifact_version_id": "f4679a72-8ee1-4dc5-ad3f-197206e32e28",
+        "generation_id": "c34f5e51-393e-42ee-892e-850bd84e2d9f",
+        "relation": "GENERATED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "bd09b1842f3e40cae38392224fab85e9148e0d96fceca9c869817fbd341691c1",
+        "artifact_identity_verified": true,
+        "artifact_kind": "DESIGN",
+        "artifact_version_id": "7156cba4-eaa5-4088-9550-98854c5c5df7",
+        "generation_id": "84a64b4b-52a0-478d-9ef0-07598717332a",
+        "relation": "GENERATED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "3e4b2f95a2f59dc5095375d27c432f456a0db9604760e3ad5a12ef362945cdb5",
+        "artifact_identity_verified": true,
+        "artifact_kind": "USER_MODELING",
+        "artifact_version_id": "75d07545-7dc9-462a-b1a9-39e216e2fec1",
+        "generation_id": "111cb000-0fa3-4acc-bce4-76dd1d40711b",
+        "relation": "ASSEMBLED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "ce2932c09d1293f3110c97c6345821462e0fb7c36caac5121069ca8b440eeb35",
+        "artifact_identity_verified": true,
+        "artifact_kind": "AGENT_TEAM",
+        "artifact_version_id": "8b02c00a-983d-4055-9712-e2e9d64c5876",
+        "generation_id": "50b67ddd-be69-453f-bc1e-36f0aaf62fa6",
+        "relation": "GENERATED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "0bd47d58bdf8ca810fab2372b774d3f6c10186608ba3b4ca44e6abfbc8c32548",
+        "artifact_identity_verified": true,
+        "artifact_kind": "ARCHITECTURE",
+        "artifact_version_id": "cd87ed1e-deb4-4433-9d3d-921105ebd8b8",
+        "generation_id": "4dc2abcd-6237-4746-9423-d0403703a3ff",
+        "relation": "GENERATED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "7195fe86d6217e3d89a6fce719f04116b0312784f3c4d374d9cfea5bf6dfdddb",
+        "artifact_identity_verified": true,
+        "artifact_kind": "USER_TWIN",
+        "artifact_version_id": "353975b2-4f5c-44f2-9323-34e3c061dac3",
+        "generation_id": "111cb000-0fa3-4acc-bce4-76dd1d40711b",
+        "relation": "GENERATED",
+        "version_number": 1
+      },
+      {
+        "artifact_content_hash": "31c1b007d841520167afe62717ec6c66e6e17245767488b342a3fa9b2cc36af3",
+        "artifact_identity_verified": true,
+        "artifact_kind": "REQUIREMENTS",
+        "artifact_version_id": "95bb9685-e906-4235-a2a0-f356c3d65164",
+        "generation_id": "a6773e9f-88d5-44b7-b16f-c43a92f42e95",
+        "relation": "GENERATED",
+        "version_number": 1
+      }
+    ],
+    "brief_authorship": "AGENT_ENTERED_SYNTHETIC_DEVELOPMENT_BRIEF_WITH_USER_AUTHORIZATION",
+    "persona_confirmations": "Generated persona version 1 was confirmed as version 2 before the user-modeling snapshot; this is delegated demo review, not human-participant validation.",
+    "manual_requirement_revision": {
+      "operator": "PARENT_AGENT_VIA_GUI",
+      "from_version": 1,
+      "to_version": 2,
+      "based_on_version_number": 1,
+      "artifact_ids": [
+        "95bb9685-e906-4235-a2a0-f356c3d65164",
+        "43475a75-601a-4237-b8ea-04bda9d7aa5b"
+      ],
+      "artifact_hashes": [
+        "31c1b007d841520167afe62717ec6c66e6e17245767488b342a3fa9b2cc36af3",
+        "bac9a88a547dca62546fcd1bbfe58e239cb4c387e10fda7b5193348ee66de0c8"
+      ],
+      "changes": [
+        {
+          "path": "/requirements/0/statement",
+          "before": "L'utente deve scegliere una operazione (Addizione, Sottrazione, Moltiplicazione, Divisione) da un menu e inserire due numeri (positivi, negativi, decimali) per eseguire il calcolo.",
+          "after": "L'utente deve scegliere Addizione, Sottrazione, Moltiplicazione o Divisione da un menu e inserire due numeri positivi, negativi o decimali. Entrambi i campi devono accettare sia la virgola sia il punto come separatore decimale, anche nello stesso calcolo. Sono validi soltanto valori numerici completi e finiti: campi vuoti, testo parzialmente numerico e valori non numerici devono essere rifiutati con un messaggio chiaro."
+        }
+      ],
+      "note": "REQ-001 was explicitly clarified before source generation to require comma/dot, complete finite input and rejection of invalid text. Version 1 native model proposal remains preserved; version 2 is not described as untouched model output."
+    },
+    "architecture_review_limit": "The generated architecture proposed React. The delegated gate reason explicitly selected simple Web HTML/CSS/JavaScript and retained decimal normalization and 17 independent checks; this is a reviewed development decision, not silent source rewriting."
+  },
+  "mockup": {
+    "failed_generation_id": "2195dfa4-acdc-4683-bc91-45a7c57ceb64",
+    "failed_reason": "SELECT field_name null violated the existing primitive invariant.",
+    "successful_generation_id": "bce30e03-4ba9-40cf-aa4e-5827eeaf7bdd",
+    "native_verification": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-v7-live-verification.json",
+      "sha256": "bb46051b930eacb1e8e87d41588c57c88bca6002567739a4b19d5cfcc7ef84e8"
+    },
+    "applied_design_version": 2,
+    "applied_design_hash": "823555e2b8a0746fe952ebde8e6ca8bcbb84ab7dc9fbab74f0e5c7adcfb605fd",
+    "parent_gui_observations": [
+      "Entered 9, 3 and Addizione; Calcola navigated from input screen to result screen.",
+      "The result contained illustrative mockup text Esempio: 5+3=8, not a computed result for 9+3.",
+      "Indietro returned with values/operation preserved; phone preview was visually inspected."
+    ],
+    "remaining_limitations": [
+      "Extra initial Indietro control creates a self-loop contrary to instructions; preserved because it is not an existing primitive validator violation.",
+      "The mockup demonstrates interaction design, not executable calculation correctness."
+    ]
+  },
+  "source_attempts": [
+    {
+      "contract": "V12",
+      "parent_generation_id": "e5e3690c-1824-4009-8a98-32cad9090d62",
+      "child_generations": [
+        "2d516486-917c-4422-b5a1-e90de69df501",
+        "1164021d-4c31-40ec-95a8-82d30810b483"
+      ],
+      "status": "FAILED",
+      "cause": "Both app.js outputs contain ES-module exports incompatible with the required classic/CommonJS profile. Syntax checks reject original bytes; second call is the bounded syntax retry, not a new successful source.",
+      "diagnosis": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-syntax-diagnostic-01\\report.json",
+        "sha256": "8476951e4b6592c4b99b03a0b87a8925c4aeaa462c57fd46c75788a71051d77f"
+      },
+      "parent_application_result": {
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "status": "FAILED"
+      },
+      "generated_source_revision_count": 0,
+      "native_generation_milliseconds_sum": 834151
+    },
+    {
+      "contract": "V13",
+      "parent_generation_id": "d7f8aa5e-1289-45bb-8596-8f1d50348fec",
+      "child_generations": [
+        "eb092309-886a-4e41-9c2f-19d63f868345",
+        "a6f5892d-ec35-42ce-9a87-d452ee9f5635"
+      ],
+      "status": "FAILED",
+      "cause": "app.js passes syntax but has semantic deficiencies. Test source contains SQL-style doubled apostrophes and fails JavaScript syntax. The original retry serializer also violated normalized-text requirements before a retry request; this engine defect was separately corrected in V14.",
+      "diagnosis": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v13-terminal-diagnosis.json",
+        "sha256": "5fba0cbea8d6d548ed3e126e2fb32b6900060169b3d0b3b9973829adc013c257"
+      },
+      "parent_application_result": {
+        "code": "INVALID_PROVIDER_OUTPUT",
+        "status": "FAILED"
+      },
+      "generated_source_revision_count": 0,
+      "native_generation_milliseconds_sum": 751038
+    },
+    {
+      "contract": "V14",
+      "parent_generation_id": "d1b71aba-33d1-428f-a6be-41ef8559603a",
+      "child_generations": [
+        "1ec37f3c-4b96-4c0b-afdb-8143eaf74d7d",
+        "2a52f998-5fd9-49b5-8f14-4d0ca18b2c2e"
+      ],
+      "status": "FAILED",
+      "cause": "app.js passes syntax but violates received instructions and runtime/business contracts. app.test.cjs reaches its actual 4096-token request limit: finish_reason length and schema_complete false; incomplete output is rejected, parent fails, index.html is never requested.",
+      "diagnosis": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v14-app-semantic-review.json",
+        "sha256": "a89b695dc4f742457a76602d012f171cd58b087cfd38b311daf0fa0d043f3209"
+      },
+      "parent_application_result": {
+        "code": "INCOMPLETE_OUTPUT",
+        "status": "FAILED"
+      },
+      "generated_source_revision_count": 0,
+      "native_generation_milliseconds_sum": 1103203
+    }
+  ],
+  "v14_app_semantic_diagnosis": {
+    "receipt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v14-app-semantic-review.json",
+      "sha256": "a89b695dc4f742457a76602d012f171cd58b087cfd38b311daf0fa0d043f3209"
+    },
+    "native_prompt_and_identity_verified": true,
+    "unchanged_native_provider_accepted_bytes_verified": true,
+    "findings": [
+      {
+        "id": "NODE_IMPORT_BOUNDARY",
+        "lines": [
+          136,
+          140
+        ],
+        "finding": "Top-level document.addEventListener is unguarded. Requiring the file in ordinary Node will reach an undefined document before exports.",
+        "basis": "STATIC_SOURCE_INSPECTION_AND_STANDARD_GLOBALS",
+        "requirement": "Explicit runtime instruction: every document/window reference guarded."
+      },
+      {
+        "id": "CLASSIC_BROWSER_BOUNDARY",
+        "lines": [
+          142,
+          153
+        ],
+        "finding": "Top-level module.exports is unguarded. A classic browser without an injected module global will fail at this assignment.",
+        "basis": "STATIC_SOURCE_INSPECTION_AND_STANDARD_GLOBALS",
+        "requirement": "Explicit runtime contract: guarded module.exports."
+      },
+      {
+        "id": "VISIBLE_OUTPUT_AND_RETURN",
+        "lines": [
+          49,
+          64
+        ],
+        "finding": "displayResult and goBack only log messages and contain comments describing an imaginary real implementation; they do not update output, switch screens or preserve return state.",
+        "basis": "STATIC_SOURCE_INSPECTION",
+        "requirement": "REQ-002, REQ-006; V14 requires actual DOM handlers and screen changes."
+      },
+      {
+        "id": "QUALITY_SELF_CERTIFICATION",
+        "lines": [
+          66,
+          80
+        ],
+        "finding": "isAccessible, isMobileReadable, isMinimalAndInItalian and isOfflineReady return true unconditionally; they neither implement nor independently establish those qualities.",
+        "basis": "STATIC_SOURCE_INSPECTION",
+        "requirement": "REQ-004, REQ-005, REQ-007, REQ-008; explicit V14 prohibition."
+      },
+      {
+        "id": "APPROVED_NUMERIC_INTERFACE",
+        "lines": [
+          4,
+          6,
+          95,
+          99
+        ],
+        "finding": "The manifest declares calculate(num1: number, num2: number, operation: string): number, but validation invokes value.trim(). Nonzero numeric operands such as 9 and 3 cannot satisfy this implementation; zero is rejected as falsy.",
+        "basis": "STATIC_TYPE_AND_CONTROL_FLOW_DEDUCTION_NOT_EXECUTED_TEST",
+        "requirement": "Manifest public interface and SCN-001."
+      },
+      {
+        "id": "DECIMAL_COMMA_NORMALIZATION",
+        "lines": [
+          18,
+          24,
+          102,
+          126
+        ],
+        "finding": "Comma-containing strings may pass validation, but arithmetic uses parseFloat directly without comma normalization. For strings 1,5 and 2,5, addition is statically predicted to return 3 instead of 4.",
+        "basis": "STATIC_LANGUAGE_SEMANTICS_DEDUCTION_NOT_EXECUTED_TEST",
+        "requirement": "REQ-001 accepts comma and dot decimals, including mixed input."
+      },
+      {
+        "id": "ZERO_DIVISOR_REPRESENTATION",
+        "lines": [
+          11,
+          24,
+          42
+        ],
+        "finding": "Both zero checks compare the raw divisor strictly with numeric 0, whereas validation requires strings. String 0 bypasses the check and parseFloat division is predicted to produce Infinity.",
+        "basis": "STATIC_LANGUAGE_SEMANTICS_DEDUCTION_NOT_EXECUTED_TEST",
+        "requirement": "REQ-003 and SCN-003 require a clear division-by-zero error."
+      },
+      {
+        "id": "PARTIAL_NUMERIC_PARSE",
+        "lines": [
+          102,
+          110,
+          120,
+          126
+        ],
+        "finding": "The numeric regex can admit 1.2.3; the mixed-separator check only rejects simultaneous dot and comma, and parseFloat truncates the accepted string. Complete-number validation is absent for this case.",
+        "basis": "STATIC_REGEX_AND_LANGUAGE_SEMANTICS_DEDUCTION_NOT_EXECUTED_TEST",
+        "requirement": "REQ-001 rejects partially numeric strings."
+      }
+    ],
+    "syntax_check": {
+      "tool": "Node --check --input-type=commonjs",
+      "returncode": 0,
+      "generated_code_executed": false
+    }
+  },
+  "v14_isolated_runtime_probe": {
+    "receipt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\source-v14-app-js-commonjs-probe\\receipt.json",
+      "sha256": "08f17389f727482c7fca33e999e2d85afb20437c791042d6c37d4821585e6b80"
+    },
+    "source_file": {
+      "path": "app.js",
+      "sha256": "6f52f1f77a63313d76acd437d1add1a347333a92c2a1f19fddcb6fdae25567d5",
+      "bytes": 4567
+    },
+    "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+    "command": [
+      "docker",
+      "--context",
+      "desktop-linux",
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--name",
+      "orchestwin-v14-child-commonjs-1ec37f3c",
+      "--label",
+      "orchestwin.development-probe=1ec37f3c-4b96-4c0b-afdb-8143eaf74d7d",
+      "--network",
+      "none",
+      "--read-only",
+      "--user",
+      "65532:65532",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges",
+      "--pids-limit",
+      "128",
+      "--memory",
+      "512m",
+      "--cpus",
+      "1",
+      "--mount",
+      "type=bind,source=C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/gui-new-project-20260919-01/source-v14-app-js-commonjs-probe/source,target=/source,readonly",
+      "--workdir",
+      "/source",
+      "--entrypoint",
+      "node",
+      "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+      "-e",
+      "require('./app.js')"
+    ],
+    "exit_code": 1,
+    "observed_error": "ReferenceError: document is not defined at /source/app.js:136",
+    "duration_seconds": 0.6130164999995031,
+    "cleanup_confirmed": true,
+    "source_and_original_evidence_unchanged": true,
+    "scope": "Actual import of only unchanged app.js in an unprivileged networkless read-only container. This confirms a runtime blocker; it is not the final application or the 17-case functional suite."
+  },
+  "all_inference_receipts": [
+    {
+      "generation_id": "50b67ddd-be69-453f-bc1e-36f0aaf62fa6",
+      "task": "proposal-team-v1",
+      "schema_id": "proposal-team-v1",
+      "prompt_version_ref": "proposal-team-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T17:51:12.125553+00:00",
+      "request_hash": "dc806af6b0842d03d12d1442131cfc202c9fea2722f6aff2d3c93f7b9a65d378",
+      "native_http_body_sha256": "f59c8e7286ad004ba9b1d534d9e77f3ec56f54ae3e08526f82c954f07096c0f4",
+      "model_visible_messages_sha256": "7e83acb93cda4aaf91f5babd7f36ffbbea13e090b4437a196bce99f551831aaa",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 136,
+        "prompt_tokens": 1959,
+        "total_tokens": 2095
+      },
+      "native_generation_milliseconds": 13583,
+      "http_elapsed_milliseconds": 14056,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 13583,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "7e83acb93cda4aaf91f5babd7f36ffbbea13e090b4437a196bce99f551831aaa",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "c34f5e51-393e-42ee-892e-850bd84e2d9f",
+      "task": "proposal-personas-v1",
+      "schema_id": "proposal-personas-v4",
+      "prompt_version_ref": "proposal-personas-v4",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:01:05.548612+00:00",
+      "request_hash": "5a594ef4a10deaf2b5d16837d0657476e7b70cdf569cafea4efb964c90bd5007",
+      "native_http_body_sha256": "8bb65a68e72fbe89977fce655719df5dc10a318d16fd3dda30d1744d2eba7298",
+      "model_visible_messages_sha256": "1db647ffd15ea3be523c4d614bc8804d068bb6cf4ce87d793e3aa2d488ac460b",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 372,
+        "prompt_tokens": 2570,
+        "total_tokens": 2942
+      },
+      "native_generation_milliseconds": 33904,
+      "http_elapsed_milliseconds": 35131,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 33904,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "1db647ffd15ea3be523c4d614bc8804d068bb6cf4ce87d793e3aa2d488ac460b",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "111cb000-0fa3-4acc-bce4-76dd1d40711b",
+      "task": "proposal-user-twins-v1",
+      "schema_id": "proposal-user-twins-v4",
+      "prompt_version_ref": "proposal-user-twins-v4",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:02:13.834564+00:00",
+      "request_hash": "44f701d77d601ba7a3d8ca9450109160b800d88d359602f8dc6e0c8f15e6a4cf",
+      "native_http_body_sha256": "b3815306ee0c5c27f7a924ceacf7e92ac4959d9b75a42d24671c69cf5337e74a",
+      "model_visible_messages_sha256": "ba2ca92609aeb0f166f3ed7e197cb6165a785e7410f9a6fdc7680091ef2b22b3",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 1510,
+        "prompt_tokens": 5658,
+        "total_tokens": 7168
+      },
+      "native_generation_milliseconds": 132759,
+      "http_elapsed_milliseconds": 144853,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 132759,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "ba2ca92609aeb0f166f3ed7e197cb6165a785e7410f9a6fdc7680091ef2b22b3",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "a6773e9f-88d5-44b7-b16f-c43a92f42e95",
+      "task": "proposal-requirements-v1",
+      "schema_id": "proposal-requirements-v3",
+      "prompt_version_ref": "proposal-requirements-v3",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:08:05.066066+00:00",
+      "request_hash": "c59edade6ab12ff5743838e004272c4cde0471337d1ad2e2071a705fc69a8083",
+      "native_http_body_sha256": "5666e7053dc09b7d7d54474d87759f0ba28ae350489aabad8be93a20a5905e14",
+      "model_visible_messages_sha256": "2dc1d47b84ceb2e1a84cf54618f3d72349ab1944f7fadf34a04badaf9f82cdb3",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 3125,
+        "prompt_tokens": 5116,
+        "total_tokens": 8241
+      },
+      "native_generation_milliseconds": 269764,
+      "http_elapsed_milliseconds": 288298,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 269764,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "2dc1d47b84ceb2e1a84cf54618f3d72349ab1944f7fadf34a04badaf9f82cdb3",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "84a64b4b-52a0-478d-9ef0-07598717332a",
+      "task": "proposal-design-v1",
+      "schema_id": "proposal-design-v5",
+      "prompt_version_ref": "proposal-design-v5",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:15:41.232043+00:00",
+      "request_hash": "ef7080985ba51b5862b9655ef6c61479deb9f42fb98480fbdd013ce43563e8cc",
+      "native_http_body_sha256": "80de7375f42d1d455115270972863ca56dedbb3f8823a43c66200225acd8c231",
+      "model_visible_messages_sha256": "5fe1e9b5e4a8955099edafd96d2c19ab63c2c219978ac3b08375c0390a76452b",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 3085,
+        "prompt_tokens": 6086,
+        "total_tokens": 9171
+      },
+      "native_generation_milliseconds": 267116,
+      "http_elapsed_milliseconds": 284269,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 267116,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "5fe1e9b5e4a8955099edafd96d2c19ab63c2c219978ac3b08375c0390a76452b",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "2195dfa4-acdc-4683-bc91-45a7c57ceb64",
+      "task": "proposal-design-v1",
+      "schema_id": "proposal-design-v6",
+      "prompt_version_ref": "proposal-design-v6",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:22:01.854972+00:00",
+      "request_hash": "a500bf4018719dbaae00e7b956e624523e4ff78566dc33011ff657c5d7ec8f2c",
+      "native_http_body_sha256": "136d54ad19086c81b562a65f660e00fe7ed2aab61a5165d78a0c0e45e074f6a6",
+      "model_visible_messages_sha256": "8cf1127a79ed290f107b5c4eefff21f5e30056324a612856c74ca09570f2810a",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 656,
+        "prompt_tokens": 5125,
+        "total_tokens": 5781
+      },
+      "native_generation_milliseconds": 54352,
+      "http_elapsed_milliseconds": 59311,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 54352,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "8cf1127a79ed290f107b5c4eefff21f5e30056324a612856c74ca09570f2810a",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "INVALID_MOCKUP_OUTPUT",
+        "status": "FAILED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "bce30e03-4ba9-40cf-aa4e-5827eeaf7bdd",
+      "task": "proposal-design-v1",
+      "schema_id": "proposal-design-v7",
+      "prompt_version_ref": "proposal-design-v7",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:34:56.389001+00:00",
+      "request_hash": "b8e09f53d86a72d98891f60257e988c8a8120a4a51e5467ba462805e9dcd0694",
+      "native_http_body_sha256": "e50275fd0e249259b117bbd8634a994e2a0bbe19ac900f6ca91b3eea1566840d",
+      "model_visible_messages_sha256": "3e77f7f8565ed3b391e0510fed7ea3ecc9d61a9ec66c3b3de5459000092fbef1",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 627,
+        "prompt_tokens": 5589,
+        "total_tokens": 6216
+      },
+      "native_generation_milliseconds": 52577,
+      "http_elapsed_milliseconds": 56817,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 52577,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "3e77f7f8565ed3b391e0510fed7ea3ecc9d61a9ec66c3b3de5459000092fbef1",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "MOCKUP_GENERATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "4dc2abcd-6237-4746-9423-d0403703a3ff",
+      "task": "proposal-architecture-v1",
+      "schema_id": "proposal-architecture-v7",
+      "prompt_version_ref": "proposal-architecture-v7",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:37:26.345577+00:00",
+      "request_hash": "19bf8751e74bd612c1ab31c568c60a2bf66687f78f8bd0cf357baeca21cfa69e",
+      "native_http_body_sha256": "464eb694d252ef82d8aae12521543f1c46a9f07e1691344fafdf5ddcd8e43f85",
+      "model_visible_messages_sha256": "b0435b2b80e5cef7e998fa6041e1ba39d2dca1fe7f2f9917cc101a1bf0619d48",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 2400,
+      "usage": {
+        "completion_tokens": 796,
+        "prompt_tokens": 6654,
+        "total_tokens": 7450
+      },
+      "native_generation_milliseconds": 68679,
+      "http_elapsed_milliseconds": 74065,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 68679,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "b0435b2b80e5cef7e998fa6041e1ba39d2dca1fe7f2f9917cc101a1bf0619d48",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "issue": null,
+        "status": "CREATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "d19681fd-eab3-4fd7-b113-ea70cba977c1",
+      "task": "proposal-architecture-v1",
+      "schema_id": "proposal-architecture-v7",
+      "prompt_version_ref": "proposal-architecture-v7",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:38:40.466430+00:00",
+      "request_hash": "c5df650a210769b2994f3e79b70f5fd7a2db28a7ac25a09abe3389b95347e03f",
+      "native_http_body_sha256": "2ec609cd3bfb2ac7f005b0db4fab5fabf2e1c1abe804d9e9a9cb39c0094a85b8",
+      "model_visible_messages_sha256": "9990286e05f73abc83bdda9a41dc53b3e13d52e4c910ec2655d1f730d6eaff7f",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 8192,
+      "usage": {
+        "completion_tokens": 2694,
+        "prompt_tokens": 9881,
+        "total_tokens": 12575
+      },
+      "native_generation_milliseconds": 270741,
+      "http_elapsed_milliseconds": 289992,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 270741,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "9990286e05f73abc83bdda9a41dc53b3e13d52e4c910ec2655d1f730d6eaff7f",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "status": "ARCHITECTURE_DETAILS_GENERATED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "e5e3690c-1824-4009-8a98-32cad9090d62",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": "SOURCE_MANIFEST_V12_COMPLETE_PROTOTYPE_MARKERS",
+      "created_at_utc": "2026-09-19T18:46:12.004701+00:00",
+      "request_hash": "618048cc161e31e9fa8d5c38f31b127869db34a206a439ea6afaf294b16b5d7d",
+      "native_http_body_sha256": "800089d094240c8b451f01e7e9427e58017ff3acfe46ae6028c63f8697e12019",
+      "model_visible_messages_sha256": "f9349e542696f419f071aa2345faf3d2f45587478d3d567a954173d8d65e4e6b",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4200,
+      "usage": {
+        "completion_tokens": 1894,
+        "prompt_tokens": 18572,
+        "total_tokens": 20466
+      },
+      "native_generation_milliseconds": 286820,
+      "http_elapsed_milliseconds": 303839,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 286820,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "f9349e542696f419f071aa2345faf3d2f45587478d3d567a954173d8d65e4e6b",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "status": "FAILED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "2d516486-917c-4422-b5a1-e90de69df501",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:51:15.923706+00:00",
+      "request_hash": "ee06ca598348fe83f044b4c653897da149aa28401c4a86d7f43feefab4b0d691",
+      "native_http_body_sha256": "0e9f0b323c71c769e96aaa3bc1388def704beb704184aa813e794fcc4bf44eee",
+      "model_visible_messages_sha256": "7d561f4c700e37e8387753f469bad4eab40c219f1fa47c0801bde1dfc577e20e",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 1921,
+        "prompt_tokens": 16614,
+        "total_tokens": 18535
+      },
+      "native_generation_milliseconds": 263462,
+      "http_elapsed_milliseconds": 281564,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 263462,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "7d561f4c700e37e8387753f469bad4eab40c219f1fa47c0801bde1dfc577e20e",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "status": "FAILED"
+      },
+      "source_file": "app.js",
+      "parent_generation_id": "e5e3690c-1824-4009-8a98-32cad9090d62"
+    },
+    {
+      "generation_id": "1164021d-4c31-40ec-95a8-82d30810b483",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T18:55:57.690553+00:00",
+      "request_hash": "8abff6f97eba1adc233b02a062552bac950bfe7e43dd2dd46b4662727ed3371b",
+      "native_http_body_sha256": "dd261023260ec6fdc1378fdb0fb4eb4c8ffcdd3bb1610b96b4aab65ae5b4e072",
+      "model_visible_messages_sha256": "b268b041b9b9ffadc34ef0971631473a4d3baa6a55a73a406288ab633033c410",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 2048,
+        "prompt_tokens": 16777,
+        "total_tokens": 18825
+      },
+      "native_generation_milliseconds": 283869,
+      "http_elapsed_milliseconds": 303773,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 283869,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "b268b041b9b9ffadc34ef0971631473a4d3baa6a55a73a406288ab633033c410",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "status": "FAILED"
+      },
+      "source_file": "app.js",
+      "parent_generation_id": "e5e3690c-1824-4009-8a98-32cad9090d62"
+    },
+    {
+      "generation_id": "d7f8aa5e-1289-45bb-8596-8f1d50348fec",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": "SOURCE_MANIFEST_V13_STATIC_MODULE_CONTRACT",
+      "created_at_utc": "2026-09-19T19:16:30.562530+00:00",
+      "request_hash": "c43c0a6ec3f97f686af4b22c9cc525b4817aa510a5779be20c79bd32e95997dd",
+      "native_http_body_sha256": "48a5db2c42df54e88aef5aef1c0bde926514fe3a5e836e058fc050c84dcb0702",
+      "model_visible_messages_sha256": "42f3502b29a62ff9ddef2c441e13e9ff12b7643311f926e4d860eb74ec69089a",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4200,
+      "usage": {
+        "completion_tokens": 2052,
+        "prompt_tokens": 18845,
+        "total_tokens": 20897
+      },
+      "native_generation_milliseconds": 311224,
+      "http_elapsed_milliseconds": 329808,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 311224,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "42f3502b29a62ff9ddef2c441e13e9ff12b7643311f926e4d860eb74ec69089a",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "INVALID_PROVIDER_OUTPUT",
+        "status": "FAILED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "eb092309-886a-4e41-9c2f-19d63f868345",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T19:22:00.455959+00:00",
+      "request_hash": "70b2915a2a7a2e3ba21ff513cd04047a73ed84b7bbbd7f8fbc7224d83ce5c40b",
+      "native_http_body_sha256": "88ff7e7b18f950343f10a240fc1c6a9874b3ffb17e136fc8c3fcc0cc607b10a1",
+      "model_visible_messages_sha256": "c19eb52c07e44fa716adf5ec4f00d181756ebddda0a1f07ed955f70dd5c25fee",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 1456,
+        "prompt_tokens": 16907,
+        "total_tokens": 18363
+      },
+      "native_generation_milliseconds": 198243,
+      "http_elapsed_milliseconds": 216107,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 198243,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "c19eb52c07e44fa716adf5ec4f00d181756ebddda0a1f07ed955f70dd5c25fee",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "status": "SOURCE_FILE_GENERATED"
+      },
+      "source_file": "app.js",
+      "parent_generation_id": "d7f8aa5e-1289-45bb-8596-8f1d50348fec"
+    },
+    {
+      "generation_id": "a6f5892d-ec35-42ce-9a87-d452ee9f5635",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T19:25:36.898366+00:00",
+      "request_hash": "a3b7b67db2bd86c32bc57529ec4785e905013597ce5f0b5b13a736f8b8ecd1df",
+      "native_http_body_sha256": "064c8ac9eae6d0e761215d56d07d7907253691dac2d05d69fbcea2de56bb82bd",
+      "model_visible_messages_sha256": "afbdf6f59a9e2a23a75c7cc230884fb88c2de9d8aa2fd37f1b51f03f763a7427",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 1647,
+        "prompt_tokens": 18234,
+        "total_tokens": 19881
+      },
+      "native_generation_milliseconds": 241571,
+      "http_elapsed_milliseconds": 257778,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 241571,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "afbdf6f59a9e2a23a75c7cc230884fb88c2de9d8aa2fd37f1b51f03f763a7427",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "status": "FAILED"
+      },
+      "source_file": "app.test.cjs",
+      "parent_generation_id": "d7f8aa5e-1289-45bb-8596-8f1d50348fec"
+    },
+    {
+      "generation_id": "d1b71aba-33d1-428f-a6be-41ef8559603a",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION",
+      "created_at_utc": "2026-09-19T19:39:49.366036+00:00",
+      "request_hash": "0d0f58d5290367491b1851b8fa964d0937f5b18a0895b09022be9ceaf3f2f903",
+      "native_http_body_sha256": "656c3ecbd66794dd598ad9f2beca1bf9e83f6e65a389afbe7d953777ab2366b9",
+      "model_visible_messages_sha256": "0c7b40cde0706d67cdf34240879690b27f981dbf5453f0b3cecead913fe6c1b3",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4200,
+      "usage": {
+        "completion_tokens": 1999,
+        "prompt_tokens": 18971,
+        "total_tokens": 20970
+      },
+      "native_generation_milliseconds": 300099,
+      "http_elapsed_milliseconds": 321402,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 300099,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "0c7b40cde0706d67cdf34240879690b27f981dbf5453f0b3cecead913fe6c1b3",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "INCOMPLETE_OUTPUT",
+        "status": "FAILED"
+      },
+      "source_file": null,
+      "parent_generation_id": null
+    },
+    {
+      "generation_id": "1ec37f3c-4b96-4c0b-afdb-8143eaf74d7d",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T19:45:10.913710+00:00",
+      "request_hash": "9c743fdde45bc541488ab0e87e6bcca94c27c84bd3fb5ffe997c08450670af10",
+      "native_http_body_sha256": "d49c69d05eda70433e0d2bb3fcf5ce55bc6531b7bf777250c9e0650b775f38e0",
+      "model_visible_messages_sha256": "c88948386f5d9a22039935eb418a948afc2569427aca798a48100c51be34f51c",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 1366,
+        "prompt_tokens": 16920,
+        "total_tokens": 18286
+      },
+      "native_generation_milliseconds": 190925,
+      "http_elapsed_milliseconds": 202965,
+      "finish_reason": "stop",
+      "native_content_complete_json": true,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 190925,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "c88948386f5d9a22039935eb418a948afc2569427aca798a48100c51be34f51c",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "status": "SOURCE_FILE_GENERATED"
+      },
+      "source_file": "app.js",
+      "parent_generation_id": "d1b71aba-33d1-428f-a6be-41ef8559603a"
+    },
+    {
+      "generation_id": "2a52f998-5fd9-49b5-8f14-4d0ca18b2c2e",
+      "task": "proposal-web-source-v1",
+      "schema_id": "proposal-web-source-v1",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "manifest_contract": null,
+      "created_at_utc": "2026-09-19T19:48:34.081639+00:00",
+      "request_hash": "27c154958524ea5f9a4a2d43597b5b29b94dda0761cf47e6f921dfe5a66c8fd4",
+      "native_http_body_sha256": "99960c60c7a9c9d43b4ad4613656c6ce39206b418170aea59b456245489d14b6",
+      "model_visible_messages_sha256": "2d33f707b81d4c43808946ee51220231f927cb8bf1db852e9436c0429ce68ac1",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "identity_and_message_hash_verified": true,
+      "temperature": 0.6,
+      "requested_output_token_limit": 4096,
+      "usage": {
+        "completion_tokens": 4096,
+        "prompt_tokens": 18230,
+        "total_tokens": 22326
+      },
+      "native_generation_milliseconds": 612179,
+      "http_elapsed_milliseconds": 655088,
+      "finish_reason": "length",
+      "native_content_complete_json": false,
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": true,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 1140,
+        "generation_wall_time_milliseconds": 612179,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 24576,
+        "model_visible_messages_sha256": "2d33f707b81d4c43808946ee51220231f927cb8bf1db852e9436c0429ce68ac1",
+        "output_repair_used": false,
+        "schema_complete": false,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "application_result": {
+        "code": "INCOMPLETE_OUTPUT",
+        "status": "FAILED"
+      },
+      "source_file": "app.test.cjs",
+      "parent_generation_id": "d1b71aba-33d1-428f-a6be-41ef8559603a"
+    }
+  ],
+  "frozen_acceptance": {
+    "definition": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\studio-demo\\calculator-acceptance-cases-20260919.json",
+      "sha256": "db35d60b3575c66a2c3f07213f2035aac22a9048478171e4653b3d10ddf30eeb"
+    },
+    "count": 17,
+    "status": "NOT_EXECUTED",
+    "executed_count": 0,
+    "passed_count": null,
+    "failed_count": null,
+    "cases": [
+      {
+        "id": "addition",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "subtraction",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "multiplication",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "division",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "mixed-decimal-separators",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "negative-multiplication",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "negative-subtraction",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "fractional-result",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "zero-numerator",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "division-by-zero",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "empty-left",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "empty-right",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "invalid-numeric-text",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "back-preserves-input",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "mockup-alignment",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "keyboard",
+        "status": "NOT_EXECUTED"
+      },
+      {
+        "id": "mobile",
+        "status": "NOT_EXECUTED"
+      }
+    ],
+    "reason": "No complete source revision or generated HTML exists for the new project. Static deductions and the child import probe are not replacements for browser acceptance checks.",
+    "oracles_changed": false,
+    "oracles_sent_to_model": false
+  },
+  "new_project_persisted_results": {
+    "web_source_revisions": 0,
+    "web_execution_attempts": 0,
+    "static_browser_inspections": 0,
+    "final_reviews": 0,
+    "export_bundles": 0,
+    "model_promoted": false,
+    "level_d_publication": false
+  },
+  "separate_assisted_demo": {
+    "report": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\studio-demo\\assisted-calculator-browser-regression-20260919.json",
+      "sha256": "d58309a105f53527fe60d7b710ebfa9219850067e45202d9dff31ea0d336e844"
+    },
+    "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+    "source_version": 5,
+    "passed_browser_checks": 16,
+    "visible_provenance": "Versione rivista con assistenza · prima proposta AI conservata",
+    "counts_toward_new_project_acceptance": false
+  },
+  "limits": [
+    "The observed base runtime identity is verified for every native response; its evaluator adapter may be loaded but was inactive for these proposer calls.",
+    "Single stochastic generations and sequential prompt corrections are diagnostic observations, not controlled comparisons or a universal claim about all 4B models.",
+    "Agent-operated gates and synthesized personas/twins are not empirical human-user research or expert validation.",
+    "Formal Level D runtime qualification, model training metrics and syntax validity cannot substitute for application correctness.",
+    "The terminal V14 test output is incomplete native JSON and is preserved byte-for-byte; no trimming, repair, source edits or partial adoption was used.",
+    "There is no complete autonomous calculator in this new project. The outcome remains negative even though earlier GUI stages and the separate assisted demo worked."
+  ],
+  "collection_database_writes": 0,
+  "collection_inference_calls": 0,
+  "git_commits_created": 0
+}

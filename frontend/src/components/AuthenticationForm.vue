@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { AuthenticationInput } from "@/api/contracts";
@@ -20,21 +20,30 @@ const { t } = useI18n({
 
 const email = ref("");
 const password = ref("");
+const validationError = ref<string | null>(null);
+const visibleError = computed(() => validationError.value ?? props.error);
 const errorSummary = ref<HTMLDivElement | null>(null);
 
-watch(
-  () => props.error,
-  async (value) => {
-    if (value === null) {
-      return;
-    }
+watch(visibleError, async (value) => {
+  if (value === null) {
+    return;
+  }
 
-    await nextTick();
-    errorSummary.value?.focus();
-  },
-);
+  await nextTick();
+  errorSummary.value?.focus();
+});
 
 function submit(): void {
+  validationError.value = null;
+  if (props.busy) return;
+  if (props.mode === "register" && [...password.value].length < 15) {
+    validationError.value = "password_too_short";
+    return;
+  }
+  if ([...password.value].length > 1024) {
+    validationError.value = "password_too_long";
+    return;
+  }
   emit("submit", {
     email: email.value,
     password: password.value,
@@ -45,13 +54,13 @@ function submit(): void {
 <template>
   <form class="grid gap-5" novalidate @submit.prevent="submit">
     <div
-      v-if="error"
+      v-if="visibleError"
       ref="errorSummary"
       class="rounded-xl border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-900"
       role="alert"
       tabindex="-1"
     >
-      {{ t(`auth.errors.${error}`) }}
+      {{ t(`auth.errors.${visibleError}`) }}
     </div>
 
     <div class="grid gap-2">
@@ -83,11 +92,13 @@ function submit(): void {
         type="password"
         :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
         :minlength="mode === 'register' ? 15 : 1"
+        :aria-invalid="visibleError?.startsWith('password_') ? 'true' : undefined"
+        :aria-describedby="mode === 'register' ? 'password-hint' : undefined"
         maxlength="1024"
         required
       />
 
-      <p v-if="mode === 'register'" class="m-0 text-sm leading-6 text-slate-600">
+      <p v-if="mode === 'register'" id="password-hint" class="m-0 text-sm leading-6 text-slate-600">
         {{ t("auth.passwordHint") }}
       </p>
     </div>

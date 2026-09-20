@@ -1,0 +1,25 @@
+# Optional bridge for the native host API and loopback-only model servers.
+# docker compose --env-file compose.env -f compose.yaml -f compose.models.yaml up -d model-database-bridge
+services:
+  model-database-bridge:
+    image: orchestwin-api:local
+    entrypoint: ["python", "/bridge.py"]
+    volumes:
+      - ./scripts/model_database_bridge.py:/bridge.py:ro
+    networks:
+      - edge
+      - data
+    ports:
+      - "127.0.0.1:15432:15432"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 48
+    mem_limit: 96m
+    cpus: 0.25
+    restart: "no"
+    healthcheck:
+      disable: true

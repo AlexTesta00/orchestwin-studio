@@ -1,4 +1,19 @@
 ARG PYTHON_IMAGE=python:3.14-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63
+ARG NODE_IMAGE=node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32
+
+FROM ${NODE_IMAGE} AS javascript-parser
+
+FROM ${PYTHON_IMAGE} AS runtime-base
+
+# Source admission parses JavaScript; npm and generated-code execution are not needed.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libatomic1 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=javascript-parser /usr/local/bin/node /usr/local/bin/node
+
+RUN node --version \
+    && printf 'throw new Error("syntax checks must not execute this");\n' | node --check --input-type=commonjs
 
 FROM ${PYTHON_IMAGE} AS wheel-builder
 
@@ -15,7 +30,7 @@ RUN python -m pip wheel \
     --wheel-dir /wheelhouse \
     .
 
-FROM ${PYTHON_IMAGE} AS runtime
+FROM runtime-base AS runtime
 
 ARG APP_UID=10001
 ARG APP_GID=10001

@@ -7,10 +7,14 @@
   "build_system": "GRADLE_KOTLIN_DSL",
   "entrypoint": "org.orchestwin.calculator.MainKt",
   "expected_output": "42",
-  "source_content_hash": "d7dfe24df68aaa09b576f41928122c637d08a2ba823a89cf7d99a541a59b703b",
+  "source_content_hash": "efcda40b10a407a56e3d290c32f3891e14222d46652d21673548124336507db6",
   "source_paths": [
     "build.gradle.kts",
+    "gradle/verification-metadata.xml",
+    "gradle/wrapper/gradle-wrapper.jar",
     "gradle/wrapper/gradle-wrapper.properties",
+    "gradlew",
+    "gradlew.bat",
     "settings.gradle.kts",
     "src/main/kotlin/org/orchestwin/calculator/Calculator.kt",
     "src/main/kotlin/org/orchestwin/calculator/Main.kt",
@@ -18,6 +22,6 @@
   ],
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
-  "launcher_complete": false,
-  "dependency_verification_complete": false
+  "launcher_complete": true,
+  "dependency_verification_complete": true
 }

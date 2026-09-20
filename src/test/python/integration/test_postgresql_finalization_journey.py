@@ -73,11 +73,6 @@ BASE_TIME = datetime(2026, 8, 31, 5, 30, tzinfo=UTC)
 LIMITATION_ID = "LIMIT-POSTGRESQL-FIXTURE"
 
 
-async def _truncate_application_data(runtime) -> None:
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 async def _mutation_is_rejected(runtime, statement: str, identifier: UUID) -> bool:
     try:
         async with runtime.session_factory.begin() as session:
@@ -161,7 +156,6 @@ async def _run_finalization_scenario() -> None:
     settings = load_database_settings(env_file=None)
     runtime = create_database_runtime(settings)
     try:
-        await _truncate_application_data(runtime)
         owner, foreign, project = await _create_owner_foreign_and_project(runtime)
         draft = create_workflow_run(
             project_id=project.id,
@@ -310,7 +304,6 @@ async def _run_finalization_scenario() -> None:
         assert current_head is not None
         assert database_revision == current_head
     finally:
-        await _truncate_application_data(runtime)
         await runtime.dispose()
 
 

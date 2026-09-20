@@ -1,0 +1,78 @@
+{
+  "base_commit": "83ad7934ffbf68c9386970f6cd35c8a6f907bc9a",
+  "development": true,
+  "fixtures": [
+    {
+      "artifact_count": 20,
+      "component_count": 10,
+      "fixture_id": "jvm-java-greeting",
+      "generation_command": [
+        "./gradlew",
+        "--init-script",
+        "/opt/orchestwin/resolve-dependencies.gradle.kts",
+        "orchestwinResolveDependencies",
+        "--write-verification-metadata",
+        "sha256",
+        "--no-daemon",
+        "--console=plain"
+      ],
+      "image_id": "sha256:956b59834e53d678a077800e26c612da325d22216e95a2eb1c192cd5e38630da",
+      "input_source_sha256": {
+        "build.gradle.kts": "9cff816596969cd08b782b60a3390d5064766a2aa1cba007a348d26e9933dfbd",
+        "gradle/wrapper/gradle-wrapper.jar": "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7",
+        "gradle/wrapper/gradle-wrapper.properties": "5b244733103959642b3514c72308d0229e64d84f4f0819f370884fa0f1112d0d",
+        "gradlew": "ab5c0cad16305af2e619c159c1f58dd68d07fab9c11e36701e109c0277407f7a",
+        "gradlew.bat": "475c4f08cd57cf2faa819e7f36d72aa93f0ad646ea23a8f7fa3ef54dee1cbc52",
+        "settings.gradle.kts": "cb37d17e19ce5068412a4c1f7f02adac0282654a7dc6f40992de42100cb5b168",
+        "src/main/java/org/orchestwin/greeting/Greeting.java": "e207d5107b27c348b6eb5b0655814cf1a3f2851bec1ce2ae117d6126f7417d58",
+        "src/main/java/org/orchestwin/greeting/Main.java": "2812ebc4e57324a6a74c0c3ab9b0194e7d2fe89e0767195e4283d6362272b813",
+        "src/test/java/org/orchestwin/greeting/GreetingTest.java": "8aa733c50206a7df269dee61a1f714c72812eafe7e2d9760323e471d92f0cfea"
+      },
+      "metadata_sha256": "64366ecdc6f70f4b7f8fb894206e9c5f1ef34a5683bfbc99e5354b3eecea9bbb",
+      "preparation_attempt_id": "092776c4919a43c9b1d1815e412dda13",
+      "preparation_stdout_sha256": "6beb5c6a3ada5de169fc902f12f0436a92bb289b3909e3e7f9f616ebb031713a"
+    },
+    {
+      "artifact_count": 117,
+      "component_count": 61,
+      "fixture_id": "jvm-kotlin-calculator",
+      "generation_command": [
+        "./gradlew",
+        "--init-script",
+        "/opt/orchestwin/resolve-dependencies.gradle.kts",
+        "orchestwinResolveDependencies",
+        "--write-verification-metadata",
+        "sha256",
+        "--no-daemon",
+        "--console=plain"
+      ],
+      "image_id": "sha256:956b59834e53d678a077800e26c612da325d22216e95a2eb1c192cd5e38630da",
+      "input_source_sha256": {
+        "build.gradle.kts": "f826130e90d9c00c4007417cb6899f10b1ffbb0d199b31c786ce3fff761ead41",
+        "gradle/wrapper/gradle-wrapper.jar": "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7",
+        "gradle/wrapper/gradle-wrapper.properties": "5b244733103959642b3514c72308d0229e64d84f4f0819f370884fa0f1112d0d",
+        "gradlew": "ab5c0cad16305af2e619c159c1f58dd68d07fab9c11e36701e109c0277407f7a",
+        "gradlew.bat": "475c4f08cd57cf2faa819e7f36d72aa93f0ad646ea23a8f7fa3ef54dee1cbc52",
+        "settings.gradle.kts": "0f0ae0313a69f017dd194a7455e26fc5e5a90ec0269713907603a0f659ad94d0",
+        "src/main/kotlin/org/orchestwin/calculator/Calculator.kt": "25aebadb43e6821681e58b09b0dc40ff7f8f5d8bd8590eb461a6eaf5309310f0",
+        "src/main/kotlin/org/orchestwin/calculator/Main.kt": "659f7ac8f75fd9695862f6ab49a72a1e1d81941b27c5c8d9b022d2bc374c825b",
+        "src/test/kotlin/org/orchestwin/calculator/CalculatorTest.kt": "7a4d1757aae5f86b6c0a558c09bcc47c9cbadb94007a3e37d304eb984587ced7"
+      },
+      "metadata_sha256": "4bda0e036527638d5c349894c9103981eb586cb7df6e097d9d6b5469c110e467",
+      "preparation_attempt_id": "ae143e34112c44cf81fa8c3960e6f5da",
+      "preparation_stdout_sha256": "a2958f6b387895fb3e5548704797f8cec79e357e74af76d3a94a722c6e0b4a22"
+    }
+  ],
+  "level_d_validated": false,
+  "report_type": "JVM_FIXTURE_DEPENDENCY_PREPARATION_NOT_PROFILE_VALIDATION",
+  "runner_input_snapshots": {
+    "infra/jvm-runners/Dockerfile.gradle": "FROM docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28\n\nUSER root\nADD --checksum=sha256:553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746 --chmod=0444 https://services.gradle.org/distributions/gradle-9.5.0-bin.zip /opt/orchestwin/gradle-9.5.0-bin.zip\nCOPY --chmod=0444 infra/jvm-runners/resolve-dependencies.gradle.kts /opt/orchestwin/resolve-dependencies.gradle.kts\nRUN chmod 0555 /opt/orchestwin\n\nUSER gradle\nWORKDIR /workspace\nENTRYPOINT []\nCMD [\"gradle\", \"--version\"]\n",
+    "infra/jvm-runners/resolve-dependencies.gradle.kts": "// Trusted runner input, supplied with --init-script during controlled SETUP.\n// Configuration.resolve() materializes artifact files; a dependencies report\n// resolves the dependency graph without guaranteeing an offline artifact cache.\n// Dependency verification stays enabled and resolution failures must propagate.\n// https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.Configuration.html\n\nallprojects {\n    val dependencyConfigurations = configurations\n    tasks.register(\"orchestwinResolveDependencies\") {\n        group = \"build setup\"\n        description = \"Materialize every resolvable dependency configuration before offline execution.\"\n        doLast {\n            dependencyConfigurations.filter { it.isCanBeResolved }.sortedBy { it.name }\n                .forEach { configuration ->\n                    val files = configuration.resolve()\n                    logger.lifecycle(\"Resolved ${configuration.name}: ${files.size} artifact files\")\n                }\n        }\n    }\n}\n"
+  },
+  "runner_inputs": {
+    "infra/jvm-runners/Dockerfile.gradle": "3433f221be113e93a50564005b75fe060a0c6308882aa2bfe78b5c64bac71a15",
+    "infra/jvm-runners/resolve-dependencies.gradle.kts": "cb936918cc38f9a02227a1d5414a0ddb7a4d8d506ad271f561963a7378d734e4"
+  },
+  "schema_version": 1,
+  "snapshot_retrieval_commit": "3009de6be9104286895efac14e141da6e3965cbc"
+}

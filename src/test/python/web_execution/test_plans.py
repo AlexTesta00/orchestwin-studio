@@ -56,6 +56,47 @@ def snapshot(files: dict[str, str]):
     )
 
 
+def test_static_test_commands_are_bound_to_all_declared_test_files_and_inventory():
+    chosen = WebTargetSelection(
+        ExecutionTarget.WEB_STATIC,
+        WebLanguageConfiguration(WebImplementationLanguage.STATIC_ASSETS, None),
+        WebProjectLayout.SINGLE_ROOT,
+    )
+    files = {
+        "index.html": "<html><body>Page</body></html>",
+        "app.test.cjs": "// test",
+        "unit/other.test.mjs": "// other",
+    }
+    source = snapshot(files)
+    plan = create_structured_web_phase_plans(
+        source,
+        selection=chosen,
+        lock_report=validate_web_dependency_locks(source, selection=chosen),
+    )
+    phase = plan.phase(WebExecutionPhase.TEST)
+    assert phase.execution_kind is WebPhaseExecutionKind.COMMAND_PLANS
+    command = phase.command_plans[0].commands[0]
+    assert command.executable == "node"
+    assert command.arguments == (
+        "--test",
+        "--test-concurrency=1",
+        "--test-reporter=tap",
+        "./app.test.cjs",
+        "./unit/other.test.mjs",
+    )
+    assert command.network_mode is CommandNetworkMode.DISABLED
+    assert command.output_parser_id == "node.test.tap.v1"
+    assert plan.inventory_content_hash == source.inventory_content_hash
+    without_tests = snapshot({"index.html": files["index.html"]})
+    smoke = create_structured_web_phase_plans(
+        without_tests,
+        selection=chosen,
+        lock_report=validate_web_dependency_locks(without_tests, selection=chosen),
+    )
+    assert smoke.phase(WebExecutionPhase.TEST).adapter_action_id == "web.static.smoke.v1"
+    assert smoke.content_hash != plan.content_hash
+
+
 def selection(
     target: ExecutionTarget,
     *,

@@ -5,7 +5,7 @@ import {
   DESIGN_ALTERNATIVE_ID,
   SECOND_DESIGN_ALTERNATIVE_ID,
 } from "../test/designFixtures";
-import { buildSelectedDesignPackage } from "./designPrototype";
+import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 
 describe("design prototype builder", () => {
   it("creates a deterministic trusted prototype without mutating the source package", () => {

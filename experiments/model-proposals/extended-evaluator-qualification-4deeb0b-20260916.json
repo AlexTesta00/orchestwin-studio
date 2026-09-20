@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "report_id": "extended-evaluator-qualification-4deeb0b-20260916",
+  "recorded_at": "2026-09-16T06:38:30.131916+00:00",
+  "base_commit": "4deeb0bf552a1039b2cde113df5065756e887d6c",
+  "status": "QUALIFICATION_RUNNING_INITIAL_SEMANTIC_FAILURE_OBSERVED",
+  "summary_it": "Qualificazione estesa avviata sul candidato immutato: 3040 casi dei 90 gruppi di validazione rimanenti e 24 nuove richieste eseguite sul candidato e sul precedente adapter. Nessun nuovo training o selezione automatica. Criteri e annotazioni fissati prima dell’inferenza.",
+  "artifact_root": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/qualification-4deeb0b-20260916-01",
+  "protocol": {
+    "scope": "EXTENDED_PREPROMOTION_DIAGNOSTIC_QUALIFICATION",
+    "git_head": "4deeb0bf552a1039b2cde113df5065756e887d6c",
+    "candidate_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+    "prior_sha256": "9568ae8c3ed614431abf2cb0ed974fa8a6a23d535f1d43080efa04c40532dfec",
+    "remaining_validation_rows": 3040,
+    "remaining_validation_groups": 90,
+    "previously_observed_validation_rows": 240,
+    "previously_observed_groups": [
+      "00f0a2f6ca92cb3315ed6b4db679808c12a0ad3e174cbe034b37051c1c230436",
+      "01bd3b61e34e455ea084f286b8f74f98be5e88d706d023ec1253290ddd0a26c9",
+      "02cc86ef7ef872c853372ea4f95da19b518e228dc94669947d6d0bc5df3d98d0",
+      "0436c01b8bd992f926f7bb50457f5f5502b109a2b3f94134b42bfb1fe6c6498d",
+      "0fff8f01c7cbd8e3e0450fa4a6a2fd2def57ec4e353ffcf73ab52c21d5e3d991",
+      "317df2a1f2c116c10d999d0febac153b0544072cabcbdc26f450e795c4745816"
+    ],
+    "full_validation_rows_after_completion": 3280,
+    "new_challenge_pages": 12,
+    "challenge_requests_per_model": 24,
+    "challenge_exact_message_pairs": 24,
+    "total_new_requests": 3088,
+    "batches": 14,
+    "worker_max_requests_per_batch": 256,
+    "states": {
+      "MISSING": 1476,
+      "INSUFFICIENT": 312,
+      "PARTIAL": 1072,
+      "PRESENT": 180
+    },
+    "selection": "All remaining validation groups, disjoint from the earlier six; independently hand-authored 12 challenge pages in two languages. Challenge expectations are frozen before inference and are assistant-authored, not expert labels.",
+    "decoding": "GREEDY_SCHEMA_CONSTRAINED",
+    "max_sequence": 6144,
+    "max_output_tokens": 2048,
+    "output_repair": false,
+    "retries": false,
+    "labels_uploaded": false,
+    "test_files_opened": false,
+    "training": false,
+    "production_promotion": false,
+    "formal_campaign": false,
+    "automatic_screen_gate": {
+      "native_schema_domain_eos_complete": "All candidate requests must pass.",
+      "locations_criteria_abstention_and_gap_state": "All candidate requests must match frozen expected static targets and state.",
+      "challenge_scope": "Overall summary target references must stay within requested targets; each absent target must be identified in an evidence gap.",
+      "interpretation": "Any failed case prevents an automatic clean screen. Report full per-group/state/language failures and paired challenge changes; do not silently repair, exclude or retry. Passing this screen alone never selects the model."
+    },
+    "narrative_review_gate": "Review every failed case plus a deterministic stratified sample and the independently authored challenges before any qualification recommendation. Human expert review remains required before adoption.",
+    "cost_plan": {
+      "expected_hours": [
+        13,
+        15
+      ],
+      "additional_compute_ceiling_usd": 40,
+      "maximum_wall_hours_after_gpu_restart": 17,
+      "gpu_rate_ceiling_usd_per_hour": 2.2,
+      "watchdog_rate_ceiling_usd_per_hour": 0.08,
+      "email_interval_hours": 5
+    },
+    "limits": [
+      "Static HTML engineering tasks and correlated synthetic rows; no general accessibility or real-user quality claim.",
+      "Challenge answers are assistant-authored and require separate human review.",
+      "Matched old-adapter inference is restricted to the 24 challenge requests, not the full validation split.",
+      "Neither confidence probabilities nor user-impact severity are empirically calibrated."
+    ]
+  },
+  "adapters": {
+    "candidate": {
+      "path": "/workspace/runs/full-e7a8bd9-01/adapter",
+      "weights_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+      "config_sha256": "8720bd4f60959881b1fca8ee978daf5c3c8d4ec2d8939d73fb5df86c681107b2"
+    },
+    "prior": {
+      "path": "/workspace/evaluator-qualification-01/prior-adapter",
+      "weights_sha256": "9568ae8c3ed614431abf2cb0ed974fa8a6a23d535f1d43080efa04c40532dfec",
+      "config_sha256": "325a600386e6cc340e2975f1dc11bc5528cb78eb4e6f26abf056c240ddbcf9ff"
+    }
+  },
+  "request_counts": {
+    "candidate_validation": 3040,
+    "candidate_challenge": 24,
+    "prior_adapter_challenge": 24,
+    "total": 3088,
+    "serial_batches": 14
+  },
+  "challenge_review": {
+    "pages": 12,
+    "languages": [
+      "en",
+      "it"
+    ],
+    "pairs": 24,
+    "authorship": "CODEX_ASSISTANT_SEPARATELY_FROM_TRAINING_GENERATOR_BEFORE_INFERENCE",
+    "human_expert_labels": false,
+    "model_answers_seen_when_labels_created": false,
+    "features": [
+      "Explicit labels outside the form",
+      "Implicit labels versus the specifically requested explicit-for property",
+      "Broken aria-labelledby references",
+      "Partially unavailable targets",
+      "Blank nested headings and alerts",
+      "Informative image alt versus figcaption",
+      "Absent form versus unavailable HTML",
+      "Formatted text and multiple name references",
+      "Untrusted page instructions",
+      "Explicit form ownership for external controls",
+      "Requested-target-only summary scope"
+    ]
+  },
+  "preflight": {
+    "tests_passed": 10,
+    "test_failures": 0,
+    "test_errors": 0,
+    "exact_native_message_requests_checked": 3088,
+    "model_tokenization_requests_checked": 3088,
+    "max_input_tokens": 3435,
+    "reserved_output_tokens": 2048,
+    "max_sequence": 6144,
+    "input_truncated": false,
+    "answer_labels_uploaded": false,
+    "worker_source_modified": false,
+    "training_environment_modified": false,
+    "python": "3.13.15",
+    "llguidance": "1.8.0"
+  },
+  "cloud": {
+    "gpu": {
+      "id": "jpxjtn64u2h2ck",
+      "name": "orchestwin-qualification-4deeb0b-20260916",
+      "cost": 2.09,
+      "createdAt": "2026-09-16T06:24:01.489Z"
+    },
+    "watchdog": {
+      "id": "s6hre5532jvtry",
+      "name": "orchestwin-qualification-watchdog-4deeb0b-20260916",
+      "cost": 0.06,
+      "createdAt": "2026-09-16T06:20:32.541Z"
+    },
+    "network_volume_id": "pwdbxu66v4",
+    "gpu_control_state": {
+      "stage": "ARMED",
+      "pod_id": "jpxjtn64u2h2ck",
+      "run_directory": "/workspace/evaluator-qualification-results-01",
+      "updated_unix": 1789540623.1868072,
+      "deadline_unix": 1789600832.541
+    },
+    "independent_control_state": {
+      "stage": "ARMED",
+      "gpu_id": "jpxjtn64u2h2ck",
+      "gpu_status": "RUNNING",
+      "watchdog_id": "s6hre5532jvtry",
+      "seen_running": true,
+      "updated_unix": 1789540634.965716,
+      "reason": null
+    },
+    "old_pod_restart_failures": {
+      "mqpsfl4szcdiy5": "Insufficient free vCPU on its old host",
+      "zg50tifkx87hvr": "Insufficient free GPUs on its old host"
+    },
+    "old_pods_reused": false,
+    "retained_model_volume_reused": true,
+    "budget": {
+      "phase_started_unix": 1789539632.541,
+      "deadline_unix": 1789600832.541,
+      "additional_compute_ceiling_usd": 40,
+      "verified_balance_usd": 176.5575033639,
+      "maximum_compute_at_rate_ceilings_usd": 38.76666666666667,
+      "lifetime_envelope_includes_stopped_time": false
+    },
+    "email_interval_hours": 5,
+    "start_email_accepted": true,
+    "completion_email_and_shutdown_configured": true,
+    "completion_results_archived_on_volume_before_shutdown": true,
+    "cost_control_limit": "Operational lease and independent deadline, not a provider-enforced account cap; persistent storage is separate."
+  },
+  "observed_launch": {
+    "supervisor": {
+      "pid": 1092,
+      "started_unix": 1789540316.0727222,
+      "mode": "VALIDATION_ONLY",
+      "output": "/workspace/evaluator-qualification-results-01"
+    },
+    "progress": {
+      "stage": "QUALIFICATION_INFERENCE",
+      "global_step": 10,
+      "max_steps": 3088,
+      "eta_seconds": null,
+      "active_seconds": 309.9907486119773,
+      "updated_unix": 1789540634.7248015,
+      "batch": "batch-01",
+      "training": false
+    },
+    "real_responses_retained": 10,
+    "schema_complete_responses": 10,
+    "recent_result_hashes": [
+      "304c47b7f5afa679cdfd06ab6cb36b0d80fb69e1adff06999c46d107d60c14a9",
+      "216b8d5540831912a0d3721e322e41285b5deead98c04e4c022a258e45ede813",
+      "10d263c102f330b0cffa9f17ef43c5cde044cf4cfc67a26bef8f2a577ec83a00"
+    ],
+    "quality_assessment_complete": false
+  },
+  "initial_semantic_observation": {
+    "case_id": "candidate-partial-detached-control-it",
+    "assessment": {
+      "passed": false,
+      "checks": {
+        "schema": true,
+        "domain": true,
+        "eos": true,
+        "schema_finished": true,
+        "criterion": true,
+        "locations": true,
+        "gap_state": false,
+        "abstention": true,
+        "summary_scope": true,
+        "gap_targets": false
+      },
+      "errors": [],
+      "expected_missing": [
+        "dom:#send"
+      ],
+      "predicted_missing": [
+        "dom:#send"
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "duplicate_locations": 0,
+      "narrative_review_required": true
+    },
+    "engineering_review": "The requested #member input exists outside #panel; the task explicitly restricts this fixture to form descendants. The response incorrectly calls #member satisfied and omits its evidence gap. The separate #send button defect is correctly identified.",
+    "human_expert_review": false,
+    "representative_accuracy_estimate": false,
+    "protocol_changed": false
+  },
+  "initial_observation_interpretation": "One inspected challenge response already fails the frozen evidence-gap requirement. The full run continues to characterize other cases and compare the prior adapter; no overall accuracy or final review result is inferred from this single case.",
+  "transfer": {
+    "archive_sha256": "a68f0a17758df3c709420c734a2648565cd16be53e6c1d50781661975f2dbb24",
+    "manifest_sha256": "e76ef55a257894264a7cbcc9d157627b2a87933801a5e7e077e7b7ef48975b21",
+    "bytes": 126221159,
+    "files": [
+      "cases.json",
+      "batches.json",
+      "adapters.json",
+      "protocol.json",
+      "source-inventory.json",
+      "run_validation.py",
+      "case_request.py",
+      "launch_validation.py",
+      "supervisor.py",
+      "complete_training_data.py",
+      "lease.json",
+      "watchdog-config.json",
+      "phase-budget.json",
+      "tokenization_preflight.py",
+      "code/src/orchestwin/__init__.py",
+      "code/src/orchestwin/evaluation/artifacts.py",
+      "code/src/orchestwin/evaluation/artifact_content.py",
+      "code/src/orchestwin/evaluation/evaluator.py",
+      "code/src/orchestwin/evaluation/field_scope_prompt.py",
+      "code/src/orchestwin/evaluation/findings.py",
+      "code/src/orchestwin/evaluation/validation.py",
+      "code/src/orchestwin/evaluation/__init__.py",
+      "code/src/orchestwin/models/final_evaluator_gateway.py",
+      "code/src/orchestwin/models/final_evaluator_session.py",
+      "code/src/orchestwin/models/openai_compatible.py",
+      "code/src/orchestwin/models/schema_decoding.py",
+      "code/src/orchestwin/models/strict_evaluator_json.py",
+      "code/src/orchestwin/models/structured_generation.py",
+      "code/src/orchestwin/models/__init__.py",
+      "code/src/orchestwin/projects/briefs.py",
+      "code/src/orchestwin/projects/domain.py",
+      "code/src/orchestwin/projects/requirements_primitives.py",
+      "code/src/orchestwin/projects/__init__.py",
+      "code/src/orchestwin/twins/epistemics.py",
+      "code/src/orchestwin/twins/personas.py",
+      "code/src/orchestwin/twins/user_twins.py",
+      "code/src/orchestwin/twins/__init__.py",
+      "code/environments/training/evaluator_candidate_worker.py",
+      "prior-adapter/adapter_config.json",
+      "prior-adapter/adapter_model.safetensors",
+      "manifest.json"
+    ],
+    "requests": 3088,
+    "answer_labels_uploaded": false
+  },
+  "evidence": {
+    "protocol.json": {
+      "sha256": "c149870383bb080a7e50f7a4d2c81546bc24bccb825c94be144ccc7ed1a9bf0f",
+      "bytes": 3408
+    },
+    "cases.json": {
+      "sha256": "565f5496e93bdba68ffffefdb3915e836e28108fa94323d8a23c50851b44cae2",
+      "bytes": 34239980
+    },
+    "labels.json": {
+      "sha256": "aeb37023c86e5aeba60f05004436a3e8a5101218895badb2f399bac9f1443ec5",
+      "bytes": 41364485
+    },
+    "batches.json": {
+      "sha256": "fcd05a5b8a2f7b13b7e27ce6904d36816dfbcdd0f1e8ab0ec0a6062f4a9ccc0d",
+      "bytes": 79789
+    },
+    "adapters.json": {
+      "sha256": "c421bea276830999d6a292c117337aed96b7345a097d406df5064e5761bc47e3",
+      "bytes": 533
+    },
+    "challenge-label-review.json": {
+      "sha256": "8f2814f22e120727fe16c1f73ccff905c9f7bf5dc97c396a76be246d6fc5512d",
+      "bytes": 272010
+    },
+    "source-inventory.json": {
+      "sha256": "2845b46646b7476550d70ef6bd50ba2e45b5f9f9959aeca8940ab8ad51448763",
+      "bytes": 2749
+    },
+    "transfer.json": {
+      "sha256": "21c18bad3105c775813949f9701b683fccd15c70d5564cabe148b980e03fcc80",
+      "bytes": 2032
+    },
+    "manifest.json": {
+      "sha256": "e76ef55a257894264a7cbcc9d157627b2a87933801a5e7e077e7b7ef48975b21",
+      "bytes": 5073
+    },
+    "phase-budget.json": {
+      "sha256": "60f861d88d457101d213e0bb3335652b390da0963c755ac8294c093a65624e67",
+      "bytes": 281
+    },
+    "lease.json": {
+      "sha256": "b937ec9fcb962b5cc70871af1fb539332e45534a002fdd406f3069595e399dcd",
+      "bytes": 307
+    },
+    "watchdog-config.json": {
+      "sha256": "5d1fa2a3beab764aa3929c7b9335763d4e1fbee85b9b39d66e7ce097e7798c7f",
+      "bytes": 401
+    },
+    "tokenization-preflight.json": {
+      "sha256": "0b9576a1b289e89561abc1fa30a037141ef61a5cc28f40486fcb4dcb87e8753c",
+      "bytes": 334545
+    },
+    "tests.xml": {
+      "sha256": "710902525b97a6c368cb46feb85857bcd9b683725dcf6a42ded7e95d2e15a7a8",
+      "bytes": 1394
+    },
+    "test_qualification.py": {
+      "sha256": "2b07a268e40d8af8a083c813642dbfadd5a6a60dfc5a488b2c56ad0456d7be3e",
+      "bytes": 4067
+    },
+    "prepare_qualification.py": {
+      "sha256": "27ec3b2181cc5c88d9cb35c57abaa6850f407a0371436e4b28600a4a4aba691b",
+      "bytes": 17554
+    },
+    "run_validation.py": {
+      "sha256": "1beb78c15c12ceded0ccf9f73bc87200ba47983b9634f9c1e43ad1d719d6657c",
+      "bytes": 9899
+    },
+    "score_validation.py": {
+      "sha256": "860f3f534c5189414db6e552185fb72c613a7dd57a98d346738aa14c64c2d4ff",
+      "bytes": 3129
+    },
+    "assess_outputs.py": {
+      "sha256": "d78d57037591e6d3b6eba45d093d7e1121f356ed490dadee721bb64c77d1e773",
+      "bytes": 3385
+    },
+    "supervisor.py": {
+      "sha256": "76269756c42637ee104b3c0756a26234e6a4dc3acec56d77baa857f812ef9503",
+      "bytes": 13198
+    },
+    "launch-observation.json": {
+      "sha256": "b288d75d5425181ba043d58bc907275acbbb65f1b9bfdf233909b34ead1bfbca",
+      "bytes": 6343
+    },
+    "first-observed-response.json": {
+      "sha256": "304c47b7f5afa679cdfd06ab6cb36b0d80fb69e1adff06999c46d107d60c14a9",
+      "bytes": 16116
+    },
+    "first-observed-assessment.json": {
+      "sha256": "000513cf2a609b3a4b9aed6f65528a1451497f10faeb7875409a1f6b2a9b8334",
+      "bytes": 1056
+    }
+  },
+  "next_action": "Allow the bounded cloud job to finish. Recover its prebuilt archive and verify hashes; run the local assessment, inspect every failure and the challenge narratives, then report the full qualification outcome. Do not infer success from this launch record.",
+  "new_training": false,
+  "production_promotion": false,
+  "formal_campaign_resumed": false,
+  "reserved_final_case_inference": false,
+  "database_writes": false,
+  "binary_weights_in_git": false,
+  "commits_created": false
+}

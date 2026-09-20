@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T17:38:11.872117+00:00",
+  "repository_head": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "scope": "CORRECTED_REFERENCE_DATA_ADMISSION_NOT_MODEL_QUALIFICATION",
+  "curriculum_id": "verified-proposer-web-source-v1",
+  "dataset_version": 2,
+  "curriculum_identity_policy": "Same semantic curriculum and family splits; dataset_version identifies the corrected materialized artifact.",
+  "dataset": {
+    "path": "environments/training/artifacts/proposer-web-v2-20260919-verified",
+    "manifest_sha256": "6a767d8d73d1c00eda273cc4362720bb29137776d3cbd396e5add7c086f41b2d",
+    "files": {
+      "train.jsonl": {
+        "sha256": "d8822f21fc8f9fc0095fba602d06bf3eeaadc4b1e71bc4a20ab974717270910f",
+        "rows": 240,
+        "size_bytes": 3624769
+      },
+      "validation.jsonl": {
+        "sha256": "c47502ae0c05f262e18e5225790c77008f32ec552f513509f7159733fa4cae14",
+        "rows": 64,
+        "size_bytes": 961232
+      }
+    },
+    "semantic_family_splits": {
+      "train": [
+        "rectangle",
+        "right-triangle",
+        "circular-sector",
+        "cylinder",
+        "square-prism",
+        "linear-proportion",
+        "binomial-square",
+        "ratio-comparison",
+        "percentage-change",
+        "simple-interest",
+        "compound-growth",
+        "discount",
+        "length-conversion",
+        "mass-conversion",
+        "speed-distance",
+        "duration",
+        "electrical-energy",
+        "density",
+        "fuel-efficiency",
+        "running-pace",
+        "two-value-means",
+        "integer-division",
+        "powers-roots",
+        "angle-complement",
+        "stock-inventory",
+        "loyalty-points",
+        "capacity-booking",
+        "shopping-quantities",
+        "task-priorities",
+        "named-counters"
+      ],
+      "validation": [
+        "trapezoid",
+        "sphere-shell",
+        "volume-conversion",
+        "recipe-scaling",
+        "break-even",
+        "fraction-complement",
+        "reading-progress",
+        "team-votes"
+      ]
+    },
+    "excluded_semantic_families": [
+      "guest-list",
+      "expense-split",
+      "expense-splitting",
+      "sales-tax",
+      "temperature"
+    ],
+    "locales": [
+      "en",
+      "it"
+    ],
+    "source_protocol": "SOURCE_FILES_V2_TEXT",
+    "manifest_contract": "SOURCE_MANIFEST_V12_COMPLETE_PROTOTYPE_MARKERS",
+    "template_limits": {
+      "numeric_business_families": 30,
+      "stateful_business_families": 8,
+      "core_generators": 2,
+      "shared_form_layouts": 1
+    }
+  },
+  "correction": {
+    "result_text_marker": "ELM-005",
+    "all_corrected_bundles_admitted": 76,
+    "negative_omission_controls_rejected": 76,
+    "production_validator_sha256": "ec0af7c89b80a9b1410e1c5fd28d5050c0f31a32da514c115e10ae88671d2802"
+  },
+  "verification": {
+    "production_prompt_and_schema_capture": "PASSED_ALL_304_ROWS",
+    "production_source_syntax_and_prototype_validation": "PASSED_ALL_76_BUNDLES",
+    "python_tests_passed": 96,
+    "python_junit_sha256": "db3c707ade7961021ed617a9f1588d910750f180e4c2995f65f4acd8075ef53d",
+    "docker_reference_bundles_passed": 76,
+    "docker_node_tests": {
+      "tests": 380,
+      "pass": 380,
+      "fail": 0
+    },
+    "image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+    "bundles": 76,
+    "all_passed": true,
+    "evidence_sha256": "d804efb997932720e9df2d8b4770c2ab2ae4699c345a5b5dd2bbaa2d493d0e9f",
+    "network": "none",
+    "read_only": true,
+    "limits": "512MiB/2CPU/128pids",
+    "oracle_scope": "Literal expected values, state isolation, failure atomicity, classic-browser VM and DOM event double; not real rendered-browser proof",
+    "runtime_user": "1000:1000",
+    "capabilities_dropped": "ALL",
+    "no_new_privileges": true
+  },
+  "frozen_v1": {
+    "manifest_sha256": "987714f1dc2cda2ad0579146c697c9aa590c5236c1f137781e4e0cae55e0f339",
+    "all_manifest_reference_hashes_rechecked": true,
+    "train_and_validation_hashes_rechecked": true,
+    "rewritten": false,
+    "cache_rewritten": false,
+    "training_bundle_rewritten": false,
+    "historical_report_rewritten": false
+  },
+  "source_sha256": {
+    "environments/training/proposer_prepare.py": "7057bd724ac9cdbea5dec2a0bacb92d64ac1d596864adbf9df79593262232c03",
+    "environments/training/proposer_curriculum.py": "c81304cbd579cd41d085bcd413af9f0c7b589a4388068b90431e7d1f16acc05a",
+    "src/orchestwin/models/source_file_generation.py": "4a135177c70482cec8d83b577f3212b7426ab88dc3d2a8347e620161ea0c2654",
+    "src/orchestwin/models/proposal_generation.py": "3dcab72d76fbac640d9869a72f89e442ee29c2f994311a0a87f765db6c8c8fbe",
+    "src/orchestwin/models/source_design_contract.py": "ec0af7c89b80a9b1410e1c5fd28d5050c0f31a32da514c115e10ae88671d2802",
+    "src/test/python/training/test_proposer_curriculum.py": "0437b4d4814ed6cb298906a2ed5f51c2e32151a05a52d10d71e1b17f21c672ce",
+    "src/test/python/training/test_proposer_training_cache.py": "399503c00f357af0183df345c75805273b0f9b37b40c970cd26dd4549bea9b02"
+  },
+  "tokenization_audited": false,
+  "training_cache_created": false,
+  "provider_inference_performed": false,
+  "model_training_performed": false,
+  "model_quality_measured": false,
+  "level_d_qualification_claimed": false,
+  "reproduction_command": ".venv/Scripts/python.exe environments/training/proposer_prepare.py --output <new-directory> --dataset-version 2",
+  "limitations": [
+    "Compact synthetic development curriculum; not a large or representative production dataset.",
+    "Translated examples share a semantic family and never cross splits.",
+    "Distinct business families reuse two core generators and one form layout; family count is not architectural diversity.",
+    "Reference Node tests and independent execution oracles share engineer-authored specifications; neither demonstrates model capability.",
+    "Manifest wording follows current production prompts, but no human project approval is claimed.",
+    "Requires tokenizer audit without truncation before training; no held-out qualification cases are included.",
+    "This V2 artifact has not been tokenized or used to train a model; V1 token counts and model results must not be attributed to it.",
+    "The Node browser oracle uses a DOM double, not a rendered browser."
+  ]
+}

@@ -8,6 +8,20 @@ import AuthenticationForm from "./AuthenticationForm.vue";
 enableAutoUnmount(afterEach);
 
 describe("AuthenticationForm", () => {
+  it("explains a short registration password without sending credentials", async () => {
+    const wrapper = mount(AuthenticationForm, {
+      props: { mode: "register", busy: false, error: null },
+      global: { plugins: [createAppI18n()] },
+    });
+    await wrapper.get('input[name="email"]').setValue("owner@example.com");
+    await wrapper.get('input[name="password"]').setValue("short");
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("submit")).toBeUndefined();
+    expect(wrapper.get('[role="alert"]').text()).toContain("15 characters");
+    await wrapper.get('input[name="password"]').setValue("a valid long passphrase");
+    await wrapper.get("form").trigger("submit");
+    expect(wrapper.emitted("submit")).toHaveLength(1);
+  });
   it("emits accessible login credentials", async () => {
     const wrapper = mount(AuthenticationForm, {
       props: {

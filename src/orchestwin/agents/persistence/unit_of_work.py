@@ -13,6 +13,7 @@ from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
     SqlAlchemyTeamSelectionContextRepository,
 )
+from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceBindings
 
 
 class SqlAlchemyTeamProposalUnitOfWork:
@@ -56,6 +57,7 @@ class SqlAlchemyTeamProposalUnitOfWork:
 
         self._contexts = SqlAlchemyTeamSelectionContextRepository(self._session)
         self._proposals = SqlAlchemyTeamProposalVersionRepository(self._session)
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(self._session)
 
         return self
 

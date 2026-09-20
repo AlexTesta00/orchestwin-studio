@@ -1,0 +1,21 @@
+{
+  "name": "fixture-vue-node-ts-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest --maxWorkers=1 --minWorkers=1 --pool=forks",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "vitest": "3.0.0",
+    "@types/express": "5.0.1",
+    "@types/node": "22.15.3",
+    "typescript": "5.8.3"
+  }
+}

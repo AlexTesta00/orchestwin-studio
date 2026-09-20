@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T17:03:24.272919+00:00",
+  "scope": "Paired synthetic development diagnosis, not final thesis qualification",
+  "decision": "DO_NOT_PROMOTE_CANDIDATE",
+  "decision_reason": "Neither case passes all independent checks; both candidate self-test suites fail. Static source acceptance on one case is not executable success.",
+  "candidate_weights_sha256": "c9c13082532797cfd0e0f8cc72b077d9ed50d3b5868eb26b0bea0ebe736065da",
+  "candidate_adapter_files": {
+    "adapter_model.safetensors": "c9c13082532797cfd0e0f8cc72b077d9ed50d3b5868eb26b0bea0ebe736065da",
+    "adapter_config.json": "082da03cecb04537a6e0b32b3b7517fdaf93d79436c3a5056f286a8e50e30835"
+  },
+  "baseline_model_identity": {
+    "provider_id": "local-studio-model",
+    "runtime_id": "proposal-900caccb-b166-4791-a8ce-8574d071a7ad",
+    "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "configuration_sha256": "a96a950bcced4ecde11374f3ada72408bbb0b92d6797b7409adc28e55510270d",
+    "adapter_id": null,
+    "adapter_sha256": null
+  },
+  "candidate_model_identity": {
+    "provider_id": "local-studio-model",
+    "runtime_id": "proposal-ac0cebcf-5201-4569-b008-123acb390af9",
+    "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "configuration_sha256": "91852b12e09b1da6899c9d0655dab4eec9391acef47cbece90d77164a18e791d",
+    "adapter_id": "interactive-proposal-c9c13082532797cf",
+    "adapter_sha256": "d92388f12086901820b688f016cfbd45f5f3e8bbafb4b040e9adaf8f97d73b9a"
+  },
+  "sampling": {
+    "temperature": 0.6,
+    "samples_per_case_per_model": 1,
+    "fixed_seed": false,
+    "syntax_retries": "At most one audited retry per file, unchanged production policy",
+    "client_deadline_seconds": 1200,
+    "client_timeout_is_not_hard_gpu_preemption": true
+  },
+  "comparison_controls": {
+    "cases_and_oracles_identical": true,
+    "cases_sha256": "e800c0967cc59467cfbaca625c6bb45882787d284db6952874dda646f11685e9",
+    "oracles_frozen_before_baseline": true,
+    "oracles_sent_to_models": false,
+    "source_hash_changes_between_frozen_protocols": [
+      "src/orchestwin/models/real_runtime.py"
+    ],
+    "generation_prompt_and_harness_hashes_unchanged": true,
+    "health_change_reason": "real_runtime.py now accepts an explicitly identified proposer adapter. Shared model server also changed to select named adapters; no claim of bit-identical serving code.",
+    "opaque_project_and_provenance_UUIDs": "Fresh UUIDs per run; semantic inputs/oracles unchanged, prompts are not byte-identical.",
+    "node_image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32"
+  },
+  "evidence": {
+    "preflight": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-preflight-20260919-01.json",
+      "sha256": "54d42a4c94f6ad3c8e69301c85a394a7bf88c9bc6afeb6b60f1e4928cd09b0b3"
+    },
+    "baseline_protocol": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/protocol.json",
+      "sha256": "74aa3414718e12e73caba4e44c3fec872ce4d391f1f1d8729dce8651c8f921c3"
+    },
+    "candidate_protocol": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-20260919-01/protocol.json",
+      "sha256": "d0633a8dcdf3ae877f564224e56775b2a1e244fd994949bda3e706bcbfdb3396"
+    },
+    "baseline_report": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/report.json",
+      "sha256": "0e3680c9026c17d17b7dc2d17adf337cabbf8e2df1171679a7288f5a8467f0f7"
+    },
+    "candidate_report": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-20260919-01/report.json",
+      "sha256": "dabba386c6d7758c524d114eb324a82831de53e4a635cdb3223b1716096cc323"
+    },
+    "baseline_manifest": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/evidence-manifest.json",
+      "sha256": "64a8b1d2272be19c733c55f77a0138b9ae0a766df8782a7093177e3bd3f55d39",
+      "verified_files": 78
+    },
+    "candidate_manifest": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-20260919-01/evidence-manifest.json",
+      "sha256": "cba4ba7906698d7a0510ec90affab2b16175081467b1d499d8103034ac074852",
+      "verified_files": 82
+    },
+    "native_http_responses": 9,
+    "all_candidate_response_identities_verified": true,
+    "all_candidate_responses_selected_proposer_adapter": true,
+    "native_files_verified_identical_to_raw_response": 6,
+    "frozen_oracles_verified": 2
+  },
+  "elapsed_seconds": {
+    "baseline": 847.18,
+    "candidate": 572.07
+  },
+  "cases": [
+    {
+      "case_id": "guest-list-en-20260919",
+      "baseline": {
+        "source_status": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "model_calls": 6,
+        "generation_seconds": 553.67,
+        "independent_checks": {
+          "exit_code": 1,
+          "tests": 4,
+          "pass": 0,
+          "fail": 4
+        },
+        "model_authored_tests": {
+          "exit_code": 0,
+          "tests": 11,
+          "pass": 11,
+          "fail": 0
+        }
+      },
+      "candidate": {
+        "source_status": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+        "source_status_scope": "Original production syntax/static-structure validation only; no execution success implied",
+        "model_calls": 4,
+        "generation_seconds": 204.61,
+        "independent_checks": {
+          "exit_code": 1,
+          "tests": 4,
+          "pass": 1,
+          "fail": 3
+        },
+        "model_authored_tests": {
+          "exit_code": 1,
+          "tests": 2,
+          "pass": 1,
+          "fail": 1
+        },
+        "native_files": [
+          {
+            "path": "app.js",
+            "generation_id": "cdbbe771-097e-463c-aa68-e28eb55e78d4",
+            "source_sha256": "7ff41b5fa92ae7f2fe8176b3a4c65ff73db33254e34ac5af6ab135742fe97c36",
+            "native_response_sha256": "6881dc5266162e11f90ce1e58c4b3252685b444855732da090cdc1ed7d9103f0"
+          },
+          {
+            "path": "app.test.cjs",
+            "generation_id": "3b05dd83-3766-49b8-b753-cb41e256a768",
+            "source_sha256": "798d86d730ceed711c01aa311a3a7dce91ec14b6958d9e33117fd28e271b024d",
+            "native_response_sha256": "aa309c365ad01aeace630b89300a212e2c37903f8e49db9f20deca2ad31a52d2"
+          },
+          {
+            "path": "index.html",
+            "generation_id": "5d8ad8f7-9565-4fe7-bbf7-ea6a8a6c13c1",
+            "source_sha256": "62cc8a20799c824e1aa5aec23b0f5855d20b45d7f1358220661e7e13f98631ef",
+            "native_response_sha256": "a7a72b17b6a64a2d730a7dda0c5faf2ff1e8e0d7424bb08a0fb0b6a132ed105f"
+          }
+        ]
+      },
+      "findings": [
+        "Candidate retains a globally declared createGuestList with guarded CommonJS export, so the independent classic-script availability group now passes (baseline failed). This VM has no document and does not verify DOM behavior.",
+        "Candidate exports createGuestList() instead of the required named factory export. All three independent state/contract groups fail with TypeError: createGuestList is not a function. This does not prove that the underlying in-memory algorithm is wrong.",
+        "Both candidate Node tests are registered; one passes and the second genuinely fails when it calls the exported service object as a function. No caught-assertion false-success pattern was observed. Baseline had eleven different passing self-tests; their counts are not directly comparable.",
+        "Candidate HTML is rejected by the original structure validator. Source inspection shows no closing style element and missing required screen/control structure. No rendered-browser execution was performed.",
+        "Static inspection of candidate app.js also finds a read() call with no definition in the submitted files; the independent core-only VM does not exercise that document branch."
+      ]
+    },
+    {
+      "case_id": "expense-split-it-20260919",
+      "baseline": {
+        "source_status": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        "model_calls": 3,
+        "generation_seconds": 291.52,
+        "independent_checks": {
+          "exit_code": 1,
+          "tests": 4,
+          "pass": 2,
+          "fail": 2
+        },
+        "model_authored_tests": {
+          "status": "NOT_GENERATED_NOT_ASSESSED"
+        }
+      },
+      "candidate": {
+        "source_status": "SOURCE_ACCEPTED",
+        "source_status_scope": "Original production syntax/static-structure validation only; no execution success implied",
+        "model_calls": 5,
+        "generation_seconds": 364.85,
+        "independent_checks": {
+          "exit_code": 1,
+          "tests": 4,
+          "pass": 2,
+          "fail": 2
+        },
+        "model_authored_tests": {
+          "exit_code": 1,
+          "tests": 2,
+          "pass": 1,
+          "fail": 1
+        },
+        "native_files": [
+          {
+            "path": "app.js",
+            "generation_id": "f835567f-a88e-487e-b956-0bc6aaa89ff1",
+            "source_sha256": "a99f00058934119173475c784665b66698c8b249a35a8014dac7f90ee3a9ab0d",
+            "native_response_sha256": "408314715905153b1153a9b2296ddbe24b7ac9674ba48cd738270c48e48e35ab"
+          },
+          {
+            "path": "app.test.cjs",
+            "generation_id": "2e619c6e-73a6-482b-b2f0-efce90f2488b",
+            "source_sha256": "2a1c704192601c221ea035947a9dd9595eae10969f5521ae03824b21dc521ec1",
+            "native_response_sha256": "e895c210592332c6ac1cc89a7ce8084f23bccdb3d97b1ea0fc229412db904cd8"
+          },
+          {
+            "path": "index.html",
+            "generation_id": "12a54ae1-de92-4804-a08e-498bf6ed7b56",
+            "source_sha256": "c63563ed28a94e7025d9d158062640619991db083551a8fd6d8a9152f7935169",
+            "native_response_sha256": "d7d1058d71ce19476fa89a163ca3a432c7ef882923f365323dbf8bedf08f7bf3"
+          }
+        ]
+      },
+      "findings": [
+        "Candidate core needed one audited syntax retry, then passed original syntax/static-structure admission. Baseline stopped after two ESM core attempts and never generated HTML or model tests.",
+        "Candidate independent numeric validation and classic-script availability pass. Its exact-allocation and conservation groups fail with TypeError: Assignment to constant variable because splitExpense decrements const remainder. Baseline passed the allocation groups but failed integer-input validation and classic-script startup: equal 2/4 totals hide different behavior.",
+        "Both candidate model-authored tests are registered: real-outputs test fails on the same const mutation; invalid-input test passes. Passing static admission therefore does not demonstrate a functioning application.",
+        "Original HTML validator skips TEXT elements: it accepts the expected ELM-004 result marker placed on a link in the first screen instead of the result output in the second screen. Native HTML also repeats id=back. This is a validator defect independently observed in the unchanged native candidate.",
+        "Static inspection finds submit initially disabled without enabling logic and result hidden through CSS without a corresponding reveal. No DOM/browser behavior was executed by this frozen benchmark; these are inspection findings, not measured browser outcomes."
+      ]
+    }
+  ],
+  "aggregate_quality_score": null,
+  "aggregate_quality_score_reason": "Test groups assess different properties; small stochastic sample and unequal generated self-tests do not support a promotion score.",
+  "cost_and_side_effects": {
+    "this_local_comparison_runpod_compute_cost_usd": 0,
+    "cloud_training_cost_included": false,
+    "database_writes": 0,
+    "source_publication": false,
+    "production_promotion": false,
+    "real_browser_test_performed": false
+  },
+  "limitations": [
+    "One stochastic sample per case; no statistical claim of reliable improvement or throughput.",
+    "Cases were excluded from training but have now informed diagnosis; further tuning makes them development checks, not untouched final qualification.",
+    "Core VM checks omit document, rendering, CSS and actual event behavior.",
+    "The original source status is retained even where manual review exposes a validator gap; any validator replay must be recorded separately."
+  ],
+  "next_experiment": [
+    "Keep candidate weights and native failures; restore previously selected proposer for the demo.",
+    "Correct static marker and duplicate-ID admission in a separate change with replay results, without rewriting original benchmark evidence.",
+    "Measure a stronger real coding model on new frozen applications before committing remaining budget to a larger training run; include actual browser submit/back/result behavior."
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "report_type": "CI_MODEL_RUNTIME_TEST_ISOLATION_FIX",
+  "observed_at": "2026-09-20T07:04:43.432330+00:00",
+  "status": "LOCAL_REGRESSION_VERIFIED_PENDING_USER_COMMIT_PUSH_AND_NEW_CI",
+  "failing_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "run_id": 35494854769,
+  "run_url": "https://github.com/AlexTesta00/orchestwin-studio/actions/runs/35494854769",
+  "failure": "Three real-runtime composition tests inherited CI FAKE_DETERMINISTIC settings and correctly triggered REAL_MODEL_CONFIGURATION_CONFLICT.",
+  "failed_jobs": [
+    {
+      "name": "Test (ubuntu-24.04)",
+      "id": 106035909682,
+      "failed_steps": [
+        "Run backend tests with coverage"
+      ]
+    },
+    {
+      "name": "Test (macos-14)",
+      "id": 106035909700,
+      "failed_steps": [
+        "Run backend tests"
+      ]
+    },
+    {
+      "name": "Test (windows-2025)",
+      "id": 106035909702,
+      "failed_steps": [
+        "Run backend tests"
+      ]
+    }
+  ],
+  "change": "Isolate process ORCHESTWIN_* settings and cwd in the three affected test cases with pytest monkeypatch. Production validation and CI environment remain unchanged.",
+  "files_sha256": {
+    "src/test/python/models/test_local_evaluator_runtime.py": "0a2579c03a0693537f6b12ac4f5fe4d058b24a2eb101374e6eb5c3808ffe56bb",
+    "src/test/python/training/test_proposer_adapter_serving.py": "1370ba2e2aff657801b49fc5c2bf38d9bb27c219b1e8898afa87d6d47baa29af"
+  },
+  "verification": {
+    "inherited_environment": {
+      "ORCHESTWIN_REQUIREMENTS_MODE": "FAKE_DETERMINISTIC",
+      "ORCHESTWIN_DESIGN_MODE": "FAKE_DETERMINISTIC",
+      "ORCHESTWIN_ARCHITECTURE_MODE": "FAKE_DETERMINISTIC"
+    },
+    "before_failed_cases": [
+      "test_local_adapter_can_replace_evaluator_without_changing_proposal_role",
+      "test_shared_launcher_writes_consistent_source_identity_and_separate_credentials[False]",
+      "test_shared_launcher_writes_consistent_source_identity_and_separate_credentials[True]"
+    ],
+    "before_junit": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\regression-before.xml",
+      "sha256": "1f6f4cc94f53599d463e2a76c573eb76d4008f1cf4571273377440d9a8219781"
+    },
+    "initial_local_attempt_note": "The initial before/after pytest invocations also hit a denied workspace cache write at session finish. Their raw logs are retained. The final run uses a distinct writable external cache and exits zero.",
+    "final_counts": {
+      "tests": 107,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "final_pytest_exit": 0,
+    "final_junit": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\regression-final.xml",
+      "sha256": "be71d3a09d56d0bf4de01ba68aebad791da717ff2efce930ca454b8c957ade73"
+    },
+    "final_log": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\regression-final.log",
+      "sha256": "a5228a88a4631fd875a68d4f24fcf539acbcd67f71485f6893ac1c351e4e4512"
+    },
+    "existing_conflict_rejection_tests_included": true,
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED"
+  },
+  "source_evidence": {
+    "ci-verification.json": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-verification.json",
+      "sha256": "a7a94a7e729902a768dd708f877668e498611386209627e7c93bc7b11c1e8e42"
+    },
+    "ci-jobs.json": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-jobs.json",
+      "sha256": "371aae152203fc633e718c70ea1f9186dfcf63387d8b09eb52bced92efb9665d"
+    },
+    "ci-ubuntu-failure-excerpt.log": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-ubuntu-failure-excerpt.log",
+      "sha256": "85604d393669d0b5cd8b3e42da9eab5c62ed2d04997477bea8545b95f4f2e08f"
+    },
+    "ci-macos-failure-excerpt.log": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-macos-failure-excerpt.log",
+      "sha256": "70498cbacec5f9babc98e9f1c21daed3ac05a8a4639dc01751ba3a88e635f863"
+    },
+    "ci-windows-failure-excerpt.log": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-windows-failure-excerpt.log",
+      "sha256": "6735a49042f09a5e92125ac0ee7dc66fc2f2fe580fd140ccc759071d32f38a87"
+    }
+  },
+  "limitations": [
+    "Passing local targeted tests do not change the failed GitHub result.",
+    "The user must commit and push the fix; formal Web qualification must bind to that exact new commit with a successful verified workflow."
+  ],
+  "actions_not_performed": [
+    "git commit",
+    "git push",
+    "workflow rerun",
+    "formal fixture execution",
+    "evidence publication",
+    "runtime restart"
+  ]
+}

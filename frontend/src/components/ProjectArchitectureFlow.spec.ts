@@ -148,7 +148,7 @@ describe("ProjectArchitectureFlow", () => {
 
     expect(wrapper.text()).toContain("Reservation platform architecture");
     expect(wrapper.text()).toContain("Create a reservation end to end");
-    expect(wrapper.text()).toContain("PENDING_APPROVAL");
+    expect(wrapper.text()).toContain("Waiting for your approval");
     expect(wrapper.text()).toContain("not empirical user validation");
   });
 
@@ -163,7 +163,7 @@ describe("ProjectArchitectureFlow", () => {
 
     const propose = wrapper
       .findAll("button")
-      .find((button) => button.text().includes("Propose Architecture Package revision"));
+      .find((button) => button.text().includes("Review these changes"));
 
     if (propose === undefined) {
       throw new Error("The Architecture revision action was not rendered");

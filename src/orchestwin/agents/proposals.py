@@ -14,6 +14,7 @@ from orchestwin.agents.selection_rules import (
     TeamSelectionIssue,
     determine_team_constraints,
 )
+from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.models.team_proposals import (
     AgentTeamProposal,
     TeamProposalGenerationStatus,
@@ -375,10 +376,13 @@ class LocalTeamProposalApplicationService:
         *,
         unit_of_work_factory: (TeamProposalUnitOfWorkFactory),
         proposal_port: TeamProposalPort,
+        proposal_evidence_store=None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._proposal_port = proposal_port
+        self._proposal_evidence_store = proposal_evidence_store
 
+    @evidence_application
     async def generate(
         self,
         *,
@@ -448,6 +452,17 @@ class LocalTeamProposalApplicationService:
                 owner_user_id=(owner_user_id),
                 proposal=proposal,
             )
+            if persisted.version is not None:
+                await bind_model_artifacts(
+                    unit,
+                    "AGENT_TEAM",
+                    (persisted.version,),
+                    relation=(
+                        "GENERATED"
+                        if persisted.status is TeamProposalVersionCreationStatus.CREATED
+                        else "MATCHED_EXISTING"
+                    ),
+                )
 
         if persisted.status is TeamProposalVersionCreationStatus.PROJECT_NOT_FOUND:
             return TeamProposalApplicationResult(

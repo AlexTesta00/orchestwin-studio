@@ -28,6 +28,7 @@ export interface RequirementsStoreError {
 interface RequirementsState {
   projectId: string | null;
   projectEpoch: number;
+  readSequence: number;
   current: RequirementsSpecificationVersionPayload | null;
   history: RequirementsSpecificationVersionPayload[];
   diffs: Record<string, RequirementsSpecificationDiffPayload>;
@@ -103,6 +104,7 @@ export const useRequirementsStore = defineStore("requirements", {
   state: (): RequirementsState => ({
     projectId: null,
     projectEpoch: 0,
+    readSequence: 0,
     current: null,
     history: [],
     diffs: {},
@@ -168,6 +170,7 @@ export const useRequirementsStore = defineStore("requirements", {
     },
 
     begin(operation: RequirementsOperation): void {
+      if (operation !== "load") this.readSequence += 1;
       this.pending[operation] = true;
       this.error = null;
     },
@@ -175,6 +178,7 @@ export const useRequirementsStore = defineStore("requirements", {
     finish(operation: RequirementsOperation, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
         this.pending[operation] = false;
+        if (operation !== "load") this.readSequence += 1;
       }
     },
 
@@ -199,6 +203,7 @@ export const useRequirementsStore = defineStore("requirements", {
       authorize: AuthorizedRequest,
       epoch: number,
     ): Promise<void> {
+      const sequence = ++this.readSequence;
       const readiness = await authorize((token) => api.readiness(projectId, token));
       const [history, diffs] = await Promise.all([
         authorize((token) => api.history(projectId, token)),
@@ -220,7 +225,8 @@ export const useRequirementsStore = defineStore("requirements", {
           : authorize((token) => api.gateEvents(projectId, token)),
       ]);
 
-      if (!this.isCurrent(projectId, epoch)) {
+      // Ignore reads overtaken by another refresh or a completed owner command.
+      if (!this.isCurrent(projectId, epoch) || sequence !== this.readSequence) {
         return;
       }
 

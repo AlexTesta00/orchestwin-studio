@@ -229,6 +229,28 @@ class FakeWebExecutionApiService:
         )
 
 
+class FakeWebExecutionStartApiService:
+    def __init__(self) -> None:
+        self.execution_command: WebExecutionStartCommand | None = None
+        self.owner_ids: list[UUID] = []
+
+    async def start_execution(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        command: WebExecutionStartCommand,
+    ) -> WebApiCommandResult:
+        assert project_id == PROJECT_ID
+        self.owner_ids.append(owner_user_id)
+        self.execution_command = command
+        return WebApiCommandResult(
+            WebApiCommandStatus.EXECUTION_RECORDED,
+            EXECUTION,
+            "Web execution evidence was recorded.",
+        )
+
+
 def _client(service: FakeWebExecutionApiService) -> TestClient:
     application = create_app(
         ApplicationSettings(
@@ -311,6 +333,33 @@ def test_source_and_execution_commands_are_typed_and_owner_scoped() -> None:
     assert service.execution_command.authorization_id == AUTHORIZATION_ID
     assert service.execution_command.declared_routes[0].path == "/"
     assert set(service.owner_ids) == {OWNER_ID}
+
+
+def test_start_route_prefers_dedicated_start_service_over_legacy_combined_adapter() -> None:
+    legacy = FakeWebExecutionApiService()
+    dedicated = FakeWebExecutionStartApiService()
+    application = create_app(
+        ApplicationSettings(
+            environment=RuntimeEnvironment.TEST,
+            api_prefix="/api/v1",
+        ),
+        runtime=ApplicationRuntime(web_execution_api_service=legacy),
+        auth_settings=AuthApiSettings(),
+    )
+    application.state.web_execution_start_api_service = dedicated
+    application.dependency_overrides[current_user_dependency] = _user
+
+    with TestClient(application) as client:
+        response = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/web-executions",
+            json=_execution_body(),
+        )
+
+    assert response.status_code == 201
+    assert dedicated.execution_command is not None
+    assert dedicated.execution_command.authorization_id == AUTHORIZATION_ID
+    assert dedicated.owner_ids == [OWNER_ID]
+    assert legacy.execution_command is None
 
 
 def test_queries_expose_revision_report_browser_and_repair_snapshots() -> None:

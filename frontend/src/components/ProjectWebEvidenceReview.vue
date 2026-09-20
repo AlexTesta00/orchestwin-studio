@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import GenerateRepairButton from "./GenerateRepairButton.vue";
 
 import { apiClient } from "@/api/client";
 import { webExecutionApi, type WebExecutionApi } from "@/api/webExecution";
@@ -431,6 +432,22 @@ onMounted(async () => {
             </p>
             <p class="mt-1 mb-0 text-sm text-red-900">{{ signature.normalized_message }}</p>
             <code class="mt-2 block text-xs break-all">{{ signature.digest }}</code>
+            <GenerateRepairButton
+              v-if="store.selectedExecution"
+              :project-id="projectId"
+              platform="web"
+              :locale="locale"
+              :execution-id="store.selectedExecution.id"
+              :base-revision-hash="store.selectedExecution.source_revision.content_hash"
+              :failure-signature="signature.digest"
+              :authorize="authorized"
+              :disabled="
+                store.selectedExecution.id !== store.currentExecution?.id ||
+                store.selectedExecution.source_revision.content_hash !==
+                  store.currentSourceRevision?.content_hash
+              "
+              @generated="loadExecution(store.selectedExecution.id)"
+            />
           </li>
         </ul>
         <p v-else class="m-0 text-slate-600">{{ copy.noSignatures }}</p>

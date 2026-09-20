@@ -13,7 +13,24 @@ export function isSupportedLocale(value: string): value is SupportedLocale {
   return value === "en" || value === "it";
 }
 
-export function createAppI18n(initialLocale: SupportedLocale = defaultLocale) {
+export function savedLocale(): SupportedLocale {
+  try {
+    const saved = localStorage.getItem("orchestwin.locale");
+    return saved && isSupportedLocale(saved) ? saved : defaultLocale;
+  } catch {
+    return defaultLocale;
+  }
+}
+
+export function saveLocale(value: SupportedLocale): void {
+  try {
+    localStorage.setItem("orchestwin.locale", value);
+  } catch {
+    // Language selection remains usable when browser storage is unavailable.
+  }
+}
+
+export function createAppI18n(initialLocale: SupportedLocale = savedLocale()) {
   return createI18n({
     legacy: false,
     locale: initialLocale,

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "campaign_id": "s12-formal-web-cases-v1",
+  "formal_case_ids": [
+    "web-calculator",
+    "hotel-management-web",
+    "weather-comparison-web"
+  ],
+  "execution_mode": "GOVERNED_ORCHESTWIN_WORKFLOW",
+  "execution_phases": [
+    "PREFLIGHT",
+    "WORKFLOW",
+    "BUILD",
+    "TEST",
+    "RUNTIME",
+    "SYNTHETIC_EVALUATION",
+    "EXPORT",
+    "FINALIZE"
+  ],
+  "comparison_policy": {
+    "single_platform_commit_for_comparable_final_runs": true,
+    "same_protocol_version_for_all_formal_cases": true,
+    "owner_approval_gates_must_not_be_bypassed": true
+  },
+  "evidence_policy": {
+    "actual_files_only": true,
+    "content_addressed": true,
+    "observed_measurements_only": true,
+    "dry_run_is_not_a_formal_result": true,
+    "synthetic_outputs_are_not_human_evidence": true
+  },
+  "permanent_claim_flags": {
+    "real_user_behavior_validated": false,
+    "empirical_user_evidence_created": false
+  }
+}

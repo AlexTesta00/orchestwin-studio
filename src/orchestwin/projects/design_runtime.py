@@ -30,9 +30,14 @@ from orchestwin.models.design import (
     DesignUserTwinInput,
 )
 from orchestwin.models.design_runtime import (
+    DesignRuntime,
     DesignRuntimeMode,
     DesignRuntimeSettings,
     build_design_runtime,
+)
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
 )
 from orchestwin.projects.design_application import (
     GovernedDesignContext,
@@ -62,6 +67,7 @@ class ManagedDesignUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyDesignUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -349,7 +355,12 @@ def _user_modeling_input(user_modeling_version) -> DesignUserModelingInput:
                     content_hash=version.content_hash,
                     name=version.profile.name,
                 ),
-                observations=version.profile.observations,
+                observations=tuple(
+                    sorted(
+                        version.profile.observations,
+                        key=lambda observation: observation.observation_key,
+                    )
+                ),
             )
             for version in user_modeling_version.snapshot.twin_versions
         ),
@@ -370,15 +381,18 @@ class DesignServices:
 def build_design_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: DesignRuntimeSettings | None = None,
+    *,
+    proposal_runtime: DesignRuntime | None = None,
 ) -> DesignServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 5."""
-    runtime = build_design_runtime(settings)
+    runtime = proposal_runtime if proposal_runtime is not None else build_design_runtime(settings)
     command_uow_factory = ManagedDesignUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyDesignGateUnitOfWorkFactory(session_factory)
 
     return DesignServices(
         runtime_mode=runtime.mode,
         generation=LocalDesignGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyDesignGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

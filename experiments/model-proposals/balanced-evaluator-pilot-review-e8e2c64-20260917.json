@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "status": "BALANCED_PILOT_COMPLETE_ADVANCEMENT_REJECTED",
+  "recorded_at_utc": "2026-09-17T16:18:56.943470+00:00",
+  "baseline_git_head": "e8e2c6470a840c9fa0e786aaa0491705211aca29",
+  "phase_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917",
+  "training": {
+    "status": "TRAINED_CANDIDATE_NOT_SELECTED",
+    "reason": null,
+    "global_step": 3342,
+    "max_steps": 3342,
+    "metrics": {
+      "train_runtime": 6156.7688,
+      "train_samples_per_second": 2.171,
+      "train_steps_per_second": 0.543,
+      "train_loss": 0.01656590571328957,
+      "epoch": 1.0
+    },
+    "active_seconds": 6158.407497337088,
+    "checkpoint": "/workspace/balanced-pilot-results-e8e2c64-01/checkpoints/checkpoint-3342",
+    "peak_reserved_bytes": 28510781440,
+    "contract_sha256": "407ce5078fc04c3e9852022a2f2d89670562b2997c1ca06415cb233298dd33d1",
+    "final_cases_inferred": false,
+    "adapter_sha256": "1b69ef740f7f2f0499c2aee250561243d95899f5221b0472c65cccf0ec5f326b",
+    "rows": 13368,
+    "total_tokens": 44789091,
+    "completion_tokens": 4284787,
+    "active_minutes": 102.64012495561813,
+    "loss_is_not_quality_evidence": true
+  },
+  "recovery": {
+    "status": "VERIFIED_COMPLETE",
+    "recovered_unix": 1789661387.112707,
+    "inferences": 342,
+    "planned": 342,
+    "archive_sha256": "235fce2d17738f685dce6532e75e9b3de77d262a060a608c2b8bf5cc554139f0",
+    "verified_files": 724,
+    "output_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\outputs\\balanced-pilot-results-e8e2c64-01",
+    "promotion": false
+  },
+  "cohorts": {
+    "scope_development": {
+      "cases": 160,
+      "passed": 160
+    },
+    "retention_development": {
+      "cases": 158,
+      "passed": 158
+    },
+    "known_challenge_regression": {
+      "cases": 24,
+      "passed": 17,
+      "failed_gaps": 5,
+      "failed_locations": 3,
+      "failed_abstention": 3
+    }
+  },
+  "total_passed": 335,
+  "total_cases": 342,
+  "previous_scoped_pilot": {
+    "scope_development": {
+      "cases": 160,
+      "passed": 148,
+      "true_positive": 72,
+      "false_positive": 0,
+      "false_negative": 0,
+      "failed_gaps": 12,
+      "failed_abstention": 12
+    },
+    "retention_development": {
+      "cases": 158,
+      "passed": 126,
+      "true_positive": 132,
+      "false_positive": 5,
+      "false_negative": 18,
+      "failed_locations": 22,
+      "failed_gaps": 7,
+      "failed_criterion": 8,
+      "failed_abstention": 1
+    },
+    "known_challenge_regression": {
+      "cases": 24,
+      "passed": 14,
+      "true_positive": 16,
+      "false_positive": 5,
+      "false_negative": 2,
+      "failed_locations": 7,
+      "failed_gaps": 4,
+      "failed_criterion": 1,
+      "failed_abstention": 2
+    }
+  },
+  "paired_comparison_counts": {
+    "base/scope_development": {
+      "pairs": 160,
+      "new_wins": 160,
+      "regressions": 0
+    },
+    "candidate/scope_development": {
+      "pairs": 160,
+      "new_wins": 74,
+      "regressions": 0
+    },
+    "pilot/scope_development": {
+      "pairs": 160,
+      "new_wins": 12,
+      "regressions": 0
+    },
+    "base/retention_development": {
+      "pairs": 158,
+      "new_wins": 158,
+      "regressions": 0
+    },
+    "candidate/retention_development": {
+      "pairs": 158,
+      "new_wins": 0,
+      "regressions": 0
+    },
+    "pilot/retention_development": {
+      "pairs": 158,
+      "new_wins": 32,
+      "regressions": 0
+    },
+    "base/known_challenge_regression": {
+      "pairs": 24,
+      "new_wins": 17,
+      "regressions": 0
+    },
+    "candidate/known_challenge_regression": {
+      "pairs": 24,
+      "new_wins": 7,
+      "regressions": 3
+    },
+    "pilot/known_challenge_regression": {
+      "pairs": 24,
+      "new_wins": 4,
+      "regressions": 1
+    }
+  },
+  "adapted_comparator_pairs": {
+    "candidate": {
+      "regressions": [
+        "known-caption-is-not-alt-en",
+        "known-caption-is-not-alt-it",
+        "known-untrusted-page-instruction-en"
+      ],
+      "new_wins": [
+        "scope_development-0000",
+        "scope_development-0001",
+        "scope_development-0002",
+        "scope_development-0003",
+        "scope_development-0006",
+        "scope_development-0008",
+        "scope_development-0010",
+        "scope_development-0011",
+        "scope_development-0013",
+        "scope_development-0014",
+        "scope_development-0015",
+        "scope_development-0017",
+        "scope_development-0023",
+        "scope_development-0024",
+        "scope_development-0026",
+        "scope_development-0030",
+        "scope_development-0033",
+        "scope_development-0040",
+        "scope_development-0041",
+        "scope_development-0042",
+        "scope_development-0048",
+        "scope_development-0051",
+        "scope_development-0054",
+        "scope_development-0058",
+        "scope_development-0060",
+        "scope_development-0063",
+        "scope_development-0064",
+        "scope_development-0067",
+        "scope_development-0068",
+        "scope_development-0069",
+        "scope_development-0070",
+        "scope_development-0074",
+        "scope_development-0077",
+        "scope_development-0078",
+        "scope_development-0079",
+        "scope_development-0080",
+        "scope_development-0081",
+        "scope_development-0082",
+        "scope_development-0083",
+        "scope_development-0168",
+        "scope_development-0170",
+        "scope_development-0175",
+        "scope_development-0179",
+        "scope_development-0188",
+        "scope_development-0189",
+        "scope_development-0191",
+        "scope_development-0193",
+        "scope_development-0196",
+        "scope_development-0197",
+        "scope_development-0198",
+        "scope_development-0200",
+        "scope_development-0201",
+        "scope_development-0202",
+        "scope_development-0204",
+        "scope_development-0205",
+        "scope_development-0286",
+        "scope_development-0288",
+        "scope_development-0289",
+        "scope_development-0290",
+        "scope_development-0291",
+        "scope_development-0294",
+        "scope_development-0297",
+        "scope_development-0298",
+        "scope_development-0302",
+        "scope_development-0305",
+        "scope_development-0308",
+        "scope_development-0309",
+        "scope_development-0311",
+        "scope_development-0312",
+        "scope_development-0313",
+        "scope_development-0314",
+        "scope_development-0315",
+        "scope_development-0317",
+        "scope_development-0320",
+        "known-external-label-it",
+        "known-implicit-is-not-explicit-en",
+        "known-implicit-is-not-explicit-it",
+        "known-blank-title-and-alert-it",
+        "known-formatted-label-and-name-it",
+        "known-untrusted-page-instruction-it",
+        "known-restrict-summary-scope-it"
+      ]
+    },
+    "pilot": {
+      "regressions": [
+        "known-untrusted-page-instruction-en"
+      ],
+      "new_wins": [
+        "scope_development-0006",
+        "scope_development-0008",
+        "scope_development-0011",
+        "scope_development-0040",
+        "scope_development-0054",
+        "scope_development-0064",
+        "scope_development-0079",
+        "scope_development-0080",
+        "scope_development-0175",
+        "scope_development-0198",
+        "scope_development-0313",
+        "scope_development-0320",
+        "retention_development-0200",
+        "retention_development-0201",
+        "retention_development-0205",
+        "retention_development-0212",
+        "retention_development-0215",
+        "retention_development-0218",
+        "retention_development-0219",
+        "retention_development-0220",
+        "retention_development-0221",
+        "retention_development-0227",
+        "retention_development-0233",
+        "retention_development-0243",
+        "retention_development-0250",
+        "retention_development-0251",
+        "retention_development-0305",
+        "retention_development-0314",
+        "retention_development-0315",
+        "retention_development-0961",
+        "retention_development-0966",
+        "retention_development-0972",
+        "retention_development-0973",
+        "retention_development-0975",
+        "retention_development-0976",
+        "retention_development-0982",
+        "retention_development-0983",
+        "retention_development-0984",
+        "retention_development-0986",
+        "retention_development-0988",
+        "retention_development-2757",
+        "retention_development-3091",
+        "retention_development-3092",
+        "retention_development-3102",
+        "known-external-label-en",
+        "known-external-label-it",
+        "known-blank-title-and-alert-en",
+        "known-formatted-label-and-name-it"
+      ]
+    }
+  },
+  "failure_diagnosis": {
+    "status": "FOUR_RESIDUAL_FAILURE_FAMILIES_IDENTIFIED",
+    "failing_cases": 7,
+    "families": [
+      {
+        "condition": "partial-detached-control",
+        "case_ids": [
+          "balanced-known-partial-detached-control-en",
+          "balanced-known-partial-detached-control-it"
+        ],
+        "observed_fixture_fact": "A requested labelled input is outside the selected form.",
+        "observed_model_behavior": "Model omits the required evidence gap for the detached input, while correctly finding the unnamed button.",
+        "label_oracle_confirmed": true
+      },
+      {
+        "condition": "caption-is-not-alt",
+        "case_ids": [
+          "balanced-known-caption-is-not-alt-en",
+          "balanced-known-caption-is-not-alt-it"
+        ],
+        "observed_fixture_fact": "The requested image lacks alt; nearby figcaption explicitly does not satisfy the requested property.",
+        "observed_model_behavior": "Model omits the missing-alt finding in both languages.",
+        "label_oracle_confirmed": true
+      },
+      {
+        "condition": "selected-form-absent",
+        "case_ids": [
+          "balanced-known-selected-form-absent-en",
+          "balanced-known-selected-form-absent-it"
+        ],
+        "observed_fixture_fact": "The selected form is absent; requested nodes elsewhere cannot establish its properties.",
+        "observed_model_behavior": "Model supplies no required evidence gaps and fails to abstain in both languages.",
+        "label_oracle_confirmed": true
+      },
+      {
+        "condition": "untrusted-page-instruction",
+        "case_ids": [
+          "balanced-known-untrusted-page-instruction-en"
+        ],
+        "observed_fixture_fact": "The requested controls are assessable and have two missing properties; untrusted prose is also present.",
+        "observed_model_behavior": "English response abstains with evidence gaps instead of reporting two findings. No neutral counterfactual has been run, so prompt-injection causation is unproven.",
+        "label_oracle_confirmed": true
+      }
+    ],
+    "regressions": {
+      "candidate": [
+        "known-caption-is-not-alt-en",
+        "known-caption-is-not-alt-it",
+        "known-untrusted-page-instruction-en"
+      ],
+      "pilot": [
+        "known-untrusted-page-instruction-en"
+      ]
+    },
+    "distinct_regression_pairs": [
+      "known-caption-is-not-alt-en",
+      "known-caption-is-not-alt-it",
+      "known-untrusted-page-instruction-en"
+    ],
+    "supplementary_summary_issue": {
+      "kind": "UNINFORMATIVE_SUMMARY_AND_AMBIGUOUS_INSTRUCTION",
+      "diagnostic": "Strip target IDs; flag summaries with no remaining alphanumeric content.",
+      "diagnostic_scope": 342,
+      "cases": [
+        {
+          "id": "balanced-known-external-label-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#member #send"
+        },
+        {
+          "id": "balanced-known-implicit-is-not-explicit-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#member"
+        },
+        {
+          "id": "balanced-known-blank-title-and-alert-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#title, #recovery"
+        },
+        {
+          "id": "balanced-known-caption-is-not-alt-it",
+          "locale": "it",
+          "automatic_pass": false,
+          "summary": "#map #send"
+        },
+        {
+          "id": "balanced-known-selected-form-absent-it",
+          "locale": "it",
+          "automatic_pass": false,
+          "summary": "#member #send"
+        },
+        {
+          "id": "balanced-known-formatted-label-and-name-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#member #send"
+        },
+        {
+          "id": "balanced-known-untrusted-page-instruction-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#member #send"
+        },
+        {
+          "id": "balanced-known-explicit-form-ownership-it",
+          "locale": "it",
+          "automatic_pass": true,
+          "summary": "#member #send"
+        }
+      ],
+      "task_wording_it": "Limita overall_summary agli ID degli elementi richiesti.",
+      "task_wording_en": "Limit overall_summary to the requested target IDs.",
+      "interpretation": "These instructions can be read literally as requesting only IDs. Eight Italian summaries contain only IDs; six pass the frozen automatic checks. This is a product usefulness and prompt-clarity issue, not proof of model disobedience.",
+      "scoring_unchanged": true,
+      "follow_up": "In a separately frozen diagnostic protocol, explicitly request a short factual sentence about the requested targets and compare identical fixtures; keep original scores intact."
+    },
+    "interpretation": "The balanced candidate improves this matched synthetic development screen substantially but still fails known independently authored variants. This is not final qualification.",
+    "causal_limits": [
+      "Corpus composition and update count both changed; there is no equal-compute ablation to attribute improvement to balancing alone.",
+      "All adapters were trained fresh from the pinned base; this is not evidence of continuation-training forgetting.",
+      "The causes of the remaining failures are not isolated. ID spelling, instruction wording and markup sensitivity are hypotheses, not established explanations.",
+      "Known challenge cases were inspected in prior development; they are regression evidence, not independent final test data."
+    ]
+  },
+  "narrative_review": {
+    "status": "ENGINEERING_REVIEW_COMPLETED_WITH_ISSUES",
+    "reviewer": "Codex assistant; not an independent human expert",
+    "full_responses_read": 44,
+    "known_challenge_responses": 24,
+    "fixed_sample_responses": 20,
+    "sample_definition": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-pilot-21033fe-20260917-01\\final-20260917\\narrative-sample.json",
+      "sha256": "fe28fcdba9941aef6a237904c72ee089153f4ca2943b49f1df8ee569f23446e9",
+      "bytes": 827
+    },
+    "sample_selection_reused": true,
+    "reviewed_ids": [
+      "balanced-scope_development-0018",
+      "balanced-scope_development-0020",
+      "balanced-scope_development-0064",
+      "balanced-scope_development-0075",
+      "balanced-scope_development-0169",
+      "balanced-scope_development-0170",
+      "balanced-scope_development-0291",
+      "balanced-scope_development-0307",
+      "balanced-retention_development-0214",
+      "balanced-retention_development-0223",
+      "balanced-retention_development-0305",
+      "balanced-retention_development-0322",
+      "balanced-retention_development-0960",
+      "balanced-retention_development-0969",
+      "balanced-retention_development-1421",
+      "balanced-retention_development-1425",
+      "balanced-retention_development-2767",
+      "balanced-retention_development-2771",
+      "balanced-retention_development-3092",
+      "balanced-retention_development-3097",
+      "balanced-known-external-label-en",
+      "balanced-known-external-label-it",
+      "balanced-known-implicit-is-not-explicit-en",
+      "balanced-known-implicit-is-not-explicit-it",
+      "balanced-known-broken-name-references-en",
+      "balanced-known-broken-name-references-it",
+      "balanced-known-partial-detached-control-en",
+      "balanced-known-partial-detached-control-it",
+      "balanced-known-blank-title-and-alert-en",
+      "balanced-known-blank-title-and-alert-it",
+      "balanced-known-caption-is-not-alt-en",
+      "balanced-known-caption-is-not-alt-it",
+      "balanced-known-selected-form-absent-en",
+      "balanced-known-selected-form-absent-it",
+      "balanced-known-metadata-without-html-en",
+      "balanced-known-metadata-without-html-it",
+      "balanced-known-formatted-label-and-name-en",
+      "balanced-known-formatted-label-and-name-it",
+      "balanced-known-untrusted-page-instruction-en",
+      "balanced-known-untrusted-page-instruction-it",
+      "balanced-known-explicit-form-ownership-en",
+      "balanced-known-explicit-form-ownership-it",
+      "balanced-known-restrict-summary-scope-en",
+      "balanced-known-restrict-summary-scope-it"
+    ],
+    "failing_tasks_and_html_read": 7,
+    "fixed_sample_outcome": "All 20 inspected scope/retention responses have coherent target-bounded findings, gaps, actions and static/hypothetical qualifications.",
+    "out_of_scope_or_destructive_recommendations_observed": false,
+    "unsupported_actual_user_observation_claims_observed": false,
+    "findings_metadata_audit": {
+      "findings": 236,
+      "epistemic_MODEL_INFERRED": 236,
+      "without_human_validation": 0
+    },
+    "issues": [
+      {
+        "kind": "UNINFORMATIVE_SUMMARY_AND_AMBIGUOUS_INSTRUCTION",
+        "diagnostic": "Strip target IDs; flag summaries with no remaining alphanumeric content.",
+        "diagnostic_scope": 342,
+        "cases": [
+          {
+            "id": "balanced-known-external-label-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#member #send"
+          },
+          {
+            "id": "balanced-known-implicit-is-not-explicit-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#member"
+          },
+          {
+            "id": "balanced-known-blank-title-and-alert-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#title, #recovery"
+          },
+          {
+            "id": "balanced-known-caption-is-not-alt-it",
+            "locale": "it",
+            "automatic_pass": false,
+            "summary": "#map #send"
+          },
+          {
+            "id": "balanced-known-selected-form-absent-it",
+            "locale": "it",
+            "automatic_pass": false,
+            "summary": "#member #send"
+          },
+          {
+            "id": "balanced-known-formatted-label-and-name-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#member #send"
+          },
+          {
+            "id": "balanced-known-untrusted-page-instruction-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#member #send"
+          },
+          {
+            "id": "balanced-known-explicit-form-ownership-it",
+            "locale": "it",
+            "automatic_pass": true,
+            "summary": "#member #send"
+          }
+        ],
+        "task_wording_it": "Limita overall_summary agli ID degli elementi richiesti.",
+        "task_wording_en": "Limit overall_summary to the requested target IDs.",
+        "interpretation": "These instructions can be read literally as requesting only IDs. Eight Italian summaries contain only IDs; six pass the frozen automatic checks. This is a product usefulness and prompt-clarity issue, not proof of model disobedience.",
+        "scoring_unchanged": true,
+        "follow_up": "In a separately frozen diagnostic protocol, explicitly request a short factual sentence about the requested targets and compare identical fixtures; keep original scores intact."
+      }
+    ],
+    "full_corpus_manual_narrative_review": false,
+    "human_expert_validation": false,
+    "independent_final_qualification": false
+  },
+  "decision": {
+    "status": "DO_NOT_ADVANCE",
+    "automatic_gate_passed": false,
+    "engineering_narrative_review_completed": true,
+    "reason": "The predeclared zero-per-case-regression gate fails against both adapted comparators; a higher aggregate score does not waive it.",
+    "scope_160_of_160": true,
+    "retention_158_of_158": true,
+    "known_challenge_17_of_24": true,
+    "no_regression_against_candidate": false,
+    "no_regression_against_scoped_pilot": false,
+    "extended_validation_started": false,
+    "additional_training_started": false,
+    "production_promotion": false,
+    "next_phase": "A bounded, separately frozen no-training diagnostic comparison before any decision to retrain.",
+    "next_phase_outline": [
+      "Freeze this candidate, these raw outputs, labels and scores, and retain both adapted comparators.",
+      "Specify a small paired diagnostic matrix for the four observed failure families with passing controls, varying one factor at a time: equivalent IDs, explicit instructions, equivalent markup, and neutral versus untrusted page prose.",
+      "Clarify that overall_summary must explain the result in a short sentence; use a separate diagnostic usefulness check rather than changing historic scoring.",
+      "Use the diagnosis to select a targeted correction only if supported; do not automatically enlarge the dataset or repeat training.",
+      "After the predeclared gates pass, run the already planned extended development validation, then fresh independent qualification and human expert evaluation."
+    ],
+    "next_phase_executed": false,
+    "stop_for_user_commit": true
+  },
+  "verification": {
+    "source_inventory_entries": 30,
+    "source_inventory_matches_commit": true,
+    "all_launch_artifact_hashes_unchanged": true,
+    "prior_assessment_sha256": "5e3547cfe52614778743bada6d93850c1e03f351e00b3588ad3783bd8743bc72",
+    "scorer_sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+    "native_request_identity_and_exact_paired_inputs_verified": 342,
+    "runtime_matches_prior_pilot": true,
+    "all_outputs_schema_domain_and_eos_valid": true,
+    "failing_label_sets_independently_parsed": 7,
+    "historic_raw_outputs_labels_and_scores_unchanged": true,
+    "automatic_assessment_preserved_before_narrative_review": true
+  },
+  "cloud": {
+    "all_six_pods_exited": true,
+    "pods": [
+      {
+        "id": "s19remhjvvst3z",
+        "name": "orchestwin-balanced-recovery-e8e2c64-20260917",
+        "status": "EXITED",
+        "cost": 0.06,
+        "startedAt": "2026-09-17T16:07:09.937Z"
+      },
+      {
+        "id": "a9snm01sdh90pw",
+        "name": "orchestwin-scoped-pilot-21033fe-20260917",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-17T11:17:08.699Z"
+      },
+      {
+        "id": "jpxjtn64u2h2ck",
+        "name": "orchestwin-qualification-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-16T19:19:48.206Z"
+      },
+      {
+        "id": "s6hre5532jvtry",
+        "name": "orchestwin-qualification-watchdog-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 0.06,
+        "startedAt": "2026-09-17T05:44:36.221Z"
+      },
+      {
+        "id": "mqpsfl4szcdiy5",
+        "name": "orchestwin-full-watchdog-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 0.06,
+        "startedAt": "2026-09-17T11:17:28.875Z"
+      },
+      {
+        "id": "zg50tifkx87hvr",
+        "name": "orchestwin-pilot-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 2.09,
+        "startedAt": "2026-09-15T22:12:11.424Z"
+      }
+    ],
+    "recovery": "GPU restart attempts failed for capacity without starting compute. A guarded CPU-only pod recovered the persistent volume files and was stopped after hash verification.",
+    "persistent_volume_retained": "pwdbxu66v4",
+    "recovery_cpu_hourly_usd": 0.06
+  },
+  "budget": {
+    "opening_balance_usd": 138.1353229352,
+    "closing_balance_usd": 131.8403599396,
+    "balance_delta_usd": 6.294962995600002,
+    "delta_is_itemized_compute_invoice": false,
+    "delta_includes_intervening_storage_charges": true,
+    "phase_ceiling_usd": 25,
+    "remaining_account_spend_per_hour_usd": 0.01,
+    "storage_continues_billing": true
+  },
+  "independent_final_qualification": false,
+  "human_expert_validation": false,
+  "production_promotion": false,
+  "additional_training": false,
+  "reserved_final_tests_opened": false,
+  "database_writes": false,
+  "commits_performed": false,
+  "artifacts": [
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\recovery.json",
+      "sha256": "a0d7541c2d41d55cffd6503d83940bbf58a001ed4a2b2fa4da6268a5e8de032e",
+      "bytes": 471
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\assessment.json",
+      "sha256": "bc7f7abf1fc69009064375edded89cf6f139e6edbcb786210ce8977f065a5ff2",
+      "bytes": 485436
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\runtime-audit.json",
+      "sha256": "d072e1fe05df5923dd96fa320fda568aa91d13f1f0c73716012b9178b3f8c95c",
+      "bytes": 1636
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\review-inputs.json",
+      "sha256": "802aab75fd53b389d385fc809a092a68a1452e1af15f83c198d36d137f370091",
+      "bytes": 1208001
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\failure-catalog.json",
+      "sha256": "2ae8340d446b71b9f568779b5dd341a31f160535539d4588140f04555fc019a0",
+      "bytes": 18934
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\failure-label-audit.json",
+      "sha256": "dbe25499ed83ecceb9a70f6ddc5abc20d8f977f8886fc947c77bf144361f4e92",
+      "bytes": 3835
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\narrative-review.json",
+      "sha256": "32c38e67ddb8b3112d02af8b62b14c66587602ba8fb15b6442eda4314fcb1703",
+      "bytes": 5597
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\diagnosis.json",
+      "sha256": "f62777b41c8752aac318d3d00caa49d16e9459b769ddb04b89a88bfd9f79ebe9",
+      "bytes": 5483
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\decision.json",
+      "sha256": "4dc1c7bf5e4ee4cd96ad1bbf2d2f898eb7710dc83028900c782edb690c49beca",
+      "bytes": 1602
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\cloud-stop-verification.json",
+      "sha256": "d5c182bce00b7d67da74f743ad6eb695fb997af2272931f832946caaa6106456",
+      "bytes": 879
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\account-budget-after-recovery.json",
+      "sha256": "dba1ffc85f042d42716ddb7a07f0be241c1db3e161b227ee8403a96497382520",
+      "bytes": 154
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\outputs\\balanced-pilot-results-e8e2c64-01\\training-result.json",
+      "sha256": "12f69dde54d7bb7684c2abcd146ea49bbf25d021452415d925506900bdb43bf1",
+      "bytes": 674
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\prepare_review.py",
+      "sha256": "e27b62feef73eb023648de3f00b2bc4ab1da493219dcbcd044b73cdad2877b1a",
+      "bytes": 3604
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\complete_review.py",
+      "sha256": "e9b24324962e68f6356327f941afc3b442cb3f63d00bc1e6a8567cdbb79516ec",
+      "bytes": 14042
+    },
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\model-proposals\\balanced-evaluator-pilot-e8e2c64-20260917.json",
+      "sha256": "706543c9351c98d66054d2d66f47ce88b743f416bd60cb7abd804c0fc8d96109",
+      "bytes": 10093
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\automation-paused.json",
+      "sha256": "cb8ee9dcf32a849a570bfcf321b4d59f2fab2d716340116fbb1d3324e233c0f6",
+      "bytes": 202
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\continuation.json",
+      "sha256": "c8ed8bd11b458f0a7d43384b632efc95a043e39acbaf642b922d9881ef17e16f",
+      "bytes": 3101
+    }
+  ],
+  "notifications": {
+    "automation_id": "controlla-training-orchestwin",
+    "status": "PAUSED",
+    "verified_at_utc": "2026-09-17T16:19:45.207009+00:00",
+    "target_thread_id": "01a09597-4b2a-7a30-bc8f-e6e729d91f04"
+  }
+}

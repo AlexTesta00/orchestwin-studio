@@ -7,10 +7,6 @@ import {
 } from "vue-router";
 
 import HomeView from "@/views/HomeView.vue";
-import LoginView from "@/views/LoginView.vue";
-import ProjectDetailView from "@/views/ProjectDetailView.vue";
-import ProjectsView from "@/views/ProjectsView.vue";
-import RegisterView from "@/views/RegisterView.vue";
 
 declare module "vue-router" {
   interface RouteMeta {
@@ -28,7 +24,7 @@ export const applicationRoutes = Object.freeze([
   {
     path: "/login",
     name: "login",
-    component: LoginView,
+    component: () => import("@/views/LoginView.vue"),
     meta: {
       guestOnly: true,
     },
@@ -36,7 +32,7 @@ export const applicationRoutes = Object.freeze([
   {
     path: "/register",
     name: "register",
-    component: RegisterView,
+    component: () => import("@/views/RegisterView.vue"),
     meta: {
       guestOnly: true,
     },
@@ -44,7 +40,7 @@ export const applicationRoutes = Object.freeze([
   {
     path: "/projects",
     name: "projects",
-    component: ProjectsView,
+    component: () => import("@/views/ProjectsView.vue"),
     meta: {
       requiresAuthentication: true,
     },
@@ -52,7 +48,7 @@ export const applicationRoutes = Object.freeze([
   {
     path: "/projects/:projectId",
     name: "project-detail",
-    component: ProjectDetailView,
+    component: () => import("@/views/ProjectDetailView.vue"),
     meta: {
       requiresAuthentication: true,
     },

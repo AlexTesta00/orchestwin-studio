@@ -810,6 +810,7 @@ class UserModelingReadinessPayload(ApiModel):
     gate_id: UUID | None
     gate_status: HumanGateStatus | None
     approved_current_snapshot: bool
+    context_current: bool = True
     workflow_state: str
     twins: tuple[
         EffectiveTwinLifecyclePayload,
@@ -923,6 +924,11 @@ class UserModelingGateApiPort(Protocol):
 class UserModelingQueryPort(Protocol):
     """Owner-scoped User Modeling read boundary."""
 
+    async def current_personas(
+        self, *, owner_user_id: UUID, project_id: UUID
+    ) -> tuple[PersonaProfileVersion, ...]:
+        """Return current persona versions before or after snapshot generation."""
+
     async def current_snapshot(
         self,
         *,
@@ -970,6 +976,7 @@ class UserModelingApiDependencies:
     gates: UserModelingGateApiPort
     queries: UserModelingQueryPort
     owner_user_id_dependency: OwnerUserIdDependency
+    context_check: Callable | None = None
 
 
 def create_user_modeling_router(
@@ -982,6 +989,13 @@ def create_user_modeling_router(
     )
 
     owner_user_id_dependency = Depends(dependencies.owner_user_id_dependency)
+
+    @router.get("/personas", response_model=tuple[PersonaVersionPayload, ...])
+    async def current_personas(project_id: UUID, owner_user_id: UUID = owner_user_id_dependency):
+        versions = await dependencies.queries.current_personas(
+            owner_user_id=owner_user_id, project_id=project_id
+        )
+        return tuple(PersonaVersionPayload.from_domain(version) for version in versions)
 
     @router.post(
         "/personas/proposals",
@@ -1268,9 +1282,15 @@ def create_user_modeling_router(
             project_id=project_id,
         )
 
+        context_current = dependencies.context_check is None or await dependencies.context_check(
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+            snapshot=snapshot,
+        )
         return _readiness_payload(
             snapshot=snapshot,
             gate=gate,
+            context_current=context_current,
         )
 
     return router
@@ -1360,6 +1380,7 @@ def _readiness_payload(
     *,
     snapshot: (UserModelingSnapshotVersion | None),
     gate: HumanGate | None,
+    context_current: bool = True,
 ) -> UserModelingReadinessPayload:
     """Derive HTTP readiness without mutating User Twin profiles."""
     if snapshot is None:
@@ -1385,7 +1406,8 @@ def _readiness_payload(
     )
 
     approved = (
-        gate is not None
+        context_current
+        and gate is not None
         and gate.gate_type is HumanGateType.USER_MODELING
         and gate.status is HumanGateStatus.APPROVED
         and gate.artifact == expected_artifact
@@ -1421,6 +1443,7 @@ def _readiness_payload(
         gate_id=(None if gate is None else gate.id),
         gate_status=(None if gate is None else gate.status),
         approved_current_snapshot=(approved),
+        context_current=context_current,
         workflow_state=(
             "READY_FOR_REQUIREMENTS_DEFINITION" if approved else "USER_MODELING_REVIEW_REQUIRED"
         ),

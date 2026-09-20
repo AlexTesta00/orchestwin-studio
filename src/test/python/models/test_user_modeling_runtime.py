@@ -62,12 +62,13 @@ def test_unknown_user_modeling_runtime_mode_is_rejected(
         UserModelingRuntimeSettings()
 
 
-def test_sprint_four_runtime_exposes_no_provider_credentials() -> None:
-    """Keep the deterministic Sprint 04 runtime free from API secrets."""
+def test_runtime_exposes_config_path_without_provider_credentials() -> None:
+    """Expose only mode and a non-secret configuration path."""
     fields = set(UserModelingRuntimeSettings.model_fields)
 
     assert fields == {
         "mode",
+        "model_config_file",
     }
 
     assert "api_key" not in fields

@@ -7,10 +7,14 @@
   "build_system": "GRADLE_KOTLIN_DSL",
   "entrypoint": "org.orchestwin.greeting.Main",
   "expected_output": "Hello, JVM!",
-  "source_content_hash": "f58bf0eefa50490b323ad0fb44f9d757a0e6afe878e65a514c0fa22ae3d98faa",
+  "source_content_hash": "ba6c2591cd4f84a837767d3056cff15059d05c06e3425d7a990bfdab4d0b43f4",
   "source_paths": [
     "build.gradle.kts",
+    "gradle/verification-metadata.xml",
+    "gradle/wrapper/gradle-wrapper.jar",
     "gradle/wrapper/gradle-wrapper.properties",
+    "gradlew",
+    "gradlew.bat",
     "settings.gradle.kts",
     "src/main/java/org/orchestwin/greeting/Greeting.java",
     "src/main/java/org/orchestwin/greeting/Main.java",
@@ -18,6 +22,6 @@
   ],
   "execution_attested": false,
   "attestation_boundary": "SOURCE_CONTRACT_ONLY",
-  "launcher_complete": false,
-  "dependency_verification_complete": false
+  "launcher_complete": true,
+  "dependency_verification_complete": true
 }

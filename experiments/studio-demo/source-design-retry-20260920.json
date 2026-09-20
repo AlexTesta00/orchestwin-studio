@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-20T07:35:26.036397+00:00",
+  "scope": "LOCAL_IMPLEMENTATION_AND_SYNTHETIC_REGRESSION_ONLY",
+  "status": "INTEGRATED_API_READY_NO_NEW_INFERENCE",
+  "model_calls": 0,
+  "app_database_migrated": true,
+  "api_restarted": true,
+  "trigger": "First WEB_STATIC index.html result rejected by the unchanged SOURCE_DESIGN_STRUCTURE_MISMATCH validator.",
+  "behavior": [
+    "One additional real audited file generation is available; app.js and tests are preserved and not regenerated.",
+    "At most two total attempts per file across syntax_retry and design_retry. A failed retry cannot request another category or another retry.",
+    "The first HTML, provider response and rejection remain immutable evidence. Only exact newly generated accepted bytes can enter the source tree.",
+    "Design feedback retains exact previous-source SHA256 and excerpt, the precise first structural mismatch, and ordered approved screens/controls/labels/field names/options/transitions.",
+    "Transport, parser availability and audit failures do not trigger a design retry. Failed rejection persistence stops before another model call.",
+    "No output repair, validator relaxation, automatic marker insertion, fixture substitution or real model success is claimed."
+  ],
+  "database": {
+    "migration": "0044_source_design_retry",
+    "previous": "0043_source_syntax_retry",
+    "guards": [
+      "Shared unique parent/ordinal/attempt index across syntax and design retries.",
+      "Exact original rejected generation/request hash, same owner/project/task/target and complete unchanged non-retry context.",
+      "Design retry allowed only for index.html with matching rejected provider content SHA256 and exact retained feedback.",
+      "Previous retry, mixed retry metadata, missing failure evidence and already accepted first attempt are refused.",
+      "Downgrade refuses retained design retries and otherwise restores the exact historical syntax index/trigger."
+    ],
+    "isolated_postgres_image": "sha256:b07129cc272f688c98f5b343138a0a52fa45b3d82f50d7a53ff441330624cd2e",
+    "app_database_touched": true,
+    "temporary_containers_cleanup_confirmed": true,
+    "app_migration_verification": {
+      "revision": "0044_source_design_retry",
+      "project_generation_count_unchanged": 18,
+      "verified_at_utc": "2026-09-20T07:45:37.771012+00:00"
+    }
+  },
+  "validation": {
+    "unit": {
+      "passed": 85,
+      "failed": 0,
+      "seconds": 4.28,
+      "suites": [
+        "src/test/python/models/test_source_design_retry.py",
+        "src/test/python/models/test_source_file_generation.py",
+        "src/test/python/models/test_source_design_contract.py"
+      ]
+    },
+    "postgres": {
+      "passed": 66,
+      "failed": 0,
+      "runs": [
+        {
+          "passed": 64,
+          "seconds": 160.03,
+          "log": {
+            "path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/design-retry-postgres-71138498ddf247b79adeb7a96c6d23c0.log",
+            "sha256": "1a53508a5c7fa4b64004c5b8d5de0617a4e541e0982b5655c964056e214fdc33",
+            "bytes": 113
+          }
+        },
+        {
+          "passed": 2,
+          "seconds": 7.48,
+          "log": {
+            "path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/design-retry-postgres-be4a7f29138645d2893585885a5edf51.log",
+            "sha256": "4cf34bd92b01b839ded4d6a458bbe4ff1a7c7c78275f597a78bd2671f999534c",
+            "bytes": 100
+          }
+        }
+      ],
+      "coverage": [
+        "Atomic successful publication and native rejection retention",
+        "Second design failure leaves no source revision/link",
+        "Artifact-link persistence failure rolls back publication while retaining model evidence",
+        "Attempt number, prior request/source hash, feedback, context, category and filename tampering rejected before transport",
+        "Duplicate attempt2 blocked by unique index; retry-of-retry rejected",
+        "Historical syntax retry, source text and owner-edit persistence regressions",
+        "Migration downgrade/upgrade and retained-history refusal"
+      ]
+    },
+    "ruff_check": "PASSED",
+    "ruff_format": "PASSED",
+    "independent_review": "Read-only review by proposer_training_dataset: no blocking finding; feedback remains subject to MAX_CONTEXT_BYTES."
+  },
+  "test_fixture_correction": "Existing source_output(WEB_STATIC) HTML now reflects the synthetic fixture own approved reservation prototype; real generated sources untouched. Two migration head assertions updated to0044.",
+  "files": [
+    {
+      "path": "src/orchestwin/models/source_file_generation.py",
+      "sha256": "636b8a8a7fa900cab1329ff471331e35d7d3fc0643b07bf557db3c71218f53b4",
+      "bytes": 42461
+    },
+    {
+      "path": "src/orchestwin/models/source_design_contract.py",
+      "sha256": "6866d27e41b565f96e58b267c53d5a8f412fad368cc501a2f5da60d40644e01c",
+      "bytes": 7136
+    },
+    {
+      "path": "src/orchestwin/persistence/migrations/versions/0044_source_design_retry.py",
+      "sha256": "5096613898e8c9f4e8449584f60aebca45c881f4cd18c278e2d1e845ab744d58",
+      "bytes": 5721
+    },
+    {
+      "path": "src/test/python/models/test_source_design_retry.py",
+      "sha256": "6813e68190a113482d98614b8f6af6b80857564d7eed770a58f22eb7b0b9032c",
+      "bytes": 5763
+    },
+    {
+      "path": "src/test/python/integration/test_source_design_retry_postgres.py",
+      "sha256": "8b7eef472a5f40670de23b8bd9734c10c1133ba077fa6f3252fddb51899e3886",
+      "bytes": 10959
+    },
+    {
+      "path": "src/test/python/integration/test_model_source_generation_postgres.py",
+      "sha256": "d01c6564a7ce6ddc6915a6b0f46754a744a55b4d3d45e90fb1b002d3d3c3d3b5",
+      "bytes": 32538
+    },
+    {
+      "path": "src/test/python/integration/test_source_text_protocol_postgres.py",
+      "sha256": "e0e1cd8ffd9ebc33425fe5230b50ab0790062a8788e62f40e876193fdcc9f22a",
+      "bytes": 5466
+    },
+    {
+      "path": "src/test/python/integration/test_web_source_owner_edits_postgres.py",
+      "sha256": "5700294b937f08ca031475782bb1f56753478e3098b0e8751683b43b26a11148",
+      "bytes": 7822
+    }
+  ],
+  "next_gate": "Wait for parent GPU release before real source inference or GUI generation. No generated-result success or Level D promotion inferred from readiness.",
+  "local_integration": {
+    "receipt": {
+      "path": "var/studio/coder-source-bf16-20260920-01/api-integration-receipt.json",
+      "sha256": "be87bece5d2a5a47394ab7f632b9461525f7f8392aa25d1bac121e394fb133ca"
+    },
+    "api_pid": 5392,
+    "api_listener_pid": 15924,
+    "api_started": "2026-09-20T07:44:56.3694553Z",
+    "api_health_200": true,
+    "models_config": {
+      "path": "var/studio/coder-source-bf16-20260920-01/models-experimental.json",
+      "sha256": "5eb0040b4ed168b6d8ba2ab905cb160e7d2cc5ccd7930db89cd5b03b550444d8"
+    },
+    "readiness": {
+      "ready": true,
+      "generation_performed": false,
+      "path": "var/studio/coder-source-bf16-20260920-01/readiness-before-api.json",
+      "sha256": "8643dbd1275ca420c4ccee390db221d511980eaad2daec9776f75355d54063d6"
+    },
+    "before_snapshot": {
+      "path": "C:/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/gui-new-project-20260920-01/before-bf16/manifest.json",
+      "sha256": "b59203d3d65e502b78c3387ec77c1256fd0bb93f61a6f232ae78a74dde08b17d",
+      "files_verified": 280,
+      "generations": 18,
+      "missing_objects": 0
+    },
+    "backup_files": [
+      "var/studio/coder-source-bf16-20260920-01/active-session.before.json",
+      "var/studio/coder-source-bf16-20260920-01/models.before.json"
+    ],
+    "preserved_processes": [
+      {
+        "id": 24464,
+        "started": "2026-09-20T06:48:11.525678Z",
+        "unchanged": true
+      },
+      {
+        "id": 15216,
+        "started": "2026-09-20T06:50:39.8716188Z",
+        "unchanged": true
+      }
+    ],
+    "source_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct BF16 source-only; general proposer and evaluator configurations unchanged."
+  }
+}

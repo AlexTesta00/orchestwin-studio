@@ -1,0 +1,1519 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T22:32:52.387892+00:00",
+  "scope": "DEVELOPMENT_CONSOLE_MODEL_PROBE_NOT_LEVEL_D",
+  "purpose": "Verify original real-model console calculator generations with pinned isolated JVM recipes and independent arithmetic checks.",
+  "methodology": {
+    "real_generator": "ModelSourceProposalAdapter using the active local proposal runtime",
+    "generation_order": [
+      "JVM_KOTLIN",
+      "JVM_SCALA",
+      "JVM_JAVA"
+    ],
+    "source_changes_after_generation": false,
+    "regenerated_attempts": 0,
+    "frozen_independent_cases_per_target": 20,
+    "independent_oracle": "Python Decimal expectations and separate Java reflection probe; generated tests are not the independent oracle.",
+    "phases": "Restricted dependency-network SETUP; subsequent build, test and execution network disabled.",
+    "supplementary_diagnostics": "Kotlin generated tests fail compilation; Java generated tests contain a contradictory assertion. Separate isolated checks of the already-built, hash-verified original JARs and required pinned runtime library do not change either FAILED_TEST pipeline result.",
+    "request_contract_difference": "Kotlin and Scala retain V14 requests. Java was generated after the target-specific V15 prompt correction. These three attempts are not a controlled model comparison."
+  },
+  "tools": [
+    {
+      "path": "scripts/verify_generated_jvm_calculator.py",
+      "sha256": "7596597b72b8ea153fbb7aa1070cb5c3a98b6a9365e23254a776f42c11a3a225",
+      "bytes": 23147
+    },
+    {
+      "path": "scripts/jvm_calculator_development_probe.py",
+      "sha256": "b1fd477507a3a1ffb8366c217607d739250faab43c477348cf61a48cb7d7e583",
+      "bytes": 31970
+    }
+  ],
+  "runtime_configuration": {
+    "path": "var/studio/base-schema-v3-20260919-01/proposal.json",
+    "sha256": "b447f36c52b28479b6a031544da4ebe567b7f8e4e8fceb597dd0a50b55fb80a0",
+    "bytes": 781
+  },
+  "jvm_configuration": {
+    "path": "var/studio/jvm-runtime.json",
+    "sha256": "6c4c7005709b80aecd60243a92ed71ef6bfc4ba6ef454b608f8d9fa76bcddd50",
+    "bytes": 856
+  },
+  "targets": [
+    {
+      "target": "JVM_KOTLIN",
+      "profile_id": "jvm.kotlin-gradle",
+      "model_identity": {
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "source_contract": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION",
+      "source_revision_id": "1f643fe2-806a-44f8-81b9-20059eea3f67",
+      "source_content_hash": "a97cfcacdd890872629d88b3f47704d6f3edb5ec637ba0db5887b4f173d20a12",
+      "generation": {
+        "passed": true,
+        "parent_generation_id": "04f6c796-9c71-4389-be27-44ce3249c769",
+        "command_exit_code": 0,
+        "elapsed_seconds": 150.594,
+        "report": {
+          "path": "var/studio/jvm-kotlin-generation-01/report.json",
+          "sha256": "07aaaa3b4c46be94e1c6fc784e4c1663e695f5c437c6a9d94b7a7eb87c198754",
+          "bytes": 992
+        },
+        "source_revision": {
+          "path": "var/studio/jvm-kotlin-generation-01/source-revision.json",
+          "sha256": "6bef37b3f1c5274a86e6f1e4697b1d72542343eea51a4e1aeae081b79d2e9a94",
+          "bytes": 4650
+        },
+        "generation_evidence": {
+          "path": "var/studio/jvm-kotlin-generation-01/generation-evidence.json",
+          "sha256": "4c1624cb499f5db54fba89aba7416a9aa9d3bba6c7a53f829402beffaa433310",
+          "bytes": 163072
+        },
+        "independent_contract": {
+          "path": "var/studio/jvm-kotlin-generation-01/independent-contract.json",
+          "sha256": "d12f207227b8ff1cc77e7827678effc4198f209b20bf41836b965103c8a74439",
+          "bytes": 5428
+        },
+        "native_calls": [
+          {
+            "generation_id": "04f6c796-9c71-4389-be27-44ce3249c769",
+            "role": "MANIFEST",
+            "evidence": {
+              "path": "var/studio/jvm-kotlin-generation-01/model-evidence/04f6c796-9c71-4389-be27-44ce3249c769.json",
+              "sha256": "2b5a46deb8320ed904d3debd44d11fbc5df69580e055215cdc27c6d75b23e063",
+              "bytes": 72963
+            },
+            "record_hash": "d7a11cf388cb14f9459164cf87f72e18cab8771dc3931c5107906a03de24583f",
+            "request_hash": "af9b858c73d9b6a6425c03e6ba7ef21a2f4009a404506878ac5c2e17abcf363a",
+            "request_recorded_at": "2026-09-19T20:06:45.124497+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 4221,
+              "output_tokens": 446,
+              "latency_milliseconds": 40715
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "60d7abe4bd104310a937f3589a62e9cba3bfa8d8d26d8bcde1b0f981b9bddfb4"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "ea3581756730ebd31b19128fa118b43d47673e97bad6f46bbf4cfe439bbbdf12",
+                "observation_hash": "ef39dcbff5658284623934af0a75cc5146eef20db19cb80e65843ea5fcf427a9"
+              }
+            ]
+          },
+          {
+            "generation_id": "cd0eff2d-a273-4f55-8c9f-f22c51284ca7",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-kotlin-generation-01/model-evidence/cd0eff2d-a273-4f55-8c9f-f22c51284ca7.json",
+              "sha256": "4279c77ef373ebb6109a77255d17558e46a7aa0b2873c10fe13a943eea8fc9f7",
+              "bytes": 37205
+            },
+            "record_hash": "d803bd0fa50d634ffb69b599932a5f0c044d204fbcc47517411c59bc59ec891f",
+            "request_hash": "aedc40003856d6a1db4b9cd19acfcbc278592da078bd3ee68e12db5554e94cd9",
+            "request_recorded_at": "2026-09-19T20:07:25.849657+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2249,
+              "output_tokens": 479,
+              "latency_milliseconds": 46633
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "d2107b243760581110499f554e5a028186ed0689719faa9ba02158eced241fc1"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "6fbc991f48adc51f9047161cae2fbc460e5880c091773fa84b9727030f6de822",
+                "observation_hash": "ee3fa65bb2cd6b6f4226207e736d7410ae38790f5f2b3d7c5999a43e1c297c2c"
+              }
+            ]
+          },
+          {
+            "generation_id": "09faa82c-9394-49e2-9ad6-68d8a814cf81",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-kotlin-generation-01/model-evidence/09faa82c-9394-49e2-9ad6-68d8a814cf81.json",
+              "sha256": "7783bb31b6994350d7b0e008b43ab0cc222b7981711dbdcb109a9890d9fc37c5",
+              "bytes": 43648
+            },
+            "record_hash": "2d3be47c0255ec544bc23132c8055230b3888a2ffe820c4d6774a8d74dad5bfb",
+            "request_hash": "7ddeaa374eb5c714aaa52aca6777e6ae793253e305cfa8aaaa266685f3ab47fd",
+            "request_recorded_at": "2026-09-19T20:08:12.489506+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2780,
+              "output_tokens": 663,
+              "latency_milliseconds": 62138
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "96bf0a5fa5f48c0d2e087de10d006fb9387c6a8e3d4f08a75329b08a71596f1e"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "62ffe7651c3fe1dbc4a87762ae36b5f0da43d134a1ea462d346db105a40494cf",
+                "observation_hash": "913a760c681be53267556f32b477afc3125d1af2170ecbe1f0e8e88dde2d5a6c"
+              }
+            ]
+          }
+        ]
+      },
+      "execution": {
+        "pipeline_passed": false,
+        "failure": "DEVELOPMENT_PHASE_FAILED:TEST",
+        "command_exit_code": 1,
+        "elapsed_seconds": 538.859,
+        "report": {
+          "path": "var/studio/jvm-kotlin-execution-01/report.json",
+          "sha256": "f7dd7e269eb49926c0fe4db7f450fe399afda5edfec673c9c0335fa4ab2372d8",
+          "bytes": 15577
+        },
+        "development_probe_id": "069dc16d-4862-4247-b85a-017982708927",
+        "execution_contract_hash": "759e16bfb593a8df57e2622a47e64ffb417f87d0333875737c469cd9c8ad7a50",
+        "image_id": "sha256:48aafc1bcd8c02dfec08363c751a9a1c4e2fa533311235643653ce2681b3377b",
+        "dependency_network_manifest_hash": "5b0f4804de281976a3bbd3322f37d26656759391d6cce13b96002beada19f8c8",
+        "application_jar": {
+          "normalized_path": "build/libs/orchestwin-kotlin-calculator.jar",
+          "sha256_digest": "00878c32ffed5c18812976b05385ee375fcd510026d866327a181bcb7c3e4a2c",
+          "size_bytes": 2932,
+          "storage_key": "sha256/00/00878c32ffed5c18812976b05385ee375fcd510026d866327a181bcb7c3e4a2c",
+          "media_type": "application/java-archive"
+        },
+        "original_sources_unchanged": true,
+        "cleanup_confirmed": true,
+        "finalization_reference": {
+          "storage_key": "sha256/4e/4ecefd940a8f104f2db56cb8152c9f7689edfb0876e1f6651d929bc4345c397d",
+          "sha256_digest": "4ecefd940a8f104f2db56cb8152c9f7689edfb0876e1f6651d929bc4345c397d",
+          "size_bytes": 837,
+          "media_type": "application/json"
+        },
+        "phases": [
+          {
+            "phase": "VALIDATE",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T20:10:37.819994+00:00",
+            "completed_at": "2026-09-19T20:11:07.710875+00:00",
+            "command_plan_hash": "1041296decef8b8bcb21d1bbb2d4dc7b0c030d4c3ea1a62cb9c425461775a4ae",
+            "failure_code": null,
+            "stdout_sha256": [
+              "aac5d56ad72d3233fb645d6e7f9f0d967d452e2197e3bcde236248ce7a4d24df"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "9d129321d2d7795ea5e2e6a03c7c8c42490083754595f067ca075884de9a659e"
+            ]
+          },
+          {
+            "phase": "SETUP",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T20:11:11.423907+00:00",
+            "completed_at": "2026-09-19T20:16:07.179275+00:00",
+            "command_plan_hash": "4f20d3c632e5519603f8103fcb1fa39535be5b8958293eaa2179c51337e70275",
+            "failure_code": null,
+            "stdout_sha256": [
+              "f434655a8ff18d4fd63f8f88bdb7e8223f996df58448c67165f14a8d33ec98d7"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "c2a8d8655ffb697d40433d403f789c77f152cc43efb97b54db919e912c0557cb"
+            ]
+          },
+          {
+            "phase": "STATIC_CHECKS",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T20:16:09.180351+00:00",
+            "completed_at": "2026-09-19T20:16:55.123749+00:00",
+            "command_plan_hash": "c5f3ac83ad0a229b3f4ab06983284b64caed18addf74b0d6a0716a8436ef650e",
+            "failure_code": null,
+            "stdout_sha256": [
+              "dc9a85a0a903ad6021c63f90ac89c77c4ec3cafbfa22d1e83a7a0cc7dd5fb68f"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "0a37b62fac61fef5645ce3141295e75246ce7fa202d6049b2c41a0ad066efee7"
+            ]
+          },
+          {
+            "phase": "BUILD",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T20:16:56.117313+00:00",
+            "completed_at": "2026-09-19T20:18:33.903335+00:00",
+            "command_plan_hash": "64cef0d1117954d091e0becea4a4d6960ff125bb7d942dd356ab641ae98614b8",
+            "failure_code": null,
+            "stdout_sha256": [
+              "5a94731eb53a837d741fb1dc52c86056ca75d818107156d5e59a6bda1132357f"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "00878c32ffed5c18812976b05385ee375fcd510026d866327a181bcb7c3e4a2c",
+              "2c442ca19da0f7a41b28ee92a2da3e955a9c3c34a3e07747d25bba503c9cf1be"
+            ]
+          },
+          {
+            "phase": "TEST",
+            "status": "FAILED",
+            "exit_codes": [
+              1
+            ],
+            "started_at": "2026-09-19T20:18:35.538585+00:00",
+            "completed_at": "2026-09-19T20:19:30.537951+00:00",
+            "command_plan_hash": "a530c54c2ed613dfebf7d600851969b5193bc189ff205342990a4821aa0867a9",
+            "failure_code": "KT_COMPILATION_ERROR",
+            "stdout_sha256": [
+              "bad7f40b8ea48d4d2a05313de9f1f87fc56dce27d6a6661d3f9b31b7294d26dd"
+            ],
+            "stderr_sha256": [
+              "3480c8bc0ff167c55be3fce38f86997edd5f14d75c22571d1acbbd533190a451"
+            ],
+            "artifact_sha256": [
+              "00878c32ffed5c18812976b05385ee375fcd510026d866327a181bcb7c3e4a2c",
+              "4d5b439e49c959751ff487c3b6a0704a676267030643fb8a475bc9ce1647fec8",
+              "be932cf35d6fc0dac6c2b9ad729f20f82d13e923bf8e0d78416eabf03052da2c"
+            ]
+          }
+        ]
+      },
+      "diagnostic_binding": {
+        "path": "var/studio/jvm-kotlin-diagnostic-01/binding-verification.json",
+        "sha256": "be958e31fac81f3f53269be308138609c531b089ff345540564593d94a75539b",
+        "bytes": 2097
+      },
+      "diagnosis": "Generated MainTest.kt places an import inside fun testCalculate(); compileTestKotlin fails. Main application JAR built successfully. The separate diagnostic is not a successful pipeline.",
+      "independent_verification": {
+        "scope": "DIAGNOSTIC_AFTER_FAILED_GENERATED_TEST",
+        "report": {
+          "path": "var/studio/jvm-kotlin-diagnostic-01/report.json",
+          "sha256": "326be8a23b0ae179bed72d3880e3549a40eab68db01d3bc4a7ff545af6a88bf6",
+          "bytes": 12599
+        },
+        "passed": true,
+        "cases_executed": 20,
+        "cases_passed": 20,
+        "console_main_passed": true,
+        "console_main_expected": "12",
+        "contract_hash": "f6db29493814a1e1f04eb61aa4a9b8d86d01479026e65d77244875517cfa73c2",
+        "probe_hash": "f32c31fce45455257c020e87176035249e68b67f9eb63e3cf322d0d80c868c4e",
+        "application_jar": {
+          "sha256_digest": "00878c32ffed5c18812976b05385ee375fcd510026d866327a181bcb7c3e4a2c",
+          "size_bytes": 2932
+        },
+        "runtime_dependencies": [
+          {
+            "name": "kotlin-stdlib-2.4.10.jar",
+            "mounted_name": "dependency-00.jar",
+            "sha256_digest": "4ec0293bc3751423b203f1d8493251c57c42e73eb6377a6b8560d0974ff0a6df",
+            "size_bytes": 1841933
+          }
+        ],
+        "checks": [
+          {
+            "id": "addition",
+            "expected": {
+              "kind": "VALUE",
+              "value": "12"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "12.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "subtraction",
+            "expected": {
+              "kind": "VALUE",
+              "value": "6"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "6.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "multiplication",
+            "expected": {
+              "kind": "VALUE",
+              "value": "27"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "27.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "division",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "comma-decimal",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.75"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.75"
+            },
+            "passed": true
+          },
+          {
+            "id": "fractional-division",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "passed": true
+          },
+          {
+            "id": "decimal-precision",
+            "expected": {
+              "kind": "VALUE",
+              "value": "0.3"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "0.30000000000000004"
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-input",
+            "expected": {
+              "kind": "VALUE",
+              "value": "-10.0"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "-10.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-subtraction",
+            "expected": {
+              "kind": "VALUE",
+              "value": "-2"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "-2.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "large-result",
+            "expected": {
+              "kind": "VALUE",
+              "value": "1000000000"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "1.0E9"
+            },
+            "passed": true
+          },
+          {
+            "id": "whitespace",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "passed": true
+          },
+          {
+            "id": "zero-numerator",
+            "expected": {
+              "kind": "VALUE",
+              "value": "0"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "0.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "zero-divisor",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.ArithmeticException",
+              "message": "Division by zero is not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-zero-divisor",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.ArithmeticException",
+              "message": "Division by zero is not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "empty-left",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Empty inputs are not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "empty-right",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Empty inputs are not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "invalid-number",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number format: abc"
+            },
+            "passed": true
+          },
+          {
+            "id": "nan",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number format: NaN or infinity detected."
+            },
+            "passed": true
+          },
+          {
+            "id": "infinity",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number format: NaN or infinity detected."
+            },
+            "passed": true
+          },
+          {
+            "id": "unsupported-operation",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Unknown operation: %"
+            },
+            "passed": true
+          }
+        ],
+        "isolated_processes": [
+          {
+            "label": "independent-cases",
+            "exit_code": 0,
+            "status": "COMPLETED",
+            "cleanup_confirmed": true,
+            "stdout_sha256": "5a178f8c3a1e731a9716c84569f999c0fcfe2f0d776706a85ca90a1b131e2d59",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "label": "console-demo",
+            "exit_code": 0,
+            "status": "COMPLETED",
+            "cleanup_confirmed": true,
+            "stdout_sha256": "dab730c4b2e63d429314ebed7a39e16dfc9a8d22571dd2a9a61433efefe2748d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      }
+    },
+    {
+      "target": "JVM_SCALA",
+      "profile_id": "jvm.scala-sbt",
+      "model_identity": {
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "source_contract": "SOURCE_MANIFEST_V14_OBSERVABLE_IMPLEMENTATION",
+      "source_revision_id": "35de739b-e202-43e7-b80b-b99d8ddb89c1",
+      "source_content_hash": "896fc068a83bb09cbf92d771438766739859dd6889282680ca2f060dc034c29b",
+      "generation": {
+        "passed": true,
+        "parent_generation_id": "89019603-34e7-4b4a-9004-a66696f3aef7",
+        "command_exit_code": 0,
+        "elapsed_seconds": 221.788,
+        "report": {
+          "path": "var/studio/jvm-scala-generation-01/report.json",
+          "sha256": "f049034e6449c7f9eed58479e33d71805cc53f3b65825e72d38bf4285a5c4a0c",
+          "bytes": 991
+        },
+        "source_revision": {
+          "path": "var/studio/jvm-scala-generation-01/source-revision.json",
+          "sha256": "3b3df1c4f8c4d4cd4b806be841b1fba986d9dbf0c911e09ba913ea7fcf46515e",
+          "bytes": 2947
+        },
+        "generation_evidence": {
+          "path": "var/studio/jvm-scala-generation-01/generation-evidence.json",
+          "sha256": "12586959ccbe257445d2bed3f912b61cc05d82fb71aaf4e40d633df8a1a15c18",
+          "bytes": 151767
+        },
+        "independent_contract": {
+          "path": "var/studio/jvm-scala-generation-01/independent-contract.json",
+          "sha256": "bd6eabb18fe3414e3f5d0ab916a1889f4234f1e38a42be643c2f4a1932a54621",
+          "bytes": 5420
+        },
+        "native_calls": [
+          {
+            "generation_id": "89019603-34e7-4b4a-9004-a66696f3aef7",
+            "role": "MANIFEST",
+            "evidence": {
+              "path": "var/studio/jvm-scala-generation-01/model-evidence/89019603-34e7-4b4a-9004-a66696f3aef7.json",
+              "sha256": "b110884e2efffb186f8be87351380c06ec7a3970d95cf529411bd8c75a511f96",
+              "bytes": 64500
+            },
+            "record_hash": "697f3862902f09c8b9f8f090307031345280d843881b4585243df567fffb8b55",
+            "request_hash": "939db77cec0ed63fe4e3f990f0c9c0dc695e9df0487b7b082d7f91a22ea49bc5",
+            "request_recorded_at": "2026-09-19T20:11:24.246835+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 3196,
+              "output_tokens": 463,
+              "latency_milliseconds": 59310
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "724f6b5eb950460b11ced6b6a282e10cbb3078fc1133879795cf8759f189ac0a"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "732a7970e60b15d076daa980dfc24dc9d3b4e75702c26a4e796a04c9cb2d000c",
+                "observation_hash": "c820ad7de2896b49a71226e0409b6bf713376eea99aa715da78d057b48df9cf7"
+              }
+            ]
+          },
+          {
+            "generation_id": "fa757a89-a77c-4432-bfca-f63478852570",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-scala-generation-01/model-evidence/fa757a89-a77c-4432-bfca-f63478852570.json",
+              "sha256": "3ec9c0cb1ad271e0a81c4dd200792d1b6eb990504646b99006f89ee1868c20be",
+              "bytes": 36352
+            },
+            "record_hash": "8fcf6461a9f85bc8b37b663722df32b8a012f591ace7d2d5bb4491c826cf5068",
+            "request_hash": "0b0f1ab3645f524767ee232176f288b3b54478ac5ef3798b73db964fe80e516d",
+            "request_recorded_at": "2026-09-19T20:12:23.568851+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2069,
+              "output_tokens": 574,
+              "latency_milliseconds": 66901
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "84f97b43d209209f515239c82f7d822cdfd92b3af0dfd12a005fc553de1fc571"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "4f0013731d8e1fcd4a295fa34ae24775a2fd3efe7217fdc4af6c883bd5d19e0b",
+                "observation_hash": "8023eb006a744d7549df818dcc930ce1feabda6db816bebbfd83ca0c4d3bfc7d"
+              }
+            ]
+          },
+          {
+            "generation_id": "02a5f1db-4a75-4064-b3b3-f91e3803f868",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-scala-generation-01/model-evidence/02a5f1db-4a75-4064-b3b3-f91e3803f868.json",
+              "sha256": "95349c98ed971242cb279f067fdf2070fb3d5283ee77a0a85621a1d5353dfcdf",
+              "bytes": 43712
+            },
+            "record_hash": "fed4c4c8a8a158b7d659e6e376699219e6033394dde46936f23f9a8c9da937b9",
+            "request_hash": "15b855e26e4b320192f201e376cb5d25475325af72cf2f71d16dbc3541fe1adb",
+            "request_recorded_at": "2026-09-19T20:13:30.478454+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2713,
+              "output_tokens": 743,
+              "latency_milliseconds": 94386
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "25bcad78eb6cb52700050f0d0ca8777a1689155a4d0a355636d01b59a5a60b25"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "51859d8c32db9808b9f537a7893deb2677d0b8f4f9d6bee39a08f765409e42ce",
+                "observation_hash": "d1b1ecc4a900b3407ec9c2be90bb906612753739bf567fe2be25094b79eb9406"
+              }
+            ]
+          }
+        ]
+      },
+      "execution": {
+        "pipeline_passed": false,
+        "failure": "DEVELOPMENT_PHASE_FAILED:STATIC_CHECKS",
+        "command_exit_code": 1,
+        "elapsed_seconds": 88.667,
+        "report": {
+          "path": "var/studio/jvm-scala-execution-01/report.json",
+          "sha256": "b49847122a32aad23f499e9e8cb3c97d977ae2f2c37dbb87661fd976dd03b0fb",
+          "bytes": 9001
+        },
+        "development_probe_id": "a8e13343-5d16-4ab8-8dbb-f185570ffbff",
+        "execution_contract_hash": "6ddc6ef3601a5dfa236215e291619e697b945cf662a8ce13167c8f2444058abd",
+        "image_id": "sha256:5ff25da6c4b1d384c9a86dfecf85f17cbc6050ebbd8c249bb4b1c2f0e068eff8",
+        "dependency_network_manifest_hash": "5b0f4804de281976a3bbd3322f37d26656759391d6cce13b96002beada19f8c8",
+        "application_jar": null,
+        "original_sources_unchanged": true,
+        "cleanup_confirmed": true,
+        "finalization_reference": {
+          "storage_key": "sha256/f5/f5a664c1e675f4a5ce6a8c4f6e813e9c43ffda8c99c501c71eef63dfa6fd1bca",
+          "sha256_digest": "f5a664c1e675f4a5ce6a8c4f6e813e9c43ffda8c99c501c71eef63dfa6fd1bca",
+          "size_bytes": 837,
+          "media_type": "application/json"
+        },
+        "phases": [
+          {
+            "phase": "VALIDATE",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:24:11.602389+00:00",
+            "completed_at": "2026-09-19T22:24:12.975992+00:00",
+            "command_plan_hash": "3dd7ddafb877cc97f6b8d7a80dbea42419c34e5ba3493b8536b1781895beb5cb",
+            "failure_code": null,
+            "stdout_sha256": [
+              "79a47fb885a48c18237ce4570598233bc3062268dcfacb9aeaaada05f7226429"
+            ],
+            "stderr_sha256": [
+              "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            ],
+            "artifact_sha256": [
+              "406b980c7588b4649f8d61e6c1cee5c5581256dae3668674a009d31f06450fd7"
+            ]
+          },
+          {
+            "phase": "SETUP",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:24:16.414376+00:00",
+            "completed_at": "2026-09-19T22:25:11.195439+00:00",
+            "command_plan_hash": "0fd2c20fbd747f2e726b07e203613b863b01ba4e1e451b7eec89ed499e9493d6",
+            "failure_code": null,
+            "stdout_sha256": [
+              "4a847036a31f356ecd33c404dbc9495bad332c96c179fbc2721f29167c3b7201"
+            ],
+            "stderr_sha256": [
+              "6e6e719aa66cdcb729a922d0c9fa36e4e7d3c504966e53ea34f797b0c9d518c0"
+            ],
+            "artifact_sha256": [
+              "6b653b61486cb2dfc4e7be1b6aa9e6a3f924b87130e1b3af70cfeafd645374bb"
+            ]
+          },
+          {
+            "phase": "STATIC_CHECKS",
+            "status": "FAILED",
+            "exit_codes": [
+              1
+            ],
+            "started_at": "2026-09-19T22:25:16.476974+00:00",
+            "completed_at": "2026-09-19T22:25:35.821105+00:00",
+            "command_plan_hash": "feca00bb9c349bb6bb53c2041ab1b7b3d4d767b38894b35125129cf0e46bcf30",
+            "failure_code": "SCALA_E007",
+            "stdout_sha256": [
+              "edc229b27eb188e9248d50e52dd1141af3696eb69d18a0374d8c65a66624664e"
+            ],
+            "stderr_sha256": [
+              "bf6ecd742a482ed6d780e3d1dc327d4363d2d982d3a29c2bad9c5d9087dc32eb"
+            ],
+            "artifact_sha256": [
+              "a2ff6ff7b0b3ee788735f5c37fd26ed62761c9c8e1da583fe326694ba6530b3b"
+            ]
+          }
+        ]
+      },
+      "diagnosis": "Original Main.scala fails compilation with nine compiler errors: invalid string escape, Double/Null comparisons and returns, invalid Double.isNaN call and invalid catch pattern. No application JAR and no arithmetic cases executed.",
+      "independent_verification": {
+        "scope": "NOT_EXECUTED",
+        "passed": false,
+        "cases_executed": 0,
+        "cases_passed": 0,
+        "reason": "DEVELOPMENT_PHASE_FAILED:STATIC_CHECKS",
+        "checks": [
+          {
+            "id": "addition",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "subtraction",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "multiplication",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "division",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "comma-decimal",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "fractional-division",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "decimal-precision",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "negative-input",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "negative-subtraction",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "large-result",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "whitespace",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "zero-numerator",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "zero-divisor",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "negative-zero-divisor",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "empty-left",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "empty-right",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "invalid-number",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "nan",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "infinity",
+            "status": "NOT_EXECUTED"
+          },
+          {
+            "id": "unsupported-operation",
+            "status": "NOT_EXECUTED"
+          }
+        ]
+      }
+    },
+    {
+      "target": "JVM_JAVA",
+      "profile_id": "jvm.java-gradle",
+      "model_identity": {
+        "provider_id": "local-studio-model",
+        "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+        "adapter_id": null,
+        "adapter_sha256": null
+      },
+      "source_contract": "SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION",
+      "source_revision_id": "502240ba-7032-4ad1-a07a-3750ec5fe92d",
+      "source_content_hash": "87387cd0e8eb3e593dc252ad80f7a12496dfb4d6b10e61b3437607978a7417b4",
+      "generation": {
+        "passed": true,
+        "parent_generation_id": "2c00c248-16d1-4d2e-826e-09701d59c2cf",
+        "command_exit_code": 0,
+        "elapsed_seconds": 191.248,
+        "report": {
+          "path": "var/studio/jvm-java-generation-01/report.json",
+          "sha256": "7b5fa53d809731a4af790c3ad103ff3d85ff90889b055eb4c8ea341b7b606699",
+          "bytes": 990
+        },
+        "source_revision": {
+          "path": "var/studio/jvm-java-generation-01/source-revision.json",
+          "sha256": "f47fee6f92d690af4558eaa2d067cc7447d18a7b66b198958a6e1cf10a0527ac",
+          "bytes": 4641
+        },
+        "generation_evidence": {
+          "path": "var/studio/jvm-java-generation-01/generation-evidence.json",
+          "sha256": "250d369e831be88cefccad071bb6f52b932045e5cbd2a795f9c5295112599126",
+          "bytes": 166291
+        },
+        "independent_contract": {
+          "path": "var/studio/jvm-java-generation-01/independent-contract.json",
+          "sha256": "67f0b679d2608936ae8b572036db013d988b5372ed9788fe5291bac3c24404b5",
+          "bytes": 5416
+        },
+        "native_calls": [
+          {
+            "generation_id": "2c00c248-16d1-4d2e-826e-09701d59c2cf",
+            "role": "MANIFEST",
+            "evidence": {
+              "path": "var/studio/jvm-java-generation-01/model-evidence/2c00c248-16d1-4d2e-826e-09701d59c2cf.json",
+              "sha256": "91620d88f32c12dd624f36e89bee73de79a27a3bb7af2487c2a5b405e620a64f",
+              "bytes": 73041
+            },
+            "record_hash": "6c0be816d0dae1d017b0a589219a38d3e3ea2c8a2973bef2d32f063a4410c30c",
+            "request_hash": "a28ed510734bfdf1cd3e9b980177b6b05e24bd317defa05441333960d7d82c76",
+            "request_recorded_at": "2026-09-19T20:17:26.402508+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 4124,
+              "output_tokens": 418,
+              "latency_milliseconds": 47253
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "4a7dd4505423cb926a24765b1c5796b96c55283e50a1fb8e150a63ea1d76d237"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "6f68e8c70ffe065f58b9b15c09617e31194e82684470da940a2dd980fd7e5525",
+                "observation_hash": "1c04a0992ef9dd58120907f9f9a5c659d98610b5c3ebd19356d36ecf0714615b"
+              }
+            ]
+          },
+          {
+            "generation_id": "9d7d7cb7-627b-4820-af37-3cdfa9a30d5a",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-java-generation-01/model-evidence/9d7d7cb7-627b-4820-af37-3cdfa9a30d5a.json",
+              "sha256": "78aba42e95ce63a0af1c5b45e2159537f01768b82c9f489fb2c5f944bc9f7d1c",
+              "bytes": 38763
+            },
+            "record_hash": "712aa7be7be0a1b107d2836863cc303e58a97c2a9fd1a08c7d2cda3526256ab2",
+            "request_hash": "102b5eb0fe315ddb8ec76a73fc1ba465aa3fe766f09fc333a989b124bef06df9",
+            "request_recorded_at": "2026-09-19T20:18:13.668204+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2136,
+              "output_tokens": 561,
+              "latency_milliseconds": 66702
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "3bf2286b5a7c494f6488424d9823bd94573b7efbf1e8f2f79bf5964aef2a4ce4"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "77b48379245bcf8d279a9aecdf670ab912b33a3142937597cb439d1d2d9ac12c",
+                "observation_hash": "fc3bcdabe400055fda0e61f4d6e87a508d8e3fbf9b5e1de9f0c7dbe4449b6c93"
+              }
+            ]
+          },
+          {
+            "generation_id": "306b4b49-a1cf-46cf-8e9d-217823f7c051",
+            "role": "SOURCE_FILE",
+            "evidence": {
+              "path": "var/studio/jvm-java-generation-01/model-evidence/306b4b49-a1cf-46cf-8e9d-217823f7c051.json",
+              "sha256": "5f57403280aa72a1ba5b0f24fcd34478f90098d44fc39255b69acb0887a05a8f",
+              "bytes": 45240
+            },
+            "record_hash": "99e3bd2b0ce001b4fd7672a11c62089591d9eae3b5da7aa5f583a9fd589dd4fa",
+            "request_hash": "956a07cee30b804126aad902628480a25d2b065195a7cf4dde8f463caab8393b",
+            "request_recorded_at": "2026-09-19T20:19:20.379616+00:00",
+            "status": "SUCCEEDED",
+            "finish_reason": "STOP",
+            "usage": {
+              "input_tokens": 2758,
+              "output_tokens": 718,
+              "latency_milliseconds": 75981
+            },
+            "raw_http_observations": [
+              {
+                "kind": "HTTP_REQUEST",
+                "body_sha256": null,
+                "observation_hash": "fc7ffa1f87808b41d4f0af32597bf72baff3195f98cd3a3612ba06af5bfe53e7"
+              },
+              {
+                "kind": "HTTP_RESPONSE",
+                "body_sha256": "811389358eff91659b130b0d20fec11f68069c8008566feaee0aabd40532378e",
+                "observation_hash": "c6af6b3e01da846f4c2b04362375419f61b465a4861187d995b5ff62321c8ab0"
+              }
+            ]
+          }
+        ]
+      },
+      "execution": {
+        "pipeline_passed": false,
+        "failure": "DEVELOPMENT_PHASE_FAILED:TEST",
+        "command_exit_code": 1,
+        "elapsed_seconds": 245.578,
+        "report": {
+          "path": "var/studio/jvm-java-execution-01/report.json",
+          "sha256": "13117d7215c8cf59a7295fd61550ff1ccbd72a648a019a406a3976ee02ce16af",
+          "bytes": 13362
+        },
+        "development_probe_id": "de5f7780-6bb7-4c20-b868-8b60ea5236a3",
+        "execution_contract_hash": "74dd554167dc6f590ab5613cd897e7216050c42f9788304bef90136d7ed6cb14",
+        "image_id": "sha256:48aafc1bcd8c02dfec08363c751a9a1c4e2fa533311235643653ce2681b3377b",
+        "dependency_network_manifest_hash": "5b0f4804de281976a3bbd3322f37d26656759391d6cce13b96002beada19f8c8",
+        "application_jar": {
+          "normalized_path": "build/libs/orchestwin-java-greeting.jar",
+          "sha256_digest": "aa6acccd5b53547512d1d8e84100b17d73fdb5a93c0b454afee3618e04708068",
+          "size_bytes": 2413,
+          "storage_key": "sha256/aa/aa6acccd5b53547512d1d8e84100b17d73fdb5a93c0b454afee3618e04708068",
+          "media_type": "application/java-archive"
+        },
+        "original_sources_unchanged": true,
+        "cleanup_confirmed": true,
+        "finalization_reference": {
+          "storage_key": "sha256/3c/3c03a1dbdf93f9cbda8070a0b388e664bb68803e26f34e6e6bd86c7cd83c3473",
+          "sha256_digest": "3c03a1dbdf93f9cbda8070a0b388e664bb68803e26f34e6e6bd86c7cd83c3473",
+          "size_bytes": 837,
+          "media_type": "application/json"
+        },
+        "phases": [
+          {
+            "phase": "VALIDATE",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:26:42.883261+00:00",
+            "completed_at": "2026-09-19T22:27:10.695884+00:00",
+            "command_plan_hash": "5dec92c4186b18abdfd33d5a016333a5e73ef02e32916c9ccd894e413196cdc4",
+            "failure_code": null,
+            "stdout_sha256": [
+              "aac5d56ad72d3233fb645d6e7f9f0d967d452e2197e3bcde236248ce7a4d24df"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "130eed05a04c2a2bf99323793506c37b79c368c21f7b217236d7ecd79bf19a8e"
+            ]
+          },
+          {
+            "phase": "SETUP",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:27:14.336350+00:00",
+            "completed_at": "2026-09-19T22:29:21.695516+00:00",
+            "command_plan_hash": "d010687679d3ab787de2c782f69a9c7831371a7f96ec9a38d9c0dfdf3fa69357",
+            "failure_code": null,
+            "stdout_sha256": [
+              "917e42e297f859ba7d706e7c1e80048175174917fa96d08fec9b497c696ca04d"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "be0ccdd2012fe5ee918239dd3d4a3175f089897a5ba6d47bf2545384f8b1bda3"
+            ]
+          },
+          {
+            "phase": "STATIC_CHECKS",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:29:22.680379+00:00",
+            "completed_at": "2026-09-19T22:29:54.132674+00:00",
+            "command_plan_hash": "cc2f1723456be5288c62c72f618a549889e6ef405a4c8e978c17889713f00d7a",
+            "failure_code": null,
+            "stdout_sha256": [
+              "cdd51f5caf48ac61c3e9194332a8d6693517d9ed02da639efe1abc37e069c3ff"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "15666a130f7106f868b1318c3dabf594a461b7f034f5ff4b07ac5cbadcb52ddf"
+            ]
+          },
+          {
+            "phase": "BUILD",
+            "status": "PASSED",
+            "exit_codes": [
+              0
+            ],
+            "started_at": "2026-09-19T22:29:55.086910+00:00",
+            "completed_at": "2026-09-19T22:30:15.492291+00:00",
+            "command_plan_hash": "f1392fd7c4266405656a114c6acd01279ec2ca80117bc99a7db39183ae8ee5da",
+            "failure_code": null,
+            "stdout_sha256": [
+              "34fec07d4fb50468b4adb33abb29fbfbc5a91451e2769bfcf4dce95c5c023e1a"
+            ],
+            "stderr_sha256": [
+              "fa945e9b8c3b64e2b42b8025d71c68c30fd7115de6d65b54db5417a42e241097"
+            ],
+            "artifact_sha256": [
+              "861ec858590b0b8e6ef500bbbea94098c1f6f37767253c99b6fb96ab61b59d0c",
+              "aa6acccd5b53547512d1d8e84100b17d73fdb5a93c0b454afee3618e04708068"
+            ]
+          },
+          {
+            "phase": "TEST",
+            "status": "FAILED",
+            "exit_codes": [
+              1
+            ],
+            "started_at": "2026-09-19T22:30:16.570853+00:00",
+            "completed_at": "2026-09-19T22:30:43.663897+00:00",
+            "command_plan_hash": "649fa243d8cc080f81d8ad1661cd794c799c4fe4e358b0c6fcf7153a89252680",
+            "failure_code": "JVM_TEST_CASE_FAILED",
+            "stdout_sha256": [
+              "d1711efff3a648786a283e8809d7363f3163fb9655e318d73257dbd6f116664b"
+            ],
+            "stderr_sha256": [
+              "981e5b16a7a064e4f43c92856700f7d7b5f5b0b2ab1ec36867db68ebf6c33365"
+            ],
+            "artifact_sha256": [
+              "02d7a6fefed791395f4920a27931404b86639cda542c745f68e7d87227a5555e",
+              "089ea6a50dd9cf1544b5fd797d930f59d9a757f34b7e17ecaa4209fffad98b0b",
+              "2c7c4d896619a03016d14ed6cf9b99383075074b3ac8283a8dfb573d33b26cf7",
+              "3aadca4fcf721dca618b54c0e93c93c37884c8d25aa2c9cb92782a3db9ffa605",
+              "9c29c997b1b3d5c4aa85b0023bb1cffbccc8ffaac7d997697976b8127a293308",
+              "aa6acccd5b53547512d1d8e84100b17d73fdb5a93c0b454afee3618e04708068",
+              "c2f1ed9557c05879c6241073d15e387b40b91e85a0208e0c073839ad78f816bd",
+              "caee7b8535e0ae835c5fa62c7d97d3d79621792a7e626ecf7cab6077db85f9d7",
+              "d9f4671e326df50ac61177a1a6bbda46163ca5c95b4db2974ef363808623de8f"
+            ]
+          }
+        ]
+      },
+      "diagnostic_binding": {
+        "path": "var/studio/jvm-java-diagnostic-01/binding-verification.json",
+        "sha256": "8d425913e1a46c2cb3e38eed21bc63836001d24a022567eacd5dbc509ddc8e7c",
+        "bytes": 1922
+      },
+      "diagnosis": "Generated Java tests contradict the comma-decimal requirement: testCalculateInvalidInputs expects an exception for 1,5 + 2 while the same test class otherwise expects comma support. Five generated tests ran and one failed at MainTest.java:39. The separate diagnostic is not a successful pipeline.",
+      "static_limitation_beyond_frozen_cases": "Original Java implementation rejects every divisor with Math.abs(rightValue) < 1e-15, including valid nonzero tiny decimals. This static finding is outside the frozen 20-case set; no source edit or additional oracle was used to change its measured result.",
+      "independent_verification": {
+        "scope": "DIAGNOSTIC_AFTER_FAILED_GENERATED_TEST",
+        "report": {
+          "path": "var/studio/jvm-java-diagnostic-01/report.json",
+          "sha256": "34b072902642dbf919e9aecbea0f7c41bc1785eb348243736564481a2acbbb07",
+          "bytes": 12008
+        },
+        "passed": true,
+        "cases_executed": 20,
+        "cases_passed": 20,
+        "console_main_passed": true,
+        "console_main_expected": "12",
+        "contract_hash": "bb0c0fd5c553994d50c869e12da5bf8f91a6c490a45f8447cae8fbf82da82998",
+        "probe_hash": "f32c31fce45455257c020e87176035249e68b67f9eb63e3cf322d0d80c868c4e",
+        "application_jar": {
+          "sha256_digest": "aa6acccd5b53547512d1d8e84100b17d73fdb5a93c0b454afee3618e04708068",
+          "size_bytes": 2413
+        },
+        "runtime_dependencies": [],
+        "checks": [
+          {
+            "id": "addition",
+            "expected": {
+              "kind": "VALUE",
+              "value": "12"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "12.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "subtraction",
+            "expected": {
+              "kind": "VALUE",
+              "value": "6"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "6.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "multiplication",
+            "expected": {
+              "kind": "VALUE",
+              "value": "27"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "27.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "division",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "comma-decimal",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.75"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.75"
+            },
+            "passed": true
+          },
+          {
+            "id": "fractional-division",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "passed": true
+          },
+          {
+            "id": "decimal-precision",
+            "expected": {
+              "kind": "VALUE",
+              "value": "0.3"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "0.30000000000000004"
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-input",
+            "expected": {
+              "kind": "VALUE",
+              "value": "-10.0"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "-10.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-subtraction",
+            "expected": {
+              "kind": "VALUE",
+              "value": "-2"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "-2.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "large-result",
+            "expected": {
+              "kind": "VALUE",
+              "value": "1000000000"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "1.0E9"
+            },
+            "passed": true
+          },
+          {
+            "id": "whitespace",
+            "expected": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "3.5"
+            },
+            "passed": true
+          },
+          {
+            "id": "zero-numerator",
+            "expected": {
+              "kind": "VALUE",
+              "value": "0"
+            },
+            "observed": {
+              "kind": "VALUE",
+              "value": "0.0"
+            },
+            "passed": true
+          },
+          {
+            "id": "zero-divisor",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.ArithmeticException",
+              "message": "Division by zero is not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "negative-zero-divisor",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.ArithmeticException",
+              "message": "Division by zero is not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "empty-left",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Empty operands are not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "empty-right",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Empty operands are not allowed."
+            },
+            "passed": true
+          },
+          {
+            "id": "invalid-number",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number format: abc"
+            },
+            "passed": true
+          },
+          {
+            "id": "nan",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number: NaN or infinity."
+            },
+            "passed": true
+          },
+          {
+            "id": "infinity",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Invalid number: NaN or infinity."
+            },
+            "passed": true
+          },
+          {
+            "id": "unsupported-operation",
+            "expected": {
+              "kind": "ERROR"
+            },
+            "observed": {
+              "kind": "ERROR",
+              "error_type": "java.lang.IllegalArgumentException",
+              "message": "Unknown operation: %"
+            },
+            "passed": true
+          }
+        ],
+        "isolated_processes": [
+          {
+            "label": "independent-cases",
+            "exit_code": 0,
+            "status": "COMPLETED",
+            "cleanup_confirmed": true,
+            "stdout_sha256": "06f1621e0b36062fd7ff8fb7a552245dd2b91fd5310b13a9bda62665f4673cf5",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "label": "console-demo",
+            "exit_code": 0,
+            "status": "COMPLETED",
+            "cleanup_confirmed": true,
+            "stdout_sha256": "dab730c4b2e63d429314ebed7a39e16dfc9a8d22571dd2a9a61433efefe2748d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      }
+    }
+  ],
+  "claims": {
+    "graphical_preview": false,
+    "owner_project_workflow": false,
+    "database_publication": false,
+    "level_d_qualification": false,
+    "formal_profile_campaign_results_included": false,
+    "all_generated_pipelines_passed": false,
+    "training_performed_for_these_attempts": false,
+    "sources_human_corrected": false
+  },
+  "summary": {
+    "source_generations_accepted": 3,
+    "development_pipelines_passed": 0,
+    "independent_cases_executed": 40,
+    "independent_cases_passed": 40,
+    "failed_generated_outputs_preserved": true,
+    "model_quality_conclusion": "The same real 4B runtime can produce a working arithmetic implementation but does not reliably produce complete valid source-and-test packages across JVM languages. Profile qualification is separate from generated-code quality."
+  },
+  "final_integrity_verification": {
+    "verified_at_utc": "2026-09-19T22:35:31.621270+00:00",
+    "targets_verified": 3,
+    "source_revision_snapshots_and_original_bytes": true,
+    "native_generation_request_response_source_binding": true,
+    "all_phase_stdout_stderr_artifact_hashes_and_sizes": true,
+    "finalization_receipt_hashes": true,
+    "original_failed_execution_reports_unchanged_by_diagnostics": true,
+    "method": "Read-only validation through existing snapshot/binding validators and SHA256 checks; no rerun or source modification."
+  }
+}

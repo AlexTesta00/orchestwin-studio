@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   CreateFinalExportInput,
   DecideFinalApprovalInput,
@@ -56,19 +58,7 @@ export interface FinalizationApi {
   downloadExport(exportId: string, accessToken: string): Promise<FinalExportDownloadPayload>;
 }
 
-export class FinalizationApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(message: string, options: { status: number; code: string | null; payload: unknown }) {
-    super(message);
-    this.name = "FinalizationApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class FinalizationApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/u, "");

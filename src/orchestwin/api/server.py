@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -77,10 +79,13 @@ def parse_server_options(
 
 
 def run_server(options: ServerOptions) -> None:
-    """Run Uvicorn using the FastAPI application factory."""
+    """Run the API with a Psycopg-compatible event loop on Windows."""
     uvicorn.run(
         APPLICATION_IMPORT,
         factory=True,
+        # Psycopg async connections need SelectorEventLoop on Windows.
+        # A Uvicorn hook avoids changing the global asyncio policy.
+        loop="asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto",
         host=options.host,
         port=options.port,
         log_level=DEFAULT_LOG_LEVEL,
@@ -89,7 +94,16 @@ def run_server(options: ServerOptions) -> None:
 
 def main(arguments: Sequence[str] | None = None) -> None:
     """Parse command-line options and start the ASGI server."""
-    run_server(parse_server_options(arguments))
+    # Fixture adapters remain available only through explicit development setup.
+    mode_key = "ORCHESTWIN_MODEL_RUNTIME_MODE"
+    defaulted = mode_key not in os.environ
+    if defaulted:
+        os.environ[mode_key] = "REAL_REQUIRED"
+    try:
+        run_server(parse_server_options(arguments))
+    finally:
+        if defaulted:
+            os.environ.pop(mode_key, None)
 
 
 if __name__ == "__main__":

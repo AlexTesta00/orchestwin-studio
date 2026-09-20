@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T17:09:30.265858+00:00",
+  "scope": "Post-hoc validator replay over unchanged native artifacts, not additional model inference or qualification",
+  "original_validator": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/prototype-validator-replay-20260919-01/original_validator.py",
+    "sha256": "5d964616c27d8850f3713fa4f06e6c9c2a5e6d37a657a1f078ff761ad49a7d32",
+    "git_reference": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4:src/orchestwin/models/source_design_contract.py",
+    "hash_serialization": "Exact git show blob bytes"
+  },
+  "revised_validator": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/src/orchestwin/models/source_design_contract.py",
+    "sha256": "ec0af7c89b80a9b1410e1c5fd28d5050c0f31a32da514c115e10ae88671d2802"
+  },
+  "policy_change": [
+    "Require exactly one TEXT marker in its approved screen and element order; permit dynamic content rather than requiring mockup example text.",
+    "Reject duplicate HTML id attributes across separate elements, including extra controls."
+  ],
+  "model_output_replays": [
+    {
+      "role": "baseline",
+      "case_id": "guest-list-en-20260919",
+      "original_pipeline_outcome": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "html": {
+        "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/guest-list-en-20260919/diagnostic-only-native/index.html",
+        "sha256": "7f34ea8015fdced57cd0296ea4f2dbd1be5a4dfe7bca09c7f4c6b71ee569b355"
+      },
+      "original_validator": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "revised_validator": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    },
+    {
+      "role": "baseline",
+      "case_id": "expense-split-it-20260919",
+      "original_pipeline_outcome": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+      "original_validator": "NOT_REACHED_NO_HTML",
+      "revised_validator": "NOT_REACHED_NO_HTML"
+    },
+    {
+      "role": "candidate",
+      "case_id": "guest-list-en-20260919",
+      "original_pipeline_outcome": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "html": {
+        "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-20260919-01/guest-list-en-20260919/diagnostic-only-native/index.html",
+        "sha256": "62cc8a20799c824e1aa5aec23b0f5855d20b45d7f1358220661e7e13f98631ef"
+      },
+      "original_validator": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "revised_validator": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    },
+    {
+      "role": "candidate",
+      "case_id": "expense-split-it-20260919",
+      "original_pipeline_outcome": "SOURCE_ACCEPTED",
+      "html": {
+        "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-candidate-probe-20260919-01/expense-split-it-20260919/diagnostic-only-native/index.html",
+        "sha256": "c63563ed28a94e7025d9d158062640619991db083551a8fd6d8a9152f7935169"
+      },
+      "original_validator": "PASSED_STATIC_STRUCTURE",
+      "revised_validator": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    }
+  ],
+  "frozen_v1_curriculum": {
+    "manifest": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/environments/training/artifacts/proposer-web-v1-20260919-verified/manifest.json",
+      "sha256": "987714f1dc2cda2ad0579146c697c9aa590c5236c1f137781e4e0cae55e0f339"
+    },
+    "reference_bundles": 76,
+    "reference_file_hashes_verified": 380,
+    "original_validator_passed": 76,
+    "revised_validator_passed": 0,
+    "revised_validator_rejected": 76,
+    "cause": "All frozen references omit the required ELM-005 TEXT marker on their result output. Historical admission was against the earlier validator.",
+    "artifacts_changed": false,
+    "detailed_replay": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/prototype-validator-replay-20260919-01/frozen-curriculum-replay.json",
+      "sha256": "82ca5c2cdf480e5872f869d8b83961fc3c8efa6c5671135c6ccfceaad9cb6735"
+    }
+  },
+  "future_reference_generator": {
+    "source": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/environments/training/proposer_curriculum.py",
+      "sha256": "c81304cbd579cd41d085bcd413af9f0c7b589a4388068b90431e7d1f16acc05a"
+    },
+    "change": "Only add data-design-element=ELM-005 to generated result output. No v1 dataset, cache or training artifact regenerated.",
+    "in_memory_reference_bundles_passed": 76,
+    "detailed_replay": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/prototype-validator-replay-20260919-01/future-reference-replay.json",
+      "sha256": "8fe2f4eb2162c3d94e63403f5d5d84aee513056b4533eb2e630d5e7455f92b4c"
+    },
+    "new_dataset_published": false,
+    "new_training_performed": false
+  },
+  "assisted_demo_v5": {
+    "scope": "Read-only replay of exported assisted v5 snapshot; no fresh browser or database observation",
+    "source_revision_id": "acbb313b-a92d-4e0c-8403-05116a1ef4de",
+    "source_origin": "ASSISTED_OWNER_EDIT",
+    "archive": {
+      "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/demo-result/web-source-acbb313b-a92d-4e0c-8403-05116a1ef4de.zip",
+      "sha256": "322ea6a33c642f93653bb5353dbf407c620369a8bceccb96087a0784f23b5a06"
+    },
+    "html_sha256": "eea31bbb89b2eecb58b2340830a965474b515aeab4d96629b1a3f0ac7fdca721",
+    "prototype_sha256": "709c648f2988f67705ec5a8f968ae2169ad8f1f16f35651b71f890f5f6b1808f",
+    "original_validator": "PASSED_STATIC_STRUCTURE",
+    "revised_validator": "PASSED_STATIC_STRUCTURE",
+    "reviewed_files_match_export_and_stored_snapshot_hashes": true
+  },
+  "checks": {
+    "pytest_passed": 137,
+    "pytest_failed": 0,
+    "suites": [
+      "src/test/python/models/test_source_design_contract.py",
+      "src/test/python/models/test_source_file_generation.py",
+      "src/test/python/training/test_proposer_curriculum.py"
+    ],
+    "ruff_format": "PASSED",
+    "ruff_check": "PASSED",
+    "models_regression": {
+      "passed": 508,
+      "skipped": 2,
+      "failed": 0,
+      "skip_reason": "Torch unavailable in native Windows Python; two numerical attention-memory tests skipped."
+    }
+  },
+  "original_benchmark_evidence_changed": false,
+  "database_writes": 0,
+  "model_calls": 0,
+  "limitations": [
+    "This replay changes the validator only. It cannot improve the original model output or retroactively change the original pipeline status.",
+    "No CSS visibility, enabled-button state, event handler behavior or rendered-browser success is inferred from static admission.",
+    "The frozen v1 training result and hashes are preserved; its omitted TEXT-marker example remains a known data limitation.",
+    "The later V12 prompt aligns TEXT-marker instructions with revised validation; absent TEXT markers in original V11 outputs are not scored as failure to follow the original instruction."
+  ],
+  "subsequent_prompt_alignment": {
+    "contract": "SOURCE_MANIFEST_V12_COMPLETE_PROTOTYPE_MARKERS",
+    "source_path": "src/orchestwin/models/source_file_generation.py",
+    "source_sha256": "4a135177c70482cec8d83b577f3212b7426ab88dc3d2a8347e620161ea0c2654",
+    "meaning": "V12 explicitly requires every prototype element, including TEXT, exactly once in its approved screen/order and globally unique HTML ids. Frozen v1 curriculum and the original paired model probes used V11, whose HTML instruction required markers only for interactive elements.",
+    "no_retroactive_claim": "This later TEXT-marker requirement is not evidence that the model violated its original V11 instruction. Replays measure compatibility with revised policy; original comparison outcomes remain unchanged. Candidate rejection is supported by independent functional failures.",
+    "model_calls": 0
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-20T10:41:12.213257+00:00",
+  "scope": "GENERATION_PROTOCOL_IMPLEMENTATION_NOT_MODEL_QUALITY",
+  "base_commit": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "manifest_contract": "SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST",
+  "status": "IMPLEMENTED_TESTED_LIVE_MODEL_FAILED",
+  "changes": [
+    "Approved prototype yields escaped DOM reference for prompt guidance only.",
+    "Model writes HTML first, script consumes exact generated HTML, tests consume both.",
+    "Error assertions follow the declared interface, not unconditional exceptions.",
+    "JVM instructions separate production/test dependencies and preserve numeric return types and exact validation boundaries."
+  ],
+  "source_files": [
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\orchestwin\\models\\source_file_generation.py",
+      "sha256": "0b6d5be5aff54374e097f061f9350458208c0e217ea659b5aa5c0eecfe7f58a6",
+      "bytes": 45811
+    },
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\orchestwin\\models\\source_design_contract.py",
+      "sha256": "806a81b7af516f00226aa1828a349a8ef9ab18f724be1f82693a67a8656607c9",
+      "bytes": 10359
+    }
+  ],
+  "unit_tests": {
+    "passed": 103,
+    "report": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\dom-first-tests-03.xml",
+      "sha256": "e7773e847fae1ca92acb260c1c42c75f2a1db42cb666143041114eb48e0fefb8",
+      "bytes": 18911
+    }
+  },
+  "postgres_tests": {
+    "passed": 66,
+    "database_scope": "DISPOSABLE_DATABASE_ONLY",
+    "application_database_touched": false,
+    "cleanup_confirmed": true,
+    "log": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\design-retry-postgres-2c55379aba54404d874e72f9e5750c0c.log",
+      "sha256": "d4ce8f0963dc13988665e116c690e649b5f4f2aecfe76899b04968cc3231dea0",
+      "bytes": 113
+    }
+  },
+  "live_gui": {
+    "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+    "status": "COMPLETE_REVISION_FUNCTIONAL_FAILURE",
+    "manual_source_edit": false,
+    "report": "experiments/studio-demo/calculator-dom-first-verification-20260920.json"
+  },
+  "claims": {
+    "calculator_verified": false,
+    "web_level_d": false,
+    "sprint_12_closed": false
+  },
+  "jvm_probe_tests": {
+    "passed": 49,
+    "report": "var/studio/jvm-v16-tests-01.xml"
+  }
+}

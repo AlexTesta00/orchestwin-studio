@@ -1,0 +1,311 @@
+{
+  "phase": "balanced-evaluator-curriculum-v5",
+  "status": "READY_FOR_USER_COMMIT_NO_TRAINING",
+  "baseline_git_head": "613848d27a2cf7bdfcbfda757be854519b3d872c",
+  "external_artifacts": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-curriculum-613848d-20260917-01",
+  "curriculum_id": "grounded-evaluator-balanced-scope-v5",
+  "motivation": [
+    "The previous fresh scope pilot improved scope from 86/160 to 148/160 but regressed on 32/158 retention cases and four previously passing known challenge cases.",
+    "That pilot used only 476 retained rows and started from the base; it does not establish forgetting caused by continued training."
+  ],
+  "dataset": {
+    "files": {
+      "train.jsonl": {
+        "rows": 13368,
+        "size_bytes": 165680703,
+        "sha256": "046cbb1569b5720c003ce190cc8998edfceb20d06100b254273454800075c56d"
+      },
+      "validation.jsonl": {
+        "rows": 1212,
+        "size_bytes": 14327453,
+        "sha256": "0fd93177c470465c8004bbbaedaa13c0a368db296753e65802a6690b96763426"
+      }
+    },
+    "training_scope_rows": 5328,
+    "training_retention_rows": 8040,
+    "retention_groups": 315,
+    "retention_row_share": 0.6014362657091562,
+    "source_strata": 132,
+    "preserved_strata": 132,
+    "source_coverage_categories": 148,
+    "preserved_coverage_categories": 148,
+    "train_locales": {
+      "it": 6684,
+      "en": 6684
+    },
+    "validation_locales": {
+      "it": 606,
+      "en": 606
+    },
+    "normalized_training_duplicates": 0,
+    "prior_data_bytes_unchanged": true,
+    "retention_copied_as_whole_byte_identical_groups": true,
+    "known_development_overlap_in_validation": 480,
+    "additional_normalized_validation_inputs": 732,
+    "validation_final_qualification": false
+  },
+  "tokenization": {
+    "splits": {
+      "train": {
+        "rows": 13368,
+        "total_tokens": 44789091,
+        "prompt_tokens": 40504304,
+        "completion_tokens": 4284787,
+        "min_tokens": 1906,
+        "max_tokens": 4753,
+        "mean_tokens": 3350.4706014362655,
+        "p95_tokens": 4064,
+        "p99_tokens": 4378,
+        "max_prompt_tokens": 3446,
+        "max_completion_tokens": 1347
+      },
+      "validation": {
+        "rows": 1212,
+        "total_tokens": 3791190,
+        "prompt_tokens": 3564777,
+        "completion_tokens": 226413,
+        "min_tokens": 2179,
+        "max_tokens": 3736,
+        "mean_tokens": 3128.0445544554455,
+        "p95_tokens": 3427,
+        "p99_tokens": 3656,
+        "max_prompt_tokens": 3172,
+        "max_completion_tokens": 602
+      }
+    },
+    "max_sequence": 6144,
+    "output_reserve": 2048,
+    "truncation": false,
+    "completion_boundary_checked": true,
+    "eos_checked": true,
+    "independent_cache_totals_match": true,
+    "balance": {
+      "components": {
+        "scope": {
+          "rows": 5328,
+          "total_tokens": 16707564,
+          "completion_tokens": 1009342
+        },
+        "retention": {
+          "rows": 8040,
+          "total_tokens": 28081527,
+          "completion_tokens": 3275445
+        }
+      },
+      "retention_total_token_share": 0.6269724697024996,
+      "retention_supervised_token_share": 0.7644358984472274,
+      "database_sha256": "864994fc43b7ae9f1807c9791a66ca8be53dcb83c750a1ff6ebfa1e92b185a69",
+      "no_truncation": true
+    }
+  },
+  "contamination": {
+    "train_new_validation_overlap": 0,
+    "train_protected_development_overlap": 0,
+    "normalized_ids": true,
+    "protected_sources": [
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\data\\validation.jsonl",
+        "sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e",
+        "rows": 3280
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01\\data\\validation.jsonl",
+        "sha256": "b5ae4562e48273275bfb87b148f2d2203c9db32c58a851c88cf31f7cc2260cad",
+        "rows": 480
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01\\pilot-screen-inputs.json",
+        "sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+        "rows": 342
+      }
+    ],
+    "reserved_test_files_opened": false
+  },
+  "validation": {
+    "tests_passed": 161,
+    "test_seconds": 17.298,
+    "ruff_check": "PASS",
+    "git_diff_check": "PASS",
+    "independent_source_replay": "PASS",
+    "gold_samples_reviewed": 12,
+    "human_expert_review": false
+  },
+  "next_training_protocol": {
+    "schema_version": 1,
+    "status": "PLANNED_NOT_LAUNCHED",
+    "dataset_manifest_sha256": "617bba7152b3c0f0346610ac19c784694fcab22e9568aa5214aa6d34003846c4",
+    "cache_manifest_sha256": "d192ce4fb7cceb8931d04437ac5c2a80349b949972d413f081b4dc05b534bb3e",
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "initialization": "FRESH_LORA_FROM_PINNED_BASE_NOT_CONTINUATION_OF_PREVIOUS_ADAPTERS",
+    "rationale": "Keep initialization and optimizer settings comparable with the rejected scope pilot; change the curriculum and one-epoch exposure. This is not an equal-token ablation and does not isolate dataset composition from additional updates. No previous-adapter forgetting claim.",
+    "training_policy": {
+      "max_steps": 3342,
+      "batch_size": 1,
+      "accumulation": 4,
+      "learning_rate": 0.0001,
+      "rank": 16,
+      "alpha": 32,
+      "save_steps": 100,
+      "max_active_seconds": 14400
+    },
+    "training_rows": 13368,
+    "epochs_at_full_completion": 1,
+    "seed": 2026091503,
+    "loss": "COMPLETION_ONLY_INCLUDING_EOS",
+    "group_limit": null,
+    "sampler": "PYTHON_SHUFFLE_WITHOUT_REPLACEMENT_PER_EPOCH",
+    "decoding": {
+      "mode": "schema",
+      "temperature": 0,
+      "max_output_tokens": 2048,
+      "max_sequence": 6144,
+      "output_repair": false,
+      "retries": 0
+    },
+    "comparators": [
+      {
+        "name": "unadapted_base",
+        "adapter": null
+      },
+      {
+        "name": "existing_candidate",
+        "weights_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf"
+      },
+      {
+        "name": "rejected_scoped_pilot",
+        "weights_sha256": "b603e9ae562a8f77100a7380d3436f1b203851ffdf73f647ab34d4e4ff76fc18"
+      },
+      {
+        "name": "balanced_candidate",
+        "status": "NOT_TRAINED"
+      }
+    ],
+    "development_screen": {
+      "unique_inputs": 342,
+      "input_counts": {
+        "scope_development": 160,
+        "retention_development": 158,
+        "known_challenge_regression": 24
+      },
+      "inputs_sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+      "labels_local_only_sha256": "45afa18038fcfd691d6b28adadec7d57fc5010412c71133810cd23216bcbaea2",
+      "new_candidate_inferences": 342,
+      "raw_prior_comparator_inferences": 1026,
+      "comparator_reuse": "Reuse frozen outputs only after exact request, adapter and runtime comparability verification; otherwise run an explicitly budgeted matched comparison. Never rescore or overwrite prior result artifacts.",
+      "scorer_sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+      "independent_final_qualification": false
+    },
+    "gates": {
+      "before_cloud_launch": [
+        "Alex commits the reviewed preparation phase; verify committed source matches dataset and cache operators.",
+        "Recheck available credit, pricing and the existing campaign ceiling; bind a new lease and independent shutdown watchdog.",
+        "Freeze the runnable bundle, allocation, inference runtime and exact paired requests before inference."
+      ],
+      "advancement": [
+        "Zero schema/domain/identity errors and zero unsupported empirical claims.",
+        "All 160 frozen scope screen cases pass exact finding, gap, abstention and target checks in both languages.",
+        "No per-case regression on the 158 retention and 24 known challenge cases relative to either frozen adapted comparator.",
+        "Review every known challenge narrative, every automatic failure and the fixed scope sample; reject out-of-request or destructive recommendations.",
+        "After passing these gates, evaluate all 480 frozen v4 development cases and all 1212 v5 validation cases, deduplicating normalized equivalent inputs when the exact inference contract permits. Report repeated cases separately."
+      ],
+      "final_qualification": [
+        "Author and freeze fresh qualification inputs independently of this generator.",
+        "Development evidence and synthetic labels are not real-user observations, expert judgments or final thesis qualification."
+      ]
+    },
+    "budget_plan": {
+      "maximum_additional_compute_usd": 25,
+      "campaign_ceiling_usd": 200,
+      "storage_reserve_usd": 20,
+      "wall_clock_ceiling_seconds": 32400,
+      "training_active_ceiling_seconds": 14400,
+      "launch_credit_and_price_recheck_required": true,
+      "cloud_launched": false,
+      "periodic_updates_hours": 5,
+      "shutdown_and_recovery_required": true
+    },
+    "training_estimate": {
+      "method": "Previous scoped pilot active time scaled by total sequence tokens",
+      "reference_training_result_sha256": "adf47a9a6c27068a41e0870b19069140bff146f36fa295b39c0f293bfb15d1cb",
+      "reference_tokens": 8286581,
+      "reference_active_seconds": 1241.858194746077,
+      "reference_trainer_seconds": 1240.2013,
+      "nominal_training_minutes": 111.87102717348641,
+      "measured_new_training_throughput": false,
+      "excludes": [
+        "new setup",
+        "inference",
+        "artifact recovery"
+      ],
+      "limitation": "Planning estimate only. Sequence length, padding and checkpoint frequency change throughput; duration cannot establish model quality."
+    },
+    "production_promotion": false,
+    "reserved_test_files_opened": false
+  },
+  "cloud_compute_started": false,
+  "new_compute_spend_usd": 0,
+  "training_executed": false,
+  "production_promotion": false,
+  "limitations": [
+    "Closed static HTML grammar and synthetic supervision; no browser accessibility or real-user quality claim.",
+    "Known development failures informed the design; validation is not independent final qualification.",
+    "A broader retention sample and its token fraction do not guarantee retention after training.",
+    "The planned larger one-epoch run changes both curriculum composition and update count; it is not a causal equal-compute ablation.",
+    "No reserved thesis test, production selector or database state was changed."
+  ],
+  "source_sha256": {
+    "environments/training/prepare_balanced_evaluator.py": "7ddf15dc52210c04f942e16b7db161b656dc8fad18ed69af127c5d80801c05bf",
+    "environments/training/audit_scoped_evaluator.py": "56ac7d95b89fa7cca19824c5667c64442250825bceeb1fea5ab205af751b5199",
+    "environments/training/complete_training_data.py": "bd8a79b4e2acba9f8f288fe0464e9ee51fc64fe188e8c97a952978efc82d1211",
+    "src/orchestwin/training/balanced_scope_curriculum.py": "64016a27c4ae1ceab1ce4d50206735624ba9a00c17c8ff4995b6351d9124fbb6",
+    "src/test/python/training/test_balanced_scope_curriculum.py": "fb674a4fc0ee4638806f6be4c598ad244b8ea77081b8b3f4a07440467afc4633",
+    "src/test/python/training/test_complete_cloud_training.py": "116332b935b80b7b052547c831eb667db524d20540c615cd4aa38635f9ec3683"
+  },
+  "artifacts": {
+    "data/manifest.json": {
+      "sha256": "617bba7152b3c0f0346610ac19c784694fcab22e9568aa5214aa6d34003846c4",
+      "bytes": 44264
+    },
+    "preflight/tokenization.json": {
+      "sha256": "e9a5242a8918700e5b8490e1baab0bcba0ca30d2f277d7e8aed30d0a23cf6ffd",
+      "bytes": 30851
+    },
+    "preflight/cache/cache.json": {
+      "sha256": "d192ce4fb7cceb8931d04437ac5c2a80349b949972d413f081b4dc05b534bb3e",
+      "bytes": 27689
+    },
+    "corpus-audit.json": {
+      "sha256": "09706c24e0cf48b20cabd21947bf262c40faad16f304a30cc759c19c68b45de7",
+      "bytes": 7303
+    },
+    "token-balance.json": {
+      "sha256": "1ab6024e9c23366adaeab3f40143449c1bec645ef5446f7dfd9d355c53d061bb",
+      "bytes": 490
+    },
+    "gold-samples.json": {
+      "sha256": "86799d8a04ac5fb70d6759e3578edb0bdf5c60ef1746d19f1763e908420a8812",
+      "bytes": 296164
+    },
+    "gold-review.json": {
+      "sha256": "32b423084ccd2c1df830d0723c9dcda33c8b5f1dffc73c16c94775fcbfd4d6d3",
+      "bytes": 1313
+    },
+    "next-training-protocol.json": {
+      "sha256": "443472f8bc02c1100c4f4ccf446ebbf2b0a39ad7d7ab41dcdf5f67353c3422a5",
+      "bytes": 5267
+    },
+    "tests-final.xml": {
+      "sha256": "34a192bca5798ab23e1bb69e4ef805d716146c81e167a150651292e4a525d974",
+      "bytes": 30467
+    },
+    "verify_corpus.py": {
+      "sha256": "298871244621ac4f0a0a70a78f349caf44b81de829189164f8ab168dbe9aefd7",
+      "bytes": 5773
+    },
+    "finalize_evidence.py": {
+      "sha256": "282d9e00f9057e7e4099f776472896dcafc081dbe2f93787ab3231659800d627",
+      "bytes": 12933
+    }
+  }
+}

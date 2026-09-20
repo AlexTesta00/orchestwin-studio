@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "scope": "Fresh postprompt synthetic proposer diagnosis; no final thesis qualification or model promotion",
+  "baseline_git_head": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "started_at_utc": "2026-09-19T16:22:04.162616+00:00",
+  "finished_at_utc": "2026-09-19T16:36:11.355019+00:00",
+  "elapsed_seconds": 847.18,
+  "model_identity": {
+    "provider_id": "local-studio-model",
+    "runtime_id": "proposal-900caccb-b166-4791-a8ce-8574d071a7ad",
+    "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "configuration_sha256": "a96a950bcced4ecde11374f3ada72408bbb0b92d6797b7409adc28e55510270d",
+    "adapter_id": null,
+    "adapter_sha256": null
+  },
+  "temperature": 0.6,
+  "sampling": "One stochastic sample per case, with at most one audited syntax retry per generated file. No seed was fixed.",
+  "input_provenance": "Two new engineering-authored briefs and mockups. Independent oracles were frozen before inference and excluded from model prompts. All originals and rejected attempts remain retained.",
+  "cases_path": "experiments/model-proposals/proposer-postprompt-cases-20260919.json",
+  "cases_sha256": "e800c0967cc59467cfbaca625c6bb45882787d284db6952874dda646f11685e9",
+  "harness": {
+    "path": "environments/training/probe_web_proposer.py",
+    "sha256": "062b45b3818cb9e970435f5892d6aa493cfd949234a1dee9b3cbf4994f19360b",
+    "safety_tests_passed": 4,
+    "ruff": "PASSED"
+  },
+  "protocol": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/protocol.json",
+    "sha256": "74aa3414718e12e73caba4e44c3fec872ce4d391f1f1d8729dce8651c8f921c3"
+  },
+  "native_report": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/report.json",
+    "sha256": "0e3680c9026c17d17b7dc2d17adf337cabbf8e2df1171679a7288f5a8467f0f7"
+  },
+  "evidence_manifest": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-postprompt-20260919-02/evidence-manifest.json",
+    "sha256": "64a8b1d2272be19c733c55f77a0138b9ae0a766df8782a7093177e3bd3f55d39",
+    "verified_files": 78
+  },
+  "node_image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+  "isolation": "Docker non-root1000:1000, read-only root/source, network none, cap-drop ALL, no-new-privileges,512MiB,1CPU,64pids;35s timeout per test command.",
+  "cases": [
+    {
+      "case_id": "guest-list-en-20260919",
+      "source_status": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "generation_seconds": 553.67,
+      "generation_requests": 6,
+      "native_responses": 6,
+      "syntax_retries": 2,
+      "independent_checks": {
+        "exit_code": 1,
+        "tests": 4,
+        "pass": 0,
+        "fail": 4,
+        "oracle_frozen_before_inference": true,
+        "classic_script_check_included": true
+      },
+      "model_authored_tests": {
+        "status": "REGISTERED_ASSERTIONS_REVIEWED_AND_EXECUTED",
+        "exit_code": 0,
+        "tests": 11,
+        "pass": 11,
+        "fail": 0
+      },
+      "mockup_structure": "REJECTED",
+      "browser_behavior_verified": false,
+      "source_published": false,
+      "findings": [
+        "Initial app.js contains literal backslash-n tokens outside JavaScript strings; the audited syntax retry retained both originals and returned parseable code.",
+        "The accepted app.js retry exports the factory directly with unguarded module.exports = createGuestList, contrary to the specified shared classic-script/named-export contract. Three independent groups cannot call the named export; the fourth actually raises ReferenceError: module is not defined on classic-script startup. This does not establish that the underlying state algorithm is wrong.",
+        "All eleven model-authored Node tests are registered and pass using the directly exported factory. Their imports and assertions were reviewed; no caught-assertion false-success pattern was observed in this suite.",
+        "HTML also required a syntax retry, then failed the exact design structure check: duplicate screen/control markers, a duplicate Back control and missing transition targets. No browser application was published."
+      ],
+      "native_files": [
+        {
+          "path": "app.js",
+          "generation_id": "12c2c85f-e5f6-40b8-88b0-812380c18a4b",
+          "source_sha256": "3e4ec430e453c89e0d61239855cf9809f8be950c533adb24a16cec139dd7edde",
+          "native_response_sha256": "eda3b0dfa437f8a3124fc34589dabd5cf5726bcd1f34c26b1e28f9fa34c0ebf2"
+        },
+        {
+          "path": "app.test.cjs",
+          "generation_id": "88e523c7-22ee-4f5d-9b1c-ec4ff446bbb5",
+          "source_sha256": "b81c508cbe7c540375b43276ef496689d80c46c2f5c457957a891d55cf26e93c",
+          "native_response_sha256": "b5c9cbc38699485b083b76d115c238c09509a508585277de066077aff2918880"
+        },
+        {
+          "path": "index.html",
+          "generation_id": "d6924c68-857b-45c2-b7fd-ece6fa82f686",
+          "source_sha256": "7f34ea8015fdced57cd0296ea4f2dbd1be5a4dfe7bca09c7f4c6b71ee569b355",
+          "native_response_sha256": "a1d71c75c35acfb0a0cd7f28fc48788cecb79598cb3cc8274462b3489b24f69d"
+        }
+      ],
+      "attempts": [
+        {
+          "generation_id": "12c2c85f-e5f6-40b8-88b0-812380c18a4b",
+          "file": "app.js",
+          "syntax_retry": true,
+          "request_sha256": "cfdd9aae32d06fe08986dcae1f2083f4c2844a0a477e0a1484972eb0da79d339",
+          "raw_response_sha256": "eda3b0dfa437f8a3124fc34589dabd5cf5726bcd1f34c26b1e28f9fa34c0ebf2",
+          "rejection": null
+        },
+        {
+          "generation_id": "6384aac1-7f62-4317-98a2-12ad2638cf89",
+          "file": "index.html",
+          "syntax_retry": false,
+          "request_sha256": "7551505067ea46f5a24ced5fd52c0a3e0f3acb605143c0118f798968f533c3c6",
+          "raw_response_sha256": "66e9dff56ab24b7a3f4a41bf9bfa97c06a169144aea1746c0b02060274d33708",
+          "rejection": "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+        },
+        {
+          "generation_id": "88e523c7-22ee-4f5d-9b1c-ec4ff446bbb5",
+          "file": "app.test.cjs",
+          "syntax_retry": false,
+          "request_sha256": "4a176466fe6951bfb8a48be3e7411d03a4452f9321d7a534230ec6da3bea687f",
+          "raw_response_sha256": "b5c9cbc38699485b083b76d115c238c09509a508585277de066077aff2918880",
+          "rejection": null
+        },
+        {
+          "generation_id": "9263f589-6cfc-425d-9e2f-a11d57b8796e",
+          "file": "app.js",
+          "syntax_retry": false,
+          "request_sha256": "afb1a20772dd1df53ec64427fe165feb725bf9cb19868c2f6fe4dd672e81a219",
+          "raw_response_sha256": "b380ce7ce58608daada1c4f422f5d75d1cc8e6263798333ad94d61e44639a8e2",
+          "rejection": "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+        },
+        {
+          "generation_id": "d2ca7a93-1743-4087-9295-5fe36df5cff7",
+          "file": "manifest",
+          "syntax_retry": false,
+          "request_sha256": "93e4f25c23bb2f707587a8f6c3bd2437589038efd0af422016ca6ef41bf91cd1",
+          "raw_response_sha256": "936985661934fa4eab1bf8dfaeb06f879bc750efb5aa273906cde2b7df351e52",
+          "rejection": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+        },
+        {
+          "generation_id": "d6924c68-857b-45c2-b7fd-ece6fa82f686",
+          "file": "index.html",
+          "syntax_retry": true,
+          "request_sha256": "f9c860699f1d377178914c73255776cf975fed73704fca5ca42f4e53dc2500de",
+          "raw_response_sha256": "a1d71c75c35acfb0a0cd7f28fc48788cecb79598cb3cc8274462b3489b24f69d",
+          "rejection": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+        }
+      ]
+    },
+    {
+      "case_id": "expense-split-it-20260919",
+      "source_status": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+      "generation_seconds": 291.52,
+      "generation_requests": 3,
+      "native_responses": 3,
+      "syntax_retries": 1,
+      "independent_checks": {
+        "exit_code": 1,
+        "tests": 4,
+        "pass": 2,
+        "fail": 2,
+        "oracle_frozen_before_inference": true,
+        "classic_script_check_included": true
+      },
+      "model_authored_tests": {
+        "status": "NOT_GENERATED_NOT_ASSESSED"
+      },
+      "mockup_structure": "NOT_REACHED",
+      "browser_behavior_verified": false,
+      "source_published": false,
+      "findings": [
+        "Both app.js attempts contain an ESM export function declaration, prohibited by the selected WEB_STATIC classic-script profile; the second attempt is retained after the bounded retry is exhausted.",
+        "The final native code passes two independent numeric-allocation/conservation groups under Node26, whose default loader can import this ESM source. These partial passes do not waive the classic-script profile rejection.",
+        "The final code omits integer validation of totalCents: the independent invalid-input group fails because0.5 is accepted instead of rejected. Classic-script startup separately fails on the export keyword.",
+        "The model test file and HTML were not generated because core validation stopped the pipeline. Their quality and design conformance were not assessed."
+      ],
+      "native_files": [
+        {
+          "path": "app.js",
+          "generation_id": "76ed6689-2242-4531-814c-31fe50e3a65c",
+          "source_sha256": "b3c288b4b0cc84b2e7126d67e09914e86bcdaf33590ac323174c1a07e390027e",
+          "native_response_sha256": "8dda1436e3c858f29c44354a7770cfad84de45a02079ecae1bc81f185ec69743"
+        }
+      ],
+      "attempts": [
+        {
+          "generation_id": "76ed6689-2242-4531-814c-31fe50e3a65c",
+          "file": "app.js",
+          "syntax_retry": true,
+          "request_sha256": "f6cd37c8b6694705995409db5dd48ef0bbd309917e64aa96a207f329a1afef7e",
+          "raw_response_sha256": "8dda1436e3c858f29c44354a7770cfad84de45a02079ecae1bc81f185ec69743",
+          "rejection": "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+        },
+        {
+          "generation_id": "7cc54756-737f-4853-9a1f-fcafab0d0cef",
+          "file": "manifest",
+          "syntax_retry": false,
+          "request_sha256": "ea2bccdd5e67bab2ad0854fbe27c8c6d93d0ab5e93a7ef160d16bf5817fb19a5",
+          "raw_response_sha256": "21f6cebdd53ecdd43a3cda04ad1497db057a1d64fe1af758bfafd6057bb4e302",
+          "rejection": "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+        },
+        {
+          "generation_id": "b13bd89a-1a72-4f5e-9242-c92c7a8c8c4c",
+          "file": "app.js",
+          "syntax_retry": false,
+          "request_sha256": "10056b6a8720057fceb1ca343921f3dc807fecef4c0b2c42071944ed6d2686c0",
+          "raw_response_sha256": "9057330926c2bad9be24f88ba5cee2ebf8aaca026efef7191f5a39a52c23df41",
+          "rejection": "SOURCE_JAVASCRIPT_SYNTAX_INVALID"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "native_responses": 9,
+    "source_proposals_accepted": 0,
+    "source_proposals_rejected": 2,
+    "syntax_retries": 3,
+    "independent_checks_passed": 2,
+    "independent_checks_total": 8,
+    "fully_passing_independent_case_suites": 0,
+    "model_authored_suites_generated": 1,
+    "model_authored_registered_tests_passed": 11,
+    "mockup_contract_rejected": 1,
+    "mockup_stage_not_reached": 1,
+    "browser_verified_applications": 0
+  },
+  "decision": {
+    "training_started_by_this_probe": false,
+    "production_promotion": false,
+    "recommendation": "Targeted proposer supervision is justified for JSON/source encoding, classic-script/CommonJS interop, typed input validation, exact screen/control markup and transitions. Validate every supervised source and test; retain this unchanged baseline for the bounded candidate comparison.",
+    "failed_native_outputs_are_not_training_targets": true
+  },
+  "candidate_comparison_plan": {
+    "status": "PREPARED_NOT_STARTED",
+    "candidate_runtime_config": "Root agent must provide a verified candidate config before execution.",
+    "output_directory": "var/studio/proposer-candidate-20260919-03",
+    "cases_and_oracles": "Reuse the exact frozen cases file and verify its SHA256 equals cases_sha256 above.",
+    "harness": "Reuse this exact harness and the same source-generation prompt implementation.",
+    "temperature": 0.6,
+    "decode_change": false,
+    "client_deadline_seconds": 1200,
+    "comparison": "Compare exact source disposition, each independent test group, model-authored test validity and mockup contract; preserve all retries and latency. No automatic adoption.",
+    "sampling_limitation": "One stochastic base/candidate sample per case is diagnostic only. Changing the baseline to deterministic decoding after observing it would make a different experiment; any repeated-seed study requires a separately frozen protocol.",
+    "training_exclusion": [
+      "guest-list-en-20260919",
+      "expense-split-it-20260919",
+      "sales-tax-en",
+      "temperature-it",
+      "All oracle files, original response bodies and result directories for these diagnostics."
+    ]
+  },
+  "constraints": {
+    "database_writes": 0,
+    "demo_mutations": 0,
+    "native_output_repairs_by_assistant": 0,
+    "runpod_compute_started_by_probe": false,
+    "incremental_runpod_compute_cost_usd": 0,
+    "formal_final_test_accessed": false,
+    "human_expert_validation": false,
+    "level_d_qualification": false,
+    "commit_performed": false
+  },
+  "limitations": [
+    "Cases differ from the earlier sales-tax/temperature diagnostic, so these scores do not estimate a causal prompt-improvement effect.",
+    "Classic-script VM startup is an isolated execution check, not a browser navigation, rendering or accessibility test.",
+    "Node26 may load an ESM file that the selected classic-browser profile correctly rejects; partial numeric passes are reported separately.",
+    "The named-export checks enforce the explicit generation contract. The guest-list state checks fail before invoking the directly exported factory; eleven separate model tests provide limited evidence for that factory logic.",
+    "Two narrow cases and one stochastic sample each cannot establish generalization, training quality or production readiness."
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "phase": 2,
+  "base_commit": "8bedba79a061e916b857d80bc8eec608daa8834c",
+  "recorded_at": "2026-09-13T16:19:22.206825+00:00",
+  "scope": "REAL_MODEL_AND_POSTGRES_ENGINEERING_PROBE_SYNTHETIC_GOVERNANCE",
+  "migration": "0038_proposal_generation_evidence",
+  "application_database_modified": false,
+  "formal_case": false,
+  "trained_in_this_phase": false,
+  "adapter_loaded": false,
+  "real_observation": {
+    "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\proposal-phase2-real-team-01",
+    "generation_id": "224fd80b-ef0e-40f6-95b4-169c8b63fc97",
+    "outcome": "CREATED",
+    "publication_state": "ARTIFACTS_LINKED",
+    "identity": {
+      "provider_id": "local-proposal-model",
+      "runtime_id": "proposal-base-bbff7e37-8b48-4f9e-9130-eb843c30d172",
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "a21e77be78a52fbed87a4cd3f8903d53d52e7dac9905857d72689fcfb25b87b5",
+      "adapter_id": null,
+      "adapter_sha256": null
+    },
+    "temperature": 0.6,
+    "max_output_tokens": 768,
+    "latency_milliseconds": 8490,
+    "usage": {
+      "completion_tokens": 94,
+      "prompt_tokens": 1517,
+      "total_tokens": 1611
+    },
+    "model_visible_messages_hash_verified": true,
+    "retention_survives_runtime_restart": true,
+    "artifact_link": {
+      "content_hash": "97ed710ca593567744c262c755521828f93c8e7cc68998cf162b045249667adf",
+      "kind": "AGENT_TEAM",
+      "relation": "GENERATED",
+      "version_id": "8c74c8d7-d366-435f-8f10-9698f4c5f559",
+      "version_number": 1
+    },
+    "files_sha256": {
+      "evidence.json": "a3409bd26501a8fa0377f2b4969663f6e45dff89aaf972201ac804fa5f7778cd",
+      "report.json": "90cbf91e61671111ccd3cceb00bc1a0a58715ce263302109abfda83dbee9afb4",
+      "proposal.json": "b1516d1beeaa99c4d73fc94451730d8baa0715bb886695e573f5812d1f4ca62c",
+      "provenance.json": "4403078a911cfd6ee0471701776fdc8ded5008207f784c4506c9606eb7d13fc6"
+    }
+  },
+  "validation": {
+    "related_regression_tests_passed": 1057,
+    "final_focused_tests_passed": 34,
+    "synthetic_postgres_tests_passed": 14,
+    "separately_enabled_real_inference_probe_passed": true,
+    "postgres_synthetic_run": {
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-proposal-evidence-test-018e755a1b484acebd409a0ba1ce695c",
+      "result_sha256": "51875ca6b3b584ad160dd233750924084242314feba0d43355e07bd676f5f033",
+      "junit_sha256": "d4131880617db0adfaebfc26a173facf670f3bfe7b55330b653cc3a89d494417"
+    },
+    "postgres_real_probe_run": {
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-proposal-evidence-test-74fbb2c0dbd8445a8078973f8702fb36",
+      "result_sha256": "f3d60df6106a794a62229d9c0086119ab220f6a37e336cfb6329ee0e514725b3",
+      "junit_sha256": "2361a80da03ca9320920396d2e0b7b12ae0c5c1af9e7cfd61611ebf4f3185545"
+    },
+    "migration_roundtrip": "PASSED",
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED",
+    "git_diff_check": "PASSED"
+  },
+  "limitations": [
+    "Synthetic PostgreSQL tests cover all six tasks; only the team task was observed on the real model in this phase.",
+    "The real probe uses synthetic governance fixtures in a disposable PostgreSQL database, not a formal thesis case.",
+    "Accepted structure and successful persistence do not establish semantic model quality or end-to-end calculator success.",
+    "The application database has not been migrated to 0038 in this phase.",
+    "Real-only deployed configuration, evaluator connectivity, source/repair generation and a new formal calculator attempt remain subsequent phases."
+  ]
+}

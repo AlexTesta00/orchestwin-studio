@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "report_type": "WEB_LEVEL_D_CURRENT_COMMIT_PREFLIGHT",
+  "observed_at": "2026-09-20T06:42:38.497572+00:00",
+  "status": "BLOCKED_EXACT_COMMIT_CI_FAILED_LOCAL_FIX_READY",
+  "platform_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "local_branch": "sprint/12-case-studies-expert-evaluation",
+  "repository": "AlexTesta00/orchestwin-studio",
+  "ci": {
+    "schema_version": 1,
+    "provider": "GITHUB_ACTIONS",
+    "status": "FAILED",
+    "repository": "AlexTesta00/orchestwin-studio",
+    "commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+    "head_sha": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+    "run_id": 35494854769,
+    "run_attempt": 1,
+    "conclusion": "failure",
+    "workflow_path": ".github/workflows/ci-cd.yml",
+    "workflow_sha256": null,
+    "observed_at": "2026-09-20T06:57:51.466532+00:00",
+    "issue_codes": [
+      "CI_RUN_UNSUCCESSFUL"
+    ],
+    "required_jobs": [
+      "Test (ubuntu-24.04)",
+      "Test (macos-14)",
+      "Test (windows-2025)",
+      "Verify Web runners and fixture contracts"
+    ],
+    "verified_jobs": [],
+    "responses": [
+      {
+        "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs?head_sha=2f25d131e0313d2b87ebeab31a842b5018c815bc&per_page=100&page=1",
+        "status_code": 200,
+        "sha256": "48fb265a6e07280e228e5acdf98c9994fcd88126cee099dccdad51ac2f3cc7e1",
+        "size_bytes": 13514
+      },
+      {
+        "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/35494854769",
+        "status_code": 200,
+        "sha256": "5d81baddb788458cc5f6d1d90bc1e9d8b4018c26f7568ede9df8d0c6b76d14e8",
+        "size_bytes": 13478
+      }
+    ],
+    "receipt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\ci-verification.json",
+      "sha256": "a7a94a7e729902a768dd708f877668e498611386209627e7c93bc7b11c1e8e42"
+    }
+  },
+  "remote": [
+    {
+      "kind": "commit",
+      "status": 200,
+      "commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+      "sha256": "4f0f6d93a712afb121d36e423e2b1789c37a0c088a7e6a444da5f724e632d93e"
+    },
+    {
+      "kind": "branch",
+      "status": 200,
+      "commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+      "sha256": "45e9b81f70b393f35f97d7d5f7578ff522b4b77f050cf46377aa2499903d1ff1"
+    }
+  ],
+  "required_next_state": [
+    "The user commits and pushes the local CI isolation fix together with reviewed work.",
+    "The exact new SHA completes the required CI jobs successfully and its committed workflow bytes verify.",
+    "A clean checkout and explicit authorized campaign DB/active owner are bound to the full 8-configuration protocol."
+  ],
+  "local_prerequisites": {
+    "runner_manifest_validation": {
+      "passed": true,
+      "runners": 3,
+      "pinned_base_images": 4
+    },
+    "fixture_campaign_ci_harvest_contracts": {
+      "tests": 112,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\preflight-tests.xml",
+      "junit_sha256": "e263ba2221ca5a2154abcdca22e4e50c3a531c283729af740f351b2342089fbb",
+      "not_ci_or_execution_evidence": true
+    },
+    "runner_recipe_compatibility": {
+      "status": "RECIPE_BYTES_VERIFIED_DOCKER_LIVE_UNAVAILABLE",
+      "verified_at": "2026-09-20T06:42:38.496034+00:00",
+      "current_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+      "old_bootstrap_commit": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+      "old_bootstrap_manifest_sha256": "15e6d2e41c71cc03c2ceafc87fbcf52ebb08b146e01bbae6e1884be9a4f58f34",
+      "phase_runner_identities": [
+        {
+          "kind": "NODE",
+          "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+          "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+          "recipe_content_hash": "c9064bc999963310eb12bf1af15221f98b2cd659cf5363309c5a35f3f1f74939"
+        },
+        {
+          "kind": "PHP",
+          "image_id": "sha256:fede10c87fcdc4eb723c78776f01d09c93a19031d23c245c4218f97a3c57ac73",
+          "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+          "recipe_content_hash": "e7fec9d2e23d38a4e8984592a5c2d569a8484a49c1981824cf819c4cd457a4f5"
+        },
+        {
+          "kind": "BROWSER",
+          "image_id": "sha256:e35d531601b5f89701fd11b62c46428296248a10c601881b0b46baaf26f5a8df",
+          "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+          "recipe_content_hash": "87f2c3067f7432b03828cbb1d993a518e754f8981f5973b643b4111750be3f31"
+        }
+      ],
+      "old_receipt_relabelled": false,
+      "formal_fresh_bootstrap_required": true,
+      "docker_daemon_observation": "dockerDesktopLinuxEngine named pipe missing; cannot infer whether retained images are present.",
+      "live_image_identity_verified": false,
+      "new_containers_or_networks_created": false,
+      "qualified_scope_working_files_match_head": true,
+      "latest_live_image_verification": {
+        "passed": true,
+        "identities": [
+          {
+            "kind": "NODE",
+            "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+            "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+            "recipe_content_hash": "c9064bc999963310eb12bf1af15221f98b2cd659cf5363309c5a35f3f1f74939",
+            "actual_image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+            "configured_user": "node",
+            "inspection_sha256": "c808f60a371eec69462e04fece7ef57854cbf50cc2709e69ff795ab0f35f4dc5"
+          },
+          {
+            "kind": "PHP",
+            "image_id": "sha256:fede10c87fcdc4eb723c78776f01d09c93a19031d23c245c4218f97a3c57ac73",
+            "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+            "recipe_content_hash": "e7fec9d2e23d38a4e8984592a5c2d569a8484a49c1981824cf819c4cd457a4f5",
+            "actual_image_id": "sha256:fede10c87fcdc4eb723c78776f01d09c93a19031d23c245c4218f97a3c57ac73",
+            "configured_user": "runner",
+            "inspection_sha256": "bf17f5a695729369471aac26651d29501e227119c964d6a503d33e2b51ed8d9b"
+          },
+          {
+            "kind": "BROWSER",
+            "image_id": "sha256:e35d531601b5f89701fd11b62c46428296248a10c601881b0b46baaf26f5a8df",
+            "bootstrap_manifest_hash": "9539bb6c09c5765008c9030d7d77a1ea849ae60b775e5becea60a42b8f833a37",
+            "recipe_content_hash": "87f2c3067f7432b03828cbb1d993a518e754f8981f5973b643b4111750be3f31",
+            "actual_image_id": "sha256:e35d531601b5f89701fd11b62c46428296248a10c601881b0b46baaf26f5a8df",
+            "configured_user": "65532:65532",
+            "inspection_sha256": "c5b056a6f6f05c26ea2d080f1e4c4383850923cc751fc06489a255caf320f9bd"
+          }
+        ],
+        "receipt_sha256": "b63cd14e1123d9ac028460eebc58aeade8d827f62542632c9c4f1342e9e0f608"
+      }
+    },
+    "runtime_recovery": {
+      "observed_at": "2026-09-20T06:50:45.355072+00:00",
+      "status": "DEVELOPMENT_RUNTIME_RESTORED_NOT_NEW_QUALIFICATION",
+      "docker_desktop_started": true,
+      "docker_running": true,
+      "web_images_present_and_verified": 3,
+      "application_database_running_healthy_and_sql_ready": true,
+      "application_database_mutated": false,
+      "persisted_jvm_profile_evidence_count": 51,
+      "historical_owner_lookup_found": false,
+      "account_created_or_impersonated": false,
+      "old_jvm_proxy_was_exited": true,
+      "new_development_network": {
+        "updated_at": "2026-09-20T06:49:13.967539+00:00",
+        "configuration": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-runtime.json",
+        "configuration_sha256": "821e6a0dc08088bba622f267c830a9289cc4ac332cd189042cd51afa1d9cf43e",
+        "previous_configuration_sha256": "6c4c7005709b80aecd60243a92ed71ef6bfc4ba6ef454b608f8d9fa76bcddd50",
+        "old_manifest": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-runtime-network-20260919\\manifest.json",
+        "old_manifest_hash": "5b0f4804de281976a3bbd3322f37d26656759391d6cce13b96002beada19f8c8",
+        "new_manifest": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-runtime-network-20260920-01\\manifest.json",
+        "new_manifest_hash": "4194fd41201513a3501ddcbb971c9cf7bcde3cc4e8a5618c20b27f4405ddd126",
+        "new_manifest_sha256": "148276567e3115c7be78816e30306ba86b7a58107f0c5b9e6c551db5189b6b87",
+        "development": true,
+        "committed_sources_verified": false,
+        "probes": {
+          "checks": {
+            "allowed_maven_central_tls": true,
+            "direct_egress_denied": true,
+            "forward_http_denied": true,
+            "invalid_port_denied": true,
+            "literal_ip_denied": true,
+            "metadata_ip_denied": true,
+            "unknown_host_denied": true,
+            "web_host_denied": true
+          },
+          "passed": true,
+          "schema_version": 1
+        },
+        "live_binding": {
+          "name": "owjvmdep-56720ac9495942ff81c52c1219dc4282-internal",
+          "network_id": "51cad536e66cd779be87fff063c096c9d234fa4e4eb4350bc9149dea486d9a4e",
+          "policy_hash": "d6feddf8bfcd4ee0ca75d4e2b6311a74f788793aea282d86d678dd6c7581eeaf",
+          "proxy_host": "owjvmdep-proxy",
+          "proxy_port": 3128
+        },
+        "runtime_readiness": {
+          "runtime_inputs_ready": true,
+          "blockers": [],
+          "catalog_validation_checked": false,
+          "executed_application": false,
+          "level_d_publication": false
+        },
+        "application_restarted": false,
+        "level_d_published": false
+      },
+      "old_owned_resources_cleanup": {
+        "status": "REMOVED",
+        "resources_remaining": 0,
+        "failures": 0,
+        "receipt": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-runtime-network-20260919\\removal-79564397cea44d79820c3a11711706c3\\manifest.json",
+        "receipt_sha256": "e645903078f1adb811bd3eab0d2d387e50e997c457e5dae6f414d273057480f5",
+        "content_hash": "8c279f07d2b1a9e0cc107ec108a7e7cc3f2a8b23fde28ddf95fb1e5588c4844b"
+      },
+      "api_restarted_by_this_operator": false,
+      "formal_web_evidence_published": false,
+      "proof_sha256": {
+        "docker-startup.json": "5ecd157e693bcaa9603a5b0c303c5fe596cb3121b33ce49216bc3ee909b07628",
+        "runtime-startup-inspection.json": "b63cd14e1123d9ac028460eebc58aeade8d827f62542632c9c4f1342e9e0f608",
+        "application-database-readiness.json": "b38368fde08282748b6f13da934dc05074327f0198d052407b79a36ea2220f85",
+        "jvm-development-network-restored.json": "9a97ed0411cfd119d667c7114592cd0e90dd08d8d8027fca4c29b216cdb67eca",
+        "previous-jvm-runtime.json": "6c4c7005709b80aecd60243a92ed71ef6bfc4ba6ef454b608f8d9fa76bcddd50"
+      }
+    }
+  },
+  "campaign_protocol": {
+    "profiles": 5,
+    "fixtures": 8,
+    "initial_projects": 24,
+    "execution_attempts": 32,
+    "expected_successful_attempts": 24,
+    "expected_negative_attempts": 8,
+    "repair_operations": 8,
+    "decisions": 40,
+    "approval_round_sizes": [
+      24,
+      8,
+      8
+    ],
+    "expected_derived_evidence_records": 52
+  },
+  "prepared_runbook": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\qualification-runbook-after-ci-fix.json",
+    "sha256": "61b407528c0a2211ed34c43c0abfcff033fb6683b8815b22bfd4808a2309bfd7"
+  },
+  "actions_not_performed": {
+    "git_commit": true,
+    "git_push": true,
+    "git_fetch": true,
+    "ci_dispatch": true,
+    "worktree_creation": true,
+    "formal_fixture_execution": true,
+    "evidence_publication": true,
+    "model_inference_or_training": true,
+    "jvm_requalification": true,
+    "database_writes": true,
+    "api_restart": true,
+    "formal_web_execution": true
+  },
+  "limitations": [
+    "Current HEAD is now present on GitHub, but workflow run 35494854769 failed in the backend test step on all three OSes.",
+    "The isolated local fix passes 107 tests with the same conflicting CI environment; it is not yet committed or verified by a new GitHub run.",
+    "The passing Web runner job cannot replace the failed required backend jobs.",
+    "The campaign requires 32 execution attempts, 8 repairs, and 40 exact decisions across 24 projects; none were started.",
+    "Profile qualification remains separate from generated calculator correctness."
+  ],
+  "source_sha256": {
+    "src/orchestwin/web_execution/validation_ci.py": "be1f5a587837cfdce649e19bb2cd3a3b284925c471e8da2abde32d05c3fc09e7",
+    "src/orchestwin/web_execution/validation_command.py": "69a5705e98118c96ba4c092c42a98a3c7cc23c5d7477ca10c6f97982609ee175",
+    "src/orchestwin/web_execution/validation_harvest.py": "a6f9c5b6787471d39f6b80fba65e73894cbda72ba095b31c9b856feb21292b4a",
+    "infra/web-runners/level-d/README.md": "59331eefe7ea391dfd58d107023441fff0f1d55c98e8c6193559d7be16a8508c",
+    ".github/workflows/ci-cd.yml": "4b35f1f412aa04f012506efb0ef701779d61afc9d1ba1acf87564b80c01cef20",
+    "scripts/verify_web_runner_manifest.py": "b1945a89f5bb04e3f48a7470ce1611f9256da9a840177939a1bc8036cb5e68ad"
+  },
+  "last_updated_at": "2026-09-20T07:04:43.439033+00:00",
+  "actions_performed": [
+    "Started Docker Desktop once after verifying it was not running.",
+    "Verified all retained Web runner image IDs without rebuilding or relabelling evidence.",
+    "Verified existing application PostgreSQL through a read-only authenticated connection; 51 JVM evidence rows preserved.",
+    "Created a fresh explicitly developmental JVM dependency network with eight passing probes and live verification.",
+    "Updated only the ignored local JVM runtime configuration and retained its previous bytes.",
+    "Removed only the old exited JVM dependency proxy and its owned bridges after ownership validation.",
+    "Queried the pushed exact commit and failed CI once; retrieved job and log details read-only.",
+    "Verified the existing demo project owner is active without modifying the database.",
+    "Isolated three CI-sensitive real-model test cases without changing production code, CI policy, or model behavior.",
+    "Verified 107 targeted tests including conflict rejection with the same CI environment and an external cache."
+  ],
+  "prior_observations": [
+    {
+      "observed_at": "2026-09-20T06:42:38.497572+00:00",
+      "status": "BLOCKED_NO_EXACT_COMMIT_CI",
+      "ci": {
+        "status": "INCOMPLETE",
+        "issue_codes": [
+          "CI_MATCHING_RUN_MISSING"
+        ],
+        "matching_run_id": null,
+        "required_jobs": [
+          "Test (ubuntu-24.04)",
+          "Test (macos-14)",
+          "Test (windows-2025)",
+          "Verify Web runners and fixture contracts"
+        ],
+        "receipt_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\ci-verification.json",
+        "receipt_sha256": "7126f7cce0966067bd7dd5b313eff6f5cc2491452a9fec70a1814185f5db4bb5"
+      },
+      "remote": [
+        {
+          "kind": "commit",
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/commits/2f25d131e0313d2b87ebeab31a842b5018c815bc",
+          "http_status": 422,
+          "sha256": "feed82ce9e065b3ce6aa5779985b253f7fa5d8d02d3ef5abb58e7b200d38d109",
+          "remote_commit": null
+        },
+        {
+          "kind": "branch",
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/git/ref/heads/sprint/12-case-studies-expert-evaluation",
+          "http_status": 200,
+          "sha256": "9d87e05dacb5b82f650d1d0c90a23d3ac3893e356c7a69727913ca72d1dde600",
+          "remote_commit": "67cdf254ffd1c415978ff8f66ce5afdf93819461"
+        }
+      ]
+    }
+  ],
+  "campaign_fixtures": [
+    {
+      "id": "static",
+      "profile_id": "web.static",
+      "languages": {
+        "frontend": "STATIC_ASSETS",
+        "backend": null
+      },
+      "expected_negative_phase": "BROWSER_EVIDENCE"
+    },
+    {
+      "id": "vue-js",
+      "profile_id": "web.vue",
+      "languages": {
+        "frontend": "JAVASCRIPT",
+        "backend": null
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "vue-ts",
+      "profile_id": "web.vue",
+      "languages": {
+        "frontend": "TYPESCRIPT",
+        "backend": null
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "express-js",
+      "profile_id": "web.node-express",
+      "languages": {
+        "frontend": null,
+        "backend": "JAVASCRIPT"
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "express-ts",
+      "profile_id": "web.node-express",
+      "languages": {
+        "frontend": null,
+        "backend": "TYPESCRIPT"
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "php",
+      "profile_id": "web.php",
+      "languages": {
+        "frontend": null,
+        "backend": "PHP"
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "vue-node-js",
+      "profile_id": "web.vue-node",
+      "languages": {
+        "frontend": "JAVASCRIPT",
+        "backend": "JAVASCRIPT"
+      },
+      "expected_negative_phase": "TEST"
+    },
+    {
+      "id": "vue-node-ts",
+      "profile_id": "web.vue-node",
+      "languages": {
+        "frontend": "TYPESCRIPT",
+        "backend": "TYPESCRIPT"
+      },
+      "expected_negative_phase": "TEST"
+    }
+  ],
+  "ci_fix": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\studio-demo\\ci-model-runtime-isolation-20260920.json",
+    "sha256": "e3d3c1bacc414f2287098b74752f4965cd134a21a30df9e5b16e42d0183a0b25"
+  },
+  "owner_readiness": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-2f25d13-20260920-01\\recheck-20260920T065750Z\\owner-readiness.json",
+    "sha256": "e7d59cf261e634749725799fda343dbc7f8933792d69633119cbc3c57ac50db3"
+  }
+}

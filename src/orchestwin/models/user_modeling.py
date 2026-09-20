@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import Final, Protocol
 from uuid import UUID
 
+from orchestwin.projects.briefs import BriefField, ProjectBrief, ProjectBriefVersion
 from orchestwin.twins.persona_candidates import (
     ProjectPersonaCandidate,
 )
@@ -108,6 +109,51 @@ def _canonical_hash(
     frozen=True,
     slots=True,
 )
+class UserModelingBriefInput:
+    """Exact approved business artifact, excluding account and persistence metadata."""
+
+    project_id: UUID
+    reference: VersionedArtifactReference
+    brief: ProjectBrief
+
+    def __post_init__(self) -> None:
+        self.validate(self.project_id)
+
+    @classmethod
+    def from_version(cls, version: ProjectBriefVersion) -> UserModelingBriefInput:
+        return cls(
+            project_id=version.project_id,
+            reference=VersionedArtifactReference(
+                artifact_id=version.id,
+                version_number=version.version_number,
+                content_hash=version.content_hash,
+            ),
+            brief=version.brief,
+        )
+
+    def validate(self, project_id: UUID, reference: VersionedArtifactReference | None = None):
+        if (
+            not isinstance(self.project_id, UUID)
+            or self.project_id != project_id
+            or not isinstance(self.reference, VersionedArtifactReference)
+            or not isinstance(self.brief, ProjectBrief)
+            or self.reference.content_hash != self.brief.content_hash
+            or (reference is not None and self.reference != reference)
+            or not isinstance(self.brief.unknown_fields, frozenset)
+            or any(
+                value is not None
+                and not isinstance(value, str)
+                and not (isinstance(value, tuple) and all(isinstance(item, str) for item in value))
+                for value in (self.brief.value_for(field) for field in BriefField)
+            )
+        ):
+            raise ValueError("approved Project Brief content or reference mismatch")
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class PersonaProposalRequest:
     """Request complete proto-personas for deterministic candidates."""
 
@@ -116,6 +162,29 @@ class PersonaProposalRequest:
         ProjectPersonaCandidate,
         ...,
     ]
+    project_brief: UserModelingBriefInput | None = None
+
+    def __post_init__(self):
+        if self.project_brief is not None:
+            self.require_project_brief()
+
+    def require_project_brief(self) -> UserModelingBriefInput:
+        if not isinstance(self.project_brief, UserModelingBriefInput):
+            raise ValueError("approved Project Brief content required")
+        self.project_brief.validate(self.project_id)
+        reference = self.project_brief.reference
+        target_users = self.project_brief.brief.target_users or ()
+        for candidate in self.candidates:
+            if (
+                candidate.project_id != self.project_id
+                or candidate.source_brief_version_id != reference.artifact_id
+                or candidate.source_brief_version_number != reference.version_number
+                or candidate.source_brief_content_hash != reference.content_hash
+                or not 1 <= candidate.ordinal <= len(target_users)
+                or candidate.target_user != " ".join(target_users[candidate.ordinal - 1].split())
+            ):
+                raise ValueError("persona candidate does not match approved Project Brief")
+        return self.project_brief
 
 
 @dataclass(
@@ -236,6 +305,7 @@ class UserTwinProposalRequest:
     agent_team_reference: VersionedArtifactReference
     catalog_version: int
     catalog_content_hash: str
+    project_brief: UserModelingBriefInput | None = None
 
     def __post_init__(self) -> None:
         """Protect catalog identity metadata."""
@@ -246,6 +316,14 @@ class UserTwinProposalRequest:
 
         if not _is_sha256_digest(self.catalog_content_hash):
             raise ValueError("catalog content hash must be a lowercase SHA-256 digest")
+        if self.project_brief is not None:
+            self.require_project_brief()
+
+    def require_project_brief(self) -> UserModelingBriefInput:
+        if not isinstance(self.project_brief, UserModelingBriefInput):
+            raise ValueError("approved Project Brief content required")
+        self.project_brief.validate(self.project_id, self.project_brief_reference)
+        return self.project_brief
 
 
 @dataclass(
@@ -376,6 +454,7 @@ __all__ = [
     "PersonaProposalResult",
     "ProposedPersonaProfile",
     "ProposedUserTwinProfile",
+    "UserModelingBriefInput",
     "UserModelingProposalIssueCode",
     "UserModelingProposalPort",
     "UserModelingProposalProviderKind",

@@ -204,6 +204,57 @@ def test_runtime_evidence_preserves_failed_process_details() -> None:
     assert runtime.stderr_ref == evidence.stderr_log
 
 
+def test_large_artifact_is_rejected_before_opening_or_reading_it(tmp_path, monkeypatch):
+    jar = tmp_path / "build/libs/large.jar"
+    jar.parent.mkdir(parents=True)
+    jar.write_bytes(b"x" * 16)
+    monkeypatch.setattr(
+        os, "open", lambda *args, **kwargs: pytest.fail("Oversized artifact was opened")
+    )
+    with pytest.raises(ValueError, match="per-file size limit"):
+        collect_jvm_artifact_inventory(
+            _contract(),
+            workspace_path=tmp_path,
+            run_id=_RUN_ID,
+            command_id="jvm.collect",
+            evidence_store=FakeEvidenceStore(),
+            policy=JvmArtifactCollectionPolicy(maximum_file_bytes=8, maximum_total_bytes=8),
+        )
+
+
+def test_artifact_traversal_stops_at_entry_budget(tmp_path):
+    root = tmp_path / "build/libs"
+    root.mkdir(parents=True)
+    for index in range(10):
+        (root / f"ignored-{index}.txt").write_text("not an artifact")
+    with pytest.raises(ValueError, match="entry limit"):
+        collect_jvm_artifact_inventory(
+            _contract(),
+            workspace_path=tmp_path,
+            run_id=_RUN_ID,
+            command_id="jvm.collect",
+            evidence_store=FakeEvidenceStore(),
+            policy=JvmArtifactCollectionPolicy(maximum_entries_scanned=3),
+        )
+
+
+def test_artifact_collector_rejects_hardlinks(tmp_path):
+    original = tmp_path / "outside.jar"
+    original.write_bytes(b"original")
+    linked = tmp_path / "build/libs/link.jar"
+    linked.parent.mkdir(parents=True)
+    os.link(original, linked)
+    with pytest.raises(ValueError, match="REGULAR_FILE"):
+        collect_jvm_artifact_inventory(
+            _contract(),
+            workspace_path=tmp_path,
+            run_id=_RUN_ID,
+            command_id="jvm.collect",
+            evidence_store=FakeEvidenceStore(),
+        )
+    assert original.read_bytes() == b"original"
+
+
 @pytest.mark.parametrize(
     ("command_id", "parser_id", "message"),
     [

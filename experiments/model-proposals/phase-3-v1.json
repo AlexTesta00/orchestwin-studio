@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "phase": 3,
+  "base_commit": "3d187f5eaea3255ee612b8f98e4424981e60eaa6",
+  "recorded_at": "2026-09-13T17:01:58.694049+00:00",
+  "scope": "LOCAL_REAL_RUNTIME_CONNECTIVITY_AND_SYNTHETIC_INPUT_INFERENCE",
+  "source_state": "UNCOMMITTED_PHASE_3_SOURCE_SNAPSHOT_HASHED",
+  "source_sha256": {
+    "compose.models.yaml": "1b7691e1ae10fc770ba0fbfce61ce10e9a7920f57d227945d47b6cd1823a8d37",
+    "environments/training/serve_proposal_model.py": "6bdb1f6b9ebfee9395fe4b80bc26b1272e0603f051d75a8aa747b5c823cb55c7",
+    "scripts/check_real_model_runtime.py": "b0290d07a57601a285a3056f5a9657a09f265adf787ef413e8e6f33342e9fcf6",
+    "scripts/model_database_bridge.py": "b280f568ff2610d2cf3c702427cad295ed66328df4a3bfcddb94c57503632e91",
+    "src/orchestwin/api/app.py": "45fae2999891dfefefff535eafd7117542afa033453700ec93aa610e05fbd930",
+    "src/orchestwin/api/model_runtime.py": "54510c1ff5f9fb0efdb5b2f1b1da440f8d4534c16d598d0761ec1ce70f0d51d7",
+    "src/orchestwin/api/services.py": "4c27010b6aa0b2a03a8de715a30c3fe9bede0a82a6662546a87c5d9916401c1f",
+    "src/orchestwin/config.py": "3ee1966cbda497d294082a30a7e3a63328f76ff4475f36aede48382253694a38",
+    "src/orchestwin/evaluation/final_runtime.py": "f94c8f74b93a9d694271324b3e2710480118801acb0b36613a2cb893eb64ab09",
+    "src/orchestwin/models/real_runtime.py": "e26ac789a5d226e19946cdf911b31c7281ac3ab164788c9bd4327cbcb41ed812",
+    "src/orchestwin/models/serialized_generation.py": "1ea77df7fabd3902d0dbf386d3576997902381a76509a0a424a1a2d789a64528",
+    "src/orchestwin/projects/architecture_runtime.py": "1a924bf98dce4ebc9411a622cb3325cac2aeb53621502042f301a6437d09b183",
+    "src/orchestwin/projects/design_runtime.py": "04c5e03f7648ec34221dce8cbe68083a686bdd6f06151e1f0e3d9cea128a2598",
+    "src/orchestwin/projects/requirements_runtime.py": "f3bf16723049baa0843af5a880660b24f716d98ed41c32760044df13db9df095",
+    "src/orchestwin/twins/runtime.py": "30a84142cc44223ac4fbcdce1b40eb0e88c73d1e530fc03602b0f5aa84fcc89d",
+    "src/test/python/integration/test_real_model_runtime_postgres.py": "ad2f0883a8e85239786bd4fc09bd1b3b17824f564a749d5ef7a289767eead8e1",
+    "src/test/python/models/test_model_database_bridge.py": "de3817373f085bfcd01f90d25390e2b49139a17b3480aec684eca844e0925fc4",
+    "src/test/python/models/test_real_model_runtime.py": "6a6139051625d0ace78170df3884d8e58e2a5769f507fec621aaba92fa716081"
+  },
+  "live_probe_source_timing": "Inference preceded final schema-timeout and cancellation-lock hardening. No prompt, model server or provider configuration changed afterwards. Final source was tested and API restarted/readiness rechecked without another inference.",
+  "formal_case": false,
+  "new_level_d_claim": false,
+  "semantic_quality_qualified": false,
+  "training_executed": false,
+  "frozen_case_used": false,
+  "deployment": {
+    "api_origin": "http://127.0.0.1:8110",
+    "api_host": "NATIVE_WINDOWS",
+    "mode": "REAL_REQUIRED",
+    "database_bridge": "127.0.0.1:15432",
+    "database_schema": {
+      "recorded_at": "2026-09-13T16:43:01.073806+00:00",
+      "database": "EXISTING_LOCAL_ORCHESTWIN",
+      "before": "0037_jvm_governed_operations",
+      "after": "0038_proposal_generation_evidence",
+      "migration_sha256": "f9638a680ac0f546f2e79028c4a70a545b68a048159768194dbaa61d526a7e05",
+      "committed_migration_verified": true,
+      "case_artifacts_read": false,
+      "new_generation_rows": 0,
+      "migration": "PASSED"
+    },
+    "ready_after_restart": true,
+    "fixture_fallback_allowed": false,
+    "inference_concurrency_per_api_process": 1
+  },
+  "observations": {
+    "proposal": {
+      "outcome": "PROPOSED",
+      "generation_id": "0b7c9e44-dc4e-410d-bcb6-58af5f003a15",
+      "identity": {
+        "adapter_id": null,
+        "adapter_sha256": null,
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "69ee08fed405451ce3d6ac1fd010a513a532d9bd8544bdc1e6f2a05dc35d6b65",
+        "provider_id": "local-proposal-model",
+        "runtime_id": "proposal-base-a282d08c-e146-4dac-acda-dfecdee2e432",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+      },
+      "temperature": 0.6,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 1511,
+        "total_tokens": 1613
+      },
+      "latency_milliseconds": 15277,
+      "database_publication_in_this_probe": false
+    },
+    "evaluator": {
+      "outcome": "ACCEPTED_STRUCTURED_OUTPUT",
+      "trace": {
+        "evaluation_run_id": "8e034200-37c5-446c-a045-b7d7d504ba0f",
+        "twin_id": "48266970-430d-4510-9fa6-82a80c036b38",
+        "request_sha256": "eecaa3e4ce6ac09c5714ac42644cc03c73cbf045bc96c68f09534bb49b83631d",
+        "result_sha256": "94c11bc64839c6ff456eae121b64db07d7a251852b5889aa78aa6c7ca20df518",
+        "runtime_identity": {
+          "provider_id": "huggingface-local",
+          "runtime_id": "s67-final-evaluator-serving-v2",
+          "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+          "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "configuration_sha256": "b7ec27fcef0c8f39111857e7c6130f8ffa74bb04345da49a2fbefa290f9c59f7",
+          "adapter_id": "s67-final-user-twin-evaluator",
+          "adapter_sha256": "82e051affb54f7fdced4c85780f8724fcc8f47063e27997bb6f5624421422664"
+        },
+        "input_tokens": 2356,
+        "output_tokens": 236,
+        "latency_milliseconds": 35625
+      },
+      "temperature": 0.0,
+      "qualitative_observation": "STRUCTURALLY_VALID_BUT_GENERIC_FINDING_NOT_A_DEMONSTRATED_DOM_DEFECT"
+    },
+    "model_visible_messages_hashes_verified": true,
+    "completion_counter_deltas": {
+      "proposals": 1,
+      "evaluator": 1
+    },
+    "output_repair_used": false,
+    "automatic_retries": 0
+  },
+  "validation": {
+    "regression": {
+      "tests": 1266,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 1265
+    },
+    "focused": {
+      "tests": 30,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 30
+    },
+    "postgres": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 2
+    },
+    "migration_roundtrip": "PASSED",
+    "temporary_postgres_cleanup": "REMOVED",
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED",
+    "git_diff_check": "PASSED"
+  },
+  "artifacts": {
+    "live_probe": {
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-live-probe-01",
+      "files_sha256": {
+        "api-anonymous.json": "6c031ab868e84dc987ec203564a6f57a206a7934a32c872353c049937fb747a6",
+        "api-health.json": "421de5a3224f59625f1fb07678c9603ec868f68320bee3b1feb04ebbdd52f632",
+        "api-readiness-after.json": "7ed8096e8c82ae43c0ea00f1f3837a7adab2faae3435a787eec6c66af19f3609",
+        "api-readiness-before.json": "d52f6930da4e5bc1341807ea957c52ef77a0d19b4d4735bd41c54746c78c27af",
+        "evaluator-http-request.json": "35ee94a33541de3f2e4a0d8e67a146f7465e1c8ddba2da3edc56b55b7a0e0aa2",
+        "evaluator-http-status.json": "2a4aa074d377ea19a678eadb03d63fd8a6904c8902db22d355d39e3d58c1edd7",
+        "evaluator-request.json": "df12a8692a91db27e67b8b86bb0e084ca6658004b8eff0eb12e70c31883ba60a",
+        "evaluator-response.raw.json": "a7bc350182b37ef74c6524a2594ce2dbab1765038d5fae5c49d6541863a433d4",
+        "evaluator-result.json": "24017d94e1ce02aa53e8864f0e833e11fcc54a7e7cdfff11224e86e72c940034",
+        "evaluator-traces.json": "e0dd492944d0067727d0e5e2dd2e0abe90386a8b3da9f96f42bef7b4c0df1a49",
+        "evaluator-verified-content.json": "d6f48242ef5d11fd61f94af4aeb91c3809359105cf57197fcc4f70a21e6181fb",
+        "probe.py": "b44dec2cb755fbce2c1372eee1fdf08470a8a28d8fd4e17c45535c08e912de00",
+        "proposal-adapter_accepted.json": "6aa6701c3b9202c7cbcf59f540db344d052afd36b4aa82846ff9ee56340307f0",
+        "proposal-application_result.json": "0cb9e6cbde09651829c4eeda7b3d7436338ab85aeef705ddb97efcd88aa1fb2b",
+        "proposal-http_request.json": "b8ee27f8dc155d914bb1f9f363d843009fb94c18c36c18aa798f01188d047c29",
+        "proposal-http_response.json": "da011c500d874b1a78fc5ea089fa5f7ac2bc46488d56cf9e1fa76e0d99001b38",
+        "proposal-provider_result.json": "ecafe48c0cfc25bc752ec269f7a830d2a4a9d6559338ef599e37449685074d9b",
+        "proposal-request.json": "0356612b51a0b4db777be948342e35a2bd8331de1d3e4a8f5be62f18b7154c22",
+        "proposal-response.raw.json": "322dca5efb94a926e09b8e73f3514b2246dd1e00cbdd5f386e714cf5aca37069",
+        "proposal-result.json": "df6f4e7838e73bbe94e6168a8a251ec00e5b8c538944b42d73932a0aafd0266d",
+        "report.json": "09966847ef26f3824d3f5d007d0d97c82347cfb548857d944ca3c2c196267095",
+        "synthetic-dom.html": "70fe377e3a0c50c56022eb365ccffcef1d0820446733e28e093bfaa29aa5558c"
+      }
+    },
+    "final_validation": {
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-validation-final",
+      "files_sha256": {
+        "api-final.json": "fc1abae1d75e7cb6859ea9722cab41e4aa1d18b3a885e1a358cda6c8aa00b6af",
+        "checks.json": "b6bfc735963f1a7429e53d03aa8382fcbd149b83d3e6842b68c16f33e40d399d",
+        "finalize.py": "6d332cdfe711916cd275ca57553da7eadde92e4814638863b8fc9e1a1f391037",
+        "focused.xml": "29f39e2052c53a6bad00ee30a21e43c915460143a81a7471e8669a66a20c0b3b",
+        "postgres-probe.py": "77bb03ef56054b35d8e77119a3e8591a1400a6c4aa5a6e4444fd6aaf8759d9d1",
+        "regression.xml": "da4cdf508e7918d92c284fd48663f5ab29abad9211353384ea76f88654000f9d",
+        "source/compose.models.yaml": "1b7691e1ae10fc770ba0fbfce61ce10e9a7920f57d227945d47b6cd1823a8d37",
+        "source/environments/training/serve_proposal_model.py": "6bdb1f6b9ebfee9395fe4b80bc26b1272e0603f051d75a8aa747b5c823cb55c7",
+        "source/scripts/check_real_model_runtime.py": "b0290d07a57601a285a3056f5a9657a09f265adf787ef413e8e6f33342e9fcf6",
+        "source/scripts/model_database_bridge.py": "b280f568ff2610d2cf3c702427cad295ed66328df4a3bfcddb94c57503632e91",
+        "source/src/orchestwin/api/app.py": "45fae2999891dfefefff535eafd7117542afa033453700ec93aa610e05fbd930",
+        "source/src/orchestwin/api/model_runtime.py": "54510c1ff5f9fb0efdb5b2f1b1da440f8d4534c16d598d0761ec1ce70f0d51d7",
+        "source/src/orchestwin/api/services.py": "4c27010b6aa0b2a03a8de715a30c3fe9bede0a82a6662546a87c5d9916401c1f",
+        "source/src/orchestwin/config.py": "3ee1966cbda497d294082a30a7e3a63328f76ff4475f36aede48382253694a38",
+        "source/src/orchestwin/evaluation/final_runtime.py": "f94c8f74b93a9d694271324b3e2710480118801acb0b36613a2cb893eb64ab09",
+        "source/src/orchestwin/models/real_runtime.py": "e26ac789a5d226e19946cdf911b31c7281ac3ab164788c9bd4327cbcb41ed812",
+        "source/src/orchestwin/models/serialized_generation.py": "1ea77df7fabd3902d0dbf386d3576997902381a76509a0a424a1a2d789a64528",
+        "source/src/orchestwin/projects/architecture_runtime.py": "1a924bf98dce4ebc9411a622cb3325cac2aeb53621502042f301a6437d09b183",
+        "source/src/orchestwin/projects/design_runtime.py": "04c5e03f7648ec34221dce8cbe68083a686bdd6f06151e1f0e3d9cea128a2598",
+        "source/src/orchestwin/projects/requirements_runtime.py": "f3bf16723049baa0843af5a880660b24f716d98ed41c32760044df13db9df095",
+        "source/src/orchestwin/twins/runtime.py": "30a84142cc44223ac4fbcdce1b40eb0e88c73d1e530fc03602b0f5aa84fcc89d",
+        "source/src/test/python/integration/test_real_model_runtime_postgres.py": "ad2f0883a8e85239786bd4fc09bd1b3b17824f564a749d5ef7a289767eead8e1",
+        "source/src/test/python/models/test_model_database_bridge.py": "de3817373f085bfcd01f90d25390e2b49139a17b3480aec684eca844e0925fc4",
+        "source/src/test/python/models/test_real_model_runtime.py": "6a6139051625d0ace78170df3884d8e58e2a5769f507fec621aaba92fa716081"
+      }
+    }
+  },
+  "postgres_artifacts": {
+    "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase3-schema-test-a2f6d2a695b244dc834fb43194c182d5",
+    "files_sha256": {
+      "result.json": "4a521e8376242ddc7c813e7ff4afa490b4508b1a7648e4f6f4993db56601c6c0",
+      "pytest.xml": "a05fcd1de7fdec0f151e0b61d153d727a6dd615a42f2822313eb6bb677ed7551",
+      "pytest.log": "ed6ee897881445088ab0bcb2a19a960649a67ab09bd6013de0f108dd8b0eca43"
+    }
+  },
+  "runtime_evidence": {
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-proposal-model-20260913\\loader.json": "69ee08fed405451ce3d6ac1fd010a513a532d9bd8544bdc1e6f2a05dc35d6b65",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-proposal-model-20260913\\runtime.json": "cf577630faa3177944d7518edd01789173e55b090f6286cc755bc7baf85e04b4",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-final-evaluator-20260913\\ready.json": "48226e05aa47990ab6acf05a435e7bda8e8cb33d55dcfa5d8e95f24c00309515",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-local-runtime\\models.json": "91980be9b4eb792e14f939b65e701b48652807784a9ccb57ea516ccba2ac531c",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-local-runtime\\proposals.json": "7ba5f725dda54853a63aa3397be593fd383b9ff3724db58a687f031c59161fc0",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-local-runtime\\database-migration.json": "9a6ea30b8455e61f380a330a3662d376cd493c93c1772c654c7c802ad1c9d9c4",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-local-runtime\\readiness-01.json": "80a26b676b47747b340f97d12c983342554160fe2ac52f78f0fdba14cfd5764e",
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase3-local-runtime\\readiness-final.json": "6451e81a92651ccfae684b00e1ddfb57b91699262ae2ddd15cbe135a64ce4548"
+  },
+  "limitations": [
+    "Synthetic inputs; the probe does not establish a formal case, browser observation or human approval.",
+    "Six proposal ports are wired and tested synthetically; only team generation was observed live in this phase.",
+    "API authentication is tested with a short-lived local owner token, not the login UI.",
+    "The S67 output passes structural validation but is generic and does not establish semantic reliability.",
+    "No trained proposal adapter and no training in this phase; the existing S67 evaluator adapter is loaded.",
+    "Shared request serialization is per API process, not hard GPU preemption or cross-process scheduling.",
+    "Long contexts, maximum output budgets and full calculator campaign capacity remain unqualified.",
+    "Source/repair generation, broader semantic evaluation and a new governed calculator attempt remain subsequent work."
+  ]
+}

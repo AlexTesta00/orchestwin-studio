@@ -60,7 +60,7 @@ async function logout(): Promise<void> {
 
     <header class="border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
       <div
-        class="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto] lg:px-8"
+        class="mx-auto grid max-w-5xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto]"
       >
         <RouterLink
           class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
@@ -164,7 +164,7 @@ async function logout(): Promise<void> {
 
     <main
       id="main-content"
-      class="mx-auto min-h-[calc(100vh-4.5rem)] w-full max-w-7xl px-4 py-10 focus:outline-none sm:px-6 sm:py-14 lg:px-8 lg:py-20"
+      class="mx-auto min-h-[calc(100vh-4.5rem)] w-full max-w-5xl px-4 py-6 focus:outline-none sm:px-6 sm:py-8"
       tabindex="-1"
     >
       <RouterView />

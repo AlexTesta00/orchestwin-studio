@@ -16,7 +16,9 @@ from orchestwin.artifacts.web_sources import WebSourceProvenanceKind
 from orchestwin.identity.domain import UserAccount
 from orchestwin.sandbox.execution_profiles import ExecutionTarget
 from orchestwin.web_execution.attempts import WebExecutionAttemptTrigger
+from orchestwin.web_execution.phase_browser_evidence import WebBrowserInteraction
 from orchestwin.web_execution.plans import WebExecutionPhase
+from orchestwin.web_execution.static_browser_jobs import BrowserAction
 from orchestwin.web_execution.targets import (
     WebImplementationLanguage,
     WebProjectLayout,
@@ -29,6 +31,7 @@ class WebApiCommandStatus(StrEnum):
 
     SOURCE_REVISION_CREATED = "SOURCE_REVISION_CREATED"
     EXECUTION_RECORDED = "EXECUTION_RECORDED"
+    EXECUTION_PREPARED = "EXECUTION_PREPARED"
     REPAIR_PROPOSED = "REPAIR_PROPOSED"
     REPAIR_APPLIED = "REPAIR_APPLIED"
     NOT_FOUND = "NOT_FOUND"
@@ -83,6 +86,7 @@ class WebExecutionStartCommand:
     authorization_id: UUID | None
     rerun_phases: tuple[WebExecutionPhase, ...] | None
     declared_routes: tuple[WebBrowserRouteCommand, ...]
+    browser_interactions: tuple[WebBrowserInteraction, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +124,7 @@ class WebApiCommandResult:
         success = self.status in {
             WebApiCommandStatus.SOURCE_REVISION_CREATED,
             WebApiCommandStatus.EXECUTION_RECORDED,
+            WebApiCommandStatus.EXECUTION_PREPARED,
             WebApiCommandStatus.REPAIR_PROPOSED,
             WebApiCommandStatus.REPAIR_APPLIED,
         }
@@ -127,8 +132,8 @@ class WebApiCommandResult:
             raise ValueError("Web API command result shape is inconsistent")
 
 
-class WebExecutionApiService(Protocol):
-    """Application port preserving owner/project scope and typed command inputs."""
+class WebSourceApiService(Protocol):
+    """Owner-scoped source persistence independent from sandbox execution."""
 
     async def create_source_revision(
         self,
@@ -153,6 +158,35 @@ class WebExecutionApiService(Protocol):
         revision_id: UUID,
     ) -> dict[str, JsonValue] | None: ...
 
+
+class WebExecutionReadApiService(Protocol):
+    """Read stored attempts independently from permission to execute new code."""
+
+    async def execution_history(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+    ) -> tuple[dict[str, JsonValue], ...]: ...
+
+    async def execution(
+        self,
+        *,
+        owner_user_id: UUID,
+        execution_id: UUID,
+    ) -> dict[str, JsonValue] | None: ...
+
+    async def execution_report(
+        self,
+        *,
+        owner_user_id: UUID,
+        execution_id: UUID,
+    ) -> dict[str, JsonValue] | None: ...
+
+
+class WebExecutionStartApiService(Protocol):
+    """Start governed Web execution independently from other write resources."""
+
     async def start_execution(
         self,
         *,
@@ -160,6 +194,43 @@ class WebExecutionApiService(Protocol):
         project_id: UUID,
         command: WebExecutionStartCommand,
     ) -> WebApiCommandResult: ...
+
+    async def prepare_execution(
+        self, *, owner_user_id: UUID, project_id: UUID, command: WebExecutionStartCommand
+    ) -> WebApiCommandResult: ...
+
+
+class WebBrowserEvidenceApiService(Protocol):
+    async def browser_evidence(
+        self, *, owner_user_id: UUID, execution_id: UUID
+    ) -> dict[str, JsonValue] | None: ...
+
+
+class WebRepairApiService(Protocol):
+    async def repair_proposals(
+        self, *, owner_user_id: UUID, execution_id: UUID
+    ) -> tuple[dict[str, JsonValue], ...]: ...
+
+    async def create_repair_proposal(
+        self, *, owner_user_id: UUID, execution_id: UUID, command: WebRepairProposalCreateCommand
+    ) -> WebApiCommandResult: ...
+
+    async def apply_repair_proposal(
+        self,
+        *,
+        owner_user_id: UUID,
+        execution_id: UUID,
+        proposal_id: UUID,
+        command: WebRepairProposalApplyCommand,
+    ) -> WebApiCommandResult: ...
+
+
+class WebExecutionApiService(
+    WebSourceApiService,
+    WebExecutionStartApiService,
+    Protocol,
+):
+    """Combined port retained for existing execution adapters and test doubles."""
 
     async def execution_history(
         self,
@@ -292,6 +363,28 @@ class WebBrowserRouteBody(ApiModel):
     path: str = Field(min_length=1, max_length=240)
 
 
+class WebBrowserActionBody(ApiModel):
+    kind: str = Field(pattern=r"^(click|fill|press|expect_text)$")
+    selector: str = Field(min_length=1, max_length=160)
+    value: str | None = Field(default=None, max_length=1000)
+
+
+class WebBrowserInteractionBody(ApiModel):
+    route_id: str = Field(min_length=1, max_length=128)
+    actions: tuple[WebBrowserActionBody, ...] = Field(min_length=1, max_length=8)
+
+    def to_domain(self):
+        return WebBrowserInteraction(
+            self.route_id,
+            tuple(BrowserAction(item.kind, item.selector, item.value) for item in self.actions),
+        )
+
+    @model_validator(mode="after")
+    def validate_interaction(self):
+        self.to_domain()
+        return self
+
+
 class StartWebExecutionBody(ApiModel):
     source_revision_id: UUID
     profile_id: str = Field(min_length=1, max_length=128)
@@ -303,6 +396,7 @@ class StartWebExecutionBody(ApiModel):
     authorization_id: UUID | None = None
     rerun_phases: tuple[WebExecutionPhase, ...] | None = None
     declared_routes: tuple[WebBrowserRouteBody, ...] = Field(default=(), max_length=5)
+    browser_interactions: tuple[WebBrowserInteractionBody, ...] = Field(default=(), max_length=5)
 
     def to_command(self) -> WebExecutionStartCommand:
         return WebExecutionStartCommand(
@@ -320,6 +414,7 @@ class StartWebExecutionBody(ApiModel):
                 WebBrowserRouteCommand(route_id=item.route_id, path=item.path)
                 for item in self.declared_routes
             ),
+            browser_interactions=tuple(item.to_domain() for item in self.browser_interactions),
         )
 
 
@@ -399,8 +494,81 @@ def web_execution_api_service_dependency(request: Request) -> WebExecutionApiSer
     return service
 
 
+def web_browser_evidence_api_service_dependency(request: Request) -> WebBrowserEvidenceApiService:
+    service = getattr(request.app.state, "web_browser_evidence_api_service", None)
+    return service if service is not None else web_execution_api_service_dependency(request)
+
+
+def web_repair_api_service_dependency(request: Request) -> WebRepairApiService:
+    service = getattr(request.app.state, "web_repair_api_service", None)
+    return service if service is not None else web_execution_api_service_dependency(request)
+
+
+def web_execution_start_api_service_dependency(
+    request: Request,
+) -> WebExecutionStartApiService:
+    """Prefer a dedicated start service; preserve legacy combined-service injection."""
+    service = getattr(request.app.state, "web_execution_start_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_EXECUTION_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
+def web_source_api_service_dependency(request: Request) -> WebSourceApiService:
+    """Prefer the dedicated source adapter; retain legacy combined-service injection."""
+    service = getattr(request.app.state, "web_source_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_SOURCE_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
+def web_execution_read_api_service_dependency(request: Request) -> WebExecutionReadApiService:
+    """Prefer dedicated read services; preserve injected combined adapters."""
+    service = getattr(request.app.state, "web_execution_read_api_service", None)
+    if service is None:
+        service = getattr(request.app.state, "web_execution_api_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "WEB_EXECUTION_READ_API_SERVICE_UNAVAILABLE"},
+        )
+    return service
+
+
 def create_web_execution_router() -> APIRouter:
     router = APIRouter(tags=["web-execution"])
+
+    @router.post(
+        "/projects/{project_id}/web-execution-plans",
+        response_model=WebCommandResponse,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="prepareWebExecution",
+    )
+    async def prepare_execution(
+        project_id: UUID,
+        body: StartWebExecutionBody,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            WebExecutionStartApiService, Depends(web_execution_start_api_service_dependency)
+        ],
+    ) -> WebCommandResponse:
+        if not hasattr(service, "prepare_execution"):
+            raise HTTPException(503, detail={"code": "WEB_EXECUTION_PREPARATION_UNAVAILABLE"})
+        return _command_response(
+            await service.prepare_execution(
+                owner_user_id=user.id, project_id=project_id, command=body.to_command()
+            )
+        )
 
     @router.post(
         "/projects/{project_id}/web-source-revisions",
@@ -413,8 +581,8 @@ def create_web_execution_router() -> APIRouter:
         body: CreateWebSourceRevisionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(
@@ -434,8 +602,8 @@ def create_web_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -455,8 +623,8 @@ def create_web_execution_router() -> APIRouter:
         revision_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebSourceApiService,
+            Depends(web_source_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         snapshot = await service.source_revision(
@@ -477,8 +645,8 @@ def create_web_execution_router() -> APIRouter:
         body: StartWebExecutionBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionStartApiService,
+            Depends(web_execution_start_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(
@@ -498,8 +666,8 @@ def create_web_execution_router() -> APIRouter:
         project_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -518,8 +686,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -540,8 +708,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebExecutionReadApiService,
+            Depends(web_execution_read_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -562,8 +730,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebBrowserEvidenceApiService,
+            Depends(web_browser_evidence_api_service_dependency),
         ],
     ) -> SnapshotResponse:
         return SnapshotResponse(
@@ -584,8 +752,8 @@ def create_web_execution_router() -> APIRouter:
         execution_id: UUID,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebRepairApiService,
+            Depends(web_repair_api_service_dependency),
         ],
     ) -> SnapshotListResponse:
         return SnapshotListResponse(
@@ -606,8 +774,8 @@ def create_web_execution_router() -> APIRouter:
         body: CreateWebRepairProposalBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebRepairApiService,
+            Depends(web_repair_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(
@@ -629,8 +797,8 @@ def create_web_execution_router() -> APIRouter:
         body: ApplyWebRepairProposalBody,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
-            WebExecutionApiService,
-            Depends(web_execution_api_service_dependency),
+            WebRepairApiService,
+            Depends(web_repair_api_service_dependency),
         ],
     ) -> WebCommandResponse:
         return _command_response(

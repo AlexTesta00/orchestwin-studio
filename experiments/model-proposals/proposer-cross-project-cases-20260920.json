@@ -1,0 +1,223 @@
+[
+  {
+    "id": "guest-list-en-20260919",
+    "locale": "en",
+    "requirements": [
+      "Build a standalone guest list for a community workshop. Export createGuestList() from app.js. Each factory call owns an independent private collection and exposes addGuest(name) and listGuests(). addGuest takes a nonblank string, trims surrounding whitespace and returns a record {id:number, name:string}. IDs start at1 and increase by1 within that instance. listGuests returns the saved records in insertion order.",
+      "Reject blank names, whitespace-only names and values that are not strings by throwing Error BEFORE modifying state or consuming an ID. Existing records must remain available after rejection. Repeated valid additions must accumulate records in the same instance. A second factory instance starts empty and cannot change the first.",
+      "The browser creates one service instance for the whole page. The exact mockup contains a required Guest name input and Add guest button. A successful add opens the separate result screen with the actual saved guest list, including ID and name. Back reopens the form preserving the entered name. Display invalid-input errors visibly within the form and remain there; never use alert. Declare the core at script scope for both Node and browser use, and wire the UI to that same service."
+    ],
+    "prototype": {
+      "screens": [
+        {
+          "id": "form",
+          "code": "SCR-001",
+          "title": "Workshop guests",
+          "elements": [
+            {
+              "id": "value",
+              "code": "ELM-001",
+              "kind": "TEXT_INPUT",
+              "content": "Guest name",
+              "field_name": "name",
+              "required": true
+            },
+            {
+              "id": "submit",
+              "code": "ELM-003",
+              "kind": "BUTTON",
+              "content": "Add guest"
+            }
+          ]
+        },
+        {
+          "id": "result",
+          "code": "SCR-002",
+          "title": "Result",
+          "elements": [
+            {
+              "id": "output",
+              "code": "ELM-004",
+              "kind": "TEXT",
+              "content": "Actual saved data or computed result"
+            },
+            {
+              "id": "back",
+              "code": "ELM-005",
+              "kind": "LINK",
+              "content": "Back"
+            }
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "trigger_element_id": "submit",
+          "target_screen_id": "result"
+        },
+        {
+          "trigger_element_id": "back",
+          "target_screen_id": "form"
+        }
+      ]
+    },
+    "oracle": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst vm = require('node:vm');\nconst fs = require('node:fs');\nconst { createGuestList } = require('./app.js');\ntest('independent persistent records', () => { const s=createGuestList(); const a=s.addGuest('  Ada  '); const b=s.addGuest('Lin'); assert.deepEqual(a,{id:1,name:'Ada'}); assert.deepEqual(b,{id:2,name:'Lin'}); assert.deepEqual(s.listGuests(),[a,b]); });\ntest('independent rejected input preserves state and next ID', () => { const s=createGuestList(); const first=s.addGuest('Ada'); for(const value of ['', '  ', 12, null, undefined]) assert.throws(()=>s.addGuest(value)); assert.deepEqual(s.listGuests(),[first]); assert.equal(s.addGuest('Lin').id,2); });\ntest('independent factory isolation', () => { const a=createGuestList(); a.addGuest('Ada'); const b=createGuestList(); assert.deepEqual(b.listGuests(),[]); b.addGuest('Lin'); assert.equal(a.listGuests()[0].name,'Ada'); assert.equal(b.listGuests()[0].id,1); });\ntest('independent classic-script core availability', () => { const c=vm.createContext({}); vm.runInContext(fs.readFileSync('./app.js','utf8'),c,{timeout:1000}); assert.equal(vm.runInContext('typeof createGuestList',c),'function'); });\n"
+  },
+  {
+    "id": "expense-split-it-20260919",
+    "locale": "it",
+    "requirements": [
+      "Crea una pagina autonoma per dividere una spesa. Esporta splitExpense(totalCents, people) da app.js: totalCents è un intero numerico fra0 e100000000 e people è un intero numerico da1 a4. Restituisci un array di people numeri interi in centesimi, con somma esattamente totalCents. Dividi usando la quota intera; assegna un centesimo aggiuntivo ai primi totalCents modulo people partecipanti. Esempio:1000 centesimi fra3 produce [334,333,333].",
+      "Rifiuta con Error valori non numerici, stringhe numeriche, NaN, infiniti, valori frazionari, spese negative o sopra100000000 e partecipanti fuori1..4. Zero centesimi è valido. La funzione pubblica riceve sempre centesimi interi e persone numeriche: le stringhe dei campi UI devono essere convertite nel gestore del form dopo la validazione.",
+      "Il mockup ha Importo in euro e il menu Partecipanti con le sole opzioni1,2,3,4. Accetta importi in euro non negativi con al massimo2decimali, convertendoli esattamente in centesimi. Dividi apre una schermata separata con la quota reale in euro di ogni partecipante. Torna conserva i valori del form. Gli errori rimangono visibili nel form, senza alert o navigazione. Il browser usa la stessa funzione pubblica dichiarata fuori dai guard Node."
+    ],
+    "prototype": {
+      "screens": [
+        {
+          "id": "form",
+          "code": "SCR-001",
+          "title": "Dividi la spesa",
+          "elements": [
+            {
+              "id": "value",
+              "code": "ELM-001",
+              "kind": "TEXT_INPUT",
+              "content": "Importo in euro",
+              "field_name": "amount",
+              "required": true
+            },
+            {
+              "id": "choice",
+              "code": "ELM-002",
+              "kind": "SELECT",
+              "content": "Partecipanti",
+              "field_name": "people",
+              "required": true,
+              "options": [
+                "1",
+                "2",
+                "3",
+                "4"
+              ]
+            },
+            {
+              "id": "submit",
+              "code": "ELM-003",
+              "kind": "BUTTON",
+              "content": "Dividi"
+            }
+          ]
+        },
+        {
+          "id": "result",
+          "code": "SCR-002",
+          "title": "Result",
+          "elements": [
+            {
+              "id": "output",
+              "code": "ELM-004",
+              "kind": "TEXT",
+              "content": "Actual saved data or computed result"
+            },
+            {
+              "id": "back",
+              "code": "ELM-005",
+              "kind": "LINK",
+              "content": "Torna"
+            }
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "trigger_element_id": "submit",
+          "target_screen_id": "result"
+        },
+        {
+          "trigger_element_id": "back",
+          "target_screen_id": "form"
+        }
+      ]
+    },
+    "oracle": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst vm = require('node:vm');\nconst fs = require('node:fs');\nconst { splitExpense } = require('./app.js');\ntest('independent exact allocation', () => { assert.deepEqual(splitExpense(1000,3),[334,333,333]); assert.deepEqual(splitExpense(2,4),[1,1,0,0]); assert.deepEqual(splitExpense(0,4),[0,0,0,0]); assert.deepEqual(splitExpense(123,1),[123]); });\ntest('independent conservation and distribution', () => { for(const cents of [1,5,99,1999,100000000]) for(const people of [1,2,3,4]) { const shares=splitExpense(cents,people); assert.equal(shares.length,people); assert.equal(shares.reduce((a,b)=>a+b,0),cents); assert.ok(shares.every(Number.isInteger)); assert.ok(Math.max(...shares)-Math.min(...shares)<=1); assert.ok(shares.every((x,i)=>i===0||shares[i-1]>=x)); } });\ntest('independent invalid numeric contract', () => { for(const cents of [-1,100000001,0.5,NaN,Infinity,'100',null]) assert.throws(()=>splitExpense(cents,2)); for(const people of [0,5,1.5,NaN,Infinity,'2',null]) assert.throws(()=>splitExpense(100,people)); });\ntest('independent classic-script core availability', () => { const c=vm.createContext({}); vm.runInContext(fs.readFileSync('./app.js','utf8'),c,{timeout:1000}); assert.equal(vm.runInContext('typeof splitExpense',c),'function'); });\n"
+  },
+  {
+    "id": "ticket-lifecycle-it-20260920",
+    "locale": "it",
+    "semantic_family": "ticket-lifecycle",
+    "requirements": [
+      "Crea un registro di richieste di assistenza. Esporta la factory createTicketDesk() da app.js; ogni chiamata crea un registro privato indipendente con create(title), transition(id, status) e listTickets(). create accetta solo stringhe non vuote dopo trim, assegna ID interi consecutivi da 1 e restituisce {id, title, status:\"OPEN\"}. listTickets restituisce tutte le richieste in ordine di creazione. Ogni oggetto restituito e ogni array sono copie: modificarli non cambia il registro.",
+      "Transition accetta un ID numerico intero positivo esistente e uno stato stringa. Sono ammesse esclusivamente OPEN -> ACTIVE, ACTIVE -> DONE e DONE -> ACTIVE. Qualsiasi altra transizione, incluso mantenere lo stesso stato, deve lanciare Error prima di modificare dati. Una transizione riuscita restituisce una copia della richiesta aggiornata. Titoli invalidi, ID non numerici o non interi e stati sconosciuti devono essere rifiutati senza modificare il registro o consumare il prossimo ID.",
+      "Il browser mantiene una sola istanza del registro. Il mockup offre Titolo oppure ID richiesta e il menu Azione: Crea usa il testo come titolo; Avvia, Risolvi e Riapri usano un ID decimale intero positivo e richiedono rispettivamente ACTIVE, DONE e ACTIVE. Rifiuta testi numerici malformati per gli ID. Applica esegue davvero l'operazione attraverso la stessa factory pubblica e apre la schermata dei risultati mostrando tutte le richieste con ID, titolo e stato. Torna preserva i campi e il registro. Gli errori rimangono visibili nella schermata iniziale senza perdere i dati, senza alert. La schermata iniziale è visibile al primo caricamento, quella dei risultati è nascosta."
+    ],
+    "prototype": {
+      "screens": [
+        {
+          "id": "form",
+          "code": "SCR-001",
+          "title": "Assistenza richieste",
+          "elements": [
+            {
+              "id": "value",
+              "code": "ELM-001",
+              "kind": "TEXT_INPUT",
+              "content": "Titolo oppure ID richiesta",
+              "field_name": "ticket",
+              "required": true
+            },
+            {
+              "id": "choice",
+              "code": "ELM-002",
+              "kind": "SELECT",
+              "content": "Azione",
+              "field_name": "action",
+              "required": true,
+              "options": [
+                "Crea",
+                "Avvia",
+                "Risolvi",
+                "Riapri"
+              ]
+            },
+            {
+              "id": "submit",
+              "code": "ELM-003",
+              "kind": "BUTTON",
+              "content": "Applica"
+            }
+          ]
+        },
+        {
+          "id": "result",
+          "code": "SCR-002",
+          "title": "Richieste aggiornate",
+          "elements": [
+            {
+              "id": "output",
+              "code": "ELM-004",
+              "kind": "TEXT",
+              "content": "Elenco reale con ID, titolo e stato"
+            },
+            {
+              "id": "back",
+              "code": "ELM-005",
+              "kind": "LINK",
+              "content": "Torna"
+            }
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "trigger_element_id": "submit",
+          "target_screen_id": "result"
+        },
+        {
+          "trigger_element_id": "back",
+          "target_screen_id": "form"
+        }
+      ]
+    },
+    "oracle": "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst vm = require('node:vm');\nconst fs = require('node:fs');\nconst { createTicketDesk } = require('./app.js');\ntest('independent ticket creation and lifecycle', () => {\n const d=createTicketDesk();\n assert.deepEqual(d.create('  Router  '),{id:1,title:'Router',status:'OPEN'});\n assert.deepEqual(d.create('Printer'),{id:2,title:'Printer',status:'OPEN'});\n for(const status of ['ACTIVE','DONE','ACTIVE']) assert.deepEqual(d.transition(1,status),{id:1,title:'Router',status});\n assert.deepEqual(d.listTickets(),[{id:1,title:'Router',status:'ACTIVE'},{id:2,title:'Printer',status:'OPEN'}]);\n});\ntest('independent rejected transitions are atomic', () => {\n const d=createTicketDesk(); d.create('Router');\n for(const status of ['OPEN','DONE','UNKNOWN',null,2]) assert.throws(()=>d.transition(1,status));\n for(const id of [0,-1,2,1.5,NaN,Infinity,'1',null]) assert.throws(()=>d.transition(id,'ACTIVE'));\n assert.deepEqual(d.listTickets(),[{id:1,title:'Router',status:'OPEN'}]);\n d.transition(1,'ACTIVE'); assert.throws(()=>d.transition(1,'OPEN')); assert.throws(()=>d.transition(1,'ACTIVE'));\n d.transition(1,'DONE'); assert.throws(()=>d.transition(1,'OPEN')); assert.throws(()=>d.transition(1,'DONE'));\n assert.equal(d.listTickets()[0].status,'DONE');\n});\ntest('independent validation preserves consecutive IDs', () => {\n const d=createTicketDesk(); d.create('Router');\n for(const title of ['', '  ',12,null,undefined]) assert.throws(()=>d.create(title));\n assert.deepEqual(d.create('Printer'),{id:2,title:'Printer',status:'OPEN'});\n});\ntest('independent defensive copies and factory isolation', () => {\n const a=createTicketDesk(), b=createTicketDesk(); const first=a.create('Router'); first.title='mutated'; first.status='DONE';\n const listed=a.listTickets(); listed[0].title='mutated again'; listed.push({id:9,title:'x',status:'DONE'});\n const changed=a.transition(1,'ACTIVE'); changed.status='DONE';\n assert.deepEqual(a.listTickets(),[{id:1,title:'Router',status:'ACTIVE'}]);\n assert.deepEqual(b.listTickets(),[]); assert.equal(b.create('__proto__').id,1);\n assert.equal(a.listTickets().length,1);\n});\ntest('independent classic-script startup', () => {\n const c=vm.createContext({}); vm.runInContext(fs.readFileSync('./app.js','utf8'),c,{timeout:1000});\n assert.equal(vm.runInContext('typeof createTicketDesk',c),'function');\n});\n"
+  }
+]

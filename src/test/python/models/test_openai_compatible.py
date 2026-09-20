@@ -228,10 +228,91 @@ def test_adapter_maps_timeout_and_invalid_completion_envelopes() -> None:
     assert invalid_result.failure.code is StructuredGenerationFailureCode.RESPONSE_SCHEMA_ERROR
 
 
-def test_remote_endpoint_requires_explicit_authorization() -> None:
+@pytest.mark.parametrize("content", ["{\n", '{"files":[{"interface', "", "{}"])
+def test_generation_limit_is_reported_without_parsing_or_accepting_partial_output(content):
+    response = _response()
+    payload = json.loads(response.body)
+    payload["choices"][0]["finish_reason"] = "length"
+    payload["choices"][0]["message"]["content"] = content
+    transport = _FakeTransport(
+        response=OpenAICompatibleHttpResponse(
+            status_code=200, body=json.dumps(payload).encode(), elapsed_milliseconds=125000
+        )
+    )
+    result = asyncio.run(_adapter(transport).generate(_request()))
+    assert result.status is StructuredGenerationStatus.FAILED
+    assert result.success is None
+    assert result.failure.code is StructuredGenerationFailureCode.INCOMPLETE_OUTPUT
+    assert result.failure.retryable is False
+    assert len(transport.calls) == 1
+
+
+def test_malformed_json_at_normal_stop_remains_a_schema_error():
+    payload = json.loads(_response().body)
+    payload["choices"][0]["message"]["content"] = '{"files":['
+    transport = _FakeTransport(
+        response=OpenAICompatibleHttpResponse(
+            status_code=200, body=json.dumps(payload).encode(), elapsed_milliseconds=10
+        )
+    )
+    result = asyncio.run(_adapter(transport).generate(_request()))
+    assert result.failure.code is StructuredGenerationFailureCode.RESPONSE_SCHEMA_ERROR
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://models.example.com", "http://127.evil.example", "http://127.0.0.1.evil.example"],
+)
+def test_remote_endpoint_requires_explicit_authorization(origin) -> None:
     with pytest.raises(ValueError, match="explicit authorization"):
         OpenAICompatibleLocalConfig(
-            base_url="https://models.example.com",
+            base_url=origin,
             model_name="ut-evaluator",
             expected_identity=_identity(),
         )
+
+
+@pytest.mark.parametrize(
+    "origin", ["http://127.0.0.1:8000", "http://[::1]:8000", "http://localhost:8000"]
+)
+def test_literal_loopback_and_localhost_remain_supported(origin):
+    assert (
+        OpenAICompatibleLocalConfig(
+            base_url=origin, model_name="local", expected_identity=_identity()
+        ).base_url
+        == origin
+    )
+
+
+def test_endpoint_credentials_cannot_be_hidden_in_the_url():
+    with pytest.raises(ValueError, match="explicit bearer token"):
+        OpenAICompatibleLocalConfig(
+            base_url="http://user:password@127.0.0.1",
+            model_name="local",
+            expected_identity=_identity(),
+        )
+
+
+@pytest.mark.parametrize(
+    "body,code",
+    [
+        (
+            b'{"error":"CONTEXT_BUDGET_EXCEEDED"}',
+            StructuredGenerationFailureCode.CONTEXT_BUDGET_EXCEEDED,
+        ),
+        (b'{"error":"OTHER_ERROR"}', StructuredGenerationFailureCode.INVALID_REQUEST),
+        (
+            b'{"error":"CONTEXT_BUDGET_EXCEEDED","secret":"not echoed"}',
+            StructuredGenerationFailureCode.INVALID_REQUEST,
+        ),
+        (b"not json", StructuredGenerationFailureCode.INVALID_REQUEST),
+    ],
+)
+def test_context_limit_is_typed_and_arbitrary_server_details_are_not_echoed(body, code):
+    transport = _FakeTransport(
+        response=OpenAICompatibleHttpResponse(status_code=422, body=body, elapsed_milliseconds=1)
+    )
+    result = asyncio.run(_adapter(transport).generate(_request()))
+    assert result.failure.code is code and result.failure.retryable is False
+    assert "not echoed" not in result.failure.message
+    assert len(transport.calls) == 1
