@@ -570,6 +570,7 @@ def main(argv=None):
         help="Call the real source adapter and retain unpublished original JVM sources",
     )
     generation.add_argument("--target", choices=PROFILES, required=True)
+    generation.add_argument("--contract-version", type=int, choices=(1, 2), default=1)
     for option in ("configuration", "runtime-config", "output"):
         generation.add_argument(f"--{option}", type=Path, required=True)
     repair_plan = commands.add_parser(

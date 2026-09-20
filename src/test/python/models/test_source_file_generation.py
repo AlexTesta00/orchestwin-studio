@@ -33,10 +33,25 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
     async def sequential(**kwargs):
         ctx = json.loads(kwargs["payload"]["messages"][1]["content"])["context"]
         step = ctx.get("source_step")
+        dom_first = "dom_reference" in ctx
         if step:
-            item = payload["files"][step["ordinal"] - 1]
+            item = next(
+                f
+                for f in payload["files"]
+                if f["normalized_path"] == step["file"]["normalized_path"]
+            )
             value = {"content": item["content"]}
         else:
+            planned_files = (
+                sorted(
+                    payload["files"],
+                    key=lambda f: {"index.html": 0, "app.js": 1, "app.test.cjs": 2}[
+                        f["normalized_path"]
+                    ],
+                )
+                if dom_first
+                else payload["files"]
+            )
             value = {
                 "acceptance_checks": [
                     {
@@ -58,14 +73,22 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
                         "media_type": f["media_type"],
                         "purpose": "Synthetic file purpose.",
                         "interface": "value(): object",
-                        "depends_on": [
-                            item["normalized_path"]
-                            for item in payload["files"][:index]
-                            if f["normalized_path"] not in {"app.test.cjs", "index.html"}
-                            or item["normalized_path"] == "app.js"
-                        ],
+                        "depends_on": (
+                            {
+                                "index.html": [],
+                                "app.js": ["index.html"],
+                                "app.test.cjs": ["app.js"],
+                            }[f["normalized_path"]]
+                            if dom_first
+                            else [
+                                item["normalized_path"]
+                                for item in payload["files"][:index]
+                                if f["normalized_path"] not in {"app.test.cjs", "index.html"}
+                                or item["normalized_path"] == "app.js"
+                            ]
+                        ),
                     }
-                    for index, f in enumerate(payload["files"])
+                    for index, f in enumerate(planned_files)
                 ],
             }
         transport.output = mutate(ctx, value) if mutate else value
@@ -557,7 +580,7 @@ def test_pinned_entrypoint_is_required_before_file_calls(tmp_path, target, recip
     assert (
         parent_context["manifest_contract"]
         == MANIFEST_CONTRACT
-        == ("SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION")
+        == ("SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST")
     )
     # The actual audited manifest and both source requests must agree with the
     # JVM console profile, while retaining the shared ban on self-certification.

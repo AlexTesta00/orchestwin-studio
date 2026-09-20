@@ -1,6 +1,7 @@
 """Check declared UI structure against a selected prototype, not pixel fidelity."""
 
 from dataclasses import dataclass, field
+from html import escape
 from html.parser import HTMLParser
 
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -45,6 +46,72 @@ _TEXT_TAGS = {
     "td",
     "th",
 }
+
+
+def prototype_html_reference(prototype):
+    """Render escaped prompt guidance, never replace or repair model-authored output.
+
+    Codes are stable DOM IDs; labels get no element marker of their own. Keeping
+    this derivation domain-independent avoids teaching a hard-coded demo solution.
+    """
+    screens = {screen["id"]: screen for screen in prototype["screens"]}
+    entry = prototype.get("entry_screen_id") or next(iter(screens))
+    targets = {
+        edge["trigger_element_id"]: screens[edge["target_screen_id"]]["code"]
+        for edge in prototype.get("transitions", [])
+    }
+    lines = ["<main>"]
+    for screen in screens.values():
+        code = escape(screen["code"], quote=True)
+        hidden = "" if screen["id"] == entry else " hidden"
+        lines.append(f'<section id="{code}" data-design-screen="{code}"{hidden}>')
+        for element in screen.get("elements", []):
+            kind = element["kind"]
+            code = escape(element["code"], quote=True)
+            text = escape(element["content"])
+            label = escape(element.get("accessible_name") or element["content"], quote=True)
+            attrs = f'id="{code}" data-design-element="{code}"'
+            if element["id"] in targets:
+                attrs += f' data-design-target="{escape(targets[element["id"]], quote=True)}"'
+            if kind in {"TEXT_INPUT", "SELECT"}:
+                lines.append(f'<label for="{code}">{label}</label>')
+                attrs += f' name="{escape(element["field_name"], quote=True)}"'
+                if element.get("required", False):
+                    attrs += " required"
+                if kind == "TEXT_INPUT":
+                    lines.append(f'<input type="text" {attrs}>')
+                else:
+                    lines.append(f"<select {attrs}>")
+                    lines.extend(
+                        f'<option value="{escape(option, quote=True)}">{escape(option)}</option>'
+                        for option in element["options"]
+                    )
+                    lines.append("</select>")
+            elif kind == "BUTTON":
+                lines.append(f'<button type="button" {attrs} aria-label="{label}">{text}</button>')
+            elif kind == "LINK":
+                lines.append(f'<a href="#" {attrs} aria-label="{label}">{text}</a>')
+            else:
+                tag = {
+                    "HEADING": "h2",
+                    "TEXT": "p",
+                    "LIST": "ul",
+                    "CARD": "article",
+                    "STATUS": "p",
+                }[kind]
+                if kind == "STATUS":
+                    attrs += ' role="status"'
+                if kind == "LIST":
+                    text = f"<li>{text}</li>"
+                lines.append(f"<{tag} {attrs}>{text}</{tag}>")
+        lines.append("</section>")
+    lines.extend(["</main>", '<script src="app.js" defer></script>'])
+    return {
+        "origin": "APPROVED_PROTOTYPE_STRUCTURE",
+        "usage": "Prompt reference only; the model must return the complete HTML, including styling and visible error regions required by the approved behavior.",
+        "entry_screen": screens[entry]["code"],
+        "html": "\n".join(lines),
+    }
 
 
 @dataclass(eq=False)

@@ -207,6 +207,25 @@ def test_generation_keeps_original_protocol_evidence_and_console_profile(
     assert len(evidence["generations"]) >= 3
 
 
+@pytest.mark.parametrize("target", ["JVM_JAVA", "JVM_KOTLIN", "JVM_SCALA"])
+def test_v2_generation_explicitly_includes_strict_input_and_small_divisor_requirements(target):
+    from scripts.verify_generated_jvm_calculator import contract
+
+    fixed = probe.pinned_build_files(probe.ExecutionTarget(target), repo_root=ROOT)
+    old = probe.generation_context(target, fixed)
+    newer = probe.generation_context(target, fixed, contract_version=2)
+    assert (
+        old["requirements"]["content"]["requirements"][0]["statement"]
+        == contract(target)["approved_requirement_text"]
+    )
+    assert (
+        newer["requirements"]["content"]["requirements"][0]["statement"]
+        == contract(target, 2)["approved_requirement_text"]
+    )
+    assert newer["fixed_files"] == old["fixed_files"]
+    assert "checks" not in newer
+
+
 def test_changed_source_or_added_unrecorded_file_rejected(tmp_path, monkeypatch):
     args = prepare(tmp_path, monkeypatch)
     revision = probe.source_revision(probe.read_snapshot(args.source_revision), args.target)

@@ -99,7 +99,7 @@ def test_design_retry_retains_failed_bytes_and_only_publishes_complete_atomic_tr
         response.status_code
         == {"success": 201, "second_failure": 502, "publication_rollback": 503}[outcome]
     ), response.text
-    assert len(transport.calls) == len(requests) == 5
+    assert len(transport.calls) == len(requests) == (3 if outcome == "second_failure" else 5)
     contexts = {
         str(identifier): json.loads(json.loads(snapshot)["request"]["input_payload_json"])[
             "context"
@@ -127,7 +127,7 @@ def test_design_retry_retains_failed_bytes_and_only_publishes_complete_atomic_tr
     ]
     if outcome != "second_failure":
         parent = next(item for item in accepted if item.get("result", {}).get("generation_steps"))
-        assert parent["result"]["generation_steps"][-1]["generation_id"] == retry_id
+        assert parent["result"]["generation_steps"][0]["generation_id"] == retry_id
     else:
         assert not any(item.get("result", {}).get("generation_steps") for item in accepted)
     with pytest.raises(
@@ -166,7 +166,7 @@ def test_database_rejects_unbound_or_wrong_kind_html_retry_before_transport(
             elif tamper == "source_hash":
                 retry["previous_source_sha256"] = "0" * 64
             elif tamper == "context":
-                ctx["completed_files"] = []
+                ctx["completed_files"] = [{"normalized_path": "invented.js", "content": "invented"}]
             elif tamper == "feedback":
                 retry["feedback"]["required_screens"] = []
             elif tamper == "both":
@@ -192,7 +192,7 @@ def test_database_rejects_unbound_or_wrong_kind_html_retry_before_transport(
     )
     assert response.status_code == 503, response.text
     assert response.json()["detail"]["code"] == "GENERATION_EVIDENCE_WRITE_FAILED"
-    assert len(requests) == len(transport.calls) == 4
+    assert len(requests) == len(transport.calls) == 2
     assert revisions == links == 0
 
 

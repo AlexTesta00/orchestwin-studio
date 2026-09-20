@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "provider": "GITHUB_ACTIONS",
+  "status": "PASSED",
+  "repository": "AlexTesta00/orchestwin-studio",
+  "commit": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "head_sha": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "run_id": 35504976439,
+  "run_attempt": 1,
+  "conclusion": "success",
+  "workflow_path": ".github/workflows/ci-cd.yml",
+  "workflow_sha256": "4b35f1f412aa04f012506efb0ef701779d61afc9d1ba1acf87564b80c01cef20",
+  "observed_at": "2026-09-20T10:43:58.016436+00:00",
+  "issue_codes": [],
+  "required_jobs": [
+    "Test (ubuntu-24.04)",
+    "Test (macos-14)",
+    "Test (windows-2025)",
+    "Verify Web runners and fixture contracts"
+  ],
+  "verified_jobs": [
+    "Test (ubuntu-24.04)",
+    "Test (macos-14)",
+    "Test (windows-2025)",
+    "Verify Web runners and fixture contracts"
+  ],
+  "responses": [
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs?head_sha=0b12093a4d23c540489f14aafcfb4ccdaa4aaed0&per_page=100&page=1",
+      "status_code": 200,
+      "sha256": "1878cb62f1624856f1773ee276534fa3c9d6cf748d17b310421c022c969be377",
+      "size_bytes": 13464
+    },
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/35504976439",
+      "status_code": 200,
+      "sha256": "d58917df59dd0480a8307a67421baaf1f46773132745546fc7f87c4e08fd6efd",
+      "size_bytes": 13428
+    },
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/contents/.github/workflows/ci-cd.yml?ref=0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+      "status_code": 200,
+      "sha256": "129867206a91b5402a6198cc7362ff6af0c5e93e5b2eeb080ff73df3baf07eca",
+      "size_bytes": 26316
+    },
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/35504976439/attempts/1/jobs?per_page=100&page=1",
+      "status_code": 200,
+      "sha256": "67b80c64e34f504b6ac9aa6f4958bf9e16c85817a7a5358ddb32fbf4f0f2a495",
+      "size_bytes": 32874
+    },
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/35504976439",
+      "status_code": 200,
+      "sha256": "d58917df59dd0480a8307a67421baaf1f46773132745546fc7f87c4e08fd6efd",
+      "size_bytes": 13428
+    },
+    {
+      "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs?head_sha=0b12093a4d23c540489f14aafcfb4ccdaa4aaed0&per_page=100&page=1",
+      "status_code": 200,
+      "sha256": "1878cb62f1624856f1773ee276534fa3c9d6cf748d17b310421c022c969be377",
+      "size_bytes": 13464
+    }
+  ],
+  "receipt_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\web-leveld-0b12093-20260920-01\\ci-104358"
+}

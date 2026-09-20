@@ -595,9 +595,9 @@ class GenerationOperation:
         return await self.adapter.propose_files(task="jvm-source", context=self.context)
 
 
-def generation_context(target, fixed):
+def generation_context(target, fixed, *, contract_version=1):
     """Synthetic requirements are explicit; no owner approvals or UX mockups are invented."""
-    requirement = calculator_contract(target)["approved_requirement_text"]
+    requirement = calculator_contract(target, contract_version)["approved_requirement_text"]
     contents = {
         "requirements": {
             "requirements": [
@@ -647,7 +647,8 @@ async def generate_development(args):
     """Explicit real inference only; execution remains a separate user-invoked command."""
     configuration = GovernedJvmSettings(_env_file=None, **read_snapshot(args.configuration))
     fixed = pinned_build_files(ExecutionTarget(args.target), repo_root=configuration.repo_root)
-    payload = generation_context(args.target, fixed)
+    contract_version = getattr(args, "contract_version", 1)
+    payload = generation_context(args.target, fixed, contract_version=contract_version)
     output = args.output.absolute()
     regular_path(output)
     output.mkdir(parents=True, exist_ok=False)
@@ -655,12 +656,15 @@ async def generate_development(args):
     records_root.mkdir()
     store = FileEvidence(records_root)
     write_json(output / "context.json", payload)
-    write_json(output / "independent-contract.json", calculator_contract(args.target))
+    write_json(
+        output / "independent-contract.json", calculator_contract(args.target, contract_version)
+    )
     owner = uuid4()
     report = {
         "mode": MODE,
         "scope": SCOPE,
         "target": args.target,
+        "independent_contract_version": contract_version,
         "passed": False,
         "checks": [],
         "executed_application": False,

@@ -122,7 +122,13 @@ def test_database_refuses_unbound_or_unbounded_syntax_retry(
     versions = artifacts()
 
     def invalid_first(ctx, output):
-        return {"content": "const unfinished = ("} if ctx.get("source_step") else output
+        # The first file is now HTML; inject an actual inline JavaScript parse
+        # error so this test still exercises syntax lineage, not missing design.
+        return (
+            {"content": "<script>const unfinished = (</script>"}
+            if ctx.get("source_step")
+            else output
+        )
 
     generator, transport = source_sequence_generator(
         tmp_path, source_output(ExecutionTarget.WEB_STATIC), mutate=invalid_first

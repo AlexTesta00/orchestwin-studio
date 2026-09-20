@@ -3,7 +3,11 @@ from copy import deepcopy
 import pytest
 
 from orchestwin.models.proposal_generation import ProposalGenerationError
-from orchestwin.models.source_design_contract import validate_prototype_html
+from orchestwin.models.source_design_contract import (
+    _Document,
+    prototype_html_reference,
+    validate_prototype_html,
+)
 
 PROTOTYPE = {
     "screens": [
@@ -55,6 +59,37 @@ def test_accepts_selected_controls_and_screens_without_changing_content():
     prototype = deepcopy(PROTOTYPE)
     validate_prototype_html(HTML, prototype)
     assert prototype == PROTOTYPE
+
+
+def test_html_reference_escapes_untrusted_text_and_preserves_the_approved_dom():
+    prototype = deepcopy(PROTOTYPE)
+    prototype["entry_screen_id"] = "result"
+    fields = prototype["screens"][0]["elements"]
+    fields[0]["content"] = 'Nome <script>alert(1)</script> & "cognome"'
+    fields[0]["field_name"] = 'value" autofocus onfocus="alert(1)'
+    fields[1]["options"] = ["<img src=x onerror=alert(1)>", '" & < >']
+    reference = prototype_html_reference(prototype)
+    validate_prototype_html(reference["html"], prototype)
+    document = _Document()
+    document.feed(reference["html"])
+    assert [n.tag for n in document.nodes].count("script") == 1
+    assert not any(n.tag == "img" or "onfocus" in n.attrs for n in document.nodes)
+    assert all("data-design-element" not in n.attrs for n in document.nodes if n.tag == "label")
+    sections = [n for n in document.nodes if n.tag == "section"]
+    assert "hidden" in sections[0].attrs and "hidden" not in sections[1].attrs
+    assert reference["entry_screen"] == "SCR-002"
+
+
+@pytest.mark.parametrize("kind", ["HEADING", "TEXT", "LIST", "CARD", "STATUS"])
+def test_html_reference_retains_non_interactive_prototype_elements(kind):
+    prototype = deepcopy(PROTOTYPE)
+    prototype["screens"][1]["elements"].append(
+        {"id": "text", "code": "ELM-005", "kind": kind, "content": "Approved content"}
+    )
+    reference = prototype_html_reference(prototype)
+    validate_prototype_html(reference["html"], prototype)
+    assert reference["html"].count('data-design-element="ELM-005"') == 1
+    assert "Approved content" in reference["html"]
 
 
 def test_wrapping_label_does_not_include_select_option_values():

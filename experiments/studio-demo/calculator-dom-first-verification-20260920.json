@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "scope": "DEVELOPMENT_GUI_ACCEPTANCE_NOT_LEVEL_D",
+  "recorded_at": "2026-09-20T11:06:35.062894+00:00",
+  "base_commit": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "manifest_contract": "SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST",
+  "dirty_local_generation_code": true,
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "parent_generation_id": "a9c8f0d8-e3f1-4bb9-8869-8ce34bd23ef2",
+  "native_files": [
+    {
+      "path": "index.html",
+      "generation_id": "a07ff971-b4b7-422b-acf3-d04d7d8f2f50",
+      "sha256": "6fcbbd4d3487be54be232e1db52afacbfcc7e9d09dfd6301b4e51b93f9c22bc6",
+      "bytes": 3455
+    },
+    {
+      "path": "app.js",
+      "generation_id": "8cf4c8fd-fbbf-419d-b319-d29a059220a0",
+      "sha256": "a46b6d0804a5505a8706e31ca672a9659283b6191f7acf3b4c56cf2b75d58097",
+      "bytes": 4333
+    },
+    {
+      "path": "app.test.cjs",
+      "generation_id": "6c7fde82-ee5c-402e-96f1-a47fdc810f03",
+      "sha256": "cd8cdd13020e32cf03b8cb5451174bbd152597564dcc73885d99f8803518d59c",
+      "bytes": 6595
+    }
+  ],
+  "revision": {
+    "content_hash": "c4ab0cbe7adc790e612a3de33a009757aca2afeb5121180b9e3881b2e59113da",
+    "created_at": "2026-09-20T11:00:19.163664+00:00",
+    "domain_rehydration_verified": true,
+    "export": {
+      "bytes": 2809,
+      "path": "records/web_source_revisions/a856f0c0-5f6a-4910-bc04-6fe480495144.json",
+      "sha256": "74aeaeeddb1fc36a08eebf110aa7d517bb48c80167d77b649351397d96196cb6"
+    },
+    "id": "a856f0c0-5f6a-4910-bc04-6fe480495144",
+    "origin": "GENERATED_PLAN",
+    "source_tree_hash": "7cddc026f13b0ecd4e1f3161f4304b125d082557a2b22e200d7cd1189ae43c97",
+    "target": "WEB_STATIC",
+    "version_number": 1
+  },
+  "model": {
+    "repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "precision": "4bit",
+    "runtime_id": "proposal-7308d035-0790-4942-b2c9-724908e95373"
+  },
+  "result": "FAILED_BROWSER_ENTRY_AND_NODE_LOAD",
+  "browser_observation": {
+    "url": "http://127.0.0.1:8080/projects/ab355503-9374-448c-be27-0c32dc929b67",
+    "action": "Opened generated preview through GUI",
+    "observed": "Iframe title Calcolatrice; blank white card; no visible inputs, operation menu or buttons",
+    "root_cause_read_only_source_inspection": "Both approved screens have class hidden; JavaScript has no entry-screen initialization",
+    "screenshot_observed_in_conversation": true
+  },
+  "acceptance_cases_sha256": "db35d60b3575c66a2c3f07213f2035aac22a9048478171e4653b3d10ddf30eeb",
+  "browser_results": [
+    {
+      "id": "addition",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "subtraction",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "multiplication",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "division",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "mixed-decimal-separators",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "negative-multiplication",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "negative-subtraction",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "fractional-result",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "zero-numerator",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "division-by-zero",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "empty-left",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "empty-right",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "invalid-numeric-text",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "back-preserves-input",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "mockup-alignment",
+      "status": "FAIL",
+      "reason": "No visible approved controls or transitions"
+    },
+    {
+      "id": "keyboard",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    },
+    {
+      "id": "mobile",
+      "status": "NOT_RUN",
+      "reason": "Blocked by blank entry screen; arithmetic and interaction not exercised"
+    }
+  ],
+  "browser_summary": {
+    "pass": 0,
+    "fail": 1,
+    "not_run": 16
+  },
+  "native_node_probe": {
+    "scope": "SUPPLEMENTARY_NATIVE_NODE_TESTS_NOT_LEVEL_D",
+    "complete_application": true,
+    "browser_acceptance_executed": false,
+    "source_revision_created": true,
+    "operator_source_edits": false,
+    "inference_calls": 0,
+    "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+    "container_id": "112c1a3988f155c1b851e4d2117a9ed819ab6c4f66f72c97fe3a6d785b8fc68a",
+    "source_files": [
+      {
+        "path": "index.html",
+        "generation_id": "a07ff971-b4b7-422b-acf3-d04d7d8f2f50",
+        "sha256": "6fcbbd4d3487be54be232e1db52afacbfcc7e9d09dfd6301b4e51b93f9c22bc6",
+        "bytes": 3455
+      },
+      {
+        "path": "app.js",
+        "generation_id": "8cf4c8fd-fbbf-419d-b319-d29a059220a0",
+        "sha256": "a46b6d0804a5505a8706e31ca672a9659283b6191f7acf3b4c56cf2b75d58097",
+        "bytes": 4333
+      },
+      {
+        "path": "app.test.cjs",
+        "generation_id": "6c7fde82-ee5c-402e-96f1-a47fdc810f03",
+        "sha256": "cd8cdd13020e32cf03b8cb5451174bbd152597564dcc73885d99f8803518d59c",
+        "bytes": 6595
+      }
+    ],
+    "started_at": "2026-09-20T11:05:17.935160+00:00",
+    "cleanup_confirmed": true,
+    "isolation_verified": true,
+    "exit_code": 1,
+    "running_after_wait": false,
+    "tests": null,
+    "pass": null,
+    "fail": null,
+    "first_failure": "document is not defined",
+    "sources_unchanged": true,
+    "completed_at": "2026-09-20T11:05:19.283795+00:00",
+    "stdout_sha256": "d072ae76261b711c7f40ddd79739e056e0b8c6e2a45116cde49f883ec87e17e7",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "observed_counts": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1
+    },
+    "count_meaning": "One test file failed during module load, before its individual assertions could execute"
+  },
+  "source_edits_by_operator": false,
+  "evidence": {
+    "root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\dom-first-gui-20260920-01",
+    "snapshot_manifest_sha256": "a7ab197851583b24c5d7560bae831bad6d920f2ba6d662b12d03c6f4a6cebe45",
+    "snapshot_files_verified": 403,
+    "exporter_duplicate_references_resolved": 3,
+    "unresolved_objects": 0
+  },
+  "remaining_model_defects": [
+    "Missing CommonJS exports and DOM guard",
+    "Both screens hidden on initial load",
+    "Comma validation and parseFloat arithmetic use different normalization",
+    "Error navigates away from input form",
+    "Self-certifying accessibility/offline stubs return true"
+  ]
+}

@@ -20,7 +20,10 @@ from orchestwin.models.source_context import (
     implementation_contract,
     implementation_work_order,
 )
-from orchestwin.models.source_design_contract import validate_prototype_html
+from orchestwin.models.source_design_contract import (
+    prototype_html_reference,
+    validate_prototype_html,
+)
 from orchestwin.models.source_proposals import (
     MAX_CONTEXT_BYTES,
     SourceFile,
@@ -38,7 +41,7 @@ PROTOCOL = "SOURCE_FILES_V2_TEXT"
 MANIFEST_BUDGET = 3200
 FILE_BUDGET = 4096
 MAX_FILES = 8
-MANIFEST_CONTRACT = "SOURCE_MANIFEST_V15_TARGET_SCOPED_OBSERVABLE_IMPLEMENTATION"
+MANIFEST_CONTRACT = "SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST"
 STATIC_RUNTIME_CONTRACT = {
     "javascript_mode": "CLASSIC_SCRIPT_COMMONJS_COMPATIBLE",
     "browser_loading": "classic script src=app.js",
@@ -106,7 +109,7 @@ class AcceptanceCheck(_Output):
     )
 
 
-def _coverage_manifest_type(target, entrypoint, work_order):
+def _coverage_manifest_type(target, entrypoint, work_order, *, dom_first=False):
     checks = tuple(
         create_model(
             f"ApprovedStatementCheck{ordinal}",
@@ -117,7 +120,7 @@ def _coverage_manifest_type(target, entrypoint, work_order):
     )
     return create_model(
         "CoveredSourceManifest",
-        __base__=_manifest_type(target, entrypoint),
+        __base__=_manifest_type(target, entrypoint, dom_first=dom_first),
         acceptance_checks=(tuple[checks], ...),
     )
 
@@ -163,10 +166,16 @@ def _selected_file(
     )
 
 
-def _manifest_type(target, entrypoint):
+def _manifest_type(target, entrypoint, *, dom_first=False):
     if target == "WEB_STATIC":
         javascript = ("text/javascript", "application/javascript")
-        core = _selected_file("StaticCore", "app.js", media_types=javascript, static=True)
+        core = _selected_file(
+            "StaticCore",
+            "app.js",
+            dependencies=("index.html",) if dom_first else (),
+            media_types=javascript,
+            static=True,
+        )
         tests = _selected_file(
             "StaticTests",
             "app.test.cjs",
@@ -177,12 +186,14 @@ def _manifest_type(target, entrypoint):
         page = _selected_file(
             "StaticPage",
             "index.html",
-            dependencies=("app.js",),
+            dependencies=() if dom_first else ("app.js",),
             media_types=("text/html",),
             dom=True,
         )
         return create_model(
-            "StaticSourceManifest", __base__=SourceManifest, files=(tuple[core, tests, page], ...)
+            "StaticSourceManifest",
+            __base__=SourceManifest,
+            files=(tuple[page, core, tests] if dom_first else tuple[core, tests, page], ...),
         )
     if not entrypoint:
         return SourceManifest
@@ -226,7 +237,7 @@ def _jvm_entrypoint(context):
     }
 
 
-def _validate_dependencies(manifest):
+def _validate_dependencies(manifest, *, dom_first=False):
     """Reject incomplete or forward dependencies before any source-file call."""
     paths = {file.normalized_path for file in manifest.files}
     completed = set()
@@ -238,12 +249,14 @@ def _validate_dependencies(manifest):
             raise ValueError("unknown or self-referential source dependency")
         if not dependencies <= completed:
             raise ValueError("source dependencies must precede their consumers")
-        if (
-            file.normalized_path in {"index.html", "app.test.cjs"}
-            and "app.js" in paths
-            and "app.js" not in dependencies
-        ):
-            raise ValueError("static consumers must depend on app.js")
+        required_dependencies = (
+            {"app.js": "index.html", "app.test.cjs": "app.js"}
+            if dom_first
+            else {"index.html": "app.js", "app.test.cjs": "app.js"}
+        )
+        required = required_dependencies.get(file.normalized_path)
+        if required in paths and required not in dependencies:
+            raise ValueError("static consumers must depend on their source contract")
         if file.normalized_path.startswith("src/test/") and not any(
             dependency.startswith("src/main/") for dependency in dependencies
         ):
@@ -251,8 +264,8 @@ def _validate_dependencies(manifest):
         completed.add(file.normalized_path)
 
 
-def _validate_manifest(context, manifest):
-    _validate_dependencies(manifest)
+def _validate_manifest(context, manifest, *, dom_first=False):
+    _validate_dependencies(manifest, dom_first=dom_first)
     placeholders = [
         SourceFile(normalized_path=f.normalized_path, content="", media_type=f.media_type)
         for f in manifest.files
@@ -355,7 +368,10 @@ def _static_file_instruction(planned):
     if suffix == ".html":
         return (
             "Link app.js with a script src element so the actual page executes the implementation. "
-            "Match its actual element IDs, field names and event bindings. "
+            "When dom_reference is present, it is an escaped structural reference derived from the approved prototype, not executed source. "
+            "Use its exact IDs, labels, markers and controls in your complete HTML. Add compact styling while preserving the structure. "
+            "JavaScript will be written afterward against your actual HTML. Do not add inline script, event attributes or invented handlers. "
+            "Keep the entry screen visible and other screens hidden; CSS must preserve [hidden] { display: none; }. "
             "Preserve the exact approved prototype screens, text outputs, interactive controls, labels, order, field names and select options. "
             "Do not redesign a SELECT as operation buttons or merge a separate result screen into the input screen. "
             "Give each screen container data-design-screen=its SCR code and every declared prototype element, including TEXT outputs, data-design-element=its ELM code exactly once in the approved screen and order. "
@@ -370,7 +386,9 @@ def _static_file_instruction(planned):
             "A bare require call does not create a variable: explicitly bind every test and assertion helper you use. "
             "Register every case with test(name, callback), after initializing all imports. "
             "Let failed assertions fail the test runner; never catch assertions merely to log an error and continue. "
-            "Use assert.throws for expected invalid input, not a catch block that converts failure into success. "
+            "Respect the actual error contract: use assert.throws only for a throwing operation; assert an error return when the approved interface returns one. "
+            "Never catch an assertion or invent an exception incompatible with the implementation and approved requirements. "
+            "The same input cannot be both valid and invalid; zero is valid unless an explicit approved condition excludes it. "
             "Test exported pure functions. No DOM, jsdom, npm, eval or external library. "
             "Assert independently derived results for approved inputs and errors, including every specified representation. "
             "Never assert quality flags, function existence or doesNotThrow as proof of rendering, accessibility or state restoration. "
@@ -379,6 +397,7 @@ def _static_file_instruction(planned):
         )
     if suffix in {".js", ".cjs"}:
         return (
+            "Read index.html in completed_files before binding any DOM event. Its controls and IDs are authoritative; do not invent or rename selectors. "
             "Implement a testable business core with explicit state ownership, input validation and unique identifiers when required. Keep records across successive operations on the same service. A factory can return methods sharing one private store. Wire the browser to the same core. "
             "Declare the business functions at the script's top level, outside all Node-only guards, so the browser can call those same functions. "
             "Only the module.exports assignment belongs inside if (typeof module !== 'undefined'). "
@@ -389,6 +408,7 @@ def _static_file_instruction(planned):
             "Implement those handlers here: read the actual fields, call the core, update visible output and errors, "
             "switch the approved screen containers and preserve input state on return. "
             "Use the approved field names and data-design markers consistently with the HTML. "
+            "Wire every transition trigger, including return controls on different screens. Invalid input must show a visible error without clearing the inputs or following the success transition. "
             "Comments, console.log and simulated DOM helpers do not implement a browser interaction. "
             "Convert form values to the approved public interface's parameter types in the DOM handler before calling the core. "
             "Visible select labels and numeric values are different representations; preserve the approved units and function contract. "
@@ -410,9 +430,12 @@ def _jvm_file_instruction(planned, entrypoint, target):
         "Put mutable domain state in a service instance; tests create a fresh instance instead of sharing global state. "
         "Expose data needed by callers through accessible public return types and methods. Tests must not access private fields or private nested types. "
         "This profile runs a console program: express the selected interaction through the CLI, without HTML rendering. "
+        "Match declared return types on every branch. Reject invalid input with the approved error mechanism before arithmetic; do not return null from a primitive numeric function. "
+        "Respect exact numeric boundaries in the requirements: never invent epsilon thresholds or reject small valid nonzero values. "
     )
     if planned.normalized_path == entrypoint["normalized_path"]:
         instruction += (
+            "Production source may import only production dependencies from the pinned build; no kotlin.test, JUnit or munit imports or assertions here. "
             "The launcher supplies no command-line arguments. Demonstrate the use case with a valid sample input, "
             "print the result and terminate successfully. Do not read interactive input or start a server. "
         )
@@ -422,7 +445,11 @@ def _jvm_file_instruction(planned, entrypoint, target):
                 "Do not declare a class or object named MainKt: the compiler generates that name. "
             )
         elif target == "JVM_SCALA":
-            instruction += "Define object Main with def main(args: Array[String]): Unit. Do not use extends App. "
+            instruction += (
+                "Define object Main with def main(args: Array[String]): Unit. Do not use extends App. "
+                "For exceptions, use separate typed catch cases; a type annotation followed by a pattern alternative is not a union-type catch. "
+                "Keep a Double result numeric throughout; never widen it to Double | Null to signal an error. "
+            )
         elif target == "JVM_JAVA":
             instruction += (
                 "Define public class Main with public static void main(String[] args). "
@@ -479,8 +506,13 @@ async def generate_source_files(generator, *, task, context):
             "content": content,
         }
     target = context["target_selection"]["target"]
+    prototype = semantic["content"].get("design", {}).get("prototype")
+    dom_first = target == "WEB_STATIC" and bool(prototype and prototype.get("screens"))
+    dom_reference = prototype_html_reference(prototype) if dom_first else None
     if target == "WEB_STATIC":
         root_context["runtime_contract"] = STATIC_RUNTIME_CONTRACT
+        if dom_reference:
+            root_context["dom_reference"] = dom_reference
     entrypoint = _jvm_entrypoint(context)
     if entrypoint:
         root_context["entrypoint_contract"] = entrypoint
@@ -501,7 +533,13 @@ async def generate_source_files(generator, *, task, context):
             "never export const, arrow-function bodies, assignments or placeholders. "
             "The implementation will declare those functions at top level and export their references "
             "only through guarded module.exports. The runtime_contract is fixed policy. "
-            "Plan exactly three files: app.js first, app.test.cjs second and index.html last. Put any CSS in the HTML. "
+            + (
+                "Plan exactly three files: index.html first with no dependencies, app.js depending on index.html second, and app.test.cjs depending on app.js last. "
+                "Use the IDs in dom_reference for the HTML interface. This is generation order: the HTML declares the DOM contract consumed by the script. "
+                if dom_first
+                else "Plan exactly three files: app.js first, app.test.cjs second and index.html last. "
+            )
+            + "Put any CSS in the HTML. "
             "The HTML must load app.js with a script src element. No npm, jsdom, browser-only test framework, or external dependencies."
         )
     elif entrypoint:
@@ -516,7 +554,7 @@ async def generate_source_files(generator, *, task, context):
     manifest = await generator.generate(
         task=task,
         context=root_context,
-        output_type=_coverage_manifest_type(target, entrypoint, work_order),
+        output_type=_coverage_manifest_type(target, entrypoint, work_order, dom_first=dom_first),
         max_output_tokens=min(
             generator.configuration.max_output_tokens,
             max(MANIFEST_BUDGET, 1400 + 140 * len(work_order["statements"])),
@@ -537,13 +575,13 @@ async def generate_source_files(generator, *, task, context):
         "not functioncalculate or verification stubs. Include shared state ownership where required. "
         "For test files, interface describes test registration such as test(name, callback), "
         "not invented exported test functions. For HTML, interface lists concrete DOM IDs after DOM:. "
-        "List project files imported or consumed in depends_on; use [] for independent files. Order dependencies before consumers. Tests depend on their actual implementation, and HTML depends on its script. "
+        "List files needed to write this file in depends_on; use [] for independent files. Follow the exact dependency order imposed by the schema. Tests depend on their actual implementation. "
         "For executable files interface contains real function or constructor signatures with parentheses; for HTML list concrete DOM IDs after DOM:. Never copy architecture labels as interfaces. Every normalized_path is a relative POSIX path, without a leading slash, drive letter or parent traversal. "
         "Use at most 8 small files, normally 3 or 4. Keep each file compact and complete, normally 25-70 readable lines. "
         "Include an independently executable test. Never generate fixed_files or documentation. "
         + stack,
     )
-    _validate_manifest(context, manifest)
+    _validate_manifest(context, manifest, dom_first=dom_first)
     # Tuple schemas constrain each position; the evidence protocol remains a JSON array.
     manifest_snapshot = manifest.model_dump(mode="json")
     manifest_hash = snapshot_content_hash(manifest_snapshot)
@@ -575,6 +613,11 @@ async def generate_source_files(generator, *, task, context):
                 if f.normalized_path in dependencies
             ],
             "work_order": work_order,
+            **(
+                {"dom_reference": dom_reference}
+                if dom_reference and planned.normalized_path == "index.html"
+                else {}
+            ),
             **({"runtime_contract": STATIC_RUNTIME_CONTRACT} if target == "WEB_STATIC" else {}),
         }
         item, accepted_step = await _generate_file(

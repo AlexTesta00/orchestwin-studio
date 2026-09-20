@@ -25,6 +25,40 @@ def setup(tmp_path, mutate):
     return ctx, store, generator, transport
 
 
+def test_approved_html_is_generated_before_its_consumers_without_rewriting_native_bytes(tmp_path):
+    ctx, store, generator, _ = setup(tmp_path, None)
+    result = execute(generator, ctx, store)
+    parent, html, script, tests = [request for request, _ in store.requests.values()]
+    contexts = [
+        json.loads(request.input_payload_json)["context"] for request in (html, script, tests)
+    ]
+    assert [c["source_step"]["file"]["normalized_path"] for c in contexts] == [
+        "index.html",
+        "app.js",
+        "app.test.cjs",
+    ]
+    assert [c["source_step"]["file"]["depends_on"] for c in contexts] == [
+        [],
+        ["index.html"],
+        ["app.js"],
+    ]
+    assert contexts[0]["completed_files"] == []
+    assert contexts[1]["completed_files"] == [{"normalized_path": "index.html", "content": HTML}]
+    assert [f["normalized_path"] for f in contexts[2]["completed_files"]] == [
+        "index.html",
+        "app.js",
+    ]
+    assert result.output.files[0].content == HTML
+    # The generated HTML is different from prompt guidance and is never substituted.
+    assert contexts[0]["dom_reference"]["html"] != HTML
+    assert (
+        json.loads(parent.input_payload_json)["context"]["dom_reference"]
+        == contexts[0]["dom_reference"]
+    )
+    assert "module.exports" in script.system_instruction
+    assert "assert.throws only" in tests.system_instruction
+
+
 @pytest.mark.parametrize("second_failure", [None, "design", "syntax"])
 def test_one_html_retry_preserves_native_bytes_and_exact_structural_feedback(
     tmp_path, second_failure
@@ -45,9 +79,9 @@ def test_one_html_retry_preserves_native_bytes_and_exact_structural_feedback(
             execute(generator, ctx, store)
     else:
         result = execute(generator, ctx, store)
-        assert result.output.files[-1].content == HTML
-    assert len(transport.calls) == len(store.requests) == 5
-    parent, _core, _tests, failed, retried = store.requests
+        assert result.output.files[0].content == HTML
+    assert len(transport.calls) == len(store.requests) == (3 if second_failure else 5)
+    parent, failed, retried, *_remaining = store.requests
     original = json.loads(store.requests[failed][0].input_payload_json)["context"]
     repeat = json.loads(store.requests[retried][0].input_payload_json)["context"]
     retry = repeat.pop("design_retry")
@@ -76,7 +110,7 @@ def test_one_html_retry_preserves_native_bytes_and_exact_structural_feedback(
     if second_failure:
         assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[parent])
     else:
-        assert result.generation_steps[-1]["generation_id"] == str(retried)
+        assert result.generation_steps[0]["generation_id"] == str(retried)
 
 
 @pytest.mark.parametrize("failure", ["transport", "audit"])
@@ -95,7 +129,7 @@ def test_html_transport_and_audit_failures_never_trigger_design_retry(tmp_path, 
     ctx, store, generator, _ = setup(tmp_path, mutate)
     with pytest.raises(type(error), match=str(error)):
         execute(generator, ctx, store)
-    assert len(store.requests) == 4
+    assert len(store.requests) == 2
     assert not any(
         "design_retry" in json.loads(request.input_payload_json)["context"]
         for request, _ in store.requests.values()
@@ -113,7 +147,7 @@ def test_syntax_then_design_failure_uses_only_two_html_attempts(tmp_path):
     ctx, store, generator, transport = setup(tmp_path, mutate)
     with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
         execute(generator, ctx, store)
-    assert len(transport.calls) == len(store.requests) == 5
+    assert len(transport.calls) == len(store.requests) == 3
 
 
 def test_failed_rejection_audit_prevents_html_retry(tmp_path):
@@ -126,4 +160,4 @@ def test_failed_rejection_audit_prevents_html_retry(tmp_path):
     store.fail = "ADAPTER_REJECTED"
     with pytest.raises(ProposalEvidenceError, match="GENERATION_EVIDENCE_WRITE_FAILED"):
         execute(generator, ctx, store)
-    assert len(transport.calls) == len(store.requests) == 4
+    assert len(transport.calls) == len(store.requests) == 2
