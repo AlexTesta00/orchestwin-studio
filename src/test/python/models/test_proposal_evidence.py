@@ -27,7 +27,6 @@ from orchestwin.models.proposal_generation import (
     ProposalGenerationError,
     build_proposal_generator,
 )
-from orchestwin.models.user_modeling import UserTwinProposalRequest
 from src.test.python.models import test_model_proposals as fixtures
 
 
@@ -77,22 +76,10 @@ def stage_case(stage):
         request, output = fixtures.persona_input_output()
         return request, output, ModelUserModelingAdapter, "propose_personas", "PERSONA"
     if stage == "user-twins":
-        user = fixtures.user_fixtures
-        persona = user.confirmed_persona_version()
-        request = UserTwinProposalRequest(
-            user.PROJECT_ID,
-            (persona,),
-            user.BRIEF_REFERENCE,
-            user.TEAM_REFERENCE,
-            1,
-            user.CATALOG_HASH,
-        )
-        result = asyncio.run(
-            user.FakeDeterministicUserModelingAdapter().propose_user_twins(request)
-        )
+        request, output = fixtures.twin_input_output()
         return (
             request,
-            fixtures.twin_draft_output(result.proposals),
+            output,
             ModelUserModelingAdapter,
             "propose_user_twins",
             "USER_TWIN",
@@ -157,6 +144,38 @@ def test_all_six_tasks_retain_exact_request_raw_response_and_adapter_result(tmp_
         canonical_output = events[2][1]["success"]["payload_json"]
         assert hashlib.sha256(canonical_output.encode()).hexdigest() in json.dumps(events[3][1])
     assert current_proposal_evidence() is None
+
+
+def test_persona_content_draft_binds_exact_brief_and_generation_evidence(tmp_path):
+    request, output = fixtures.persona_input_output()
+    generator, _ = audited_generator(tmp_path, output)
+    store = MemoryEvidence()
+    command = Command(store, lambda: ModelUserModelingAdapter(generator).propose_personas(request))
+    result = asyncio.run(command.run(owner_user_id=uuid4(), project_id=request.project_id))
+    generation_id, (generation, _) = next(iter(store.requests.items()))
+    assert generation.output_schema.schema_id == "proposal-personas-v4"
+    assert generation.prompt_version_ref == "proposal-personas-v4"
+    provider = next(
+        payload for kind, payload, _ in store.events[generation_id] if kind == "PROVIDER_RESULT"
+    )
+    canonical_output = provider["success"]["payload_json"]
+    raw_draft = json.loads(canonical_output)["proposals"][0]
+    assert "candidate_content_hash" not in raw_draft
+    assert all("provenance" not in item for item in raw_draft["observations"])
+    candidate = request.candidates[0]
+    proposal = result.proposals[0]
+    assert proposal.candidate_content_hash == candidate.content_hash
+    assert proposal.profile.observations[0] == candidate.role_observation
+    for observation in proposal.profile.observations[1:]:
+        assert (
+            observation.provenance.references[:-2]
+            == candidate.role_observation.provenance.references
+        )
+        reference = observation.provenance.references[-1]
+        assert reference.source_kind.value == "MODEL_OUTPUT"
+        assert reference.source_id == f"generation:{generation_id}"
+        assert reference.content_hash == hashlib.sha256(canonical_output.encode()).hexdigest()
+        assert reference.locator == observation.observation_key
 
 
 @pytest.mark.parametrize(

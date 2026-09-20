@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T17:33:38.436677+00:00",
+  "status": "CONTRACT_TESTED_AND_SINGLE_LIVE_SUCCESS_NOT_QUALIFIED",
+  "change": "Personas v3 decodes content drafts only; exact candidate linkage, copied user role, pending persona state and model/source provenance are bound by application code.",
+  "draft_fields": [
+    "candidate_ordinal",
+    "name",
+    "observations"
+  ],
+  "draft_observation_keys": [
+    "persona.summary",
+    "persona.goals",
+    "persona.context_of_use"
+  ],
+  "unchanged_public_contract": [
+    "PersonaProposalResult",
+    "ProposedPersonaProfile",
+    "PersonaProfile",
+    "Pending confirmation and required human review for model-inferred observations",
+    "Exact USER_PROVIDED role observation from candidate"
+  ],
+  "bounds": {
+    "TEXT_characters": 600,
+    "ITEMS_count": 6,
+    "ITEM_characters": 200,
+    "ABSTAINED_reason_characters": 240,
+    "rationale_characters": 240,
+    "name_characters": 200,
+    "enforcement": [
+      "Structured JSON schema before decoding",
+      "Pydantic draft validation after response",
+      "Original domain constructors"
+    ]
+  },
+  "governance": [
+    "Exact candidate count and order required",
+    "Duplicate candidate ordinals rejected before inference",
+    "Role is copied unchanged from candidate, never regenerated",
+    "Candidate hash is computed from exact input object, not model output",
+    "All inferred observations use MODEL_INFERRED and REQUIRED human validation",
+    "Provenance combines exact candidate brief reference with exact generation-output reference",
+    "Unknown and abstained semantic values remain explicit",
+    "No output trimming, synthetic fallback or generated-content repair"
+  ],
+  "size_measurement": {
+    "basis": "Existing synthetic unit fixture measured before draft conversion; same semantic values and rationale",
+    "current_valid_candidate_provenance_references": 1,
+    "old_recursive_JSON_fields_per_persona": 85,
+    "new_recursive_JSON_fields_per_persona": 27,
+    "old_compact_JSON_characters": 2957,
+    "new_compact_JSON_characters": 1009,
+    "character_reduction_fraction": 0.6588,
+    "note": "ProjectPersonaCandidate requires exactly one brief reference; hypothetical multiple-reference counts are not a supported input. Character reduction is not a token or latency benchmark."
+  },
+  "observed_runtime_context": {
+    "source": "Parent read-only observation of real in-flight v2 request; not reexecuted by this subtask",
+    "generation_id": "9139cfa9-122f-4599-a878-f336095b7139",
+    "reported_finish_reason": "length",
+    "reported_output_tokens": 8192,
+    "reported_response_characters": 12099,
+    "reported_trailing_whitespace_characters": 6726,
+    "interpretation": "Repeated metadata was an avoidable cost but not the sole cause. Excess structural whitespace separately exhausted output budget; independent decoder fix is owned by another agent. Original failed raw response remains preserved."
+  },
+  "checks": {
+    "pytest_passed": 101,
+    "pytest_failed": 0,
+    "suites": [
+      "src/test/python/models/test_model_proposals.py",
+      "src/test/python/models/test_proposal_evidence.py",
+      "src/test/python/models/test_user_modeling.py",
+      "src/test/python/twins/test_personas.py"
+    ],
+    "ruff_format": "PASSED",
+    "ruff_check": "PASSED",
+    "git_diff_check": "PASSED",
+    "inference_calls": 0,
+    "database_writes": 0,
+    "runtime_restarts": 0,
+    "test_data": "Synthetic completions only, not model quality evidence"
+  },
+  "source_sha256": {
+    "src/orchestwin/models/model_proposals.py": "15c904d482f5b68418ef1298d8ec154f96bafe2631b15744bdb0cc9d29c94d16",
+    "src/orchestwin/models/profile_schema.py": "8b04923fec4d123379e02c22f62f9aca58c5c63ddf06333f5798362b5b5745a6",
+    "src/orchestwin/models/profile_drafts.py": "9497cccb983f0765ff0613cf640982e5473b904c753d80aad73728b0bfb260b7",
+    "src/orchestwin/models/proposal_generation.py": "3dcab72d76fbac640d9869a72f89e442ee29c2f994311a0a87f765db6c8c8fbe",
+    "src/test/python/models/test_model_proposals.py": "02871180caa6f18330588ddec20aeb2b3ddcfd527050adbee9f9db4738c2849a",
+    "src/test/python/models/test_proposal_evidence.py": "a79c8d4dbbd29066bacc5bcf8aa96e654667ffa0fbe561622adb1df14ab8f6a1"
+  },
+  "read_only_analysis": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\persona-content-draft-review.json",
+    "sha256": "fb64e23552f2a28b9d347eee6c5b4832e6f0a6be40ec2433e5200b85cc98b0e2"
+  },
+  "remaining_live_check": "One post-fix persona request succeeded. Broader semantic quality and repeatable latency remain unmeasured; subsequent workflow stages are separate evidence.",
+  "live_check": {
+    "verification_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\persona-v2-v3-live-verification.json",
+    "verification_sha256": "d9bc246361b59b612fa7764002307c71fadc996e690138e2f0c1425a1230c962",
+    "evidence_files_hash_verified": 14,
+    "runs": [
+      {
+        "generation_id": "9139cfa9-122f-4599-a878-f336095b7139",
+        "manifest_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\persona-v2-failure\\manifest.json",
+        "manifest_sha256": "12ac6244c5d1700697650d0509040b6a14917046347a360d211c20bc8a752cf8",
+        "evidence_files_verified": 7,
+        "raw_HTTP_body_sha256": "ffb41b03a93897527be09417df6f8cefed95c72ff167ba386e4bc5922c40e3a1",
+        "schema_id": "proposal-personas-v2",
+        "schema_sha256": "dfbe17a65dd8c14181d09e3818a3a8b2ca6869e6b84dcdf704d8b23f4c31fa3c",
+        "prompt_version_ref": "proposal-personas-v2",
+        "temperature": 0.6,
+        "expected_and_actual_model_identity_match": true,
+        "model_identity": {
+          "adapter_id": null,
+          "adapter_sha256": null,
+          "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+          "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "configuration_sha256": "73d445b744167587c2c7dbbf28dd4dbad69ad800c27457234f136a8b3ef95612",
+          "provider_id": "local-studio-model",
+          "runtime_id": "proposal-8a3fbde0-cb33-4573-a09a-464c42c7c2a2",
+          "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+        },
+        "usage": {
+          "completion_tokens": 8192,
+          "prompt_tokens": 2634,
+          "total_tokens": 10826
+        },
+        "finish_reason": "length",
+        "output_characters": 12099,
+        "trailing_whitespace_characters": 6726,
+        "JSON_parse_valid": false,
+        "http_elapsed_milliseconds": 781653,
+        "native_serving": {
+          "adapter_active": false,
+          "adapter_loaded": true,
+          "adapter_name": null,
+          "adapter_role": null,
+          "generation_wall_time_budget_seconds": 1140,
+          "generation_wall_time_milliseconds": 731796,
+          "model_visible_messages_sha256": "cb3ae9e66bea088fad277b144f60134203b862eb6caa21d8955efb173969f75f",
+          "output_repair_used": false,
+          "schema_complete": false,
+          "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_V2"
+        },
+        "application_result": {
+          "code": "INCOMPLETE_OUTPUT",
+          "status": "FAILED"
+        },
+        "accepted_artifact_evidence": false,
+        "failure_scope": "Application reports FAILED/INCOMPLETE_OUTPUT and adapter rejected; exported generation contains no accepted artifact. No historical aggregate DB counts inferred."
+      },
+      {
+        "generation_id": "ddfa2066-30d0-46dd-8ace-331cb9bcb6a0",
+        "manifest_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\persona-v3-success\\manifest.json",
+        "manifest_sha256": "853fe49dcca1c3cd7acd7af57ac2b97ed2fc3670706a1f6948dbaf1d66a691f6",
+        "evidence_files_verified": 7,
+        "raw_HTTP_body_sha256": "70e05abb682dc17814f4acabec744715534fea120f56d72fbe2994e0a10a6292",
+        "schema_id": "proposal-personas-v3",
+        "schema_sha256": "1651a53b806c08e266a0862b36a799cd0d3fd4c8560a40d67dc803a5e8f202c9",
+        "prompt_version_ref": "proposal-personas-v3",
+        "temperature": 0.6,
+        "expected_and_actual_model_identity_match": true,
+        "model_identity": {
+          "adapter_id": null,
+          "adapter_sha256": null,
+          "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+          "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+          "provider_id": "local-studio-model",
+          "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+          "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+        },
+        "usage": {
+          "completion_tokens": 314,
+          "prompt_tokens": 1799,
+          "total_tokens": 2113
+        },
+        "finish_reason": "stop",
+        "output_characters": 1252,
+        "trailing_whitespace_characters": 0,
+        "JSON_parse_valid": true,
+        "http_elapsed_milliseconds": 36057,
+        "native_serving": {
+          "adapter_active": false,
+          "adapter_loaded": true,
+          "adapter_name": null,
+          "adapter_role": null,
+          "generation_wall_time_budget_seconds": 1140,
+          "generation_wall_time_milliseconds": 34987,
+          "max_output_tokens": 8192,
+          "max_sequence_length": 24576,
+          "model_visible_messages_sha256": "449edd8b6593bfffeb7a587cc706fdddf8d4a80ef8269f3bd09ca583fc222348",
+          "output_repair_used": false,
+          "schema_complete": true,
+          "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+        },
+        "application_result": {
+          "issue": null,
+          "status": "CREATED"
+        },
+        "strict_JSON_validation_passed": true,
+        "Pydantic_draft_and_domain_validation_passed": true,
+        "candidate_and_observation_count_order_verified": true,
+        "candidate_count": 1,
+        "exact_original_role_preserved": true,
+        "exact_candidate_hash_bound": true,
+        "inferred_provenance_verified": true,
+        "pending_confirmation_preserved": true,
+        "accepted_persona_profile_hashes": [
+          "69cea22363d77fe4e2fabe9a03e476df29a81550a9baae623736548636ccca0f"
+        ],
+        "canonical_generated_payload_sha256": "3cf8fb6f4bce49741687145e4c6db111686cd4a9e32d58af81fb67b8d958ec1f"
+      }
+    ],
+    "limits": [
+      "Two fixes changed together: persona content draft v3 and bounded structural whitespace decoder v3.",
+      "Single stochastic request per version at temperature 0.6; not a controlled latency benchmark or model capability qualification.",
+      "v2 produced incomplete JSON and a failed application result; no output repair was applied or historical result replaced.",
+      "v3 proves one accepted pending persona artifact with exact source/model provenance, not real-user validation.",
+      "Reported native generation timing uses raw HTTP orchestwin_serving metadata; it includes 34987 ms for v3, not a rounded log estimate."
+    ],
+    "database_writes_by_verification": 0,
+    "inference_calls_by_verification": 0
+  }
+}

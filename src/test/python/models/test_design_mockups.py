@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 from orchestwin.api.design_mockups import MockupRequest, ModelMockupApplication, _payload
 from orchestwin.models.design_drafts import requirements_view
-from orchestwin.models.design_mockups import MockupDraft, bind_mockup
+from orchestwin.models.design_mockups import MockupDraft, MockupElementDraft, bind_mockup
 from orchestwin.models.planning_schema import constrain_planning_schema
 
 from ..artifacts import design_fixtures as fixtures
@@ -111,6 +111,80 @@ def test_mockup_schema_constrains_only_known_requirement_codes():
     ]
 
 
+@pytest.mark.parametrize(
+    "value, reason",
+    [
+        (element("SELECT", "Operation", options=["Add"]), "require a field name"),
+        (
+            element("SELECT", "Operation", field_name="  ", options=["Add"]),
+            "require a field name",
+        ),
+        (element("TEXT_INPUT", "Operand"), "require a field name"),
+        (element("SELECT", "Operation", field_name="operation"), "require options"),
+        (element("TEXT", "Help", field_name="help"), "must not define a field name"),
+        (element("TEXT", "Help", required=True), "only prototype input elements"),
+        (element("TEXT", "Help", options=["One"]), "only SELECT"),
+        (element("TEXT_INPUT", "Operand", field_name="operand", options=["One"]), "only SELECT"),
+        (element("BUTTON", "Continue"), "declared destination"),
+        (element("LINK", "Return"), "declared destination"),
+        (element("TEXT", "Help", target_screen="SCR-002"), "declared destination"),
+        (
+            element(
+                "SELECT",
+                "Operation",
+                field_name="operation",
+                options=["Add"],
+                target_screen="SCR-002",
+            ),
+            "declared destination",
+        ),
+    ],
+)
+def test_primitive_inconsistencies_are_rejected_at_draft_boundary(value, reason):
+    with pytest.raises(ValueError, match=reason):
+        MockupElementDraft.model_validate(value)
+
+
+@pytest.mark.parametrize(
+    "kind, fields",
+    [
+        ("HEADING", {}),
+        ("TEXT", {}),
+        ("LIST", {}),
+        ("CARD", {}),
+        ("STATUS", {}),
+        ("TEXT_INPUT", {"field_name": "operand", "required": True}),
+        ("SELECT", {"field_name": "operation", "required": True, "options": ["Add", "Subtract"]}),
+        ("BUTTON", {"target_screen": "SCR-002"}),
+        ("LINK", {"target_screen": "SCR-001"}),
+    ],
+)
+def test_valid_primitive_kinds_preserve_model_authored_values(kind, fields):
+    value = element(kind, "Visible content", **fields)
+    assert MockupElementDraft.model_validate(value).model_dump(mode="json") == value
+
+
+def test_decoder_schema_correlates_fields_with_primitive_kind():
+    schema = MockupDraft.model_json_schema()["$defs"]["MockupElementDraft"]
+    branches = {
+        branch["properties"]["kind"]["const"]: branch["properties"] for branch in schema["anyOf"]
+    }
+    assert len(branches) == 9
+    assert branches["SELECT"]["field_name"] == {"type": "string", "pattern": r"\S"}
+    assert branches["SELECT"]["options"] == {"minItems": 1}
+    assert branches["SELECT"]["target_screen"] == {"type": "null"}
+    assert branches["TEXT_INPUT"]["options"] == {"maxItems": 0}
+    for kind in ("BUTTON", "LINK"):
+        assert branches[kind]["target_screen"] == {"type": "string"}
+        assert branches[kind]["field_name"] == {"type": "null"}
+        assert branches[kind]["required"] == {"const": False}
+    for kind in ("HEADING", "TEXT", "LIST", "CARD", "STATUS"):
+        assert branches[kind]["field_name"] == {"type": "null"}
+        assert branches[kind]["target_screen"] == {"type": "null"}
+        assert branches[kind]["options"] == {"maxItems": 0}
+        assert branches[kind]["required"] == {"const": False}
+
+
 def test_success_mockup_does_not_mix_in_an_error_state():
     value = draft_value()
     value["screens"][1]["elements"][0]["content"] = "Errore: divisione per zero"
@@ -184,7 +258,9 @@ def test_generation_retains_model_evidence_without_publishing_or_changing_gates(
     assert accepted["payload"]["result"] == _payload(result)
     assert accepted["payload"]["result"]["package"]["schema_version"] == 1
     assert evidence.events[-1]["payload"]["status"] == "MOCKUP_GENERATED"
-    assert evidence.request.output_schema.version_number == 6
+    assert evidence.request.output_schema.version_number == 7
+    assert "one moment" in evidence.request.system_instruction
+    assert "error examples must be omitted" in evidence.request.system_instruction
 
 
 def test_missing_owner_project_does_not_call_model(tmp_path):

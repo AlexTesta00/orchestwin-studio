@@ -713,6 +713,8 @@ class TrackingProposalPort:
 
         self.persona_calls = 0
         self.twin_calls = 0
+        self.persona_requests = []
+        self.twin_requests = []
 
     async def propose_personas(
         self,
@@ -722,6 +724,7 @@ class TrackingProposalPort:
         assert self._tracker.active == 0
 
         self.persona_calls += 1
+        self.persona_requests.append(request)
 
         return await self._inner.propose_personas(request)
 
@@ -733,6 +736,7 @@ class TrackingProposalPort:
         assert self._tracker.active == 0
 
         self.twin_calls += 1
+        self.twin_requests.append(request)
 
         return await self._inner.propose_user_twins(request)
 
@@ -856,6 +860,34 @@ def test_gate_two_approval_is_required_before_persona_proposal() -> None:
     assert result.issue is (UserModelingApplicationIssueCode.TEAM_APPROVAL_REQUIRED)
     assert proposals.persona_calls == 0
     assert store.personas == {}
+
+
+def test_approved_business_brief_reaches_both_ports_without_a_second_lookup():
+    context = ready_context()
+    brief = replace(
+        context.brief_version.brief,
+        description="Calculate shift coverage using entered values.",
+        goals=("Avoid manual transcription.",),
+        unknown_fields=context.brief_version.brief.unknown_fields
+        - {BriefField.DESCRIPTION, BriefField.GOALS},
+    )
+    version = replace(context.brief_version, brief=brief, content_hash=brief.content_hash)
+    context = replace(context, brief_version=version, brief_gate=approved_brief_gate(version))
+    service, _, proposals, _, _ = build_service(context)
+
+    async def scenario():
+        await propose_and_confirm(service)
+        return await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+
+    assert asyncio.run(scenario()).status is UserModelingApplicationStatus.CREATED
+    for request in (proposals.persona_requests[0], proposals.twin_requests[0]):
+        assert request.project_brief.brief is version.brief
+        assert request.project_brief.reference == context.brief_reference
+        assert request.project_brief.project_id == PROJECT_ID
+        assert request.project_brief.brief.goals == ("Avoid manual transcription.",)
+        assert request.require_project_brief() is request.project_brief
 
 
 def test_persona_proposal_persists_pending_versions_after_recheck() -> None:

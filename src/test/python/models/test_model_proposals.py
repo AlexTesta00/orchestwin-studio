@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from copy import deepcopy
 from dataclasses import replace
 from uuid import uuid4
 
@@ -32,7 +33,11 @@ from orchestwin.models.proposal_generation import (
     wire_value,
 )
 from orchestwin.models.structured_generation import ModelRuntimeIdentity
-from orchestwin.models.user_modeling import PersonaProposalRequest, UserTwinProposalRequest
+from orchestwin.models.user_modeling import (
+    PersonaProposalRequest,
+    UserModelingBriefInput,
+    UserTwinProposalRequest,
+)
 from orchestwin.twins.epistemics import (
     HumanValidationRequirement,
 )
@@ -277,26 +282,36 @@ def test_nested_extra_fields_are_rejected(tmp_path):
         asyncio.run(ModelRequirementsAdapter(generator).propose(request))
 
 
-def persona_input_output():
-    request = PersonaProposalRequest(user_fixtures.PROJECT_ID, user_fixtures.candidates())
+def persona_input_output(version=None):
+    version = version or user_fixtures.brief_version()
+    candidates = user_fixtures.derive_project_persona_candidates(
+        brief_version=version, brief_gate=user_fixtures.approved_gate(version)
+    ).candidates
+    request = PersonaProposalRequest(
+        user_fixtures.PROJECT_ID, candidates, UserModelingBriefInput.from_version(version)
+    )
     proposed = asyncio.run(
         user_fixtures.FakeDeterministicUserModelingAdapter().propose_personas(request)
     )
-    proposals = []
-    for proposal, candidate in zip(proposed.proposals, request.candidates, strict=True):
-        observations = tuple(
-            observation
-            if observation == candidate.role_observation
-            else replace(
-                observation,
-                provenance=candidate.role_observation.provenance,
-            )
-            for observation in proposal.profile.observations
-        )
-        proposals.append(
-            replace(proposal, profile=replace(proposal.profile, observations=observations))
-        )
-    return request, {"proposals": wire_value(proposals)}
+    return request, {
+        "proposals": [
+            {
+                "candidate_ordinal": proposal.candidate_ordinal,
+                "name": proposal.profile.name,
+                "observations": [
+                    {
+                        "observation_key": item.observation_key,
+                        "value": wire_value(item.value),
+                        "confidence": item.confidence.value,
+                        "rationale": item.rationale,
+                    }
+                    for item in proposal.profile.observations
+                    if item.observation_key != "persona.role"
+                ],
+            }
+            for proposal in proposed.proposals
+        ]
+    }
 
 
 def test_personas_preserve_exact_role_and_label_model_inferences(tmp_path):
@@ -308,25 +323,174 @@ def test_personas_preserve_exact_role_and_label_model_inferences(tmp_path):
         item.content_hash for item in request.candidates
     ]
     assert result.provider_kind.value == "MODEL_ADAPTER"
-    assert result.proposals[0].profile.confirmation_status.value == "PENDING_CONFIRMATION"
-    assert request.candidates[0].role_observation in result.proposals[0].profile.observations
-    assert any(
-        ref.source_id == generator.provider_id
-        for item in result.proposals[0].profile.observations
-        for ref in item.provenance.references
-    )
+    proposal, candidate = result.proposals[0], request.candidates[0]
+    profile = proposal.profile
+    assert proposal.candidate_content_hash == candidate.content_hash
+    assert profile.confirmation_status.value == "PENDING_CONFIRMATION"
+    assert profile.source.value == "SYSTEM_PROPOSED"
+    assert profile.kind.value == "PROTO_PERSONA"
+    assert profile.rejection_reason is None
+    assert profile.observations[0] is candidate.role_observation
+    for item in profile.observations[1:]:
+        assert item.epistemic_status.value == "MODEL_INFERRED"
+        assert item.human_validation is HumanValidationRequirement.REQUIRED
+        assert item.provenance.references[:-2] == candidate.role_observation.provenance.references
+        assert (
+            item.provenance.references[-2].content_hash
+            == request.project_brief.reference.content_hash
+        )
+        assert item.provenance.references[-2].locator == "brief"
+        assert item.provenance.references[-1].source_id == generator.provider_id
+        assert item.provenance.references[-1].source_kind.value == "MODEL_OUTPUT"
+    payload = transport.calls[0]["payload"]
+    assert payload["response_format"]["json_schema"]["name"] == "proposal-personas-v4"
+    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-personas-v4"
+    schema = json.dumps(sent["output_schema"])
+    assert all(key not in schema for key in ("candidate_content_hash", "provenance", "source_kind"))
 
 
-def test_personas_cannot_invent_empirical_support_or_candidate_hash(tmp_path):
+@pytest.mark.parametrize(
+    "change",
+    ["hash", "approval", "source", "epistemic", "human_validation", "provenance", "role"],
+)
+def test_persona_drafts_cannot_invent_governance_metadata(tmp_path, change):
     request, output = persona_input_output()
+    draft = output["proposals"][0]
+    if change == "hash":
+        draft["candidate_content_hash"] = "f" * 64
+    elif change == "approval":
+        draft["confirmation_status"] = "CONFIRMED"
+    elif change == "source":
+        draft["source"] = "OWNER_PROVIDED"
+    elif change == "epistemic":
+        draft["observations"][0]["epistemic_status"] = "HUMAN_VALIDATED"
+    elif change == "human_validation":
+        draft["observations"][0]["human_validation"] = "NOT_REQUIRED"
+    elif change == "provenance":
+        draft["observations"][0]["provenance"] = {"references": []}
+    else:
+        draft["observations"].insert(0, wire_value(request.candidates[0].role_observation))
+    generator, transport = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError):
+        asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["ordinal", "missing_proposal", "extra_proposal", "missing_field", "order", "confidence"],
+)
+def test_persona_drafts_require_exact_candidate_and_observation_structure(tmp_path, change):
+    request, output = persona_input_output()
+    draft = output["proposals"][0]
+    if change == "ordinal":
+        draft["candidate_ordinal"] += 1
+    elif change == "missing_proposal":
+        output["proposals"].clear()
+    elif change == "extra_proposal":
+        output["proposals"].append(deepcopy(draft))
+    elif change == "missing_field":
+        draft["observations"].pop()
+    elif change == "order":
+        draft["observations"].reverse()
+    else:
+        draft["observations"][0]["confidence"] = 1.1
     generator, _ = make_generator(tmp_path, output)
-    output["proposals"][0]["candidate_content_hash"] = "f" * 64
     with pytest.raises(ProposalGenerationError):
         asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
-    output["proposals"][0]["candidate_content_hash"] = request.candidates[0].content_hash
-    output["proposals"][0]["profile"]["observations"][1]["epistemic_status"] = "HUMAN_VALIDATED"
+
+
+def test_persona_drafts_preserve_multiple_candidate_order(tmp_path):
+    version = user_fixtures.brief_version()
+    brief = replace(version.brief, target_users=("Hotel receptionist", "Shift manager"))
+    request, output = persona_input_output(
+        replace(version, brief=brief, content_hash=brief.content_hash)
+    )
+    candidate, second = request.candidates
+    generator, _ = make_generator(tmp_path, output)
+    result = asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    assert [item.candidate_content_hash for item in result.proposals] == [
+        candidate.content_hash,
+        second.content_hash,
+    ]
+    assert [item.profile.observations[0] for item in result.proposals] == [
+        candidate.role_observation,
+        second.role_observation,
+    ]
+    output["proposals"].reverse()
     with pytest.raises(ProposalGenerationError):
         asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+
+
+def test_duplicate_persona_candidate_ordinals_fail_without_model_call(tmp_path):
+    request, output = persona_input_output()
+    request = replace(request, candidates=(request.candidates[0], request.candidates[0]))
+    generator, transport = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError):
+        asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    assert transport.calls == []
+
+
+@pytest.mark.parametrize("kind", ["UNKNOWN", "ABSTAINED", "ITEMS"])
+def test_persona_content_at_limits_preserves_uncertainty_and_review(tmp_path, kind):
+    request, output = persona_input_output()
+    observations = output["proposals"][0]["observations"]
+    observations[0]["value"]["text"] = "x" * 600
+    observations[1]["value"] = {
+        "kind": kind,
+        "text": None,
+        "items": [str(i) + "x" * 199 for i in range(6)] if kind == "ITEMS" else [],
+        "reason": "x" * 240 if kind == "ABSTAINED" else None,
+    }
+    generator, _ = make_generator(tmp_path, output)
+    result = asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    profile = result.proposals[0].profile
+    assert profile.observations[1].value.text == "x" * 600
+    goals = profile.observations[2]
+    assert goals.value.kind.value == kind
+    assert goals.rationale == observations[1]["rationale"]
+    assert goals.epistemic_status.value == "MODEL_INFERRED"
+    assert goals.human_validation is HumanValidationRequirement.REQUIRED
+    assert profile.confirmation_status.value == "PENDING_CONFIRMATION"
+
+
+@pytest.mark.parametrize("change", ["text", "item_count", "item_length", "reason"])
+def test_persona_content_bounds_are_enforced_before_decoding_and_afterwards(tmp_path, change):
+    from orchestwin.models.profile_drafts import PersonaModelOutput
+
+    request, output = persona_input_output()
+    draft = output["proposals"][0]
+    if change == "text":
+        draft["observations"][0]["value"] = {
+            "kind": "TEXT",
+            "text": "x" * 601,
+            "items": [],
+            "reason": None,
+        }
+    elif change.startswith("item"):
+        draft["observations"][1]["value"] = {
+            "kind": "ITEMS",
+            "text": None,
+            "items": [str(i) for i in range(7)] if change == "item_count" else ["x" * 201],
+            "reason": None,
+        }
+    else:
+        draft["observations"][1]["value"] = {
+            "kind": "ABSTAINED",
+            "text": None,
+            "items": [],
+            "reason": "x" * 241,
+        }
+    with pytest.raises(ValueError):
+        PersonaModelOutput.model_validate_json(json.dumps(output))
+    generator, transport = make_generator(tmp_path, output)
+    with pytest.raises(ProposalGenerationError):
+        asyncio.run(ModelUserModelingAdapter(generator).propose_personas(request))
+    definitions = transport.calls[0]["payload"]["response_format"]["json_schema"]["schema"]["$defs"]
+    assert definitions["ProfileValueTEXT"]["properties"]["text"]["maxLength"] == 600
+    assert definitions["ProfileValueITEMS"]["properties"]["items"]["maxItems"] == 6
+    assert definitions["ProfileValueITEMS"]["properties"]["items"]["items"]["maxLength"] == 200
+    assert definitions["ProfileValueABSTAINED"]["properties"]["reason"]["maxLength"] == 240
 
 
 def twin_draft_output(proposals):
@@ -353,13 +517,15 @@ def twin_draft_output(proposals):
 
 def twin_input_output():
     persona = user_fixtures.confirmed_persona_version()
+    brief = UserModelingBriefInput.from_version(user_fixtures.brief_version())
     request = UserTwinProposalRequest(
         user_fixtures.PROJECT_ID,
         (persona,),
-        user_fixtures.BRIEF_REFERENCE,
+        brief.reference,
         user_fixtures.TEAM_REFERENCE,
         1,
         user_fixtures.CATALOG_HASH,
+        brief,
     )
     expected = asyncio.run(
         user_fixtures.FakeDeterministicUserModelingAdapter().propose_user_twins(request)
@@ -378,7 +544,12 @@ def test_twins_bind_confirmed_persona_and_current_context(tmp_path):
     persona = request.persona_versions[0]
     assert observation.provenance.references[0].source_id == f"persona:{persona.persona_id}"
     assert observation.provenance.references[0].content_hash == persona.content_hash
-    assert observation.provenance.references[1].source_kind.value == "MODEL_OUTPUT"
+    assert observation.provenance.references[1].source_kind.value == "PROJECT_BRIEF"
+    assert (
+        observation.provenance.references[1].content_hash
+        == request.project_brief_reference.content_hash
+    )
+    assert observation.provenance.references[2].source_kind.value == "MODEL_OUTPUT"
     assert all(
         o.human_validation is HumanValidationRequirement.REQUIRED
         for o in result.proposals[0].profile.observations

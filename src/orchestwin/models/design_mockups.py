@@ -1,10 +1,10 @@
 """Model-authored visual drafts, bound to exact design and requirement identities."""
 
 import re
-from typing import Annotated
+from typing import Annotated, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from orchestwin.artifacts.prototypes import (
     PrototypeElementKind,
@@ -19,8 +19,31 @@ from orchestwin.models.design_drafts import requirement_code_map
 from orchestwin.models.requirements_drafts import Text, Title
 
 
+def _element_schema(schema):
+    """Keep existing primitive invariants enforceable before token sampling."""
+    fields = {PrototypeElementKind.TEXT_INPUT, PrototypeElementKind.SELECT}
+    actions = {PrototypeElementKind.BUTTON, PrototypeElementKind.LINK}
+    schema["anyOf"] = []
+    for kind in PrototypeElementKind:
+        schema["anyOf"].append(
+            {
+                "properties": {
+                    "kind": {"const": kind.value},
+                    "field_name": {"type": "string", "pattern": r"\S"}
+                    if kind in fields
+                    else {"type": "null"},
+                    "required": {} if kind in fields else {"const": False},
+                    "options": {"minItems": 1}
+                    if kind is PrototypeElementKind.SELECT
+                    else {"maxItems": 0},
+                    "target_screen": {"type": "string"} if kind in actions else {"type": "null"},
+                }
+            }
+        )
+
+
 class MockupElementDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, json_schema_extra=_element_schema)
     kind: PrototypeElementKind
     content: Text
     requirements: Annotated[tuple[str, ...], Field(min_length=1)]
@@ -28,6 +51,24 @@ class MockupElementDraft(BaseModel):
     required: bool
     options: tuple[Title, ...]
     target_screen: Annotated[str, Field(pattern=r"^SCR-[0-9]{3}$")] | None
+
+    @model_validator(mode="after")
+    def validate_primitive(self) -> Self:
+        is_field = self.kind in {PrototypeElementKind.TEXT_INPUT, PrototypeElementKind.SELECT}
+        is_action = self.kind in {PrototypeElementKind.BUTTON, PrototypeElementKind.LINK}
+        if is_field and (self.field_name is None or not self.field_name.strip()):
+            raise ValueError("prototype input elements require a field name")
+        if not is_field and self.field_name is not None:
+            raise ValueError("non-input prototype elements must not define a field name")
+        if self.required and not is_field:
+            raise ValueError("only prototype input elements may be required")
+        if self.kind is PrototypeElementKind.SELECT and not self.options:
+            raise ValueError("SELECT prototype elements require options")
+        if self.kind is not PrototypeElementKind.SELECT and self.options:
+            raise ValueError("only SELECT prototype elements may define options")
+        if is_action != (self.target_screen is not None):
+            raise ValueError("mockup actions require a declared destination")
+        return self
 
 
 class MockupScreenDraft(BaseModel):

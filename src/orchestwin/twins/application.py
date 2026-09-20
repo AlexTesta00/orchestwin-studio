@@ -18,6 +18,7 @@ from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     ProposedPersonaProfile,
     ProposedUserTwinProfile,
+    UserModelingBriefInput,
     UserModelingProposalIssueCode,
     UserModelingProposalPort,
     UserModelingProposalStatus,
@@ -362,6 +363,7 @@ class LocalUserModelingApplicationService:
             PersonaProposalRequest(
                 project_id=project_id,
                 candidates=(candidate_result.candidates),
+                project_brief=UserModelingBriefInput.from_version(context.brief_version),
             )
         )
 
@@ -582,6 +584,7 @@ class LocalUserModelingApplicationService:
                 agent_team_reference=(team_reference),
                 catalog_version=(_require_catalog_version(context)),
                 catalog_content_hash=(_require_catalog_hash(context)),
+                project_brief=UserModelingBriefInput.from_version(context.brief_version),
             )
         )
 

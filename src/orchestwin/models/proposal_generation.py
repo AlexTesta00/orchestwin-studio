@@ -204,14 +204,14 @@ class ProposalGenerator:
         constrain_planning_schema(schema_payload, serialized_context, task)
         _forbid_extra_schema(schema_payload)
         contract_version = {
-            "personas": 2,
-            "user-twins": 3,
+            "personas": 4,
+            "user-twins": 4,
             "requirements": 3,
             "design": 5,
             "architecture": 7,
         }.get(task, 1)
         if task == "design" and serialized_context.get("purpose") == "DESIGN_MOCKUP":
-            contract_version = 6
+            contract_version = 7
         schema = create_structured_json_schema(
             schema_id=f"proposal-{task}-v{contract_version}",
             version_number=contract_version,
