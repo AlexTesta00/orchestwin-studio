@@ -46,10 +46,13 @@ def test_reference_markup_preserves_approved_controls_and_separate_screens(famil
         )
 
 
-@pytest.mark.parametrize("family", [curriculum.NUMERIC[0], curriculum.STATEFUL[0]])
-def test_capture_uses_production_messages_without_inference_or_fake_provider_results(family):
-    rows, files, _ = prepare.capture_rows(family, "it")
-    assert [row["step"] for row in rows] == ["manifest", "app.js", "app.test.cjs", "index.html"]
+@pytest.mark.parametrize("family", curriculum.all_families(), ids=lambda family: family.name)
+@pytest.mark.parametrize("locale", ("en", "it"))
+def test_capture_uses_production_messages_without_inference_or_fake_provider_results(
+    family, locale
+):
+    rows, files, _ = prepare.capture_rows(family, locale)
+    assert [row["step"] for row in rows] == ["manifest", "index.html", "app.js", "app.test.cjs"]
     assert len({row["group_id"] for row in rows}) == 1
     for row in rows:
         assert row["provenance"] == "SYNTHETIC_ENGINEER_AUTHORED"
@@ -73,9 +76,19 @@ def test_capture_uses_production_messages_without_inference_or_fake_provider_res
                 visible["context"]["source_step"]["file"]["normalized_path"] == row["source_path"]
             )
             assert "ONLY file to write" in row["messages"][0]["content"]
+            dependencies = {
+                item["normalized_path"]: item["content"]
+                for item in visible["context"]["completed_files"]
+            }
+            expected_paths = {
+                "index.html": (),
+                "app.js": ("index.html",),
+                "app.test.cjs": ("index.html", "app.js"),
+            }[row["source_path"]]
+            assert dependencies == {path: files[path] for path in expected_paths}
     if isinstance(family, curriculum.StatefulFamily):
         manifest = json.loads(rows[0]["messages"][2]["content"])
-        assert manifest["files"][0]["interface"] == (
+        assert manifest["files"][1]["interface"] == (
             "createService(): object; readNumber(raw: string): number"
         )
         assert "apply(action: string" in manifest["acceptance_checks"][0]["public_interface"]

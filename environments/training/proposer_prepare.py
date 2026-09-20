@@ -156,24 +156,24 @@ def manifest_for(family, context):
         ],
         files=[
             dict(
+                normalized_path="index.html",
+                media_type="text/html",
+                purpose="Render the exact prototype and load the shared implementation.",
+                interface="DOM: form, first, second, mode, entry, result, output, error, back",
+                depends_on=[],
+            ),
+            dict(
                 normalized_path="app.js",
                 media_type="text/javascript",
                 purpose="Implement validated business behavior and browser bindings.",
                 interface=exported_interface + "; readNumber(raw: string): number",
-                depends_on=[],
+                depends_on=["index.html"],
             ),
             dict(
                 normalized_path="app.test.cjs",
                 media_type="text/javascript",
                 purpose="Assert the actual core behavior and invalid input handling.",
                 interface="test(name, callback): void",
-                depends_on=["app.js"],
-            ),
-            dict(
-                normalized_path="index.html",
-                media_type="text/html",
-                purpose="Render the exact prototype and load the shared implementation.",
-                interface="DOM: form, first, second, mode, entry, result, output, error, back",
                 depends_on=["app.js"],
             ),
         ],

@@ -45,8 +45,9 @@ def test_campaign_lock_rejects_concurrent_run_and_releases_after_error(tmp_path)
     assert (tmp_path / "active.lock").read_bytes()
 
 
-def test_campaign_lock_is_released_when_its_process_is_killed(tmp_path):
+def test_campaign_lock_is_released_when_its_process_exits_abruptly(tmp_path):
     child = """
+import os
 import sys
 from pathlib import Path
 from orchestwin.web_execution.validation_command import campaign_lock
@@ -54,6 +55,7 @@ root = Path(sys.argv[1])
 with campaign_lock(root):
     (root / 'lock-ready').write_text('ready', encoding='utf-8')
     sys.stdin.buffer.read(1)
+    os._exit(7)
 """
     process = subprocess.Popen(
         [sys.executable, "-B", "-c", child, str(tmp_path)],
@@ -71,14 +73,18 @@ with campaign_lock(root):
             time.sleep(0.02)
         with pytest.raises(CampaignError, match="ALREADY_ACTIVE"), campaign_lock(tmp_path):
             pytest.fail("concurrent process entered the campaign")
-        process.kill()
-        process.wait(timeout=10)
+        # Windows venv executables may launch another interpreter. Exit the
+        # actual lock owner without running its context manager's cleanup.
+        process.stdin.write(b"x")
+        process.stdin.flush()
+        assert process.wait(timeout=10) == 7
         with campaign_lock(tmp_path):
             assert (tmp_path / "active.lock").is_file()
     finally:
         if process.poll() is None:
-            process.kill()
-        process.communicate(timeout=10)
+            process.communicate(input=b"x", timeout=10)
+        else:
+            process.communicate(timeout=10)
 
 
 def test_output_directory_cannot_be_checkout(tmp_path):
