@@ -15,10 +15,12 @@ probe = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(probe)
 
 
-def test_independent_oracle_is_never_sent_as_model_context():
-    cases = probe.read_cases(
-        ROOT / "experiments/model-proposals/proposer-postprompt-cases-20260919.json"
-    )
+@pytest.mark.parametrize(
+    "case_file",
+    ("proposer-postprompt-cases-20260919.json", "proposer-cross-project-cases-20260920.json"),
+)
+def test_independent_oracle_is_never_sent_as_model_context(case_file):
+    cases = probe.read_cases(ROOT / "experiments/model-proposals" / case_file)
     for case in cases:
         context = probe.context(case)
         text = json.dumps(context)
