@@ -16,8 +16,6 @@ import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlo
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
-import ProjectJvmEvidenceReview from "@/components/ProjectJvmEvidenceReview.vue";
-import ProjectJvmSourceReview from "@/components/ProjectJvmSourceReview.vue";
 import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
@@ -35,7 +33,6 @@ import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
 import { useArchitectureStore } from "@/stores/architecture";
 import { useWebExecutionStore } from "@/stores/webExecution";
-import { useJvmExecutionStore } from "@/stores/jvmExecution";
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -46,7 +43,6 @@ const design = useDesignStore();
 const clarification = useClarificationStore();
 const architecture = useArchitectureStore();
 const web = useWebExecutionStore();
-const jvm = useJvmExecutionStore();
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
@@ -133,9 +129,6 @@ function approved(
 const hasWebSource = computed(
   () => web.activeProjectId === projectId.value && web.currentSourceRevision !== null,
 );
-const hasJvmSource = computed(
-  () => jvm.activeProjectId === projectId.value && jvm.currentSourceRevision !== null,
-);
 const completedStages = computed(() => [
   clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
   team.projectId === projectId.value &&
@@ -155,7 +148,7 @@ const completedStages = computed(() => [
   architecture.projectId === projectId.value &&
     architecture.isReadyForImplementation &&
     approved(architecture.gate, architecture.current),
-  hasWebSource.value || hasJvmSource.value,
+  hasWebSource.value,
 ]);
 const currentStage = computed(() => {
   const incomplete = completedStages.value.findIndex((complete) => !complete);
@@ -202,9 +195,7 @@ const activeVersion = computed(
       requirements.current?.version_number,
       design.current?.version_number,
       architecture.current?.version_number,
-      hasWebSource.value
-        ? web.currentSourceRevision?.version_number
-        : jvm.currentSourceRevision?.version_number,
+      web.currentSourceRevision?.version_number,
     ][activeStage.value],
 );
 
@@ -566,16 +557,6 @@ onUnmounted(() => {
           :project-id="projectId"
           :locale="locale === 'it' ? 'it' : 'en'"
         />
-        <p
-          v-if="hasJvmSource && !hasWebSource"
-          class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600"
-        >
-          {{
-            locale === "it"
-              ? "Sorgenti JVM disponibili. Apri i dettagli tecnici per revisionarli e autorizzarne l’esecuzione."
-              : "JVM sources are available. Open technical details to review them and authorize execution."
-          }}
-        </p>
       </div>
 
       <details
@@ -609,32 +590,6 @@ onUnmounted(() => {
               <ProjectExecutionLaunch
                 :project-id="projectId"
                 platform="web"
-                :locale="locale === 'it' ? 'it' : 'en'"
-              />
-            </div>
-          </details>
-          <details class="rounded-xl border border-slate-200 p-4">
-            <summary class="cursor-pointer text-sm font-semibold">
-              {{
-                locale === "it"
-                  ? "Sorgenti, autorizzazioni ed evidenze JVM"
-                  : "JVM sources, authorizations and evidence"
-              }}
-            </summary>
-            <div class="mt-4 grid gap-4">
-              <ProjectJvmSourceReview
-                :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-source`"
-                :project-id="projectId"
-                :locale="locale === 'it' ? 'it' : 'en'"
-              />
-              <ProjectJvmEvidenceReview
-                :key="`${projectId}:${currentBrief?.version_number ?? 0}:jvm-evidence`"
-                :project-id="projectId"
-                :locale="locale === 'it' ? 'it' : 'en'"
-              />
-              <ProjectExecutionLaunch
-                :project-id="projectId"
-                platform="jvm"
                 :locale="locale === 'it' ? 'it' : 'en'"
               />
             </div>
