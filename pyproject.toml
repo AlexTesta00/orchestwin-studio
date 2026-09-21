@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "orchestwin-studio"
 version = "0.0.0"
 description = "Human-governed multi-agent platform for end-to-end Agentic UCD workflows."
-readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -34,7 +33,6 @@ packages = ["src/orchestwin"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/LICENSE",
-    "/README.md",
     "/alembic.ini",
     "/pyproject.toml",
     "/src/orchestwin",
