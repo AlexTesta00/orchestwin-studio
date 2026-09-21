@@ -147,8 +147,17 @@ class ModelTeamProposalAdapter:
                 "sentences; do not enumerate or reclassify mandatory roles."
             ),
         )
-        suggestions = {item.agent_id: item for item in output.suggestions}
-        _require(len(suggestions) == len(output.suggestions))
+        mandatory = {
+            item.agent_id
+            for item in constraints.role_constraints
+            if item.kind is TeamRoleConstraintKind.MANDATORY
+        }
+        suggestions = {
+            item.agent_id: item for item in output.suggestions if item.agent_id not in mandatory
+        }
+        _require(
+            len(suggestions) == len([s for s in output.suggestions if s.agent_id not in mandatory])
+        )
         allowed = {
             item.agent_id
             for item in constraints.role_constraints

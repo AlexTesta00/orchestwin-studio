@@ -619,3 +619,22 @@ def test_readiness_is_authenticated_and_rechecked_after_startup(configuration):
         state["ready"] = False
         assert client.get("/api/v1/model-runtime/readiness").status_code == 503
         assert client.get("/api/v1/health").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "value,accepted",
+    [
+        ("1.8.0", True),
+        ("1.7.6", True),
+        ("1.9.3", True),
+        ("1.6.0", False),
+        ("0.7.3", False),
+        ("2.0.0", False),
+        ("1.8", False),
+        (None, False),
+    ],
+)
+def test_compatible_schema_decoder_versions(value, accepted):
+    from orchestwin.models.real_runtime import _compatible_schema_decoder
+
+    assert _compatible_schema_decoder(value) is accepted
