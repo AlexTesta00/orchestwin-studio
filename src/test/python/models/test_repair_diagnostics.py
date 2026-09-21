@@ -1,12 +1,17 @@
 """Raw repair diagnostics preserve evidence identity and report excerpt limits."""
 
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
 from orchestwin.jvm_execution.evidence import JvmEvidenceReference
-from orchestwin.models.repair_diagnostics import EXCERPT_BYTES, failure_log_context
+from orchestwin.models.repair_diagnostics import (
+    EXCERPT_BYTES,
+    browser_final_state,
+    failure_log_context,
+)
 from orchestwin.models.source_proposals import file_entry
 
 
@@ -69,3 +74,76 @@ def test_reference_budget_reports_omissions_without_inventing_content(tmp_path):
     assert len(result["excerpts"]) == 2
     assert result["omitted_reference_count"] == 1
     assert all(not item["truncated"] for item in result["excerpts"])
+
+
+def artifact(tmp_path, name, raw, media_type):
+    entry = file_entry(name, raw, media_type)
+    entry.pop("normalized_path")
+    reference = JvmEvidenceReference(**entry)
+    path = tmp_path / reference.storage_key
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+    return reference
+
+
+def test_browser_final_state_reports_visible_and_hidden_screens(tmp_path):
+    document = (
+        b'<main><h1>App</h1><section id="SCR-001" data-design-screen="SCR-001" hidden=""></section>'
+        b'<section id="SCR-002" data-design-screen="SCR-002"></section></main>'
+    )
+    dom = artifact(tmp_path, "root.html", document, "text/html")
+    bundle = {
+        "content_hash": "0" * 64,
+        "normalized_findings": [],
+        "request": {},
+        "routes": [
+            {
+                "route": {"route_id": "root", "path": "/"},
+                "final_path": "/",
+                "dom_snapshot_ref": dom.to_snapshot(),
+            }
+        ],
+        "status": "COLLECTED",
+    }
+    noise = artifact(tmp_path, "axe.json", b'{"violations": []}', "application/json")
+    bundle_ref = artifact(tmp_path, "bundle.json", json.dumps(bundle).encode(), "application/json")
+    phase = SimpleNamespace(artifact_refs=(noise, bundle_ref))
+    assert browser_final_state(phase, tmp_path) == {
+        "status": "VERIFIED",
+        "routes": [
+            {
+                "route_id": "root",
+                "final_path": "/",
+                "visible_screens": ["SCR-002"],
+                "hidden_screens": ["SCR-001"],
+            }
+        ],
+    }
+    assert browser_final_state(SimpleNamespace(artifact_refs=(noise,)), tmp_path) == {
+        "status": "NOT_AVAILABLE",
+        "routes": [],
+    }
+    assert browser_final_state(phase, None) == {"status": "STORE_NOT_CONFIGURED", "routes": []}
+
+
+def test_browser_final_state_fails_closed_on_tampered_dom(tmp_path):
+    dom = artifact(
+        tmp_path, "root.html", b'<section data-design-screen="SCR-001"></section>', "text/html"
+    )
+    (tmp_path / dom.storage_key).write_bytes(b'<section data-design-screen="SCR-009"></section>')
+    bundle = {
+        "content_hash": "0" * 64,
+        "normalized_findings": [],
+        "request": {},
+        "routes": [
+            {
+                "route": {"route_id": "root", "path": "/"},
+                "final_path": "/",
+                "dom_snapshot_ref": dom.to_snapshot(),
+            }
+        ],
+        "status": "COLLECTED",
+    }
+    bundle_ref = artifact(tmp_path, "bundle.json", json.dumps(bundle).encode(), "application/json")
+    with pytest.raises(ValueError, match="REPAIR_LOG_CONTENT_MISMATCH"):
+        browser_final_state(SimpleNamespace(artifact_refs=(bundle_ref,)), tmp_path)

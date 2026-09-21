@@ -417,6 +417,9 @@ def _static_file_instruction(planned):
             "HTML id attributes must be unique across the complete page. "
             "For each prototype transition put data-design-target=the target SCR code on its trigger. "
             "Set input/select name to field_name and required exactly as approved. Keep example results as dynamic outputs replaced by actual calculations. "
+            "Put exactly one h1 with the application title at the top of main, outside every screen container, so a level-one heading stays visible in every screen state; screen titles are h2. "
+            "Every text, including button labels, must meet WCAG 2 AA contrast of at least 4.5:1: dark text on light backgrounds, or white text only on dark backgrounds such as #0b5394, #1b5e20 or #333333, never on light or mid greens such as #4CAF50. "
+            "axe-core inspects every route at the end of the recorded journey and any violation rejects the execution. "
         )
     if planned.normalized_path.endswith(".test.cjs"):
         return (
