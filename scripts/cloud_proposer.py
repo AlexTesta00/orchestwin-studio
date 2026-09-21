@@ -296,13 +296,12 @@ def command_serve(args):
             f"--keepalive-seconds {args.keepalive_seconds} "
             f"--model-repository {json.dumps(args.model)} "
             f"--model-revision {json.dumps(args.revision)} --precision {args.precision} "
-            f"--engine {args.engine} --failure-hold-minutes {args.failure_hold_minutes} ) "
-            f"> {output}/nohup.log 2>&1 < /dev/null &"
+            f"--engine {args.engine} --failure-hold-minutes {args.failure_hold_minutes} )"
         )
         run_remote(
             receipt,
             f"mkdir -p {output} && rm -f {output}/stop.request {output}/supervisor-state.json "
-            f"&& {launch} echo started",
+            f"&& setsid -f bash -c '{launch}' > {output}/nohup.log 2>&1 < /dev/null && echo started",
         )
     deadline = time.time() + args.timeout
     while True:
