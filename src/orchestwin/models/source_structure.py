@@ -102,6 +102,13 @@ def validate_static_module_contract(content):
             continue
         function = _FUNCTION.match(text)
         if function:
+            if _DOM.search(statement):
+                raise SourceSyntaxError(
+                    reason="MODULE_FUNCTION_TOUCHES_DOM",
+                    line=line,
+                    parser=PARSER,
+                    detail=function.group(2),
+                )
             declared.add(function.group(2))
             continue
         klass = _CLASS.match(text)
@@ -139,12 +146,13 @@ def validate_static_module_contract(content):
         if body is not None:
             bodies[name] = (body_start, body)
     for name in sorted(exported):
-        offending = _dom_reach(name, bodies, frozenset())
-        if offending is not None:
+        offender = _dom_reach(name, bodies, frozenset())
+        if offender is not None:
             raise SourceSyntaxError(
                 reason="EXPORTED_FUNCTION_TOUCHES_DOM",
-                line=blanked.count("\n", 0, offending) + 1,
+                line=blanked.count("\n", 0, bodies[name][0]) + 1,
                 parser=PARSER,
+                detail=name if offender == name else f"{name} calls {offender}",
             )
 
 
@@ -152,9 +160,9 @@ def _dom_reach(name, bodies, path):
     entry = bodies.get(name)
     if entry is None or name in path:
         return None
-    body_start, body = entry
+    _, body = entry
     if _DOM.search(body):
-        return body_start
+        return name
     for callee in sorted(set(_IDENTIFIER.findall(body))):
         if callee != name and callee in bodies:
             found = _dom_reach(callee, bodies, path | {name})

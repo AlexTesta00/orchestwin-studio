@@ -13,13 +13,14 @@ from orchestwin.models.proposal_generation import ProposalGenerationError
 class SourceSyntaxError(ProposalGenerationError):
     """A bounded parser diagnostic without generated text or process stderr."""
 
-    def __init__(self, *, reason, module=False, line=None, parser="node --check"):
+    def __init__(self, *, reason, module=False, line=None, parser="node --check", detail=None):
         super().__init__("SOURCE_JAVASCRIPT_SYNTAX_INVALID")
         self.diagnostic = {
             "parser": parser,
             "input_type": "module" if module else "commonjs",
             "reason": reason,
             "line": line,
+            **({"detail": detail} if detail else {}),
         }
 
 

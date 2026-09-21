@@ -65,7 +65,7 @@ def test_compliant_module_passes():
 @pytest.mark.parametrize(
     "content,reason,line",
     [
-        (GENERATED_YESTERDAY, "MODULE_SCOPE_SIDE_EFFECT", 22),
+        (GENERATED_YESTERDAY, "MODULE_FUNCTION_TOUCHES_DOM", 3),
         (
             "function a() {}\ndocument.addEventListener('DOMContentLoaded', a);\n"
             "if (typeof module !== 'undefined') { module.exports = { a }; }\n",
@@ -116,8 +116,9 @@ def test_exported_functions_must_not_touch_the_dom():
     )
     with pytest.raises(SourceSyntaxError) as failure:
         validate_static_module_contract(content)
-    assert failure.value.diagnostic["reason"] == "EXPORTED_FUNCTION_TOUCHES_DOM"
+    assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
     assert failure.value.diagnostic["line"] == 2
+    assert failure.value.diagnostic["detail"] == "render"
 
 
 def test_exported_functions_must_not_reach_the_dom_through_helpers():
@@ -128,11 +129,12 @@ def test_exported_functions_must_not_reach_the_dom_through_helpers():
     )
     with pytest.raises(SourceSyntaxError) as failure:
         validate_static_module_contract(content)
-    assert failure.value.diagnostic["reason"] == "EXPORTED_FUNCTION_TOUCHES_DOM"
+    assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
     assert failure.value.diagnostic["line"] == 2
+    assert failure.value.diagnostic["detail"] == "showError"
 
 
-def test_unexported_dom_helpers_used_only_in_the_guard_pass():
+def test_top_level_dom_helpers_are_rejected_even_when_only_the_guard_calls_them():
     content = (
         "function core(name) { return { ok: Boolean(name) }; }\n"
         "function render(result) { document.getElementById('o').textContent = result.ok; }\n"
@@ -140,6 +142,26 @@ def test_unexported_dom_helpers_used_only_in_the_guard_pass():
         "  document.addEventListener('DOMContentLoaded', function () { render(core('a')); });\n"
         "}\n"
         "if (typeof module !== 'undefined') { module.exports = { core }; }\n"
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_static_module_contract(content)
+    assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
+    assert failure.value.diagnostic["detail"] == "render"
+
+
+def test_dom_helpers_inside_the_document_guard_pass():
+    content = (
+        "const items = [];\n"
+        "function addItem(name) { items.push(name); return { ok: true, count: items.length }; }\n"
+        "function resetItems() { items.length = 0; }\n"
+        "if (typeof document !== 'undefined') {\n"
+        "  document.addEventListener('DOMContentLoaded', function () {\n"
+        "    const output = document.getElementById('o');\n"
+        "    function render(result) { output.textContent = result.count; }\n"
+        "    document.getElementById('b').addEventListener('click', function () { render(addItem('x')); });\n"
+        "  });\n"
+        "}\n"
+        "if (typeof module !== 'undefined') { module.exports = { addItem, resetItems }; }\n"
     )
     validate_static_module_contract(content)
 
@@ -159,13 +181,13 @@ def test_unexported_dom_helpers_used_only_in_the_guard_pass():
             "function core(name) { guests.push(name); save(); return { ok: true }; }\n"
             "function save() { localStorage.setItem('guests', JSON.stringify(guests)); }\n"
             "if (typeof module !== 'undefined') { module.exports = { core }; }\n",
-            "EXPORTED_FUNCTION_TOUCHES_DOM",
+            "MODULE_FUNCTION_TOUCHES_DOM",
             3,
         ),
         (
             "function core() { return fetch('/api').then(r => r.json()); }\n"
             "if (typeof module !== 'undefined') { module.exports = { core }; }\n",
-            "EXPORTED_FUNCTION_TOUCHES_DOM",
+            "MODULE_FUNCTION_TOUCHES_DOM",
             1,
         ),
     ],
