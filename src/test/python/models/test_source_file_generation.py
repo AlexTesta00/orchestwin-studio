@@ -3,12 +3,14 @@
 import asyncio
 import hashlib
 import json
+from copy import deepcopy
 from uuid import UUID, uuid4
 
 import pytest
 
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_file_generation import (
     FILE_BUDGET,
     MANIFEST_BUDGET,
@@ -25,6 +27,29 @@ from orchestwin.models.source_syntax import SourceSyntaxError
 from src.test.python.models.test_proposal_evidence import Command, MemoryEvidence, audited_generator
 from src.test.python.models.test_source_proposals import context, output
 
+APP_PARTS = {
+    "shared_state": "",
+    "private_helpers": "",
+    "functions": [{"name": "value", "parameters": "", "body": "  return 3;"}],
+    "browser_setup": "  document.title = String(value());",
+}
+
+
+def app_file(**overrides):
+    parts = {**deepcopy(APP_PARTS), **overrides}
+    return {
+        "normalized_path": "app.js",
+        "media_type": "text/javascript",
+        "parts": parts,
+        "content": assemble_static_module(parts),
+    }
+
+
+def broken(value, text):
+    if "functions" in value:
+        return {**value, "shared_state": text}
+    return {"content": text}
+
 
 def source_sequence_generator(tmp_path, payload, *, mutate=None):
     generator, transport = audited_generator(tmp_path, {})
@@ -40,7 +65,7 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
                 for f in payload["files"]
                 if f["normalized_path"] == step["file"]["normalized_path"]
             )
-            value = {"content": item["content"]}
+            value = deepcopy(item["parts"]) if "parts" in item else {"content": item["content"]}
         else:
             planned_files = (
                 sorted(
@@ -112,14 +137,7 @@ def complete_output():
     payload = output()
     payload["files"].extend(
         [
-            {
-                "normalized_path": "app.js",
-                "media_type": "text/javascript",
-                "content": (
-                    "function value() { return 3; }\n"
-                    "if (typeof module !== 'undefined') { module.exports = { value }; }"
-                ),
-            },
+            app_file(),
             {
                 "normalized_path": "app.test.cjs",
                 "media_type": "text/javascript",
@@ -137,9 +155,9 @@ def complete_output():
 
 def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
-    payload["files"][0]["content"] = (
-        'const label = "è";\nconst s = "\\n";\nfunction value() { return label + s; }\n'
-        "if (typeof module !== 'undefined') { module.exports = { value }; }"
+    payload["files"][0] = app_file(
+        shared_state='const label = "è";\nconst s = "\\n";',
+        functions=[{"name": "value", "parameters": "", "body": "  return label + s;"}],
     )
     generator, transport = source_sequence_generator(tmp_path, payload)
     result = execute(generator, ctx, store)
@@ -255,10 +273,11 @@ def test_static_manifest_cannot_carry_module_declarations_or_implementation_bodi
 
 def test_module_mismatch_retry_receives_original_excerpt_and_exact_diagnostic(tmp_path):
     previous = "// Original Unicode: è\n\nexport const calculate = (a, b) => a + b;"
+    assembled = assemble_static_module(broken(APP_PARTS, previous))
 
     def mutate(ctx, value):
         if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
-            return {"content": previous}
+            return broken(value, previous)
         return value
 
     store = MemoryEvidence()
@@ -269,8 +288,8 @@ def test_module_mismatch_retry_receives_original_excerpt_and_exact_diagnostic(tm
     feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
     assert feedback["diagnostic"]["reason"] == "ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT"
     assert feedback["diagnostic"]["line"] == 3
-    assert feedback["source_excerpt"]["text"] == previous
-    assert feedback["previous_source_sha256"] == hashlib.sha256(previous.encode()).hexdigest()
+    assert feedback["source_excerpt"]["text"] == assembled
+    assert feedback["previous_source_sha256"] == hashlib.sha256(assembled.encode()).hexdigest()
     assert "no ES-module import/export declarations" in prompt
     assert "SYNTAX_RETRY_FEEDBACK_JSON=" not in store.requests[rejected][0].system_instruction
 
@@ -358,10 +377,11 @@ def test_all_web_profiles_preserve_browser_observation_scope(target):
 
 def test_escaped_unicode_feedback_respects_the_normalized_request_text_budget(tmp_path):
     previous = "const value = (" + "\U0001f600" * 1000
+    assembled = assemble_static_module(broken(APP_PARTS, previous))
 
     def mutate(ctx, value):
         if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
-            return {"content": previous}
+            return broken(value, previous)
         return value
 
     store = MemoryEvidence()
@@ -372,7 +392,7 @@ def test_escaped_unicode_feedback_respects_the_normalized_request_text_budget(tm
     assert len(prompt) <= 16000 and " ".join(prompt.split()) == prompt
     feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
     excerpt = feedback["source_excerpt"]
-    assert excerpt["text"] == previous[excerpt["start_character"] : excerpt["end_character"]]
+    assert excerpt["text"] == assembled[excerpt["start_character"] : excerpt["end_character"]]
     assert excerpt["truncated"] and len(excerpt["text"]) <= SYNTAX_EXCERPT_CHARACTERS
 
 
@@ -437,7 +457,7 @@ def test_repeated_syntax_failure_stops_after_one_retry_and_never_accepts_parent(
     store = MemoryEvidence()
 
     def mutate(child_context, value):
-        return {"content": "const value = ("} if child_context.get("source_step") else value
+        return broken(value, "const value = (") if child_context.get("source_step") else value
 
     generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
@@ -500,11 +520,11 @@ def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failur
             if failure == "coverage_omitted":
                 del value["acceptance_checks"]
         elif failure == "carriage_return":
-            value["content"] = "one\rtwo"
+            value = broken(value, "one\rtwo")
         elif failure == "line_control":
-            value["content"] = "\x01"
+            value = broken(value, "\x01")
         elif failure == "content_large":
-            value["content"] = "x" * 32769
+            value = broken(value, "x" * 32769)
         elif failure == "extra":
             value["approved"] = True
         elif failure == "second_file" and step["ordinal"] == 2:
@@ -537,12 +557,11 @@ def test_file_generation_requires_auditing(tmp_path):
 def test_html_is_not_accepted_as_javascript_or_json(tmp_path, path):
     payload = complete_output()
     payload["files"] = [f for f in payload["files"] if f["normalized_path"] != path]
+    html = "<!DOCTYPE html><html></html>"
     payload["files"].append(
-        {
-            "normalized_path": path,
-            "media_type": "text/plain",
-            "content": "<!DOCTYPE html><html></html>",
-        }
+        {**app_file(shared_state=html), "media_type": "text/plain"}
+        if path == "app.js"
+        else {"normalized_path": path, "media_type": "text/plain", "content": html}
     )
     store = MemoryEvidence()
     generator, _ = source_sequence_generator(tmp_path, payload)
@@ -689,6 +708,27 @@ def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, f
             ["addGuest(name: string): object"],
             ["displayGuestList", "getGuestInputField"],
         ),
+        (
+            "calculateTip(amount: number, tipPercentage: number): object; "
+            "updateResultDisplay(tipAmount: number, totalAmount: number): void; "
+            "validateAndShowErrorForAmount(inputValue: string): void; "
+            "toggleScreen(screenId: string): void; hideError(): void; "
+            "processCalculation(): void; resetApplication(): void; resetItems(): void; "
+            "getGuestCount(): number",
+            [
+                "calculateTip(amount: number, tipPercentage: number): object",
+                "resetItems(): void",
+                "getGuestCount(): number",
+            ],
+            [
+                "updateResultDisplay",
+                "validateAndShowErrorForAmount",
+                "toggleScreen",
+                "hideError",
+                "processCalculation",
+                "resetApplication",
+            ],
+        ),
         ("isUserRegistrationRequired(): boolean", None, None),
         ("hasExternalDependencies(): boolean; saveGuestsToStorage(): void", None, None),
         ("DOM: ELM-001, ELM-002", None, None),
@@ -701,4 +741,6 @@ def test_static_interface_keeps_only_pure_business_functions(interface, kept, re
         with pytest.raises(ValueError):
             _validate_static_interface(interface)
         return
-    assert _validate_static_interface(interface) == (kept, removed)
+    kept_signatures, removed_names, names = _validate_static_interface(interface)
+    assert (kept_signatures, removed_names) == (kept, removed)
+    assert names == list(dict.fromkeys(signature.split("(")[0] for signature in kept))

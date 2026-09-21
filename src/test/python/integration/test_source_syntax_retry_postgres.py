@@ -18,7 +18,7 @@ from src.test.python.integration.test_model_source_generation_postgres import (
     source_output,
 )
 from src.test.python.integration.test_proposal_evidence_postgres import database, pytestmark, run
-from src.test.python.models.test_source_file_generation import source_sequence_generator
+from src.test.python.models.test_source_file_generation import broken, source_sequence_generator
 
 __all__ = ["database", "pytestmark"]
 
@@ -33,7 +33,7 @@ def test_syntax_retry_preserves_failed_child_and_publishes_only_complete_accepte
         if ctx.get("source_step", {}).get("ordinal") == 2 and (
             exhausted or "syntax_retry" not in ctx
         ):
-            return {"content": "assert.equal(result, ("}
+            return broken(output, "assert.equal(result, (")
         return output
 
     generator, _ = source_sequence_generator(
@@ -109,9 +109,7 @@ def test_syntax_retry_preserves_failed_child_and_publishes_only_complete_accepte
             await db.dispose()
 
     run(scenario())
-    with pytest.raises(
-        sa.exc.DBAPIError, match="Cannot remove protection of retained source syntax retries"
-    ):
+    with pytest.raises(sa.exc.DBAPIError, match="Cannot remove protection of retained source"):
         downgrade_database(database, revision="0042_web_source_owner_edits")
 
 

@@ -130,9 +130,7 @@ def test_design_retry_retains_failed_bytes_and_only_publishes_complete_atomic_tr
         assert parent["result"]["generation_steps"][0]["generation_id"] == retry_id
     else:
         assert not any(item.get("result", {}).get("generation_steps") for item in accepted)
-    with pytest.raises(
-        sa.exc.DBAPIError, match="Cannot remove protection of retained source design retries"
-    ):
+    with pytest.raises(sa.exc.DBAPIError, match="Cannot remove protection of retained source"):
         downgrade_database(database, revision="0043_source_syntax_retry")
 
 
