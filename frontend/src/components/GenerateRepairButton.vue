@@ -20,6 +20,7 @@ const props = withDefaults(
     disabled?: boolean;
     authorize?: AuthorizedRequest;
     api?: SourceGenerationApi;
+    label?: string;
   }>(),
   { locale: "en", disabled: false },
 );
@@ -97,7 +98,7 @@ onUnmounted(() => {
       :disabled="pending || disabled || complete"
       @click="generate"
     >
-      {{ pending ? copy.busy : copy.action }}
+      {{ pending ? copy.busy : (label ?? copy.action) }}
     </button>
     <p v-if="complete" role="status">{{ copy.complete }}</p>
     <p v-if="error" role="alert">{{ copy.error }}</p>
