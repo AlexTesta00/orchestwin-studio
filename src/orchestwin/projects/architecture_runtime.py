@@ -30,9 +30,14 @@ from orchestwin.models.architecture import (
     ArchitectureRequirementsInput,
 )
 from orchestwin.models.architecture_runtime import (
+    ArchitectureRuntime,
     ArchitectureRuntimeMode,
     ArchitectureRuntimeSettings,
     build_architecture_runtime,
+)
+from orchestwin.models.proposal_evidence_persistence import (
+    SqlAlchemyProposalEvidenceBindings,
+    SqlAlchemyProposalEvidenceStore,
 )
 from orchestwin.projects.architecture_application import (
     GovernedArchitectureContext,
@@ -58,6 +63,7 @@ class ManagedArchitectureUnitOfWork:
         owner_user_id: UUID,
     ) -> None:
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._inner = SqlAlchemyArchitectureUnitOfWork(
             session,
             owner_user_id=owner_user_id,
@@ -340,15 +346,20 @@ class ArchitectureServices:
 def build_architecture_services(
     session_factory: async_sessionmaker[AsyncSession],
     settings: ArchitectureRuntimeSettings | None = None,
+    *,
+    proposal_runtime: ArchitectureRuntime | None = None,
 ) -> ArchitectureServices:
     """Compose deterministic provider, SQLAlchemy adapters, and Gate 6."""
-    runtime = build_architecture_runtime(settings)
+    runtime = (
+        proposal_runtime if proposal_runtime is not None else build_architecture_runtime(settings)
+    )
     command_uow_factory = ManagedArchitectureUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyArchitectureGateUnitOfWorkFactory(session_factory)
 
     return ArchitectureServices(
         runtime_mode=runtime.mode,
         generation=LocalArchitectureGenerationService(
+            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
             governance=SqlAlchemyArchitectureGovernanceAdapter(session_factory),
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,

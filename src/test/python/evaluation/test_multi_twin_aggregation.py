@@ -11,6 +11,7 @@ from orchestwin.evaluation.aggregation import (
     MULTI_TWIN_AGGREGATION_DISCLAIMER,
     DeclaredFindingConflict,
     aggregate_synthetic_evaluation,
+    finding_reference,
 )
 from orchestwin.evaluation.application import (
     SyntheticEvaluationRun,
@@ -269,3 +270,42 @@ def test_aggregation_rejects_unknown_or_same_twin_conflict_declarations() -> Non
     )
     with pytest.raises(ValueError, match="different User Twins"):
         aggregate_synthetic_evaluation(run, declared_conflicts=(same_twin,))
+
+
+def test_independent_twins_may_reuse_local_ids_without_losing_findings():
+    shared_a = _finding("UTF-001", TWIN_A, summary="Shared observation.", action="Check it.")
+    separate_b = _finding(
+        "UTF-001", TWIN_B, summary="Different role observation.", action="Review it."
+    )
+    shared_b = _finding("UTF-002", TWIN_B, summary="Shared observation.", action="Check it.")
+    run = _run((_response(TWIN_A, (shared_a,)), _response(TWIN_B, (separate_b, shared_b))))
+    before = run.to_snapshot()
+    result = aggregate_synthetic_evaluation(run)
+    assert result.shared_findings[0].findings == (shared_a, shared_b)
+    assert result.role_specific_findings[0].finding == separate_b
+    related = {
+        ref
+        for question in result.human_validation_questions
+        for ref in question.related_finding_ids
+    }
+    assert related == {finding_reference(shared_a), finding_reference(separate_b), "UTF-002"}
+    assert run.to_snapshot() == before
+
+
+def test_conflicts_can_reference_two_independent_findings_with_the_same_local_id():
+    left = _finding("UTF-001", TWIN_A, summary="Action needs a label.", action="Shorten it.")
+    right = _finding("UTF-001", TWIN_B, summary="Action needs a label.", action="Explain it.")
+    run = _run((_response(TWIN_A, (left,)), _response(TWIN_B, (right,))))
+    refs = sorted((finding_reference(left), finding_reference(right)))
+    declaration = DeclaredFindingConflict(
+        "C-1", *refs, "Different recommendations.", "Which label supports the task?"
+    )
+    result = aggregate_synthetic_evaluation(run, declared_conflicts=(declaration,))
+    assert len(result.direct_conflicts) == 1
+    assert not result.shared_findings and not result.role_specific_findings
+    assert result.human_validation_questions[0].related_finding_ids == tuple(refs)
+    ambiguous = DeclaredFindingConflict(
+        "C-2", "UTF-001", refs[0], "Ambiguous reference.", "Which finding is intended?"
+    )
+    with pytest.raises(ValueError, match="ambiguous local ID"):
+        aggregate_synthetic_evaluation(run, declared_conflicts=(ambiguous,))

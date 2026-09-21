@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   ApplyJvmRepairProposalInput,
   CreateJvmRepairProposalInput,
@@ -66,19 +68,7 @@ export interface JvmExecutionApi {
   ): Promise<JvmSourceRevisionPayload>;
 }
 
-export class JvmExecutionApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(message: string, options: { status: number; code: string | null; payload: unknown }) {
-    super(message);
-    this.name = "JvmExecutionApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class JvmExecutionApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");

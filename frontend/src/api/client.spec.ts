@@ -132,4 +132,42 @@ describe("ApiClient", () => {
       detail: "invalid_authentication",
     });
   });
+
+  it("preserves structured provider errors instead of calling them unexpected", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ detail: { code: "PROVIDER_UNAVAILABLE", stage: "MODEL_PROPOSAL" } }),
+          { status: 503 },
+        ),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+    await expect(client.generateProjectTeamProposal("token", "project-id")).rejects.toMatchObject({
+      status: 503,
+      detail: "PROVIDER_UNAVAILABLE",
+    });
+  });
+
+  it("distinguishes gate conflict errors from typed domain conflict results", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "gate_state_conflict" }), { status: 409 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "REJECTED", issue: "STALE_ARTIFACT" }), {
+          status: 409,
+        }),
+      );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+    await expect(client.decideAgentTeamGate("token", "project", "APPROVE")).rejects.toMatchObject({
+      detail: "gate_state_conflict",
+      status: 409,
+    });
+    await expect(client.decideAgentTeamGate("token", "project", "APPROVE")).resolves.toMatchObject({
+      status: "REJECTED",
+      issue: "STALE_ARTIFACT",
+    });
+  });
 });

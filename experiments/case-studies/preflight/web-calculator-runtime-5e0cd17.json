@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "report_type": "READ_ONLY_PRE_FORMAL_RUNTIME_AUDIT",
+  "recorded_at": "2026-09-13T14:00:54.813992+00:00",
+  "base_commit": "5e0cd179d8a23beca20216b010b71f964e5e112a",
+  "candidate_code": "Working-tree implementation; separate user commit required before deployment.",
+  "artifact_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\execution-catalog-6ff1f89302284bd898d8a4bcb95fd061",
+  "formal_attempt_started": false,
+  "full_model_workflow_ready": false,
+  "generative_provider_policy_for_next_attempt": "USER_SCOPE_CLARIFICATION_PENDING",
+  "catalog": {
+    "database_schema": "0037_jvm_governed_operations",
+    "verified_candidate_api_level_d": 8,
+    "running_api_level_d_display": 0,
+    "runtime_database_writes": false,
+    "profiles": [
+      {
+        "target": "ANDROID_JAVA",
+        "capability_status": "DESIGN_ONLY_LEVEL_C",
+        "content_hash": "3db832d9018b40619a7d27c1fec511217bab0f659dd653505fe46865afae92e8",
+        "runtime_profile_id": null
+      },
+      {
+        "target": "ANDROID_KOTLIN",
+        "capability_status": "DESIGN_ONLY_LEVEL_C",
+        "content_hash": "2a36685f820a5c72c364a3df455afdc12705527d74536230a45addf5f41151a8",
+        "runtime_profile_id": null
+      },
+      {
+        "target": "JVM_JAVA",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "2f5a6d19fb94319289783589621a2cdbbc69f76b0f6bb5775cf4885eef86b53a",
+        "runtime_profile_id": "jvm.java-gradle"
+      },
+      {
+        "target": "JVM_KOTLIN",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "8f72cbadfc307ba10b997882e69d6fe2eca07dab5204cd11a15c44a2b393fcf3",
+        "runtime_profile_id": "jvm.kotlin-gradle"
+      },
+      {
+        "target": "JVM_SCALA",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "c55d63ff64f4f5a64ccaf53b52cdae97e81e29f8a55a6f7df61be03b0c38c637",
+        "runtime_profile_id": "jvm.scala-sbt"
+      },
+      {
+        "target": "WEB_NODE_EXPRESS",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "1386da317acfc4b5a5f2b7d6ca34e98783322378a491053b9a4828da018288a5",
+        "runtime_profile_id": "web.node-express"
+      },
+      {
+        "target": "WEB_PHP",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "36a7bbcef2aade3e6508a0590136c4aa332e5f00e2847bc2748e508aec1f04ce",
+        "runtime_profile_id": "web.php"
+      },
+      {
+        "target": "WEB_STATIC",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "52809632d44c9bd0d9e4e87217996a38ea8ea634cc98cf5d6e1adfc8fe68ca2e",
+        "runtime_profile_id": "web.static"
+      },
+      {
+        "target": "WEB_VUE",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "7f109b1788ef2df71538b883d4256758a63225b26646723cc37d5d5be3a34118",
+        "runtime_profile_id": "web.vue"
+      },
+      {
+        "target": "WEB_VUE_NODE",
+        "capability_status": "VALIDATED_LEVEL_D",
+        "content_hash": "c73525db22867980bb55c5acf7e32648c92ff9263fc33553a0b4366f69c33cf9",
+        "runtime_profile_id": "web.vue-node"
+      }
+    ]
+  },
+  "running_api": {
+    "image_id": "sha256:fabe21c9a909ec8d38ab4fcba78af883a0eb3133a2748e1f44fa764b2a4b51df",
+    "observed_configuration": {
+      "ORCHESTWIN_TEAM_PROPOSAL_PROVIDER": "FAKE_DETERMINISTIC"
+    },
+    "governed_web_enabled_key_present": false,
+    "governed_jvm_enabled_key_present": false,
+    "deployment_updated": false
+  },
+  "generation_providers": {
+    "team_model_adapter_implemented": false,
+    "user_modeling_supported_modes": [
+      "FAKE_DETERMINISTIC"
+    ],
+    "requirements_supported_modes": [
+      "FAKE_DETERMINISTIC"
+    ],
+    "design_supported_modes": [
+      "FAKE_DETERMINISTIC"
+    ],
+    "architecture_supported_modes": [
+      "FAKE_DETERMINISTIC"
+    ]
+  },
+  "separate_checks_pending": [
+    "Trained adapter identities and final User Twin evaluator readiness were not assessed by this catalog audit.",
+    "Deploy the committed API with explicit governed execution configuration and matching local runner identities.",
+    "Choose whether the next formal attempt requires real generative model adapters or explicitly documents deterministic proposal providers.",
+    "Start only a new project/workflow/evidence workspace after freezing the next platform commit; keep C94 frozen."
+  ],
+  "tests": [
+    {
+      "path": "regression.xml",
+      "counts": {
+        "total": 782,
+        "passed": 782,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "path": "postgres-pytest.xml",
+      "counts": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  ],
+  "temporary_resources_removed": true,
+  "inputs": {
+    "src/orchestwin/api/execution_catalog.py": {
+      "sha256": "ccaa4ce5fa22bb42210ba24ec82261bb05247c391c8687d5326cbec0179a3ba9",
+      "size_bytes": 7124
+    },
+    "src/orchestwin/api/sprint07_runtime.py": {
+      "sha256": "e55b650b9f0a1c1513d766d4fe9ca385f6ff799c76cb073f86bb08ad63ae88e9",
+      "size_bytes": 8050
+    },
+    "src/test/python/api/test_execution_catalog.py": {
+      "sha256": "26c21c34dd668deb97512e036aaed6acf954130802759381548bd1fbb5354f6d",
+      "size_bytes": 7830
+    },
+    "src/test/python/api/test_sprint07_runtime_wiring.py": {
+      "sha256": "9a4a2ac1ea4a8c9d36e3067b41dcb3d412633a318a4f5423f42247e19599c364",
+      "size_bytes": 5601
+    },
+    "src/test/python/integration/test_postgresql_execution_catalog.py": {
+      "sha256": "abca4539a765a79ec75abf20d076747e10345bfc37aca68c54a93c700f45f095",
+      "size_bytes": 3864
+    },
+    "src/orchestwin/models/runtime.py": {
+      "sha256": "818864bc9cc8405257accd45eee0aa1cf8b9874bda8f5d120c2958f6c857cca5",
+      "size_bytes": 1997
+    },
+    "src/orchestwin/models/user_modeling_runtime.py": {
+      "sha256": "95c345acf983832fca67828db59fe216a67377bd88b96581aa8e37aef2f90be8",
+      "size_bytes": 2146
+    },
+    "src/orchestwin/models/requirements_runtime.py": {
+      "sha256": "8961a571de5fcbc8c70f4dc73af44002afb9b808940d7a199082ec57945380d2",
+      "size_bytes": 2078
+    },
+    "src/orchestwin/models/design_runtime.py": {
+      "sha256": "2d56569cf129791bc4eb4386d66891836753252a4a9902d266394c6addfbb278",
+      "size_bytes": 1867
+    },
+    "src/orchestwin/models/architecture_runtime.py": {
+      "sha256": "541c9b135002621d780fdefc537f6fbf6434e4e292c491363f0950251dd7cc10",
+      "size_bytes": 2068
+    }
+  },
+  "artifacts": {
+    "platform.tar": {
+      "sha256": "83bf8518ff7d54b399e0bc3968d636267281234198a885e10eea9e12c85e07a4",
+      "size_bytes": 6881280
+    },
+    "running-api-catalog.json": {
+      "sha256": "53c8bde4fe30f4298602cf27f42227508e96435f864d8ebc825e46a4f0316263",
+      "size_bytes": 8015
+    },
+    "candidate-api-catalog.json": {
+      "sha256": "11da8c314f225b47ede105379d4de54843acd7b49406aa633e7c81d316d55e27",
+      "size_bytes": 59857
+    },
+    "summary.json": {
+      "sha256": "d320a4e73d3f74a5cd43c6c7a0ff172afefe7c94088bfbc728cbf19841fec15e",
+      "size_bytes": 510
+    },
+    "regression.xml": {
+      "sha256": "94435fc4ea0e941da3345acea1a3464791d4ca32a25a006800bf92da23c6cb6c",
+      "size_bytes": 121230
+    },
+    "postgres-pytest.xml": {
+      "sha256": "79896a344f4153d4dfb6befc115cbb9294b0403973c99593573e36f5cf385ee4",
+      "size_bytes": 587
+    },
+    "postgres-result.json": {
+      "sha256": "e0aa44e54895782d596175ec86ef18ebeda79996c30ce39131e46209328b02f6",
+      "size_bytes": 556
+    },
+    "postgres-pytest.log": {
+      "sha256": "5ee03dc48d3ebf24017f5a7f34c4949a9e335346dd2d944565db707f03e30700",
+      "size_bytes": 100
+    }
+  }
+}

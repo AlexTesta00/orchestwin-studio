@@ -1,0 +1,694 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-20T07:29:04.239071+00:00",
+  "status": "DIAGNOSTIC_NOT_PROMOTED_DESIGN_REJECTION_AND_BUDGET_CENSORING",
+  "scope": "Two reused engineering cases, one stochastic workflow sample each; not final thesis qualification or a controlled model ablation.",
+  "base_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "native_report": {
+    "path": "var/studio/coder-diagnostic-20260920-01/report.json",
+    "sha256": "64137aa391cc981b63ee113a6b18cf171416175a2407b35bbfeee439d501f05f",
+    "bytes": 2911
+  },
+  "protocol": {
+    "path": "var/studio/coder-diagnostic-20260920-01/protocol.json",
+    "sha256": "ece9237374aae5a4c3eee7a09a26787cff9005fb8bb48e189eef7fa78f44447b",
+    "bytes": 14881
+  },
+  "evidence_manifest": {
+    "path": "var/studio/coder-diagnostic-20260920-01/evidence-manifest.json",
+    "sha256": "d3ba31ecc15fe5011c5e4d6a33dd57d2ba1a86119f6550d58a83ca490e63524c",
+    "bytes": 12991,
+    "verified_files": 63
+  },
+  "baseline_evidence_manifest": {
+    "path": "var/studio/proposer-postprompt-20260919-02/evidence-manifest.json",
+    "sha256": "64a8b1d2272be19c733c55f77a0138b9ae0a766df8782a7093177e3bd3f55d39",
+    "bytes": 16192,
+    "verified_files": 78
+  },
+  "started_at_utc": "2026-09-20T07:04:39.680530+00:00",
+  "finished_at_utc": "2026-09-20T07:24:40.365868+00:00",
+  "elapsed_seconds": 1200.68,
+  "model_identity": {
+    "provider_id": "local-proposal-model",
+    "runtime_id": "proposal-base-2e76c70b-c809-4120-9269-02c5bca34a83",
+    "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "configuration_sha256": "07318eb96a15e7b5788f091c299aa95e98ecdd78f145d0d6cdd0f9393affa445",
+    "adapter_id": null,
+    "adapter_sha256": null
+  },
+  "runtime": {
+    "health": {
+      "path": "var/studio/coder-source-20260920-01/health.json",
+      "sha256": "713a2264dd271a87fe8b2be54b28e9ec49249381ff92873b03c52c726f3d1165",
+      "bytes": 1202
+    },
+    "loader": {
+      "path": "var/studio/coder-source-20260920-01/loader.json",
+      "sha256": "07318eb96a15e7b5788f091c299aa95e98ecdd78f145d0d6cdd0f9393affa445",
+      "bytes": 1613
+    },
+    "location": "RUNPOD_REMOTE_OVER_LOCAL_TUNNEL",
+    "load_in_4bit": true,
+    "adapter_loaded": false,
+    "adapter_active": false,
+    "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3",
+    "schema_decoder_version": "1.8.0",
+    "max_sequence_length": 32768,
+    "model_revision_observation": "MODEL_CONFIG_COMMIT_HASH",
+    "observed_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "tokenizer_revision_observation": "REQUEST_PIN_ONLY",
+    "observed_tokenizer_revision": null,
+    "training_executed": false,
+    "output_repair_used": false
+  },
+  "sampling": {
+    "temperature": 0.6,
+    "samples_per_case": 1,
+    "seed_controlled": false,
+    "global_client_deadline_seconds": 1200,
+    "server_cooperative_request_watchdog_seconds": 540,
+    "client_timeout_is_not_hard_gpu_preemption": true,
+    "syntax_retry_max_per_file": 1,
+    "syntax_retries_observed": 0,
+    "design_retry_available": false
+  },
+  "cases_and_oracles": {
+    "file": {
+      "path": "experiments/model-proposals/proposer-postprompt-cases-20260919.json",
+      "sha256": "e800c0967cc59467cfbaca625c6bb45882787d284db6952874dda646f11685e9",
+      "bytes": 8316
+    },
+    "identical_to_historical_protocol": true,
+    "oracles_excluded_from_all_seven_requests": true,
+    "exposure": "Previously used to diagnose prompts/training; reused diagnostic fixtures, not unseen final-test cases."
+  },
+  "cases": [
+    {
+      "case": "guest-list-en-20260919",
+      "outcome": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "generation_seconds": 728.33,
+      "model_calls": 4,
+      "source_published": false,
+      "browser_behavior_verified": false,
+      "model_tests_quality": "SIX_REGISTERED_ASSERTION_CASES_REVIEWED_AND_EXECUTED",
+      "native_files": [
+        {
+          "path": "app.js",
+          "generation_id": "145174ca-5439-4c78-9fea-e3d68a7986f4",
+          "source_sha256": "cc66e1eed28c81f1c394bd6fc8afd8b889666c42340d8218647167557612b516",
+          "native_response_sha256": "d97298ea6fe7b175598e2f55264ec82dc36060cb9c08f240b34bbe18cebb1a7d"
+        },
+        {
+          "path": "app.test.cjs",
+          "generation_id": "af6c17f8-e45f-460b-9aa7-efda62ffd206",
+          "source_sha256": "4d568d06a1b84d109cd6551c8172ba3de5eaa77f097d67d3617c91aeda22264b",
+          "native_response_sha256": "e855bdd7e7457cd80060e1baa2fb9ed9f871792a2145eccfbd40c8817f5701a1"
+        },
+        {
+          "path": "index.html",
+          "generation_id": "ae6a0d06-b806-42fa-bc11-c1b08bb57adc",
+          "source_sha256": "7f2a0040ea1f454b2b874639a37b7ae7484cf0dcf063f3274373122c6a2723ad",
+          "native_response_sha256": "452c6e3e9606c444f7e28e9aef04e3acb7f5279616867e3a33573e24f04fe597"
+        }
+      ],
+      "independent_tests_exit": 0,
+      "model_tests_exit": 0,
+      "model_calls_label": "REQUESTS_RECORDED_NOT_ALL_NATIVE_RESPONSES_COMPLETE",
+      "independent_checks": {
+        "receipt": {
+          "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/independent-tests.json",
+          "sha256": "991dfc10206beb960e2050efe318896ea6f99dcefde3f6bc127f1fb3a5dc3ce3",
+          "bytes": 1164
+        },
+        "status": "EXECUTED_IN_PINNED_ISOLATED_DOCKER",
+        "exit_code": 0,
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "model_authored_tests": {
+        "receipt": {
+          "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/model-tests.json",
+          "sha256": "f69293b515a172270b78282a53edb5ba0a9d7ff17af2ac7bdfc7158d99d42d10",
+          "bytes": 1309
+        },
+        "status": "EXECUTED_IN_PINNED_ISOLATED_DOCKER",
+        "exit_code": 0,
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "independent_oracle_sha256": "fcf008c85ab2ea708c059e01c201300e0a0738c458f46ad2e4fa27b5ba4dbbbd",
+      "semantic_review": {
+        "core": "Four independent groups pass: persistent records, rejection without state/ID mutation, factory isolation, classic-script availability. Guarded CommonJS export and guarded DOM bindings are present.",
+        "model_tests": "Six registered node:test cases with real assert calls reviewed; no swallowed assertion failures found. They cover factory methods, blank and non-string inputs, accumulation, instance isolation and whitespace trimming.",
+        "design_rejection": "Original HTML uses data-screen instead of mandatory data-design-screen and omits all data-design-element and data-design-target markers.",
+        "missing_screen_markers": [
+          "SCR-001",
+          "SCR-002"
+        ],
+        "missing_element_markers": [
+          "ELM-001",
+          "ELM-003",
+          "ELM-004",
+          "ELM-005"
+        ],
+        "missing_transitions": [
+          {
+            "trigger": "ELM-003",
+            "target": "SCR-002"
+          },
+          {
+            "trigger": "ELM-005",
+            "target": "SCR-001"
+          }
+        ],
+        "marker_instructions_verified_in_native_html_request": true,
+        "offline_validator_replay": "REJECTED_SAME_CODE",
+        "browser_behavior": "NOT_EXECUTED; source contains DOM listeners, but Node and static checks do not establish rendered usability."
+      },
+      "case_disposition": "COMPLETE_GENERATION_REJECTED_BY_DESIGN_CONTRACT"
+    },
+    {
+      "case": "expense-split-it-20260919",
+      "outcome": "TIMEOUT",
+      "generation_seconds": 470.38,
+      "model_calls": 3,
+      "source_published": false,
+      "browser_behavior_verified": false,
+      "model_tests_quality": "NO_COMPLETE_NATIVE_TEST_FILE_NOT_ASSESSED",
+      "native_files": [
+        {
+          "path": "app.js",
+          "generation_id": "cea78b22-16ed-48d8-8816-944184554dd6",
+          "source_sha256": "8ddfade794cdc76343524f38a05c0508a6eb51f80ec8a978ff9c807ce3c78e74",
+          "native_response_sha256": "acacfddb2d10a0ab2d6703f903f0297f85866ee079a353c6fbc61e489aabfb2e"
+        }
+      ],
+      "independent_tests_exit": 1,
+      "model_calls_label": "REQUESTS_RECORDED_NOT_ALL_NATIVE_RESPONSES_COMPLETE",
+      "independent_checks": {
+        "receipt": {
+          "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/independent-tests.json",
+          "sha256": "e5464df02df0ec68fcd0e84416624a649dae90e83cbf3653f24930df83e1bb88",
+          "bytes": 2248
+        },
+        "status": "EXECUTED_IN_PINNED_ISOLATED_DOCKER",
+        "exit_code": 1,
+        "tests": 4,
+        "pass": 2,
+        "fail": 2,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "model_authored_tests": {
+        "status": "NOT_EXECUTED_NO_COMPLETE_FILE",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      "independent_oracle_sha256": "938320596187a56afaf021e8132728ceb48642fdac4c65a1fca9cf18d54b6f91",
+      "case_disposition": "INCOMPLETE_GENERATION_CENSORED_BY_GLOBAL_CLIENT_DEADLINE",
+      "semantic_review": {
+        "confirmed_core_contract_defect": "Native app.js omits module.exports; require returns no splitExpense function. Two numeric groups fail with TypeError before executing the arithmetic implementation.",
+        "algorithm_correctness": "NOT_ESTABLISHED_BY_THESE_FAILED_IMPORT_TESTS; do not label numeric allocation itself wrong.",
+        "oracle_false_positive": "The invalid-input group reports PASS because untyped assert.throws also accepts TypeError from calling the missing export. It supplies no evidence for actual input validation.",
+        "raw_group_counts_preserved": {
+          "pass": 2,
+          "fail": 2,
+          "total": 4
+        },
+        "informative_passing_group": "independent classic-script core availability",
+        "invalid_input_behavior_evidence": "UNINFORMATIVE_PRECONDITION_FAILURE",
+        "ui_static_concern_not_executed": "The DOM parser uses parseFloat on the unvalidated full amount string, allowing numeric prefixes such as 1x to be interpreted as 1; no HTML/browser execution was available to assess the integrated flow.",
+        "missing_test_and_html_cause": "The app.test.cjs request timed out when the shared 1200-second client budget expired. No complete native test body was retained; HTML was not requested.",
+        "no_posthoc_source_or_oracle_repair": true
+      }
+    }
+  ],
+  "native_attempts": [
+    {
+      "case_id": "guest-list-en-20260919",
+      "generation_id": "07f5a982-6f8f-493a-8cea-d790f673a8f2",
+      "file": "manifest",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/07f5a982-6f8f-493a-8cea-d790f673a8f2/request.json",
+        "sha256": "40feb865ab5e4c9ec85a5781f47ad1863ec5cf0fdf9e28e05583a6168f0fcbf5",
+        "bytes": 25253
+      },
+      "request_content_hash": "a352bf3661baaaa58bd52f98f8cb7365dc301621b14d86f0651e0b609e089c69",
+      "prompt_sha256": "586aafddf618be34a4fe375f0b331e0b5e8cfcc280db041b4d5e03ffc599035f",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 3200,
+      "temperature": 0.6,
+      "parent_generation_id": null,
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": {
+        "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+      },
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/07f5a982-6f8f-493a-8cea-d790f673a8f2/HTTP_RESPONSE.bin",
+        "sha256": "34e29bdf486545e4db3f2b93cddf4004af109fc0978235effbd7414fea0c5d69",
+        "bytes": 4199
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 622,
+        "prompt_tokens": 3915,
+        "total_tokens": 4537
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 195434,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "184f7783b24a980f6194745dd56b9f2160c8283e20dec88ac8ddf59862381d6d",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 195928
+    },
+    {
+      "case_id": "guest-list-en-20260919",
+      "generation_id": "145174ca-5439-4c78-9fea-e3d68a7986f4",
+      "file": "app.js",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/145174ca-5439-4c78-9fea-e3d68a7986f4/request.json",
+        "sha256": "165afa988e4f227483e9609ce43ec76b1dbd80ceb6c6637e921889cc0ace67e4",
+        "bytes": 14030
+      },
+      "request_content_hash": "9b487dacd903041237253f24b6e60b6197fe8cf74fea7edd3493748c6e7d55bd",
+      "prompt_sha256": "de9d40c0564dd536bd314a523bdf7cb60f541d3b8b339eba4eb622f8e37f73cb",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 4096,
+      "temperature": 0.6,
+      "parent_generation_id": "07f5a982-6f8f-493a-8cea-d790f673a8f2",
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": null,
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/145174ca-5439-4c78-9fea-e3d68a7986f4/HTTP_RESPONSE.bin",
+        "sha256": "d97298ea6fe7b175598e2f55264ec82dc36060cb9c08f240b34bbe18cebb1a7d",
+        "bytes": 3705
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 644,
+        "prompt_tokens": 2558,
+        "total_tokens": 3202
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 135827,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "a713d0114a6efb8b76c960c44688295e445fe458c8c62655ba4e920402317c22",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 136302
+    },
+    {
+      "case_id": "guest-list-en-20260919",
+      "generation_id": "ae6a0d06-b806-42fa-bc11-c1b08bb57adc",
+      "file": "index.html",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/ae6a0d06-b806-42fa-bc11-c1b08bb57adc/request.json",
+        "sha256": "dbfd85610467b8b71444e06d0230223c1393cd38c14eb934b41f5c3520ecc981",
+        "bytes": 15777
+      },
+      "request_content_hash": "fd677ebe1171cb3a5d6a45b915f7911a6881d3b56f21703952ff787f964052db",
+      "prompt_sha256": "aef97f4f8f473eb2777e199af7fefd40bd0a98cd8ce6361a989440623e919d72",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 4096,
+      "temperature": 0.6,
+      "parent_generation_id": "07f5a982-6f8f-493a-8cea-d790f673a8f2",
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": {
+        "code": "SOURCE_DESIGN_STRUCTURE_MISMATCH"
+      },
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/ae6a0d06-b806-42fa-bc11-c1b08bb57adc/HTTP_RESPONSE.bin",
+        "sha256": "452c6e3e9606c444f7e28e9aef04e3acb7f5279616867e3a33573e24f04fe597",
+        "bytes": 2956
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 561,
+        "prompt_tokens": 3079,
+        "total_tokens": 3640
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 120234,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "b43f3db037d92b1058141a29b6aff7ce5234a1f3cf48955175f4b0adba82fb74",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 120640
+    },
+    {
+      "case_id": "guest-list-en-20260919",
+      "generation_id": "af6c17f8-e45f-460b-9aa7-efda62ffd206",
+      "file": "app.test.cjs",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/af6c17f8-e45f-460b-9aa7-efda62ffd206/request.json",
+        "sha256": "636bad28db2d26b0c6fbb9de9de92ca660311eaab7ce1cee2caf58a4c119985f",
+        "bytes": 16249
+      },
+      "request_content_hash": "c91fa318886a5cf028a98c550a06032f40c2b9fccd7b93d5cd609840ac41e775",
+      "prompt_sha256": "04b593aff83d4f61709f0b5e5acff57b1866a9a40a433288888db0c8b416b797",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 4096,
+      "temperature": 0.6,
+      "parent_generation_id": "07f5a982-6f8f-493a-8cea-d790f673a8f2",
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": null,
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/guest-list-en-20260919/af6c17f8-e45f-460b-9aa7-efda62ffd206/HTTP_RESPONSE.bin",
+        "sha256": "e855bdd7e7457cd80060e1baa2fb9ed9f871792a2145eccfbd40c8817f5701a1",
+        "bytes": 4221
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 952,
+        "prompt_tokens": 3155,
+        "total_tokens": 4107
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 274848,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "58d3a320e8fa6146d873fcf84a463946b9d54e9547d955ecdac2948a3f0674b4",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 275267
+    },
+    {
+      "case_id": "expense-split-it-20260919",
+      "generation_id": "c6c4cfd7-6ade-4468-926a-1965215f656b",
+      "file": "app.test.cjs",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/c6c4cfd7-6ade-4468-926a-1965215f656b/request.json",
+        "sha256": "f739a10ad200a9a163e7c8e7c80a5261a9b5f2d4c329b2d0a22004821dc437fc",
+        "bytes": 18239
+      },
+      "request_content_hash": "1af73934976dba0933cc6c3083918bd03828817b50ad5ff5181d7fd293bb099f",
+      "prompt_sha256": "04b593aff83d4f61709f0b5e5acff57b1866a9a40a433288888db0c8b416b797",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 4096,
+      "temperature": 0.6,
+      "parent_generation_id": "fceaf2f4-c485-4a3c-80d9-1741660e7bbf",
+      "syntax_retry": false,
+      "provider_status": "FAILED",
+      "failure": {
+        "code": "TIMEOUT",
+        "message": "The local model request exceeded its timeout.",
+        "retryable": true,
+        "provider_status_code": null
+      },
+      "adapter_rejection": {
+        "code": "TIMEOUT"
+      },
+      "native_response": null
+    },
+    {
+      "case_id": "expense-split-it-20260919",
+      "generation_id": "cea78b22-16ed-48d8-8816-944184554dd6",
+      "file": "app.js",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/cea78b22-16ed-48d8-8816-944184554dd6/request.json",
+        "sha256": "252edf79379b14f321d4a631a960f54c6d7f264cf1b7e2627f876a9365a2c6c2",
+        "bytes": 14491
+      },
+      "request_content_hash": "0dc8393a6bdab02dd10aff4eb0c770884e504c6fa1a6454d836386f84aa94f58",
+      "prompt_sha256": "de9d40c0564dd536bd314a523bdf7cb60f541d3b8b339eba4eb622f8e37f73cb",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 4096,
+      "temperature": 0.6,
+      "parent_generation_id": "fceaf2f4-c485-4a3c-80d9-1741660e7bbf",
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": null,
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/cea78b22-16ed-48d8-8816-944184554dd6/HTTP_RESPONSE.bin",
+        "sha256": "acacfddb2d10a0ab2d6703f903f0297f85866ee079a353c6fbc61e489aabfb2e",
+        "bytes": 5251
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 1026,
+        "prompt_tokens": 2999,
+        "total_tokens": 4025
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 225218,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "c0c42d5324394ed44a17f6f8e1e464bfa1a9b4650dca16e0e989d5f20de96e41",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 225693
+    },
+    {
+      "case_id": "expense-split-it-20260919",
+      "generation_id": "fceaf2f4-c485-4a3c-80d9-1741660e7bbf",
+      "file": "manifest",
+      "request": {
+        "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/fceaf2f4-c485-4a3c-80d9-1741660e7bbf/request.json",
+        "sha256": "5ecaea17a60b0e88867474dbe8d13ecfdd662fee7ff17dba6f53bee1fbd111a6",
+        "bytes": 26774
+      },
+      "request_content_hash": "da346ee83abf04acdec705de41a7eea2e9e782edbec0eea5411c26e3da243f73",
+      "prompt_sha256": "586aafddf618be34a4fe375f0b331e0b5e8cfcc280db041b4d5e03ffc599035f",
+      "prompt_version_ref": "proposal-web-source-v1",
+      "max_output_tokens": 3200,
+      "temperature": 0.6,
+      "parent_generation_id": null,
+      "syntax_retry": false,
+      "provider_status": "SUCCEEDED",
+      "failure": null,
+      "adapter_rejection": {
+        "code": "TIMEOUT"
+      },
+      "native_response": {
+        "path": "var/studio/coder-diagnostic-20260920-01/expense-split-it-20260919/fceaf2f4-c485-4a3c-80d9-1741660e7bbf/HTTP_RESPONSE.bin",
+        "sha256": "1436c6306e9312bff840e3edf3b1504c6a24a53054e5096d72b335b460c9ad50",
+        "bytes": 4213
+      },
+      "finish_reason": "stop",
+      "usage": {
+        "completion_tokens": 719,
+        "prompt_tokens": 4423,
+        "total_tokens": 5142
+      },
+      "serving": {
+        "adapter_active": false,
+        "adapter_loaded": false,
+        "adapter_name": null,
+        "adapter_role": null,
+        "generation_wall_time_budget_seconds": 540,
+        "generation_wall_time_milliseconds": 165422,
+        "max_output_tokens": 8192,
+        "max_sequence_length": 32768,
+        "model_visible_messages_sha256": "1c1ff8ac06645580618af807a94fcb1a99a519723794b97d2cc05e413fc561b2",
+        "output_repair_used": false,
+        "schema_complete": true,
+        "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+      },
+      "http_elapsed_milliseconds": 165733
+    }
+  ],
+  "summary": {
+    "cases_requested": 2,
+    "complete_application_generations": 1,
+    "cases_censored_by_budget": 1,
+    "source_proposals_accepted": 0,
+    "source_proposals_rejected_design": 1,
+    "requests_recorded": 7,
+    "complete_native_responses": 6,
+    "native_output_tokens_for_completed_responses_only": 4524,
+    "native_tokens_for_timed_out_request": null,
+    "http_elapsed_milliseconds_completed_responses_only": 1119563,
+    "independent_test_groups_raw_pass": 6,
+    "independent_test_groups_raw_fail": 2,
+    "independent_test_groups_total": 8,
+    "raw_passing_groups_uninformative_due_to_missing_export": 1,
+    "fully_passing_independent_case_suites": 1,
+    "model_authored_tests_executed": 6,
+    "model_authored_tests_passed": 6,
+    "browser_verified_applications": 0,
+    "applications_published": 0,
+    "promotion": false
+  },
+  "historical_comparison": {
+    "reference": {
+      "path": "experiments/model-proposals/proposer-postprompt-baseline-20260919.json",
+      "sha256": "aaeb77a4a8c1f20eefa3ce309a8e6f77782729c06ad82b1ecd8cd52f1861fec6",
+      "bytes": 14189
+    },
+    "model_identity": {
+      "provider_id": "local-studio-model",
+      "runtime_id": "proposal-900caccb-b166-4791-a8ce-8574d071a7ad",
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "a96a950bcced4ecde11374f3ada72408bbb0b92d6797b7409adc28e55510270d",
+      "adapter_id": null,
+      "adapter_sha256": null
+    },
+    "temperature": 0.6,
+    "baseline_raw_results": {
+      "guest_groups_passed": 0,
+      "guest_groups_total": 4,
+      "expense_groups_passed": 2,
+      "expense_groups_total": 4,
+      "accepted_proposals": 0,
+      "browser_verified_applications": 0,
+      "model_authored_tests_passed": 11,
+      "native_responses": 9,
+      "elapsed_seconds": 847.18
+    },
+    "changed_factors": [
+      "base model and tokenizer",
+      "local versus cloud hardware/runtime and quantization setup",
+      "generation prompt V11 to V15, runtime and interface instructions",
+      "schema decoder V3 and source/design/syntax validation implementation",
+      "harness billing-location metadata; changed source hashes enumerated below"
+    ],
+    "changed_client_sources": [
+      {
+        "path": "environments/training/probe_web_proposer.py",
+        "historical_sha256": "062b45b3818cb9e970435f5892d6aa493cfd949234a1dee9b3cbf4994f19360b",
+        "coder_trial_sha256": "cb04c5ab6d54b3f502f5efedef802d10a251971ae34cffdd4f842555d37b7936"
+      },
+      {
+        "path": "src/orchestwin/models/design_mockups.py",
+        "historical_sha256": "9a3ce598cd005839190bfc72f52643c6b330f2787075d68e2b9f4c757b5476a7",
+        "coder_trial_sha256": "9c8d0501cc082d1df724ddbfa29830bb5f82f522369bc987cd3575ec57295a29"
+      },
+      {
+        "path": "src/orchestwin/models/model_proposals.py",
+        "historical_sha256": "c1f74cdb5cbb7c3b8bb7a62a89351d6643cdba123992b35f3f4618fce470241d",
+        "coder_trial_sha256": "41834018f4052b6fa77620759f8361d6bf7afd81c69796d44a9d46c18f785706"
+      },
+      {
+        "path": "src/orchestwin/models/profile_drafts.py",
+        "historical_sha256": "a80e8eefbfde5aee86cd40c63b6e8be1ca2e52c3b462576535d0e0486b37d512",
+        "coder_trial_sha256": "9497cccb983f0765ff0613cf640982e5473b904c753d80aad73728b0bfb260b7"
+      },
+      {
+        "path": "src/orchestwin/models/profile_schema.py",
+        "historical_sha256": "b70c7d68047b6efa66c57061a821b7b09735faa583148c7e9da6df1a7d73d417",
+        "coder_trial_sha256": "8b04923fec4d123379e02c22f62f9aca58c5c63ddf06333f5798362b5b5745a6"
+      },
+      {
+        "path": "src/orchestwin/models/proposal_generation.py",
+        "historical_sha256": "189ee0bd39b25143f8c4e829281463c422aede40d2829b54943f388b974cdc88",
+        "coder_trial_sha256": "f829f95bdccabf9d048ebeaff0abcb1e4f96ad7c5b279d0ac5cade8722313f98"
+      },
+      {
+        "path": "src/orchestwin/models/real_runtime.py",
+        "historical_sha256": "f88aaa17800ae7a87bc5ea79a445aad22ee257915d9000206403f5072f84742e",
+        "coder_trial_sha256": "41bc04b0e6227093e0c9bfd74c564b645c2af99e27dd539f3baa0e37d692f2d2"
+      },
+      {
+        "path": "src/orchestwin/models/schema_decoding.py",
+        "historical_sha256": "d2d7f3dc0e4cc3470b8a82f6c077a71eb73112ff5023fe5f81b503b9438e6b55",
+        "coder_trial_sha256": "2e0ebd0ff7707cebf999d2b0ec4805bdbaeb0efe25de1ac9b26e2eaedcb8f245"
+      },
+      {
+        "path": "src/orchestwin/models/source_design_contract.py",
+        "historical_sha256": "5d964616c27d8850f3713fa4f06e6c9c2a5e6d37a657a1f078ff761ad49a7d32",
+        "coder_trial_sha256": "eda86a0574a14f27575ec14a6ef5e852a0d91103affbffa6bd86035f45b3aa5c"
+      },
+      {
+        "path": "src/orchestwin/models/source_file_generation.py",
+        "historical_sha256": "5b3053ab0e8810681725619b811286421b6225f367b35c3864f42dbb767b7c54",
+        "coder_trial_sha256": "4cf06e9489e0516d0a3d09f62476ac2893146e98f0519ebfc32f1e2bb4196f9d"
+      },
+      {
+        "path": "src/orchestwin/models/source_syntax.py",
+        "historical_sha256": "37e85c05f1e5bb601f4fb065019c05099820d12568844ab7424945e0c7458baf",
+        "coder_trial_sha256": "30c26ed3f81b15d358a955a3eaa2ba0e783947f5f954c94d61dfb3a764fbef44"
+      },
+      {
+        "path": "src/orchestwin/models/user_modeling.py",
+        "historical_sha256": "d45c69f45574f7f18e22f190adf228b7b569cc3c5e8cdbe399f387711d813c7b",
+        "coder_trial_sha256": "fe8f1c215f82012cde7867554ff2a1610984a672bb341129b135ee070e783566"
+      }
+    ],
+    "interpretation": "Guest-list core now passes all four groups, while its complete HTML violates explicit marker contracts. Expense retains a concrete CommonJS export defect and the workflow is budget-censored. These observations cannot isolate a model effect, establish generalization, rank arithmetic algorithms or justify promotion."
+  },
+  "oracle_followup": {
+    "change_during_run": false,
+    "recommended_new_version": "Assert exported callable availability before invalid-input assertions, or require the intended error type/message; rerun only under a separately versioned oracle and preserve these raw results."
+  },
+  "constraints": {
+    "new_model_calls_by_review": 0,
+    "new_application_executions_by_review": 0,
+    "generated_source_modifications": 0,
+    "database_writes": 0,
+    "runpod_compute_cost_usd": null,
+    "billing": "REQUIRES_SEPARATE_CLOUD_BILLING_RECEIPT",
+    "level_d_qualification": false,
+    "human_expert_validation": false,
+    "production_promotion": false,
+    "commit_performed": false
+  },
+  "limitations": [
+    "A named-export defect is not evidence that the internal arithmetic algorithm is wrong.",
+    "The expense invalid-input PASS is vacuous and must not be counted as demonstrated validation behavior.",
+    "Budget-censored stages are missing observations, not observed semantic failures.",
+    "Static HTML correspondence and Node VM startup are not browser navigation, rendering or accessibility verification.",
+    "Tokenizer revision is requested/pinned but not independently observed by the loader.",
+    "Inference cost is not zero: no cloud billing amount is established by this report.",
+    "One sample per previously diagnosed case cannot establish statistical superiority or an isolated fine-tuning effect."
+  ]
+}

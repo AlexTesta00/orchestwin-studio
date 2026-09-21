@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from orchestwin.api.app import create_app
@@ -39,6 +40,21 @@ USER_ID = UUID("00000000-0000-4000-8000-000000000001")
 SESSION_ID = UUID("00000000-0000-4000-8000-000000000002")
 FAMILY_ID = UUID("00000000-0000-4000-8000-000000000003")
 NOW = datetime.now(UTC)
+
+
+@pytest.mark.parametrize(
+    ("password", "code"),
+    [("short-secret", "password_too_short"), ("x" * 1025, "password_too_long")],
+)
+def test_registration_validation_is_actionable_and_does_not_echo_password(password, code):
+    with build_client(FakeIdentityService()) as client:
+        response = client.post(
+            "/api/v1/auth/register", json={"email": "owner@example.com", "password": password}
+        )
+    assert response.status_code == 422
+    assert response.json()["detail"] == code
+    assert password not in response.text
+    assert "input" not in response.json()["errors"][0]
 
 
 def build_user() -> UserAccount:

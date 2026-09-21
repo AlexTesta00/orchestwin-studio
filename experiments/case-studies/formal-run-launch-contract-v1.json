@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "contract_id": "s12-formal-run-launch-v1",
+  "formal_case_family": "WEB",
+  "formal_case_ids": [
+    "web-calculator",
+    "hotel-management-web",
+    "weather-comparison-web"
+  ],
+  "project_mode": "GREENFIELD",
+  "required_gate_sequence": [
+    "PROJECT_BRIEF",
+    "AGENT_TEAM",
+    "USER_MODELING",
+    "REQUIREMENTS",
+    "DESIGN",
+    "ARCHITECTURE",
+    "HIGH_IMPACT_OPERATION",
+    "FINAL_OUTPUT"
+  ],
+  "supported_technologies": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "Node.js",
+    "Vue",
+    "Express",
+    "Java",
+    "Kotlin",
+    "Scala"
+  ],
+  "forbidden_technologies": [
+    "PHP"
+  ],
+  "forbidden_mobile_scope": [
+    "Android",
+    "Flutter",
+    "Jetpack Compose",
+    "APK",
+    "ADB",
+    "emulator"
+  ],
+  "owner_gates_must_not_be_bypassed": true,
+  "launch_inputs_are_configuration_not_results": true,
+  "actual_case_results_require_observed_evidence": true,
+  "permanent_claim_flags": {
+    "real_user_behavior_validated": false,
+    "empirical_user_evidence_created": false
+  }
+}

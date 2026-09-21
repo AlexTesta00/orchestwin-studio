@@ -256,10 +256,16 @@ class WebBrowserRouteEvidence:
     def __post_init__(self) -> None:
         if self.final_path is not None:
             _validate_same_origin_path(self.final_path, label="browser final path")
-        _require_canonical_unique(
-            self.console_messages,
-            label="browser console messages",
+        expected_console = tuple(
+            sorted(
+                self.console_messages,
+                key=lambda item: (item.level, item.message, item.location or ""),
+            )
         )
+        if self.console_messages != expected_console or len(set(self.console_messages)) != len(
+            self.console_messages
+        ):
+            raise ValueError("browser console messages must be canonical and unique")
         _require_canonical_unique(
             self.failed_requests,
             label="browser failed requests",

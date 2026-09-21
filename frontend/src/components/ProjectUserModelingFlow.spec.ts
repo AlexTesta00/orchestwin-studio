@@ -475,6 +475,7 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.text()).toContain("PROTO_PERSONA");
 
     expect(wrapper.text()).toContain("Pending confirmation");
+    expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeDefined();
 
     await wrapper.get('[data-testid="confirm-persona"]').trigger("click");
 
@@ -516,10 +517,56 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.text()).toContain("Human validation required");
 
     expect(wrapper.text()).toContain("PROJECT_GROUNDED_UT");
+    expect(wrapper.findAll('[data-testid="twin-identity"]').length).toBeGreaterThan(0);
+    expect(
+      wrapper.get('[data-testid="profiles-technical-details"]').attributes("open"),
+    ).toBeUndefined();
+    expect(
+      wrapper.get('[data-testid="twin-technical-details"]').attributes("open"),
+    ).toBeUndefined();
+    expect(wrapper.get('[data-testid="twin-profile-details"]').attributes("open")).toBeDefined();
 
     const details = wrapper.findAll('[data-testid="provenance-inspector"]');
 
     expect(details.length).toBeGreaterThan(0);
+  });
+
+  it("replaces an unknown context of use with text accepted by the domain", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    const value = structuredClone(snapshot);
+    value.snapshot.twin_versions[0]!.profile.observations = [
+      {
+        ...goalsObservation,
+        observation_key: "user_twin.context_of_use",
+        value: { kind: "UNKNOWN", text: null, items: [], reason: null },
+      },
+    ];
+    store.applySnapshot(value);
+    const propose = vi.spyOn(store, "proposeRevision").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      diff: proposedDiff,
+      twin_version: null,
+      snapshot_version: null,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="edit-twin-observation"]').trigger("click");
+    await wrapper.get('[data-testid="revision-value"]').setValue("At the reception desk");
+    await wrapper.get('[data-testid="submit-revision"]').trigger("submit");
+    await flushPromises();
+    expect(propose).toHaveBeenCalledWith(
+      PROJECT_ID,
+      TWIN_ID,
+      [
+        expect.objectContaining({
+          field: "context_of_use",
+          value: { kind: "TEXT", text: "At the reception desk", items: [], reason: null },
+        }),
+      ],
+      ACCESS_TOKEN,
+    );
   });
 
   it("creates an explicit ProfileDiff instead of silently mutating a User Twin", async () => {
@@ -633,5 +680,8 @@ describe("ProjectUserModelingFlow", () => {
     );
 
     expect(twinVersion.profile.validation_status).toBe("PROJECT_GROUNDED_UT");
+    expect(wrapper.get('[data-testid="twin-profile-details"]').attributes("open")).toBeUndefined();
+    expect(wrapper.text()).toContain("Approved profile");
+    expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
   });
 });

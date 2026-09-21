@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T18:35:26.457042+00:00",
+  "status": "CONTRACT_FIX_VERIFIED_AND_SINGLE_GUI_MOCKUP_GENERATED",
+  "classification": "DEVELOPMENT_DIAGNOSTIC_AND_SYNTHETIC_CONTRACT_REGRESSION",
+  "original_generation_id": "2195dfa4-acdc-4683-bc91-45a7c57ceb64",
+  "original_manifest": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-first-rejected\\manifest.json",
+    "sha256": "b3e0ab2694f1f153594ddd733181d42cc9eceac7ad0f7ca7381f23112a9a9e21",
+    "files_verified": 7
+  },
+  "offline_replay": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-first-rejection-replay.json",
+    "sha256": "d61b6898c3e3585cb4643ce062da0448a7f709b9580f2ba28f6c015434e9290a",
+    "exception": {
+      "type": "ValueError",
+      "reason": "prototype input elements require a field name"
+    },
+    "field": "screens[0].elements[0].field_name",
+    "scaffolding_limit": "Original code-to-UUID mapping is not in compact request. Supplied exact requirement codes with synthetic UUID5 identities only for binder references. Original alternative ID and every model-authored draft byte unchanged. Failure precedes any UUID-dependent constraint."
+  },
+  "changes": [
+    "MockupElementDraft exposes kind-correlated anyOf schema before constrained decoding: inputs require a nonempty field name; only SELECT has options; only inputs may be required; only BUTTON/LINK require a destination.",
+    "Equivalent Pydantic draft validation rejects inconsistent primitives even when a provider does not enforce the schema. Valid model-authored values are retained unchanged.",
+    "Mockup prompt contract advances from design-v6 to design-v7 and distinguishes one representative DEFAULT entry, one SUCCESS result, and optional separate ERROR scenarios. Existing domain success/error rejection remains unchanged."
+  ],
+  "validation": {
+    "pytest": {
+      "command": ".venv/Scripts/python.exe -B -m pytest src/test/python/models/test_design_mockups.py -q -p no:cacheprovider --basetemp var/studio/mockup-v7-tests-01",
+      "passed": 33,
+      "failed": 0,
+      "elapsed_seconds": 0.85,
+      "evidence_source": "command stdout in task tool result; no JUnit artifact was requested"
+    },
+    "ruff": {
+      "status": "PASSED",
+      "checked_files": [
+        "src/orchestwin/models/design_mockups.py",
+        "src/orchestwin/api/design_mockups.py",
+        "src/orchestwin/models/proposal_generation.py",
+        "src/test/python/models/test_design_mockups.py"
+      ]
+    },
+    "native_decoder": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-v7-native-receipt.json",
+      "sha256": "fd38e45b8be2058aa1d7ce6976e5f831093a582fddb115f111bf2b0d02ded697",
+      "version": "1.8.0",
+      "policy": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3",
+      "cases": 24,
+      "valid_accepted": 9,
+      "invalid_masked": 15,
+      "model_loaded": false,
+      "gpu_used": false
+    }
+  },
+  "source_sha256": {
+    "src\\orchestwin\\models\\design_mockups.py": "9c8d0501cc082d1df724ddbfa29830bb5f82f522369bc987cd3575ec57295a29",
+    "src\\orchestwin\\api\\design_mockups.py": "8eda093e13564886ea0c2a413ad177b4248202afae51c219cc0d757867923c6f",
+    "src\\orchestwin\\models\\proposal_generation.py": "f829f95bdccabf9d048ebeaff0abcb1e4f96ad7c5b279d0ac5cade8722313f98",
+    "src\\test\\python\\models\\test_design_mockups.py": "b11fd5a409788f00220bb1f5f7e9e714715976f03f6cb5935e5af28d7e16258f"
+  },
+  "limitations": [
+    "No model output has been repaired or relabeled as accepted. Original generation remains rejected.",
+    "Grammar and draft primitive checks do not guarantee layout quality or task correctness. A fresh actual GUI mockup generation succeeded once; executable application verification remains a separate step.",
+    "Repeated button labels are not a domain violation. Self-return navigation was a prompt-quality observation, not added as a heuristic rejection.",
+    "Generic rejection evidence serialization was not changed; the original precise invariant was recovered only through the separately preserved offline replay."
+  ],
+  "inference_calls_in_this_fix": 0,
+  "database_writes_in_this_fix": 0,
+  "pre_live_status": "CONTRACT_FIX_VERIFIED_AWAITING_NEW_MODEL_GENERATION",
+  "live_check": {
+    "schema_version": 1,
+    "observed_at_utc": "2026-09-19T18:41:39.220295+00:00",
+    "classification": "SINGLE_REAL_MODEL_GUI_MOCKUP_OBSERVATION_NOT_EXECUTABLE_APP_QUALIFICATION",
+    "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+    "generation_id": "bce30e03-4ba9-40cf-aa4e-5827eeaf7bdd",
+    "manifest": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-v7-success\\manifest.json",
+      "sha256": "769a54eac6074fc4e4ae7e4ae0ccbdde0414f5fcdea04b11b46a95ba6f953f55",
+      "files_verified": 7
+    },
+    "raw_http_sha256": "e50275fd0e249259b117bbd8634a994e2a0bbe19ac900f6ca91b3eea1566840d",
+    "provider_success_content_hash": "7a6f9647996bb11ade3599abada990dc2902e44d0efe66e2f3e88fb9ab57d805",
+    "canonical_payload_sha256": "9bbe35491dd3cd1d35d013a27dd63b373478ce1782625e7bdb8b76407bd503a3",
+    "output_schema": {
+      "schema_id": "proposal-design-v7",
+      "version_number": 7,
+      "content_hash": "c26426b841ca5d99d8f0698bb6cc9aa6ce2fd0dae4caef35b6b6559fa6d20b72",
+      "kind_correlated_branches": 9
+    },
+    "model_identity": {
+      "adapter_id": null,
+      "adapter_sha256": null,
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+      "provider_id": "local-studio-model",
+      "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+    },
+    "provider_kind": "OPENAI_COMPATIBLE_LOCAL",
+    "request_provider_native_identity_exact_match": true,
+    "serving": {
+      "adapter_active": false,
+      "adapter_loaded": true,
+      "adapter_name": null,
+      "adapter_role": null,
+      "generation_wall_time_budget_seconds": 1140,
+      "generation_wall_time_milliseconds": 52577,
+      "max_output_tokens": 8192,
+      "max_sequence_length": 24576,
+      "model_visible_messages_sha256": "3e77f7f8565ed3b391e0510fed7ea3ecc9d61a9ec66c3b3de5459000092fbef1",
+      "output_repair_used": false,
+      "schema_complete": true,
+      "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+    },
+    "usage": {
+      "completion_tokens": 627,
+      "prompt_tokens": 5589,
+      "total_tokens": 6216
+    },
+    "native_generation_milliseconds": 52577,
+    "http_elapsed_milliseconds": 56817,
+    "temperature": 0.6,
+    "finish_reason": "stop",
+    "application_status": "MOCKUP_GENERATED",
+    "accepted_design_package_sha256": "823555e2b8a0746fe952ebde8e6ca8bcbb84ab7dc9fbab74f0e5c7adcfb605fd",
+    "bound_payload_verification": {
+      "native_and_provider_json_equal": true,
+      "request_schema_provider_domain_hashes_valid": true,
+      "pydantic_draft_valid": true,
+      "accepted_domain_package_valid": true,
+      "accepted_package_hash_matches_audit": true,
+      "screen_count": 2,
+      "elements_checked_unchanged": 9,
+      "transition_destinations_checked_unchanged": 3,
+      "identity_metadata_assigned_server_side": true,
+      "generated_content_repair": false
+    },
+    "gui_observations_reported_by_parent": {
+      "source": "Parent agent CUA interactions and screenshot in conversation; not independently repeated by this read-only verification.",
+      "entry_values": [
+        "9",
+        "3",
+        "Addizione"
+      ],
+      "calculate_navigation": "SCR-001 to SCR-002",
+      "visible_result": "Esempio: 5 + 3 = 8",
+      "return_preserved_inputs": true,
+      "phone_view_readable": true,
+      "design_applied_version": 2,
+      "design_gate_approved": true,
+      "gate_note": "Delegated development demo approval, not empirical human-user validation. Gate persistence will be captured separately by final project evidence collector."
+    },
+    "limitations": [
+      "One stochastic sample at temperature 0.6; schema and prompt changed together. This is neither an isolated latency benchmark nor semantic model qualification.",
+      "Mockup is illustrative navigation. Its fixed Esempio: 5 + 3 = 8 does not compute the supplied 9 and 3, and is not evidence of executable calculator correctness.",
+      "An extra Indietro action on SCR-001 returns to SCR-001 despite the prompt instruction. It is a prompt-quality limitation and was not repaired or rejected by a new heuristic.",
+      "No complete generated application, browser oracle or JVM execution is established by this receipt."
+    ],
+    "database_writes_by_collector": 0,
+    "inference_calls_by_collector": 0,
+    "verification_receipt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\mockup-v7-live-verification.json",
+      "sha256": "bb46051b930eacb1e8e87d41588c57c88bca6002567739a4b19d5cfcc7ef84e8"
+    }
+  }
+}

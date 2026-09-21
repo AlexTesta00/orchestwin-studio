@@ -1,64 +1,52 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-
+import { computed, nextTick, reactive, ref, useId, watch } from "vue";
 import type {
   DeclarativePrototypePayload,
   PrototypeElementPayload,
   PrototypeViewport,
 } from "../types/design";
 
-type Locale = "en" | "it";
-
 const props = withDefaults(
-  defineProps<{
-    prototype: DeclarativePrototypePayload;
-    locale?: Locale;
-  }>(),
-  {
-    locale: "en",
-  },
+  defineProps<{ prototype: DeclarativePrototypePayload; locale?: "en" | "it" }>(),
+  { locale: "en" },
 );
-
-const messages = {
+const labels = {
   en: {
-    viewport: "Preview viewport",
-    screens: "Prototype screens",
-    reset: "Return to entry screen",
-    current: "Current screen",
-    noScreen: "The selected prototype screen is unavailable.",
+    viewport: "Preview size",
+    screens: "Mockup screens",
+    reset: "Reset preview",
+    noScreen: "This screen is unavailable.",
+    required: "Complete the required fields to continue.",
+    example: "Interactive design preview",
+    sizes: { MOBILE: "Phone", TABLET: "Tablet", DESKTOP: "Desktop" },
   },
   it: {
-    viewport: "Viewport dell'anteprima",
-    screens: "Schermate del prototipo",
-    reset: "Torna alla schermata iniziale",
-    current: "Schermata corrente",
-    noScreen: "La schermata selezionata del prototipo non è disponibile.",
+    viewport: "Dimensioni anteprima",
+    screens: "Schermate mockup",
+    reset: "Riavvia anteprima",
+    noScreen: "Questa schermata non è disponibile.",
+    required: "Completa i campi obbligatori per continuare.",
+    example: "Anteprima interattiva del design",
+    sizes: { MOBILE: "Telefono", TABLET: "Tablet", DESKTOP: "Desktop" },
   },
-} as const;
-
-const copy = computed(() => messages[props.locale]);
+};
+const copy = computed(() => labels[props.locale]);
+const titleId = `mockup-${useId()}`;
 const currentScreenId = ref(props.prototype.entry_screen_id);
-const viewport = ref<PrototypeViewport>(props.prototype.supported_viewports[0] ?? "DESKTOP");
-
+const viewport = ref<PrototypeViewport>(
+  props.prototype.supported_viewports.includes("DESKTOP")
+    ? "DESKTOP"
+    : (props.prototype.supported_viewports[0] ?? "MOBILE"),
+);
+const values = reactive<Record<string, string>>({});
+const validationError = ref(false);
+const form = ref<HTMLFormElement | null>(null);
+const screenHeading = ref<HTMLElement | null>(null);
 const currentScreen = computed(
   () => props.prototype.screens.find((screen) => screen.id === currentScreenId.value) ?? null,
 );
-const viewportClass = computed(() => {
-  const classes: Record<PrototypeViewport, string> = {
-    MOBILE: "max-w-sm",
-    TABLET: "max-w-2xl",
-    DESKTOP: "max-w-5xl",
-  };
-
-  return classes[viewport.value];
-});
-
-watch(
-  () => props.prototype,
-  (prototype) => {
-    currentScreenId.value = prototype.entry_screen_id;
-    viewport.value = prototype.supported_viewports[0] ?? "DESKTOP";
-  },
+const viewportClass = computed(
+  () => ({ MOBILE: "max-w-sm", TABLET: "max-w-xl", DESKTOP: "max-w-2xl" })[viewport.value],
 );
 
 function transitionFor(elementId: string) {
@@ -69,175 +57,220 @@ function transitionFor(elementId: string) {
   );
 }
 
-function activate(element: PrototypeElementPayload): void {
-  const transition = transitionFor(element.id);
-
-  if (transition !== undefined) {
-    currentScreenId.value = transition.target_screen_id;
-  }
+async function showScreen(id: string): Promise<void> {
+  currentScreenId.value = id;
+  validationError.value = false;
+  await nextTick();
+  screenHeading.value?.focus();
 }
 
-function isNavigable(elementId: string): boolean {
-  return transitionFor(elementId) !== undefined;
+function activate(element: PrototypeElementPayload): void {
+  const transition = transitionFor(element.id);
+  if (!transition) return;
+  if (form.value && !form.value.reportValidity()) {
+    validationError.value = true;
+    return;
+  }
+  void showScreen(transition.target_screen_id);
 }
 
 function reset(): void {
-  currentScreenId.value = props.prototype.entry_screen_id;
+  Object.keys(values).forEach((key) => delete values[key]);
+  void showScreen(props.prototype.entry_screen_id);
+}
+
+watch(
+  () => props.prototype,
+  () => {
+    currentScreenId.value = props.prototype.entry_screen_id;
+    validationError.value = false;
+    Object.keys(values).forEach((key) => delete values[key]);
+  },
+);
+
+function fieldKey(element: PrototypeElementPayload): string {
+  return element.field_name ?? element.id;
 }
 </script>
 
 <template>
-  <section class="grid gap-5" aria-labelledby="prototype-preview-title">
-    <header class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p class="m-0 text-xs font-black tracking-widest text-indigo-700 uppercase">
-          {{ prototype.code }}
-        </p>
-        <h3 id="prototype-preview-title" class="mt-1 text-xl font-black text-slate-950">
-          {{ prototype.title }}
-        </h3>
-      </div>
-
+  <section class="grid min-w-0 gap-3" :aria-labelledby="titleId">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h3 :id="titleId" class="m-0 text-base font-semibold text-slate-900">
+        {{ prototype.title }}
+      </h3>
       <button
         type="button"
-        class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+        class="rounded-md px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-600"
         @click="reset"
       >
         {{ copy.reset }}
       </button>
     </header>
-
-    <fieldset class="flex flex-wrap gap-2">
-      <legend class="mb-2 text-sm font-black text-slate-900">{{ copy.viewport }}</legend>
-      <label
-        v-for="option in prototype.supported_viewports"
-        :key="option"
-        class="cursor-pointer rounded-lg border px-3 py-2 text-sm font-bold"
-        :class="
-          viewport === option
-            ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
-            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-        "
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <nav :aria-label="copy.screens" class="flex flex-wrap gap-1">
+        <button
+          v-for="(screen, index) in prototype.screens"
+          :key="screen.id"
+          type="button"
+          class="rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-indigo-600"
+          :class="
+            screen.id === currentScreenId
+              ? 'bg-indigo-100 text-indigo-900'
+              : 'text-slate-600 hover:bg-slate-100'
+          "
+          :aria-current="screen.id === currentScreenId ? 'step' : undefined"
+          @click="showScreen(screen.id)"
+        >
+          {{ index + 1 }}. {{ screen.title }}
+        </button>
+      </nav>
+      <div
+        class="flex rounded-lg border border-slate-200 p-1"
+        role="group"
+        :aria-label="copy.viewport"
       >
-        <input v-model="viewport" class="sr-only" type="radio" :value="option" />
-        {{ option }}
-      </label>
-    </fieldset>
-
-    <nav :aria-label="copy.screens">
-      <ol class="flex flex-wrap gap-2">
-        <li v-for="screen in prototype.screens" :key="screen.id">
-          <button
-            type="button"
-            class="rounded-lg border px-3 py-2 text-sm font-bold"
-            :class="
-              screen.id === currentScreenId
-                ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
-                : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-            "
-            @click="currentScreenId = screen.id"
-          >
-            {{ screen.code }} · {{ screen.title }}
-          </button>
-        </li>
-      </ol>
-    </nav>
-
-    <div class="overflow-x-auto rounded-2xl bg-slate-100 p-4 sm:p-6">
+        <button
+          v-for="option in prototype.supported_viewports"
+          :key="option"
+          type="button"
+          class="rounded-md px-2 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-indigo-600"
+          :class="
+            viewport === option ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
+          "
+          :aria-pressed="viewport === option"
+          :data-viewport="option"
+          @click="viewport = option"
+        >
+          {{ copy.sizes[option] }}
+        </button>
+      </div>
+    </div>
+    <div class="min-w-0 rounded-xl border border-slate-200 bg-slate-100 p-3 sm:p-5">
       <article
         v-if="currentScreen !== null"
         :class="viewportClass"
-        class="mx-auto grid min-h-80 content-start gap-5 rounded-2xl border border-slate-300 bg-white p-6 shadow-xl transition-[max-width]"
+        class="mx-auto overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-[max-width]"
         :data-screen-id="currentScreen.id"
       >
-        <header class="border-b border-slate-200 pb-4">
-          <p class="m-0 text-xs font-black tracking-widest text-slate-500 uppercase">
-            {{ copy.current }} · {{ currentScreen.code }} · {{ currentScreen.state }}
-          </p>
-          <h4 class="mt-2 text-2xl font-black text-slate-950">{{ currentScreen.title }}</h4>
-        </header>
-
-        <template v-for="element in currentScreen.elements" :key="element.id">
-          <h5 v-if="element.kind === 'HEADING'" class="text-xl font-black text-slate-950">
-            {{ element.content }}
-          </h5>
-
-          <p v-else-if="element.kind === 'TEXT'" class="m-0 leading-7 text-slate-700">
-            {{ element.content }}
-          </p>
-
-          <ul v-else-if="element.kind === 'LIST'" class="list-disc space-y-1 pl-5 text-slate-700">
-            <li>{{ element.content }}</li>
-          </ul>
-
-          <div
-            v-else-if="element.kind === 'CARD'"
-            class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700"
+        <div
+          class="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-4 py-2"
+          aria-hidden="true"
+        >
+          <span v-for="dot in 3" :key="dot" class="h-1.5 w-1.5 rounded-full bg-slate-300" />
+          <span class="ml-2 text-[10px] tracking-wide text-slate-500">{{ copy.example }}</span>
+        </div>
+        <div class="p-5 sm:p-6">
+          <h4
+            ref="screenHeading"
+            tabindex="-1"
+            class="m-0 mb-5 text-xl font-bold tracking-tight text-slate-950 outline-none"
           >
-            {{ element.content }}
-          </div>
-
-          <p
-            v-else-if="element.kind === 'STATUS'"
-            class="m-0 rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-bold text-emerald-900"
-            role="status"
+            {{ currentScreen.title }}
+          </h4>
+          <form
+            ref="form"
+            class="grid gap-4"
+            :class="viewport !== 'MOBILE' ? 'sm:grid-cols-2' : ''"
+            @submit.prevent
           >
-            {{ element.content }}
-          </p>
-
-          <label
-            v-else-if="element.kind === 'TEXT_INPUT'"
-            class="grid gap-2 font-bold text-slate-900"
-          >
-            {{ element.accessible_name ?? element.content }}
-            <input
-              type="text"
-              class="rounded-lg border border-slate-300 px-3 py-2 font-normal"
-              :name="element.field_name ?? undefined"
-              :required="element.required"
-            />
-          </label>
-
-          <label v-else-if="element.kind === 'SELECT'" class="grid gap-2 font-bold text-slate-900">
-            {{ element.accessible_name ?? element.content }}
-            <select
-              class="rounded-lg border border-slate-300 px-3 py-2 font-normal"
-              :name="element.field_name ?? undefined"
-              :required="element.required"
-            >
-              <option v-for="option in element.options" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </label>
-
-          <button
-            v-else-if="element.kind === 'BUTTON'"
-            type="button"
-            class="justify-self-start rounded-lg bg-indigo-700 px-4 py-2 font-black text-white hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-400"
-            :aria-label="element.accessible_name ?? element.content"
-            :disabled="!isNavigable(element.id)"
-            :data-trigger-element-id="element.id"
-            @click="activate(element)"
-          >
-            {{ element.content }}
-          </button>
-
-          <a
-            v-else-if="element.kind === 'LINK'"
-            href="#"
-            class="justify-self-start font-black text-indigo-700 underline"
-            :class="{ 'pointer-events-none text-slate-500': !isNavigable(element.id) }"
-            :aria-label="element.accessible_name ?? element.content"
-            :aria-disabled="!isNavigable(element.id)"
-            @click.prevent="activate(element)"
-          >
-            {{ element.content }}
-          </a>
-        </template>
+            <template v-for="element in currentScreen.elements" :key="element.id">
+              <h5
+                v-if="element.kind === 'HEADING'"
+                class="col-span-full m-0 text-lg font-semibold text-slate-900"
+              >
+                {{ element.content }}
+              </h5>
+              <p
+                v-else-if="element.kind === 'TEXT'"
+                class="col-span-full m-0 text-sm leading-6 text-slate-600"
+              >
+                {{ element.content }}
+              </p>
+              <ul
+                v-else-if="element.kind === 'LIST'"
+                class="col-span-full m-0 list-disc pl-5 text-sm text-slate-700"
+              >
+                <li>{{ element.content }}</li>
+              </ul>
+              <div
+                v-else-if="element.kind === 'CARD'"
+                class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
+              >
+                {{ element.content }}
+              </div>
+              <p
+                v-else-if="element.kind === 'STATUS'"
+                class="col-span-full m-0 rounded-xl border p-4 text-base font-semibold"
+                :class="
+                  currentScreen.state === 'ERROR'
+                    ? 'border-red-200 bg-red-50 text-red-900'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                "
+                role="status"
+              >
+                {{ element.content }}
+              </p>
+              <label
+                v-else-if="element.kind === 'TEXT_INPUT'"
+                class="grid gap-1.5 text-sm font-medium text-slate-800"
+              >
+                {{ element.accessible_name ?? element.content
+                }}<span v-if="element.required" class="sr-only">*</span>
+                <input
+                  v-model="values[fieldKey(element)]"
+                  type="text"
+                  class="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 font-normal focus:border-indigo-500 focus:outline-2 focus:outline-indigo-200"
+                  :name="element.field_name ?? undefined"
+                  :required="element.required"
+                />
+              </label>
+              <label
+                v-else-if="element.kind === 'SELECT'"
+                class="grid gap-1.5 text-sm font-medium text-slate-800"
+              >
+                {{ element.accessible_name ?? element.content
+                }}<span v-if="element.required" class="sr-only">*</span>
+                <select
+                  v-model="values[fieldKey(element)]"
+                  class="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-normal focus:border-indigo-500 focus:outline-2 focus:outline-indigo-200"
+                  :name="element.field_name ?? undefined"
+                  :required="element.required"
+                >
+                  <option disabled value="">—</option>
+                  <option v-for="option in element.options" :key="option" :value="option">
+                    {{ option }}
+                  </option>
+                </select>
+              </label>
+              <button
+                v-else-if="element.kind === 'BUTTON'"
+                type="button"
+                class="col-span-full min-h-11 rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+                :aria-label="element.accessible_name ?? element.content"
+                :disabled="!transitionFor(element.id)"
+                :data-trigger-element-id="element.id"
+                @click="activate(element)"
+              >
+                {{ element.content }}
+              </button>
+              <a
+                v-else-if="element.kind === 'LINK'"
+                href="#"
+                class="col-span-full justify-self-start rounded text-sm font-semibold text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                :aria-label="element.accessible_name ?? element.content"
+                :aria-disabled="!transitionFor(element.id)"
+                @click.prevent="activate(element)"
+                >{{ element.content }}</a
+              >
+            </template>
+            <p v-if="validationError" class="col-span-full m-0 text-sm text-red-800" role="alert">
+              {{ copy.required }}
+            </p>
+          </form>
+        </div>
       </article>
-
-      <p v-else class="m-0 rounded-xl bg-white p-4 text-slate-700" role="alert">
+      <p v-else class="m-0 rounded-lg bg-white p-4 text-sm text-slate-700" role="alert">
         {{ copy.noScreen }}
       </p>
     </div>

@@ -1,0 +1,1694 @@
+{
+  "schema_version": 1,
+  "phase": 6,
+  "recorded_at": "2026-09-13T21:53:10.329401+00:00",
+  "base_commit": "cc2ad696dc07ad3c9314cd34ab498d2a02518591",
+  "scope": "NON_FORMAL_SOURCE_GENERATION_DIAGNOSIS",
+  "diagnosis_status": "COMPLETED",
+  "implementation_status": "READY_FOR_USER_COMMIT",
+  "semantic_quality_qualified": false,
+  "formal_campaign_ready": false,
+  "new_level_d_validation": false,
+  "training_executed": false,
+  "new_model_downloaded": false,
+  "specialized_model_comparison_performed": false,
+  "evaluator_inference_performed": false,
+  "frozen_case_used": false,
+  "case_artifacts_read": false,
+  "database_accessed": false,
+  "production_code_modified": false,
+  "source_publication_performed": false,
+  "commit_performed": false,
+  "decision": {
+    "retrain_now": false,
+    "reason": "Application input loss and contract gaps are established; training necessity is not established.",
+    "next_phase": "Repair typed semantic projection, manifest contracts and coherent per-file prompts; repeat complete governed qualification, then compare coding models before deciding on targeted fine-tuning.",
+    "s67_evaluator": "Not exercised by this diagnosis; no quality or retraining conclusion is drawn about its trained adapter."
+  },
+  "protocol": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\protocol.json",
+    "sha256": "9615ea4d561fd5b8a44aa89cd996ad3c5c3d282addaeb8aa25bbae28df5edbec",
+    "size_bytes": 38951
+  },
+  "historical_audit": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\historical-audit.json",
+    "sha256": "bf54f9b98f67c9f9502b7a7161f356f5a4e9b6ba7b3fd1db24cb5d6f7a29d986",
+    "size_bytes": 21374
+  },
+  "model": {
+    "identity": {
+      "adapter_id": null,
+      "adapter_sha256": null,
+      "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "configuration_sha256": "cc8b6e2a6e78916152a8d030b3af5cfb05ba6cdec2a1d1a9d4649f587800cadf",
+      "provider_id": "local-proposal-model",
+      "runtime_id": "proposal-base-937decbc-2c0f-4911-88a8-991cbb6a9902",
+      "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+    },
+    "same_model_and_serving_bytes_as_phase5": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\runtime\\comparison-to-phase5.json",
+      "sha256": "594bd13d3b90d04da473b8bb0ec213004bc5ce571ddc3c670d8cae9df8119917",
+      "size_bytes": 536
+    },
+    "temperature": 0.6,
+    "quantization": "4-bit",
+    "completed_generation_counter_before": 0,
+    "completed_generation_counter_after": 32,
+    "runtime_stopped_after_diagnosis": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\runtime\\stopped.json",
+      "sha256": "d7c184fafa5d3c1c8b9636347beeca9b590657784af038de475e1a72ccb7bbef",
+      "size_bytes": 68
+    }
+  },
+  "findings": [
+    {
+      "id": "D01",
+      "status": "CONFIRMED_APPLICATION_INFORMATION_LOSS",
+      "summary": "The recursive semantic projection drops source_screen_id, trigger_element_id, target_screen_id, entry_screen_id, architecture connection endpoints, traceability IDs/codes and ADR context text.",
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\semantic-projection-proof-v2.json",
+        "sha256": "e4129f6bbbbf5f82cd3faa555c9dee425fabd160c67abcba2ad9ab1b00b1dda7",
+        "size_bytes": 2168
+      },
+      "interpretation": "Approved snapshots remain intact, but model-visible content loses semantic relationships. A different target_screen_id produces exactly the same projection. This is an application defect independent of model training.",
+      "next_action": "Replace key-name filtering with typed projection preserving graph relationships and stable readable aliases; keep architectural decision context."
+    },
+    {
+      "id": "D02",
+      "status": "CONFIRMED_MANIFEST_VALIDATION_GAP",
+      "summary": "All four retained final manifests put UI/main consumers before their dependencies and describe interfaces in prose. Scala omits the requested independently executable test. These plans passed source-plan admission.",
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\historical-audit.json",
+        "sha256": "bf54f9b98f67c9f9502b7a7161f356f5a4e9b6ba7b3fd1db24cb5d6f7a29d986",
+        "size_bytes": 21374
+      },
+      "interpretation": "Source publication validates lineage and file boundaries, not coherent public APIs or executable test coverage. The current schema cannot require a usable dependency graph or exact signatures.",
+      "next_action": "Validate manifest roles, public signatures, dependencies and test presence before child generation; retain exact rejected output instead of silently rewriting plans."
+    },
+    {
+      "id": "D03",
+      "status": "NO_TOKEN_OR_LINE_EXHAUSTION_OBSERVED",
+      "summary": "All 19 historical and 32 diagnostic requests terminated with STOP below the selected output budget. Historical files use 99-374 tokens and 10-43 lines; diagnostic files use 51-371 tokens and 6-37 lines.",
+      "interpretation": "Budget exhaustion does not explain these retained failures. Increasing max output to 2200 did not restore the tested Web or Java behavior. This does not exclude indirect effects of formatting or brevity instructions.",
+      "next_action": "Do not treat a larger token cap as a demonstrated fix."
+    },
+    {
+      "id": "D04",
+      "status": "OBSERVED_PROMPT_SENSITIVITY_ON_ONE_JAVA_FILE",
+      "summary": "The two baseline Java Main replays compile but print Usage with zero arguments. Both focused-instruction replays compile and print a reservation UUID without arguments, using identical frozen domain/service source bytes.",
+      "interpretation": "The same model weights can satisfy this specific launcher behavior after a prompt change. The two focused outputs are byte-identical; this is one task with two calls, not an estimate of model quality.",
+      "next_action": "Remove conflicting instructions and provide explicit per-file contracts before comparing models or training."
+    },
+    {
+      "id": "D05",
+      "status": "SEMANTIC_QUALITY_REMAINS_UNQUALIFIED",
+      "summary": "None of eight Web replays exports createReservation for Node; focused Web scripts import but return an empty module. Kotlin focused outputs both omit the final class brace. Scala focused sample 09 still extends App; sample 23 contains def main outside the body of object Main.",
+      "interpretation": "Lexical markers and valid JSON are insufficient. Scala sample 25 also has a main signature only in object Interaction, plus duplicate domain/service definitions and a malformed string. No diagnostic Kotlin or Scala compile success is claimed.",
+      "next_action": "Use compiler/test results and exact failing interfaces as repair feedback, with bounded audited attempts."
+    },
+    {
+      "id": "D06",
+      "status": "QUALIFICATION_SCOPE_MUST_REMAIN_EXPLICIT",
+      "summary": "The historical governed Web TEST phase was a smoke check; generated Node tests were evaluated separately and failed. This phase probes individual files and leaves all application-level qualification claims false.",
+      "interpretation": "Passing a schema, an import check or one CLI probe must not be promoted into thesis application evidence. Synthetic artifacts and known failing files are not held-out evaluation cases.",
+      "next_action": "Define independent acceptance checks from approved requirements; qualify complete applications only after all required checks pass."
+    }
+  ],
+  "aggregate_observations": [
+    {
+      "target": "WEB_STATIC",
+      "arm": "BASELINE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "createReservationExport": 0,
+        "importWithoutDOM": 0
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "WEB_STATIC",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "createReservationExport": 0,
+        "importWithoutDOM": 0
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "WEB_STATIC",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "createReservationExport": 0,
+        "importWithoutDOM": 0
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "WEB_STATIC",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "createReservationExport": 0,
+        "importWithoutDOM": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_JAVA",
+      "arm": "BASELINE",
+      "repetitions": 2,
+      "distinct_source_hashes": 1,
+      "true_observation_counts": {
+        "compile_and_zero_argument_exit_0": 2,
+        "printed_usage": 2,
+        "printed_uuid": 0
+      },
+      "compiled_and_printed_reservation_uuid_without_arguments": 0,
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_JAVA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "compile_and_zero_argument_exit_0": 0,
+        "printed_usage": 0,
+        "printed_uuid": 0
+      },
+      "compiled_and_printed_reservation_uuid_without_arguments": 0,
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_JAVA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "compile_and_zero_argument_exit_0": 0,
+        "printed_usage": 0,
+        "printed_uuid": 0
+      },
+      "compiled_and_printed_reservation_uuid_without_arguments": 0,
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_JAVA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetitions": 2,
+      "distinct_source_hashes": 1,
+      "true_observation_counts": {
+        "compile_and_zero_argument_exit_0": 2,
+        "printed_usage": 0,
+        "printed_uuid": 2
+      },
+      "compiled_and_printed_reservation_uuid_without_arguments": 2,
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_KOTLIN",
+      "arm": "BASELINE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "calls_existing_factory_createReservation": 0,
+        "calls_nonexistent_factory_generateUniqueId": 2,
+        "imports_factory": 0,
+        "imports_reservation": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_KOTLIN",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "calls_existing_factory_createReservation": 0,
+        "calls_nonexistent_factory_generateUniqueId": 1,
+        "imports_factory": 0,
+        "imports_reservation": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_KOTLIN",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "calls_existing_factory_createReservation": 0,
+        "calls_nonexistent_factory_generateUniqueId": 0,
+        "imports_factory": 0,
+        "imports_reservation": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_KOTLIN",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetitions": 2,
+      "distinct_source_hashes": 1,
+      "true_observation_counts": {
+        "calls_existing_factory_createReservation": 0,
+        "calls_nonexistent_factory_generateUniqueId": 0,
+        "imports_factory": 0,
+        "imports_reservation": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_SCALA",
+      "arm": "BASELINE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "explicit_main_signature": 0,
+        "extends_app_present": 2,
+        "other_top_level_declarations_present": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_SCALA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "explicit_main_signature": 0,
+        "extends_app_present": 2,
+        "other_top_level_declarations_present": 2
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_SCALA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "explicit_main_signature": 1,
+        "extends_app_present": 2,
+        "other_top_level_declarations_present": 1
+      },
+      "application_pass_rate": null
+    },
+    {
+      "target": "JVM_SCALA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetitions": 2,
+      "distinct_source_hashes": 2,
+      "true_observation_counts": {
+        "explicit_main_signature": 1,
+        "extends_app_present": 1,
+        "other_top_level_declarations_present": 0
+      },
+      "application_pass_rate": null
+    }
+  ],
+  "trials": [
+    {
+      "trial_id": "01-JVM_KOTLIN-OUTPUT_BUDGET_2200-2",
+      "target": "JVM_KOTLIN",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 18040,
+      "response_sha256": "fe4bc574b45f0e4f216ae519b03491d90c720c8ac7bf4acf961b3a338aa3cd27",
+      "usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 2847,
+        "total_tokens": 2974
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "0d7e6711233b7b89d17bc1960b969f8473a84c8c4440cfc9085f94aa8c1e5bc0",
+      "line_count": 15,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\01-JVM_KOTLIN-OUTPUT_BUDGET_2200-2\\source.txt",
+        "sha256": "0d7e6711233b7b89d17bc1960b969f8473a84c8c4440cfc9085f94aa8c1e5bc0",
+        "size_bytes": 346
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\01-JVM_KOTLIN-OUTPUT_BUDGET_2200-2\\sent-request.json",
+        "sha256": "74450220608db4a4771568636fc1d41e9a5faa1b6a12aaefd76a0b3551e4ecc8",
+        "size_bytes": 16113
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\01-JVM_KOTLIN-OUTPUT_BUDGET_2200-2\\response.raw.json",
+        "sha256": "fe4bc574b45f0e4f216ae519b03491d90c720c8ac7bf4acf961b3a338aa3cd27",
+        "size_bytes": 1493
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": false,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "02-JVM_KOTLIN-BASELINE-2",
+      "target": "JVM_KOTLIN",
+      "arm": "BASELINE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 9362,
+      "response_sha256": "08bd655ea3fd7531b6ac0169ce59e7261de9342ce22553d2fa5c285172cb1989",
+      "usage": {
+        "completion_tokens": 107,
+        "prompt_tokens": 2847,
+        "total_tokens": 2954
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "40db82296c20ae60354039d138385405cf45ffa7dab0d82f2f875ba7b583050b",
+      "line_count": 15,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\02-JVM_KOTLIN-BASELINE-2\\source.txt",
+        "sha256": "40db82296c20ae60354039d138385405cf45ffa7dab0d82f2f875ba7b583050b",
+        "size_bytes": 310
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\02-JVM_KOTLIN-BASELINE-2\\sent-request.json",
+        "sha256": "0cd8bb6fe9e9b53c642f120685c116339a6b5d29e36ec31deb218091c74d2bf4",
+        "size_bytes": 16103
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\02-JVM_KOTLIN-BASELINE-2\\response.raw.json",
+        "sha256": "08bd655ea3fd7531b6ac0169ce59e7261de9342ce22553d2fa5c285172cb1989",
+        "size_bytes": 1451
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": true,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "03-JVM_JAVA-FOCUSED_INSTRUCTION-1",
+      "target": "JVM_JAVA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 8060,
+      "response_sha256": "8959d6659ba12b860c94655d4543fbb2f394e38a253faaa9dc16d23d2043bc58",
+      "usage": {
+        "completion_tokens": 93,
+        "prompt_tokens": 2249,
+        "total_tokens": 2342
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "061b9e40a9ba9d21027d5e1b088c09a1f91090319ea57846d7114ed60f5330c1",
+      "line_count": 10,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\03-JVM_JAVA-FOCUSED_INSTRUCTION-1\\source.txt",
+        "sha256": "061b9e40a9ba9d21027d5e1b088c09a1f91090319ea57846d7114ed60f5330c1",
+        "size_bytes": 386
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\03-JVM_JAVA-FOCUSED_INSTRUCTION-1\\sent-request.json",
+        "sha256": "e26476c0de5560ebc9f65869f1ed7517e13a5ad18613573c73334584068cec8b",
+        "size_bytes": 13364
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\03-JVM_JAVA-FOCUSED_INSTRUCTION-1\\response.raw.json",
+        "sha256": "8959d6659ba12b860c94655d4543fbb2f394e38a253faaa9dc16d23d2043bc58",
+        "size_bytes": 1423
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": true,
+        "printed_uuid": true,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "04-JVM_SCALA-OUTPUT_BUDGET_2200-2",
+      "target": "JVM_SCALA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 23855,
+      "response_sha256": "fd19872cbdedf8b665bdeab3128ad3c74ad6ee9d9cdd1f943ebcad31e2cd8074",
+      "usage": {
+        "completion_tokens": 285,
+        "prompt_tokens": 2403,
+        "total_tokens": 2688
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "563446d45b704949837aa3c1e720ab27d9ed51de85f498b7338c62e76e388d6d",
+      "line_count": 32,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\04-JVM_SCALA-OUTPUT_BUDGET_2200-2\\source.txt",
+        "sha256": "563446d45b704949837aa3c1e720ab27d9ed51de85f498b7338c62e76e388d6d",
+        "size_bytes": 750
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\04-JVM_SCALA-OUTPUT_BUDGET_2200-2\\sent-request.json",
+        "sha256": "dbaa203b9151f9315c305a0d4a2386aa30d8a7fc10549e5b42fb736883b426f3",
+        "size_bytes": 14240
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\04-JVM_SCALA-OUTPUT_BUDGET_2200-2\\response.raw.json",
+        "sha256": "fd19872cbdedf8b665bdeab3128ad3c74ad6ee9d9cdd1f943ebcad31e2cd8074",
+        "size_bytes": 2121
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "05-JVM_KOTLIN-OMIT_ARCHITECTURE-1",
+      "target": "JVM_KOTLIN",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 11098,
+      "response_sha256": "27ff73765a9260e9e58c09d80a8270ea9a3fd2c46040b85987043202790cf0a5",
+      "usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 2082,
+        "total_tokens": 2209
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "0d7e6711233b7b89d17bc1960b969f8473a84c8c4440cfc9085f94aa8c1e5bc0",
+      "line_count": 15,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\05-JVM_KOTLIN-OMIT_ARCHITECTURE-1\\source.txt",
+        "sha256": "0d7e6711233b7b89d17bc1960b969f8473a84c8c4440cfc9085f94aa8c1e5bc0",
+        "size_bytes": 346
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\05-JVM_KOTLIN-OMIT_ARCHITECTURE-1\\sent-request.json",
+        "sha256": "2841336515a1861158260b9caf175659c3b9781f2e5952da4a9a8900daf70207",
+        "size_bytes": 11215
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\05-JVM_KOTLIN-OMIT_ARCHITECTURE-1\\response.raw.json",
+        "sha256": "27ff73765a9260e9e58c09d80a8270ea9a3fd2c46040b85987043202790cf0a5",
+        "size_bytes": 1493
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": false,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "06-JVM_SCALA-OUTPUT_BUDGET_2200-1",
+      "target": "JVM_SCALA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 19612,
+      "response_sha256": "124a0eecb8e4a7e2b143682b50981708476c576052e3f2667af07f1b3eb57166",
+      "usage": {
+        "completion_tokens": 230,
+        "prompt_tokens": 2403,
+        "total_tokens": 2633
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "df08bb2aeab13d91b794f8d3cb5df6330624205b6dea8d0749cda3118bb375a9",
+      "line_count": 26,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\06-JVM_SCALA-OUTPUT_BUDGET_2200-1\\source.txt",
+        "sha256": "df08bb2aeab13d91b794f8d3cb5df6330624205b6dea8d0749cda3118bb375a9",
+        "size_bytes": 689
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\06-JVM_SCALA-OUTPUT_BUDGET_2200-1\\sent-request.json",
+        "sha256": "af78833f5713601893a761f00066c8fe8db3c0144403fea71737a7fdbf8d8173",
+        "size_bytes": 14240
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\06-JVM_SCALA-OUTPUT_BUDGET_2200-1\\response.raw.json",
+        "sha256": "124a0eecb8e4a7e2b143682b50981708476c576052e3f2667af07f1b3eb57166",
+        "size_bytes": 1988
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "07-JVM_JAVA-BASELINE-1",
+      "target": "JVM_JAVA",
+      "arm": "BASELINE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 16504,
+      "response_sha256": "c316696b7437eb7e2eb248500b16513eb21e77d2f166587de37219dc64b09939",
+      "usage": {
+        "completion_tokens": 198,
+        "prompt_tokens": 2484,
+        "total_tokens": 2682
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "0b7f8661fbb8d8d893b00a57102b336720ba44d65f9eb52da05cb2d2d2ee1483",
+      "line_count": 19,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\07-JVM_JAVA-BASELINE-1\\source.txt",
+        "sha256": "0b7f8661fbb8d8d893b00a57102b336720ba44d65f9eb52da05cb2d2d2ee1483",
+        "size_bytes": 643
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\07-JVM_JAVA-BASELINE-1\\sent-request.json",
+        "sha256": "c0c1c0f411361738c743f02ead1aef62fc2ef3e65182e1b23bb8ab6c83a0f16b",
+        "size_bytes": 14573
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\07-JVM_JAVA-BASELINE-1\\response.raw.json",
+        "sha256": "c316696b7437eb7e2eb248500b16513eb21e77d2f166587de37219dc64b09939",
+        "size_bytes": 1848
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": true,
+        "printed_uuid": false,
+        "printed_usage": true
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "08-JVM_KOTLIN-BASELINE-1",
+      "target": "JVM_KOTLIN",
+      "arm": "BASELINE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 12654,
+      "response_sha256": "c676fe828262e710f7cf39ef4daabed65238296b84b032ada68545416f68b330",
+      "usage": {
+        "completion_tokens": 146,
+        "prompt_tokens": 2847,
+        "total_tokens": 2993
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "23d31d98e7940f9a771a11fe3ee077590aacdec2911b59e9480feff76bfa2160",
+      "line_count": 18,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\08-JVM_KOTLIN-BASELINE-1\\source.txt",
+        "sha256": "23d31d98e7940f9a771a11fe3ee077590aacdec2911b59e9480feff76bfa2160",
+        "size_bytes": 478
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\08-JVM_KOTLIN-BASELINE-1\\sent-request.json",
+        "sha256": "abf376c4622824eea6930a5fa2aafeeb7c50936e923e5635b36aca1e1e4408b8",
+        "size_bytes": 16103
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\08-JVM_KOTLIN-BASELINE-1\\response.raw.json",
+        "sha256": "c676fe828262e710f7cf39ef4daabed65238296b84b032ada68545416f68b330",
+        "size_bytes": 1649
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": true,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "09-JVM_SCALA-FOCUSED_INSTRUCTION-1",
+      "target": "JVM_SCALA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 5485,
+      "response_sha256": "6c644a6b77bd02bcfb5ac194f60f05d6916f2d5ad42cbd6732e065f266cc1d70",
+      "usage": {
+        "completion_tokens": 59,
+        "prompt_tokens": 2164,
+        "total_tokens": 2223
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "79848bf052326e7a409b87f870d6681e062897be5d52ce0f57f89e24f8261953",
+      "line_count": 6,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\09-JVM_SCALA-FOCUSED_INSTRUCTION-1\\source.txt",
+        "sha256": "79848bf052326e7a409b87f870d6681e062897be5d52ce0f57f89e24f8261953",
+        "size_bytes": 231
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\09-JVM_SCALA-FOCUSED_INSTRUCTION-1\\sent-request.json",
+        "sha256": "1b1d848135f9716168b1951a3aa5cf96d6e28e49cbad4dbf7f74732bf2cb9c40",
+        "size_bytes": 12987
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\09-JVM_SCALA-FOCUSED_INSTRUCTION-1\\response.raw.json",
+        "sha256": "6c644a6b77bd02bcfb5ac194f60f05d6916f2d5ad42cbd6732e065f266cc1d70",
+        "size_bytes": 1246
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": false
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "10-WEB_STATIC-FOCUSED_INSTRUCTION-1",
+      "target": "WEB_STATIC",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 22982,
+      "response_sha256": "f9746a0cdfbb7825a2b281b258d4943d3884edb0b00ee38098ac534f9a6901c9",
+      "usage": {
+        "completion_tokens": 236,
+        "prompt_tokens": 2200,
+        "total_tokens": 2436
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "128e1add9fa6e6561ecb61b05cd39c139aa12b1bbab978ef30baeb4bc84dfcfc",
+      "line_count": 29,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\10-WEB_STATIC-FOCUSED_INSTRUCTION-1\\source.txt",
+        "sha256": "128e1add9fa6e6561ecb61b05cd39c139aa12b1bbab978ef30baeb4bc84dfcfc",
+        "size_bytes": 883
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\10-WEB_STATIC-FOCUSED_INSTRUCTION-1\\sent-request.json",
+        "sha256": "2cb963910ab95601a754f13666796f78ddf30105ed5205151a69a6ccc10a2d10",
+        "size_bytes": 13125
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\10-WEB_STATIC-FOCUSED_INSTRUCTION-1\\response.raw.json",
+        "sha256": "f9746a0cdfbb7825a2b281b258d4943d3884edb0b00ee38098ac534f9a6901c9",
+        "size_bytes": 2007
+      },
+      "checks": {
+        "importWithoutDOM": true,
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "11-JVM_SCALA-BASELINE-2",
+      "target": "JVM_SCALA",
+      "arm": "BASELINE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 31202,
+      "response_sha256": "4d767d2a647e99829947c6326249087148dc8ba6aa0acefc071182819dd8232c",
+      "usage": {
+        "completion_tokens": 324,
+        "prompt_tokens": 2403,
+        "total_tokens": 2727
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "ed415126ccc42e9472c9f1bc66e27debae49dfc26216acfd11dad9c8f202552c",
+      "line_count": 36,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\11-JVM_SCALA-BASELINE-2\\source.txt",
+        "sha256": "ed415126ccc42e9472c9f1bc66e27debae49dfc26216acfd11dad9c8f202552c",
+        "size_bytes": 875
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\11-JVM_SCALA-BASELINE-2\\sent-request.json",
+        "sha256": "7d6f499718ebb3f66768b7942e5910a13623c3cda2e7c18d95904c5adc2cfefa",
+        "size_bytes": 14230
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\11-JVM_SCALA-BASELINE-2\\response.raw.json",
+        "sha256": "4d767d2a647e99829947c6326249087148dc8ba6aa0acefc071182819dd8232c",
+        "size_bytes": 2307
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "12-WEB_STATIC-OMIT_ARCHITECTURE-1",
+      "target": "WEB_STATIC",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 24454,
+      "response_sha256": "78035f9424cbd114a6cf89271d0b0dfbad58b8d4591cc9b284164ffd7388e6dc",
+      "usage": {
+        "completion_tokens": 275,
+        "prompt_tokens": 1629,
+        "total_tokens": 1904
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "5cc3894f50194db5fb15d9d6028fca637ad5a3077901bdc76f78daa8351ea1ab",
+      "line_count": 24,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\12-WEB_STATIC-OMIT_ARCHITECTURE-1\\source.txt",
+        "sha256": "5cc3894f50194db5fb15d9d6028fca637ad5a3077901bdc76f78daa8351ea1ab",
+        "size_bytes": 873
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\12-WEB_STATIC-OMIT_ARCHITECTURE-1\\sent-request.json",
+        "sha256": "d2aae54e408a9d0eed57900234d2839f68fd01877e1c690f664a7cfb2f560213",
+        "size_bytes": 9223
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\12-WEB_STATIC-OMIT_ARCHITECTURE-1\\response.raw.json",
+        "sha256": "78035f9424cbd114a6cf89271d0b0dfbad58b8d4591cc9b284164ffd7388e6dc",
+        "size_bytes": 2104
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "SyntaxError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "13-JVM_SCALA-BASELINE-1",
+      "target": "JVM_SCALA",
+      "arm": "BASELINE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 31409,
+      "response_sha256": "33c5dd49031632f90bfbae60473acafc211ef9d10eebd4e11bfe469fc3defa58",
+      "usage": {
+        "completion_tokens": 326,
+        "prompt_tokens": 2403,
+        "total_tokens": 2729
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "de31d705823f8964112ee54e9163830565c4b1916eaa97d6760300d2a45e4e23",
+      "line_count": 34,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\13-JVM_SCALA-BASELINE-1\\source.txt",
+        "sha256": "de31d705823f8964112ee54e9163830565c4b1916eaa97d6760300d2a45e4e23",
+        "size_bytes": 912
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\13-JVM_SCALA-BASELINE-1\\sent-request.json",
+        "sha256": "e0a737186688f49804376f1506efc7eb2708ae84754e08d8f0e396b7ed288282",
+        "size_bytes": 14230
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\13-JVM_SCALA-BASELINE-1\\response.raw.json",
+        "sha256": "33c5dd49031632f90bfbae60473acafc211ef9d10eebd4e11bfe469fc3defa58",
+        "size_bytes": 2342
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "14-JVM_JAVA-OMIT_ARCHITECTURE-2",
+      "target": "JVM_JAVA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 13906,
+      "response_sha256": "ae119a2fd426153c01e636ab4d125ac1e3aade85e579f4b1f2d0f15156997f88",
+      "usage": {
+        "completion_tokens": 148,
+        "prompt_tokens": 1719,
+        "total_tokens": 1867
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "c310149eb4a34354057ad9e4c39f4e558079af97da895a8691d6eb46ba619b0a",
+      "line_count": 15,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\14-JVM_JAVA-OMIT_ARCHITECTURE-2\\source.txt",
+        "sha256": "c310149eb4a34354057ad9e4c39f4e558079af97da895a8691d6eb46ba619b0a",
+        "size_bytes": 468
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\14-JVM_JAVA-OMIT_ARCHITECTURE-2\\sent-request.json",
+        "sha256": "39fb338aba49a2ffa5829889e1c09cc3cb36db782c2d75f7fc3c1f888c98e720",
+        "size_bytes": 9685
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\14-JVM_JAVA-OMIT_ARCHITECTURE-2\\response.raw.json",
+        "sha256": "ae119a2fd426153c01e636ab4d125ac1e3aade85e579f4b1f2d0f15156997f88",
+        "size_bytes": 1627
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": false,
+        "printed_uuid": false,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "15-JVM_JAVA-OUTPUT_BUDGET_2200-1",
+      "target": "JVM_JAVA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 19478,
+      "response_sha256": "472eea087c5d3290acfe44130f869ea8d39bb92addcb007f5a129a017837540d",
+      "usage": {
+        "completion_tokens": 202,
+        "prompt_tokens": 2484,
+        "total_tokens": 2686
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "e5872ccd7a458785524e40453d9dbd6d9bdf84e5af30a356c75ca6982acf5ef4",
+      "line_count": 19,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\15-JVM_JAVA-OUTPUT_BUDGET_2200-1\\source.txt",
+        "sha256": "e5872ccd7a458785524e40453d9dbd6d9bdf84e5af30a356c75ca6982acf5ef4",
+        "size_bytes": 659
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\15-JVM_JAVA-OUTPUT_BUDGET_2200-1\\sent-request.json",
+        "sha256": "d87fceb6e18504776712efa76719a4df80cc0c00d12b54d40720d851971d7c28",
+        "size_bytes": 14583
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\15-JVM_JAVA-OUTPUT_BUDGET_2200-1\\response.raw.json",
+        "sha256": "472eea087c5d3290acfe44130f869ea8d39bb92addcb007f5a129a017837540d",
+        "size_bytes": 1870
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": false,
+        "printed_uuid": false,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "16-WEB_STATIC-OUTPUT_BUDGET_2200-1",
+      "target": "WEB_STATIC",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 15099,
+      "response_sha256": "3dbc01803fa40a2231c9304acfda2823005272f8cfc4b6463a20687449ef0f06",
+      "usage": {
+        "completion_tokens": 160,
+        "prompt_tokens": 2394,
+        "total_tokens": 2554
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "2897d389ce376fd82ba13c6cf8a27ea67e3c6f5acee21466246d331cd01f29e4",
+      "line_count": 11,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\16-WEB_STATIC-OUTPUT_BUDGET_2200-1\\source.txt",
+        "sha256": "2897d389ce376fd82ba13c6cf8a27ea67e3c6f5acee21466246d331cd01f29e4",
+        "size_bytes": 532
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\16-WEB_STATIC-OUTPUT_BUDGET_2200-1\\sent-request.json",
+        "sha256": "92fd789ae9e6a2cdba101ce13208921a1caf0af59fe284de14d21d499cffe2cf",
+        "size_bytes": 14121
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\16-WEB_STATIC-OUTPUT_BUDGET_2200-1\\response.raw.json",
+        "sha256": "3dbc01803fa40a2231c9304acfda2823005272f8cfc4b6463a20687449ef0f06",
+        "size_bytes": 1633
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "ReferenceError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "17-JVM_KOTLIN-FOCUSED_INSTRUCTION-2",
+      "target": "JVM_KOTLIN",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 11210,
+      "response_sha256": "4113e06d1cb02254061859a8748d85a6ec3f47583746f3f61e02066e8a1f7262",
+      "usage": {
+        "completion_tokens": 120,
+        "prompt_tokens": 2661,
+        "total_tokens": 2781
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "d4c4b592d8e3e47bbbfb5e99a30903bee9a2fb2ddffe3fe74312696236c564d0",
+      "line_count": 10,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\17-JVM_KOTLIN-FOCUSED_INSTRUCTION-2\\source.txt",
+        "sha256": "d4c4b592d8e3e47bbbfb5e99a30903bee9a2fb2ddffe3fe74312696236c564d0",
+        "size_bytes": 492
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\17-JVM_KOTLIN-FOCUSED_INSTRUCTION-2\\sent-request.json",
+        "sha256": "5bd374704917854f04cf7142d12702f1bc7c62da44d0d145bf945b4294a9b99a",
+        "size_bytes": 15157
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\17-JVM_KOTLIN-FOCUSED_INSTRUCTION-2\\response.raw.json",
+        "sha256": "4113e06d1cb02254061859a8748d85a6ec3f47583746f3f61e02066e8a1f7262",
+        "size_bytes": 1524
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": false,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "18-WEB_STATIC-OUTPUT_BUDGET_2200-2",
+      "target": "WEB_STATIC",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 14376,
+      "response_sha256": "c277b843c007db16071255b4e531435616b0ffdd49d1d00cbd6b5c0479287a9d",
+      "usage": {
+        "completion_tokens": 162,
+        "prompt_tokens": 2394,
+        "total_tokens": 2556
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "59d877c160a910a33063a16c52a97b636d112b41e25ca239094ef160dc1c0e23",
+      "line_count": 11,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\18-WEB_STATIC-OUTPUT_BUDGET_2200-2\\source.txt",
+        "sha256": "59d877c160a910a33063a16c52a97b636d112b41e25ca239094ef160dc1c0e23",
+        "size_bytes": 549
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\18-WEB_STATIC-OUTPUT_BUDGET_2200-2\\sent-request.json",
+        "sha256": "a444cc11b1e19652e6706b2fdf50bfe9b9b211d5f141948b903bccb17a18a130",
+        "size_bytes": 14121
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\18-WEB_STATIC-OUTPUT_BUDGET_2200-2\\response.raw.json",
+        "sha256": "c277b843c007db16071255b4e531435616b0ffdd49d1d00cbd6b5c0479287a9d",
+        "size_bytes": 1650
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "ReferenceError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "19-JVM_JAVA-OMIT_ARCHITECTURE-1",
+      "target": "JVM_JAVA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 12673,
+      "response_sha256": "015e7f7dd04b1e09ab605e8605b3557a4cc40d34c014edeea77b0e9d3406fa75",
+      "usage": {
+        "completion_tokens": 148,
+        "prompt_tokens": 1719,
+        "total_tokens": 1867
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "a1513bd1f4b54407b0e1821b3832c80a65c33687de44f558c3752266f6e10728",
+      "line_count": 15,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\19-JVM_JAVA-OMIT_ARCHITECTURE-1\\source.txt",
+        "sha256": "a1513bd1f4b54407b0e1821b3832c80a65c33687de44f558c3752266f6e10728",
+        "size_bytes": 469
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\19-JVM_JAVA-OMIT_ARCHITECTURE-1\\sent-request.json",
+        "sha256": "b9ef83e487c30f78e838f70bbc9cfffc50c967eb7ee8cb5bc659af3ad7bc3f7c",
+        "size_bytes": 9685
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\19-JVM_JAVA-OMIT_ARCHITECTURE-1\\response.raw.json",
+        "sha256": "015e7f7dd04b1e09ab605e8605b3557a4cc40d34c014edeea77b0e9d3406fa75",
+        "size_bytes": 1628
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": false,
+        "printed_uuid": false,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "20-WEB_STATIC-BASELINE-2",
+      "target": "WEB_STATIC",
+      "arm": "BASELINE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 14419,
+      "response_sha256": "d7465a49612a4c991d51cf864db7ce33dbf35f0a2e78d560d92d1812fd738f95",
+      "usage": {
+        "completion_tokens": 160,
+        "prompt_tokens": 2394,
+        "total_tokens": 2554
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "2897d389ce376fd82ba13c6cf8a27ea67e3c6f5acee21466246d331cd01f29e4",
+      "line_count": 11,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\20-WEB_STATIC-BASELINE-2\\source.txt",
+        "sha256": "2897d389ce376fd82ba13c6cf8a27ea67e3c6f5acee21466246d331cd01f29e4",
+        "size_bytes": 532
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\20-WEB_STATIC-BASELINE-2\\sent-request.json",
+        "sha256": "676d6a9aa42af5610b084d42da35bfb2dc43f838ff6cf76e36d4b66743770fa1",
+        "size_bytes": 14111
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\20-WEB_STATIC-BASELINE-2\\response.raw.json",
+        "sha256": "d7465a49612a4c991d51cf864db7ce33dbf35f0a2e78d560d92d1812fd738f95",
+        "size_bytes": 1633
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "ReferenceError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "21-JVM_KOTLIN-OUTPUT_BUDGET_2200-1",
+      "target": "JVM_KOTLIN",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 13149,
+      "response_sha256": "6901dd59c3d9819fb82166773cf72dd99d6752d1bce8568cda7e570114c62b89",
+      "usage": {
+        "completion_tokens": 151,
+        "prompt_tokens": 2847,
+        "total_tokens": 2998
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "50e03d5b5f406b76b1b7315156bfca2491d6c928f1c0cf65e6d5963736513cbb",
+      "line_count": 20,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\21-JVM_KOTLIN-OUTPUT_BUDGET_2200-1\\source.txt",
+        "sha256": "50e03d5b5f406b76b1b7315156bfca2491d6c928f1c0cf65e6d5963736513cbb",
+        "size_bytes": 487
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\21-JVM_KOTLIN-OUTPUT_BUDGET_2200-1\\sent-request.json",
+        "sha256": "9bf021af7ec78a466619b537a4e388b0a1a4930ee1f366e94c0402019f05c617",
+        "size_bytes": 16113
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\21-JVM_KOTLIN-OUTPUT_BUDGET_2200-1\\response.raw.json",
+        "sha256": "6901dd59c3d9819fb82166773cf72dd99d6752d1bce8568cda7e570114c62b89",
+        "size_bytes": 1678
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": true,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "22-JVM_JAVA-BASELINE-2",
+      "target": "JVM_JAVA",
+      "arm": "BASELINE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 17301,
+      "response_sha256": "baf6ddcdf456a4cfdb92dff053641f447d66b6de839e882cef620302a18596bf",
+      "usage": {
+        "completion_tokens": 198,
+        "prompt_tokens": 2484,
+        "total_tokens": 2682
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "0b7f8661fbb8d8d893b00a57102b336720ba44d65f9eb52da05cb2d2d2ee1483",
+      "line_count": 19,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\22-JVM_JAVA-BASELINE-2\\source.txt",
+        "sha256": "0b7f8661fbb8d8d893b00a57102b336720ba44d65f9eb52da05cb2d2d2ee1483",
+        "size_bytes": 643
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\22-JVM_JAVA-BASELINE-2\\sent-request.json",
+        "sha256": "ccc3c17572635184067c409812edb4c5fda235ac2d8972f9cfacfec99f1b81fc",
+        "size_bytes": 14573
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\22-JVM_JAVA-BASELINE-2\\response.raw.json",
+        "sha256": "baf6ddcdf456a4cfdb92dff053641f447d66b6de839e882cef620302a18596bf",
+        "size_bytes": 1848
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": true,
+        "printed_uuid": false,
+        "printed_usage": true
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "23-JVM_SCALA-FOCUSED_INSTRUCTION-2",
+      "target": "JVM_SCALA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 4908,
+      "response_sha256": "e38a8f07703e92711434431b9c5ac07924cd9a10ccafe9a52450303c22e732d2",
+      "usage": {
+        "completion_tokens": 51,
+        "prompt_tokens": 2164,
+        "total_tokens": 2215
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "89c216a2b7cb34f6685c2882acd21602de01668a1561566d0b9c3c45ab350ece",
+      "line_count": 6,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\23-JVM_SCALA-FOCUSED_INSTRUCTION-2\\source.txt",
+        "sha256": "89c216a2b7cb34f6685c2882acd21602de01668a1561566d0b9c3c45ab350ece",
+        "size_bytes": 199
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\23-JVM_SCALA-FOCUSED_INSTRUCTION-2\\sent-request.json",
+        "sha256": "c71706961f38790242e74ee3a46c6f2de2c9a7eae05f8f6461ea814c0e959b39",
+        "size_bytes": 12987
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\23-JVM_SCALA-FOCUSED_INSTRUCTION-2\\response.raw.json",
+        "sha256": "e38a8f07703e92711434431b9c5ac07924cd9a10ccafe9a52450303c22e732d2",
+        "size_bytes": 1214
+      },
+      "checks": {
+        "explicit_main_signature": true,
+        "extends_app_present": false,
+        "other_top_level_declarations_present": false
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "24-WEB_STATIC-BASELINE-1",
+      "target": "WEB_STATIC",
+      "arm": "BASELINE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 14818,
+      "response_sha256": "1d3367e47add79db2272174416c9d405a0514b4fbd536ae0608bfad34da7f5a5",
+      "usage": {
+        "completion_tokens": 159,
+        "prompt_tokens": 2394,
+        "total_tokens": 2553
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "1103775574333a337956908f900630f29812f9c9da90abbf14fe272320c72637",
+      "line_count": 11,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\24-WEB_STATIC-BASELINE-1\\source.txt",
+        "sha256": "1103775574333a337956908f900630f29812f9c9da90abbf14fe272320c72637",
+        "size_bytes": 531
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\24-WEB_STATIC-BASELINE-1\\sent-request.json",
+        "sha256": "22b2be748982d75abec3960a6948bbf9e2a78b0afda13932ab7770cfbba836d3",
+        "size_bytes": 14111
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\24-WEB_STATIC-BASELINE-1\\response.raw.json",
+        "sha256": "1d3367e47add79db2272174416c9d405a0514b4fbd536ae0608bfad34da7f5a5",
+        "size_bytes": 1632
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "ReferenceError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "25-JVM_SCALA-OMIT_ARCHITECTURE-2",
+      "target": "JVM_SCALA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 25072,
+      "response_sha256": "5914a8052fcbf9fcaf4cd121a146e7b4d828f03fba619aa4031e5c5c87f88437",
+      "usage": {
+        "completion_tokens": 285,
+        "prompt_tokens": 1638,
+        "total_tokens": 1923
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "0011b2a078a86ab47c23fee5a18c8e0e7ac41e3aeaf96aea6c718df88d13b953",
+      "line_count": 32,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\25-JVM_SCALA-OMIT_ARCHITECTURE-2\\source.txt",
+        "sha256": "0011b2a078a86ab47c23fee5a18c8e0e7ac41e3aeaf96aea6c718df88d13b953",
+        "size_bytes": 848
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\25-JVM_SCALA-OMIT_ARCHITECTURE-2\\sent-request.json",
+        "sha256": "ea202eafd2b74a5c36e4b9444ebbdd43bae33223ccef3a98b3e87abd0e095ef1",
+        "size_bytes": 9342
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\25-JVM_SCALA-OMIT_ARCHITECTURE-2\\response.raw.json",
+        "sha256": "5914a8052fcbf9fcaf4cd121a146e7b4d828f03fba619aa4031e5c5c87f88437",
+        "size_bytes": 2216
+      },
+      "checks": {
+        "explicit_main_signature": true,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "26-WEB_STATIC-OMIT_ARCHITECTURE-2",
+      "target": "WEB_STATIC",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 19220,
+      "response_sha256": "986871d3a1bd74bab80acc2690beaaab5d9b17c4ba7163829cdaaae4ea6e39fc",
+      "usage": {
+        "completion_tokens": 230,
+        "prompt_tokens": 1629,
+        "total_tokens": 1859
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "df58d513c732229e74fbba7d8330c15cf0c149a5338da442588d986a7998e564",
+      "line_count": 18,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\26-WEB_STATIC-OMIT_ARCHITECTURE-2\\source.txt",
+        "sha256": "df58d513c732229e74fbba7d8330c15cf0c149a5338da442588d986a7998e564",
+        "size_bytes": 704
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\26-WEB_STATIC-OMIT_ARCHITECTURE-2\\sent-request.json",
+        "sha256": "960a2308ca15fab0717c83776ed3453e546eaee072c1b3b65e225cb30a900ed0",
+        "size_bytes": 9223
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\26-WEB_STATIC-OMIT_ARCHITECTURE-2\\response.raw.json",
+        "sha256": "986871d3a1bd74bab80acc2690beaaab5d9b17c4ba7163829cdaaae4ea6e39fc",
+        "size_bytes": 1875
+      },
+      "checks": {
+        "importWithoutDOM": false,
+        "importError": "ReferenceError",
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "27-JVM_KOTLIN-FOCUSED_INSTRUCTION-1",
+      "target": "JVM_KOTLIN",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 10684,
+      "response_sha256": "3834e7eb44c03d6be1a19a5e847df89bce33af67661e3371835bc1f8a016cac6",
+      "usage": {
+        "completion_tokens": 120,
+        "prompt_tokens": 2661,
+        "total_tokens": 2781
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "d4c4b592d8e3e47bbbfb5e99a30903bee9a2fb2ddffe3fe74312696236c564d0",
+      "line_count": 10,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\27-JVM_KOTLIN-FOCUSED_INSTRUCTION-1\\source.txt",
+        "sha256": "d4c4b592d8e3e47bbbfb5e99a30903bee9a2fb2ddffe3fe74312696236c564d0",
+        "size_bytes": 492
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\27-JVM_KOTLIN-FOCUSED_INSTRUCTION-1\\sent-request.json",
+        "sha256": "5504974bf87e392bf867eaf2bad4cc1e1f6f8587e97505e307db4af7de66ca3d",
+        "size_bytes": 15157
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\27-JVM_KOTLIN-FOCUSED_INSTRUCTION-1\\response.raw.json",
+        "sha256": "3834e7eb44c03d6be1a19a5e847df89bce33af67661e3371835bc1f8a016cac6",
+        "size_bytes": 1524
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": false,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "28-JVM_JAVA-OUTPUT_BUDGET_2200-2",
+      "target": "JVM_JAVA",
+      "arm": "OUTPUT_BUDGET_2200",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 33281,
+      "response_sha256": "2808ba2bf8e3eb56f845e9ea0658ea4902ee1404f34435b550f70464b35c481f",
+      "usage": {
+        "completion_tokens": 371,
+        "prompt_tokens": 2484,
+        "total_tokens": 2855
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "e4d1c5f4fa7988f2beeab714a0628d00a8bfcf078aacb34927597fa93b0e82ec",
+      "line_count": 37,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\28-JVM_JAVA-OUTPUT_BUDGET_2200-2\\source.txt",
+        "sha256": "e4d1c5f4fa7988f2beeab714a0628d00a8bfcf078aacb34927597fa93b0e82ec",
+        "size_bytes": 1180
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\28-JVM_JAVA-OUTPUT_BUDGET_2200-2\\sent-request.json",
+        "sha256": "d206477cb342b92d0947afc6d35e603407a12ea82800966d8dd7a175075193a9",
+        "size_bytes": 14583
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\28-JVM_JAVA-OUTPUT_BUDGET_2200-2\\response.raw.json",
+        "sha256": "2808ba2bf8e3eb56f845e9ea0658ea4902ee1404f34435b550f70464b35c481f",
+        "size_bytes": 2571
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": false,
+        "printed_uuid": false,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "29-JVM_SCALA-OMIT_ARCHITECTURE-1",
+      "target": "JVM_SCALA",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 1,
+      "http_status": 200,
+      "elapsed_milliseconds": 13789,
+      "response_sha256": "c352ad4c2ea962846c02758221d98f6690670e5f9fb8112d25ef4091aa9d93e0",
+      "usage": {
+        "completion_tokens": 162,
+        "prompt_tokens": 1638,
+        "total_tokens": 1800
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "d302d4a855161328706ebb0ca3a2d0fb1c517f18d949d1f4105a4486a740da7f",
+      "line_count": 20,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\29-JVM_SCALA-OMIT_ARCHITECTURE-1\\source.txt",
+        "sha256": "d302d4a855161328706ebb0ca3a2d0fb1c517f18d949d1f4105a4486a740da7f",
+        "size_bytes": 464
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\29-JVM_SCALA-OMIT_ARCHITECTURE-1\\sent-request.json",
+        "sha256": "d58d70f3abaf14861548df2470bd0cd04b0b451e5c05dfdf292138946c4da76b",
+        "size_bytes": 9342
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\29-JVM_SCALA-OMIT_ARCHITECTURE-1\\response.raw.json",
+        "sha256": "c352ad4c2ea962846c02758221d98f6690670e5f9fb8112d25ef4091aa9d93e0",
+        "size_bytes": 1706
+      },
+      "checks": {
+        "explicit_main_signature": false,
+        "extends_app_present": true,
+        "other_top_level_declarations_present": false
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    },
+    {
+      "trial_id": "30-WEB_STATIC-FOCUSED_INSTRUCTION-2",
+      "target": "WEB_STATIC",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 16816,
+      "response_sha256": "49fb442be0787bebdd307a7d8c2e9df675778137d157e48128dc67869e9ce567",
+      "usage": {
+        "completion_tokens": 186,
+        "prompt_tokens": 2200,
+        "total_tokens": 2386
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "dc4a7948437ced71691511eff546090df9c8ece6616987b42b0b2d9359b25ae5",
+      "line_count": 16,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\30-WEB_STATIC-FOCUSED_INSTRUCTION-2\\source.txt",
+        "sha256": "dc4a7948437ced71691511eff546090df9c8ece6616987b42b0b2d9359b25ae5",
+        "size_bytes": 697
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\30-WEB_STATIC-FOCUSED_INSTRUCTION-2\\sent-request.json",
+        "sha256": "838826bf91e8f58d8eec366bdc7c135ede342116d7afbfda1dfb6ed7441fb0f6",
+        "size_bytes": 13125
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\30-WEB_STATIC-FOCUSED_INSTRUCTION-2\\response.raw.json",
+        "sha256": "49fb442be0787bebdd307a7d8c2e9df675778137d157e48128dc67869e9ce567",
+        "size_bytes": 1756
+      },
+      "checks": {
+        "importWithoutDOM": true,
+        "createReservationExport": false
+      },
+      "probe_scope": "NODE_CORE_ONLY_NOT_BROWSER_OR_GENERATED_TEST_SUITE"
+    },
+    {
+      "trial_id": "31-JVM_JAVA-FOCUSED_INSTRUCTION-2",
+      "target": "JVM_JAVA",
+      "arm": "FOCUSED_INSTRUCTION",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 8957,
+      "response_sha256": "515134e207c628ae5e5109644df9d0f6c103aac13876a53be1caf8bf596f023b",
+      "usage": {
+        "completion_tokens": 93,
+        "prompt_tokens": 2249,
+        "total_tokens": 2342
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "061b9e40a9ba9d21027d5e1b088c09a1f91090319ea57846d7114ed60f5330c1",
+      "line_count": 10,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\31-JVM_JAVA-FOCUSED_INSTRUCTION-2\\source.txt",
+        "sha256": "061b9e40a9ba9d21027d5e1b088c09a1f91090319ea57846d7114ed60f5330c1",
+        "size_bytes": 386
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\31-JVM_JAVA-FOCUSED_INSTRUCTION-2\\sent-request.json",
+        "sha256": "b47b17c9748f3edcbf4e64c3d556a3a25a0b6e6c8a4793d57cd58e482ffbfdb6",
+        "size_bytes": 13364
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\31-JVM_JAVA-FOCUSED_INSTRUCTION-2\\response.raw.json",
+        "sha256": "515134e207c628ae5e5109644df9d0f6c103aac13876a53be1caf8bf596f023b",
+        "size_bytes": 1423
+      },
+      "checks": {
+        "compile_and_zero_argument_exit_0": true,
+        "printed_uuid": true,
+        "printed_usage": false
+      },
+      "probe_scope": "JAVAC_AND_ZERO_ARGUMENT_MAIN_ONLY_NOT_JUNIT"
+    },
+    {
+      "trial_id": "32-JVM_KOTLIN-OMIT_ARCHITECTURE-2",
+      "target": "JVM_KOTLIN",
+      "arm": "OMIT_ARCHITECTURE",
+      "repetition": 2,
+      "http_status": 200,
+      "elapsed_milliseconds": 15344,
+      "response_sha256": "ce34c55b4cfff9e81b0eb40a905bab8fd4b33a16719fba5c1fcd84b71937f65a",
+      "usage": {
+        "completion_tokens": 159,
+        "prompt_tokens": 2082,
+        "total_tokens": 2241
+      },
+      "finish_reason": "stop",
+      "status": "GENERATED",
+      "source_sha256": "907d4c96f1d977d2f1cdb3dbd3b07c29e8ad157a95e5c3575201e504aabd7e13",
+      "line_count": 17,
+      "source_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\32-JVM_KOTLIN-OMIT_ARCHITECTURE-2\\source.txt",
+        "sha256": "907d4c96f1d977d2f1cdb3dbd3b07c29e8ad157a95e5c3575201e504aabd7e13",
+        "size_bytes": 435
+      },
+      "request_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\32-JVM_KOTLIN-OMIT_ARCHITECTURE-2\\sent-request.json",
+        "sha256": "4683c1dc4539c0c1bd7e0c4d7392f07bf806c360d3fa5717549a0eea13759c99",
+        "size_bytes": 11215
+      },
+      "response_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\32-JVM_KOTLIN-OMIT_ARCHITECTURE-2\\response.raw.json",
+        "sha256": "ce34c55b4cfff9e81b0eb40a905bab8fd4b33a16719fba5c1fcd84b71937f65a",
+        "size_bytes": 1614
+      },
+      "checks": {
+        "calls_nonexistent_factory_generateUniqueId": false,
+        "calls_existing_factory_createReservation": false,
+        "imports_factory": false,
+        "imports_reservation": true
+      },
+      "probe_scope": "STATIC_TEXT_OBSERVATIONS_ONLY_NO_COMPILATION_CLAIM"
+    }
+  ],
+  "execution_scope": {
+    "final_container_probes": 18,
+    "historical_controls": 2,
+    "new_java_compiler_and_cli_probes": 8,
+    "new_node_core_probes": 8,
+    "static_only_kotlin_scala_reviews": 16,
+    "all_final_containers_removed": true,
+    "anonymous_cache_removed_after_aborted_preflight": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\checks\\implicit-cache-cleanup.json",
+      "sha256": "63fef36722a9ffb355f705cf55b988f6e854db8041363fd81a61e766046fb11e",
+      "size_bytes": 497
+    },
+    "generated_file_substitution": "One diagnostic file substituted only in a separate disposable read-only workspace; no original artifact overwritten."
+  },
+  "validation": {
+    "unit_tests": {
+      "passed": 6,
+      "failed": 0,
+      "xml": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\verification\\diagnosis-tests.xml",
+        "sha256": "1e06519d73c6d77ed8f28612f20d0d309a908e26e38e345fc50cbfa98f86106b",
+        "size_bytes": 1190
+      }
+    },
+    "ruff_check": "PASSED",
+    "ruff_format": "PASSED",
+    "diff_check": "PASSED",
+    "production_regression_suite_rerun": false,
+    "reason": "Only diagnostic operators, their tests and this report are added; production sources are unchanged."
+  },
+  "limitations": [
+    "Selected known failing development files, not held-out tasks or independent application samples.",
+    "FOCUSED_INSTRUCTION is a task-specific prompt intervention, not a proven general repair.",
+    "OMIT_ARCHITECTURE removes approved semantic content solely for an explicit diagnostic ablation.",
+    "Two stochastic repetitions cannot establish population pass rates or training necessity.",
+    "No database writes, governed source publication, evaluator inference or frozen-case access.",
+    "Probe scope and interventions were specified before inference; executable probe code was finalized after inference began. This is exploratory diagnosis, not a preregistered benchmark.",
+    "No per-call paired model seed; order is seeded, sampling remains stochastic. Small samples do not identify population effect sizes.",
+    "Scala explicit_main_signature is a lexical observation and does not prove binding to object Main; manual review found that sample 23 is not bound to Main.",
+    "Kotlin and Scala diagnostic outputs were not compiled; previous phase retained their original governed failures.",
+    "No quantization, output-format or alternative-model ablation was performed. Correcting application inputs precedes such comparisons.",
+    "The full synthetic application is not qualified by the successful focused Java Main probe; its original JUnit test defects remain."
+  ],
+  "harness_corrections": [
+    {
+      "issue": "Initial diagnostic function name shadowed http package before network access.",
+      "inference_requests_sent": 0,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-20260914\\preflight-failure.json",
+        "sha256": "0cb246a4e3917b89a49e3b63feef82f14660b439e5e6c632d0e155bcca963b46",
+        "size_bytes": 225
+      }
+    },
+    {
+      "issue": "First projection collision check used nonexistent to_screen_id; replaced by a counterexample changing the actual target_screen_id.",
+      "valid_evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\semantic-projection-proof-v2.json",
+        "sha256": "e4129f6bbbbf5f82cd3faa555c9dee425fabd160c67abcba2ad9ab1b00b1dda7",
+        "size_bytes": 2168
+      }
+    },
+    {
+      "issue": "Java image declares an implicit Gradle cache volume; pre-start verification rejected it.",
+      "executed_java_code_before_fix": false,
+      "resolution": "Explicit tmpfs cache, retained initial preflight receipt, removed the created anonymous volume, and completed checks-v2 without new inference."
+    }
+  ],
+  "source_files": [
+    {
+      "repository_path": "environments/training/diagnose_source_generation.py",
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\diagnose_source_generation.py",
+      "sha256": "1fdbe52db62034975dd9196a8cfd75f8e8de146d0534e2af0b3c50aa4c6e4d5f",
+      "size_bytes": 16679,
+      "archived": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\source-snapshot\\environments\\training\\diagnose_source_generation.py",
+        "sha256": "1fdbe52db62034975dd9196a8cfd75f8e8de146d0534e2af0b3c50aa4c6e4d5f",
+        "size_bytes": 16679
+      }
+    },
+    {
+      "repository_path": "environments/training/check_source_diagnosis.py",
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\check_source_diagnosis.py",
+      "sha256": "6355318be113851d360f35eac631868c72e10f4ee765300266f7f612b25f0af9",
+      "size_bytes": 12379,
+      "archived": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\source-snapshot\\environments\\training\\check_source_diagnosis.py",
+        "sha256": "6355318be113851d360f35eac631868c72e10f4ee765300266f7f612b25f0af9",
+        "size_bytes": 12379
+      }
+    },
+    {
+      "repository_path": "src/test/python/models/test_source_diagnosis.py",
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\test\\python\\models\\test_source_diagnosis.py",
+      "sha256": "f0e5754779b024c7356ab50d82da467efcfb31292640abee346b5063c9cb7a91",
+      "size_bytes": 3210,
+      "archived": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\source-snapshot\\src\\test\\python\\models\\test_source_diagnosis.py",
+        "sha256": "f0e5754779b024c7356ab50d82da467efcfb31292640abee346b5063c9cb7a91",
+        "size_bytes": 3210
+      }
+    }
+  ],
+  "reference_context": [
+    {
+      "url": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
+      "use": "Primary model identity and non-thinking model documentation; not a substitute for local quality evidence."
+    },
+    {
+      "url": "https://github.com/guidance-ai/llguidance",
+      "use": "Token masking enforces output grammar; source-program semantic correctness remains separately checked."
+    },
+    {
+      "url": "https://huggingface.co/docs/transformers/main/en/main_classes/text_generation",
+      "use": "Generation parameter documentation; local retained usage and STOP observations drive the budget conclusion."
+    }
+  ],
+  "artifact_index": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase6-source-diagnosis-v2-20260914\\artifact-index.json",
+    "sha256": "fa0d4707f918364a39e270a06dc91fa9f0a3857940a869bbd1f11e94d4e5fdd2",
+    "size_bytes": 63452
+  },
+  "artifact_index_scope": "All existing diagnostic files before this index and final report; index and report hashes are verified separately."
+}

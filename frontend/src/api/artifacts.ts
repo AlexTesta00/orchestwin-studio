@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./requestError";
+
 import type { CrossStageArtifactGraphPayload } from "../types/artifacts";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -7,26 +9,7 @@ export interface ArtifactGraphApiOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class ArtifactGraphApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(
-    message: string,
-    options: {
-      status: number;
-      code: string | null;
-      payload: unknown;
-    },
-  ) {
-    super(message);
-    this.name = "ArtifactGraphApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class ArtifactGraphApiError extends ApiRequestError {}
 
 export interface ArtifactGraphApi {
   current(projectId: string, accessToken: string): Promise<CrossStageArtifactGraphPayload>;

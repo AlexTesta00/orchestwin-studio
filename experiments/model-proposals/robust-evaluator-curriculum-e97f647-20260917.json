@@ -1,0 +1,462 @@
+{
+  "schema_version": 1,
+  "status": "ROBUSTNESS_CURRICULUM_VERIFIED_READY_FOR_USER_COMMIT",
+  "recorded_at_utc": "2026-09-17T17:36:51.042444+00:00",
+  "baseline_git_head": "e97f6479d94f34e69251d0b6912fc6836c3fd09a",
+  "phase_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01",
+  "motivation": "Frozen paired diagnosis identified ID/HTML/prose sensitivity and persistent missing-form failures. Targeted static supervision varies those factors while retaining every v5 training row.",
+  "dataset": {
+    "curriculum_id": "grounded-evaluator-robust-interface-v6",
+    "seed": 2026091706,
+    "files": {
+      "train.jsonl": {
+        "rows": 17256,
+        "size_bytes": 214789799,
+        "sha256": "137f9b84d852d0cf7929216de4aed1b3dcb7418c276d7d6c62a05cfcfa6156c4"
+      },
+      "validation.jsonl": {
+        "rows": 1944,
+        "size_bytes": 24595620,
+        "sha256": "cf122e8c8c00a6467775694b3b1063332f79c64d2398e61cb01ff4853e75730a"
+      }
+    },
+    "training_rows": 17256,
+    "new_training_rows": 3888,
+    "retained_rows": 13368,
+    "new_validation_rows": 1944,
+    "new_train_groups": 8,
+    "new_validation_groups": 4,
+    "modes": 11,
+    "languages": [
+      "en",
+      "it"
+    ],
+    "id_styles": [
+      "short",
+      "readable",
+      "opaque"
+    ],
+    "quote_styles": [
+      "single",
+      "double"
+    ],
+    "void_styles": [
+      "native",
+      "xml"
+    ],
+    "prose_styles": [
+      "neutral",
+      "instruction"
+    ],
+    "training_template_ids": [
+      0,
+      1
+    ],
+    "validation_template_ids": [
+      2,
+      3
+    ],
+    "invariant_groups": 264,
+    "all_retained_bytes_unchanged": true
+  },
+  "leakage": {
+    "protected_sources": [
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-curriculum-613848d-20260917-01\\data\\validation.jsonl",
+        "sha256": "0fd93177c470465c8004bbbaedaa13c0a368db296753e65802a6690b96763426",
+        "rows": 1212
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\data\\validation.jsonl",
+        "sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e",
+        "rows": 3280
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01\\data\\validation.jsonl",
+        "sha256": "b5ae4562e48273275bfb87b148f2d2203c9db32c58a851c88cf31f7cc2260cad",
+        "rows": 480
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01\\pilot-screen-inputs.json",
+        "sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+        "rows": 342
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\cases.json",
+        "sha256": "d13baffe8762ab609189999092d3ecda82ab91d55d07bcaee4fe02a9955e57e6",
+        "rows": 86
+      }
+    ],
+    "normalized_training_overlap": 0,
+    "train_validation_overlap": 0,
+    "group_overlap": 0,
+    "normalization": "Consistent DOM/task ID references and parsed equivalent quote/void syntax; natural language text is not altered. Invariant siblings are retained within their original split."
+  },
+  "composition": {
+    "components": {
+      "new_robustness": {
+        "rows": 3888,
+        "total_tokens": 12530091,
+        "completion_tokens": 1025807,
+        "prompt_tokens": 11504284,
+        "row_share": 0.22531293463143254,
+        "token_share": 0.21860205541663172,
+        "completion_token_share": 0.19316238447149225
+      },
+      "retained_v5": {
+        "rows": 13368,
+        "total_tokens": 44789091,
+        "completion_tokens": 4284787,
+        "prompt_tokens": 40504304,
+        "row_share": 0.7746870653685675,
+        "token_share": 0.7813979445833683,
+        "completion_token_share": 0.8068376155285077
+      }
+    },
+    "retained_coverage_categories": 274,
+    "original_coverage_categories": 274,
+    "same_retention_token_totals_as_historical_audit": true,
+    "independent_cache_totals_match": true,
+    "training": false
+  },
+  "tokenization": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "max_sequence": 6144,
+    "output_reserve": 2048,
+    "splits": {
+      "train": {
+        "rows": 17256,
+        "total_tokens": 57319182,
+        "prompt_tokens": 52008588,
+        "completion_tokens": 5310594,
+        "min_tokens": 1906,
+        "max_tokens": 4753,
+        "mean_tokens": 3321.695757997218,
+        "p95_tokens": 4031,
+        "p99_tokens": 4352,
+        "max_prompt_tokens": 3446,
+        "max_completion_tokens": 1347
+      },
+      "validation": {
+        "rows": 1944,
+        "total_tokens": 6286146,
+        "prompt_tokens": 5773713,
+        "completion_tokens": 512433,
+        "min_tokens": 2168,
+        "max_tokens": 4185,
+        "mean_tokens": 3233.614197530864,
+        "p95_tokens": 3806,
+        "p99_tokens": 4127,
+        "max_prompt_tokens": 3261,
+        "max_completion_tokens": 1012
+      }
+    },
+    "package_versions": {
+      "transformers": "5.5.0",
+      "tokenizers": "0.22.2"
+    },
+    "tokenizer_origin": {
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "previous_audit_sha256": "e9a5242a8918700e5b8490e1baab0bcba0ca30d2f277d7e8aed30d0a23cf6ffd",
+      "all_pinned_files_identical": true
+    },
+    "cache_sha256": "0124e73987536a420cd57c06e868177a054a508e188c49be731c5f3b873e7d7a",
+    "truncation": false,
+    "completion_boundary_checked": true,
+    "eos_checked": true,
+    "model_weights_loaded": false
+  },
+  "verification": {
+    "tests_passed": 184,
+    "tests_failed": 0,
+    "ruff_check": "PASS",
+    "ruff_format": "PASS",
+    "git_diff_check": "PASS",
+    "native_gold_and_static_oracle_checks": "PASS",
+    "new_invariance_groups": 264,
+    "invariance_violations": 0,
+    "old_training_suffix_digest_verified": true,
+    "prior_diagnostic_source_and_tests_unchanged": true,
+    "protected_sources_rehashed_unchanged": true,
+    "operator_snapshots_rehashed": true,
+    "gold_summary_review": {
+      "sample": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\gold-review-sample.json",
+        "sha256": "e479752f260cf3f422ee16f920bddd07f5ed89e0a854ee9d92360532b9eadb8a",
+        "bytes": 29648
+      },
+      "rows": 22,
+      "coverage": "Every mode in English and Italian; template-level review of rationale and actions in source.",
+      "reviewer": "Coding assistant, not an independent human expert",
+      "finding": "Sample sentences distinguish requested static properties from unavailable evidence; they do not claim real-user success or general accessibility conformance."
+    }
+  },
+  "next_training_protocol": {
+    "schema_version": 1,
+    "status": "PREDECLARED_PREPARATION_ONLY_PENDING_USER_COMMIT",
+    "objective": "Resolve known static-fact failures and surface sensitivity without losing previously passing development cases.",
+    "scope": "Synthetic evaluator development; no source-generator training, real-user evidence, thesis-final qualification or deployment.",
+    "initialization": "Fresh LoRA from the pinned base; the previous balanced adapter is a comparator, not an optimizer checkpoint for this different corpus.",
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "dataset_manifest": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\data-02\\manifest.json",
+      "sha256": "1a880d486f7e50aa14fd338471c984cd74e83b2e77ce7c24b38a32f78979e940",
+      "bytes": 10295
+    },
+    "cache_manifest": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\preflight-03\\cache\\cache.json",
+      "sha256": "24808db190ba7fb752d80edc35a40e63be6684962970558992fc064f4772a73a",
+      "bytes": 28683
+    },
+    "training_policy": {
+      "max_steps": 4314,
+      "batch_size": 1,
+      "accumulation": 4,
+      "learning_rate": 0.0001,
+      "rank": 16,
+      "alpha": 32,
+      "save_steps": 100,
+      "max_active_seconds": 14400
+    },
+    "epochs": 1,
+    "training_seed": 2026091503,
+    "dataset_seed": 2026091706,
+    "sampler": "PYTHON_SHUFFLE_WITHOUT_REPLACEMENT_PER_EPOCH",
+    "loss": "ALL_COMPLETION_TOKENS_INCLUDING_EOS",
+    "packing": false,
+    "max_sequence": 6144,
+    "max_output_tokens": 2048,
+    "runtime_lock": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\uv.lock",
+      "sha256": "fcd551c5c136ba0c6266d131b41a10ae48b13477dc7269f786a29f7db14d073b",
+      "bytes": 233919
+    },
+    "balanced_comparator": {
+      "weights": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\outputs\\balanced-pilot-results-e8e2c64-01\\adapter\\adapter_model.safetensors",
+        "sha256": "1b69ef740f7f2f0499c2aee250561243d95899f5221b0472c65cccf0ec5f326b",
+        "bytes": 132187856
+      },
+      "config": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\outputs\\balanced-pilot-results-e8e2c64-01\\adapter\\adapter_config.json",
+        "sha256": "038c44b5784a3c715a54ca4f7134b723cab43628b2777accf5858b894ac8122b",
+        "bytes": 1295
+      },
+      "historical_assessment": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\assessment.json",
+        "sha256": "bc7f7abf1fc69009064375edded89cf6f139e6edbcb786210ce8977f065a5ff2",
+        "bytes": 485436
+      },
+      "diagnostic_assessment": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\model-proposals\\evaluator-diagnostic-e97f647-20260917.json",
+        "sha256": "cfbb34bbcfcedbe5428250fa3837f61bef80254b7cb319656af91aaeecda30a2",
+        "bytes": 55945
+      }
+    },
+    "frozen_scorer": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\orchestwin\\training\\scoped_evaluator_scoring.py",
+      "sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+      "bytes": 3635
+    },
+    "inference_worker": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\evaluator_candidate_worker.py",
+      "sha256": "9603016196d9ccc5f7868bbcf8e1c2cd887a86f32431118ae08b073bbcf982ae",
+      "bytes": 10319
+    },
+    "decoding": "Reuse the pinned native structured inference worker and generation limits without prompt changes; record exact runtime, tokenizer and adapter identity for every output.",
+    "stages": [
+      {
+        "stage": 1,
+        "action": "Verify user commit contains source hashes, reproduce cache identity in pinned cloud runtime, refresh balance/GPU price and arm independent recovery/cost watchdog before provisioning the candidate run.",
+        "training": true,
+        "max_active_seconds": 14400
+      },
+      {
+        "stage": 2,
+        "action": "Run the candidate on all 342 frozen historical development cases and all 86 frozen diagnostic cases; reuse verified comparator outputs. Deduplicate inference only when full request bytes are identical and retain every cohort mapping.",
+        "historical": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01\\pilot-screen-inputs.json",
+          "sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+          "bytes": 3682259
+        },
+        "diagnostic": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\cases.json",
+          "sha256": "d13baffe8762ab609189999092d3ecda82ab91d55d07bcaee4fe02a9955e57e6",
+          "bytes": 921947
+        },
+        "candidate_request_upper_bound": 428,
+        "gate": "342/342 historical and 86/86 diagnostic native/domain/scorer passes; zero prior-pass regressions; no ID-only summary; no unsupported user-success/accessibility assurance in reviewed narratives. Failure stops progression."
+      },
+      {
+        "stage": 3,
+        "action": "Only after stage 2 passes: evaluate candidate and previous balanced comparator on every new validation input, with fixed identical decoding/runtime, then compare paired native decisions and invariance groups.",
+        "inputs": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\validation-inputs.json",
+          "sha256": "ec381de9c5f7876d2d9216bab2a3cd465b8ba20833a97184004bce8cf4bc633d",
+          "bytes": 21408485
+        },
+        "label_map_local_only": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\validation-case-map.json",
+          "sha256": "b068a5f32add44bbc20208e0f0f664bbae514b6bfd854078cfa6290e54b24cab",
+          "bytes": 895559
+        },
+        "unique_inputs": 1944,
+        "inference_upper_bound": 3888,
+        "gate": "Candidate 1944/1944 static native/domain/scorer passes; zero comparator-pass regressions; every invariant group correct; scope-policy and real-property counterfactuals correctly separated. A partial run is incomplete evidence."
+      },
+      {
+        "stage": 4,
+        "action": "Recover outputs, adapters and checksums; preserve all failures and report paired deltas by language, mode, ID, quote, void syntax and prose. Stop owned compute and pause monitoring; stop for user commit. No production promotion."
+      }
+    ],
+    "narrative_review": "Supplement the unchanged scorer with ID-only-summary detection; inspect all failed, changed-decision and prompt-injection outputs plus a preselected representative set of remaining passes in both languages. Record exact coverage; never equate automatic scores with semantic or human-expert validation.",
+    "budget": {
+      "phase_compute_ceiling_usd": 20,
+      "gpu_hourly_ceiling_usd": 2.2,
+      "watchdog_hourly_ceiling_usd": 0.08,
+      "allocation_max_seconds": 28800,
+      "storage_reserve_usd": 20,
+      "refresh_balance_and_quote_before_launch": true,
+      "prices_are_caps_not_current_quotes": true
+    },
+    "stop_rules": [
+      "Never alter frozen historical inputs, labels or scorer to obtain a pass.",
+      "Do not automatically extend training or start another candidate after failure or deadline.",
+      "The reserved thesis-final test remains unopened.",
+      "Known development success permits a later independent qualification plan; it does not establish readiness for production."
+    ],
+    "launch_executed": false,
+    "production_promotion": false,
+    "estimated_training": {
+      "method": "Historical same-GPU one-epoch active time scaled by complete sequence tokens.",
+      "reference": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01\\final-20260917\\outputs\\balanced-pilot-results-e8e2c64-01\\training-result.json",
+        "sha256": "12f69dde54d7bb7684c2abcd146ea49bbf25d021452415d925506900bdb43bf1",
+        "bytes": 674
+      },
+      "reference_gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+      "reference_tokens": 44789091,
+      "current_tokens": 57319182,
+      "ratio": 1.2797576534875423,
+      "nominal_training_minutes": 131.35448546687,
+      "measured_new_throughput": false,
+      "includes_setup_validation_or_recovery": false,
+      "limitation": "Planning estimate, not a quality prediction or runtime guarantee; longer sequences and different hardware can change throughput."
+    }
+  },
+  "limitations": [
+    "All examples are synthetic development supervision, with controlled siblings rather than thousands of independent real services.",
+    "Validation holds out services and layouts but shares generation rules; it is not an independent final test.",
+    "The entire previous training corpus remains unchanged, including its older response styles; improved narrative quality on historical requests remains an empirical gate.",
+    "Dataset preparation and correct gold labels do not demonstrate improved model quality; the corrective adapter has not been trained.",
+    "The leakage normalizer checks controlled DOM identities and syntax, not arbitrary paraphrase equivalence.",
+    "This phase does not retrain the source generator, promote a model, write to the database or launch cloud compute."
+  ],
+  "training_executed": false,
+  "model_inference_executed": false,
+  "cloud_resources_started": false,
+  "production_promotion": false,
+  "database_writes": false,
+  "reserved_final_tests_opened": false,
+  "commits_performed": false,
+  "git_staging_performed": false,
+  "previous_uncommitted_diagnosis": {
+    "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\experiments\\model-proposals\\evaluator-diagnostic-e97f647-20260917.json",
+    "sha256": "cfbb34bbcfcedbe5428250fa3837f61bef80254b7cb319656af91aaeecda30a2",
+    "bytes": 55945
+  },
+  "source_sha256": {
+    "environments/training/audit_complete_evaluator.py": "5ac5730ec5ad76bb4a77cd8e3572f1743490ac74c11a959a6f025be9998ac75f",
+    "environments/training/audit_scoped_evaluator.py": "a0e6f20ead21a497d8c54316c34624c00c85e2436bd7179a37c615fb820db0d1",
+    "environments/training/complete_training_data.py": "975e4a177cb8e5cc072a7c32e9247390d0b8a775723fbded3762d5bc657036f3",
+    "environments/training/complete_training_runtime.py": "474732e1fae6a1a7e75446d939ed4153c6174d5200674d0fc6a42b10b577ab53",
+    "environments/training/prepare_complete_evaluator.py": "b53c0caa1bd6365e4ced57ffcf9f8beb818ed2d503b4a6de7d58fe11dc4cdcd4",
+    "environments/training/prepare_robust_evaluator.py": "dcb0de7dd4788c0a350da17c9b13386e0709da0e3c88afc4b4f8bb4b98094c82",
+    "environments/training/run_complete_evaluator.py": "57b01d2a303fbc29e8c3a19387a754f8687f5768e2bc6110eaf37b291505a0c0",
+    "src/orchestwin/training/complete_interface_validation.py": "de89391afaae8c3a4e532453c8b3b9cfd100203b744bb73d2d9f812357a14cd3",
+    "src/orchestwin/training/evaluator_assessment.py": "c2762151342b3bc1b193225fedd1a990c0d22d5ea60b25cbb8fbbe8b9659fb38",
+    "src/orchestwin/training/grounded_evaluator_curriculum.py": "e6e4888b5125fa0bad8a2d07e4f2e08c5119bc2c19fd246a44d7cad9183773a7",
+    "src/orchestwin/training/relational_evaluator_curriculum.py": "701ca1d2aed28b4250f7d05008877de0fd88ec7d11ccf86aa00dc608259547a9",
+    "src/orchestwin/training/robust_interface_curriculum.py": "f537451d08a06d5df7ddcc7782b12a3ae60efb79b472dde6e3ef77d6c68f1b6c",
+    "src/orchestwin/training/robust_interface_fixtures.py": "5d7f6c2016b3de53edfe45c41a6f08d801d65fcc75f4ff5c94e9fb4be517d5c5",
+    "src/orchestwin/training/robustness_leakage.py": "8c54876458fdd712b9eb6812b8a442effd88c34e2a2d7937c32f8809c7d4a258",
+    "src/orchestwin/training/scoped_evaluator_scoring.py": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+    "src/orchestwin/training/scoped_interface_validation.py": "901b83e9060836c844ba9fa4057d0fd2c7f8ac7ececfb05e8e844a1b8e368744",
+    "src/test/python/training/test_robust_interface_curriculum.py": "5c92505fb444a436914056dbe43ffd90742762220e44de1414396de563b5c893"
+  },
+  "artifacts": [
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\data-02\\manifest.json",
+      "sha256": "1a880d486f7e50aa14fd338471c984cd74e83b2e77ce7c24b38a32f78979e940",
+      "bytes": 10295
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\preflight-03\\tokenization.json",
+      "sha256": "8629ef376ce537afc70e75bbe3bb54a2e5c659eb9968aa2410253330b97d4027",
+      "bytes": 32610
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\preflight-03\\cache\\cache.json",
+      "sha256": "24808db190ba7fb752d80edc35a40e63be6684962970558992fc064f4772a73a",
+      "bytes": 28683
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\composition-audit.json",
+      "sha256": "75f95f4cbb9eeb8cd94e6b5bd4b124677e03f049316fc9a9f992d415129a037d",
+      "bytes": 819
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\static-audit.json",
+      "sha256": "b328a1783b26370d571784efc81373a40d8d7d7105ce135d61d9ad8ac6fb2eeb",
+      "bytes": 5634
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\tests.xml",
+      "sha256": "be589d97a99b1597c33631d46781351669835f2e2447c83f5fd10b94b1869b52",
+      "bytes": 33978
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\validation-inputs.json",
+      "sha256": "ec381de9c5f7876d2d9216bab2a3cd465b8ba20833a97184004bce8cf4bc633d",
+      "bytes": 21408485
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\validation-case-map.json",
+      "sha256": "b068a5f32add44bbc20208e0f0f664bbae514b6bfd854078cfa6290e54b24cab",
+      "bytes": 895559
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\gold-review-sample.json",
+      "sha256": "e479752f260cf3f422ee16f920bddd07f5ed89e0a854ee9d92360532b9eadb8a",
+      "bytes": 29648
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\next-training-protocol.json",
+      "sha256": "0b3e9b00232b612ad559d95aaaf85cd2a2018d75cb41a12cf1cc877e77bc52b8",
+      "bytes": 9157
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\training-policy.json",
+      "sha256": "230c73fde9b511a682ed9beb2d592213fe155fa1750389885bc70fb976b70305",
+      "bytes": 182
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\tokenizer-environment.json",
+      "sha256": "26745a20622b5080c326230085c414af8ed7b0599631cb22db62297888c2abac",
+      "bytes": 759
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\run_preflight_final.py",
+      "sha256": "92b72a66eb15d7d9f141711e3e10f2579ea8635ef9cf527291e939329e084c88",
+      "bytes": 3919
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\robust-curriculum-e97f647-20260917-01\\prepare_validation_final.py",
+      "sha256": "66ccc8c89352461b0c6bfbfcc171fcb4769e0906451feb94b9dadffcace6803b",
+      "bytes": 3615
+    }
+  ]
+}

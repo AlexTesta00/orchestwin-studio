@@ -67,12 +67,6 @@ FAILURE_SIGNATURE = "9" * 64
 EXECUTION_PLAN_HASH = "f" * 64
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset owner-scoped rows while preserving the migrated schema."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 def source_revision(
     *,
     revision_id: UUID,
@@ -218,7 +212,6 @@ async def run_integration_scenario() -> None:
     runtime = create_database_runtime(settings)
 
     try:
-        await truncate_application_data(runtime)
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory),
             password_service=Argon2PasswordService(),
@@ -378,7 +371,6 @@ async def run_integration_scenario() -> None:
         assert "0022_jvm_source_revisions" in revisions
         assert "0023_jvm_execution_attempts" in revisions
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

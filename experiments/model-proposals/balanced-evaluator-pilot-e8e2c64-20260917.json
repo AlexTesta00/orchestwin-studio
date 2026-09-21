@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "status": "BALANCED_TRAINING_STARTED_SCREEN_PENDING",
+  "recorded_unix": 1789644537.2963402,
+  "baseline_git_head": "e8e2c6470a840c9fa0e786aaa0491705211aca29",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\balanced-pilot-e8e2c64-20260917-01",
+  "cloud": {
+    "provider": "Runpod",
+    "gpu": {
+      "id": "a9snm01sdh90pw",
+      "name": "orchestwin-scoped-pilot-21033fe-20260917",
+      "status": "RUNNING",
+      "cost": 2.09,
+      "startedAt": "2026-09-17T11:17:08.699Z",
+      "createdAt": "2026-09-17T05:45:23.947Z",
+      "connection": {
+        "command": "ssh root@205.196.144.42 -p 11640",
+        "host": "205.196.144.42",
+        "port": 11640,
+        "username": "root"
+      }
+    },
+    "watchdog": {
+      "id": "mqpsfl4szcdiy5",
+      "name": "orchestwin-full-watchdog-e7a8bd9-20260915",
+      "status": "RUNNING",
+      "cost": 0.06,
+      "startedAt": "2026-09-17T11:17:28.875Z",
+      "createdAt": "2026-09-15T11:44:44.217Z",
+      "connection": {
+        "command": "ssh root@213.173.105.96 -p 49668",
+        "host": "213.173.105.96",
+        "port": 49668,
+        "username": "root"
+      }
+    },
+    "network_volume": "pwdbxu66v4",
+    "control_directory": "/workspace/balanced-pilot-e8e2c64-01",
+    "result_directory": "/workspace/balanced-pilot-results-e8e2c64-01",
+    "gpu_memory_mib": 97887,
+    "watchdog_state_observed": "ARMED",
+    "launch": {
+      "pid": 978,
+      "started_unix": 1789644085.0067182,
+      "mode": "TRAINING_AND_MATCHED_DEVELOPMENT_SCREEN"
+    },
+    "guard": {
+      "stage": "ARMED",
+      "pod_id": "a9snm01sdh90pw",
+      "run_directory": "/workspace/balanced-pilot-results-e8e2c64-01",
+      "updated_unix": 1789644392.0207913,
+      "deadline_unix": 1789676143.6556535
+    },
+    "note": "Existing GPU allocation restarted successfully. Watchdog s6hre5532jvtry could not restart for host CPU capacity; existing campaign watchdog mqpsfl4szcdiy5 restarted at the same USD 0.06/hour rate."
+  },
+  "budget": {
+    "phase_compute_ceiling_usd": 25,
+    "campaign_ceiling_usd": 200,
+    "opening_balance_usd": 138.1353229352,
+    "gpu_hourly_usd": 2.09,
+    "watchdog_hourly_usd": 0.06,
+    "storage_reserve_usd": 20,
+    "lease": {
+      "pod_id": "a9snm01sdh90pw",
+      "pod_name": "orchestwin-scoped-pilot-21033fe-20260917",
+      "created_unix": 1789643803.6556535,
+      "hourly_ceiling_usd": 2.2,
+      "allowance_usd": 19.8,
+      "campaign_remaining_usd": 138.1353229352,
+      "storage_reserve_usd": 20,
+      "checkpoint_grace_seconds": 180,
+      "pod_started_unix": 1789643828.699
+    },
+    "independent_watchdog": {
+      "gpu_id": "a9snm01sdh90pw",
+      "gpu_name": "orchestwin-scoped-pilot-21033fe-20260917",
+      "watchdog_id": "mqpsfl4szcdiy5",
+      "watchdog_name": "orchestwin-full-watchdog-e7a8bd9-20260915",
+      "gpu_hourly_ceiling": 2.2,
+      "watchdog_hourly_ceiling": 0.08,
+      "gpu_deadline_unix": 1789676143.6556535,
+      "watchdog_deadline_unix": 1789676443.6556535,
+      "startup_deadline_unix": 1789645603.6556535
+    },
+    "provider_hard_spending_cap": false
+  },
+  "training": {
+    "rows": 13368,
+    "total_tokens": 44789091,
+    "completion_tokens": 4284787,
+    "max_steps": 3342,
+    "epochs": 1,
+    "initialization": "FRESH_LORA_FROM_PINNED_BASE_NOT_CONTINUATION_OF_PREVIOUS_ADAPTERS",
+    "policy": {
+      "max_steps": 3342,
+      "batch_size": 1,
+      "accumulation": 4,
+      "learning_rate": 0.0001,
+      "rank": 16,
+      "alpha": 32,
+      "save_steps": 100,
+      "max_active_seconds": 14400
+    },
+    "observed_progress": {
+      "stage": "TRAINING",
+      "reason": null,
+      "global_step": 27,
+      "max_steps": 3342,
+      "active_seconds": 93.58211571536958,
+      "session_seconds": 93.57428196119145,
+      "session_steps": 27,
+      "seconds_per_step": 3.4657141467107944,
+      "eta_seconds": 11488.842396346283,
+      "updated_unix": 1789644414.551998,
+      "contract_sha256": "407ce5078fc04c3e9852022a2f2d89670562b2997c1ca06415cb233298dd33d1"
+    },
+    "completed": false,
+    "improvement_demonstrated": false
+  },
+  "development_screen": {
+    "new_balanced_inferences": 342,
+    "cohorts": {
+      "scope_development": 160,
+      "retention_development": 158,
+      "known_challenge_regression": 24
+    },
+    "frozen_prior_inferences": 1026,
+    "unchanged_input_sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+    "scorer_sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+    "comparison_reuse": "SOURCE_INPUTS_AND_OBSERVED_RUNTIME_MATCH_PRIOR_PILOT",
+    "inference_output_validation_pending": true,
+    "labels_uploaded": false,
+    "independent_final_qualification": false
+  },
+  "gates": {
+    "before_cloud_launch": [
+      "Alex commits the reviewed preparation phase; verify committed source matches dataset and cache operators.",
+      "Recheck available credit, pricing and the existing campaign ceiling; bind a new lease and independent shutdown watchdog.",
+      "Freeze the runnable bundle, allocation, inference runtime and exact paired requests before inference."
+    ],
+    "advancement": [
+      "Zero schema/domain/identity errors and zero unsupported empirical claims.",
+      "All 160 frozen scope screen cases pass exact finding, gap, abstention and target checks in both languages.",
+      "No per-case regression on the 158 retention and 24 known challenge cases relative to either frozen adapted comparator.",
+      "Review every known challenge narrative, every automatic failure and the fixed scope sample; reject out-of-request or destructive recommendations.",
+      "After passing these gates, evaluate all 480 frozen v4 development cases and all 1212 v5 validation cases, deduplicating normalized equivalent inputs when the exact inference contract permits. Report repeated cases separately."
+    ],
+    "final_qualification": [
+      "Author and freeze fresh qualification inputs independently of this generator.",
+      "Development evidence and synthetic labels are not real-user observations, expert judgments or final thesis qualification."
+    ]
+  },
+  "verification": {
+    "prelaunch_tests": 58,
+    "committed_dataset_preparation_tests": 161,
+    "source_inventory_matches_commit": true,
+    "remote_bundle_hash_verified": true,
+    "cache_hash_verified": true,
+    "whole_dataset_preflight_passed": true,
+    "runtime_matches_prior_pilot": true
+  },
+  "notifications": {
+    "email": "alextesta68@gmail.com",
+    "periodic_hours": 5,
+    "completion_email": true,
+    "owner": "CLOUD_SUPERVISOR",
+    "app_automation_id": "controlla-training-orchestwin",
+    "app_automation_status": "ACTIVE"
+  },
+  "limits": [
+    "Training launch, loss and synthetic development results cannot establish final model quality.",
+    "No automatic retraining or dataset expansion after this experiment. A failed gate leads to diagnosis; a passed gate permits preparing extended validation.",
+    "Prior datasets, protocols, raw outputs and scores stay immutable.",
+    "Human expert evaluation, fresh independent qualification and thesis final tests remain separate."
+  ],
+  "promotion": false,
+  "database_writes": false,
+  "reserved_test_files_opened": false,
+  "commits_performed": false,
+  "artifacts": {
+    "bundle/manifest.json": {
+      "sha256": "401d692713db5f73fda7205e1ac59b0a0cfc200019d27923f8186e5e1366f89e",
+      "bytes": 5087
+    },
+    "bundle/protocol.json": {
+      "sha256": "4330631cce2970884549e9d6e4160b6a781a6304fb027120f109aaffe792a3cb",
+      "bytes": 5474
+    },
+    "bundle/source-inventory.json": {
+      "sha256": "0b2c8a452d907662815e9829932e514c781d5d73b7b501db89746931a3234fbc",
+      "bytes": 3455
+    },
+    "cases.json": {
+      "sha256": "9eb121413cb3e2600290a29e1e437afe8e532360ebb27f69d41f4cb28ca504b9",
+      "bytes": 3710115
+    },
+    "batches.json": {
+      "sha256": "725c8b834d817f022eac49002a7c024f8b3378d90e927e521e14dff21bddd598",
+      "bytes": 15589
+    },
+    "labels-local-only.json": {
+      "sha256": "4b3e7c6471136dcc9a232d3c21741c63bfc7c3d7891b48f22068b9db254d6cff",
+      "bytes": 4397948
+    },
+    "transfer.json": {
+      "sha256": "baed23179fa904fcf871288b837b98fa071fa13f6853f3704e3e73233ac99dbf",
+      "bytes": 124
+    },
+    "launch-status.json": {
+      "sha256": "6e27e672263b124b8c6d4ae14aa6cc939ccd5682ecd0ff469242bded99e9823e",
+      "bytes": 3204
+    },
+    "prelaunch-tests.xml": {
+      "sha256": "f7c3c7f9fbfc32b8b9ee80b3f373210d70a195cafee672510c4a85bc3d5b49b8",
+      "bytes": 9761
+    },
+    "comparator-reuse-check.json": {
+      "sha256": "cd45af79b9b864085d5f90d0b8bece34ad0fdd60fdc04b9fc04009a761794650",
+      "bytes": 3932
+    },
+    "lease.json": {
+      "sha256": "bf0850fab53e3feb49f066f7ae7a346de24db93e921ab70ab4e2e2b90737f4b5",
+      "bytes": 340
+    },
+    "watchdog-config.json": {
+      "sha256": "8d48a2d48d052f2292ad8e5fbf137fa563392518beb584488fbe5a5fd019dda4",
+      "bytes": 403
+    },
+    "recover_results.py": {
+      "sha256": "40cac63ad6d66f99770c615977bd0d76fc66aa02be62a51df2e58af1a5aa2b96",
+      "bytes": 4058
+    },
+    "assess_results.py": {
+      "sha256": "2d262dcebc6d23a042fc264660de4d47d28ed69b20797ebdd6513fe97305a53c",
+      "bytes": 5584
+    },
+    "prepare_run.py": {
+      "sha256": "5f6d259e6fca9846b6013fa06bd5690241e09e22f8e36d9b50458afc45c93a81",
+      "bytes": 7887
+    },
+    "capture_status.py": {
+      "sha256": "57a49377cdda3fb3bacd5ae4afaf9d095096cfbeb4dbececbf653770d4a67f71",
+      "bytes": 1662
+    },
+    "record_launch.py": {
+      "sha256": "fa1b72dccb6ebd2e3d61d2c517137f02ce82e602697b7649d36a091d6c3c66c0",
+      "bytes": 6022
+    },
+    "launch-continuation.json": {
+      "sha256": "a832703e7dfa6fe0b41272997cb7746fe315193624524790c7a30c336849f056",
+      "bytes": 4580
+    }
+  }
+}

@@ -1,0 +1,539 @@
+{
+  "schema_version": 1,
+  "status": "DATASET_AND_TOKEN_PREFLIGHT_COMPLETE_PILOT_NOT_LAUNCHED",
+  "recorded_utc": "2026-09-16T21:56:09.452410+00:00",
+  "baseline_git_head": "724385a591d1f5d5632006c03824a1fc6cac554b",
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\scoped-curriculum-724385a-20260916-01",
+  "scope": "SYNTHETIC_EVALUATOR_DEVELOPMENT_DATA_AND_PILOT_PREPARATION",
+  "motivation": "The prior candidate passed all closed-grammar v3 validation but only 13/24 known challenge requests; its training corpus lacked the five observed scope conditions.",
+  "curriculum_id": "grounded-evaluator-scoped-interface-v4",
+  "dataset": {
+    "files": {
+      "train.jsonl": {
+        "rows": 2600,
+        "size_bytes": 31026087,
+        "sha256": "70b5b47fd36cfb3ea4cdfaeaf84e87b1cd75866589f02b3a1ddc2f91153e566b"
+      },
+      "validation.jsonl": {
+        "rows": 480,
+        "size_bytes": 5665906,
+        "sha256": "b5ae4562e48273275bfb87b148f2d2203c9db32c58a851c88cf31f7cc2260cad"
+      }
+    },
+    "statistics": {
+      "train": {
+        "scoped_groups_retained": 54,
+        "scoped_rows": 2124,
+        "retention_rows": 476,
+        "removed_duplicates": 1908,
+        "scoped_states": {
+          "PARTIAL": 432,
+          "MISSING": 864,
+          "INSUFFICIENT": 180,
+          "PRESENT": 648
+        },
+        "scoped_locales": {
+          "en": 1062,
+          "it": 1062
+        },
+        "conditions": {
+          "detached-with-missing-button": 108,
+          "wrong-label-reference": 108,
+          "detached-present": 108,
+          "foreign-owner-inside": 108,
+          "metadata-only": 36,
+          "external-owned-descendants-only": 108,
+          "external-owned": 108,
+          "implicit-only": 108,
+          "implicit-and-explicit": 108,
+          "explicit-present": 108,
+          "button-subset-bad-decoy": 108,
+          "broken-button-reference": 108,
+          "input-subset-good-decoy": 108,
+          "input-subset-bad-decoy": 108,
+          "button-subset-good-decoy": 108,
+          "form-absent-targets-present": 36,
+          "nameless-button": 108,
+          "explicit-absent": 108,
+          "blank-explicit-label": 108,
+          "valid-button-reference": 108,
+          "detached-unlabelled": 108
+        },
+        "scoped_structural_coverage_rows": {
+          "unassessable_target_present_outside_form": 468,
+          "unrequested_controls_inside_selected_form": 2052,
+          "requested_control_with_external_form_owner": 216,
+          "implicit_label_without_requested_explicit_label": 108,
+          "selected_form_absent_but_requested_targets_present": 36
+        },
+        "retention_families": {
+          "complete_interface": 404,
+          "button_name": 42,
+          "image_text": 6,
+          "document_language": 6,
+          "error_guidance": 6,
+          "heading": 6,
+          "input_label": 6
+        }
+      },
+      "validation": {
+        "scoped_groups_retained": 12,
+        "scoped_rows": 480,
+        "retention_rows": 0,
+        "removed_duplicates": 24,
+        "scoped_states": {
+          "PARTIAL": 96,
+          "PRESENT": 144,
+          "MISSING": 192,
+          "INSUFFICIENT": 48
+        },
+        "scoped_locales": {
+          "en": 240,
+          "it": 240
+        },
+        "conditions": {
+          "detached-with-missing-button": 24,
+          "foreign-owner-inside": 24,
+          "input-subset-good-decoy": 24,
+          "wrong-label-reference": 24,
+          "input-subset-bad-decoy": 24,
+          "external-owned-descendants-only": 24,
+          "button-subset-bad-decoy": 24,
+          "explicit-absent": 24,
+          "button-subset-good-decoy": 24,
+          "form-absent-targets-present": 12,
+          "broken-button-reference": 24,
+          "detached-present": 24,
+          "detached-unlabelled": 24,
+          "implicit-only": 24,
+          "implicit-and-explicit": 24,
+          "external-owned": 24,
+          "nameless-button": 24,
+          "metadata-only": 12,
+          "explicit-present": 24,
+          "blank-explicit-label": 24,
+          "valid-button-reference": 24
+        },
+        "scoped_structural_coverage_rows": {
+          "unassessable_target_present_outside_form": 108,
+          "unrequested_controls_inside_selected_form": 456,
+          "requested_control_with_external_form_owner": 48,
+          "selected_form_absent_but_requested_targets_present": 12,
+          "implicit_label_without_requested_explicit_label": 24
+        },
+        "retention_families": {}
+      }
+    },
+    "dataset_manifest_sha256": "2e2f35f8230122535c11122418da43c21fa524d9c70b0fcfea64e7f48d9690d2",
+    "train_groups": 78,
+    "scoped_train_groups": 54,
+    "retention_train_groups": 24,
+    "validation_groups": 12,
+    "native_domain_validated_rows": 3080,
+    "retention_selection": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\curriculum-bc1b724-20260915-01\\data",
+      "manifest_sha256": "477af12816ade32b2f9dec51fcfb125fe2b0e6dd2a1321f4a43b795b8b57c3d9",
+      "train_sha256": "0a61bc04e095d6b93a53fb60c149090f50ffaf3e175c3ea9d8672259d47b1b57",
+      "selected_groups": [
+        "0d1f54a9c5f8115cddb23fc2ae7511de669d674bd089f2835a51054c6b069ef1",
+        "1909f915ada3bf539e2a5ba0ac118f556790b431f327c1717086b976791eaf68",
+        "220fcca19a51db8d2f209a9d8568372aa1f278e217103db99312bb5bd46d2ae3",
+        "3bc6826ebe9db3495c9218a5ede971be37261d9c0c82b516ada71fbc2a5f2d09",
+        "3ff4e70e1b7d09bf6ca5c74de1d721bfaeaf4243391bc6065c3283d5abb5099c",
+        "76f006da5268e3fa49534efe6737ad353ac7f40a483f0cfa6a13ec8fa01db714",
+        "7c75b73165018b88d7bae1a8e6c9fddcf33c3ad4caa069b5f668bfff4d4e74df",
+        "832aedb8b0aec9589739b42a7651a02db1a572890e70696adc41035d62a49b60",
+        "8449c0254353b3abb4a6e813e92b593e776e2039dcd28f61a6282424b539f388",
+        "8b4e45f8d773e1e397e63927eddd8c24fd22c10b35a6521ad6d04b6c7ad16207",
+        "9ebf8001ea1f9c790cf3ef02de5b28001fde81d4077aa0fa21f7e94de4c278a5",
+        "a4363f571f45f63520828a4d16671d150185a17fa2fbfa0920a4222d360a51df",
+        "a618ae0c635785a9b85dd8d6851b0fafb988e7675ffd529d467e9c6d3a8c42c1",
+        "a7ce94c1364a67e8ed2abfe07d38f99c3ed55e3486451c6ca52e59f960e92f72",
+        "ac66def2a2301fe3d7cf8c35ae7653f8b95fdc48b05f8b90ec03741706054835",
+        "ade20958ed86201b3c8c526365b194693eea48b45ed8c3c4c37175d06bbcac9c",
+        "b3cc383fbee535a123330b13a35f13ef104b41906f6847cf9960bf4d3c1416e8",
+        "b5661fb5a336a03788811be1607038097e52e45073ce9d467398aafe0e6764c6",
+        "b950d55d9c0337de9862bc12971a8096199ed2713bae93acfdb4af7a4320297c",
+        "d77c13760400b87fae056cc27a2c0beeebf61485fa84dd3f9dc8490a9402748a",
+        "ea8d4fc32a48abe24a27903e287541d8f2cde034ce77616f1b8e6be94bf89a2e",
+        "f1e627c302bb5749c4501d9e91a58adfe59da3b2966e8a4d6d7516034edea0b0",
+        "f47f8c70baabcac17ae91397072f6d12fb061b054c5fb420552d391071873f31",
+        "f92c4de8d0aac5f12f2430cf65c01ecf2c727e5ec42b38e5919f5ba383c0cc26"
+      ],
+      "selection": "Deterministic whole training groups covering each source family, then service/layout strata; no model scores."
+    },
+    "split_policy": "Translation and counterfactual siblings stay in one partition. Services and layouts are disjoint; normalized duplicate inputs are removed and cannot cross partitions."
+  },
+  "tokenization": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "splits": {
+      "train": {
+        "rows": 2600,
+        "total_tokens": 8286581,
+        "prompt_tokens": 7687968,
+        "completion_tokens": 598613,
+        "min_tokens": 1921,
+        "max_tokens": 4660,
+        "mean_tokens": 3187.1465384615385,
+        "p95_tokens": 3724,
+        "p99_tokens": 4155,
+        "max_prompt_tokens": 3406,
+        "max_completion_tokens": 1326
+      },
+      "validation": {
+        "rows": 480,
+        "total_tokens": 1499840,
+        "prompt_tokens": 1408097,
+        "completion_tokens": 91743,
+        "min_tokens": 2188,
+        "max_tokens": 3497,
+        "mean_tokens": 3124.6666666666665,
+        "p95_tokens": 3413,
+        "p99_tokens": 3449,
+        "max_prompt_tokens": 3152,
+        "max_completion_tokens": 392
+      }
+    },
+    "max_sequence": 6144,
+    "output_reserve": 2048,
+    "truncation": false,
+    "completion_only": true,
+    "eos_checked": true,
+    "cache_matches_independent_token_measurement": true,
+    "cache_sha256": "b4449915c0d266755039e9c8b55e6aec6943b7dc8f6c5604b67532e73b973559",
+    "tokenizer_files": {
+      "tokenizer.json": {
+        "path": "/home/stoprosik/.cache/huggingface/hub/models--Qwen--Qwen3-4B-Instruct-2507/snapshots/abcc171021d4f320b2e7f47c6f0deca67ded870c/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+      },
+      "tokenizer_config.json": {
+        "path": "/home/stoprosik/.cache/huggingface/hub/models--Qwen--Qwen3-4B-Instruct-2507/snapshots/abcc171021d4f320b2e7f47c6f0deca67ded870c/tokenizer_config.json",
+        "sha256": "c32490f354f7559c99627f61b1b3a94bfcbd31e1149ade76762ae44e2f4d5569"
+      }
+    },
+    "packages": {
+      "transformers": "5.5.0",
+      "tokenizers": "0.22.2"
+    }
+  },
+  "integrity": {
+    "status": "LOCAL_DATA_INTEGRITY_VERIFIED",
+    "dataset_manifest_sha256": "2e2f35f8230122535c11122418da43c21fa524d9c70b0fcfea64e7f48d9690d2",
+    "comparisons": {
+      "v4_validation": {
+        "rows": 480,
+        "exact_prompt_overlap": 0,
+        "normalized_task_profile_html_overlap": 0
+      },
+      "v3_validation": {
+        "rows": 3280,
+        "exact_prompt_overlap": 0,
+        "normalized_task_profile_html_overlap": 0
+      },
+      "known_challenge": {
+        "rows": 24,
+        "exact_prompt_overlap": 0,
+        "normalized_task_profile_html_overlap": 0
+      }
+    },
+    "group_overlap_new_train_with_new_or_old_validation": 0,
+    "retention_rows_verified_byte_for_byte": 476,
+    "retention_whole_groups": 24,
+    "reserved_test_files_opened": false,
+    "model_inferences": 0,
+    "training_executed": false,
+    "limitations": [
+      "Normalized comparison covers task, profile and HTML after consistent identifier replacement; it is not semantic decontamination of arbitrary natural language.",
+      "Known challenge is now a development regression suite. New validation still shares the synthetic generator and is not independent qualification."
+    ]
+  },
+  "gold_review": {
+    "status": "ASSISTANT_ENGINEERING_REVIEW_COMPLETED",
+    "reviewer": "ASSISTANT",
+    "human_expert_review": false,
+    "selection_sha256": "3a250d23af42496e274cba4ac90ffa4daabcd98de26bf7179c393dc779adbe77",
+    "reviewed_rows": 16,
+    "conditions": [
+      "button-subset-bad-decoy",
+      "detached-with-missing-button",
+      "external-owned",
+      "external-owned-descendants-only",
+      "foreign-owner-inside",
+      "implicit-and-explicit",
+      "implicit-only",
+      "input-subset-bad-decoy"
+    ],
+    "languages": [
+      "en",
+      "it"
+    ],
+    "observed_issues": [],
+    "checks": [
+      "Explicit-label requirement is distinct from wrapping-only label.",
+      "External form ownership changes eligibility only when requested.",
+      "Out-of-scope targets receive gaps while supported findings survive.",
+      "Unrequested bad controls do not leak into the summary or repairs.",
+      "All findings remain simulated hypotheses requiring human validation."
+    ],
+    "limitations": [
+      "Purposive paired sample from one service and one layout, not a random audit of every row.",
+      "Mechanical tests cover all variants and layouts; neither test coverage nor assistant review replaces expert validation.",
+      "Severity and confidence are synthetic fixed targets, not calibrated probabilities or human severity judgments."
+    ]
+  },
+  "pilot": {
+    "schema_version": 1,
+    "status": "PREPARED_NOT_LAUNCHED",
+    "dataset_manifest_sha256": "2e2f35f8230122535c11122418da43c21fa524d9c70b0fcfea64e7f48d9690d2",
+    "cache_manifest_sha256": "0cc7316fe8099479baafdf4dc0d31f3b1d8ec4d46628bf97cb9f1bfc40486a96",
+    "training_policy": {
+      "max_steps": 650,
+      "batch_size": 1,
+      "accumulation": 4,
+      "learning_rate": 0.0001,
+      "rank": 16,
+      "alpha": 32,
+      "save_steps": 100,
+      "max_active_seconds": 7200
+    },
+    "training_policy_sha256": "31a1c70380fb95a7a65b29f48e2e7530eb3499ca4d5dab4e999e67a238dba693",
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "initialization": "FRESH_LORA_FROM_PINNED_BASE_NOT_CONTINUATION_OF_OLD_ADAPTER",
+    "training_rows": 2600,
+    "epochs_at_full_completion": 1,
+    "loss": "COMPLETION_ONLY_INCLUDING_EOS",
+    "group_limit": null,
+    "sampler": "PYTHON_SHUFFLE_WITHOUT_REPLACEMENT_PER_EPOCH",
+    "seed": 2026091503,
+    "comparators": [
+      {
+        "name": "unadapted_base",
+        "adapter": null
+      },
+      {
+        "name": "existing_candidate",
+        "weights_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf"
+      },
+      {
+        "name": "scoped_pilot",
+        "weights_sha256": null,
+        "status": "NOT_TRAINED"
+      }
+    ],
+    "decoding": {
+      "mode": "schema",
+      "temperature": 0,
+      "max_output_tokens": 2048,
+      "max_sequence": 6144,
+      "output_repair": false,
+      "retries": 0
+    },
+    "development_screen": {
+      "selection": "One whole validation group per service/layout stratum, chosen by fixed SHA256 rank, plus all known challenge cases. No model scores used.",
+      "inputs_sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+      "labels_local_only_sha256": "45afa18038fcfd691d6b28adadec7d57fc5010412c71133810cd23216bcbaea2",
+      "input_counts": {
+        "scope_development": 160,
+        "retention_development": 158,
+        "known_challenge_regression": 24
+      },
+      "unique_inputs": 342,
+      "planned_matched_inferences": 1026,
+      "labels_sent_to_model": false,
+      "independent_final_qualification": false
+    },
+    "gates": {
+      "required_before_cloud_launch": [
+        "Commit this source/data-preparation phase by the user.",
+        "Implement and test an explicit unadapted-base mode in the experiment worker; the current worker still requires an adapter.",
+        "Freeze and test the new scope scorer, including findings, each gap, abstention and narrative scope; do not change the old qualification protocol.",
+        "Create a fresh run-bound budget guard after checking current balance, runtime identities and input/cache digests."
+      ],
+      "pilot_advancement": [
+        "Zero schema/domain/identity errors and zero unsupported empirical claims.",
+        "Zero scope finding, gap, abstention or requested-target errors on the frozen scope development screen in both languages.",
+        "No per-case regression against the current candidate on matched retention and known-challenge inputs; report base-model comparison separately.",
+        "Review all known-challenge narratives and a fixed paired scope sample; no out-of-request claims or destructive recommendations.",
+        "If these gates pass, run all 480 v4 development validation inputs before considering a larger curriculum."
+      ],
+      "qualification": [
+        "Author and freeze fresh cases independently of this generator before any new qualification inference.",
+        "Known challenges and development validation cannot establish final qualification.",
+        "Expert review and final thesis evaluation remain distinct and unperformed."
+      ]
+    },
+    "budget_plan": {
+      "maximum_additional_compute_usd": 25,
+      "phase_wall_clock_ceiling_seconds": 32400,
+      "training_active_time_ceiling_seconds": 7200,
+      "cloud_launched": false,
+      "new_gpu_spend_this_phase_usd": 0,
+      "latest_balance_not_rechecked": true,
+      "shutdown_on_completion_or_guard": true
+    },
+    "training_estimate": {
+      "method": "Previous same-base cloud active time scaled by total sequence tokens",
+      "reference_rows": 63420,
+      "reference_tokens": 222575836,
+      "reference_active_seconds": 29910.177215039963,
+      "reference_result_sha256": "8ed5651f274ab17cada63fc0eba70f608d341d185755cf080e23cc5b676a887e",
+      "nominal_training_minutes": 18.559450018703068,
+      "measured_pilot_throughput": false,
+      "excludes": [
+        "setup",
+        "validation",
+        "recovery"
+      ],
+      "limitation": "Longer sequences and initialization effects change throughput. This is a planning figure, not a measured duration or quality prediction."
+    },
+    "production_promotion": false,
+    "reserved_test_files_opened": false
+  },
+  "verification": {
+    "unique_passed_tests": 75,
+    "test_runs": [
+      {
+        "file": "tests.xml",
+        "passed": 73
+      },
+      {
+        "file": "preflight-tests.xml",
+        "passed": 26,
+        "overlap_with_first_run": 24
+      }
+    ],
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "git_diff_check": "PASS",
+    "notes": [
+      "An initial preflight CLI run failed on a path/string conversion before producing audit output; corrected and the full real-tokenizer audit completed.",
+      "A pytest rerun passed all cases but its cache plugin hit local filesystem permissions; rerun with cache provider disabled completed successfully."
+    ]
+  },
+  "artifacts": {
+    "data/manifest.json": {
+      "sha256": "2e2f35f8230122535c11122418da43c21fa524d9c70b0fcfea64e7f48d9690d2",
+      "bytes": 8481
+    },
+    "data/train.jsonl": {
+      "sha256": "70b5b47fd36cfb3ea4cdfaeaf84e87b1cd75866589f02b3a1ddc2f91153e566b",
+      "bytes": 31026087
+    },
+    "data/validation.jsonl": {
+      "sha256": "b5ae4562e48273275bfb87b148f2d2203c9db32c58a851c88cf31f7cc2260cad",
+      "bytes": 5665906
+    },
+    "preflight/tokenization.json": {
+      "sha256": "a7cd4392fcc4fc5b562e32e79f37cd5e51edf4678f5e558ca42ce5df97e0e917",
+      "bytes": 9307
+    },
+    "preflight/cache/cache.json": {
+      "sha256": "0cc7316fe8099479baafdf4dc0d31f3b1d8ec4d46628bf97cb9f1bfc40486a96",
+      "bytes": 6731
+    },
+    "preflight/cache/train.sqlite": {
+      "sha256": "b4449915c0d266755039e9c8b55e6aec6943b7dc8f6c5604b67532e73b973559",
+      "bytes": 35016704
+    },
+    "integrity.json": {
+      "sha256": "c261ec277bcef8850d872437ca52f208a299f0cd3eb9e3631143e847923691ba",
+      "bytes": 1165
+    },
+    "check_integrity.py": {
+      "sha256": "69c8881c023b33df1f5e148974ce9308b9d404b1ebbde7f35d12c2b6f1069118",
+      "bytes": 5406
+    },
+    "gold-review-selection.json": {
+      "sha256": "3a250d23af42496e274cba4ac90ffa4daabcd98de26bf7179c393dc779adbe77",
+      "bytes": 28896
+    },
+    "gold-review.json": {
+      "sha256": "70f4d76afe6506761233aa6c74d6043de1d8d4dd9b09c70fce560437ed14006d",
+      "bytes": 1338
+    },
+    "prepare_pilot_protocol.py": {
+      "sha256": "cc37508a6f83d210c81232104b92cfd77352fd64a3f86eb87bb3f01bc7ed3476",
+      "bytes": 8148
+    },
+    "pilot-protocol.json": {
+      "sha256": "3d1ba826a008eac27e4c6014407edffe4840c638cd603eea75e64f22421a63ae",
+      "bytes": 4777
+    },
+    "pilot-screen-inputs.json": {
+      "sha256": "5ada2d4dc6516263b3c6c416fdc049616bd236530468f2188d8f061b2287e592",
+      "bytes": 3682259
+    },
+    "pilot-screen-labels-local-only.json": {
+      "sha256": "45afa18038fcfd691d6b28adadec7d57fc5010412c71133810cd23216bcbaea2",
+      "bytes": 4371858
+    },
+    "tests.xml": {
+      "sha256": "f974928b76ddc730afe3c864b61572372bf307cdea4536c0c78489cbf762747a",
+      "bytes": 14924
+    },
+    "preflight-tests.xml": {
+      "sha256": "a84d818ca6f6d99abd0ea1380aebbdeb48a094a29c09db05947859aff721a674",
+      "bytes": 6033
+    }
+  },
+  "code_files": {
+    "environments/training/prepare_scoped_evaluator.py": {
+      "sha256": "8db12abae63c753e7f3219262627938483620374b81532bb023d88c1784e81c1",
+      "bytes": 10535
+    },
+    "environments/training/audit_scoped_evaluator.py": {
+      "sha256": "7839ca1e49d60903199a3a1af2ca629739b69f6dc27dd9ec3013abe31a7828b8",
+      "bytes": 4205
+    },
+    "environments/training/complete_training_data.py": {
+      "sha256": "bfcf8849927e7b4688b883d63eddfd8d825740a53cb56678c9b91ff2085d7e06",
+      "bytes": 9282
+    },
+    "environments/training/scoped-evaluator-pilot.json": {
+      "sha256": "31a1c70380fb95a7a65b29f48e2e7530eb3499ca4d5dab4e999e67a238dba693",
+      "bytes": 170
+    },
+    "src/orchestwin/training/scoped_interface_fixtures.py": {
+      "sha256": "cf775538e13f6af461ac9adbc52522eb22f7b4a76cb865ef49127f4b02dce8bf",
+      "bytes": 7918
+    },
+    "src/orchestwin/training/scoped_interface_curriculum.py": {
+      "sha256": "128382b2080dae16078513e2f3cfafcfd7150211e50b478238813fa4364b1f10",
+      "bytes": 12994
+    },
+    "src/orchestwin/training/scoped_interface_validation.py": {
+      "sha256": "901b83e9060836c844ba9fa4057d0fd2c7f8ac7ececfb05e8e844a1b8e368744",
+      "bytes": 5187
+    },
+    "src/test/python/training/test_scoped_interface_curriculum.py": {
+      "sha256": "bb2f1e458315828028ea137c2a854130fe519b25b1ed3e4f8d6bcf9010567e82",
+      "bytes": 10471
+    },
+    "src/test/python/training/test_complete_cloud_training.py": {
+      "sha256": "4c3949fe876974e85af619c9afa4ce90317b2301ab3de6ff0ba95b76d8816570",
+      "bytes": 16328
+    }
+  },
+  "runtime_actions": {
+    "model_weights_loaded": false,
+    "inferences": 0,
+    "training_executed": false,
+    "runpod_resources_started": false,
+    "database_writes": false,
+    "model_promotion": false,
+    "reserved_test_files_opened": false
+  },
+  "limitations": [
+    "This is evidence that the development data and token cache are coherent, not evidence of improved model quality.",
+    "Rows share synthetic templates and correlated counterfactual/translation groups; 3080 rows are not 3080 independent real-world trials.",
+    "Only two static property families receive new scope supervision; broader properties rely on retained training examples.",
+    "Normalized overlap checks are limited to structured task/profile/HTML representations; they do not prove unrestricted semantic decontamination.",
+    "Fresh independently authored qualification, base-model comparison, expert review and empirical user evidence are still required.",
+    "Severity and confidence remain synthetic targets, not calibrated scores."
+  ],
+  "next_step": "After the user commit, prepare and test the unadapted-base comparison and scope scorer, bind a fresh cloud budget guard, then launch the bounded pilot and matched development screen. Do not promote on training loss or generator validation alone.",
+  "suggested_commit": "feat(training): prepare scoped evaluator curriculum and pilot preflight",
+  "commits_performed": false
+}

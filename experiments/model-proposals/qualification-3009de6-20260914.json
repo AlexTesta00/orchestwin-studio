@@ -1,0 +1,1329 @@
+{
+  "schema_version": 1,
+  "report_id": "qualification-3009de6-20260914",
+  "recorded_at": "2026-09-14T13:37:27.129247+00:00",
+  "base_commit": "3009de6be9104286895efac14e141da6e3965cbc",
+  "scope": "ENGINEERING_QUALIFICATION_AND_RETRAINING_PREPARATION",
+  "overall_status": "FORMAL_CAMPAIGN_BLOCKED_BY_OBSERVED_QUALITY_AND_WEB_CLOCK_FAILURE",
+  "summary_it": "Qualifiche reali eseguite e limiti documentati; nessuna dichiarazione di miglioramento dei pesi, validazione umana o campagna formale completata.",
+  "step_1": {
+    "status": "BASE_COMMIT_PUSH_AND_CI_VERIFIED",
+    "ci": {
+      "schema_version": 1,
+      "provider": "GITHUB_ACTIONS",
+      "status": "PASSED",
+      "repository": "AlexTesta00/orchestwin-studio",
+      "commit": "3009de6be9104286895efac14e141da6e3965cbc",
+      "head_sha": "3009de6be9104286895efac14e141da6e3965cbc",
+      "run_id": 34836434474,
+      "run_attempt": 1,
+      "conclusion": "success",
+      "workflow_path": ".github/workflows/ci-cd.yml",
+      "workflow_sha256": "4b35f1f412aa04f012506efb0ef701779d61afc9d1ba1acf87564b80c01cef20",
+      "observed_at": "2026-09-14T11:30:59.099327+00:00",
+      "issue_codes": [],
+      "required_jobs": [
+        "Test (ubuntu-24.04)",
+        "Test (macos-14)",
+        "Test (windows-2025)",
+        "Verify Web runners and fixture contracts"
+      ],
+      "verified_jobs": [
+        "Test (ubuntu-24.04)",
+        "Test (macos-14)",
+        "Test (windows-2025)",
+        "Verify Web runners and fixture contracts"
+      ],
+      "responses": [
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs?head_sha=3009de6be9104286895efac14e141da6e3965cbc&per_page=100&page=1",
+          "status_code": 200,
+          "sha256": "c0b7cd9549dd09e98064ddd70a31540375449e23a2592ee99a701bce819b9857",
+          "size_bytes": 13486
+        },
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/34836434474",
+          "status_code": 200,
+          "sha256": "296a83f3ce8b6dd2893e2234499b918c0efd4f0586749b0a57d384d5f7b00269",
+          "size_bytes": 13450
+        },
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/contents/.github/workflows/ci-cd.yml?ref=3009de6be9104286895efac14e141da6e3965cbc",
+          "status_code": 200,
+          "sha256": "20c6c9523bd92dea4b912333167a0e9b7f772d8f9d0ae6dadf03f97f13e70823",
+          "size_bytes": 26316
+        },
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/34836434474/attempts/1/jobs?per_page=100&page=1",
+          "status_code": 200,
+          "sha256": "b7eb58cd7c26d599b4f7759b93e6060935a92332fbad816980ec83ceadf5d657",
+          "size_bytes": 32874
+        },
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs/34836434474",
+          "status_code": 200,
+          "sha256": "296a83f3ce8b6dd2893e2234499b918c0efd4f0586749b0a57d384d5f7b00269",
+          "size_bytes": 13450
+        },
+        {
+          "url": "https://api.github.com/repos/AlexTesta00/orchestwin-studio/actions/runs?head_sha=3009de6be9104286895efac14e141da6e3965cbc&per_page=100&page=1",
+          "status_code": 200,
+          "sha256": "c0b7cd9549dd09e98064ddd70a31540375449e23a2592ee99a701bce819b9857",
+          "size_bytes": 13486
+        }
+      ]
+    },
+    "evidence": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\ci-02\\result.json",
+      "sha256": "696d5dfbd30a620f2ee303191d8c9edeed3dc0f2c062b13645d077a2ef3433f8",
+      "size_bytes": 2615
+    },
+    "new_changes_require_user_commit_and_new_ci": true
+  },
+  "step_2": {
+    "status": "JVM_VERIFIED_PACKAGE_PREPARED_WEB_REVALIDATION_FAILED",
+    "jvm": {
+      "campaign": {
+        "report_type": "JVM_REAL_VALIDATION_CAMPAIGN_REQUIRES_HARVEST",
+        "database_used": "DISPOSABLE_TEST_ONLY",
+        "image_id": "sha256:b07129cc272f688c98f5b343138a0a52fa45b3d82f50d7a53ff441330624cd2e",
+        "container_name": "ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e",
+        "level_d_validated": false,
+        "runs": [
+          {
+            "target": "JVM_KOTLIN",
+            "status": "PASSED"
+          },
+          {
+            "target": "JVM_JAVA",
+            "status": "PASSED"
+          },
+          {
+            "target": "JVM_SCALA",
+            "status": "PASSED"
+          }
+        ],
+        "container_id": "5be31234e01726f5345ae9dd4d15715a0bdd8402d852c53aa0fd2bcdc8c90311",
+        "migration": "0041_source_text_evidence",
+        "status": "PASSED",
+        "database_export": "qualification-database.dump",
+        "cleanup_status": "REMOVED"
+      },
+      "harvest": {
+        "package_hash": "d80d47b93f653e04af6a447d35c068f6ac3fadc3bdc1246f101e352722378593",
+        "catalog_hash": "6324b320e5f4cb6bb8576ff172ead32f0bebf6a1f2cbf21777e85e1bc9e35546",
+        "summary": [
+          {
+            "target": "JVM_JAVA",
+            "profile_id": "jvm.java-gradle",
+            "attempts": 7,
+            "successful_attempts": 3,
+            "expected_failed_attempts": 4,
+            "approved_operations": 8,
+            "phase_containers_removed": 42,
+            "records": 17
+          },
+          {
+            "target": "JVM_KOTLIN",
+            "profile_id": "jvm.kotlin-gradle",
+            "attempts": 7,
+            "successful_attempts": 3,
+            "expected_failed_attempts": 4,
+            "approved_operations": 8,
+            "phase_containers_removed": 42,
+            "records": 17
+          },
+          {
+            "target": "JVM_SCALA",
+            "profile_id": "jvm.scala-sbt",
+            "attempts": 7,
+            "successful_attempts": 3,
+            "expected_failed_attempts": 4,
+            "approved_operations": 8,
+            "phase_containers_removed": 41,
+            "records": 17
+          }
+        ],
+        "independent_package_readback_verified": true,
+        "records": 51,
+        "database_published": false
+      },
+      "evidence": [
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\result.json",
+          "sha256": "62e757e857a880fc8db6c7b037c8ee03b46ff58fb4b59567586b4858796afd8f",
+          "size_bytes": 786
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\harvest-result.json",
+          "sha256": "3dd02892f4dab898129603c3a36ed64d7a8c882435ac9a49d7974dc92c48ecb7",
+          "size_bytes": 1111
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\publication.json",
+          "sha256": "95bf4a5cb92a0f42cbfecacf0c9d78ec67581a8ea792e2da3a7dd207cf1a47c0",
+          "size_bytes": 190529
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\contract-tests.json",
+          "sha256": "c9d1d1a21857a84726c9bc62ba10fabe63045a7af3e2b495316586c7bf904d1c",
+          "size_bytes": 188398
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\platform-sources.tar",
+          "sha256": "6c45f064f4f106f2257f54d592ef85cc3432a0e25f7351677c18f4b617732014",
+          "size_bytes": 12390400
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\qualification-database.dump",
+          "sha256": "2144b5bc77e565faa7a0c14922fc19ab2e7cee5ba747222d15277291e6fd5260",
+          "size_bytes": 393273
+        }
+      ],
+      "production_database_published": false,
+      "catalog_coexistence_check": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\jvm-catalog-coexistence-check.json",
+        "sha256": "eb1f54f042ba9c3ba497d18b8b5c4b6e0730b7d377592047ed26c464afc5ceae",
+        "size_bytes": 3059
+      },
+      "publication_limitation": "The new sealed catalog is eligible alone. Combining it with the previously published same-version catalog produces native CONFLICTING decisions for all three profiles; production adoption requires explicit profile/catalog revision handling, preserving historical evidence.",
+      "source_identity": "Exact uncommitted source bytes retained and hash verified; base commit alone does not identify these changes.",
+      "change": "Gradle SETUP budget 600 seconds; strict dependency resolver now emits per-configuration progress and elapsed duration. Historical dependency preparation hashes retained with their original runner source snapshots."
+    },
+    "web": {
+      "diagnosis": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\web-failure-diagnosis-03\\diagnosis.json",
+        "sha256": "447ad960d49813c18ef43189c45b3cb8592534974a916072d44b897edb96c9f4",
+        "size_bytes": 12417
+      },
+      "sql_export": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\web-failure-diagnosis-03\\database-export.json",
+        "sha256": "060de44cdf4a5589ba927616fbd766f2259028bbad6f81b64c36ca86670d2f58",
+        "size_bytes": 1376688
+      },
+      "latest_attempts": 31,
+      "positive_or_repaired_attempts_passed": 22,
+      "expected_negative_attempts": 8,
+      "unexpected_clock_failure_attempts": 1,
+      "full_campaign_complete": false,
+      "new_level_d_published": false,
+      "clock_rollback_seconds": 6.262314,
+      "failed_attempt": "d9e15f74-7f64-4318-8aa4-3cc2b2403a56",
+      "failed_phase": "TEST",
+      "failure": "WEB_COMMAND_LAUNCH_UNCONFIRMED",
+      "underlying_kernel_cause_established": false,
+      "clock_changed": false,
+      "earlier_failed_runs": [
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-web-2d6e75592eb642e2a11cb0441d2d78ff",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-web-b686896aa4084f0c977b99a4a883a5ef"
+      ]
+    }
+  },
+  "step_3": {
+    "status": "REAL_SOURCE_AND_REPAIR_QUALIFICATION_FAILED",
+    "source_model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "source_model_revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+    "adapter_loaded": false,
+    "source_runs": [
+      {
+        "protocol": "V8",
+        "root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7",
+        "result": [
+          {
+            "target": "WEB_STATIC",
+            "project_id": "d5f05a40-7732-4658-9df0-5daeb69d2304",
+            "owner_id": "2682ad9b-ccf5-40e1-9626-fa351b6d5cbb",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "REJECTED",
+            "http_status": 503,
+            "generations": [
+              {
+                "generation_id": "367713b2-e090-4705-997f-94f0c52a7d73",
+                "file": "367713b2-e090-4705-997f-94f0c52a7d73-evidence.json",
+                "sha256": "75af0859376c4adf25daff28a01f61bedb9b34f6d1b5db96962c8023e0c1a0b4",
+                "publication_state": "INCOMPLETE"
+              }
+            ]
+          },
+          {
+            "target": "JVM_JAVA",
+            "project_id": "5f0a3be9-691a-499c-9d98-77cf635f4a26",
+            "owner_id": "4e0a5834-664b-459d-98d0-ef0e9ca9d607",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "1e48c1e762c0efb1b37e49380b0bbce4b4b12ca5964a19eeccfa9cdf5fe25cb3",
+            "generations": [
+              {
+                "generation_id": "e035a1a5-85cc-4afd-888f-9608740cfdcb",
+                "file": "e035a1a5-85cc-4afd-888f-9608740cfdcb-evidence.json",
+                "sha256": "510b25aec5d0a3f9227d6c0236045a058db3ba6e0e6224b0a5f4946cb8e87b33",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "15a78800-df22-4139-ab41-b2cfcd04ad4b",
+                "file": "15a78800-df22-4139-ab41-b2cfcd04ad4b-evidence.json",
+                "sha256": "2526135f7dba9dbb732f152e9a655c6cfb94db02477b516bcb7cb886d49e8e66",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "128b6590-1324-4e7b-909c-05543586a4fa",
+                "file": "128b6590-1324-4e7b-909c-05543586a4fa-evidence.json",
+                "sha256": "09e46b5ab792f28b1a41c16b9ee4948c294d07d3485086c003d6bd2043e3a346",
+                "publication_state": "ARTIFACTS_LINKED"
+              }
+            ]
+          },
+          {
+            "target": "JVM_KOTLIN",
+            "project_id": "3488c31b-991a-4a6a-bb62-bfd8fa80ee86",
+            "owner_id": "5b994fbd-412f-46ea-82e8-dc699a0372fb",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "47844c26ede601632ba83825f1b09fa572e5bf5bd7bd4f860480d3517c2a7320",
+            "generations": [
+              {
+                "generation_id": "d1ca0f88-a59a-410c-bc38-d4d6906347bc",
+                "file": "d1ca0f88-a59a-410c-bc38-d4d6906347bc-evidence.json",
+                "sha256": "35eda5e1e39c8521dd02057fb4e2e50513986150380ee3ca6370240ce27c5f93",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "575b386d-78e4-4950-839e-f26d8a230959",
+                "file": "575b386d-78e4-4950-839e-f26d8a230959-evidence.json",
+                "sha256": "6a6e4a8c95689ce90894712bfa8c73e099c9ed4564aad270c8dbdebaafa09dfa",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "09638672-74de-4c0d-9caa-30d5ce53ad42",
+                "file": "09638672-74de-4c0d-9caa-30d5ce53ad42-evidence.json",
+                "sha256": "ca5dd237a9ede4898443a0f578609c2f0f3d1dbe11312bad6280ac575e930512",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          },
+          {
+            "target": "JVM_SCALA",
+            "project_id": "caf9aff4-2ff6-4b26-9f4c-970eb1e3fe20",
+            "owner_id": "5d547930-67d2-4313-98dc-eacccbad2bce",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "0221b3bfee118d3709ddd002da820a7015d5e5e25244cc05e81b6a9363cf79ac",
+            "generations": [
+              {
+                "generation_id": "d480aa2e-d4cb-4bb2-b631-ce38e7d2f095",
+                "file": "d480aa2e-d4cb-4bb2-b631-ce38e7d2f095-evidence.json",
+                "sha256": "6938a8b9a76edcfd3f1998cfb0460d374075370b8e65da5acbb5e9ab23a45209",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "aa3977d4-2b3a-44f0-a39f-62f702ce6e6b",
+                "file": "aa3977d4-2b3a-44f0-a39f-62f702ce6e6b-evidence.json",
+                "sha256": "020b2b7aeab6ac428c4085621c2fac524280927b15645e29b8d2b1e3634a4a7a",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "811e57bf-a8c3-4177-af77-ceeb3fd193e0",
+                "file": "811e57bf-a8c3-4177-af77-ceeb3fd193e0-evidence.json",
+                "sha256": "968463a302b389e51b11a420092d5c8f8c5fd19d754a18a5e4ad6433420db613",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          }
+        ],
+        "request_counts": {
+          "audited_requests": 10,
+          "completed_server_requests": 10
+        },
+        "evidence": [
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\protocol.json",
+            "sha256": "2b766f96aa8ede1ca134b85d4703117d2f5427edf914a0146c6be168341021fc",
+            "size_bytes": 1314
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\results.json",
+            "sha256": "d8e9968205324d08ecd0c419a3ce5657106be5bc98ae87e2bac7e04c48a0387d",
+            "size_bytes": 4469
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\request-counts.json",
+            "sha256": "ad99e5de2efbb8922b4ac64cab5b7985ee12040266ba70171f5e4e1710d712a2",
+            "size_bytes": 66
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\qualification-database.dump",
+            "sha256": "39f8acdf9dd31d0afda9d6bbe13431ba9deb6b2f7869583bbc9cb6c6109662d1",
+            "size_bytes": 482658
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\source-code.json",
+            "sha256": "c77dec2091e4f0904b328d2d10f7f5c34c4ff4d242527dddef3127feee556404",
+            "size_bytes": 625
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-e7fc4ec43d384b83afb4a07be78c25c7\\result.json",
+            "sha256": "4e62e94dc9be6fa94be1fb49a0bc3eac603b7e663a83b3df7b340a5c85271e72",
+            "size_bytes": 571
+          }
+        ]
+      },
+      {
+        "protocol": "V9",
+        "root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea",
+        "result": [
+          {
+            "target": "WEB_STATIC",
+            "project_id": "c737ef81-1e4a-4038-b7c2-1414c67f5a3f",
+            "owner_id": "ec411444-f127-4d7a-81d1-e873bce385cb",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "045acda55f007ed812294b317dfb2ab7f94bdf889d280f02e7b3d508b7cfa98c",
+            "generations": [
+              {
+                "generation_id": "b6eaede7-403b-4cd2-a0b2-335dd97494f0",
+                "file": "b6eaede7-403b-4cd2-a0b2-335dd97494f0-evidence.json",
+                "sha256": "4aa0fc3bdc1f9eab678feef106c15bb86e8d1c8cc0122040efbebc6ba2b2d39f",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "763e78b7-9b65-48e2-bc59-c1e768362083",
+                "file": "763e78b7-9b65-48e2-bc59-c1e768362083-evidence.json",
+                "sha256": "d69b239834724d39bd16d7c9a8a25c3c4bfb235f55b34219ceef961b2acdda28",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "6165b515-12e5-4300-b040-7a18e628057e",
+                "file": "6165b515-12e5-4300-b040-7a18e628057e-evidence.json",
+                "sha256": "b73b7f2efa4970357bcb10d0217918a6e4ef65a1dba9b4048899eac153431ce2",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "5447b9ce-c143-46b4-9d0f-7408a5042b07",
+                "file": "5447b9ce-c143-46b4-9d0f-7408a5042b07-evidence.json",
+                "sha256": "b2418e5be4e128c4965064b9e8bf909944e2632424aebb14dcec384227e72255",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          },
+          {
+            "target": "JVM_JAVA",
+            "project_id": "30b54113-97c0-4774-aa49-3bea8b798521",
+            "owner_id": "f6232125-1b06-48e0-aa94-3c17abf6ad80",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "7737b26a31166944b08563c986bfa3a78d10c2a81c13ae88df3d55b0b84db950",
+            "generations": [
+              {
+                "generation_id": "7ea528ae-71ca-4e8e-8238-d1bee34e8400",
+                "file": "7ea528ae-71ca-4e8e-8238-d1bee34e8400-evidence.json",
+                "sha256": "14de375b43a2f0ad28f9bd125b88d2dc24302ec1bfb49d5d6c8427319ed52573",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "4abaf992-4b03-442e-a6fa-08a8dd26ec27",
+                "file": "4abaf992-4b03-442e-a6fa-08a8dd26ec27-evidence.json",
+                "sha256": "80017fc9add3e0025073fc5c7800bfddc82d9d8d7183f209e642ff3667cd6cf0",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "3980b350-0088-4e9d-8083-57fe63f8ff16",
+                "file": "3980b350-0088-4e9d-8083-57fe63f8ff16-evidence.json",
+                "sha256": "f605ddf07953fb006be89b040f4e46eec1913f52e250029b8a6a4d84fce2ddc9",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          },
+          {
+            "target": "JVM_KOTLIN",
+            "project_id": "88828d75-7bf3-4427-af76-bfe32e71fed9",
+            "owner_id": "7e08e250-26d3-40e8-98b5-d7ba35f25ac9",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "2d5f07250d497aa161b1ad01cc9dcec9238b51ff2805dc761f40e33f635cac9a",
+            "generations": [
+              {
+                "generation_id": "fa360adf-a013-402f-a23c-4dcb857337fe",
+                "file": "fa360adf-a013-402f-a23c-4dcb857337fe-evidence.json",
+                "sha256": "b9087947265e5c702490f012ab272411b20d727f653e5227ab6acc6bb1b4ba3c",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "bb72eac7-74cc-4913-909a-643827619b8c",
+                "file": "bb72eac7-74cc-4913-909a-643827619b8c-evidence.json",
+                "sha256": "a6d63a9d00fac305508dd43a91ee7c58da1b67e2b603bc2ea9a0320e8ed28486",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "2d120c8c-e7d0-4f54-946c-507a583b35b0",
+                "file": "2d120c8c-e7d0-4f54-946c-507a583b35b0-evidence.json",
+                "sha256": "131a9f82fb44d8cc4fc9aba141e324f11135287aaba68f031a12ff7d8c2346e2",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          },
+          {
+            "target": "JVM_SCALA",
+            "project_id": "18c81ecf-f83c-453a-baa1-49a0735b64ec",
+            "owner_id": "6f4e751e-0b59-4542-84f6-f75b9761afa8",
+            "formal_case": false,
+            "frozen_case_used": false,
+            "status": "PUBLISHED",
+            "http_status": 201,
+            "source_hash": "e92a1e26a74b0347e7643ab9274b9eef9a5a3cc1551ddcb2653d4c4eeacda894",
+            "generations": [
+              {
+                "generation_id": "d39d4c40-8c21-4fc3-8237-054480500b71",
+                "file": "d39d4c40-8c21-4fc3-8237-054480500b71-evidence.json",
+                "sha256": "3cb618d3ce75d20b782ce998cf7f6d944e6d11ca5c7f59074c8435742c80fc8d",
+                "publication_state": "ARTIFACTS_LINKED"
+              },
+              {
+                "generation_id": "2e9417ac-8525-4168-8505-68bd993b0a41",
+                "file": "2e9417ac-8525-4168-8505-68bd993b0a41-evidence.json",
+                "sha256": "22ba6f0ad9154d60b0f04ff136793161c8ca904361b815c9551f03a9a9e6945d",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              },
+              {
+                "generation_id": "1b4d08ed-6b41-4557-9586-9c626f6ff85b",
+                "file": "1b4d08ed-6b41-4557-9586-9c626f6ff85b-evidence.json",
+                "sha256": "51aabbdc16b8a33332e3a7cce227e99dc27e54c48f0756725e1eba12407e42e4",
+                "publication_state": "MODEL_ACCEPTED_WITHOUT_PUBLICATION"
+              }
+            ]
+          }
+        ],
+        "request_counts": {
+          "audited_requests": 13,
+          "completed_server_requests": 13
+        },
+        "evidence": [
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\protocol.json",
+            "sha256": "967653fcfbf5ec977a9c0dddf77ceef62eecb8e9c32d4a6d76d7ee159dd89b2b",
+            "size_bytes": 1312
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\results.json",
+            "sha256": "93ffe8d05542be5add8521107f94ecdd74525214b387f574af2c799173b8c4c5",
+            "size_bytes": 5494
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\request-counts.json",
+            "sha256": "fc9ccfeb8d9a0390a698504adb19462278631e6f49eb63542d6506e617ca0774",
+            "size_bytes": 66
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\qualification-database.dump",
+            "sha256": "b79b09094526cc7d350e6bb99616f790bca88f6c191a1d110161b9faa7e5bb63",
+            "size_bytes": 529533
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\source-code.json",
+            "sha256": "cd90472b620c1e119334b949103c61ee70f00eada57261fcd518cdfdc4e5dadc",
+            "size_bytes": 625
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-source-955c4db837424bcaa8b1addeb528d7ea\\result.json",
+            "sha256": "1a2d82ec4c6520db1ab463ed8e431ad94d18e5db0225e54bead2b4d3bce00f2e",
+            "size_bytes": 571
+          }
+        ]
+      }
+    ],
+    "execution_runs": [
+      {
+        "root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-e7750f4dfacc4575be4c8b7516268aa0",
+        "evidence": [
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-e7750f4dfacc4575be4c8b7516268aa0\\protocol.json",
+            "sha256": "da627a522eff06c3384f6fdc97c64433a968922b121c8d59b78e3fb8e24787b4",
+            "size_bytes": 1060
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-e7750f4dfacc4575be4c8b7516268aa0\\results.json",
+            "sha256": "44859d298311fab3499e75edfc10cb502a91b455947bd420c1ae910ef69a8c9b",
+            "size_bytes": 1199
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-e7750f4dfacc4575be4c8b7516268aa0\\qualification-database.dump",
+            "sha256": "e6dcffbab9233868c7628d88daf1a129de9f1e75139bd2511c9ee4ec1ab3593d",
+            "size_bytes": 508547
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-e7750f4dfacc4575be4c8b7516268aa0\\result.json",
+            "sha256": "749bb64defc28877374b64370cb4d9c97f993bbe0a1311718e2c7c54812dd89d",
+            "size_bytes": 576
+          }
+        ]
+      },
+      {
+        "root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-d2bbfe43de2b47dfa69acfa30a233a14",
+        "evidence": [
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-d2bbfe43de2b47dfa69acfa30a233a14\\protocol.json",
+            "sha256": "d23e19b18e080f70bc5841d8ac848d169c4bf773c368b483049e2dbda1b233f5",
+            "size_bytes": 1079
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-d2bbfe43de2b47dfa69acfa30a233a14\\results.json",
+            "sha256": "06c1ba7c4df3b85453a658aaf8c4a8419dc85f0b2453bf121b8c6f4616f8c7cc",
+            "size_bytes": 1504
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-d2bbfe43de2b47dfa69acfa30a233a14\\qualification-database.dump",
+            "sha256": "f6336600e36f4bf8a6ec0bb9745127e8019a076246900839f7f3022abad7f825",
+            "size_bytes": 561084
+          },
+          {
+            "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-d2bbfe43de2b47dfa69acfa30a233a14\\result.json",
+            "sha256": "a302b73a845e3195b243211cf76606d10dcb4f1b0614463a9c903883c3ab8cfb",
+            "size_bytes": 576
+          }
+        ]
+      }
+    ],
+    "admission_diagnostics": [
+      "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-5821c79004a6450faeae0b3a589b7398",
+      "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-execution-b4dc708c41d44f5c8d6eb09b729b90cf"
+    ],
+    "execution_image_policy": "Generated-code JVM probes used the historically validated exact runner images after native admission rejected the new unpromoted Gradle image. No capability check was bypassed. The new image is assessed independently in the fresh fixture campaign.",
+    "latest_profiles_attempted": 4,
+    "latest_profiles_business_qualified": 0,
+    "latest_findings": {
+      "WEB_STATIC": "TEST fails: app.createReservation is not a function. Supplemental independent core oracle also finds missing public export and retrieval.",
+      "JVM_JAVA": "BUILD fails: int identifiers incompatible with String map keys and retrieval parameter.",
+      "JVM_KOTLIN": "Main BUILD passes; TEST compilation fails on missing assertNotNull and nonexistent emptyString. Source inspection also shows whitespace-only guest names accepted; this last point was not separately executed.",
+      "JVM_SCALA": "Rejected before execution: generated production Main extends FunSuite and provides no valid application entrypoint."
+    },
+    "real_repairs": {
+      "calls": 2,
+      "applied": 0,
+      "result": "Both model responses rejected as INVALID_PROVIDER_OUTPUT. They declare application/octet-stream outside the generated text-source contract and do not correct the observed Java/Kotlin defects.",
+      "evidence": [
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-repairs-5502a2ce5c9947c0b277f2643a68c076\\protocol.json",
+          "sha256": "4c0b4ce77171b6dd533927074fc93b0eabbb48d08cfb5d9137175a366319babf",
+          "size_bytes": 1234
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-repairs-5502a2ce5c9947c0b277f2643a68c076\\selection.json",
+          "sha256": "57496a4efffcc02a96bf2ebd8798d90880949ad8f4533125fe3f8d78ffb439c1",
+          "size_bytes": 128
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-repairs-5502a2ce5c9947c0b277f2643a68c076\\results.json",
+          "sha256": "c40d4e080bc373474f268308f82316c63f1d220b76fc82f6f41e5f7e61a88457",
+          "size_bytes": 289
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-repairs-5502a2ce5c9947c0b277f2643a68c076\\qualification-database.dump",
+          "sha256": "79f9269a0322bfbe8bb836bc7c04a8c0fabc612125426efd848438f96535584e",
+          "size_bytes": 543772
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-repairs-5502a2ce5c9947c0b277f2643a68c076\\result.json",
+          "sha256": "ee781eca095cab23b69a2040a59698d195392849011e9ebf4559f3448e037bec",
+          "size_bytes": 583
+        }
+      ]
+    },
+    "independent_business_oracle": {
+      "evidence_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\web-business-oracle-01",
+      "scope": "Supplemental white-box offline engineering checks, not governed Level D evidence."
+    },
+    "methodology": "Approved upstream artifacts in these source probes are controlled synthetic inputs. Source/provider and execution APIs are real; the probes are not complete formal thesis workflows. Fixture repair success must not be reported as model repair success."
+  },
+  "step_4": {
+    "status": "RELATIONAL_CONTENT_AND_QUALIFICATION_IMPLEMENTED_RETRAINING_PREPARED",
+    "candidate": {
+      "per_state": {
+        "INSUFFICIENT": 2,
+        "MISSING": 10,
+        "PRESENT": 11
+      },
+      "passed": 23,
+      "cases": 36,
+      "production_promotion": false,
+      "native_domain_accepted": 36,
+      "state_totals": {
+        "INSUFFICIENT": 12,
+        "MISSING": 12,
+        "PRESENT": 12
+      },
+      "runtime_identity": {
+        "provider_id": "unsloth-evaluator-experiment",
+        "runtime_id": "f1f73776-32c7-4689-a5ae-78fce76870f6",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "9689f9772d958e3786947bc5ab347fc7e4e3776f8d1026a5383cffcd5dc81185",
+        "adapter_id": "experimental-02c1ae3ccc3aef22",
+        "adapter_sha256": "31d7ef5b3a33e4c08955dd575019a884c936e4d34d95a946c4343f7151b2c73f"
+      },
+      "evidence": [
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\benchmark\\result.json",
+          "sha256": "118a33066ec996a019eae641fdf19e5897cf46a3dc2e632c98561c10eae7d4cc",
+          "size_bytes": 157
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\identity.json",
+          "sha256": "cad8963d5ef8b64f110af5e51acb4163d7497734ff5766b6bb774e3cf6dc6e6d",
+          "size_bytes": 542
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\operator.py",
+          "sha256": "36496c31dbe0aad45044e272138ccd267e601f86fbfabf68fea1e696936e57a0",
+          "size_bytes": 16327
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\worker\\configuration.json",
+          "sha256": "e328dd8f9c581da048dd870b1dbbf9860d0fbb06f0dec0932395b22fe79bb09e",
+          "size_bytes": 673
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\process-result.json",
+          "sha256": "e1e8011e6a3c78bb2662eb4d011b401254285237ef6eb563169f9dbfc397b7d7",
+          "size_bytes": 41
+        }
+      ]
+    },
+    "s67": {
+      "per_state": {
+        "INSUFFICIENT": 0,
+        "MISSING": 2,
+        "PRESENT": 0
+      },
+      "state_totals": {
+        "INSUFFICIENT": 12,
+        "MISSING": 12,
+        "PRESENT": 12
+      },
+      "domain_accepted": 8,
+      "passed": 2,
+      "cases": 36,
+      "production_promotion": false,
+      "native_domain_accepted": 8,
+      "runtime_identity": {
+        "provider_id": "unsloth-evaluator-experiment",
+        "runtime_id": "40222bac-34fd-4c07-bc8e-0ceca9c4640a",
+        "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+        "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+        "configuration_sha256": "0ecaf1d4534f338415695b69dc6c60b72e58c1d2a278bdbf9b4b30878ca5757d",
+        "adapter_id": "experimental-c9e50dd95f0eb60f",
+        "adapter_sha256": "1b9b1b84cb3408796c96ada1647d0fecdce3ffa6d1015b189ce745f3f3b52ba8"
+      },
+      "evidence": [
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-s67-01\\benchmark\\result.json",
+          "sha256": "23ac62a676bd040372fa64e546afadec4a9d62134374b66b0f4a1f7fec12f55e",
+          "size_bytes": 270
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-s67-01\\identity.json",
+          "sha256": "9709585d0cf35b2889f9b07bad16554e9d9f366f918236101ddc52160e49f2af",
+          "size_bytes": 542
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-s67-01\\operator.py",
+          "sha256": "e2c95353c03f6f4cee9c4ba349ac4d1f985f644b3ab5c6637da73d937f3a2219",
+          "size_bytes": 24531
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-s67-01\\worker\\configuration.json",
+          "sha256": "69f7133dda5070e28e4c25a975569de84758d60b0398db6c6d29bad9799e34a6",
+          "size_bytes": 673
+        },
+        {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-s67-01\\process-result.json",
+          "sha256": "23cec2e14b281d16a0e98950677ac62e3e95000f5002b018e15105292962fc15",
+          "size_bytes": 41
+        }
+      ]
+    },
+    "paired_comparison": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-paired-comparison.json",
+      "sha256": "b2bc91ccf8a84ead317934bf27f288884859f151fd53f34974e2b1189456faae",
+      "size_bytes": 15776
+    },
+    "semantic_review": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-semantic-review.json",
+      "sha256": "f6e29586d5204763d74b2dd69031f812d7f78710663f9261bbaf8437fd7ba32b",
+      "size_bytes": 1673
+    },
+    "metric_limit": "A passing narrow schema/judgment/criterion/reference check does not establish free-text fidelity or complete multi-control artifact quality. Case 5 contains a wrong selector in its recommendation despite a correct structured location.",
+    "model_selected_for_production": false,
+    "dataset": {
+      "curriculum_id": "grounded-evaluator-relational-calibration-v2",
+      "seed": 2026091501,
+      "variants_per_family": 32,
+      "files": {
+        "train.jsonl": {
+          "sha256": "8324187ac72dd863a463567163a7a6b7fc50adb2d70611c4321e231ccf3af09c",
+          "size_bytes": 8558524,
+          "rows": 864
+        },
+        "validation.jsonl": {
+          "sha256": "6ab2874372fc2a760bdab228a5f26cefc0fb25a27d07fb6d44065dd8574b6606",
+          "size_bytes": 1428728,
+          "rows": 144
+        },
+        "test.jsonl": {
+          "sha256": "15d5996956d0851f493524fce1aea625bc28084e5e1ef9ef284c7a8737ae591c",
+          "size_bytes": 1429264,
+          "rows": 144
+        }
+      },
+      "source_sha256": {
+        "environments/training/prepare_evaluator_calibration.py": "47f9e6ddb0583fd467be834762281ef96d55ece6f4ab940a9d08c4da9a5bb497",
+        "src/orchestwin/training/grounded_evaluator_curriculum.py": "e6e4888b5125fa0bad8a2d07e4f2e08c5119bc2c19fd246a44d7cad9183773a7",
+        "src/orchestwin/training/relational_evaluator_curriculum.py": "701ca1d2aed28b4250f7d05008877de0fd88ec7d11ccf86aa00dc608259547a9"
+      },
+      "labels": {
+        "PRESENT": 384,
+        "MISSING": 384,
+        "INSUFFICIENT": 384
+      },
+      "scope": "SYNTHETIC_NARROW_CONTRACT_CALIBRATION",
+      "formal_case_used": false,
+      "human_label_review_performed": false,
+      "empirical_validation": false,
+      "production_schema_validated_rows": 1152,
+      "domain_validated_rows": 1152,
+      "split_policy": "Whole counterfactual groups and translations; test/validation task phrases absent from train across all families.",
+      "structure_holdout": true,
+      "limitations": [
+        "Closed HTML fixture grammar, not a general accessibility oracle.",
+        "Template-generated targets are not representative real-user labels.",
+        "Independent held-out inference is required before candidate selection.",
+        "Historical S66/S67 and formal case evidence are unchanged."
+      ],
+      "training_executed": false,
+      "model_selected": false
+    },
+    "data_and_tokenization_evidence": [
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-data-02\\manifest.json",
+        "sha256": "f3694cdded75e6af35cf541c1d5c9e9ae91dcd355903c1f797e5317f782ab619",
+        "size_bytes": 1938
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-tokenization-01\\tokenization.json",
+        "sha256": "341edb34285f75a8ee0d8170eeed1f6cf45d7a6246c9eddc6e00dc6f89c83bb7",
+        "size_bytes": 466
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-tokenization-01\\supervision.json",
+        "sha256": "82789540a261e536982c12625de9ef07dc0164e1b8a9992c570b025782159627",
+        "size_bytes": 269603
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\diagnostic-cohort.json",
+        "sha256": "6b9db569f41350d2d46ef2faf692793299097eadf410db9c7992f6490752ac18",
+        "size_bytes": 652
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\validation-cohort.json",
+        "sha256": "cbf21d8838f5d68d7589f50ccb3b765e0a9f12fb08ce22dea3c59fac5b8c7fc7",
+        "size_bytes": 1972
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\reserved-final-cohort.json",
+        "sha256": "e8b1ec4b97d27b1e5d865396beb00e994cf02dec708436b7815870d59fca7a13",
+        "size_bytes": 1528
+      }
+    ],
+    "reserved_final_cases": 108,
+    "reserved_final_inference_performed": false,
+    "new_training_executed": false
+  },
+  "step_5": {
+    "status": "TWO_ARTIFACT_REVISIONS_WITH_EXPLICIT_FOCUSED_RECOVERY",
+    "twins": 2,
+    "independent_real_inferences": 8,
+    "accepted_artifact_revisions": 2,
+    "first_revision": {
+      "previous_version": 1,
+      "new_version": 2,
+      "base_artifact_hash": "fd8cbc2eda610b167bfbbd158c80f4fbe58b2121bf65c94983816417793b5e88",
+      "new_artifact_hash": "57a7560b6f5880e45c1bbf247e4d824e8b1d2a69e1029508008e7ee807e6b348",
+      "evaluation_hash": "2ed502484558fa0236103d406e7e225c1c14572b7257e90745c5178aec17bce7",
+      "aggregation_hash": "df12adbb193117f854f968328388ee5790604fbc4b2fe01a8b90629dbbab56c5",
+      "decision_sha256": "d79f748b64374845317188c64f6cea39a0e7ddd5102aac6376d15dec81b84e1d",
+      "model_output_modified": false
+    },
+    "second_revision": {
+      "base_artifact_hash": "57a7560b6f5880e45c1bbf247e4d824e8b1d2a69e1029508008e7ee807e6b348",
+      "new_artifact_hash": "4939bb98dbfaaad9228c8c30fbf87b55b07ec0c9499d542dbb534767807eb4e3",
+      "from_version": 2,
+      "to_version": 3,
+      "evaluation_hash": "4e110d31be5701de1a9479738bb4e50a486a66910641036e0a759d3c43062a98",
+      "aggregation_hash": "27b5040acf2f41e245d5daa5e54f2142d90dc20c11842210ff568f3e88a306b0",
+      "decision_sha256": "6bb3645e3181323a99c16b5ceb3142e172cef3104e5f0dc76bbac44b2622fa9a",
+      "previous_accepted_revision": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\iterations\\round-01\\applied-revision.json"
+    },
+    "final_result": {
+      "revision_applied": true,
+      "from_version": 2,
+      "to_version": 3,
+      "final_artifact_sha256": "4939bb98dbfaaad9228c8c30fbf87b55b07ec0c9499d542dbb534767807eb4e3",
+      "final_findings": 0,
+      "final_evidence_gaps": [],
+      "raw_model_outputs_modified": false,
+      "broader_scenario_validated": false,
+      "formal_case": false
+    },
+    "lineage_verification": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\iterations-lineage-verification.json",
+      "sha256": "bc59dab94bb0cd82114573b7b832a7e6ad2fd53f71bd565be16e456d99863663",
+      "size_bytes": 415
+    },
+    "raw_outputs_edited": false,
+    "broader_form_validation_passed": false,
+    "retained_rejections": [
+      "Broad second-round evaluation misses the empty button; STOP decision retained.",
+      "Focused recovery changes the scenario explicitly. First Twin rationale falsely says content was absent; only the supported second-Twin finding and verified HTML bytes authorize the button revision."
+    ],
+    "evidence": [
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\iterations\\protocol.json",
+        "sha256": "bffda2a6d818e4e3b5ddf60d59e443b4c9ea0f1177e57fb1556f9135b230463b",
+        "size_bytes": 1720
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\iterations\\round-01\\revision-decision.json",
+        "sha256": "d79f748b64374845317188c64f6cea39a0e7ddd5102aac6376d15dec81b84e1d",
+        "size_bytes": 988
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\iterations\\round-02\\revision-decision.json",
+        "sha256": "51ca613eead20ec488694d287c7b6fcdf68491d31f581390dfe1d896de815f8b",
+        "size_bytes": 551
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-focused-recovery-01\\protocol.json",
+        "sha256": "3168b84d8fdc67e4ad0c0a13f85bfec5223690636494b6791840918e9ed5d6f2",
+        "size_bytes": 1905
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-focused-recovery-01\\version-2\\engineering-review.json",
+        "sha256": "e4e918fd64bf9af0d6886119278cb44b36dc1cb58fe597a310f9796bc9a20e4b",
+        "size_bytes": 553
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-focused-recovery-01\\version-2\\revision-decision.json",
+        "sha256": "6bb3645e3181323a99c16b5ceb3142e172cef3104e5f0dc76bbac44b2622fa9a",
+        "size_bytes": 1060
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-focused-recovery-01\\result.json",
+        "sha256": "fde3bda4a8b6dcba90f98e043751c1427d253352d3753a499da8e08a1b356ce4",
+        "size_bytes": 329
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-focused-recovery-01\\final-artifact.html",
+        "sha256": "4939bb98dbfaaad9228c8c30fbf87b55b07ec0c9499d542dbb534767807eb4e3",
+        "size_bytes": 357
+      }
+    ],
+    "scope": "Native authorized evaluation, independent Twin calls, aggregation and exact delegated engineering decisions over immutable external artifact versions. Not an application SQL workflow, owner UI session, actual human judgment or model-weight update."
+  },
+  "step_6": {
+    "status": "PREFLIGHT_BLOCKED_NO_FORMAL_LAUNCH",
+    "preflight": {
+      "status": "BLOCKED_NOT_LAUNCHED",
+      "native_preflight": {
+        "ready": false,
+        "blockers": [
+          "formal case execution requires a clean working tree"
+        ],
+        "required_profiles": [
+          "WEB_STATIC",
+          "WEB_VUE_NODE"
+        ],
+        "observed_profiles": [
+          "WEB_NODE_EXPRESS",
+          "WEB_PHP",
+          "WEB_STATIC",
+          "WEB_VUE",
+          "WEB_VUE_NODE"
+        ]
+      },
+      "host": {
+        "platform_commit": "3009de6be9104286895efac14e141da6e3965cbc",
+        "branch": "sprint/12-case-studies-expert-evaluation",
+        "worktree_clean": false,
+        "available_execution_profiles": [
+          "WEB_NODE_EXPRESS",
+          "WEB_PHP",
+          "WEB_STATIC",
+          "WEB_VUE",
+          "WEB_VUE_NODE"
+        ]
+      },
+      "observed_profiles_scope": "Implementation targets that completed positive fixture attempts during this diagnostic run. This does not assert whole-campaign Level D eligibility or current application database publication.",
+      "draft_plan": {
+        "schema_version": 1,
+        "campaign_id": "s12-formal-web-cases-v1",
+        "platform_commit": "3009de6be9104286895efac14e141da6e3965cbc",
+        "phases": [
+          "PREFLIGHT",
+          "WORKFLOW",
+          "BUILD",
+          "TEST",
+          "RUNTIME",
+          "SYNTHETIC_EVALUATION",
+          "EXPORT",
+          "FINALIZE"
+        ],
+        "cases": [
+          {
+            "case_id": "web-calculator",
+            "case_version": 1,
+            "case_content_hash": "d12213a16bf4412f7379d4779ac960cdb341f6ba2a47cce838675f753714f8df",
+            "execution_profile": "WEB_STATIC",
+            "technologies": [
+              "HTML",
+              "CSS",
+              "JavaScript"
+            ],
+            "definition_path": "experiments/case-studies/web-calculator-v1.json"
+          },
+          {
+            "case_id": "hotel-management-web",
+            "case_version": 1,
+            "case_content_hash": "1c64c984976420d4fc7e8585436903e552df8590633709ecfc5a5e8f6d1e066f",
+            "execution_profile": "WEB_VUE_NODE",
+            "technologies": [
+              "HTML",
+              "CSS",
+              "JavaScript",
+              "Vue",
+              "Node.js",
+              "Express"
+            ],
+            "definition_path": "experiments/case-studies/hotel-management-web-v1.json"
+          },
+          {
+            "case_id": "weather-comparison-web",
+            "case_version": 1,
+            "case_content_hash": "2adf9d525662dfc9795bd505ddec93b70b94f7335d2b5cac2a433045303397e2",
+            "execution_profile": "WEB_VUE_NODE",
+            "technologies": [
+              "HTML",
+              "CSS",
+              "JavaScript",
+              "Vue",
+              "Node.js",
+              "Express"
+            ],
+            "definition_path": "experiments/case-studies/weather-comparison-web-v1.json"
+          }
+        ],
+        "actual_files_only": true,
+        "observed_measurements_only": true,
+        "owner_gates_must_not_be_bypassed": true,
+        "real_user_behavior_validated": false,
+        "empirical_user_evidence_created": false,
+        "content_hash": "167773dc80fbf440dc916ab444741c81926ce72b1e0de498bfa3099a7f07e226"
+      },
+      "draft_requires_new_post_commit_identity": true,
+      "additional_prerequisites": [
+        {
+          "code": "WEB_CLOCK_DISCONTINUITY",
+          "evidence": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\web-failure-diagnosis-03\\diagnosis.json"
+        },
+        {
+          "code": "SOURCE_BUSINESS_QUALIFICATION_FAILED",
+          "profiles_evaluated": 4,
+          "profiles_qualified": 0,
+          "repairs_applied": 0
+        },
+        {
+          "code": "EVALUATOR_ABSTENTION_FAILED",
+          "correct": 2,
+          "cases": 12
+        },
+        {
+          "code": "FULL_FORM_FALSE_NEGATIVE",
+          "evidence": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\evaluator-candidate-01\\iterations"
+        },
+        {
+          "code": "NEW_COMMIT_AND_CI_REQUIRED",
+          "user_commits_only": true
+        }
+      ],
+      "execution_order_after_qualification": [
+        "User commits reviewed changes; verify pushed commit and CI.",
+        "Complete fresh Web validation on a clock-stable execution host; seal exact runner evidence.",
+        "Select and freeze evaluator and source runtimes that pass independent validation, preserving rejected candidates.",
+        "Freeze a new campaign plan on the final exact commit; create new case attempts through governed APIs and recorded gates.",
+        "Run Web calculator, hotel management and weather comparison cases with the same protocol and platform commit.",
+        "Export actual governed records, raw synthetic feedback and metrics; perform expert review separately with real reviewers."
+      ],
+      "expert_review": {
+        "participants": "Four actual expert reviewers E1-E4, not model personas",
+        "assignment": "60 pairs, 2 ratings per pair, 30 per reviewer; 11 items; blinded randomized order; retain raw ratings and separate randomization key.",
+        "no_tuning_after_review_starts": true,
+        "reviewer_contact_performed": false,
+        "ratings_created": false
+      },
+      "frozen_c94_modified": false,
+      "application_database_written": false,
+      "formal_attempt_created": false,
+      "human_evidence_created": false
+    },
+    "evidence": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\formal-preflight-01\\result.json",
+      "sha256": "65774d06bf91a14aa11012239fd1ead2dbd61c46a18f77afe66358e6d728b8c1",
+      "size_bytes": 5165
+    }
+  },
+  "retraining": {
+    "plan": {
+      "status": "PREPARED_NOT_TRAINED",
+      "scope": "SYNTHETIC_EVALUATOR_ADAPTER_CALIBRATION_ONLY",
+      "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+      "base_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+      "training_data": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-data-02\\manifest.json",
+        "sha256": "f3694cdded75e6af35cf541c1d5c9e9ae91dcd355903c1f797e5317f782ab619",
+        "size_bytes": 1938
+      },
+      "tokenization": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-tokenization-01\\tokenization.json",
+        "sha256": "341edb34285f75a8ee0d8170eeed1f6cf45d7a6246c9eddc6e00dc6f89c83bb7",
+        "size_bytes": 466
+      },
+      "supervision": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-tokenization-01\\supervision.json",
+        "sha256": "82789540a261e536982c12625de9ef07dc0164e1b8a9992c570b025782159627",
+        "size_bytes": 269603
+      },
+      "training_rows": 864,
+      "validation_rows": 144,
+      "diagnostic_rows_already_observed": 36,
+      "final_rows_reserved": 108,
+      "diagnostic_cohort": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\diagnostic-cohort.json",
+        "sha256": "6b9db569f41350d2d46ef2faf692793299097eadf410db9c7992f6490752ac18",
+        "size_bytes": 652
+      },
+      "validation_cohort": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\validation-cohort.json",
+        "sha256": "cbf21d8838f5d68d7589f50ccb3b765e0a9f12fb08ce22dea3c59fac5b8c7fc7",
+        "size_bytes": 1972
+      },
+      "final_cohort": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\reserved-final-cohort.json",
+        "sha256": "e8b1ec4b97d27b1e5d865396beb00e994cf02dec708436b7815870d59fca7a13",
+        "size_bytes": 1528
+      },
+      "training_policy": {
+        "from_exact_base": true,
+        "rank": 16,
+        "alpha": 32,
+        "epochs": 1,
+        "learning_rate": 0.0001,
+        "batch": 1,
+        "accumulation": 4,
+        "maximum_sequence": 4096,
+        "quantization_bits": 4,
+        "precision": "bf16",
+        "supervision": "decision-balanced",
+        "packing": false,
+        "prompt_loss_masked": true
+      },
+      "candidate_selection": "Review labels and choose training settings using only the training and validation splits. Freeze the selected adapter hashes before the reserved final evaluation. Preserve every unsuccessful candidate. Do not tune using reserved final outputs.",
+      "review_scope": "The closed HTML grammar labels have schema, native-domain and structural-oracle checks. This is not representative real-user annotation, expert ratings or a general browser accessibility oracle.",
+      "local_training_command": [
+        "wsl.exe",
+        "--exec",
+        "/mnt/c/Users/alext/Desktop/Tesi/orchestwin-studio/environments/training/.venv/bin/python",
+        "-u",
+        "/mnt/c/Users/alext/Desktop/Tesi/orchestwin-studio/environments/training/run_evaluator_calibration.py",
+        "train",
+        "--data",
+        "/mnt/c/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/qualification-3009de6-20260914/relational-data-02",
+        "--output",
+        "/mnt/c/Users/alext/.codex/visualizations/2026/09/12/01a09597-4b2a-7a30-bc8f-e6e729d91f04/qualification-3009de6-20260914/relational-training-candidate-01",
+        "--supervision",
+        "decision-balanced",
+        "--authorize-local-training"
+      ],
+      "validation_command_template": [
+        "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\.venv\\Scripts\\python.exe",
+        "-u",
+        "-X",
+        "utf8",
+        "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\qualify_evaluator_candidate.py",
+        "--data",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-data-02",
+        "--output",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-candidate-validation-01",
+        "--adapter",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-training-candidate-01\\adapter",
+        "--weights-sha256",
+        "READ_FROM_VERIFIED_TRAINING_RESULT",
+        "--config-sha256",
+        "READ_FROM_VERIFIED_TRAINING_RESULT",
+        "--split",
+        "validation",
+        "--group-ids",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\validation-cohort.json"
+      ],
+      "final_command_template": [
+        "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\.venv\\Scripts\\python.exe",
+        "-u",
+        "-X",
+        "utf8",
+        "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\qualify_evaluator_candidate.py",
+        "--data",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-data-02",
+        "--output",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-candidate-final-01",
+        "--adapter",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\relational-training-candidate-01\\adapter",
+        "--weights-sha256",
+        "READ_FROM_FROZEN_SELECTED_ADAPTER",
+        "--config-sha256",
+        "READ_FROM_FROZEN_SELECTED_ADAPTER",
+        "--split",
+        "test",
+        "--group-ids",
+        "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\reserved-final-cohort.json"
+      ],
+      "minimum_screening_criteria": {
+        "each_state_correct_fraction": 0.8333333333333334,
+        "all_responses_accepted_by_native_domain": true,
+        "all_findings_bound_to_supplied_artifacts": true,
+        "no_output_repair": true,
+        "no_false_empirical_claims": true
+      },
+      "promotion": "Passing narrow synthetic screening is required but not sufficient. Also assess real complete artifact scenarios, several simultaneous controls, regression on retained broader cases and operator review. No automatic production selection.",
+      "separate_source_model": {
+        "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+        "revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+        "adapter_loaded": false,
+        "this_evaluator_training_will_not_update_it": true,
+        "required_data": "Separately reviewed requirements-to-source and compiler-log-to-repair examples, with independently executed business assertions. Current failed outputs are diagnostic negative examples, never positive training targets."
+      },
+      "gpu_use": "Run one loaded model at a time on the observed 8 GiB GPU; no model server may occupy it during training.",
+      "formal_case_used": false,
+      "frozen_c94_modified": false,
+      "paid_provider_calls": false,
+      "training_executed": false,
+      "production_promotion": false,
+      "diagnostic_result": {
+        "candidate": {
+          "correct": 23,
+          "total": 36,
+          "insufficient_correct": 2,
+          "insufficient_total": 12
+        },
+        "s67": {
+          "correct": 2,
+          "total": 36
+        },
+        "comparison": "All 36 model-visible message pairs and input token counts are identical; schema decoding and per-case limits are equal. This is a diagnostic cohort already observed, not the reserved final test."
+      },
+      "additional_pretraining_review": "Prepared examples cover narrow relational criteria with distractors. Review labels and add separately grouped multi-control artifact scenarios plus faithful free-text action references before claiming broader improvement. The current 36 diagnostic cases must not be treated as an untouched final test."
+    },
+    "evidence": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\retraining-plan.json",
+      "sha256": "17fe2d9388e9c4f0c460d03156571edab8c8a36140a351e9b3216299f440e94e",
+      "size_bytes": 8188
+    },
+    "additional_training_data_review": "The prepared curriculum covers individual relational criteria with distractors. Add/review complete multi-control artifact examples and faithful narrative/action references before claiming broad evaluator quality. No hyperparameter or larger-model choice is assumed to improve quality without paired validation.",
+    "coder_is_separate": "Evaluator adapter training cannot improve the separate source coder. Source training needs reviewed requirements-to-code and failure-to-repair pairs that actually compile and satisfy independent functional assertions."
+  },
+  "tests": {
+    "reports": [
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\backend-tests-01.xml",
+        "sha256": "f2b65fc2febeb3e513b2762616292cbfb09b81a4c0674f6707090c655cbfc3ec",
+        "size_bytes": 680592,
+        "passed": 3995,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 47
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-integration-0cc790e4cb5748de83f7adb3e3dabbf6\\pytest.xml",
+        "sha256": "6d70eb0d4ce31b7db33f6e9890b9576134b5ded0649ed9dcf6757a1033ff9390",
+        "size_bytes": 34983,
+        "passed": 185,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 2
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914\\cohort-tests-01.xml",
+        "sha256": "b6d8d9b0772680d82378184f864099ddac5927b6faf81a16019c8b84a8e207cb",
+        "size_bytes": 2132,
+        "passed": 11,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\contract-reports\\unit.xml",
+        "sha256": "e7d9c85522a91e4979954ce75b42629df7b60ac55ba674826a5cf2c75c36c47b",
+        "size_bytes": 122335,
+        "passed": 676,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 4
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\contract-reports\\linux.xml",
+        "sha256": "e889083da1ff5ff7ca0f84e6e6b95d6e06112dfb5651255ec06ca9ae34535190",
+        "size_bytes": 1572,
+        "passed": 8,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-qualification-jvm-9d75df66752346e1a7c9d7346cdab09e\\contract-reports\\postgres.xml",
+        "sha256": "9b4db4def2822c9cf374fd331628db3981ea4d232175ae1ed1a10fd8dc7e4a7e",
+        "size_bytes": 10486,
+        "passed": 56,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "counts_overlap_do_not_sum": true,
+    "full_suite_skip_scope": "Windows symlink/POSIX and separately opted-in Docker/local inference tests. JVM Windows skips are covered by retained Linux tests; real inference/execution probes are separate engineering evidence."
+  },
+  "claim_boundaries": {
+    "new_weights_trained": false,
+    "model_promoted": false,
+    "formal_case_launched": false,
+    "frozen_c94_modified": false,
+    "application_database_written": false,
+    "real_user_behavior_validated": false,
+    "empirical_human_evidence_created": false,
+    "paid_inference_provider_calls": false,
+    "git_staged_by_agent": false,
+    "git_committed_by_agent": false,
+    "git_pushed_by_agent": false
+  },
+  "commit_suggestion": "feat(evaluation): qualify real models and prepare controlled retraining",
+  "evidence_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-3009de6-20260914"
+}

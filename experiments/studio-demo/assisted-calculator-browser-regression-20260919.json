@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-09-19T19:36:45Z",
+  "scope": "EXISTING_ASSISTED_DEMO_BROWSER_REGRESSION_NOT_AUTONOMOUS_MODEL_SUCCESS",
+  "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "source_revision_id": "acbb313b-a92d-4e0c-8403-05116a1ef4de",
+  "source_version": 5,
+  "source_content_hash": "262a9d5b705a7971d5dbaaeca3ce69a4263bc57d07ae3855ea51bde96c1f1c2a",
+  "visible_provenance": "Versione rivista con assistenza · prima proposta AI conservata",
+  "source_files_changed_during_check": false,
+  "method": "Actual browser interactions through the authenticated Studio GUI and its sandboxed source preview; DOM observations and screenshots, no page-state mutation or injected calculation code.",
+  "source_export_hashes": {
+    "app.js": "1bd2635ec7dc0fc794fc903c911d2fecf1e9cedba6e3cae5538038e6ea1f5013",
+    "app.test.cjs": "4e6e3cec7a40fdaae8efbcf5d1a9077ef8d9ca6c608bdd7c0615fb94e749a77f",
+    "index.html": "eea31bbb89b2eecb58b2340830a965474b515aeab4d96629b1a3f0ac7fdca721"
+  },
+  "observations": [
+    {"id": "addition", "observed": "9 + 3 = 12", "expected": 12, "passed": true},
+    {"id": "subtraction", "observed": "9 − 3 = 6", "expected": 6, "passed": true},
+    {"id": "multiplication", "observed": "9 × 3 = 27", "expected": 27, "passed": true},
+    {"id": "division", "observed": "9 ÷ 3 = 3", "expected": 3, "passed": true},
+    {"id": "mixed-decimal-separators", "left_input": "1,5", "right_input": "2.5", "observed": "1,5 + 2,5 = 4", "expected": 4, "passed": true},
+    {"id": "negative-multiplication", "observed": "-2 × 3 = -6", "expected": -6, "passed": true},
+    {"id": "negative-subtraction", "observed": "-4 − -7 = 3", "expected": 3, "passed": true},
+    {"id": "fractional-result", "observed": "1 ÷ 4 = 0,25", "expected": 0.25, "passed": true},
+    {"id": "zero-numerator", "observed": "0 ÷ 5 = 0", "expected": 0, "passed": true},
+    {"id": "back-preserves-input", "left": "0", "right": "5", "operation": "Divisione", "passed": true},
+    {"id": "division-by-zero", "observed": "Non puoi dividere per zero. Cambia il secondo numero.", "form_visible": true, "result_visible": false, "passed": true},
+    {"id": "empty-left", "observed": "Inserisci un numero valido in entrambi i campi.", "native_validation_message": "Compila questo campo.", "form_visible": true, "result_visible": false, "passed": true},
+    {"id": "empty-right", "observed": "Inserisci un numero valido in entrambi i campi.", "form_visible": true, "result_visible": false, "passed": true},
+    {"id": "invalid-numeric-text", "left_input": "12abc", "right_input": "3", "observed": "Inserisci un numero valido in entrambi i campi.", "form_visible": true, "result_visible": false, "passed": true},
+    {"id": "keyboard", "tab_focus_order": ["secondNumber INPUT", "operation SELECT", "Calcola BUTTON"], "operation_selected_with": "End", "activation": "Enter", "observed": "8 ÷ 2 = 4", "back_activated_with_enter": true, "passed": true},
+    {"id": "mobile", "mode": "Studio Telefono preview", "actual_inner_viewport_width": 374, "form_document_width": 374, "result_document_width": 374, "observed": "8 ÷ 2 = 4", "form_and_result_visually_inspected": true, "horizontal_overflow": false, "passed": true}
+  ],
+  "passed_checks": 16,
+  "failed_checks": 0,
+  "browser_console_errors_observed": 0,
+  "automation_observation": "The browser tool fill('') left the original value intact. Empty-field checks were repeated using Select All and Backspace, and the actual empty DOM value was verified before submission. The initial nonempty calculation is not counted as an empty-field result.",
+  "limitations": [
+    "This is the existing assisted revision, not the new project ab355503-9374-448c-be27-0c32dc929b67.",
+    "These observations do not satisfy or replace the new project's frozen 17-case acceptance record.",
+    "The mobile frame measured 374 pixels, not the new project's specified 390-pixel browser viewport.",
+    "No new mockup-alignment claim or formal Level D qualification is made."
+  ]
+}

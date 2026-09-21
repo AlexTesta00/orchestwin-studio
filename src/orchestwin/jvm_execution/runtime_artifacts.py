@@ -5,16 +5,20 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
+import stat
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Final
 from uuid import UUID
 
 from orchestwin.jvm_execution.plans import JvmExecutionPhase
 from orchestwin.jvm_execution.profile_contracts import JvmProfileContract
+from orchestwin.jvm_execution.workspaces import read_regular_file, regular_path
 from orchestwin.sandbox.evidence import (
     SandboxArtifactReference,
     SandboxCommandEvidence,
@@ -50,10 +54,16 @@ class JvmArtifactCollectionPolicy:
     maximum_files: int = 128
     maximum_file_bytes: int = 16 * 1024 * 1024
     maximum_total_bytes: int = 64 * 1024 * 1024
+    maximum_entries_scanned: int = 10_000
 
     def __post_init__(self) -> None:
-        values = (self.maximum_files, self.maximum_file_bytes, self.maximum_total_bytes)
-        if any(isinstance(value, bool) or value < 1 for value in values):
+        values = (
+            self.maximum_files,
+            self.maximum_file_bytes,
+            self.maximum_total_bytes,
+            self.maximum_entries_scanned,
+        )
+        if any(type(value) is not int or value < 1 for value in values):
             raise ValueError("JVM artifact collection limits must be positive integers")
         if self.maximum_file_bytes > self.maximum_total_bytes:
             raise ValueError("JVM artifact file limit must not exceed the total limit")
@@ -221,14 +231,44 @@ def collect_jvm_artifact_inventory(
         raise ValueError("JVM artifact collection command ID must be normalized")
 
     workspace_resolved = workspace.resolve(strict=True)
+    _regular_artifact_path(workspace)
+    patterns = _artifact_patterns(contract)
+    roots = {pattern.split("/", 1)[0] for pattern in patterns}
+    if not roots <= {"build", "target"}:
+        raise ValueError("JVM artifact patterns must use the declared build roots")
+    pending = []
+    for root in sorted(roots):
+        path = workspace / root
+        _regular_artifact_path(path)
+        if path.exists():
+            if not path.is_dir():
+                raise ValueError("JVM artifact root must be a directory")
+            pending.append(path)
     candidates: dict[str, Path] = {}
-    for pattern in _artifact_patterns(contract):
-        for candidate in workspace.glob(pattern):
-            if candidate.is_dir():
-                continue
-            _reject_unsafe_artifact_path(workspace, workspace_resolved, candidate)
-            relative = candidate.relative_to(workspace).as_posix()
-            candidates[relative] = candidate
+    scanned = 0
+    while pending:
+        directory = pending.pop()
+        _regular_artifact_path(directory)
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                scanned += 1
+                if scanned > policy.maximum_entries_scanned:
+                    raise ValueError("JVM artifact traversal exceeds its entry limit")
+                candidate = directory / entry.name
+                _regular_artifact_path(candidate)
+                metadata = candidate.lstat()
+                if stat.S_ISDIR(metadata.st_mode):
+                    pending.append(candidate)
+                    continue
+                relative = candidate.relative_to(workspace).as_posix()
+                if any(
+                    _matches_pattern(relative.split("/"), pattern.split("/"))
+                    for pattern in patterns
+                ):
+                    _reject_unsafe_artifact_path(workspace, workspace_resolved, candidate)
+                    candidates[relative] = candidate
+                    if len(candidates) > policy.maximum_files:
+                        raise ValueError("JVM artifact collection exceeds the file-count limit")
 
     if not candidates:
         raise ValueError("JVM artifact collection found no declared files")
@@ -239,7 +279,12 @@ def collect_jvm_artifact_inventory(
     collected: list[JvmCollectedArtifact] = []
     for relative, candidate in sorted(candidates.items()):
         try:
-            content = candidate.read_bytes()
+            content = read_regular_file(
+                candidate,
+                maximum_bytes=min(
+                    policy.maximum_file_bytes, policy.maximum_total_bytes - total_bytes
+                ),
+            )
         except OSError as error:
             raise ValueError("JVM artifact file could not be read") from error
         if len(content) > policy.maximum_file_bytes:
@@ -262,6 +307,27 @@ def collect_jvm_artifact_inventory(
         execution_plan_content_hash=contract.execution_plan.content_hash,
         runner_image_digest=contract.runner.image.digest,
         artifacts=tuple(collected),
+    )
+
+
+def _regular_artifact_path(path):
+    try:
+        regular_path(path)
+    except ValueError:
+        raise ValueError(
+            "JVM artifact collection rejects symbolic links and redirected paths"
+        ) from None
+
+
+def _matches_pattern(path: list[str], pattern: list[str]) -> bool:
+    if not pattern:
+        return not path
+    if pattern[0] == "**":
+        return _matches_pattern(path, pattern[1:]) or bool(
+            path and _matches_pattern(path[1:], pattern)
+        )
+    return bool(
+        path and fnmatchcase(path[0], pattern[0]) and _matches_pattern(path[1:], pattern[1:])
     )
 
 

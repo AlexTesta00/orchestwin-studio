@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-19T18:16:46.028423+00:00",
+  "repository_head": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "scope": "FRONTEND_APPROVAL_REFRESH_RACE_FIX_AND_REGRESSION",
+  "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+  "observed_failure": {
+    "sequence": [
+      "POST user-modeling/gate/submit returned 401",
+      "POST auth/refresh returned 200 and changed the access token",
+      "Token-prop watcher started a User Modeling load before the retried command completed",
+      "Retried POST user-modeling/gate/submit returned 200; store applied PENDING_APPROVAL",
+      "Older load completed from readiness with gate_exists=false and replaced currentGate with null"
+    ],
+    "visible_effect": "The approval reason and decision buttons briefly appeared, then disappeared and the submit button returned.",
+    "api_log": "var/studio/logs/api.stdout.log",
+    "log_and_code_supported_cause": "The store checked only project identity, allowing an earlier read for the same project to overwrite a later owner command."
+  },
+  "persistence_check": {
+    "method": "Local PostgreSQL SELECT in a READ ONLY transaction; credentials used only in memory.",
+    "gate_id": "4861c8a2-6aab-4baf-8d03-cb70913f3959",
+    "gate_type": "USER_MODELING",
+    "observed_status": "PENDING_APPROVAL",
+    "artifact_id": "75d07545-7dc9-462a-b1a9-39e216e2fec1",
+    "artifact_version": 1,
+    "artifact_hash": "3e4b2f95a2f59dc5095375d27c432f456a0db9604760e3ad5a12ef362945cdb5",
+    "conclusion": "The submitted gate was persisted correctly; the defect was stale frontend state.",
+    "database_writes_performed_by_diagnosis": false
+  },
+  "fix": {
+    "stores": [
+      "userModeling",
+      "requirements",
+      "design",
+      "architecture"
+    ],
+    "behavior": "Monotonic readSequence guards prevent reads overtaken by commands or newer refreshes from replacing snapshot, gate or readiness state.",
+    "backend_changed": false,
+    "approval_rules_changed": false,
+    "inference_performed_for_fix": false
+  },
+  "verification": {
+    "store_regressions": {
+      "passed": 21,
+      "failed": 0,
+      "specs": [
+        "frontend/src/stores/userModeling.spec.ts",
+        "frontend/src/stores/requirements.spec.ts",
+        "frontend/src/stores/design.spec.ts",
+        "frontend/src/stores/architecture.spec.ts"
+      ],
+      "new_cases": [
+        "User Modeling: load begins while gate submission is pending and completes after the submitted gate is applied",
+        "Requirements: older load cannot erase a newly generated specification and its coverage",
+        "Design: older load cannot clear a newly submitted gate",
+        "Architecture: older load cannot clear a newly submitted gate"
+      ]
+    },
+    "component_regressions": {
+      "passed": 23,
+      "failed": 0,
+      "specs": [
+        "frontend/src/components/ProjectUserModelingFlow.spec.ts",
+        "frontend/src/components/ProjectUserModelingJourney.spec.ts",
+        "frontend/src/components/ProjectRequirementsFlow.spec.ts",
+        "frontend/src/components/ProjectDesignFlow.spec.ts",
+        "frontend/src/components/ProjectArchitectureFlow.spec.ts"
+      ]
+    },
+    "total_tests_passed": 44,
+    "typescript_app": "PASSED",
+    "eslint_changed_files": "PASSED",
+    "prettier_changed_files": "PASSED",
+    "frontend_build": {
+      "status": "PASSED",
+      "observed_by": "root task",
+      "bundle": "frontend/dist/assets/ProjectDetailView-DwI28Lg7.js",
+      "sha256": "55aa12193c6554f8ffd08cb63ac9abd9d896d16c48e0216c234532fcc7b5905f"
+    }
+  },
+  "gui_observations": {
+    "observed_by": "root task using the existing GUI",
+    "before_fix_reload_recovered_persisted_gate": true,
+    "user_modeling_gate_approved_after_recovery": true,
+    "after_rebuilt_frontend": [
+      "Requirements generation completed",
+      "Owner revision restored explicit comma/dot numeric input and rejection of partial invalid numbers",
+      "Requirements revision version 2 applied",
+      "Requirements gate submitted and approved successfully"
+    ],
+    "real_expired_token_race_reproduced_after_fix": false,
+    "race_covered_by_deterministic_regression": true
+  },
+  "source_sha256": {
+    "frontend/src/stores/userModeling.ts": "10b99e1e33b985358f52ac975707feefc89e89b4449285d30b0e6e1838ec9b48",
+    "frontend/src/stores/userModeling.spec.ts": "fde83c01707d3554006e4b2b2477099898aa41684380b5f57b797eccbf75409f",
+    "frontend/src/stores/requirements.ts": "fb066161b346ba09fada03b48f30cb2e430ff9762d6452759ee5e46d32548a48",
+    "frontend/src/stores/requirements.spec.ts": "e9f72fe4ab999eec37a21f9c87fc865f281dcab68e0b3d5feb2fe6abf80cee4c",
+    "frontend/src/stores/design.ts": "ff9cd048addcf111230c2e7b1ef91d54992e80cb9c51723f49a6d7ad23a440e3",
+    "frontend/src/stores/design.spec.ts": "19550ba0ddc325586e69c06685bcf0c2db71a9642b8a1e746d433a7cf0d237dc",
+    "frontend/src/stores/architecture.ts": "252df95cf56bcc6c0ab1c719a2e70265b5ed64dedd914176edddbe1e8b1771c1",
+    "frontend/src/stores/architecture.spec.ts": "c8ce6ab72c5382cf6797dc450575baf0ef5dab01810f43706bdc994e7043cb99"
+  },
+  "limitations": [
+    "Successful later GUI actions do not demonstrate a second real expired-token interleaving; that exact race is covered by the deterministic store regression.",
+    "This report establishes frontend state handling, not model quality, empirical User Twin validation or JVM execution."
+  ],
+  "commit_performed": false
+}

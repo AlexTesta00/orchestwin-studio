@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import mimetypes
-import os
 import re
 from collections.abc import Mapping
 from contextlib import suppress
@@ -31,6 +30,7 @@ from orchestwin.sandbox.evidence import (
     SandboxRunEvidence,
     create_sandbox_run_evidence,
 )
+from orchestwin.sandbox.host_process import run_bounded_host_process
 
 _MEBIBYTE: Final = 1024 * 1024
 _CONTROLLED_NETWORK_PATTERN: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
@@ -94,7 +94,7 @@ class HostProcessRunner(Protocol):
 
 
 class AsyncioHostProcessRunner:
-    """Production process adapter using ``create_subprocess_exec`` and bounded streams."""
+    """Use bounded worker-thread subprocess I/O without changing the API event loop."""
 
     async def run(
         self,
@@ -104,125 +104,18 @@ class AsyncioHostProcessRunner:
         maximum_output_bytes_per_stream: int,
         environment_overrides: Mapping[str, str],
     ) -> HostProcessResult:
-        """Launch a direct process and terminate it on timeout or output overflow."""
-        if not arguments:
-            raise ValueError("host process argument vector must not be empty")
-        if timeout_seconds < 1 or maximum_output_bytes_per_stream < 1:
-            raise ValueError("host process limits must be positive")
-
-        environment = os.environ.copy()
-        environment.update(environment_overrides)
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *arguments,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=environment,
-            )
-        except OSError:
-            return HostProcessResult(
-                status=HostProcessStatus.SPAWN_ERROR,
-                exit_code=None,
-                stdout=b"",
-                stderr=b"",
-                failure_message="Docker CLI process could not be started.",
-            )
-
-        if process.stdout is None or process.stderr is None:
-            await _terminate_process(process)
-            return HostProcessResult(
-                status=HostProcessStatus.RUNTIME_ERROR,
-                exit_code=None,
-                stdout=b"",
-                stderr=b"",
-                failure_message="Docker CLI streams were not available.",
-            )
-
-        stdout_buffer = bytearray()
-        stderr_buffer = bytearray()
-        stdout_task = asyncio.create_task(
-            _read_bounded_stream(
-                process.stdout,
-                stdout_buffer,
-                maximum_bytes=maximum_output_bytes_per_stream,
-            )
+        result = await run_bounded_host_process(
+            arguments,
+            timeout_seconds=timeout_seconds,
+            maximum_output_bytes_per_stream=maximum_output_bytes_per_stream,
+            environment_overrides=environment_overrides,
         )
-        stderr_task = asyncio.create_task(
-            _read_bounded_stream(
-                process.stderr,
-                stderr_buffer,
-                maximum_bytes=maximum_output_bytes_per_stream,
-            )
-        )
-        wait_task = asyncio.create_task(process.wait())
-        tasks = {stdout_task, stderr_task, wait_task}
-
-        done, pending = await asyncio.wait(
-            tasks,
-            timeout=timeout_seconds,
-            return_when=asyncio.FIRST_EXCEPTION,
-        )
-
-        output_limit_exceeded = any(
-            isinstance(task.exception(), _OutputLimitExceeded)
-            for task in done
-            if not task.cancelled() and task.exception() is not None
-        )
-        unexpected_error = any(
-            task.exception() is not None and not isinstance(task.exception(), _OutputLimitExceeded)
-            for task in done
-            if not task.cancelled()
-        )
-
-        if output_limit_exceeded:
-            await _terminate_process(process)
-            await _cancel_tasks(pending)
-            return HostProcessResult(
-                status=HostProcessStatus.OUTPUT_LIMIT_EXCEEDED,
-                exit_code=None,
-                stdout=bytes(stdout_buffer),
-                stderr=bytes(stderr_buffer),
-                failure_message="Docker CLI output exceeded the configured stream limit.",
-            )
-
-        if unexpected_error:
-            await _terminate_process(process)
-            await _cancel_tasks(pending)
-            return HostProcessResult(
-                status=HostProcessStatus.RUNTIME_ERROR,
-                exit_code=None,
-                stdout=bytes(stdout_buffer),
-                stderr=bytes(stderr_buffer),
-                failure_message="Docker CLI output could not be collected safely.",
-            )
-
-        if pending:
-            await _terminate_process(process)
-            await _cancel_tasks(pending)
-            return HostProcessResult(
-                status=HostProcessStatus.TIMED_OUT,
-                exit_code=None,
-                stdout=bytes(stdout_buffer),
-                stderr=bytes(stderr_buffer),
-                failure_message="Docker CLI process exceeded the command timeout.",
-            )
-
-        return_code = wait_task.result()
-        if return_code < 0 or return_code > 255:
-            return HostProcessResult(
-                status=HostProcessStatus.RUNTIME_ERROR,
-                exit_code=None,
-                stdout=bytes(stdout_buffer),
-                stderr=bytes(stderr_buffer),
-                failure_message="Docker CLI process terminated without a portable exit code.",
-            )
-
         return HostProcessResult(
-            status=HostProcessStatus.COMPLETED,
-            exit_code=return_code,
-            stdout=bytes(stdout_buffer),
-            stderr=bytes(stderr_buffer),
-            failure_message=None,
+            status=HostProcessStatus(result.status),
+            exit_code=result.exit_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            failure_message=result.failure_message,
         )
 
 
@@ -420,20 +313,32 @@ class LocalDockerContainerRuntimeAdapter(ContainerRuntimePort):
         for index, command in enumerate(request.plan.commands, start=1):
             container_name = _container_name(request, index=index)
             command_started_at = self._clock.now()
-            process_result = await self._process_runner.run(
-                self._build_run_arguments(
-                    request,
-                    command=command,
-                    container_name=container_name,
-                ),
-                timeout_seconds=command.timeout_seconds,
-                maximum_output_bytes_per_stream=(
-                    self._runtime_policy.maximum_output_bytes_per_stream
-                ),
-                environment_overrides={
-                    variable.key: variable.value for variable in request.environment_for(command)
-                },
-            )
+            try:
+                process_result = await self._process_runner.run(
+                    self._build_run_arguments(
+                        request,
+                        command=command,
+                        container_name=container_name,
+                    ),
+                    timeout_seconds=command.timeout_seconds,
+                    maximum_output_bytes_per_stream=(
+                        self._runtime_policy.maximum_output_bytes_per_stream
+                    ),
+                    environment_overrides={
+                        variable.key: variable.value
+                        for variable in request.environment_for(command)
+                    },
+                )
+            except asyncio.CancelledError:
+                cleanup = asyncio.create_task(self._cleanup_container(container_name))
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        continue
+                if not cleanup.result():
+                    raise RuntimeError("SANDBOX_CANCELLATION_CLEANUP_UNCONFIRMED") from None
+                raise
             command_finished_at = self._clock.now()
 
             cleanup_confirmed = True

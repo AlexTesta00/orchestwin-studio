@@ -313,7 +313,11 @@ class EvidenceBackedJvmExecutionProfile:
             snapshot,
             declaration,
             source_revision=source_revision,
-            runner=runner,
+            runner=replace(
+                runner,
+                capability_status=self.base_profile.scope.capability_status,
+                validation_evidence_refs=self.base_profile.scope.validation_evidence_refs,
+            ),
         )
         promoted_runner = replace(
             base_contract.runner,

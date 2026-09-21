@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "scope": "DEVELOPMENT_CONSOLE_MODEL_PROBE_NOT_LEVEL_D",
+  "recorded_at": "2026-09-20T11:24:42.431318+00:00",
+  "base_commit": "0b12093a4d23c540489f14aafcfb4ccdaa4aaed0",
+  "uncommitted_generation_changes": true,
+  "model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+  "model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+  "manifest_contract": "SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST",
+  "independent_contract_version": 2,
+  "expected_checks_per_language": 34,
+  "oracles_sent_to_model": false,
+  "approved_requirement_text_sent": true,
+  "source_edits_by_operator": false,
+  "database_publication": false,
+  "results": [
+    {
+      "language": "java",
+      "generation_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-java-v16-v2-20260920-01",
+      "generation_passed": true,
+      "generation_failure": null,
+      "generation_report_sha256": "3214f17c6f4711b986bcce966f4846e3ce1f978cb1d0d18158d491118ad0b93d",
+      "execution_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-java-v16-v2-execution-20260920-01",
+      "execution_completed": true,
+      "phase_results": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM VALIDATE completed."
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM SETUP completed."
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM STATIC_CHECKS completed."
+        },
+        {
+          "phase": "BUILD",
+          "status": "FAILED",
+          "failure_code": "JAVA_COMPILATION_ERROR",
+          "normalized_summary": "illegal escape character"
+        }
+      ],
+      "checks": [],
+      "cleanup_confirmed": true,
+      "original_sources_unchanged": true,
+      "passed": false,
+      "execution_report_sha256": "c9b5490de6bc0c078ddc0afe1b3b27a21a4bc01e82f6949ff443c8957c8f3877"
+    },
+    {
+      "language": "kotlin",
+      "generation_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-kotlin-v16-v2-20260920-01",
+      "generation_passed": false,
+      "generation_failure": "ProposalGenerationError:INCOMPLETE_OUTPUT",
+      "generation_report_sha256": "b187cc7d5a7541cbe1bdb0b281a278525747d7ba5ade41947c77a4a298fd23f3",
+      "execution_directory": null,
+      "execution_completed": false,
+      "phase_results": [],
+      "checks": [],
+      "cleanup_confirmed": null,
+      "original_sources_unchanged": null,
+      "passed": false
+    },
+    {
+      "language": "scala",
+      "generation_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-scala-v16-v2-20260920-01",
+      "generation_passed": true,
+      "generation_failure": null,
+      "generation_report_sha256": "b979b9bf51e4da67a1a59698ad545b46132400e1a1026536f748f2973a0190fa",
+      "execution_directory": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\jvm-scala-v16-v2-execution-20260920-01",
+      "execution_completed": true,
+      "phase_results": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM VALIDATE completed."
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM SETUP completed."
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "FAILED",
+          "failure_code": "SCALA_E008",
+          "normalized_summary": "Scala 3 compiler reported a typed error."
+        }
+      ],
+      "checks": [],
+      "cleanup_confirmed": true,
+      "original_sources_unchanged": true,
+      "passed": false,
+      "execution_report_sha256": "1202c42f444b8db84c1ecf17ca6d05732218e4a1d20285e5b047c682bd1ef889"
+    }
+  ],
+  "complete": true,
+  "summary": {
+    "pipelines_passed": 0,
+    "independent_checks_passed": 0,
+    "independent_checks_failed": 0,
+    "independent_checks_not_run": 102
+  },
+  "archive": {
+    "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\jvm-v16-local-results-20260920-01\\native-evidence.zip",
+    "sha256": "ebfc42b64cc3c8c76cea33eb3fcf6d00a2be444a1c19723eb5d3e6b2940580ee",
+    "files_verified": 68
+  }
+}

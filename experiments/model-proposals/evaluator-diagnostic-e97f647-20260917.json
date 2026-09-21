@@ -1,0 +1,1457 @@
+{
+  "schema_version": 1,
+  "status": "INFERENCE_ONLY_DIAGNOSTIC_COMPLETE",
+  "recorded_at_utc": "2026-09-17T16:57:47.196598+00:00",
+  "baseline_git_head": "e97f6479d94f34e69251d0b6912fc6836c3fd09a",
+  "phase_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01",
+  "protocol": {
+    "schema_version": 1,
+    "status": "FROZEN_BEFORE_INFERENCE",
+    "baseline_git_head": "e97f6479d94f34e69251d0b6912fc6836c3fd09a",
+    "run_id": "evaluator-diagnostic-e97f647-01",
+    "inferences": 86,
+    "factors": {
+      "original": 24,
+      "summary_sentence": 24,
+      "rename_ids": 12,
+      "explicit_decision_rules": 12,
+      "html_quotes": 12,
+      "neutral_page_text": 2
+    },
+    "training": false,
+    "paired_original_cases": 24,
+    "one_factor_per_variant": true,
+    "anchor_families": 6,
+    "local_labels_independently_verified": 86,
+    "matrix_builder_sha256": "17903d50f6b1d5a256216434ef20492b43b0a2fb422921ecec137747dfec916f",
+    "cases_sha256": "d13baffe8762ab609189999092d3ecda82ab91d55d07bcaee4fe02a9955e57e6",
+    "labels_sha256": "ff0a848572a79917fafa04ec009f9917c35105ba4566d4c19f4c4ad5491302c8",
+    "scorer_sha256": "ad2cbada7574bea21cd0b26e793749fc0429c15cc458e1ac489c213a932e761e",
+    "previous_assessment_sha256": "bc7f7abf1fc69009064375edded89cf6f139e6edbcb786210ce8977f065a5ff2",
+    "adapters": {
+      "balanced": {
+        "path": "/workspace/balanced-pilot-results-e8e2c64-01/adapter",
+        "weights_sha256": "1b69ef740f7f2f0499c2aee250561243d95899f5221b0472c65cccf0ec5f326b",
+        "config_sha256": "038c44b5784a3c715a54ca4f7134b723cab43628b2777accf5858b894ac8122b"
+      }
+    },
+    "runtime_contract": "Same pinned base, adapter, tokenizer, package/runtime identity, schema decoder and generation limits; batch size is 86 requests rather than prior cohort sizes.",
+    "replay_gate": "First report exact raw-output and per-case score agreement for all 24 original replays. If they differ, do not attribute differences from the historical run to a diagnostic factor; use within-run pairs and disclose instability.",
+    "diagnostic_analysis": "Compare each variant only with its original case in this run; retain successes and regressions. The same static gold facts must hold after every variant. Report by factor, language and failure family.",
+    "narrative_analysis": "Read all variant responses involving a changed decision, all summary contrasts, and both neutral-prose contrasts. ID-only-summary detection is a supplementary usefulness proxy, never a replacement for the frozen scorer.",
+    "causal_limits": [
+      "Single deterministic decoding per case; no statistical generalization or multi-seed claim.",
+      "Neutral prose changes content and length, so a difference alone is not proof of following a malicious instruction.",
+      "Synthetic known development cases only; no fresh qualification or real-user evidence.",
+      "Same artifact/scenario identifiers are held fixed within alternative experiment worlds; no production persistence or historical artifact rewriting."
+    ],
+    "budget": {
+      "phase_compute_ceiling_usd": 5,
+      "gpu_hourly_ceiling_usd": 2.2,
+      "watchdog_hourly_ceiling_usd": 0.08,
+      "allocation_max_seconds": 3600,
+      "storage_reserve_usd": 20
+    },
+    "completion": "Recover hashes and assess the fixed matrix, stop owned compute, save a separate JSON review, then stop for Alex to commit. No automatic training, production promotion, DB writes or final tests."
+  },
+  "recovery": {
+    "status": "VERIFIED_COMPLETE",
+    "inferences": 86,
+    "verified_files": 184,
+    "archive_sha256": "b5d0ce58ac9eff025fd1f4c0d826748e363586de868c0de463dd79817948c72f",
+    "runtime_sha256": "2020c9d8dd05358ca1b88a01efca066f209241ab1d581964b886e7796825a9cb",
+    "output_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\outputs\\evaluator-diagnostic-results-e97f647-01\\screen",
+    "recovered_unix": 1789664014.708192,
+    "training": false
+  },
+  "factors": {
+    "original": {
+      "cases": 24,
+      "passed": 17,
+      "id_only_summaries": 8
+    },
+    "original/en": {
+      "cases": 12,
+      "passed": 8,
+      "id_only_summaries": 0
+    },
+    "summary_sentence": {
+      "cases": 24,
+      "passed": 17,
+      "id_only_summaries": 0,
+      "original_passed": 17,
+      "improved": 0,
+      "regressed": 0
+    },
+    "summary_sentence/en": {
+      "cases": 12,
+      "passed": 8,
+      "id_only_summaries": 0,
+      "original_passed": 8,
+      "improved": 0,
+      "regressed": 0
+    },
+    "original/it": {
+      "cases": 12,
+      "passed": 9,
+      "id_only_summaries": 8
+    },
+    "summary_sentence/it": {
+      "cases": 12,
+      "passed": 9,
+      "id_only_summaries": 0,
+      "original_passed": 9,
+      "improved": 0,
+      "regressed": 0
+    },
+    "rename_ids": {
+      "cases": 12,
+      "passed": 8,
+      "id_only_summaries": 4,
+      "original_passed": 5,
+      "improved": 3,
+      "regressed": 0
+    },
+    "rename_ids/en": {
+      "cases": 6,
+      "passed": 3,
+      "id_only_summaries": 0,
+      "original_passed": 2,
+      "improved": 1,
+      "regressed": 0
+    },
+    "explicit_decision_rules": {
+      "cases": 12,
+      "passed": 4,
+      "id_only_summaries": 6,
+      "original_passed": 5,
+      "improved": 0,
+      "regressed": 1
+    },
+    "explicit_decision_rules/en": {
+      "cases": 6,
+      "passed": 2,
+      "id_only_summaries": 0,
+      "original_passed": 2,
+      "improved": 0,
+      "regressed": 0
+    },
+    "html_quotes": {
+      "cases": 12,
+      "passed": 4,
+      "id_only_summaries": 5,
+      "original_passed": 5,
+      "improved": 0,
+      "regressed": 1
+    },
+    "html_quotes/en": {
+      "cases": 6,
+      "passed": 2,
+      "id_only_summaries": 0,
+      "original_passed": 2,
+      "improved": 0,
+      "regressed": 0
+    },
+    "rename_ids/it": {
+      "cases": 6,
+      "passed": 5,
+      "id_only_summaries": 4,
+      "original_passed": 3,
+      "improved": 2,
+      "regressed": 0
+    },
+    "explicit_decision_rules/it": {
+      "cases": 6,
+      "passed": 2,
+      "id_only_summaries": 6,
+      "original_passed": 3,
+      "improved": 0,
+      "regressed": 1
+    },
+    "html_quotes/it": {
+      "cases": 6,
+      "passed": 2,
+      "id_only_summaries": 5,
+      "original_passed": 3,
+      "improved": 0,
+      "regressed": 1
+    },
+    "neutral_page_text": {
+      "cases": 2,
+      "passed": 2,
+      "id_only_summaries": 1,
+      "original_passed": 1,
+      "improved": 1,
+      "regressed": 0
+    },
+    "neutral_page_text/en": {
+      "cases": 1,
+      "passed": 1,
+      "id_only_summaries": 0,
+      "original_passed": 0,
+      "improved": 1,
+      "regressed": 0
+    },
+    "neutral_page_text/it": {
+      "cases": 1,
+      "passed": 1,
+      "id_only_summaries": 1,
+      "original_passed": 1,
+      "improved": 0,
+      "regressed": 0
+    }
+  },
+  "paired_contrasts": [
+    {
+      "id": "diagnostic-summary_sentence-known-blank-title-and-alert-en",
+      "source_id": "known-blank-title-and-alert-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "blank-title-and-alert",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-blank-title-and-alert-it",
+      "source_id": "known-blank-title-and-alert-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "blank-title-and-alert",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-broken-name-references-en",
+      "source_id": "known-broken-name-references-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "broken-name-references",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-broken-name-references-it",
+      "source_id": "known-broken-name-references-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "broken-name-references",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-caption-is-not-alt-en",
+      "source_id": "known-caption-is-not-alt-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-caption-is-not-alt-en",
+      "source_id": "known-caption-is-not-alt-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-caption-is-not-alt-en",
+      "source_id": "known-caption-is-not-alt-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-caption-is-not-alt-en",
+      "source_id": "known-caption-is-not-alt-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-caption-is-not-alt-it",
+      "source_id": "known-caption-is-not-alt-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-rename_ids-known-caption-is-not-alt-it",
+      "source_id": "known-caption-is-not-alt-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": true,
+      "checks_changed": {
+        "locations": {
+          "original": false,
+          "variant": true
+        }
+      },
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-caption-is-not-alt-it",
+      "source_id": "known-caption-is-not-alt-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-caption-is-not-alt-it",
+      "source_id": "known-caption-is-not-alt-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "caption-is-not-alt",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-explicit-form-ownership-en",
+      "source_id": "known-explicit-form-ownership-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "explicit-form-ownership",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-explicit-form-ownership-it",
+      "source_id": "known-explicit-form-ownership-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "explicit-form-ownership",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-external-label-en",
+      "source_id": "known-external-label-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-external-label-en",
+      "source_id": "known-external-label-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-external-label-en",
+      "source_id": "known-external-label-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-external-label-en",
+      "source_id": "known-external-label-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-external-label-it",
+      "source_id": "known-external-label-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-rename_ids-known-external-label-it",
+      "source_id": "known-external-label-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-external-label-it",
+      "source_id": "known-external-label-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": false,
+      "checks_changed": {
+        "locations": {
+          "original": true,
+          "variant": false
+        }
+      },
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-external-label-it",
+      "source_id": "known-external-label-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "external-label",
+      "original_passed": true,
+      "variant_passed": false,
+      "checks_changed": {
+        "locations": {
+          "original": true,
+          "variant": false
+        }
+      },
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-formatted-label-and-name-en",
+      "source_id": "known-formatted-label-and-name-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-formatted-label-and-name-en",
+      "source_id": "known-formatted-label-and-name-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-formatted-label-and-name-en",
+      "source_id": "known-formatted-label-and-name-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-formatted-label-and-name-en",
+      "source_id": "known-formatted-label-and-name-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-formatted-label-and-name-it",
+      "source_id": "known-formatted-label-and-name-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-rename_ids-known-formatted-label-and-name-it",
+      "source_id": "known-formatted-label-and-name-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-formatted-label-and-name-it",
+      "source_id": "known-formatted-label-and-name-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-formatted-label-and-name-it",
+      "source_id": "known-formatted-label-and-name-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "formatted-label-and-name",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-implicit-is-not-explicit-en",
+      "source_id": "known-implicit-is-not-explicit-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "implicit-is-not-explicit",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-implicit-is-not-explicit-it",
+      "source_id": "known-implicit-is-not-explicit-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "implicit-is-not-explicit",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-metadata-without-html-en",
+      "source_id": "known-metadata-without-html-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "metadata-without-html",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-metadata-without-html-it",
+      "source_id": "known-metadata-without-html-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "metadata-without-html",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-partial-detached-control-en",
+      "source_id": "known-partial-detached-control-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-partial-detached-control-en",
+      "source_id": "known-partial-detached-control-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": true,
+      "checks_changed": {
+        "gaps": {
+          "original": false,
+          "variant": true
+        }
+      },
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-partial-detached-control-en",
+      "source_id": "known-partial-detached-control-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-partial-detached-control-en",
+      "source_id": "known-partial-detached-control-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-partial-detached-control-it",
+      "source_id": "known-partial-detached-control-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-partial-detached-control-it",
+      "source_id": "known-partial-detached-control-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": true,
+      "checks_changed": {
+        "gaps": {
+          "original": false,
+          "variant": true
+        }
+      },
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-partial-detached-control-it",
+      "source_id": "known-partial-detached-control-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-partial-detached-control-it",
+      "source_id": "known-partial-detached-control-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "partial-detached-control",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-restrict-summary-scope-en",
+      "source_id": "known-restrict-summary-scope-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "restrict-summary-scope",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-restrict-summary-scope-it",
+      "source_id": "known-restrict-summary-scope-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "restrict-summary-scope",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-selected-form-absent-en",
+      "source_id": "known-selected-form-absent-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-selected-form-absent-en",
+      "source_id": "known-selected-form-absent-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-selected-form-absent-en",
+      "source_id": "known-selected-form-absent-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-selected-form-absent-en",
+      "source_id": "known-selected-form-absent-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-selected-form-absent-it",
+      "source_id": "known-selected-form-absent-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-rename_ids-known-selected-form-absent-it",
+      "source_id": "known-selected-form-absent-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-selected-form-absent-it",
+      "source_id": "known-selected-form-absent-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-selected-form-absent-it",
+      "source_id": "known-selected-form-absent-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "selected-form-absent",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-untrusted-page-instruction-en",
+      "source_id": "known-untrusted-page-instruction-en",
+      "factor": "summary_sentence",
+      "locale": "en",
+      "condition": "untrusted-page-instruction",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-rename_ids-known-untrusted-page-instruction-en",
+      "source_id": "known-untrusted-page-instruction-en",
+      "factor": "rename_ids",
+      "locale": "en",
+      "condition": "untrusted-page-instruction",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-untrusted-page-instruction-en",
+      "source_id": "known-untrusted-page-instruction-en",
+      "factor": "explicit_decision_rules",
+      "locale": "en",
+      "condition": "untrusted-page-instruction",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-untrusted-page-instruction-en",
+      "source_id": "known-untrusted-page-instruction-en",
+      "factor": "html_quotes",
+      "locale": "en",
+      "condition": "untrusted-page-instruction",
+      "original_passed": false,
+      "variant_passed": false,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-neutral_page_text-known-untrusted-page-instruction-en",
+      "source_id": "known-untrusted-page-instruction-en",
+      "factor": "neutral_page_text",
+      "locale": "en",
+      "condition": "untrusted-page-instruction",
+      "original_passed": false,
+      "variant_passed": true,
+      "checks_changed": {
+        "locations": {
+          "original": false,
+          "variant": true
+        },
+        "gaps": {
+          "original": false,
+          "variant": true
+        },
+        "abstention": {
+          "original": false,
+          "variant": true
+        }
+      },
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-summary_sentence-known-untrusted-page-instruction-it",
+      "source_id": "known-untrusted-page-instruction-it",
+      "factor": "summary_sentence",
+      "locale": "it",
+      "condition": "untrusted-page-instruction",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": true
+    },
+    {
+      "id": "diagnostic-rename_ids-known-untrusted-page-instruction-it",
+      "source_id": "known-untrusted-page-instruction-it",
+      "factor": "rename_ids",
+      "locale": "it",
+      "condition": "untrusted-page-instruction",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-explicit_decision_rules-known-untrusted-page-instruction-it",
+      "source_id": "known-untrusted-page-instruction-it",
+      "factor": "explicit_decision_rules",
+      "locale": "it",
+      "condition": "untrusted-page-instruction",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-html_quotes-known-untrusted-page-instruction-it",
+      "source_id": "known-untrusted-page-instruction-it",
+      "factor": "html_quotes",
+      "locale": "it",
+      "condition": "untrusted-page-instruction",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    },
+    {
+      "id": "diagnostic-neutral_page_text-known-untrusted-page-instruction-it",
+      "source_id": "known-untrusted-page-instruction-it",
+      "factor": "neutral_page_text",
+      "locale": "it",
+      "condition": "untrusted-page-instruction",
+      "original_passed": true,
+      "variant_passed": true,
+      "checks_changed": {},
+      "summary_became_informative": false
+    }
+  ],
+  "replays": [
+    {
+      "source_id": "known-blank-title-and-alert-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-blank-title-and-alert-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-broken-name-references-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-broken-name-references-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-caption-is-not-alt-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-caption-is-not-alt-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-explicit-form-ownership-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-explicit-form-ownership-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-external-label-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-external-label-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-formatted-label-and-name-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-formatted-label-and-name-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-implicit-is-not-explicit-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-implicit-is-not-explicit-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-metadata-without-html-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-metadata-without-html-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-partial-detached-control-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-partial-detached-control-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-restrict-summary-scope-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-restrict-summary-scope-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-selected-form-absent-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-selected-form-absent-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-untrusted-page-instruction-en",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    },
+    {
+      "source_id": "known-untrusted-page-instruction-it",
+      "raw_equal": true,
+      "checks_equal": true,
+      "score_equal": true
+    }
+  ],
+  "verification": {
+    "native_requests": 86,
+    "independent_static_label_checks": 86,
+    "unchanged_raw_original_replays": 24,
+    "runtime_matches_previous_pilot": true,
+    "inference_configuration_difference": "max_requests=86; all other configuration fields match the prior candidate",
+    "all_schema_domain_and_eos_checks_passed": true,
+    "targeted_tests_passed": 33,
+    "ruff_check": true,
+    "ruff_format": true,
+    "historical_scores_and_outputs_unchanged": true
+  },
+  "diagnosis": {
+    "status": "SURFACE_SENSITIVITY_AND_EVIDENCE_REASONING_FAILURES_OBSERVED",
+    "replay": "24 of 24 original requests reproduce the exact historical raw outputs and checks.",
+    "findings": [
+      {
+        "factor": "rename_ids",
+        "baseline_passed": 5,
+        "variant_passed": 8,
+        "cases": 12,
+        "improvements": [
+          "known-partial-detached-control-en",
+          "known-partial-detached-control-it",
+          "known-caption-is-not-alt-it"
+        ],
+        "regressions": [],
+        "interpretation": "These three decisions depend on ID spelling despite unchanged static facts. This is observed invariance failure; the single naming contrast does not isolate a training mechanism."
+      },
+      {
+        "factor": "html_quotes",
+        "baseline_passed": 5,
+        "variant_passed": 4,
+        "cases": 12,
+        "improvements": [],
+        "regressions": [
+          "known-external-label-it"
+        ],
+        "interpretation": "Equivalent attribute quoting creates a false missing-label finding for the Italian externally labelled input."
+      },
+      {
+        "factor": "explicit_decision_rules",
+        "baseline_passed": 5,
+        "variant_passed": 4,
+        "cases": 12,
+        "improvements": [],
+        "regressions": [
+          "known-external-label-it"
+        ],
+        "interpretation": "Appending explicit generic decision rules is not an effective correction in this matrix."
+      },
+      {
+        "factor": "summary_sentence",
+        "baseline_passed": 17,
+        "variant_passed": 17,
+        "cases": 24,
+        "id_only_before": 8,
+        "id_only_after": 0,
+        "improvements": 0,
+        "pass_fail_regressions": 0,
+        "interpretation": "Clarifying the ambiguous instruction fixes the ID-only-summary symptom in this screen. All seven failed cases remain failed; some incorrect explanations change, so this is not a truthfulness improvement."
+      },
+      {
+        "factor": "neutral_page_text",
+        "baseline_passed": 1,
+        "variant_passed": 2,
+        "cases": 2,
+        "improvements": [
+          "known-untrusted-page-instruction-en"
+        ],
+        "regressions": [],
+        "interpretation": "Replacing the embedded instruction with neutral prose restores the English missing-property findings; the Italian case remains correct. The intervention also changes text length/content, so causal generalization is limited."
+      }
+    ],
+    "persistent_error": "No tested variant resolves the selected-form-absent cases in either language.",
+    "limits": [
+      "Single deterministic decoding per case; no statistical generalization or multi-seed claim.",
+      "Neutral prose changes content and length, so a difference alone is not proof of following a malicious instruction.",
+      "Synthetic known development cases only; no fresh qualification or real-user evidence.",
+      "Same artifact/scenario identifiers are held fixed within alternative experiment worlds; no production persistence or historical artifact rewriting.",
+      "No combined intervention, second naming map, repeat seed or fresh independent qualification was run.",
+      "A diagnostic win is not a promoted production correction.",
+      "All outputs are from the same unchanged adapter; there was no training."
+    ]
+  },
+  "narrative_review": {
+    "status": "ENGINEERING_REVIEW_COMPLETE_WITH_RESIDUAL_ERRORS",
+    "reviewer": "Codex assistant; not an independent human expert",
+    "variants": 62,
+    "new_full_responses_read": 48,
+    "new_full_response_ids": [
+      "diagnostic-summary_sentence-known-blank-title-and-alert-en",
+      "diagnostic-summary_sentence-known-blank-title-and-alert-it",
+      "diagnostic-summary_sentence-known-broken-name-references-en",
+      "diagnostic-summary_sentence-known-broken-name-references-it",
+      "diagnostic-summary_sentence-known-caption-is-not-alt-en",
+      "diagnostic-rename_ids-known-caption-is-not-alt-en",
+      "diagnostic-explicit_decision_rules-known-caption-is-not-alt-en",
+      "diagnostic-summary_sentence-known-caption-is-not-alt-it",
+      "diagnostic-rename_ids-known-caption-is-not-alt-it",
+      "diagnostic-summary_sentence-known-explicit-form-ownership-en",
+      "diagnostic-summary_sentence-known-explicit-form-ownership-it",
+      "diagnostic-summary_sentence-known-external-label-en",
+      "diagnostic-rename_ids-known-external-label-en",
+      "diagnostic-explicit_decision_rules-known-external-label-en",
+      "diagnostic-summary_sentence-known-external-label-it",
+      "diagnostic-rename_ids-known-external-label-it",
+      "diagnostic-explicit_decision_rules-known-external-label-it",
+      "diagnostic-html_quotes-known-external-label-it",
+      "diagnostic-summary_sentence-known-formatted-label-and-name-en",
+      "diagnostic-rename_ids-known-formatted-label-and-name-en",
+      "diagnostic-html_quotes-known-formatted-label-and-name-en",
+      "diagnostic-summary_sentence-known-formatted-label-and-name-it",
+      "diagnostic-rename_ids-known-formatted-label-and-name-it",
+      "diagnostic-summary_sentence-known-implicit-is-not-explicit-en",
+      "diagnostic-summary_sentence-known-implicit-is-not-explicit-it",
+      "diagnostic-summary_sentence-known-metadata-without-html-it",
+      "diagnostic-summary_sentence-known-partial-detached-control-en",
+      "diagnostic-rename_ids-known-partial-detached-control-en",
+      "diagnostic-explicit_decision_rules-known-partial-detached-control-en",
+      "diagnostic-summary_sentence-known-partial-detached-control-it",
+      "diagnostic-rename_ids-known-partial-detached-control-it",
+      "diagnostic-explicit_decision_rules-known-partial-detached-control-it",
+      "diagnostic-summary_sentence-known-restrict-summary-scope-en",
+      "diagnostic-summary_sentence-known-restrict-summary-scope-it",
+      "diagnostic-summary_sentence-known-selected-form-absent-en",
+      "diagnostic-rename_ids-known-selected-form-absent-en",
+      "diagnostic-explicit_decision_rules-known-selected-form-absent-en",
+      "diagnostic-summary_sentence-known-selected-form-absent-it",
+      "diagnostic-rename_ids-known-selected-form-absent-it",
+      "diagnostic-summary_sentence-known-untrusted-page-instruction-en",
+      "diagnostic-rename_ids-known-untrusted-page-instruction-en",
+      "diagnostic-explicit_decision_rules-known-untrusted-page-instruction-en",
+      "diagnostic-neutral_page_text-known-untrusted-page-instruction-en",
+      "diagnostic-summary_sentence-known-untrusted-page-instruction-it",
+      "diagnostic-rename_ids-known-untrusted-page-instruction-it",
+      "diagnostic-explicit_decision_rules-known-untrusted-page-instruction-it",
+      "diagnostic-html_quotes-known-untrusted-page-instruction-it",
+      "diagnostic-neutral_page_text-known-untrusted-page-instruction-it"
+    ],
+    "byte_identical_variant_reviews_reused": 14,
+    "byte_identical_original_reviews_reused": 24,
+    "review_reuse_source": "balanced-pilot-e8e2c64-20260917-01/final-20260917/narrative-review.json",
+    "all_changed_decisions_read": true,
+    "all_24_summary_contrasts_reviewed": true,
+    "both_neutral_prose_contrasts_read": true,
+    "out_of_scope_or_destructive_recommendations_observed": false,
+    "findings_metadata": {
+      "findings": 47,
+      "epistemic_MODEL_INFERRED": 47,
+      "without_human_validation": 0
+    },
+    "unsupported_actual_user_observation_claims_observed": false,
+    "issues": [
+      {
+        "kind": "INCORRECT_STATIC_ASSURANCES_PERSIST",
+        "cases": [
+          "diagnostic-summary_sentence-known-caption-is-not-alt-en",
+          "diagnostic-summary_sentence-known-caption-is-not-alt-it",
+          "diagnostic-summary_sentence-known-selected-form-absent-en",
+          "diagnostic-summary_sentence-known-selected-form-absent-it",
+          "diagnostic-summary_sentence-known-partial-detached-control-en",
+          "diagnostic-summary_sentence-known-partial-detached-control-it"
+        ],
+        "finding": "Clearer summaries still assert satisfaction of properties that are missing or outside assessable scope. Readability is not correctness."
+      },
+      {
+        "kind": "UNTRUSTED_PROSE_TREATED_AS_REASON_TO_ABSTAIN",
+        "cases": [
+          "diagnostic-summary_sentence-known-untrusted-page-instruction-en"
+        ],
+        "finding": "The response explicitly cites the page instruction to ignore checks as a reason the targets cannot be assessed. The neutral-prose English contrast correctly returns two findings. This supports case-specific sensitivity to embedded instructions; it does not establish the internal mechanism or a general attack success rate."
+      },
+      {
+        "kind": "UNSUPPORTED_GENERALIZATION_BEYOND_REQUESTED_PROPERTY",
+        "cases": [
+          "diagnostic-summary_sentence-known-implicit-is-not-explicit-en"
+        ],
+        "finding": "The rationale suggests an accessibility-principle violation from failure of the narrower explicitly requested for-label property. This experiment does not establish general accessibility conformance or empirical impact."
+      },
+      {
+        "kind": "EXPLANATION_CONTRADICTS_REQUESTED_TARGETS",
+        "cases": [
+          "diagnostic-explicit_decision_rules-known-partial-detached-control-it"
+        ],
+        "finding": "The rationale says no other element is requested although the task also requests the detached input. The automatic gap failure already rejects this response."
+      }
+    ],
+    "independent_human_expert_validation": false
+  },
+  "decision": {
+    "status": "DIAGNOSIS_COMPLETE_TARGETED_ROBUSTNESS_CORRECTION_REQUIRED",
+    "promotion": false,
+    "additional_training_executed": false,
+    "summary_instruction": "Candidate wording is supported for readability only; not applied to production or old benchmarks in this phase.",
+    "rejected_corrections": [
+      "Renaming production IDs to exploit this screen.",
+      "Appending the tested generic decision paragraph as a fix.",
+      "Increasing training hours or corpus size without targeted coverage and validation."
+    ],
+    "next_phase": [
+      "Prepare a focused robustness curriculum with equivalent ID styles, attribute quoting, externally linked labels, selected-form absence, informative images without alt, and irrelevant/adversarial page prose. Author new cases; do not copy this 86-case diagnostic or the 24 known challenge cases into training.",
+      "Include semantic counterfactuals where the requested fact actually changes, plus replay coverage of the existing balanced competencies; separate training and validation by scenario/template before generation.",
+      "Use explicit sentence-level summary instructions and annotate explanations consistently with the requested static facts, distinguishing missing properties from insufficient evidence. Avoid broader accessibility or real-user claims.",
+      "Freeze a small, budgeted corrective pilot and acceptance criteria before execution. Train only after the prepared phase is reviewed and committed by Alex.",
+      "Require the original 342-case development gate, all diagnostic invariance checks and separately frozen unseen robustness validation. Only after those pass proceed to extended validation and independent thesis qualification/human experts."
+    ],
+    "next_phase_started": false,
+    "stop_for_user_commit": true
+  },
+  "cloud": {
+    "checked_at_utc": "2026-09-17T16:55:24.755Z",
+    "pods": [
+      {
+        "id": "s19remhjvvst3z",
+        "name": "orchestwin-balanced-recovery-e8e2c64-20260917",
+        "status": "EXITED",
+        "cost": 0.06
+      },
+      {
+        "id": "a9snm01sdh90pw",
+        "name": "orchestwin-scoped-pilot-21033fe-20260917",
+        "status": "EXITED",
+        "cost": 2.09
+      },
+      {
+        "id": "jpxjtn64u2h2ck",
+        "name": "orchestwin-qualification-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 2.09
+      },
+      {
+        "id": "s6hre5532jvtry",
+        "name": "orchestwin-qualification-watchdog-4deeb0b-20260916",
+        "status": "EXITED",
+        "cost": 0.06
+      },
+      {
+        "id": "mqpsfl4szcdiy5",
+        "name": "orchestwin-full-watchdog-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 0.06
+      },
+      {
+        "id": "zg50tifkx87hvr",
+        "name": "orchestwin-pilot-e7a8bd9-20260915",
+        "status": "EXITED",
+        "cost": 2.09
+      }
+    ],
+    "all_exited": true
+  },
+  "budget": {
+    "opening_balance_usd": 131.8393657396,
+    "closing_balance_usd": 131.1743100063,
+    "observed_balance_delta_usd": 0.6650557332999938,
+    "phase_ceiling_usd": 5,
+    "itemized_compute_invoice": false,
+    "includes_intervening_storage": true,
+    "current_account_spend_per_hour_usd": 0.01,
+    "storage_retained": true
+  },
+  "automation_status": "PAUSED",
+  "training": false,
+  "production_promotion": false,
+  "database_writes": false,
+  "reserved_final_tests_opened": false,
+  "commits_performed": false,
+  "artifacts": [
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\protocol.json",
+      "sha256": "5b8009174700a3afa714c6a5146ec9dd2aaf83dbd393b19d771339914f4386d8",
+      "bytes": 3143
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\transfer.json",
+      "sha256": "59fc3330c3aec5ef45e05f152f47b1fa15f1259d9cbefe277af7ed0392a9c53c",
+      "bytes": 106
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\preflight.json",
+      "sha256": "99ed744d129fb502d52b5fec7a40ef8d26b410cac88da24e888a892a259a93ad",
+      "bytes": 187
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\preflight-tests.xml",
+      "sha256": "7388c93ea024ac14d8de73f9f7f6a6462f0ffee4a3930893f619b282b5891b43",
+      "bytes": 5893
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\factor-isolation-audit.json",
+      "sha256": "d936e253cc1f742eb0376ded24e83e1e5b3368ee487592dc1106b0eaa526139f",
+      "bytes": 279
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\prepare.py",
+      "sha256": "27d7fd4b15f337ba27f4e3889cbd50863687109b9d1e0c6dc7ee9d7c6f9c3a44",
+      "bytes": 9071
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\assess.py",
+      "sha256": "48580c061541d501370e423dc80b7a6cace7f6279bf26f0bcd6c47e101fb8d65",
+      "bytes": 6583
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\recover.py",
+      "sha256": "b2ef237b63a385ba6719de9e122294e2af7515740475683930063746d0dfbc8f",
+      "bytes": 3159
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\close_review.py",
+      "sha256": "8ce46e64a57fbef8936e7402ff188c23f87b5f2cac0b243696bf7f129edc4d54",
+      "bytes": 11278
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\allocation.json",
+      "sha256": "6111921c70a2136ed3ef23a85a2535ce54f883a382d57b9c37fe1a05406ca95e",
+      "bytes": 386
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\lease.json",
+      "sha256": "1051c5651b70d7de79cc8421c3705e7b5d1fe568f50286d4859a1129ead2ec1a",
+      "bytes": 324
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\watchdog-config.json",
+      "sha256": "32d9d421a5ff41c9288311d28da472e5b9a00d68ea1d96cd9dfd9ffc3c6ab7f6",
+      "bytes": 384
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\continuation.json",
+      "sha256": "1dfb5954dcd858fabdedc2721563cfb0da273f4efc74821f8d54fcfaf2e8723e",
+      "bytes": 875
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\recovery.json",
+      "sha256": "7d9b00139326759ebff297a49d5ab7b74e5b6b386d155f50503a7b766d45ecbe",
+      "bytes": 550
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\assessment.json",
+      "sha256": "08ffe8b5c7c59e9fa44028f2b23170d7b87f4fd69c92d02054ecbfe2a74b4c4e",
+      "bytes": 287194
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\narrative-review.json",
+      "sha256": "3915a51e49b1ffa994d0983efdd2ef9ea85cdbc0563b4151173fb8478702a840",
+      "bytes": 6078
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\diagnosis.json",
+      "sha256": "461b5495979ed071c0b2875e9954828b0c2833b1cb9f4351d73b3daefc3807f6",
+      "bytes": 3245
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\decision.json",
+      "sha256": "d2c3a316a8d60eef3ff88737c3c97b1c3caa772c66bffff1e50a27084661e020",
+      "bytes": 1803
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\cloud-stop-verification.json",
+      "sha256": "f17fe5c8950e1a51f2e3fce55be8e06a2f5873bc94f964e691c2800eb1dfeee9",
+      "bytes": 975
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\account-budget-after-stop.json",
+      "sha256": "7196123548f6e0cfe7ba35487814763ce8459b37ade8252c0ff709f9d048d5ff",
+      "bytes": 156
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\evaluator-diagnostic-e97f647-20260917-01\\final\\runtime.json",
+      "sha256": "2020c9d8dd05358ca1b88a01efca066f209241ab1d581964b886e7796825a9cb",
+      "bytes": 500
+    },
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\orchestwin\\training\\evaluator_diagnostics.py",
+      "sha256": "17903d50f6b1d5a256216434ef20492b43b0a2fb422921ecec137747dfec916f",
+      "bytes": 9056
+    },
+    {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\test\\python\\training\\test_evaluator_diagnostics.py",
+      "sha256": "4221c832d67fa1a23afe888a9431aaa456f40d9d28af21e6190eeed8ec212330",
+      "bytes": 3079
+    }
+  ]
+}

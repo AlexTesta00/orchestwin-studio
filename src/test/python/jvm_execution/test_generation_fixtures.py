@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from xml.etree import ElementTree
 
 from orchestwin.jvm_execution.detection import (
     JvmDetectionSnapshot,
@@ -121,10 +122,52 @@ def test_each_fixture_has_a_stable_hash_and_deterministic_target() -> None:
         assert manifest["source_content_hash"] == _source_content_hash(directory)
         assert manifest["execution_attested"] is False
         assert manifest["attestation_boundary"] == "SOURCE_CONTRACT_ONLY"
-        assert manifest["dependency_verification_complete"] is False
+        assert manifest["launcher_complete"] is True
+        assert manifest["dependency_verification_complete"] is (
+            expected_target is not ExecutionTarget.JVM_SCALA
+        )
         assert result.status is JvmDetectionStatus.SELECTED
         assert result.selected is not None
         assert result.selected.selection.target is expected_target
+
+
+def test_observed_gradle_dependency_metadata_matches_its_preparation_inputs() -> None:
+    repository = Path(__file__).parents[4]
+    provenance = _load_json(repository / "infra/jvm-runners/fixture-dependencies.lock.json")
+    assert provenance["development"] is True
+    assert provenance["level_d_validated"] is False
+    assert provenance["report_type"] == "JVM_FIXTURE_DEPENDENCY_PREPARATION_NOT_PROFILE_VALIDATION"
+    # These are historical preparation receipts. Preserve their exact inputs
+    # when the current runner gains instrumentation; never rewrite old hashes
+    # to make a new image appear to have produced the previous observations.
+    assert set(provenance["runner_input_snapshots"]) == set(provenance["runner_inputs"])
+    for relative, digest in provenance["runner_inputs"].items():
+        original = provenance["runner_input_snapshots"][relative].encode("utf-8")
+        assert hashlib.sha256(original).hexdigest() == digest
+    assert {item["fixture_id"] for item in provenance["fixtures"]} == {
+        "jvm-java-greeting",
+        "jvm-kotlin-calculator",
+    }
+    namespace = {"v": "https://schema.gradle.org/dependency-verification"}
+    for observed in provenance["fixtures"]:
+        fixture = _FIXTURE_ROOT / observed["fixture_id"]
+        manifest = _load_json(fixture / "fixture.json")
+        assert set(observed["input_source_sha256"]) == set(manifest["source_paths"]) - {
+            "gradle/verification-metadata.xml"
+        }
+        for relative, digest in observed["input_source_sha256"].items():
+            assert hashlib.sha256((fixture / relative).read_bytes()).hexdigest() == digest
+        metadata = (fixture / "gradle/verification-metadata.xml").read_bytes()
+        assert hashlib.sha256(metadata).hexdigest() == observed["metadata_sha256"]
+        document = ElementTree.fromstring(metadata)
+        assert (
+            len(document.findall("v:components/v:component", namespace))
+            == observed["component_count"]
+        )
+        assert (
+            len(document.findall("v:components/v:component/v:artifact", namespace))
+            == observed["artifact_count"]
+        )
 
 
 def test_generated_build_and_tooling_state_is_excluded_from_fixture_contract(
@@ -180,7 +223,7 @@ def test_declared_source_contract_ignores_unknown_untracked_tool_state(
     source_hash = _source_content_hash(directory)
 
     for relative in (
-        "gradle/wrapper/gradle-wrapper.jar",
+        "tool-generated/launcher-cache.jar",
         "tool-generated/session.bin",
         "unknown-ide/cache.state",
     ):

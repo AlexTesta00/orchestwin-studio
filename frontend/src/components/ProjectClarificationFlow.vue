@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
+import type { ProjectBriefVersionResponse } from "@/api/contracts";
 import {
   BRIEF_FIELDS,
   type BriefAssumptionResponse,
@@ -14,6 +15,7 @@ import {
 } from "@/api/workflow-contracts";
 import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedRequest, useClarificationStore } from "@/stores/clarification";
+import TwinIdentity from "./TwinIdentity.vue";
 
 interface AnswerDraft {
   text: string;
@@ -23,49 +25,66 @@ interface AnswerDraft {
 
 const props = defineProps<{
   projectId: string;
+  currentBrief?: Pick<ProjectBriefVersionResponse, "id" | "version_number" | "content_hash"> | null;
   api?: ProjectWorkflowApi;
   authorize?: AuthorizedRequest;
 }>();
 
 const auth = useAuthStore();
 const store = useClarificationStore();
+const gateTargetsBrief = computed(() => {
+  if (store.gate === null) return false;
+  if (props.currentBrief === null || props.currentBrief === undefined) return true;
+  return (
+    store.gate.artifact.artifact_id === props.currentBrief.id &&
+    store.gate.artifact.version === props.currentBrief.version_number &&
+    store.gate.artifact.content_hash === props.currentBrief.content_hash
+  );
+});
+const canSubmitBrief = computed(
+  () =>
+    !gateTargetsBrief.value ||
+    ["DRAFT", "STALE", "REVISION_REQUESTED", "REJECTED"].includes(store.gate?.status ?? ""),
+);
 
 const { t, locale } = useI18n({
   useScope: "local",
   messages: {
     en: {
       flow: {
-        title: "Clarification and Project Brief approval",
+        title: "Complete your idea",
         intro:
-          "Resolve missing information, keep assumptions explicit, and approve the exact Project Brief version.",
-        loading: "Updating project workflow…",
-        refresh: "Refresh workflow",
-        startRound: "Start clarification round",
-        noOpenRound: "There is no open clarification round.",
-        roundTitle: "Clarification round {number}",
-        markUnknown: "This information is currently unknown",
+          "Answer the remaining questions, review any assumptions, and confirm your project idea.",
+        loading: "Updating your project…",
+        refresh: "Refresh",
+        startRound: "See the remaining questions",
+        noOpenRound: "There are no questions waiting for an answer.",
+        roundTitle: "Questions · round {number}",
+        markUnknown: "I do not know yet",
         textPlaceholder: "Enter a focused answer",
         listPlaceholder: "Enter one item per line",
-        submitAnswers: "Save clarification answers",
+        submitAnswers: "Save answers",
         answerRequired: "Provide at least one answer or mark one field as unknown.",
         nextStep: "Next step: {step}",
-        historyTitle: "Clarification history",
+        historyTitle: "Previous answers",
         noHistory: "No clarification round has been created.",
-        assumptionsTitle: "Explicit assumptions",
+        assumptionsTitle: "Ideas to confirm",
         assumptionsIntro:
-          "Assumptions remain separate until they are explicitly accepted or rejected.",
-        assumptionField: "Project Brief field",
-        assumptionStatement: "Assumption",
+          "These are suggestions to fill gaps in your idea. They are only used if you accept them.",
+        assumptionField: "Project detail",
+        assumptionStatement: "Suggestion",
         assumptionPlaceholder: "Describe the assumption and its intended meaning.",
-        createAssumption: "Create assumption",
+        createAssumption: "Add a suggestion",
         noAssumptions: "No assumptions have been proposed.",
         decisionReason: "Decision rationale",
         accept: "Accept assumption",
         reject: "Reject assumption",
+        rejectIdea: "Reject idea",
+        audit: "Version details",
         rejectionReasonRequired: "A rejection rationale is required.",
-        gateTitle: "Gate 1 — Project Brief",
-        noGate: "The Project Brief has not been submitted for approval.",
-        submitGate: "Submit current brief for approval",
+        gateTitle: "Conferma la tua idea di progetto",
+        noGate: "When your idea is complete, prepare it for your approval.",
+        submitGate: "Prepare for approval",
         gateReason: "Decision rationale",
         approve: "Approve",
         requestRevision: "Request revision",
@@ -74,11 +93,11 @@ const { t, locale } = useI18n({
         cancel: "Cancel",
         gateReasonRequired: "Reject and request-revision actions require a rationale.",
         missingForApproval: "Approval is blocked by these missing fields:",
-        eventHistory: "Gate audit history",
-        noEvents: "No Gate 1 event has been recorded.",
+        eventHistory: "Previous decisions",
+        noEvents: "No decision has been recorded yet.",
         versionLabel: "Version {version}",
         statusLabel: "Status: {status}",
-        error: "Workflow error: {detail}",
+        error: "Could not complete the action: {detail}",
         fields: {
           name: "Name",
           description: "Description",
@@ -94,7 +113,7 @@ const { t, locale } = useI18n({
           risks: "Risks",
           stakeholders: "Stakeholders",
           available_artifacts: "Available artifacts",
-          definition_of_done: "Definition of Done",
+          definition_of_done: "When the project is complete",
         },
         statuses: {
           OPEN: "Open",
@@ -139,12 +158,12 @@ const { t, locale } = useI18n({
         },
         nextSteps: {
           CLARIFICATION_REQUIRED: "Another clarification round is required",
-          BRIEF_READY_FOR_APPROVAL: "The Project Brief is ready for Gate 1",
+          BRIEF_READY_FOR_APPROVAL: "Your idea is complete and ready for approval",
           PAUSED_NEEDS_HUMAN: "Automatic clarification stopped; human intervention is required",
         },
         errors: {
           unexpected_error: "An unexpected error occurred.",
-          unexpected_api_error: "The API returned an unexpected response.",
+          unexpected_api_error: "The service returned an unexpected response. Please try again.",
           clarification_round_not_found: "No open clarification round was found.",
           clarification_service_unavailable: "The clarification service is unavailable.",
           brief_gate_service_unavailable: "The Project Brief gate service is unavailable.",
@@ -217,37 +236,39 @@ const { t, locale } = useI18n({
     },
     it: {
       flow: {
-        title: "Chiarificazione e approvazione del Project Brief",
+        title: "Completa la tua idea",
         intro:
-          "Risolvi le informazioni mancanti, mantieni esplicite le assunzioni e approva la versione esatta del Project Brief.",
-        loading: "Aggiornamento del workflow…",
-        refresh: "Aggiorna workflow",
-        startRound: "Avvia round di chiarificazione",
-        noOpenRound: "Non è presente un round di chiarificazione aperto.",
-        roundTitle: "Round di chiarificazione {number}",
-        markUnknown: "Questa informazione è attualmente sconosciuta",
+          "Rispondi alle domande rimaste, controlla le ipotesi e conferma la tua idea di progetto.",
+        loading: "Aggiornamento del progetto…",
+        refresh: "Aggiorna",
+        startRound: "Vedi le domande rimaste",
+        noOpenRound: "Non ci sono domande in attesa di una risposta.",
+        roundTitle: "Domande · sessione {number}",
+        markUnknown: "Non lo so ancora",
         textPlaceholder: "Inserisci una risposta mirata",
         listPlaceholder: "Inserisci un elemento per riga",
-        submitAnswers: "Salva risposte di chiarificazione",
+        submitAnswers: "Salva risposte",
         answerRequired: "Fornisci almeno una risposta oppure marca un campo come sconosciuto.",
         nextStep: "Passo successivo: {step}",
-        historyTitle: "Cronologia chiarificazioni",
+        historyTitle: "Risposte precedenti",
         noHistory: "Non è stato ancora creato alcun round di chiarificazione.",
-        assumptionsTitle: "Assunzioni esplicite",
+        assumptionsTitle: "Idee da confermare",
         assumptionsIntro:
-          "Le assunzioni restano separate finché non vengono accettate o rifiutate esplicitamente.",
-        assumptionField: "Campo del Project Brief",
-        assumptionStatement: "Assunzione",
+          "Sono proposte per completare i dettagli mancanti della tua idea. Verranno usate solo se le accetti.",
+        assumptionField: "Dettaglio del progetto",
+        assumptionStatement: "Proposta",
         assumptionPlaceholder: "Descrivi l'assunzione e il significato previsto.",
-        createAssumption: "Crea assunzione",
+        createAssumption: "Aggiungi una proposta",
         noAssumptions: "Non sono state proposte assunzioni.",
         decisionReason: "Motivazione della decisione",
-        accept: "Accetta assunzione",
-        reject: "Rifiuta assunzione",
+        accept: "Accetta proposta",
+        reject: "Rifiuta proposta",
+        rejectIdea: "Rifiuta idea",
+        audit: "Dettagli di versione",
         rejectionReasonRequired: "Per rifiutare è richiesta una motivazione.",
-        gateTitle: "Gate 1 — Project Brief",
-        noGate: "Il Project Brief non è ancora stato sottoposto ad approvazione.",
-        submitGate: "Sottoponi il brief corrente ad approvazione",
+        gateTitle: "Conferma la tua idea di progetto",
+        noGate: "Quando la tua idea è completa, preparala per l’approvazione.",
+        submitGate: "Prepara per l’approvazione",
         gateReason: "Motivazione della decisione",
         approve: "Approva",
         requestRevision: "Richiedi revisione",
@@ -256,27 +277,27 @@ const { t, locale } = useI18n({
         cancel: "Annulla",
         gateReasonRequired: "Rifiuto e richiesta di revisione richiedono una motivazione.",
         missingForApproval: "L'approvazione è bloccata dai seguenti campi mancanti:",
-        eventHistory: "Cronologia audit del gate",
-        noEvents: "Non è stato ancora registrato alcun evento Gate 1.",
+        eventHistory: "Decisioni precedenti",
+        noEvents: "Non è stata ancora registrata alcuna decisione.",
         versionLabel: "Versione {version}",
         statusLabel: "Stato: {status}",
-        error: "Errore del workflow: {detail}",
+        error: "Impossibile completare l’operazione: {detail}",
         fields: {
           name: "Nome",
           description: "Descrizione",
           problem: "Problema",
           goals: "Obiettivi",
-          target_users: "Utenti target",
-          domain: "Dominio",
+          target_users: "A chi si rivolge",
+          domain: "Contesto",
           technical_constraints: "Vincoli tecnici",
-          temporal_constraints: "Vincoli temporali",
+          temporal_constraints: "Scadenze",
           budget: "Budget",
-          functional_requirements: "Requisiti funzionali",
-          non_functional_requirements: "Requisiti non funzionali",
+          functional_requirements: "Funzionalità desiderate",
+          non_functional_requirements: "Qualità attese",
           risks: "Rischi",
-          stakeholders: "Stakeholder",
-          available_artifacts: "Artefatti disponibili",
-          definition_of_done: "Definition of Done",
+          stakeholders: "Persone coinvolte",
+          available_artifacts: "Materiali disponibili",
+          definition_of_done: "Criteri di completamento",
         },
         statuses: {
           OPEN: "Aperto",
@@ -321,16 +342,17 @@ const { t, locale } = useI18n({
         },
         nextSteps: {
           CLARIFICATION_REQUIRED: "È necessario un altro round di chiarificazione",
-          BRIEF_READY_FOR_APPROVAL: "Il Project Brief è pronto per Gate 1",
+          BRIEF_READY_FOR_APPROVAL: "La tua idea è completa e pronta per l’approvazione",
           PAUSED_NEEDS_HUMAN:
             "La chiarificazione automatica è terminata; è richiesto un intervento umano",
         },
         errors: {
           unexpected_error: "Si è verificato un errore inatteso.",
-          unexpected_api_error: "L'API ha restituito una risposta inattesa.",
+          unexpected_api_error: "Il servizio ha restituito una risposta inattesa. Riprova.",
           clarification_round_not_found: "Non è stato trovato un round di chiarificazione aperto.",
           clarification_service_unavailable: "Il servizio di chiarificazione non è disponibile.",
-          brief_gate_service_unavailable: "Il servizio Gate 1 non è disponibile.",
+          brief_gate_service_unavailable:
+            "Il servizio di approvazione non è disponibile. Riprova tra poco.",
         },
       },
       clarification: {
@@ -674,9 +696,14 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 </script>
 
 <template>
-  <section class="grid gap-8" aria-labelledby="clarification-flow-title">
+  <section class="grid gap-5" aria-labelledby="clarification-flow-title">
     <header class="grid gap-2">
-      <h2 id="clarification-flow-title" class="text-2xl font-black text-slate-950">
+      <TwinIdentity
+        role="INTAKE_CLARIFICATION_AGENT"
+        :locale="locale.startsWith('it') ? 'it' : 'en'"
+        compact
+      />
+      <h2 id="clarification-flow-title" class="text-xl font-bold text-slate-950">
         {{ t("flow.title") }}
       </h2>
 
@@ -685,7 +712,18 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       </p>
     </header>
 
-    <div class="min-h-6" aria-live="polite" aria-atomic="true">
+    <div
+      :class="
+        store.busy ||
+        localError !== null ||
+        store.errorDetail !== null ||
+        store.lastRoundAnswer?.next_step
+          ? 'min-h-6'
+          : 'sr-only'
+      "
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <p v-if="store.busy" class="m-0 text-sm font-semibold text-slate-700">
         {{ t("flow.loading") }}
       </p>
@@ -829,13 +867,14 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       </p>
     </section>
 
-    <section
-      class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    <details
+      v-if="store.roundHistory.length > 0"
+      class="rounded-xl border border-slate-200 bg-white p-4"
       aria-labelledby="clarification-history-title"
     >
-      <h3 id="clarification-history-title" class="text-xl font-black text-slate-950">
+      <summary id="clarification-history-title" class="cursor-pointer font-semibold text-slate-700">
         {{ t("flow.historyTitle") }}
-      </h3>
+      </summary>
 
       <ol v-if="store.roundHistory.length > 0" class="grid gap-3">
         <li
@@ -873,118 +912,118 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       <p v-else class="m-0 text-slate-600">
         {{ t("flow.noHistory") }}
       </p>
-    </section>
+    </details>
 
-    <section
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    <details
+      :open="store.assumptions.some((assumption) => assumption.status === 'PROPOSED')"
+      class="rounded-xl border border-slate-200 bg-white p-4"
       aria-labelledby="assumptions-title"
     >
-      <header class="grid gap-1">
-        <h3 id="assumptions-title" class="text-xl font-black text-slate-950">
-          {{ t("flow.assumptionsTitle") }}
-        </h3>
-
+      <summary id="assumptions-title" class="cursor-pointer font-semibold text-slate-950">
+        {{ t("flow.assumptionsTitle") }}
+      </summary>
+      <div class="mt-4 grid gap-4">
         <p class="m-0 text-sm text-slate-600">
           {{ t("flow.assumptionsIntro") }}
         </p>
-      </header>
 
-      <form class="grid gap-4 md:grid-cols-2" @submit.prevent="createAssumption">
-        <label class="grid gap-2 font-bold text-slate-800">
-          {{ t("flow.assumptionField") }}
+        <form class="grid gap-4 md:grid-cols-2" @submit.prevent="createAssumption">
+          <label class="grid gap-2 font-bold text-slate-800">
+            {{ t("flow.assumptionField") }}
 
-          <select
-            v-model="assumptionField"
-            class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+            <select
+              v-model="assumptionField"
+              class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+            >
+              <option v-for="field in BRIEF_FIELDS" :key="field" :value="field">
+                {{ fieldText(field) }}
+              </option>
+            </select>
+          </label>
+
+          <label class="grid gap-2 font-bold text-slate-800">
+            {{ t("flow.assumptionStatement") }}
+
+            <textarea
+              v-model="assumptionStatement"
+              class="min-h-28 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+              :placeholder="t('flow.assumptionPlaceholder')"
+            ></textarea>
+          </label>
+
+          <button
+            type="submit"
+            class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60 md:col-span-2"
+            :disabled="store.busy"
           >
-            <option v-for="field in BRIEF_FIELDS" :key="field" :value="field">
-              {{ fieldText(field) }}
-            </option>
-          </select>
-        </label>
+            {{ t("flow.createAssumption") }}
+          </button>
+        </form>
 
-        <label class="grid gap-2 font-bold text-slate-800">
-          {{ t("flow.assumptionStatement") }}
+        <ul v-if="store.assumptions.length > 0" class="grid gap-4">
+          <li
+            v-for="assumption in store.assumptions"
+            :key="assumption.id"
+            class="grid gap-3 rounded-xl border border-slate-200 p-4"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="grid gap-1">
+                <p class="m-0 font-black text-slate-900">
+                  {{ fieldText(assumption.field) }}
+                </p>
 
-          <textarea
-            v-model="assumptionStatement"
-            class="min-h-28 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
-            :placeholder="t('flow.assumptionPlaceholder')"
-          ></textarea>
-        </label>
+                <p class="m-0 text-slate-700">
+                  {{ assumption.statement }}
+                </p>
+              </div>
 
-        <button
-          type="submit"
-          class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60 md:col-span-2"
-          :disabled="store.busy"
-        >
-          {{ t("flow.createAssumption") }}
-        </button>
-      </form>
-
-      <ul v-if="store.assumptions.length > 0" class="grid gap-4">
-        <li
-          v-for="assumption in store.assumptions"
-          :key="assumption.id"
-          class="grid gap-3 rounded-xl border border-slate-200 p-4"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="grid gap-1">
-              <p class="m-0 font-black text-slate-900">
-                {{ fieldText(assumption.field) }}
-              </p>
-
-              <p class="m-0 text-slate-700">
-                {{ assumption.statement }}
-              </p>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                {{ statusText(assumption.status) }}
+              </span>
             </div>
 
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-              {{ statusText(assumption.status) }}
-            </span>
-          </div>
+            <template v-if="assumption.status === 'PROPOSED'">
+              <label class="grid gap-2 text-sm font-bold text-slate-800">
+                {{ t("flow.decisionReason") }}
 
-          <template v-if="assumption.status === 'PROPOSED'">
-            <label class="grid gap-2 text-sm font-bold text-slate-800">
-              {{ t("flow.decisionReason") }}
+                <textarea
+                  v-model="assumptionReasons[assumption.id]"
+                  class="min-h-20 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+                ></textarea>
+              </label>
 
-              <textarea
-                v-model="assumptionReasons[assumption.id]"
-                class="min-h-20 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
-              ></textarea>
-            </label>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+                  :disabled="store.busy"
+                  @click="acceptAssumption(assumption)"
+                >
+                  {{ t("flow.accept") }}
+                </button>
 
-            <div class="flex flex-wrap gap-3">
-              <button
-                type="button"
-                class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-                :disabled="store.busy"
-                @click="acceptAssumption(assumption)"
-              >
-                {{ t("flow.accept") }}
-              </button>
+                <button
+                  type="button"
+                  class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+                  :disabled="store.busy"
+                  @click="rejectAssumption(assumption)"
+                >
+                  {{ t("flow.reject") }}
+                </button>
+              </div>
+            </template>
 
-              <button
-                type="button"
-                class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-                :disabled="store.busy"
-                @click="rejectAssumption(assumption)"
-              >
-                {{ t("flow.reject") }}
-              </button>
-            </div>
-          </template>
+            <p v-else-if="assumption.decision_reason" class="m-0 text-sm text-slate-600">
+              {{ assumption.decision_reason }}
+            </p>
+          </li>
+        </ul>
 
-          <p v-else-if="assumption.decision_reason" class="m-0 text-sm text-slate-600">
-            {{ assumption.decision_reason }}
-          </p>
-        </li>
-      </ul>
-
-      <p v-else class="m-0 text-slate-600">
-        {{ t("flow.noAssumptions") }}
-      </p>
-    </section>
+        <p v-else class="m-0 text-slate-600">
+          {{ t("flow.noAssumptions") }}
+        </p>
+      </div>
+    </details>
 
     <section
       class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -999,22 +1038,25 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           <p class="m-0 text-sm text-slate-600">
             {{
               t("flow.statusLabel", {
-                status: statusText(store.gate.status),
+                status: statusText(gateTargetsBrief ? store.gate.status : "STALE"),
               })
             }}
           </p>
 
-          <p class="m-0 text-sm text-slate-600">
-            {{
-              t("flow.versionLabel", {
-                version: store.gate.artifact.version,
-              })
-            }}
-            ·
-            <code>
-              {{ store.gate.artifact.content_hash.slice(0, 12) }}
-            </code>
-          </p>
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer">{{ t("flow.audit") }}</summary>
+            <p class="mt-2 text-sm text-slate-600">
+              {{
+                t("flow.versionLabel", {
+                  version: store.gate.artifact.version,
+                })
+              }}
+              ·
+              <code>
+                {{ store.gate.artifact.content_hash.slice(0, 12) }}
+              </code>
+            </p>
+          </details>
         </template>
 
         <p v-else class="m-0 text-sm text-slate-600">
@@ -1038,6 +1080,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       </div>
 
       <button
+        v-if="canSubmitBrief"
         type="button"
         class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy"
@@ -1046,8 +1089,11 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         {{ t("flow.submitGate") }}
       </button>
 
-      <template v-if="store.gate !== null">
-        <label class="grid gap-2 font-bold text-slate-800">
+      <template v-if="store.gate !== null && gateTargetsBrief">
+        <label
+          v-if="['PENDING_APPROVAL', 'PAUSED'].includes(store.gate.status)"
+          class="grid gap-2 font-bold text-slate-800"
+        >
           {{ t("flow.gateReason") }}
 
           <textarea
@@ -1072,7 +1118,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             :disabled="store.busy"
             @click="decideGate('REJECT')"
           >
-            {{ t("flow.reject") }}
+            {{ t("flow.rejectIdea") }}
           </button>
 
           <button
@@ -1125,10 +1171,10 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         </button>
       </template>
 
-      <div class="grid gap-3">
-        <h4 class="text-lg font-black text-slate-900">
+      <details class="text-sm">
+        <summary class="cursor-pointer font-semibold text-slate-700">
           {{ t("flow.eventHistory") }}
-        </h4>
+        </summary>
 
         <ol v-if="store.gateEvents.length > 0" class="grid gap-3">
           <li
@@ -1157,7 +1203,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         <p v-else class="m-0 text-slate-600">
           {{ t("flow.noEvents") }}
         </p>
-      </div>
+      </details>
     </section>
   </section>
 </template>

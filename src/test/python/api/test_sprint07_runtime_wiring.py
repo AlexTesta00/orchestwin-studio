@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
@@ -12,6 +13,7 @@ from pydantic import ValidationError
 from orchestwin.api import services as services_module
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings
+from orchestwin.api.execution_catalog import SqlAlchemyExecutionCatalogLoader
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.config import ApplicationSettings, RuntimeEnvironment
@@ -62,11 +64,15 @@ def test_sprint07_settings_enforce_distinct_roots_digest_images_and_limits(
 
 def test_builder_composes_profiles_brownfield_queries_and_gate_7_without_side_effects(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = _settings(tmp_path)
 
     bundle = build_sprint07_services(settings, object())  # type: ignore[arg-type]
+    load = AsyncMock(return_value=tuple(p.metadata for p in bundle.profile_registry.profiles))
+    monkeypatch.setattr(SqlAlchemyExecutionCatalogLoader, "load", load)
     profiles = asyncio.run(bundle.execution_queries.profiles())
+    load.assert_awaited_once_with()
 
     assert len(profiles) == 10
     assert {profile.capability_status.value for profile in profiles} == {"DESIGN_ONLY_LEVEL_C"}

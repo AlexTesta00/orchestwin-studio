@@ -420,14 +420,55 @@ def _load_runtime_dependencies() -> tuple[Any, Any, Any]:
     return torch, AutoTokenizer, FastLanguageModel
 
 
-def _loader_policy() -> dict[str, object]:
+def _loader_policy(precision: str = "4bit") -> dict[str, object]:
     """Return fresh, serializable evidence of the exact-repository loading policy."""
-    return {
+    if precision not in ("4bit", "bf16"):
+        raise ModelSpikeInputError("precision must be 4bit or bf16")
+    policy = {
         "policy_id": "unsloth-exact-revision-v1",
         "import_order": ["unsloth", "torch", "transformers"],
         "use_exact_model_name": True,
         "fast_inference": False,
         "unsupported_loader_arguments": "REJECT",
+    }
+    if precision == "bf16":
+        policy.update(
+            policy_id="unsloth-exact-revision-bf16-v1",
+            precision="bf16",
+            load_in_4bit=False,
+            device_policy="ALL_PARAMETERS_ON_CURRENT_CUDA_DEVICE_NO_OFFLOAD",
+        )
+    return policy
+
+
+def _verify_bf16_parameters(model, torch, device_index: int) -> dict[str, object]:
+    """Observe loaded storage; a request flag cannot prove precision or residency."""
+    if getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_quantized", False):
+        raise ModelSpikeIdentityError("BF16 loader returned a quantized model")
+    device_map = getattr(model, "hf_device_map", None)
+    if device_map and any(
+        str(device) not in (str(device_index), f"cuda:{device_index}")
+        for device in device_map.values()
+    ):
+        raise ModelSpikeIdentityError("BF16 loader device map permits offload or another device")
+    parameter_count, tensor_count = 0, 0
+    for parameter in model.parameters():
+        if parameter.device.type != "cuda" or parameter.device.index != device_index:
+            raise ModelSpikeIdentityError("BF16 parameter is offloaded or on another device")
+        if parameter.dtype != torch.bfloat16 or getattr(parameter, "quant_state", None) is not None:
+            raise ModelSpikeIdentityError("BF16 parameter storage differs from requested precision")
+        parameter_count += parameter.numel()
+        tensor_count += 1
+    if not parameter_count:
+        raise ModelSpikeIdentityError("BF16 parameter storage was not observed")
+    return {
+        "precision": "bf16",
+        "parameter_dtype": str(torch.bfloat16),
+        "parameter_count": parameter_count,
+        "parameter_tensor_count": tensor_count,
+        "device": f"cuda:{device_index}",
+        "load_in_4bit_observed": False,
+        "offloaded_parameters": 0,
     }
 
 
@@ -455,7 +496,9 @@ def _load_model(
     request: Mapping[str, object],
     *,
     network_authorized: bool,
+    precision: str = "4bit",
 ) -> tuple[Any, Any, Any, dict[str, object]]:
+    loader_policy = _loader_policy(precision)
     torch, AutoTokenizer, FastLanguageModel = _load_runtime_dependencies()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable to the isolated model-spike process")
@@ -473,13 +516,16 @@ def _load_model(
         "model_name": _required_string(request, "model_repository"),
         "revision": _required_string(request, "model_revision"),
         "max_seq_length": _required_integer(generation, "max_sequence_length"),
-        "dtype": None,
-        "load_in_4bit": True,
+        "dtype": torch.bfloat16 if precision == "bf16" else None,
+        "load_in_4bit": precision == "4bit",
         "trust_remote_code": False,
         "local_files_only": not network_authorized,
         "use_exact_model_name": True,
         "fast_inference": False,
     }
+    if precision == "bf16":
+        device_index = torch.cuda.current_device()
+        model_values["device_map"] = {"": device_index}
     model, bundled_tokenizer = FastLanguageModel.from_pretrained(
         **_supported_kwargs(FastLanguageModel.from_pretrained, model_values)
     )
@@ -502,6 +548,9 @@ def _load_model(
         )
 
     FastLanguageModel.for_inference(model)
+    precision_observation = (
+        _verify_bf16_parameters(model, torch, device_index) if precision == "bf16" else None
+    )
     if _optional_attribute(tokenizer, "chat_template") is None:
         raise ModelSpikeIdentityError("the exact tokenizer revision has no chat template")
     if tokenizer.pad_token_id is None:
@@ -531,7 +580,7 @@ def _load_model(
         )
 
     evidence = {
-        "loader_policy": _loader_policy(),
+        "loader_policy": loader_policy,
         "requested_model_revision": requested_model_revision,
         "observed_model_revision": observed_model_revision,
         "requested_tokenizer_revision": requested_tokenizer_revision,
@@ -549,6 +598,8 @@ def _load_model(
         "model_load_duration_milliseconds": load_duration,
         "model_load_peak_gpu_memory_mb": load_peak,
     }
+    if precision_observation is not None:
+        evidence["precision_observation"] = precision_observation
     return torch, model, tokenizer, evidence
 
 

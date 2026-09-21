@@ -23,6 +23,9 @@ from orchestwin.identity.persistence.models import (
     AuthSessionRecord,
     UserRecord,
 )
+from orchestwin.jvm_execution.operation_persistence import JVM_GOVERNED_OPERATIONS
+from orchestwin.jvm_execution.validation_evidence_persistence import JVM_PROFILE_VALIDATION_EVIDENCE
+from orchestwin.models.proposal_evidence_persistence import EVENTS, GENERATIONS, LINKS
 from orchestwin.persistence.config import (
     load_database_settings,
 )
@@ -50,6 +53,9 @@ from orchestwin.training.training_run_persistence import (
     TrainingRunCheckpointRecord,
     TrainingRunRecord,
 )
+from orchestwin.web_execution.operation_persistence import WEB_GOVERNED_OPERATIONS
+from orchestwin.web_execution.static_inspection_persistence import STATIC_BROWSER_INSPECTIONS
+from orchestwin.web_execution.validation_evidence_persistence import WEB_PROFILE_VALIDATION_EVIDENCE
 from orchestwin.workflow.event_persistence import WorkflowEventRecord
 from orchestwin.workflow.final_review_persistence import FinalReviewRecord
 from orchestwin.workflow.high_impact_persistence import (
@@ -77,6 +83,13 @@ if configuration.config_file_name is not None:
     )
 
 _IMPORTED_MODELS = (
+    GENERATIONS,
+    EVENTS,
+    LINKS,
+    JVM_GOVERNED_OPERATIONS,
+    JVM_PROFILE_VALIDATION_EVIDENCE,
+    WEB_GOVERNED_OPERATIONS,
+    WEB_PROFILE_VALIDATION_EVIDENCE,
     UserRecord,
     AuthSessionRecord,
     ProjectRecord,
@@ -103,6 +116,7 @@ _IMPORTED_MODELS = (
     SANDBOX_RUNS,
     SANDBOX_COMMAND_RESULTS,
     HIGH_IMPACT_OPERATION_VERSIONS,
+    STATIC_BROWSER_INSPECTIONS,
 )
 
 target_metadata = OrmBase.metadata

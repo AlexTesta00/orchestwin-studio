@@ -26,6 +26,7 @@ export interface ArchitectureStoreError {
 interface ArchitectureState {
   projectId: string | null;
   projectEpoch: number;
+  readSequence: number;
   current: ArchitecturePackageVersionPayload | null;
   history: ArchitecturePackageVersionPayload[];
   diffs: Record<string, ArchitecturePackageDiffPayload>;
@@ -99,6 +100,7 @@ export const useArchitectureStore = defineStore("architecture", {
   state: (): ArchitectureState => ({
     projectId: null,
     projectEpoch: 0,
+    readSequence: 0,
     current: null,
     history: [],
     diffs: {},
@@ -168,6 +170,7 @@ export const useArchitectureStore = defineStore("architecture", {
     },
 
     begin(operation: ArchitectureOperation): void {
+      if (operation !== "load") this.readSequence += 1;
       this.pending[operation] = true;
       this.error = null;
     },
@@ -175,6 +178,7 @@ export const useArchitectureStore = defineStore("architecture", {
     finish(operation: ArchitectureOperation, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
         this.pending[operation] = false;
+        if (operation !== "load") this.readSequence += 1;
       }
     },
 
@@ -199,6 +203,7 @@ export const useArchitectureStore = defineStore("architecture", {
       authorize: AuthorizedRequest,
       epoch: number,
     ): Promise<void> {
+      const sequence = ++this.readSequence;
       const readiness = await authorize((token) => api.readiness(projectId, token));
       const [history, diffs] = await Promise.all([
         authorize((token) => api.history(projectId, token)),
@@ -213,7 +218,8 @@ export const useArchitectureStore = defineStore("architecture", {
           : authorize((token) => api.gateEvents(projectId, token)),
       ]);
 
-      if (!this.isCurrent(projectId, epoch)) {
+      // Ignore reads overtaken by another refresh or a completed owner command.
+      if (!this.isCurrent(projectId, epoch) || sequence !== this.readSequence) {
         return;
       }
 

@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "status": "QUALIFICATION_COMPLETED_SCREEN_FAILED_CANDIDATE_NOT_SELECTED",
+  "run_id": "qualification-4deeb0b-01",
+  "baseline_git_head": "4deeb0bf552a1039b2cde113df5065756e887d6c",
+  "completed_utc": "2026-09-16T19:16:06.560345+00:00",
+  "inference_active_seconds": 45841.84542621998,
+  "candidate_sha256": "221ea1c8eff3f2fbdb335ca78bc5380e23113cca73a6a726f9ec3c96b47e71bf",
+  "prior_sha256": "9568ae8c3ed614431abf2cb0ed974fa8a6a23d535f1d43080efa04c40532dfec",
+  "new_inferences": 3088,
+  "native_complete_outputs": 3088,
+  "recovery": {
+    "status": "VERIFIED_COMPLETE",
+    "recovered_unix": 1789586442.1150506,
+    "inferences": 3088,
+    "planned": 3088,
+    "archive_sha256": "9f79106a8ca0ed1582ab658e459371403e6fc3814890e1464aaafdb4cb02206d",
+    "archive_bytes": 14866959,
+    "verified_files": 6239,
+    "receipt_sha256": "8584dacd0fe262836d7c85d6d422d7f1fdccb0d815165a822f0316fc6d7f5a2a",
+    "output_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-4deeb0b-20260916-01\\final-20260916\\outputs\\evaluator-qualification-results-01",
+    "promotion": false
+  },
+  "cloud_resources": {
+    "observed_utc": "2026-09-16 19:21:48 UTC",
+    "resources": [
+      {
+        "id": "jpxjtn64u2h2ck",
+        "name": "orchestwin-qualification-4deeb0b-20260916",
+        "status": "EXITED",
+        "hourly_usd": 2.09
+      },
+      {
+        "id": "s6hre5532jvtry",
+        "name": "orchestwin-qualification-watchdog-4deeb0b-20260916",
+        "status": "EXITED",
+        "hourly_usd": 0.06
+      }
+    ],
+    "all_stopped": true,
+    "disks_retained": true,
+    "network_volume_retained": "pwdbxu66v4"
+  },
+  "budget": {
+    "observed_after_verified_stop_utc": "2026-09-16T19:27:54.600470+00:00",
+    "remaining_balance_usd": 148.5973544224,
+    "account_current_spend_per_hour_usd": 0.01,
+    "phase_start_balance_usd": 176.5575033639,
+    "phase_budget_usd": 40,
+    "total_authorized_budget_usd": 200,
+    "note": "Account balance decrease includes charges beyond active inference and is not a resource-attributed invoice. Retained storage continues to incur charges.",
+    "account_balance_decrease_since_phase_start_usd": 27.960148941499995
+  },
+  "new_run_cohorts": {
+    "v3_validation/candidate": {
+      "cases": 3040,
+      "passed": 3040,
+      "true_positive": 3360,
+      "false_positive": 0,
+      "false_negative": 0,
+      "failure_checks": {}
+    },
+    "independent_challenge/candidate": {
+      "cases": 24,
+      "passed": 13,
+      "true_positive": 16,
+      "false_positive": 0,
+      "false_negative": 2,
+      "failure_checks": {
+        "summary_scope": 5,
+        "locations": 2,
+        "gap_state": 4,
+        "gap_targets": 4,
+        "abstention": 2
+      }
+    },
+    "independent_challenge/prior": {
+      "cases": 24,
+      "passed": 3,
+      "true_positive": 1,
+      "false_positive": 9,
+      "false_negative": 17,
+      "failure_checks": {
+        "locations": 15,
+        "criterion": 9,
+        "gap_state": 4,
+        "gap_targets": 6,
+        "abstention": 2,
+        "summary_scope": 3
+      }
+    }
+  },
+  "combined_v3_validation": {
+    "cases": 3280,
+    "passed": 3280,
+    "true_positive": 3648,
+    "false_positive": 0,
+    "false_negative": 0,
+    "groups": 96,
+    "previously_executed": 240,
+    "newly_executed": 3040,
+    "exact_gold_json_matches": 3280
+  },
+  "combined_v3_per_state": {
+    "INSUFFICIENT": {
+      "cases": 336,
+      "passed": 336,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "MISSING": {
+      "cases": 1600,
+      "passed": 1600,
+      "true_positive": 3072,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "PARTIAL": {
+      "cases": 1152,
+      "passed": 1152,
+      "true_positive": 576,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "PRESENT": {
+      "cases": 192,
+      "passed": 192,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0
+    }
+  },
+  "combined_v3_per_locale": {
+    "en": {
+      "cases": 1640,
+      "passed": 1640,
+      "true_positive": 1824,
+      "false_positive": 0,
+      "false_negative": 0
+    },
+    "it": {
+      "cases": 1640,
+      "passed": 1640,
+      "true_positive": 1824,
+      "false_positive": 0,
+      "false_negative": 0
+    }
+  },
+  "paired_challenge": {
+    "pairs": 24,
+    "candidate_only_correct": 11,
+    "prior_only_correct": 1
+  },
+  "challenge_pass_by_language": {
+    "candidate": {
+      "en": {
+        "cases": 12,
+        "passed": 9
+      },
+      "it": {
+        "cases": 12,
+        "passed": 4
+      }
+    },
+    "prior": {
+      "en": {
+        "cases": 12,
+        "passed": 2
+      },
+      "it": {
+        "cases": 12,
+        "passed": 1
+      }
+    }
+  },
+  "failed_candidate_ids": [
+    "candidate-external-label-it",
+    "candidate-implicit-is-not-explicit-en",
+    "candidate-implicit-is-not-explicit-it",
+    "candidate-partial-detached-control-en",
+    "candidate-partial-detached-control-it",
+    "candidate-blank-title-and-alert-it",
+    "candidate-selected-form-absent-en",
+    "candidate-selected-form-absent-it",
+    "candidate-formatted-label-and-name-it",
+    "candidate-untrusted-page-instruction-it",
+    "candidate-restrict-summary-scope-it"
+  ],
+  "failure_classes": {
+    "explicit_label_requirement": [
+      "candidate-implicit-is-not-explicit-en",
+      "candidate-implicit-is-not-explicit-it"
+    ],
+    "selected_form_scope_and_abstention": [
+      "candidate-partial-detached-control-en",
+      "candidate-partial-detached-control-it",
+      "candidate-selected-form-absent-en",
+      "candidate-selected-form-absent-it"
+    ],
+    "unrequested_targets_in_italian_summary": [
+      "candidate-external-label-it",
+      "candidate-blank-title-and-alert-it",
+      "candidate-formatted-label-and-name-it",
+      "candidate-untrusted-page-instruction-it",
+      "candidate-restrict-summary-scope-it"
+    ]
+  },
+  "additional_narrative_issues_among_automatic_passes": [
+    "candidate-caption-is-not-alt-it",
+    "candidate-untrusted-page-instruction-en"
+  ],
+  "engineering_review": {
+    "challenge_responses_reviewed": 48,
+    "challenge_hashes_reverified_against_final_export": true,
+    "new_v3_sample_reviewed": 24,
+    "new_v3_sample_groups": 24,
+    "new_v3_sample_issues_observed": 0,
+    "all_failed_candidate_cases_reviewed": true,
+    "new_v3_unreviewed_narratives": 3016,
+    "human_expert_validation": false
+  },
+  "previous_historical_regression_context": {
+    "cases": 26,
+    "passed": 26,
+    "schema_accepted": 26,
+    "domain_accepted": 26,
+    "true_positive": 22,
+    "false_positive": 0,
+    "false_negative": 0,
+    "failure_checks": {},
+    "rerun_in_this_phase": false
+  },
+  "provenance": {
+    "status": "FULL_VALIDATION_PROVENANCE_VERIFIED",
+    "newly_executed_rows": 3040,
+    "previously_executed_rows": 240,
+    "combined_validation_rows": 3280,
+    "combined_groups": 96,
+    "new_groups": 90,
+    "previous_groups": 6,
+    "between_runs_group_overlap": [],
+    "training_group_overlap": [],
+    "normalized_broad_training_prompt_overlap": [],
+    "training_rows_verified": 63420,
+    "training_broad_rows_checked": 59964,
+    "training_file_sha256": "0a61bc04e095d6b93a53fb60c149090f50ffaf3e175c3ea9d8672259d47b1b57",
+    "validation_file_sha256": "56cbe85e69f5ad8f6460fb8398d8f8183b2b60f700f53a0741ca274b66dfd72e",
+    "exact_gold_json_matches": 3280,
+    "unchanged_inference_source_files": 24,
+    "all_validation_rows_executed_exactly_once_across_the_two_runs": true,
+    "test_file_opened": false,
+    "limits": [
+      "Normalized comparison uses the closed-grammar semantic_key, not independent natural-language decontamination.",
+      "Legacy retention rows are checked for hash and group overlap, but not the broad-grammar semantic comparison.",
+      "Exact synthetic-gold reproduction is not evidence of generalization to arbitrary pages, calibrated confidence or real-user behavior."
+    ]
+  },
+  "decision": {
+    "model_status": "TRAINED_CANDIDATE_NOT_SELECTED",
+    "reason": "The frozen clean-screen gate requires every candidate case to pass; 11 of 24 new challenge cases fail. Perfect closed-grammar validation does not cancel those failures.",
+    "next_step": "Prepare and independently verify a targeted development curriculum for form scope, explicit labels, requested subsets and bilingual narrative control. Run a bounded pilot with retention and a base-model comparison before expanding training.",
+    "development_protocol": {
+      "keep_v3_frozen": true,
+      "challenge_after_diagnosis_role": "Known development regression set for any subsequent model influenced by these findings; do not call it an unseen holdout again.",
+      "coverage_requirements": [
+        "Cross target location with property state: inside selected form, outside with no ownership, and explicitly form-associated only when the task permits it.",
+        "Cross selected-form presence with requested-target presence. Include named targets elsewhere when the selected form is absent.",
+        "Contrast implicit wrapping labels with explicit for-linked labels under tasks that clearly specify which property is required.",
+        "Select only a subset of same-form controls; vary correct and defective unrequested decoys independently of requested targets.",
+        "Use balanced English and Italian task paraphrases and scoped summaries; assess recommendation relevance and unsupported claims separately from JSON validity."
+      ],
+      "data_controls": [
+        "Use newly authored development scenarios; never copy the exact validation/challenge prompts or outputs into training.",
+        "Keep all counterfactual and translation siblings in one partition, with held-out service and structure families.",
+        "Freeze a fresh independently authored qualification suite before pilot inference; retain final thesis cases untouched.",
+        "Audit token lengths and semantic duplication; report structural family counts as well as row counts."
+      ],
+      "pilot_comparisons": [
+        "new pilot adapter",
+        "current 63420-row candidate",
+        "pinned base model without adapter"
+      ],
+      "pilot_acceptance": "Predeclare schema, target, abstention, scope and narrative gates, plus retention checks. Continue only on measured improvement without regression; loss alone cannot authorize scaling or promotion.",
+      "new_training_started": false,
+      "human_review_needed": "Challenge labels, rationale quality and the thesis evaluation interpretation still require human expert review."
+    },
+    "training_restarted": false,
+    "production_promotion": false,
+    "database_writes": false,
+    "final_reserved_cases_inferred": false
+  },
+  "notifications": {
+    "owner": "EXISTING_CLOUD_SUPERVISOR",
+    "duplicate_local_email_sent": false,
+    "final_smtp_receipt_independently_verified": false,
+    "note": "Completion email is configured in the existing cloud supervisor; no successful final delivery is asserted without a dedicated receipt."
+  },
+  "validation_of_code_changes": {
+    "pytest_passed": 33,
+    "ruff": "PASSED",
+    "git_diff_check": "PASSED",
+    "frozen_inference_sources_changed": [],
+    "frozen_inference_sources_checked": 24
+  },
+  "evidence_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\qualification-4deeb0b-20260916-01",
+  "evidence_files": {
+    "protocol.json": {
+      "sha256": "c149870383bb080a7e50f7a4d2c81546bc24bccb825c94be144ccc7ed1a9bf0f",
+      "bytes": 3408
+    },
+    "labels.json": {
+      "sha256": "aeb37023c86e5aeba60f05004436a3e8a5101218895badb2f399bac9f1443ec5",
+      "bytes": 41364485
+    },
+    "source-inventory.json": {
+      "sha256": "2845b46646b7476550d70ef6bd50ba2e45b5f9f9959aeca8940ab8ad51448763",
+      "bytes": 2749
+    },
+    "challenge-label-review.json": {
+      "sha256": "8f2814f22e120727fe16c1f73ccff905c9f7bf5dc97c396a76be246d6fc5512d",
+      "bytes": 272010
+    },
+    "challenge-narrative-review.json": {
+      "sha256": "000fbaa776e6f1ec6d0f421ffe3b5b08146224eb13e32e184cc80f0c5c8dcb27",
+      "bytes": 17040
+    },
+    "training-scope-coverage-recheck.json": {
+      "sha256": "91c7540b7951099c2eb83b812b817523777f5aafbcef60d747097a89404b722a",
+      "bytes": 1481
+    },
+    "completion-observation.json": {
+      "sha256": "9247ddbc490d9167b6c3fb2b597455944fe718f8774da8963efafe143c77cb89",
+      "bytes": 7809
+    },
+    "cloud-stop-verification.json": {
+      "sha256": "69d8ca889decc2820cc0e1d5c8e8117c17c4d5ae3b8d24c81853f0bb2a31b71f",
+      "bytes": 476
+    },
+    "account-budget-final.json": {
+      "sha256": "c1fb28a4142dc55dfb3b3ab314234d18bc25f94a37a56ec793a5c9dbb2a40bae",
+      "bytes": 523
+    },
+    "final-20260916/recovery.json": {
+      "sha256": "50b78204f7bf6ce0c9e7ccb4383f8df256f53500196a9a2df57e4ffe5618f208",
+      "bytes": 596
+    },
+    "final-20260916/export-receipt.json": {
+      "sha256": "8584dacd0fe262836d7c85d6d422d7f1fdccb0d815165a822f0316fc6d7f5a2a",
+      "bytes": 1335793
+    },
+    "final-20260916/assessment.json": {
+      "sha256": "56e2844749826109a1e4b05d4fa48acbb6376613f4f403144fa07eaae9dfdfca",
+      "bytes": 6946858
+    },
+    "final-20260916/assessment-provenance.json": {
+      "sha256": "9831daafb652163013e3c7b9d3b641e7ed5a01ac9ca146e5d4f4ac0a6c569bc3",
+      "bytes": 976
+    },
+    "final-20260916/complete-validation-provenance.json": {
+      "sha256": "d3372b514164fb427a3ae331eabedd2c0c7febfed2590805a7fc01522f0c369b",
+      "bytes": 1203
+    },
+    "final-20260916/review-selection.json": {
+      "sha256": "f0ad021b132f615107a3f6bcd54cc1928a56adf87c13c46013d8048b176ca0f4",
+      "bytes": 793
+    },
+    "final-20260916/review-sample.json": {
+      "sha256": "12864c2907defa4a465adc165277e9f0f544cdd4fad5fa102c0928477182bd2d",
+      "bytes": 86562
+    },
+    "final-20260916/v3-narrative-review.json": {
+      "sha256": "ccc479a965ad969e0f3e8105164818a1b1f42330037b02b475ce87cac4530d20",
+      "bytes": 9692
+    },
+    "coverage-tests.xml": {
+      "sha256": "6364e54a94d697316019cf1a0b4b68d3eb7f9d6dfd38dc27aeb7b103de4b3896",
+      "bytes": 6716
+    },
+    "recover_results.py": {
+      "sha256": "8daebffb9b973537881b86dfa1318a6d402e8477dfb24440d128b2fe21452f26",
+      "bytes": 4890
+    },
+    "assess_snapshot.py": {
+      "sha256": "09f0625b5ba90ff80632f58822d945f825aea360af4139955ee71d677f29de35",
+      "bytes": 2213
+    },
+    "prepare_final_review.py": {
+      "sha256": "c3fd3cf054173f85aef03936c7778f103610dedc84ada4038ce68c4bd013d17d",
+      "bytes": 3195
+    },
+    "audit_complete_validation.py": {
+      "sha256": "4f41dcb2147fff0fe99c6a1408010288a714493cb920643bdc1dc40ff5adb2f3",
+      "bytes": 4526
+    }
+  },
+  "previous_evidence_files": {
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\validation-e7a8bd9-20260915-01\\assessment.json": {
+      "sha256": "924efa9ff20a61c366a2023b264ed3d6b6c61444d0770b6600e5af67db636b58",
+      "bytes": 644109
+    },
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\validation-e7a8bd9-20260915-01\\local-provenance-audit.json": {
+      "sha256": "a440f44d25f12015bad7fc0cf100f145761bdb448dc515a642c55ab6439c80be",
+      "bytes": 1790
+    },
+    "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\validation-e7a8bd9-20260915-01\\completed-review.json": {
+      "sha256": "724f64d9710b543a558f43500b5a781996becec4131fb1f290149a9e41271beb",
+      "bytes": 370
+    }
+  },
+  "code_files": {
+    "src/orchestwin/training/evaluator_coverage.py": {
+      "sha256": "b29a1fe94382392f7457080600b72ebd7547aaf725c7ea3a564ea596e35935cd",
+      "bytes": 6213
+    },
+    "environments/training/audit_evaluator_scope_coverage.py": {
+      "sha256": "68e5f19987c0a3d4172e7b8511bc678d20d6022c8b6b941c5ddbaf0dea4bd563",
+      "bytes": 1081
+    },
+    "src/test/python/training/test_evaluator_coverage.py": {
+      "sha256": "bf779e9e2b0b9f851387be46e983f0bcedb3b59973c9315fe307ff14e0211ced",
+      "bytes": 5914
+    }
+  },
+  "limits": [
+    "The two validation executions jointly cover 3280 rows from 96 correlated synthetic groups; these are not independent real-world trials.",
+    "All 3280 v3 responses match the synthetic gold JSON exactly. This demonstrates the closed task behavior, not unrestricted generalization.",
+    "Challenge fixtures and expected answers are assistant-authored; the 24 language requests represent 12 pages.",
+    "Matched prior-adapter inference covers only the 24 challenge requests; an unadapted base-model comparison is still absent.",
+    "The challenge is now a known development regression set for any subsequent model influenced by this diagnosis.",
+    "Human expert validation, calibrated confidence/severity and real-user evaluation remain outstanding.",
+    "The reviewed findings identify development priorities; no model-quality defect has been repaired by the coverage audit itself."
+  ],
+  "commit_groups": [
+    {
+      "title": "chore(models): record completed evaluator qualification",
+      "files": [
+        "experiments/model-proposals/extended-evaluator-qualification-4deeb0b-20260916.json",
+        "experiments/model-proposals/completed-evaluator-qualification-4deeb0b-20260916.json"
+      ]
+    },
+    {
+      "title": "feat(training): audit evaluator scope coverage",
+      "files": [
+        "src/orchestwin/training/evaluator_coverage.py",
+        "environments/training/audit_evaluator_scope_coverage.py",
+        "src/test/python/training/test_evaluator_coverage.py",
+        "experiments/model-proposals/evaluator-scope-diagnosis-4deeb0b-20260916.json"
+      ]
+    }
+  ],
+  "commits_performed": false
+}

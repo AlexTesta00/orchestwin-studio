@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 from pydantic_settings import (
@@ -13,11 +14,13 @@ from pydantic_settings import (
 from orchestwin.models.fake_team_proposals import (
     FakeDeterministicTeamProposalAdapter,
 )
+from orchestwin.models.proposal_generation import ProposalRuntimeConfigurationError
 from orchestwin.models.team_proposals import (
     TeamProposalPort,
 )
 
 TEAM_PROPOSAL_PROVIDER_ENVIRONMENT: Final = "ORCHESTWIN_TEAM_PROPOSAL_PROVIDER"
+TeamProposalRuntimeConfigurationError = ProposalRuntimeConfigurationError
 
 
 class TeamProposalRuntimeProvider(StrEnum):
@@ -25,10 +28,6 @@ class TeamProposalRuntimeProvider(StrEnum):
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
     MODEL_ADAPTER = "MODEL_ADAPTER"
-
-
-class TeamProposalRuntimeConfigurationError(RuntimeError):
-    """Raised when a configured provider has no available adapter."""
 
 
 class TeamProposalRuntimeSettings(BaseSettings):
@@ -44,6 +43,7 @@ class TeamProposalRuntimeSettings(BaseSettings):
     )
 
     provider: TeamProposalRuntimeProvider = TeamProposalRuntimeProvider.FAKE_DETERMINISTIC
+    model_config_file: Path | None = None
 
 
 def load_team_proposal_runtime_settings(
@@ -61,9 +61,7 @@ def create_team_proposal_port(
     if settings.provider is TeamProposalRuntimeProvider.FAKE_DETERMINISTIC:
         return FakeDeterministicTeamProposalAdapter()
 
-    raise TeamProposalRuntimeConfigurationError(
-        "team-proposal provider "
-        f"{settings.provider.value} is not configured; "
-        "use FAKE_DETERMINISTIC until a model adapter "
-        "is implemented"
-    )
+    from orchestwin.models.model_proposals import ModelTeamProposalAdapter
+    from orchestwin.models.proposal_generation import build_proposal_generator
+
+    return ModelTeamProposalAdapter(build_proposal_generator(settings.model_config_file))

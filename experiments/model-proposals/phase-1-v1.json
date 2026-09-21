@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "phase": 1,
+  "base_commit": "e41dd36",
+  "recorded_at": "2026-09-13T15:40:27.427122+00:00",
+  "scope": "REAL_MODEL_ENGINEERING_PROBES_NOT_FORMAL_CASES",
+  "model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+  "model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+  "adapter_loaded": false,
+  "temperature": 0.6,
+  "probe_max_output_tokens": 768,
+  "trained_in_this_phase": false,
+  "database_writes": 0,
+  "gate_decisions": 0,
+  "observations": [
+    {
+      "observation_id": "phase-1-team-01",
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\proposal-phase1-team-probe-01",
+      "report_sha256": "946b4b264b3c2c0ba7a0eca4cbd1bec2fd181fad14ac44bb306f81429be5da6a",
+      "outcome": "ACCEPTED_MODEL_PROPOSAL",
+      "runtime_id": "proposal-base-2e24ae26-e239-497c-9f2d-9af41add2b69",
+      "http_status": 200,
+      "latency_milliseconds": 27837,
+      "usage": {
+        "completion_tokens": 256,
+        "prompt_tokens": 1396,
+        "total_tokens": 1652
+      },
+      "rationale_characters": 1290,
+      "model_visible_messages_hash_verified": true,
+      "identity_verified": true,
+      "original_artifact_hashes_verified": true,
+      "source_version": "WORKING_TREE_EXACT_HASHES_IN_REPORT"
+    },
+    {
+      "observation_id": "phase-1-team-02",
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\proposal-phase1-team-probe-02",
+      "report_sha256": "3579671652ee0d1307c5a271fd303c1e1ee83eed188a6a34fd7ef6df91395858",
+      "outcome": "INVALID_PROVIDER_OUTPUT",
+      "runtime_id": "proposal-base-bbff7e37-8b48-4f9e-9130-eb843c30d172",
+      "http_status": 200,
+      "latency_milliseconds": 40143,
+      "usage": {
+        "completion_tokens": 416,
+        "prompt_tokens": 1405,
+        "total_tokens": 1821
+      },
+      "rationale_characters": 2151,
+      "model_visible_messages_hash_verified": true,
+      "identity_verified": true,
+      "original_artifact_hashes_verified": true,
+      "source_version": "WORKING_TREE_EXACT_HASHES_IN_REPORT",
+      "rejection_reason": "RATIONALE_LENGTH_2151_EXCEEDS_2000"
+    },
+    {
+      "observation_id": "phase-1-team-03",
+      "directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\proposal-phase1-team-probe-03",
+      "report_sha256": "293eef7b4da3d94655e36a29cd7ec1cc353a2a951d679c496d6dc7dc10f3385a",
+      "outcome": "ACCEPTED_MODEL_PROPOSAL",
+      "runtime_id": "proposal-base-bbff7e37-8b48-4f9e-9130-eb843c30d172",
+      "http_status": 200,
+      "latency_milliseconds": 9891,
+      "usage": {
+        "completion_tokens": 115,
+        "prompt_tokens": 1442,
+        "total_tokens": 1557
+      },
+      "rationale_characters": 606,
+      "model_visible_messages_hash_verified": true,
+      "identity_verified": true,
+      "original_artifact_hashes_verified": true,
+      "source_version": "WORKING_TREE_EXACT_HASHES_IN_REPORT",
+      "change_before_probe": "Explicitly request a rationale below 600 characters; output validation limit remains 2000. No output repair or automatic retry."
+    }
+  ],
+  "validation": {
+    "regression_tests_passed": 981,
+    "regression_scope": "models, API, projects, twins; PostgreSQL integration tests excluded because no persistence changes",
+    "focused_tests_after_prompt_change_passed": 39,
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED",
+    "git_diff_check": "PASSED",
+    "final_probe_source_hashes_match_candidate": true,
+    "final_serving_source_hash_matches_candidate": true
+  },
+  "limitations": [
+    "Only the team task has real GPU observations in this phase; the other five tasks have synthetic contract tests.",
+    "Structural acceptance does not establish semantic proposal quality or end-to-end success.",
+    "Proposal persistence and formal evidence links are phase 2.",
+    "Real-only campaign configuration and deployed connectivity are phase 3.",
+    "Generated source, repair and a new formal calculator attempt are phase 4."
+  ]
+}

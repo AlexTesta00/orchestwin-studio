@@ -25,6 +25,7 @@ from orchestwin.models.architecture import (
     ArchitectureProposalStatus,
     ArchitectureRequirementsInput,
 )
+from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.requirements_primitives import (
     snapshot_content_hash,
@@ -222,6 +223,7 @@ class LocalArchitectureGenerationService:
     def __init__(
         self,
         *,
+        proposal_evidence_store=None,
         governance: ArchitectureGovernancePort,
         proposals: ArchitectureProposalPort,
         uow_factory: ArchitectureGenerationUnitOfWorkFactory,
@@ -230,11 +232,13 @@ class LocalArchitectureGenerationService:
     ) -> None:
         """Configure explicit application dependencies."""
         self._governance = governance
+        self._proposal_evidence_store = proposal_evidence_store
         self._proposals = proposals
         self._uow_factory = uow_factory
         self._uuid_factory = uuid_factory
         self._clock = clock if clock is not None else _utc_now
 
+    @evidence_application
     async def generate(
         self,
         *,
@@ -323,6 +327,7 @@ class LocalArchitectureGenerationService:
                     persistence_status=append_status,
                 )
 
+            await bind_model_artifacts(unit, "ARCHITECTURE", (version,))
             await unit.commit()
 
         return ArchitectureGenerationResult(

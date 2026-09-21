@@ -1,0 +1,3163 @@
+{
+  "schema_version": 1,
+  "phase": 5,
+  "recorded_at": "2026-09-13T19:36:19.922050+00:00",
+  "base_commit": "c9d05fd413828148f7e3d3470c74adf2e00adfbe",
+  "source_state": "UNCOMMITTED_PHASE_5_SOURCE_BYTES_RETAINED_AND_HASHED",
+  "scope": "NON_FORMAL_REAL_MODEL_SOURCE_AND_REPAIR_EXECUTION_QUALIFICATION",
+  "implementation_status": "READY_FOR_USER_COMMIT",
+  "qualification_status": "FAILED",
+  "semantic_quality_qualified": false,
+  "formal_campaign_ready": false,
+  "formal_case": false,
+  "frozen_case_used": false,
+  "case_artifacts_read": false,
+  "training_executed": false,
+  "new_level_d_validation": false,
+  "commit_performed": false,
+  "qualification_protocol": {
+    "requirements": "SYNTHETIC_APPROVED_RESERVATION_REQUIREMENTS_FROM_INTEGRATION_FIXTURES",
+    "governance": "USER_AUTHORIZED_DISPOSABLE_PROJECT_QUALIFICATION",
+    "api_authentication": "ASGI_OWNER_OVERRIDE_FOR_TECHNICAL_TRIALS_SEPARATE_REAL_OWNER_READINESS_CHECK",
+    "profiles": "Existing evidence-backed VALIDATED_LEVEL_D catalog; OWNER_PROJECT purpose preserves GENERATED_PLAN and REPAIR_CHANGE_SET origins.",
+    "generations": "Actual local Qwen inference, temperature 0.6, no source substitution or output repair.",
+    "sampling": "Development trials informed prompt/schema changes; final matrix is one generation per target and is not an unbiased benchmark.",
+    "repair_trials": 2,
+    "repairs_applied": 1,
+    "repairs_rejected": 1,
+    "rejected_second_repair_reason": "Provider STOP output repeated the exact base bytes; adapter rejected an unchanged REPLACE.",
+    "automatic_provider_retries": 0,
+    "s67_evaluator": "Reused unchanged; no evaluator inference or training during these trials."
+  },
+  "capabilities": {
+    "generation_protocol": "SOURCE_FILES_V1",
+    "max_manifest_files": 8,
+    "static_and_jvm_max_files": 4,
+    "manifest_output_token_budget": 1000,
+    "file_output_token_budget": 1100,
+    "max_lines_per_file": 60,
+    "max_characters_per_line": 240,
+    "assembly": "Exact provider lines joined by LF plus final LF; no unescaping or code repair.",
+    "audit": "Each file has its own request, raw response and terminal observation; PostgreSQL binds every accepted byte and pinned byte to parent publication.",
+    "repair_feedback": "Selected recorded phase code, normalized summary and findings are passed with immutable attempt and source references.",
+    "schema_decoder": "llguidance 1.8.0 constrained JSON schema with token-by-token EOS consumption.",
+    "limits": "JSON/schema conformance does not establish compilable code, correct tests, accessibility, or business correctness."
+  },
+  "source_files": {
+    "environments/training/requirements-proposals.txt": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\environments\\training\\requirements-proposals.txt",
+      "sha256": "62dad245288058fe42fc1b4dfae7f9e65722068c928722f87ebfefc6522bd904",
+      "size_bytes": 168
+    },
+    "environments/training/serve_proposal_model.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\environments\\training\\serve_proposal_model.py",
+      "sha256": "ce65d9da84cd21f88f26d930e8b2197a3f4eb52c656e773a5bc5b1d28ad0bef0",
+      "size_bytes": 13998
+    },
+    "src/orchestwin/api/source_generation.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\api\\source_generation.py",
+      "sha256": "4aecb38328caf6815e09cbcd056e1930fb1c72c7496eb7095d9dd441debc5159",
+      "size_bytes": 22426
+    },
+    "src/orchestwin/models/proposal_evidence.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\proposal_evidence.py",
+      "sha256": "39ca38a49b2a8edbba34247ebd0424700e2967bbebe76c7741b41a41c8f74304",
+      "size_bytes": 10239
+    },
+    "src/orchestwin/models/proposal_evidence_persistence.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\proposal_evidence_persistence.py",
+      "sha256": "5389a74443a4e2157be623c0110653c53b8f9874c6ec794897f2762861bfeb9a",
+      "size_bytes": 14422
+    },
+    "src/orchestwin/models/proposal_generation.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\proposal_generation.py",
+      "sha256": "f206fdad4c52e9fab3341ae3b5d7d7250f9387a95a769ed5530fde3d2f9b24a9",
+      "size_bytes": 11840
+    },
+    "src/orchestwin/models/real_runtime.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\real_runtime.py",
+      "sha256": "102aa1eb2c5dccdec50659a66d7f6a170185c06861fb867c4bd91c16bf53ca14",
+      "size_bytes": 12855
+    },
+    "src/orchestwin/models/schema_decoding.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\schema_decoding.py",
+      "sha256": "30c99debf7a09b93bd5a9d256776a5f8d305284bd757efae2d7e9cf21704530c",
+      "size_bytes": 2440
+    },
+    "src/orchestwin/models/source_file_generation.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\source_file_generation.py",
+      "sha256": "3ad92d9efd84d8dd82bf921784b7ed59ae3c88b5cf21db46774e09dcfa4f756c",
+      "size_bytes": 17068
+    },
+    "src/orchestwin/models/source_proposals.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\models\\source_proposals.py",
+      "sha256": "18c817bef1d8d8f512a1ff8de9baa014343f8937fea75dda8eb5772e95e6edee",
+      "size_bytes": 10967
+    },
+    "src/orchestwin/persistence/migrations/versions/0040_source_file_evidence.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\orchestwin\\persistence\\migrations\\versions\\0040_source_file_evidence.py",
+      "sha256": "7d60c0620319137f0b3d99b5fe72060a0b85cedba567347d5a73ad0593d4791b",
+      "size_bytes": 9795
+    },
+    "src/test/python/integration/test_model_source_generation_postgres.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\test\\python\\integration\\test_model_source_generation_postgres.py",
+      "sha256": "b0bdea19d716410ef80de4725e73ad0cd07efcc18f1e5037bf009229e24e85fe",
+      "size_bytes": 30022
+    },
+    "src/test/python/models/test_proposal_serving.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\test\\python\\models\\test_proposal_serving.py",
+      "sha256": "aa7c2cde0bbdcc77e36e911250422f11db0268c929e35aca38c59e42bf07269c",
+      "size_bytes": 4930
+    },
+    "src/test/python/models/test_real_model_runtime.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\test\\python\\models\\test_real_model_runtime.py",
+      "sha256": "6a7c627c4095f1021531fd2e58f22c3038749daf01ee61daa56ad8ede0242f88",
+      "size_bytes": 15232
+    },
+    "src/test/python/models/test_schema_decoding.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\test\\python\\models\\test_schema_decoding.py",
+      "sha256": "3a7c03372f99bb04bcd3fcaf518990eb1b88155f452b6becd31152213ddd3e0b",
+      "size_bytes": 2476
+    },
+    "src/test/python/models/test_source_file_generation.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\source-snapshot\\src\\test\\python\\models\\test_source_file_generation.py",
+      "sha256": "85c0bd72ae8f053a5db6b0ab93f724135fef46d77174f76a444f84a6664922bb",
+      "size_bytes": 7946
+    }
+  },
+  "harnesses": {
+    "phase5_live_probe.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_live_probe.py",
+      "sha256": "b1f77a645d96e81e38b17b4161ec2e55853b666f259983308ed7d19ac209ccc4",
+      "size_bytes": 5387
+    },
+    "phase5_live_scenario.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_live_scenario.py",
+      "sha256": "c5dee5917a66aa33d284972b3e8644c528840fbf2c2ae723d6bc8b74a25cd47d",
+      "size_bytes": 5741
+    },
+    "phase5_execution_probe.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_execution_probe.py",
+      "sha256": "5bb52a0684a49e45e7230278f9cc22b2180ef21be09857f01ea29b314e3681f8",
+      "size_bytes": 6203
+    },
+    "phase5_execution_scenario.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_execution_scenario.py",
+      "sha256": "262be4728305c606015137a06934e43d755859b57737d5358b087da31d90952a",
+      "size_bytes": 11221
+    },
+    "phase5_repair_probe.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_repair_probe.py",
+      "sha256": "092ac844aa9ae20a972c7ead3035939f4872300e6d5cb76caf8cb410de7638ae",
+      "size_bytes": 6173
+    },
+    "phase5_repair_scenario.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_repair_scenario.py",
+      "sha256": "3d7bc0632d44008a54f4c8c8f22d8127ae9da0f341656ca0f3790aca1b975bdb",
+      "size_bytes": 5305
+    },
+    "phase5_postgres_probe.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_postgres_probe.py",
+      "sha256": "875a4b1c867775565ba5b04d21baae80dbcb5ba738a128c51df8d502d6aaff30",
+      "size_bytes": 5458
+    },
+    "phase5_node_tests.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_node_tests.py",
+      "sha256": "a89f4058c6e3976bc5688feae4efd6ab55e6389ad3991166a5c459b41907146b",
+      "size_bytes": 3386
+    },
+    "phase5_final_jvm_matrix.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_final_jvm_matrix.py",
+      "sha256": "4c30579fafbf167f321eb58e774e88ed8265bf1cc9437eac7c5ae009e32e0991",
+      "size_bytes": 418
+    },
+    "phase5_guidance_contract.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_guidance_contract.py",
+      "sha256": "37d0f31819ef8c125f48e562082f24bcad02e369bddeaaddcddd3cb52c040eae",
+      "size_bytes": 1486
+    },
+    "phase5_native_operator.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_native_operator.py",
+      "sha256": "5fd7c43d8127cd0cb1f19b4df935524416371095902f285f6e99118b88bd0e72",
+      "size_bytes": 3966
+    },
+    "phase5_api_readiness_final.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_api_readiness_final.py",
+      "sha256": "2175013d9b9e1a880468935cf0cf508f527279a0b5c38d3988bf865979cd4a4f",
+      "size_bytes": 1735
+    },
+    "phase5_evidence_index.py": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\harnesses\\phase5_evidence_index.py",
+      "sha256": "e5cfae89e667194ff848701f41c5ee46b4a5b8c08a6b51f5c4df2dd24be36002",
+      "size_bytes": 11145
+    }
+  },
+  "final_matrix": [
+    {
+      "target": "WEB_STATIC",
+      "source_publication": "PUBLISHED",
+      "generation": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\live-report.json",
+        "sha256": "d6e09198244332e30482963d9318507d83e5725bbc85006f5509b4f88be1de83",
+        "size_bytes": 1793
+      },
+      "execution": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\execution-report.json",
+        "sha256": "3f1b57a170a49edf8b46893fe04a7bb022a102ba91c6cbaa5f287c7d998ad63b",
+        "size_bytes": 1029
+      },
+      "execution_performed": true,
+      "execution_status": "FAILED",
+      "conclusion": "Mouse/keyboard confirmation passed on both viewports. Accessibility and generated Node tests failed."
+    },
+    {
+      "target": "JVM_JAVA",
+      "source_publication": "PUBLISHED",
+      "generation": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\live-report.json",
+        "sha256": "8378748c9ffdedfe672481baed2321feb934b7c25897085713b5d5f620899d2e",
+        "size_bytes": 2089
+      },
+      "execution": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\execution-report.json",
+        "sha256": "54e28f3190a8071d9896b2ebf13027a605881b5dcf026495c445a1fab23c035e",
+        "size_bytes": 1027
+      },
+      "execution_performed": true,
+      "execution_status": "FAILED",
+      "conclusion": "Main sources compiled. Generated tests did not compile: missing symbols."
+    },
+    {
+      "target": "JVM_KOTLIN",
+      "source_publication": "PUBLISHED",
+      "generation": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\live-report.json",
+        "sha256": "272e5d58d9e5821b10c8fe95fe6bd77db05e3fd5308e89560b113123b8d895fb",
+        "size_bytes": 2091
+      },
+      "execution": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\execution-report.json",
+        "sha256": "725e8c372e71128e8a2b657cb9d8006027efcaaddf98aa6e20cb51a83b0afa25",
+        "size_bytes": 1029
+      },
+      "execution_performed": true,
+      "execution_status": "FAILED",
+      "conclusion": "Setup passed. Main compilation failed: unresolved println and ReservationFactory references."
+    },
+    {
+      "target": "JVM_SCALA",
+      "source_publication": "PUBLISHED",
+      "generation": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\live-report.json",
+        "sha256": "5392002af204962d30f9eba866fac470578dee1ebceab1d702531a2df8df9ece",
+        "size_bytes": 2090
+      },
+      "execution": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\execution-report.json",
+        "sha256": "2e01f4f953c02409e93656380853ae1471145391161222ed485d87afd456cfa1",
+        "size_bytes": 1000
+      },
+      "execution_performed": false,
+      "execution_status": "ADMISSION_REJECTED",
+      "conclusion": "Admission rejected: generated extends App entrypoint is outside the profile contract. Sources were not executed."
+    }
+  ],
+  "development_generation_trials": [
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\live-report.json",
+        "sha256": "272e5d58d9e5821b10c8fe95fe6bd77db05e3fd5308e89560b113123b8d895fb",
+        "size_bytes": 2091
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\source-response.json",
+        "sha256": "0c1229eeaa74c6afb316f859708a6e3db248e25482576236f278e132e1f5383c",
+        "size_bytes": 5629
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\source-request.json",
+        "sha256": "5941a8c13a662618f20375f430dab7544863a61a168383b3df3eb415f776a5c7",
+        "size_bytes": 200
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\approved-artifacts.json",
+        "sha256": "66afb76aa44f24f3352e19011ca6517e070682703ebfa0392b5983633130ac10",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\source-hashes.json",
+        "sha256": "214017c57a76235ab88136ad6b24d013316c93c1120fe746d422740a8d061e06",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\result.json",
+        "sha256": "abe65fd98995523c66bc6f5980737f99c602f819e9b3d0ed8f873c5be723281c",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad\\qualification-database.dump",
+        "sha256": "ee803c224479db424ab6817cfc7ca4c6cc17c54960e79b892c645b186fbf6c1b",
+        "size_bytes": 360862
+      },
+      "outcome": {
+        "target": "JVM_KOTLIN",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\live-report.json",
+        "sha256": "ece0af0bbf71107fd6d5e9d87bb7b16d2c847300f589df018fc43d9079a4ea21",
+        "size_bytes": 2108
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\source-response.json",
+        "sha256": "9018f394df1b353fa73e25c23f7b3e5f4dafed4e4f09361747776db1d359d437",
+        "size_bytes": 136
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\source-request.json",
+        "sha256": "fde06386c7ba8e74cb6ce35c7c57980a4a1a88c163e00007d84f9621f37e06f5",
+        "size_bytes": 200
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\approved-artifacts.json",
+        "sha256": "b1823be1ae78e36f595086f286ff4b7993236ed5d9dc68a9cb60c8c0b10124e1",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\source-hashes.json",
+        "sha256": "084f9daabca775a16f50c08c24a12e58cff16ea53f7fc2edb58d655bec57ec23",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\result.json",
+        "sha256": "a536b274021a3b059167762742ea18e420322601bb5a9415e0d457105ab4fa3f",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-2695946cf40e4b21807453565b328d57\\qualification-database.dump",
+        "sha256": "d5ceb24fdf0e5adaca41b23fcaf39410b650504f382eebf2cee54f87434e3771",
+        "size_bytes": 361161
+      },
+      "outcome": {
+        "target": "JVM_KOTLIN",
+        "status": "REJECTED",
+        "http_status": 422,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\live-report.json",
+        "sha256": "5392002af204962d30f9eba866fac470578dee1ebceab1d702531a2df8df9ece",
+        "size_bytes": 2090
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\source-response.json",
+        "sha256": "db871fdf9abfca325c9586f938f416ed8cbfbbb5f18431596170a148c66e76c4",
+        "size_bytes": 3759
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\source-request.json",
+        "sha256": "cdd431baa2ba276a5dfc6957f868ce2e5323973a7e4799567e647e7c5e5414e4",
+        "size_bytes": 199
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\approved-artifacts.json",
+        "sha256": "4031eaedaa60a4484b3d2af2213346bec612d0818d8cef8de64d03cf8867695d",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\source-hashes.json",
+        "sha256": "214017c57a76235ab88136ad6b24d013316c93c1120fe746d422740a8d061e06",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\result.json",
+        "sha256": "49daee6459dca8d103a53b7992c121d166ba0a363f673836f385c32c8ce20a06",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00\\qualification-database.dump",
+        "sha256": "5bb92d5bac91c590c04aa30deb4f3a98752fe0286bf057b44f959bb8100d1676",
+        "size_bytes": 357212
+      },
+      "outcome": {
+        "target": "JVM_SCALA",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4aed5f60f4ae490483bac6deef95a1a4",
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4aed5f60f4ae490483bac6deef95a1a4\\source-hashes.json",
+        "sha256": "1ea7526767877044075f967ef204b044a8c83316c0c50be341d158631f656848",
+        "size_bytes": 1734
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4aed5f60f4ae490483bac6deef95a1a4\\result.json",
+        "sha256": "644d9037cde39c06b1d785b2b96eceae27aa0e20fd6fbdfd85018c1786af2bc9",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4aed5f60f4ae490483bac6deef95a1a4\\qualification-database.dump",
+        "sha256": "be12b4f1f39ad27185316db5d46a1dc3fb741b39dee50df1b1c9c5d60d1902ec",
+        "size_bytes": 325331
+      },
+      "outcome": {
+        "status": "HARNESS_DID_NOT_COMPLETE_A_GENERATION_REPORT"
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\live-report.json",
+        "sha256": "d6e09198244332e30482963d9318507d83e5725bbc85006f5509b4f88be1de83",
+        "size_bytes": 1793
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\source-response.json",
+        "sha256": "d3afeb2bee88e1d653a17426380557fdd29434bdb47b7777af64bed13f227087",
+        "size_bytes": 2501
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\source-request.json",
+        "sha256": "e9121093c4bc1aba5cd8547eea3705dcbfd0ba3576cf86532522426ae46f02e5",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\approved-artifacts.json",
+        "sha256": "885be6857ba8236f1b3652099baeeb1909af438034fb02b1ff1812acd0e2a5b0",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\source-hashes.json",
+        "sha256": "214017c57a76235ab88136ad6b24d013316c93c1120fe746d422740a8d061e06",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\result.json",
+        "sha256": "670a04e3b0cb78f37fa6984c01c8d117251383b615ab36844400bebb6bdfe549",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4\\qualification-database.dump",
+        "sha256": "bb6ebe4914f6b04b5938b4f288de722cfabaeebdf73855749eea8bcc08d1023c",
+        "size_bytes": 356478
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 4,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\live-report.json",
+        "sha256": "01285d293b78eacd64421ce720613c585b884098dae7ee0b4516cd18eb6bedde",
+        "size_bytes": 896
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\source-response.json",
+        "sha256": "fbef57fe3d51818638937b385ee3bd0225802aa3622737120fec97e2096a09e5",
+        "size_bytes": 136
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\source-request.json",
+        "sha256": "9d9455b676bbb65433cfa8b221dc6c3a517aba0a17543e56705e8bb0a71301ec",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\approved-artifacts.json",
+        "sha256": "6d70e34e8e6ff72156ec308e4a13c32145c11d950514d5b677fb0bc519e74e81",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\source-hashes.json",
+        "sha256": "a0666ea796cb54008969487c3693ce8d71f68c0229f6f7d147c947c5cceea111",
+        "size_bytes": 1734
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\result.json",
+        "sha256": "076c0eb9d1281fb71f1afedae32164e9908b08e76068524e9928751867931e78",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-7826dc7e7cf74ac0887ad6220407087d\\qualification-database.dump",
+        "sha256": "b08017696a82ce2e7ef2062ec8b11f8f6b095cc9a056a508e05f0f4c30c57ac0",
+        "size_bytes": 344654
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "REJECTED",
+        "http_status": 502,
+        "counter_deltas": {
+          "proposals": 0,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\live-report.json",
+        "sha256": "3d9c1ce55ab7292dd2c4457de05ac33fd1a2567da883e4fbb9f487052cf85173",
+        "size_bytes": 2091
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\source-response.json",
+        "sha256": "0003ce65bab11918558bbdda5b35eabb9070a8c1992b3cfda36710178b10f73c",
+        "size_bytes": 2835
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\source-request.json",
+        "sha256": "e2efbaef9461303d948557da075c1a4547afb39eac33e06db55554517bc1188d",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\approved-artifacts.json",
+        "sha256": "579b0083b17b2055e6aaa877bd28e16e76d8a30b92c280d64b88c7efc486a728",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\source-hashes.json",
+        "sha256": "88002ebb16b6a6f8d348af5fc8b062404e09689429c7bbb24ae03c7af02a7e5c",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\result.json",
+        "sha256": "1841c9431509cc0508d02e199ecfe3b92f6c7a11e442e750267e424c1024fca7",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127\\qualification-database.dump",
+        "sha256": "04da8d90cefbbb9769372b1c362ba1b478026501f1c04f0237c9a85bdc8dac37",
+        "size_bytes": 355695
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\live-report.json",
+        "sha256": "8378748c9ffdedfe672481baed2321feb934b7c25897085713b5d5f620899d2e",
+        "size_bytes": 2089
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\source-response.json",
+        "sha256": "3cf62e23670bf410e1ee0eea247e87a5f90854c535659cd6ee892b93a055a4e3",
+        "size_bytes": 5601
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\source-request.json",
+        "sha256": "ec3b8cc44a383e782027b80354f33c79f50cf799fa075ada338eefde2d1fb177",
+        "size_bytes": 198
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\approved-artifacts.json",
+        "sha256": "71998fb5efd609616648437edd6ffbc569b54305af176529b1cfae158a282337",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\source-hashes.json",
+        "sha256": "214017c57a76235ab88136ad6b24d013316c93c1120fe746d422740a8d061e06",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\result.json",
+        "sha256": "a63c3ac19acc44598410be91da6a876beff30bdcc1f0f78031ae5fc14e05f9bc",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302\\qualification-database.dump",
+        "sha256": "03a11af8d62c2c89583e3ae42b9f5d4129099436547cc8289435f542c738cd80",
+        "size_bytes": 360513
+      },
+      "outcome": {
+        "target": "JVM_JAVA",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\live-report.json",
+        "sha256": "843a1fb12bd0303273eb6e876a8c6b5aad4c6282037f74e85bd21970bc626b5b",
+        "size_bytes": 1793
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\source-response.json",
+        "sha256": "34d4010c9eee097e2f62d26696c49ee7beb36bcc046b37bd21ef6592d882381f",
+        "size_bytes": 2502
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\source-request.json",
+        "sha256": "a76612c75b9ce00871849cbac86e77049b1ed397515246875fac465c59a5b200",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\approved-artifacts.json",
+        "sha256": "3a868267b568e2684c196bb314b7ada78e4fc69f6157aec639959e56e6a7f7cb",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\source-hashes.json",
+        "sha256": "9ad5b1d325e6e439b1b2eccb9b61f1aa849ff055cef71b922431490d0e654b91",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\result.json",
+        "sha256": "8ef5569f96ea4825182c850bc798e8dcd2254acd8dead78a85b0e44e9b6c6f40",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3\\qualification-database.dump",
+        "sha256": "535d34d06eeb1c05ca914beb098bc3c578f81913456cbbda5f220c4755f04054",
+        "size_bytes": 356978
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 4,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\live-report.json",
+        "sha256": "ec0c01553066dbb7caf100db49dd94e0acff769191d0273b2e243033b9234231",
+        "size_bytes": 896
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\source-response.json",
+        "sha256": "fbef57fe3d51818638937b385ee3bd0225802aa3622737120fec97e2096a09e5",
+        "size_bytes": 136
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\source-request.json",
+        "sha256": "02ba2fe59f935636ae81aefd6d80c13da1ea3daebd6cc1640239c80e7012b5c8",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\approved-artifacts.json",
+        "sha256": "b3893fa4fbfcf2dfb3689fe368eea8c2fd860b659d368e1a5221c9c6250d8f82",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\source-hashes.json",
+        "sha256": "1ea7526767877044075f967ef204b044a8c83316c0c50be341d158631f656848",
+        "size_bytes": 1734
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\result.json",
+        "sha256": "f00c82fb644957eea1a738a48036ea786f7597e7135e9e76f167eaf5f8540146",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-ce33d2372d7c490db525dac320f7a47b\\qualification-database.dump",
+        "sha256": "91c7667dac0342ac6d9718cb01a0614bea0ee4ff955e0b9684799e4ab45b0167",
+        "size_bytes": 344662
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "REJECTED",
+        "http_status": 502,
+        "counter_deltas": {
+          "proposals": 0,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\live-report.json",
+        "sha256": "60fb1710c78bbc218203c9a74c46bfcfa57a99d33131a1faf218eb275d714e95",
+        "size_bytes": 3281
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\source-response.json",
+        "sha256": "867180cbaeed40ab7c0512be60f90602a2b354e724cfd96248a2586aabb72df5",
+        "size_bytes": 7250
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\source-request.json",
+        "sha256": "32aa2e5414e35656cdcca2072d8da5a7b92dfb9586f421808c3e356307a389c6",
+        "size_bytes": 198
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\approved-artifacts.json",
+        "sha256": "a79146c3b29691225e8cc9a722724afedf6215fc6ac19edcc2e23982fe89a241",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\source-hashes.json",
+        "sha256": "b720affd1f62e821521598f13293f96af1fa2c14017a9b75224b5227fd2ac909",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\result.json",
+        "sha256": "c16568265e332906fa2a8a3feef7e50da0022f46da0bd89cd890da727cd5fded",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4\\qualification-database.dump",
+        "sha256": "6f06081a2b939efdcc4ee0586882772b23aa6db7ca6147b3d608b7f1e39ca415",
+        "size_bytes": 404805
+      },
+      "outcome": {
+        "target": "JVM_JAVA",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 9,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\live-report.json",
+        "sha256": "36c9ab6c7851864b03d183a5fe9f3cf19e2351f8f7de7dacc2c108657fdb5845",
+        "size_bytes": 896
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\source-response.json",
+        "sha256": "b33c231cd58a3a6286eb6b786ff1d4a0f9b2a3f3109c4de334abe1473213696d",
+        "size_bytes": 144
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\source-request.json",
+        "sha256": "ece7852f80d37f0cbaf7ab553c8a69199d831badb7389663d99c5f6711be6b46",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\approved-artifacts.json",
+        "sha256": "0aadaee2abe02f37cca43c0db0dce2508e0f2d10157b87a5bb55693fa5cdd560",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\source-hashes.json",
+        "sha256": "b983abc3b34a31fd6fbf45a60ea3c31750f8d4f6c8e89d5f9625a075404d0ab2",
+        "size_bytes": 1734
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\result.json",
+        "sha256": "8d775b81e3705b0a358d692454921cb32dc0dc7d4e39a0e1a6b6033258789cbb",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-e7b874e2db9949c9b4e62d193907d45f\\qualification-database.dump",
+        "sha256": "ceb326904a13f0f1b554ee116facf86480ae622e99ef9cc523f43efbcdd1abfc",
+        "size_bytes": 346940
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "REJECTED",
+        "http_status": 502,
+        "counter_deltas": {
+          "proposals": 1,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\live-report.json",
+        "sha256": "5c0e79940a3447990c858c72cc66d92902a8c0be6c8214b4c990f76cec31e356",
+        "size_bytes": 896
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\source-response.json",
+        "sha256": "b33c231cd58a3a6286eb6b786ff1d4a0f9b2a3f3109c4de334abe1473213696d",
+        "size_bytes": 144
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\source-request.json",
+        "sha256": "90935f2d7816b9c57140c50e7ca2bbd5d519697bdc91b35fc122b47c2a1837e6",
+        "size_bytes": 241
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\approved-artifacts.json",
+        "sha256": "c23fc4e7ae9e1bfb4d22f0286447145d0a3c780ae475e7deeba85e48664e5098",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\source-hashes.json",
+        "sha256": "6058bfce8442989d99e168e2ecc4a6260c1c8a379a6ce0086cbc92cf7a78f97d",
+        "size_bytes": 1734
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\result.json",
+        "sha256": "c0fa88fd013badac3efc471eb628406983e0662a4d223836f1a32acc265f59e5",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-f9d3ebce3fbe4a459505f3bfd5aff99e\\qualification-database.dump",
+        "sha256": "b8d52327a473cb4eda1a597184cd8f49e4716badef1d316db36872bdc37c6855",
+        "size_bytes": 347109
+      },
+      "outcome": {
+        "target": "WEB_STATIC",
+        "status": "REJECTED",
+        "http_status": 502,
+        "counter_deltas": {
+          "proposals": 1,
+          "evaluator": 0
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11",
+      "live-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\live-report.json",
+        "sha256": "78b1589a18435f8f15d35fac8ffad09285a60b69e61d70724304b8b8365101c5",
+        "size_bytes": 2090
+      },
+      "source-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\source-response.json",
+        "sha256": "0e9745b484328f4a90403ee7ba94d5a71bdaac3d70a8731176cc3a0051b9ded0",
+        "size_bytes": 3763
+      },
+      "source-request.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\source-request.json",
+        "sha256": "b0a53cc41a84a8143362530605172b529a31a89ea71f05928785bee0aa1a55e7",
+        "size_bytes": 199
+      },
+      "approved-artifacts.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\approved-artifacts.json",
+        "sha256": "ce5d7146d252b1bab3b8b4667b575e8c0d17485fc48c0aa3fa299964862cc1b9",
+        "size_bytes": 31475
+      },
+      "source-hashes.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\source-hashes.json",
+        "sha256": "b89105fc36ce0e0b93e7926a14d0fde0f1aaab109d00090ddd9661239ef6dd80",
+        "size_bytes": 1855
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\result.json",
+        "sha256": "f67c838cc97499e668b6b926116d3b8bc3e7c263eb1c07d9a70780e1c82781c0",
+        "size_bytes": 562
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11\\qualification-database.dump",
+        "sha256": "4c4fa1e8be29f14f12cdcebba9476ef76924d042d91e83ce7a7dd41e7037e9a7",
+        "size_bytes": 358766
+      },
+      "outcome": {
+        "target": "JVM_SCALA",
+        "status": "PUBLISHED",
+        "http_status": 201,
+        "counter_deltas": {
+          "proposals": 5,
+          "evaluator": 0
+        }
+      }
+    }
+  ],
+  "execution_trials": [
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-17142ae3c66c4329951bb574b75fdb4d",
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-17142ae3c66c4329951bb574b75fdb4d\\result.json",
+        "sha256": "a52c5a4f4be0aa74f936fb5b4c03125e3d18ac0067e5df92751dee97edd63ef2",
+        "size_bytes": 567
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-17142ae3c66c4329951bb574b75fdb4d\\qualification-database.dump",
+        "sha256": "da32766af8ee5700c49de96cad16499940578a12a3c6a526c1d1d1e166490927",
+        "size_bytes": 357487
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-17142ae3c66c4329951bb574b75fdb4d.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\execution-report.json",
+        "sha256": "3f1b57a170a49edf8b46893fe04a7bb022a102ba91c6cbaa5f287c7d998ad63b",
+        "size_bytes": 1029
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\execution-response.json",
+        "sha256": "01c4294cb5170c3f32e0ff487aa018cf85565b6ff6eea944e64b60695f407c15",
+        "size_bytes": 19413
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\prepared.json",
+        "sha256": "a5fab433128d5fd6554f8c71cb53fd8237a7e7eab3872edcf48728f989c6503e",
+        "size_bytes": 15934
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\approved.json",
+        "sha256": "f18c383fa9ef4600be92e3f3077d3a3228ff5825685f17e7acf2b6fa440b4b24",
+        "size_bytes": 14965
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\terminal.json",
+        "sha256": "a92e9978b709372a218095c1d376f8ae7a8b30b08fc9eaec90541afadf63c5ff",
+        "size_bytes": 15218
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\result.json",
+        "sha256": "72868ab68fa5a9f4cd023cd1246a4c0010ec1d4740a963850583dba3263c85bb",
+        "size_bytes": 644
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\qualification-database.dump",
+        "sha256": "0694f19b06066968bb10a3a974984a19457a5d169398a225b0e9bb48294af615",
+        "size_bytes": 378916
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d\\browser-oracle.json",
+        "sha256": "0e970556e625cb39de4833a5c14e37a8e9942a7629e2cac08515f97bf0ff489a",
+        "size_bytes": 918
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "33e7b5d7-3f87-4ca3-a207-39632fe77d47",
+        "source_content_hash": "9f514552e4c9f2af3c02663ebad324ec5add58a17749c03524b198a7713eea57",
+        "source_tree_hash": "deefccf9d3c7b7e52e3ca827cd4c9b7d046eb0bf08b172810f577e53cd0ebc2b",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "77def69c-dcc5-4dfa-b6c4-c0459e4fd8c3",
+        "attempt_content_hash": "fce07330ac4d60f9e05d5689a0434b0e1e15a5499e70e90cb9b7586f8dbfa137"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web validate completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "Static projects have no validated dependency installation phase.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web static_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "The selected validated baseline has no compilation phase.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web test completed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web run completed.",
+          "findings": []
+        },
+        {
+          "phase": "HEALTH_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web health_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BROWSER_EVIDENCE",
+          "status": "FAILED",
+          "failure_code": "WEB_BROWSER_CHECKS_FAILED",
+          "normalized_summary": "WEB BROWSER CHECKS FAILED",
+          "findings": [
+            {
+              "code": "AXE_LANDMARK_ONE_MAIN",
+              "message": "Ensure the document has a main landmark",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_REGION",
+              "message": "Ensure all page content is contained by landmarks",
+              "source_tool": "axe-core",
+              "location": "#app, #confirmation"
+            }
+          ]
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web collect_artifacts completed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [
+        {
+          "viewport": "narrow",
+          "interaction_status": "PASSED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            }
+          ],
+          "failure_codes": []
+        },
+        {
+          "viewport": "wide",
+          "interaction_status": "PASSED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            }
+          ],
+          "failure_codes": []
+        }
+      ],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d.json",
+        "sha256": "ecc8f1b88dd61224df29d85228ffb136f2a727ba24413eaf1e5f54e356bc6f8f",
+        "size_bytes": 8489
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\execution-report.json",
+        "sha256": "30c52eee819e0ef25871a4e3ccc6ded95556cb61e75c420c6b59f899d1f58578",
+        "size_bytes": 1006
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\prepared.json",
+        "sha256": "288713742e207f0da99f83cafb4597c5c9e0722aa252ca04c6556bfb609a86ad",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\result.json",
+        "sha256": "6cc8b6deaa8d139a7bb978f0db275153db330fbd7edd0577c16ebbb3bad2995f",
+        "size_bytes": 641
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\qualification-database.dump",
+        "sha256": "4967e5c76568c1ada68cb0370de17a28923fb847090222664de9db8063a2d920",
+        "size_bytes": 391624
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\browser-oracle.json",
+        "sha256": "0e970556e625cb39de4833a5c14e37a8e9942a7629e2cac08515f97bf0ff489a",
+        "size_bytes": 918
+      },
+      "backend-admission-error.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3\\backend-admission-error.json",
+        "sha256": "4bc4c5da9d86db6a155b51bab3c282700aa87cd66fe50a42f60953a6c386782a",
+        "size_bytes": 73
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "REPAIR_CHANGE_SET",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "e78de41f-4304-4f2a-a47e-6f61c9e5ac3e",
+        "source_content_hash": "1f8f545a509ef01d2e7fcd48c2cba15fcffe622c95871b0aa44f8abb5e1f1623",
+        "source_tree_hash": "864c51f6cce7ebe17edff68f549c0ae7aebd2dd8efa263d81bcd630497d0e648",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "WEB_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 120
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\execution-report.json",
+        "sha256": "1d31888de2267ab42bfa7d650eaa1fa80490a9ea1bc7bad041094127aa17abf0",
+        "size_bytes": 999
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\prepared.json",
+        "sha256": "4b97860bd1bf5de70fa3acdf68b1a6bdeb2341eaed10da73718863c4fcda699c",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\result.json",
+        "sha256": "74138a4161c0b2e7b3818d25dc85c161d4540a043277e9736071482b2610d582",
+        "size_bytes": 567
+      },
+      "network-cleanup.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\network-cleanup.json",
+        "sha256": "2685a12ec6ce528f85a0065f7934b2727586627094ba7aae482b0786098c28e6",
+        "size_bytes": 6367
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\qualification-database.dump",
+        "sha256": "551c68723a31fda603f2a67c9c168bbe3bb7b01c935adb31f463dd3ec97861b1",
+        "size_bytes": 420484
+      },
+      "backend-admission-error.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e\\backend-admission-error.json",
+        "sha256": "54916ec0c896d4b482162111fc22acc3c932bc1350a26be0e11956e6995d4375",
+        "size_bytes": 103
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-d8f374c971c34b3280e420a249e7f9b4",
+        "target": "JVM_JAVA",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "9f8ebe78-a435-459f-91c0-f245f8ae8bd1",
+        "source_content_hash": "d2b77d207d676872f50ed6b15663bd12fd1980f97786c80aac2615f903efbfdd",
+        "source_tree_hash": "c2038c22c4a21ec7e60359f0e031b3ae8bcd16e12eaddab5684f74da7e41b00c",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "JVM_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 116
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-2fe70148bff341d9bf8d6bc6dc243b8e.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\execution-report.json",
+        "sha256": "1f8ed222a68d2bf775908cdfb06dc4ea3a16fff24c9209e078d4d581a94c2bfc",
+        "size_bytes": 1029
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\execution-response.json",
+        "sha256": "c469834fd12bcb1e06a56bf30fbd59a51c17563ff5f1ac6673ec53db11bf444c",
+        "size_bytes": 19301
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\prepared.json",
+        "sha256": "8214bdf680530915393e5e832b162f1abd057b54a5e099a8ecffaefc18ba1c60",
+        "size_bytes": 15332
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\approved.json",
+        "sha256": "3e0ad2d68c38be63930328961129b45bfbe626ed5e9167534b2b21edf10157d4",
+        "size_bytes": 14383
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\terminal.json",
+        "sha256": "585edfcbd1ac462ba9f57c8dcddd55e8f16fbef979cb9b73ff6cdd91c63c28af",
+        "size_bytes": 14636
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\result.json",
+        "sha256": "8d89bf6be3f8a7353a32e7c7b6a212cfef1aabc6694a74485adf3aa50ed09646",
+        "size_bytes": 567
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\qualification-database.dump",
+        "sha256": "53bc51cdbb895a2a124d7c1708314df3a1a8b3954f874453da22c94a85c46401",
+        "size_bytes": 379344
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-3d59063797244ed297845a76446a29c9\\browser-oracle.json",
+        "sha256": "4a863ccf3f12d957267b54f1a80b2810f89488037e09e7df345a9722e3717401",
+        "size_bytes": 652
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "a7b96117-1f9b-4600-811b-c9addd52e6f2",
+        "source_content_hash": "03a392b2d8fb5f130f71be046641d79a2f1fbdd801955104344657998cac1ca8",
+        "source_tree_hash": "3a4bae6b27558a5c5ea6aa0402f205f1c1881bfad752ee54655b326c0d885c11",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "c8af6695-720b-4fd4-8479-368496ece471",
+        "attempt_content_hash": "b2bc735c9ccd20313c1d53e235fd13e792c2d0c48cb9647a3c35044a502ae418"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web validate completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "Static projects have no validated dependency installation phase.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web static_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "The selected validated baseline has no compilation phase.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web test completed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web run completed.",
+          "findings": []
+        },
+        {
+          "phase": "HEALTH_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web health_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BROWSER_EVIDENCE",
+          "status": "FAILED",
+          "failure_code": "WEB_BROWSER_CHECKS_FAILED",
+          "normalized_summary": "WEB BROWSER CHECKS FAILED",
+          "findings": [
+            {
+              "code": "AXE_ARIA_ALLOWED_ATTR",
+              "message": "Ensure an element's role supports its ARIA attributes",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_LANDMARK_ONE_MAIN",
+              "message": "Ensure the document has a main landmark",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "INTERACTION_FAILED",
+              "message": "Browser automation reported a failure.",
+              "source_tool": "playwright",
+              "location": "/"
+            }
+          ]
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web collect_artifacts completed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [
+        {
+          "viewport": "narrow",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "INTERACTION_FAILED"
+          ]
+        },
+        {
+          "viewport": "wide",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "INTERACTION_FAILED"
+          ]
+        }
+      ],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-3d59063797244ed297845a76446a29c9.json",
+        "sha256": "20eed411cbc993145c7e784b71d76fe3ad6ac692dd8c1041f0f4b9b40dfa8661",
+        "size_bytes": 8122
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\execution-report.json",
+        "sha256": "a233a17412c5b3536fd80677712943d0d0c85e0fa45b70edb4b28037c0831087",
+        "size_bytes": 1000
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\prepared.json",
+        "sha256": "4b97860bd1bf5de70fa3acdf68b1a6bdeb2341eaed10da73718863c4fcda699c",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\result.json",
+        "sha256": "6c706c85c1111bbcf0c55cfa64b0c738fa37c6f1c68165e2197e776510b79a5c",
+        "size_bytes": 641
+      },
+      "network-cleanup.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\network-cleanup.json",
+        "sha256": "227a174dc737e372fc2bb9e13ab316b7da6ffb7ca9daefbf7bbbb9f41b099028",
+        "size_bytes": 6367
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\qualification-database.dump",
+        "sha256": "e370f1e239dedc5f4c42ed0671dd3e0d6ce566217a55232e88e686066005677c",
+        "size_bytes": 374445
+      },
+      "backend-admission-error.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d\\backend-admission-error.json",
+        "sha256": "54916ec0c896d4b482162111fc22acc3c932bc1350a26be0e11956e6995d4375",
+        "size_bytes": 103
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-fc48bdd082d8434fae9d35e1ce1c8a11",
+        "target": "JVM_SCALA",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "f684f29c-3162-44b5-b102-c9a9d86068c1",
+        "source_content_hash": "bcbc5b0e5de52decbd5e338824e287d8a85252f265b70993cda334c0e1dbc881",
+        "source_tree_hash": "9be71c2afaae6d1d20942d40c220ffa6767a8dcc97107586675ad4e361f42126",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "JVM_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 116
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-5dac36494e2a4e508b25d77fcdd1bc0d.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\execution-report.json",
+        "sha256": "2e01f4f953c02409e93656380853ae1471145391161222ed485d87afd456cfa1",
+        "size_bytes": 1000
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\prepared.json",
+        "sha256": "4b97860bd1bf5de70fa3acdf68b1a6bdeb2341eaed10da73718863c4fcda699c",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\result.json",
+        "sha256": "162d90d6fb6032e8125dc2789553bcb219a16c0e6a79a119b76326ac295c902a",
+        "size_bytes": 641
+      },
+      "network-cleanup.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\network-cleanup.json",
+        "sha256": "3e4a0a10bda816dc75ba6fe0ac1a042c0a6b8b934b667355e1a344085bfedad3",
+        "size_bytes": 6367
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\qualification-database.dump",
+        "sha256": "9c621366caf33053804dfbdf1787c02a4edce60998d3126faa6d2657c81fa3de",
+        "size_bytes": 372891
+      },
+      "backend-admission-error.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9\\backend-admission-error.json",
+        "sha256": "54916ec0c896d4b482162111fc22acc3c932bc1350a26be0e11956e6995d4375",
+        "size_bytes": 103
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-4ae74d1319914973a720954e7222dc00",
+        "target": "JVM_SCALA",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "e7a5139f-9c2d-4cad-8796-341dff2f81c4",
+        "source_content_hash": "76f81e9ccdd156642f5752a347fe6d84cfe4cd37e72f64d8f923521664e908a8",
+        "source_tree_hash": "e9ef482799015fa0a965729c360558e17700791f9a9b7839a8aaeae6f70a7705",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "JVM_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 116
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-7d9a5e916049440a92fbd16bdc6ff9a9.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\execution-report.json",
+        "sha256": "54e28f3190a8071d9896b2ebf13027a605881b5dcf026495c445a1fab23c035e",
+        "size_bytes": 1027
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\execution-response.json",
+        "sha256": "11ec46fc6fee833648767c9f0c71106343e0d7803a0cc0920cfd79f3c48d897d",
+        "size_bytes": 13173
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\prepared.json",
+        "sha256": "24bc28f95b560d449546310965bd710046b56412ec19ca94df62820b9faf881a",
+        "size_bytes": 22036
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\approved.json",
+        "sha256": "4360dc98ae581bcdd49ec220a95844d15dd86f44f2c7c851471951eef5ff6d60",
+        "size_bytes": 20881
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\terminal.json",
+        "sha256": "393c6af996327f800f006189d83700e59805d79fe78aafe3386507eaa1cbdf49",
+        "size_bytes": 21433
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\result.json",
+        "sha256": "d7f898e824c22c0601919354931d8c13d9f6519a619d88de7e931de7f758fbd0",
+        "size_bytes": 644
+      },
+      "network-cleanup.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\network-cleanup.json",
+        "sha256": "211c0c443b158d5d340dd79e36c5689310fb7a1ed5dd630d18658602ed7a1362",
+        "size_bytes": 6367
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82\\qualification-database.dump",
+        "sha256": "160577663f65457a36eba7e1bb9e418445182ef274b58227e14ed3e164c8e7f3",
+        "size_bytes": 382694
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-c3d4eb8997f64e848fd8ba1ce334b302",
+        "target": "JVM_JAVA",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "8e572a0a-406e-4b75-bab4-9c55b27628cb",
+        "source_content_hash": "c1ea325bf8d927054ffb59e7a9c7403b97dacd421ef88e19437459a6dec687f7",
+        "source_tree_hash": "dfb56e2bb7dd6fbfd2638f83148d91be6e4d3e24f2c0e4c31344e50ffac9ee95",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "9dfe9f28-4a4e-49be-954b-01ff2286e547",
+        "attempt_content_hash": "76c958d846373544c105c4c0b6b04a406d221e4caab16396bc2f803e94618b03"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM VALIDATE completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM SETUP completed.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM STATIC_CHECKS completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM BUILD completed.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "FAILED",
+          "failure_code": "JAVA_COMPILATION_ERROR",
+          "normalized_summary": "cannot find symbol",
+          "findings": [
+            {
+              "code": "GRADLE_BUILD_FAILED",
+              "message": "Gradle reported a failed build.",
+              "source_tool": "gradle",
+              "location": null
+            },
+            {
+              "code": "JAVA_COMPILATION_ERROR",
+              "message": "cannot find symbol",
+              "source_tool": "gradle-compiler",
+              "location": "src/test/java/org/orchestwin/greeting/ReservationServiceTest.java:32"
+            },
+            {
+              "code": "JAVA_COMPILATION_ERROR",
+              "message": "cannot find symbol",
+              "source_tool": "gradle-compiler",
+              "location": "src/test/java/org/orchestwin/greeting/ReservationServiceTest.java:37"
+            }
+          ]
+        },
+        {
+          "phase": "RUN",
+          "status": "NOT_RUN",
+          "failure_code": null,
+          "normalized_summary": "A previous JVM phase failed.",
+          "findings": []
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "NOT_RUN",
+          "failure_code": null,
+          "normalized_summary": "A previous JVM phase failed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-7fdf7ac615624aaaac2da55ba48a3a82.json",
+        "sha256": "ebc46a3f1a8686d7d4707ac2501665681cc2e71e77695f222b75525fb2322451",
+        "size_bytes": 5532
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\execution-report.json",
+        "sha256": "014d85d95439e8fd86959852f3ce95e90d1998fe1df09ce6a20eaaceb149922d",
+        "size_bytes": 1034
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\execution-response.json",
+        "sha256": "a7d286f39ec27600ef3549f48bc1b0c6026055a6e6844e1ab48ad9e7e936eb99",
+        "size_bytes": 19197
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\prepared.json",
+        "sha256": "4ab6e082101bcf71662cd35a64740f30ac382a175f202cfdac868f3f933f20d5",
+        "size_bytes": 16525
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\approved.json",
+        "sha256": "d3bc0b50bbfe314cc1f882592af05bd8c5d227ecd409fd5f32ac08911988ade6",
+        "size_bytes": 15510
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\terminal.json",
+        "sha256": "ca8fd7fbf1dcc92620d2d439daa6bce2f6fd9258ae1960a18996e7ca02851363",
+        "size_bytes": 15763
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\result.json",
+        "sha256": "9cb5a8d05ed50dd288b5bd2bbc8aac5e06e47997758df93a68adfbc804e46a3f",
+        "size_bytes": 644
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\qualification-database.dump",
+        "sha256": "c0f151c23b8bb0f6db2374ec9f0a5e40088040295e313ad3f4cfbcc2b31c4eae",
+        "size_bytes": 394276
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6\\browser-oracle.json",
+        "sha256": "0e970556e625cb39de4833a5c14e37a8e9942a7629e2cac08515f97bf0ff489a",
+        "size_bytes": 918
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "REPAIR_CHANGE_SET",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "e78de41f-4304-4f2a-a47e-6f61c9e5ac3e",
+        "source_content_hash": "1f8f545a509ef01d2e7fcd48c2cba15fcffe622c95871b0aa44f8abb5e1f1623",
+        "source_tree_hash": "864c51f6cce7ebe17edff68f549c0ae7aebd2dd8efa263d81bcd630497d0e648",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "e0aa174d-fea8-4c26-8c98-e1b106ffa8cf",
+        "attempt_content_hash": "68cbd7f77e3e6dd1e616eefb8822a051fab00fbbbdb39ea143297f3c35e9891f"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web validate completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "Static projects have no validated dependency installation phase.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web static_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "The selected validated baseline has no compilation phase.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web test completed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web run completed.",
+          "findings": []
+        },
+        {
+          "phase": "HEALTH_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web health_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BROWSER_EVIDENCE",
+          "status": "FAILED",
+          "failure_code": "WEB_BROWSER_CHECKS_FAILED",
+          "normalized_summary": "WEB BROWSER CHECKS FAILED",
+          "findings": [
+            {
+              "code": "AXE_LANDMARK_NO_DUPLICATE_MAIN",
+              "message": "Ensure the document has at most one main landmark",
+              "source_tool": "axe-core",
+              "location": "#app"
+            }
+          ]
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web collect_artifacts completed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [
+        {
+          "viewport": "narrow",
+          "interaction_status": "PASSED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            }
+          ],
+          "failure_codes": []
+        },
+        {
+          "viewport": "wide",
+          "interaction_status": "PASSED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": "Create Reservation",
+              "status": "PASSED"
+            }
+          ],
+          "failure_codes": []
+        }
+      ],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6.json",
+        "sha256": "4a4ec71c69be93f0329f93dc1fcbdc1fac991f32e5fc2aed0872173616e16969",
+        "size_bytes": 8489
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\execution-report.json",
+        "sha256": "24a161bf66ada244b5012da2a8a401ee5d6621227368badf7a936ff4ab04b46c",
+        "size_bytes": 1029
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\execution-response.json",
+        "sha256": "289ed942b876ce4d37ffea279cde1de93031e8222aa6b29cec0bef2c59c69b44",
+        "size_bytes": 19650
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\prepared.json",
+        "sha256": "dc97d766249da3992ae159bc35e0b8bf90c338505ed033e3eace74453fcd7d3a",
+        "size_bytes": 15934
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\approved.json",
+        "sha256": "80ccfeab3e18fee1ca39fd01ffdb9c6c74584bcc604254956f7acc9702f8e126",
+        "size_bytes": 14965
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\terminal.json",
+        "sha256": "2678c840e573172f1f44dafbea98c76a93a7da067c6c792bd88d76e853cbbd65",
+        "size_bytes": 15218
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\result.json",
+        "sha256": "c2b08b7ecf3033720b7f6aa94bed6b24648b785577e596d79810a1c66ca01bf2",
+        "size_bytes": 644
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\qualification-database.dump",
+        "sha256": "7aeda760c9198b30ee006fe7f50c4c6e7dddec3807812aff9d817fd5e3fa9742",
+        "size_bytes": 378974
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96\\browser-oracle.json",
+        "sha256": "2c885a5d2d5b71d091a91ea81dd35ef1cd21c349bfb7fe21ae6a82194b5a29bf",
+        "size_bytes": 918
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "33e7b5d7-3f87-4ca3-a207-39632fe77d47",
+        "source_content_hash": "9f514552e4c9f2af3c02663ebad324ec5add58a17749c03524b198a7713eea57",
+        "source_tree_hash": "deefccf9d3c7b7e52e3ca827cd4c9b7d046eb0bf08b172810f577e53cd0ebc2b",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "b9ce458b-32ab-44ff-b010-fddb2ff2af54",
+        "attempt_content_hash": "ad567207daaace1996bd028c1750a01afd007e96d56998423be9acaa8bd4edfa"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web validate completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "Static projects have no validated dependency installation phase.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web static_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "The selected validated baseline has no compilation phase.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web test completed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web run completed.",
+          "findings": []
+        },
+        {
+          "phase": "HEALTH_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web health_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BROWSER_EVIDENCE",
+          "status": "FAILED",
+          "failure_code": "WEB_BROWSER_CHECKS_FAILED",
+          "normalized_summary": "WEB BROWSER CHECKS FAILED",
+          "findings": [
+            {
+              "code": "AXE_LANDMARK_ONE_MAIN",
+              "message": "Ensure the document has a main landmark",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_REGION",
+              "message": "Ensure all page content is contained by landmarks",
+              "source_tool": "axe-core",
+              "location": "#app, #confirmation"
+            },
+            {
+              "code": "INTERACTION_FAILED",
+              "message": "Browser automation reported a failure.",
+              "source_tool": "playwright",
+              "location": "/"
+            }
+          ]
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web collect_artifacts completed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [
+        {
+          "viewport": "narrow",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "INTERACTION_FAILED"
+          ]
+        },
+        {
+          "viewport": "wide",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 5,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "INTERACTION_FAILED"
+          ]
+        }
+      ],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96.json",
+        "sha256": "23b7be720d1ecc9be1ad88d4e4973fe649d2311e042392b0eeb7ca18f0c65a40",
+        "size_bytes": 8489
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\execution-report.json",
+        "sha256": "3bb3489327f0ba7c9ebc4a5c4449964fe7d87d593254a78eb73a4eccb211605a",
+        "size_bytes": 1029
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\execution-response.json",
+        "sha256": "daf4cf04112b441d948b8167cd29b6a4efb622963b2c8d01bda043a4b14505c4",
+        "size_bytes": 20842
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\prepared.json",
+        "sha256": "8425b695707b5e9709653fd447b0a31d84c0f6a268e7fd939341c314ae3ce22f",
+        "size_bytes": 15284
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\approved.json",
+        "sha256": "32ee8c45a2f18a382b708db3bdd72ad77c462f6fb523f9f1e572c5d2cd0958c0",
+        "size_bytes": 14335
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\terminal.json",
+        "sha256": "fff8e285c5efee2e01a13207dfd523c9345a6d98f34e2bd14122e1ae8bacaaa6",
+        "size_bytes": 14588
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\result.json",
+        "sha256": "74f36451bbb7e4b4d74cc9c8d72ad48d7fbf39888dbefc3bfa9ccd78b4c7f3e8",
+        "size_bytes": 567
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\qualification-database.dump",
+        "sha256": "9e7dffdef7823b711143fcd40691dddc6b8b3ad33f54d4fbad34c9d672983117",
+        "size_bytes": 378317
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248\\browser-oracle.json",
+        "sha256": "1d454ce6e2393ed9a93b0d7c0a2d78b34cec24582a103cb85d16fe8ac7d79fdf",
+        "size_bytes": 652
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "eb233946-832a-4f7b-85e0-2518e3a40c58",
+        "source_content_hash": "9a02e7f530c83627dc1522aef91ba2c60375b8e048d9dc4ab20fb1f915973b7f",
+        "source_tree_hash": "743b44e7069b786ed98f9e7b57f0f92db69f754260660150a0b1e7ee9de197fc",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "ea847058-5c53-45c5-a513-55c9d7e61559",
+        "attempt_content_hash": "90d49530e4bc0a1cb07c28aacf514652383c5c6f6418e7c82c458036d8c6bac0"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web validate completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "Static projects have no validated dependency installation phase.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web static_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "SKIPPED",
+          "failure_code": null,
+          "normalized_summary": "The selected validated baseline has no compilation phase.",
+          "findings": []
+        },
+        {
+          "phase": "TEST",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web test completed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web run completed.",
+          "findings": []
+        },
+        {
+          "phase": "HEALTH_CHECK",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web health_check completed.",
+          "findings": []
+        },
+        {
+          "phase": "BROWSER_EVIDENCE",
+          "status": "FAILED",
+          "failure_code": "WEB_BROWSER_CHECKS_FAILED",
+          "normalized_summary": "WEB BROWSER CHECKS FAILED",
+          "findings": [
+            {
+              "code": "AXE_DOCUMENT_TITLE",
+              "message": "Ensure each HTML document contains a non-empty <title> element",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_HTML_HAS_LANG",
+              "message": "Ensure every HTML document has a lang attribute",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_LANDMARK_ONE_MAIN",
+              "message": "Ensure the document has a main landmark",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "AXE_PAGE_HAS_HEADING_ONE",
+              "message": "Ensure that the page, or at least one of its frames contains a level-one heading",
+              "source_tool": "axe-core",
+              "location": "html"
+            },
+            {
+              "code": "BROWSER_REQUEST_BLOCKED",
+              "message": "UNDECLARED_NAVIGATION",
+              "source_tool": "playwright",
+              "location": "chrome-error://chromewebdata/"
+            },
+            {
+              "code": "BROWSER_REQUEST_BLOCKED",
+              "message": "UNDECLARED_NAVIGATION",
+              "source_tool": "playwright",
+              "location": "http://127.0.0.1:4173/?guest_name=Ada"
+            },
+            {
+              "code": "BROWSER_REQUEST_FAILED",
+              "message": "GET /?guest_name=Ada failed: net::ERR_BLOCKED_BY_CLIENT",
+              "source_tool": "playwright",
+              "location": "/"
+            },
+            {
+              "code": "FINAL_NAVIGATION_INVALID",
+              "message": "Browser automation reported a failure.",
+              "source_tool": "playwright",
+              "location": "/"
+            },
+            {
+              "code": "INTERACTION_FAILED",
+              "message": "Browser automation reported a failure.",
+              "source_tool": "playwright",
+              "location": "/"
+            }
+          ]
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "Web collect_artifacts completed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [
+        {
+          "viewport": "narrow",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "FINAL_NAVIGATION_INVALID",
+            "INTERACTION_FAILED"
+          ]
+        },
+        {
+          "viewport": "wide",
+          "interaction_status": "FAILED",
+          "actions": [
+            {
+              "failure_code": null,
+              "index": 0,
+              "kind": "fill",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": null,
+              "index": 1,
+              "kind": "click",
+              "observed_text": null,
+              "status": "PASSED"
+            },
+            {
+              "failure_code": "TEXT_ASSERTION_READ_FAILED",
+              "index": 2,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "FAILED"
+            },
+            {
+              "failure_code": null,
+              "index": 3,
+              "kind": "press",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            },
+            {
+              "failure_code": null,
+              "index": 4,
+              "kind": "expect_text",
+              "observed_text": null,
+              "status": "NOT_RUN"
+            }
+          ],
+          "failure_codes": [
+            "FINAL_NAVIGATION_INVALID",
+            "INTERACTION_FAILED"
+          ]
+        }
+      ],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-9b391d2662974256a816fe18c2fb3248.json",
+        "sha256": "157e33a4a5a1c6c1d77ba4a7c9f43cd2b3be7095579054d3f364acc6a85f3fd1",
+        "size_bytes": 8118
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50\\execution-report.json",
+        "sha256": "bd65ffa2b8d2bfab4621f3e3df66e98030cfce18200c5315bd19aac1cb208f65",
+        "size_bytes": 1001
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50\\prepared.json",
+        "sha256": "288713742e207f0da99f83cafb4597c5c9e0722aa252ca04c6556bfb609a86ad",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50\\result.json",
+        "sha256": "57a041eb1e669ea57edc780bf72088962d4fd53251f166cbf357b0929a1a3635",
+        "size_bytes": 567
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50\\qualification-database.dump",
+        "sha256": "9b194d81ce11210402a2418786af6298a30d83efd74ba6397dadeaf729de9a13",
+        "size_bytes": 371374
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50\\browser-oracle.json",
+        "sha256": "c3741f667cd3b54394d2fcfe14d8c0801532a4fd54746071f4ba91f75f494048",
+        "size_bytes": 652
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "eb233946-832a-4f7b-85e0-2518e3a40c58",
+        "source_content_hash": "9a02e7f530c83627dc1522aef91ba2c60375b8e048d9dc4ab20fb1f915973b7f",
+        "source_tree_hash": "743b44e7069b786ed98f9e7b57f0f92db69f754260660150a0b1e7ee9de197fc",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "WEB_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 109
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-b109dcef980d4f26b31d574e3c240f50.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\execution-report.json",
+        "sha256": "b318247a5f988a8cdab2c080ecd18f519fe5b4c8d6cd4db5d972cc094ea4466b",
+        "size_bytes": 1001
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\prepared.json",
+        "sha256": "288713742e207f0da99f83cafb4597c5c9e0722aa252ca04c6556bfb609a86ad",
+        "size_bytes": 104
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\result.json",
+        "sha256": "3a9cd0398590d0bd88d3060870aa939db2fcd265ebc0236ea558aee264768d72",
+        "size_bytes": 567
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\qualification-database.dump",
+        "sha256": "11fb1a9ef654c1508fe76cd20908a15d95d5edd31443d9c7cb9ac98c70146ca9",
+        "size_bytes": 371374
+      },
+      "browser-oracle.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\browser-oracle.json",
+        "sha256": "c3741f667cd3b54394d2fcfe14d8c0801532a4fd54746071f4ba91f75f494048",
+        "size_bytes": 652
+      },
+      "backend-admission-error.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a\\backend-admission-error.json",
+        "sha256": "20128a863fb6446a6be6ebb7bc036be7138c016bca88ac453fd7ce3b998506c5",
+        "size_bytes": 92
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-8c35d91eb9f94f39b38a5d462c7eb127",
+        "target": "WEB_STATIC",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": false,
+        "source_revision_id": "eb233946-832a-4f7b-85e0-2518e3a40c58",
+        "source_content_hash": "9a02e7f530c83627dc1522aef91ba2c60375b8e048d9dc4ab20fb1f915973b7f",
+        "source_tree_hash": "743b44e7069b786ed98f9e7b57f0f92db69f754260660150a0b1e7ee9de197fc",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "error_type": "RuntimeError",
+        "error_code": "WEB_EXECUTION_INPUT_OR_RUNTIME_INVALID",
+        "error_frames": [
+          {
+            "file": "phase5_execution_scenario.py",
+            "line": 116
+          }
+        ]
+      },
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-fb4558db37cc4568be56fce7a79a8a8a.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size_bytes": 2
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a",
+      "execution-report.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\execution-report.json",
+        "sha256": "725e8c372e71128e8a2b657cb9d8006027efcaaddf98aa6e20cb51a83b0afa25",
+        "size_bytes": 1029
+      },
+      "execution-response.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\execution-response.json",
+        "sha256": "1bc982f1cb5a0ae3111758be2ff0e1b072c3cb2b0ba66bb0edd6f9b36b2e7d50",
+        "size_bytes": 11508
+      },
+      "prepared.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\prepared.json",
+        "sha256": "07c333cba1624be7e6a879976d85bb3f2ec3c33081ec540a922277d310c63455",
+        "size_bytes": 22092
+      },
+      "approved.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\approved.json",
+        "sha256": "99cc4d16585c536a083a10ae7cb0268f4bd2754d5173dd03b5b1ca9c82e22ad3",
+        "size_bytes": 20937
+      },
+      "terminal.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\terminal.json",
+        "sha256": "ff2011e135520bc398e42053a830ef413ec7d4794b797820ce43cfff1e668324",
+        "size_bytes": 21489
+      },
+      "result.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\result.json",
+        "sha256": "038489e1e5eac61fcb382d3954c5969f87691627eb6ac7590bb958fbe6fb2ea9",
+        "size_bytes": 644
+      },
+      "network-cleanup.json": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\network-cleanup.json",
+        "sha256": "b7a62ec440fbb0630884b95f530a9b42acd161e2994d6233b633b0ef989f8ad5",
+        "size_bytes": 6367
+      },
+      "qualification-database.dump": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a\\qualification-database.dump",
+        "sha256": "828b6c394258f9dcc45514ffe1f381ffd91f7049a385ecef7ec2e7d9340f51dc",
+        "size_bytes": 382860
+      },
+      "outcome": {
+        "scope": "REAL_GENERATED_CODE_EXECUTION",
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-22b8c163adda48aa8236ae4c7b7b80ad",
+        "target": "JVM_KOTLIN",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "governance": "USER_AUTHORIZED_TECHNICAL_QUALIFICATION_WITH_SYNTHETIC_REQUIREMENTS",
+        "source_origin_preserved": "GENERATED_PLAN",
+        "source_modified_by_harness": false,
+        "execution_performed": true,
+        "source_revision_id": "942a6c74-d36b-4971-881e-81925cd7d637",
+        "source_content_hash": "4b6eef1b512fbb57bea72443eb7c3370726ab7dc75b6f8039ec22d2a034cfaef",
+        "source_tree_hash": "c1c113d147542af7b598817b18c29af696436b22b473fc2051d8489ed53c2ac7",
+        "profile_capability": "VALIDATED_LEVEL_D",
+        "service_status": "EXECUTION_RECORDED",
+        "execution_status": "FAILED",
+        "attempt_id": "2116d736-8492-473f-94a8-04a8b02347a3",
+        "attempt_content_hash": "369df66a94c30933924f0c605f68d36168f9a57da106cfe5eda5a757f6aeae63"
+      },
+      "phase_outcomes": [
+        {
+          "phase": "VALIDATE",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM VALIDATE completed.",
+          "findings": []
+        },
+        {
+          "phase": "SETUP",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM SETUP completed.",
+          "findings": []
+        },
+        {
+          "phase": "STATIC_CHECKS",
+          "status": "PASSED",
+          "failure_code": null,
+          "normalized_summary": "JVM STATIC_CHECKS completed.",
+          "findings": []
+        },
+        {
+          "phase": "BUILD",
+          "status": "FAILED",
+          "failure_code": "KT_COMPILATION_ERROR",
+          "normalized_summary": "Unresolved reference 'println'.",
+          "findings": [
+            {
+              "code": "GRADLE_BUILD_FAILED",
+              "message": "Gradle reported a failed build.",
+              "source_tool": "gradle",
+              "location": null
+            },
+            {
+              "code": "KT_COMPILATION_ERROR",
+              "message": "Unresolved reference 'println'.",
+              "source_tool": "gradle-kotlin-compiler",
+              "location": "src/main/kotlin/org/orchestwin/calculator/Main.kt:5:22"
+            },
+            {
+              "code": "KT_COMPILATION_ERROR",
+              "message": "Unresolved reference 'ReservationFactory'.",
+              "source_tool": "gradle-kotlin-compiler",
+              "location": "src/main/kotlin/org/orchestwin/calculator/service/ReservationService.kt:9:18"
+            }
+          ]
+        },
+        {
+          "phase": "TEST",
+          "status": "NOT_RUN",
+          "failure_code": null,
+          "normalized_summary": "A previous JVM phase failed.",
+          "findings": []
+        },
+        {
+          "phase": "RUN",
+          "status": "NOT_RUN",
+          "failure_code": null,
+          "normalized_summary": "A previous JVM phase failed.",
+          "findings": []
+        },
+        {
+          "phase": "COLLECT_ARTIFACTS",
+          "status": "NOT_RUN",
+          "failure_code": null,
+          "normalized_summary": "A previous JVM phase failed.",
+          "findings": []
+        }
+      ],
+      "browser_interactions": [],
+      "files_index": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\artifact-index\\ow-phase5-execution-fd4543cb0099476f9211c0fa871c513a.json",
+        "sha256": "fc31cdf0ec5b1dd3381afe29f0ea6e3efce97992a7ae84cafff9a09cb9ca284f",
+        "size_bytes": 4426
+      }
+    }
+  ],
+  "repair_trials": [
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3",
+      "outcome": {
+        "scope": "REAL_REPAIR_OF_RECORDED_BROWSER_FAILURE",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "target": "WEB_STATIC",
+        "owner_id": "00000000-0000-4000-8000-000000000002",
+        "project_id": "00000000-0000-4000-8000-000000000001",
+        "execution_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-1e612506b0fa4af5b0ca4cd2da96803d",
+        "source_changed_by_harness": false,
+        "automatic_retries": 0,
+        "status": "REPAIR_APPLIED",
+        "http_status": 201,
+        "generation_id": "b642bf5a-f98d-44e1-817c-928bc9b763ae",
+        "counter_deltas": {
+          "proposals": 1,
+          "evaluator": 0
+        },
+        "generations": [
+          "b642bf5a-f98d-44e1-817c-928bc9b763ae"
+        ]
+      },
+      "files": {
+        "apply-response.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\apply-response.json",
+          "sha256": "31f74e11f7c3adf2c55295b5a37f9322a3548bd34118d9cf11b27d4435ec5fe6",
+          "size_bytes": 11748
+        },
+        "approved.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\approved.json",
+          "sha256": "5677d79507c6ee593e97402267aebf0c43f39ad8055b6ba9cb70d5c6b2f8e220",
+          "size_bytes": 4460
+        },
+        "b642bf5a-f98d-44e1-817c-928bc9b763ae-evidence.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\b642bf5a-f98d-44e1-817c-928bc9b763ae-evidence.json",
+          "sha256": "0ad7532297cebf0a8c8093969f5d9fc9de256234a66756d5e7dc5770bfbfc64e",
+          "size_bytes": 36155
+        },
+        "browser-oracle-v3.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\browser-oracle-v3.json",
+          "sha256": "0e970556e625cb39de4833a5c14e37a8e9942a7629e2cac08515f97bf0ff489a",
+          "size_bytes": 918
+        },
+        "live-report.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\live-report.json",
+          "sha256": "24144f7c1d66fa584e8c692d5109c7f2de193d097fbb4aac86282dad5b97fce8",
+          "size_bytes": 639
+        },
+        "phase5_repair_probe.py": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\phase5_repair_probe.py",
+          "sha256": "092ac844aa9ae20a972c7ead3035939f4872300e6d5cb76caf8cb410de7638ae",
+          "size_bytes": 6173
+        },
+        "phase5_repair_scenario.py": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\phase5_repair_scenario.py",
+          "sha256": "3b6f2e99edaef5a4ff0c2986d19328ba501e463e9fb4663cd97b29140c01c4dd",
+          "size_bytes": 5282
+        },
+        "qualification-database.dump": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\qualification-database.dump",
+          "sha256": "f406521aaa544877449dcbb44d6e9703b0870a5ab409d7cddc84e1cfe9366138",
+          "size_bytes": 391624
+        },
+        "readiness-after.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\readiness-after.json",
+          "sha256": "f17f54f3a8cb4cd9381d3210839093bc56bda12a42ed637f5f317d527f294b9d",
+          "size_bytes": 4768
+        },
+        "readiness-before.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\readiness-before.json",
+          "sha256": "0453469ac4330231abc1008adcacb3b488e6796426852dfeab29d9b024eefc34",
+          "size_bytes": 4768
+        },
+        "repair-report.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\repair-report.json",
+          "sha256": "d4746079f9d42a07483f683799ff729ce327870d2f548b783f6ac25b89a4d08e",
+          "size_bytes": 743
+        },
+        "repair-request.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\repair-request.json",
+          "sha256": "06123eaa04904489a9912612274ed7692f91f0ea3acc8be0d1e982967eaf2943",
+          "size_bytes": 203
+        },
+        "repair-response.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\repair-response.json",
+          "sha256": "a8094172dd8495f7c209d50f0ef95d4f981b3e68beec93880dd0b871e28b5f93",
+          "size_bytes": 5316
+        },
+        "result.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\result.json",
+          "sha256": "33f8f5ea32a6b0f1a33f03612300f4058c5ce631ecae6b2119cab95160a7a12c",
+          "size_bytes": 635
+        },
+        "source-response.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-64e014753f7647939c2b366fe2d9c0f3\\source-response.json",
+          "sha256": "78158d831383bb5e5876e55e4b6830aa5cfc39c9f1dc2ab47072287fef338ee3",
+          "size_bytes": 3064
+        }
+      }
+    },
+    {
+      "folder": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840",
+      "outcome": {
+        "scope": "REAL_REPAIR_OF_RECORDED_BROWSER_FAILURE",
+        "formal_case": false,
+        "frozen_case_used": false,
+        "target": "WEB_STATIC",
+        "owner_id": "00000000-0000-4000-8000-000000000002",
+        "project_id": "00000000-0000-4000-8000-000000000001",
+        "execution_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-execution-86c18cbf68aa4ee39b706da317cf48b6",
+        "source_changed_by_harness": false,
+        "automatic_retries": 0,
+        "status": "REPAIR_REJECTED",
+        "http_status": 502,
+        "counter_deltas": {
+          "proposals": 1,
+          "evaluator": 0
+        },
+        "generations": [
+          "6e8d4249-1a7e-4475-b147-eb83256d4607"
+        ]
+      },
+      "files": {
+        "6e8d4249-1a7e-4475-b147-eb83256d4607-evidence.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\6e8d4249-1a7e-4475-b147-eb83256d4607-evidence.json",
+          "sha256": "7260a5c5eeb5d662a5194b527814d4645fa6fcc5f9d4c70669b1d7208788fdf0",
+          "size_bytes": 30388
+        },
+        "browser-oracle-v3.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\browser-oracle-v3.json",
+          "sha256": "0e970556e625cb39de4833a5c14e37a8e9942a7629e2cac08515f97bf0ff489a",
+          "size_bytes": 918
+        },
+        "phase5_repair_probe.py": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\phase5_repair_probe.py",
+          "sha256": "092ac844aa9ae20a972c7ead3035939f4872300e6d5cb76caf8cb410de7638ae",
+          "size_bytes": 6173
+        },
+        "phase5_repair_scenario.py": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\phase5_repair_scenario.py",
+          "sha256": "3d7bc0632d44008a54f4c8c8f22d8127ae9da0f341656ca0f3790aca1b975bdb",
+          "size_bytes": 5305
+        },
+        "qualification-database.dump": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\qualification-database.dump",
+          "sha256": "39aa17dcc7ceda087a95069b473e8105d8766397b52c8b10cde952a239dfc403",
+          "size_bytes": 399745
+        },
+        "readiness-after.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\readiness-after.json",
+          "sha256": "da2eafea9279f94bba191811e5c3ecf2786cefd4e36eea2b4b969c667659c649",
+          "size_bytes": 4768
+        },
+        "readiness-before.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\readiness-before.json",
+          "sha256": "f17f54f3a8cb4cd9381d3210839093bc56bda12a42ed637f5f317d527f294b9d",
+          "size_bytes": 4768
+        },
+        "repair-report.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\repair-report.json",
+          "sha256": "eb2cb5db68f259e69fa028b5e4132720f7ff31c95d55f2a8dff4ee048a9f49d0",
+          "size_bytes": 684
+        },
+        "repair-request.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\repair-request.json",
+          "sha256": "e41221020a50b0399c59c6540370b63fbb26f7bbbc9b183b5d9bc9bf0c07859f",
+          "size_bytes": 203
+        },
+        "repair-response.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\repair-response.json",
+          "sha256": "b33c231cd58a3a6286eb6b786ff1d4a0f9b2a3f3109c4de334abe1473213696d",
+          "size_bytes": 144
+        },
+        "result.json": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-repair-650633540a6f44e4b1d0afd4336d1840\\result.json",
+          "sha256": "28d29cd012ba216fe28ab5fcf8b738edc318df739916a87162e38e62f6dc3e38",
+          "size_bytes": 635
+        }
+      }
+    }
+  ],
+  "supplementary_node_tests": [
+    {
+      "outcome": {
+        "scope": "SUPPLEMENTARY_GENERATED_NODE_TESTS",
+        "governed_level_d_attempt": false,
+        "source_changed": false,
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-6fda38d885f94a7e806ddd1403f525e4",
+        "source_revision_id": "33e7b5d7-3f87-4ca3-a207-39632fe77d47",
+        "source_tree_hash": "deefccf9d3c7b7e52e3ca827cd4c9b7d046eb0bf08b172810f577e53cd0ebc2b",
+        "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+        "command": [
+          "node",
+          "--test",
+          "app.test.cjs"
+        ],
+        "network": "none",
+        "source_read_only": true,
+        "exit_code": 1,
+        "status": "FAILED",
+        "stdout": {
+          "sha256": "0a59152849c4c7ada5d2799699422413a3225d441c0554b6f702110bcf4328d7",
+          "size_bytes": 1008,
+          "truncated": false
+        },
+        "stderr": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_bytes": 0,
+          "truncated": false
+        },
+        "container_removed": true
+      },
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-node-tests-1dd5859666b447f6ab7fe439d1673b4b\\report.json",
+        "sha256": "f307cb371da2f508e4fa2d622a2012a145e64d7fa22c98eaaa3e6c6d5f908c22",
+        "size_bytes": 1028
+      }
+    },
+    {
+      "outcome": {
+        "scope": "SUPPLEMENTARY_GENERATED_NODE_TESTS",
+        "governed_level_d_attempt": false,
+        "source_changed": false,
+        "generation_root": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-live-cab34faa194a4b468462a6ce381882c3",
+        "source_revision_id": "a7b96117-1f9b-4600-811b-c9addd52e6f2",
+        "source_tree_hash": "3a4bae6b27558a5c5ea6aa0402f205f1c1881bfad752ee54655b326c0d885c11",
+        "image_id": "sha256:a976b10bab71af1d0fc82aedc4e8ca08eb2242e6e3c16b37b1b87c8ead3c8419",
+        "command": [
+          "node",
+          "--test",
+          "app.test.cjs"
+        ],
+        "network": "none",
+        "source_read_only": true,
+        "exit_code": 1,
+        "status": "FAILED",
+        "stdout": {
+          "sha256": "8a7e6846b565cf77d1e54466a79510bc74d531e671d37963a2f8bfa4aaf05de4",
+          "size_bytes": 1131,
+          "truncated": false
+        },
+        "stderr": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_bytes": 0,
+          "truncated": false
+        },
+        "container_removed": true
+      },
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-node-tests-43eb9819eee54939a35221ddb9c17308\\report.json",
+        "sha256": "998e801813976d28729983e02a0a0579fbd8ebdf1cef49787c07d720a8118700",
+        "size_bytes": 1028
+      }
+    }
+  ],
+  "harness_corrections": {
+    "ow-phase5-execution-8c53d3cdcc5242e8a1ff2d5b89160a96": "Regex escaping in the oracle locator was incorrect; retained DOM showed correct pointer confirmation. Corrected oracle v3 was tested on identical source bytes.",
+    "ow-phase5-execution-2d3c2db2313442ea8ad0876f637e98d3": "Repair rerun initially omitted explicit phase scope. Admission rejected it; the corrected command declares every phase.",
+    "legacy_result_status": "Earlier helper result.json PASSED denotes harness process completion only. live-report/execution-report and phase results determine actual outcomes."
+  },
+  "validation": {
+    "broad_regression": {
+      "tests": 2819,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 30,
+      "passed": 2789,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\verification\\phase5-broad-final.xml",
+        "sha256": "3971aa3a7d24219154ce6a2b07bdcecf5d84528702c23288d76bf6cfa85d9dc4",
+        "size_bytes": 481060
+      }
+    },
+    "final_contracts": {
+      "tests": 59,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "passed": 59,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\verification\\phase5-final-contracts.xml",
+        "sha256": "8a4a2f8962bcb619f89069a187ff385a1d87c63fe3fa15952a50b6654feed3d2",
+        "size_bytes": 9889
+      }
+    },
+    "repair_feedback_unit": {
+      "tests": 24,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "passed": 24,
+      "evidence": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\verification\\phase5-repair-feedback.xml",
+        "sha256": "29b78ef1c300f7c41cdd9cf5d81ea41a003edc1cec720a2517a35eff2db2a00a",
+        "size_bytes": 4275
+      }
+    },
+    "final_postgresql": {
+      "tests": {
+        "tests": 53,
+        "errors": 0,
+        "failures": 0,
+        "skipped": 1,
+        "passed": 52,
+        "evidence": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-evidence-20260913\\verification\\pytest.xml",
+          "sha256": "6fd3cf5ee8b31881dedbd0c9f4b4dc7b3a70a8521d084d925773777dc7529d87",
+          "size_bytes": 9805
+        }
+      },
+      "result": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\ow-phase5-source-test-2c862e1b6f3e4072bd891a83ff72cf67\\result.json",
+        "sha256": "583ad523cb7e37569910769551df6342203eb6c5fa24504cfdf9249aea469964",
+        "size_bytes": 546
+      }
+    },
+    "timing": "Broad regression preceded the final recorded-failure context addition; final targeted and PostgreSQL checks cover that addition."
+  },
+  "deployment": {
+    "api_origin": "http://127.0.0.1:8110",
+    "api_process_id": 14656,
+    "mode": "REAL_REQUIRED",
+    "database_schema": "0040_source_file_evidence",
+    "migration": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-local-runtime\\database-migration.json",
+      "sha256": "0397ac33ff5fac443ffaa1e66c4f4056fed5ab96d23910bfb82a57073705567b",
+      "size_bytes": 435
+    },
+    "authenticated_readiness": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-local-runtime\\api-readiness-final.json",
+      "sha256": "d7af90664b5c31c1f8fa4163704b3b9a7aa4d0c846871997569280d3cf197a46",
+      "size_bytes": 5680
+    },
+    "proposal_runtime": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-proposal-model-20260913\\runtime.json",
+      "sha256": "b8f503e53e00056237707f8dce74c98ccf5ee616aecbbc151d78db94ff5b6277",
+      "size_bytes": 745
+    },
+    "proposal_loader": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\phase5-final-proposal-model-20260913\\loader.json",
+      "sha256": "34b4bd6b82e6828283a6a94760a222c69601baa36716c1b6c4b107e3b37ae121",
+      "size_bytes": 1615
+    },
+    "credentials_included": false
+  },
+  "next_qualification_need": "Improve source/test generation and failure-guided repairs; rerun controlled qualifications before reopening any frozen formal campaign."
+}

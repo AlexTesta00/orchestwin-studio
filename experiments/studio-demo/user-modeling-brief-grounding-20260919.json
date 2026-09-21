@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "report_type": "USER_MODELING_APPROVED_BRIEF_CONTEXT_FIX",
+  "created_at_utc": "2026-09-19T17:57:45.412286+00:00",
+  "status": "CONTRACT_REGRESSIONS_AND_SINGLE_LIVE_V4_OBSERVATIONS_VERIFIED",
+  "evidence_scope": "CONTRACT_TESTS_PLUS_TWO_REAL_PROJECT_GROUNDED_OBSERVATIONS_NOT_SEMANTIC_QUALIFICATION",
+  "defect": {
+    "personas": "Only target-user role candidates and artifact references reached inference; approved description, problem and goals were omitted.",
+    "user_twins": "Confirmed personas and brief/team references reached inference, but the approved Project Brief business content was omitted.",
+    "consequence": "UNKNOWN or abstention could be appropriate for the transmitted context even when the owner had supplied relevant goals in the approved brief."
+  },
+  "resolution": {
+    "input_type": "UserModelingBriefInput",
+    "included_context": [
+      "project_id",
+      "exact versioned artifact reference",
+      "immutable ProjectBrief business fields and explicit unknown_fields"
+    ],
+    "excluded_added_metadata": [
+      "created_by_user_id",
+      "created_at",
+      "account credentials",
+      "database connection settings"
+    ],
+    "approval_authority": "Existing owner-scoped application governance checks for current approved Brief/Team; construction uses that already-loaded immutable version.",
+    "integrity_checks": [
+      "Brief content hash equals reference hash",
+      "Context project matches proposal project",
+      "Persona candidate brief ID/version/hash and role match the supplied content",
+      "Twin brief reference equals the supplied business-context reference",
+      "Real adapter rechecks integrity before inference and rejects absent content"
+    ],
+    "persistence_freshness": "Existing governance-context and persona-set fingerprint checks remain before persistence.",
+    "provenance": "Inferred observations retain model evidence and required human review, and now also reference the exact approved brief business content actually supplied.",
+    "prompt_versions": {
+      "personas": "proposal-personas-v4",
+      "user_twins": "proposal-user-twins-v4"
+    },
+    "output_artifact_schema_changed": false,
+    "api_payload_contract_changed": false,
+    "database_migration_required": false,
+    "deterministic_goal_injection": false,
+    "runtime_restart_performed_by_this_task": false,
+    "legacy_test_compatibility": "Optional absent context is retained in port dataclasses for legacy fake fixtures; the real model adapter fails closed without it."
+  },
+  "validation": {
+    "targeted_suite": {
+      "passed": 123,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_xml": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\user-modeling-grounding-v4-20260919\\tests-final.xml",
+      "sha256": "15d2c4ebf1e2e705b5cc2f27e80c3f9960d692b1be3f56c44efcd07e69429a88"
+    },
+    "regression_suite": {
+      "passed": 578,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "junit_xml": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\user-modeling-grounding-v4-20260919\\regressions.xml",
+      "sha256": "026391540eccb03b52132c79e433551760e9229686846c72bb11daa0f3383230"
+    },
+    "skip_reasons": {
+      "native_llguidance_unavailable_on_windows": 7,
+      "torch_unavailable_on_windows": 2
+    },
+    "checks": [
+      "Captured HTTP model input contains exact approved description/goals",
+      "Project/version/hash/content mismatch rejected before inference",
+      "Immutable context and preserved explicit unknowns",
+      "Persona role and candidate linkage preserved",
+      "Twin persona/brief/model proof links retained",
+      "Legacy fake adapter tests pass",
+      "No application-injected goals when the completion remains uncertain",
+      "Ruff check and format check pass"
+    ],
+    "native_decoder_note": "The seven native decoder tests were separately executed successfully on WSL CPU; see schema-decoder-v3-20260919/native-receipt.json."
+  },
+  "source_sha256": {
+    "src/orchestwin/models/user_modeling.py": "fe8f1c215f82012cde7867554ff2a1610984a672bb341129b135ee070e783566",
+    "src/orchestwin/twins/application.py": "b3a04d2b2f85fb6f738a8e9cfbd8b07514500ac8672c5b4b31e722f878c378a3",
+    "src/orchestwin/models/model_proposals.py": "41834018f4052b6fa77620759f8361d6bf7afd81c69796d44a9d46c18f785706",
+    "src/orchestwin/models/proposal_generation.py": "600f2c79dffe026fb9893d636ae0abb89a58547e1cbb4f5aec49de8be62a462e"
+  },
+  "live_generation_performed_for_this_report": false,
+  "semantic_quality_qualified": false,
+  "live_observations_included": true,
+  "live_check": {
+    "verification_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\user-modeling-v4-live-verification.json",
+    "verification_sha256": "1519038a4db08dd89de76dd9e80d1d58965fdc839a76fced340abc052a87cfa2",
+    "project_id": "ab355503-9374-448c-be27-0c32dc929b67",
+    "files_hash_verified": 14,
+    "runs": [
+      {
+        "generation_id": "c34f5e51-393e-42ee-892e-850bd84e2d9f",
+        "manifest_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\persona-v4-grounded\\manifest.json",
+        "manifest_sha256": "1d3db843c0e18038dcf811533969ffcd191b3833ae666559fde37d0925c1081b",
+        "files_verified": 7,
+        "native_response_sha256": "8bb65a68e72fbe89977fce655719df5dc10a318d16fd3dda30d1744d2eba7298",
+        "schema_id": "proposal-personas-v4",
+        "prompt_version_ref": "proposal-personas-v4",
+        "temperature": 0.6,
+        "approved_brief_reference": {
+          "artifact_id": "931f0d9f-e087-4f13-b4c0-3d3f0d51dc34",
+          "content_hash": "5abf825adf66c77e565c19861ad4b9de984fe47d2c27e8a58354e193d69cc153",
+          "version_number": 1
+        },
+        "model_identity": {
+          "adapter_id": null,
+          "adapter_sha256": null,
+          "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+          "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+          "provider_id": "local-studio-model",
+          "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+          "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+        },
+        "expected_actual_identity_equal": true,
+        "usage": {
+          "completion_tokens": 372,
+          "prompt_tokens": 2570,
+          "total_tokens": 2942
+        },
+        "http_elapsed_milliseconds": 35131,
+        "serving": {
+          "adapter_active": false,
+          "adapter_loaded": true,
+          "adapter_name": null,
+          "adapter_role": null,
+          "generation_wall_time_budget_seconds": 1140,
+          "generation_wall_time_milliseconds": 33904,
+          "max_output_tokens": 8192,
+          "max_sequence_length": 24576,
+          "model_visible_messages_sha256": "1db647ffd15ea3be523c4d614bc8804d068bb6cf4ce87d793e3aa2d488ac460b",
+          "output_repair_used": false,
+          "schema_complete": true,
+          "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+        },
+        "finish_reason": "stop",
+        "native_output_characters": 1435,
+        "trailing_whitespace_characters": 0,
+        "application_result": {
+          "issue": null,
+          "status": "CREATED"
+        },
+        "generated_content_hashes": {
+          "PERSONA": [
+            "ea8e4d81671c3f51db6bd3976a2c063a547c9da69016a7fbad5ecf42cc9eca6e"
+          ]
+        },
+        "checks": {
+          "goals_verbatim_equal_to_three_brief_goals": true,
+          "context_verbatim_equal_to_brief_domain": true,
+          "native_values_and_rationales_unchanged_by_adapter": true,
+          "exact_model_output_and_approved_brief_provenance_verified": true,
+          "human_validation_REQUIRED_for_all_generated_observations": true,
+          "exact_candidate_hash_verified": true,
+          "original_USER_PROVIDED_role_unchanged": true,
+          "pending_confirmation_preserved": true
+        },
+        "observation_count": 3,
+        "UNKNOWN_observation_keys": [],
+        "confidence_values": [
+          1.0
+        ]
+      },
+      {
+        "generation_id": "111cb000-0fa3-4acc-bce4-76dd1d40711b",
+        "manifest_path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\gui-new-project-20260919-01\\user-twin-v4-grounded\\manifest.json",
+        "manifest_sha256": "7e7726cb38aed4d453c09e3258abecfe966e61435b007e5ac8bd6f6bba257470",
+        "files_verified": 7,
+        "native_response_sha256": "b3815306ee0c5c27f7a924ceacf7e92ac4959d9b75a42d24671c69cf5337e74a",
+        "schema_id": "proposal-user-twins-v4",
+        "prompt_version_ref": "proposal-user-twins-v4",
+        "temperature": 0.6,
+        "approved_brief_reference": {
+          "artifact_id": "931f0d9f-e087-4f13-b4c0-3d3f0d51dc34",
+          "content_hash": "5abf825adf66c77e565c19861ad4b9de984fe47d2c27e8a58354e193d69cc153",
+          "version_number": 1
+        },
+        "model_identity": {
+          "adapter_id": null,
+          "adapter_sha256": null,
+          "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+          "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+          "configuration_sha256": "a3dfe4196c84ea2a1ed13581c35d92802d2d02863dbd50462182eb1f15cc409b",
+          "provider_id": "local-studio-model",
+          "runtime_id": "proposal-b95d881b-07f3-44e8-b20b-bcd031a044e3",
+          "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c"
+        },
+        "expected_actual_identity_equal": true,
+        "usage": {
+          "completion_tokens": 1510,
+          "prompt_tokens": 5658,
+          "total_tokens": 7168
+        },
+        "http_elapsed_milliseconds": 144853,
+        "serving": {
+          "adapter_active": false,
+          "adapter_loaded": true,
+          "adapter_name": null,
+          "adapter_role": null,
+          "generation_wall_time_budget_seconds": 1140,
+          "generation_wall_time_milliseconds": 132759,
+          "max_output_tokens": 8192,
+          "max_sequence_length": 24576,
+          "model_visible_messages_sha256": "ba2ca92609aeb0f166f3ed7e197cb6165a785e7410f9a6fdc7680091ef2b22b3",
+          "output_repair_used": false,
+          "schema_complete": true,
+          "schema_decoding": "LLGUIDANCE_JSON_SCHEMA_CANONICAL_BOUNDED_WS_V3"
+        },
+        "finish_reason": "stop",
+        "native_output_characters": 5145,
+        "trailing_whitespace_characters": 0,
+        "application_result": {
+          "issue": null,
+          "status": "CREATED"
+        },
+        "generated_content_hashes": {
+          "USER_TWIN": [
+            "7195fe86d6217e3d89a6fce719f04116b0312784f3c4d374d9cfea5bf6dfdddb"
+          ]
+        },
+        "checks": {
+          "goals_verbatim_equal_to_three_brief_goals": true,
+          "context_verbatim_equal_to_brief_domain": true,
+          "native_values_and_rationales_unchanged_by_adapter": true,
+          "exact_model_output_and_approved_brief_provenance_verified": true,
+          "human_validation_REQUIRED_for_all_generated_observations": true,
+          "accessibility_content": {
+            "brief_sources": [
+              "Campi e pulsanti accessibili da tastiera",
+              "Schermate leggibili su smartphone"
+            ],
+            "model_items": [
+              "Accessibilità da tastiera",
+              "Schermate leggibili su smartphone"
+            ],
+            "assessment": "Meaning-preserving paraphrase reviewed in this read-only inspection; not participant evidence"
+          },
+          "offline_content": {
+            "brief_source": "Funzionamento anche senza connessione dopo il caricamento",
+            "model_items": [
+              "Funziona offline dopo il caricamento"
+            ],
+            "assessment": "Meaning-preserving paraphrase reviewed in this read-only inspection; not executed offline browser proof"
+          }
+        },
+        "observation_count": 16,
+        "UNKNOWN_observation_keys": [
+          "user_twin.expertise",
+          "user_twin.recurring_tasks",
+          "user_twin.information_needs",
+          "user_twin.decision_criteria",
+          "user_twin.preferred_vocabulary",
+          "user_twin.frustrations",
+          "user_twin.pain_points",
+          "user_twin.trust_concerns"
+        ],
+        "confidence_values": [
+          1.0
+        ]
+      }
+    ],
+    "observed_quality_limits": [
+      "Both real outputs assign confidence=1.0 to every generated observation; these values are not a calibration finding.",
+      "The User Twin preserves eight UNKNOWN values with rationale; some may remain overly conservative despite supplied context. No missing values were filled deterministically.",
+      "Risk sensitivity Bassa and assumptions including Utente inserisce numeri in modo corretto remain model-authored hypotheses requiring review; they are not empirically validated user characteristics.",
+      "Accessibility and offline entries reflect the supplied brief; this is not evidence that generated software already satisfies them."
+    ],
+    "comparison_limits": [
+      "One stochastic sample per stage at temperature 0.6.",
+      "The current run combines content drafts, bounded structural whitespace decoding and approved business-context grounding; causal effects are not isolated.",
+      "No held-out semantic score, training gain or repeatable latency benchmark is inferred."
+    ],
+    "approval_scope": {
+      "classification": "DELEGATED_AGENT_OPERATED_DEVELOPMENT_APPROVAL_NOT_EMPIRICAL_USER_VALIDATION",
+      "source": "Parent reports gate approved with a reason identifying hypotheses and demo scope",
+      "exact_gate_event_verified_by_this_update": false,
+      "note": "These model-generation exports predate later gate events. Final project collector must retain the exact approval event separately."
+    },
+    "additional_inference_calls_by_this_update": 0,
+    "additional_database_reads_by_this_update": 0,
+    "additional_database_writes_by_this_update": 0
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-20T11:27:47.373283+00:00",
+  "status": "CONTEXT_EXPORT_AWAITING_EXPLICIT_AUTHORIZATION_POD_STOPPED",
+  "purpose": "Compare V16 generation with Qwen3-Coder-30B-A3B-Instruct BF16",
+  "runtime_identity": {
+    "adapter_id": null,
+    "adapter_sha256": null,
+    "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "configuration_sha256": "9059e455408af06447aa37f3a1d3ab33b8b8825315b1ed5699853f9ec09e2a56",
+    "provider_id": "local-proposal-model",
+    "runtime_id": "proposal-base-b4e6e2cd-1655-49da-bfe7-0d105f9384a7",
+    "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+  },
+  "pod_id": "ifswaathsle8ww",
+  "pod_status": "EXITED",
+  "cost_per_hour_usd": 2.09,
+  "budget": {
+    "prior_billed_usd": 4.170778063358739,
+    "prior_extra_reserve_usd": 0.329221936641261,
+    "resume_compute_cap_usd": 2.3,
+    "failed_resume_reserve_usd": 0.2,
+    "overall_ceiling_usd": 7,
+    "resumed_by_user": true,
+    "no_training": true
+  },
+  "private_code_reused_on_existing_volume": true,
+  "new_private_code_bundle_uploaded": false,
+  "context_export_performed": false,
+  "model_calls": 0,
+  "training_performed": false,
+  "authorization_blocker": "Automatic approval review rejected sending approved project requirements, architecture and design; previous explicit export approval covered code bundles only. User question pending.",
+  "requested_context_bytes": 41497,
+  "requested_context_sha256": "8e749207d58f02ffbd269b815a9803654547b2592c6a175adfad35d64c634036",
+  "recovery": {
+    "files": 8,
+    "sha256": "4f81bbd0d41c5992dc31b7f43fffb6e55326693b420983dace1a7eda02a3ba08",
+    "secret_files_excluded": true
+  },
+  "shutdown_receipt": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-dom-first-0b12093-20260920-02\\shutdown-verified.json",
+  "local_watcher_status": "EXITED",
+  "tunnel_closed": true,
+  "demo_runtime_unchanged": true,
+  "billing_records_pending": true,
+  "quality_claims": false
+}

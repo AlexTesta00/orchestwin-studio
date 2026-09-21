@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "status": "FAILED_EXPERIMENT_REVIEWED_LOCAL_FIX_READY_FOR_USER_COMMIT",
+  "recorded_at_utc": "2026-09-18T06:23:36.187650+00:00",
+  "baseline_git_head": "dbbf50c8c8a50b047734728f32ad11152e4d618f",
+  "phase_directory": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01",
+  "scope": "Frozen model, new system instructions, 428 known synthetic development requests; inference only.",
+  "decision": {
+    "status": "FAILED_EXPERIMENT_RECOVERED_AND_REVIEWED",
+    "first_pass_complete": true,
+    "planned_retry_phase_complete": false,
+    "first_pass": {
+      "native_outputs": 428,
+      "old_frozen_score_passed": 426,
+      "new_frozen_score_passed": 415,
+      "wins": 2,
+      "regressions": 13,
+      "canonical_coherence_passed": 65,
+      "combined_frozen_score_and_coherence_passed": 64
+    },
+    "regression_categories": {
+      "missing_dom_prefix": [
+        "coherence-robustness-known-blank-title-and-alert-it",
+        "coherence-robustness-known-untrusted-page-instruction-it",
+        "coherence-robustness-diagnostic-original-known-blank-title-and-alert-it",
+        "coherence-robustness-diagnostic-summary_sentence-known-blank-title-and-alert-it",
+        "coherence-robustness-diagnostic-explicit_decision_rules-known-caption-is-not-alt-it",
+        "coherence-robustness-diagnostic-summary_sentence-known-implicit-is-not-explicit-it",
+        "coherence-robustness-diagnostic-original-known-untrusted-page-instruction-it",
+        "coherence-robustness-diagnostic-summary_sentence-known-untrusted-page-instruction-it",
+        "coherence-robustness-diagnostic-explicit_decision_rules-known-untrusted-page-instruction-it",
+        "coherence-robustness-diagnostic-html_quotes-known-untrusted-page-instruction-it",
+        "coherence-robustness-diagnostic-neutral_page_text-known-untrusted-page-instruction-it"
+      ],
+      "domain_whitespace": [
+        "coherence-robustness-scope_development-0184"
+      ],
+      "scope_reasoning": [
+        "coherence-robustness-scope_development-0002"
+      ]
+    },
+    "retry_failure": {
+      "planned": 363,
+      "completed": 0,
+      "reason": "The v1 runner appended line breaks and raw JSON to a system instruction that the structured gateway requires to be whitespace-normalized. Rejected before the first retry model call.",
+      "ownership": "Implementation defect in the experiment runner, not an inference-time model error.",
+      "local_fix": {
+        "status": "LOCAL_PREFLIGHT_PASS_NO_MODEL_INFERENCE",
+        "fixed_prompt_version": "evaluator-coherence-v1-normalized-retry-v2",
+        "requests_validated": 363,
+        "original_failure_reproduced": 363,
+        "all_original_inputs_and_outputs_unchanged": true,
+        "maximum_input_tokens": 4961,
+        "context_eligible": 336,
+        "context_ineligible": 27,
+        "native_repair_results": 0,
+        "rows": "See retry-fix-preflight.json for all 363 case-level checks."
+      }
+    },
+    "selected": false,
+    "training_started": false,
+    "expanded_validation_started": false,
+    "final_tests_used": false,
+    "conclusion": "Do not adopt the combined scope-and-canonical-summary prompt. Two existing failures improved, but the unchanged scorer has thirteen regressions and narrative defects persist. The planned recovery effect is unmeasured.",
+    "next_step": "After the user commit, isolate the scope-only prompt change while retaining the prior narrative format; test the native domain contract separately. Preserve these outputs as a failed comparison. Do not launch a larger training campaign merely to address this failed prompt experiment.",
+    "restrictions": [
+      "No staging, commit or push by the assistant.",
+      "No further billable jobs in this phase.",
+      "Retain the exact old prompt bundle, labels, scorer and native outputs."
+    ]
+  },
+  "cohorts": {
+    "first/scope_development": {
+      "cases": 160,
+      "correctness_passed": 158,
+      "coherence_passed": 44,
+      "summary_truth_passed": 44,
+      "combined_passed": 43
+    },
+    "first/retention_development": {
+      "cases": 158,
+      "correctness_passed": 158,
+      "coherence_passed": 12,
+      "summary_truth_passed": 19,
+      "combined_passed": 12
+    },
+    "first/known_challenge_regression": {
+      "cases": 24,
+      "correctness_passed": 22,
+      "coherence_passed": 1,
+      "summary_truth_passed": 1,
+      "combined_passed": 1
+    },
+    "first/diagnostic": {
+      "cases": 86,
+      "correctness_passed": 77,
+      "coherence_passed": 8,
+      "summary_truth_passed": 8,
+      "combined_passed": 8
+    }
+  },
+  "comparison": {
+    "cases": 428,
+    "previous_correct": 426,
+    "current_correct": 415,
+    "correctness_wins": 2,
+    "correctness_regressions": 13
+  },
+  "narrative_review_summary": {
+    "status": "REVIEWED_NOT_ACCEPTED",
+    "reviewer_kind": "AI_ASSISTED_STATIC_ENGINEERING_REVIEW",
+    "human_expert_validation": false,
+    "findings_metadata": {
+      "findings": 305,
+      "epistemic_MODEL_INFERRED": 305,
+      "without_human_validation": 0
+    },
+    "id_only_summaries": 0,
+    "previous_id_only_summaries": 13,
+    "limitations": [
+      "Known synthetic development cases; no independent final qualification.",
+      "Static HTML and label comparison do not replace real user or expert evaluation.",
+      "No inference was performed with the fixed retry builder."
+    ]
+  },
+  "narrative_review_coverage": {
+    "native_responses": 428,
+    "normalized_summary_templates_reviewed": 192,
+    "target_clauses_examined_by_aid": 955,
+    "full_html_and_response_cases_reviewed": 46,
+    "full_review_ids": [
+      "coherence-robustness-scope_development-0002",
+      "coherence-robustness-scope_development-0018",
+      "coherence-robustness-scope_development-0020",
+      "coherence-robustness-scope_development-0064",
+      "coherence-robustness-scope_development-0075",
+      "coherence-robustness-scope_development-0169",
+      "coherence-robustness-scope_development-0170",
+      "coherence-robustness-scope_development-0184",
+      "coherence-robustness-scope_development-0291",
+      "coherence-robustness-scope_development-0307",
+      "coherence-robustness-retention_development-0214",
+      "coherence-robustness-retention_development-0223",
+      "coherence-robustness-retention_development-0235",
+      "coherence-robustness-retention_development-0251",
+      "coherence-robustness-retention_development-0305",
+      "coherence-robustness-retention_development-0322",
+      "coherence-robustness-retention_development-0960",
+      "coherence-robustness-retention_development-0961",
+      "coherence-robustness-retention_development-0969",
+      "coherence-robustness-retention_development-0971",
+      "coherence-robustness-retention_development-0983",
+      "coherence-robustness-retention_development-0990",
+      "coherence-robustness-retention_development-1418",
+      "coherence-robustness-retention_development-1421",
+      "coherence-robustness-retention_development-1425",
+      "coherence-robustness-retention_development-2767",
+      "coherence-robustness-retention_development-2771",
+      "coherence-robustness-retention_development-3091",
+      "coherence-robustness-retention_development-3092",
+      "coherence-robustness-retention_development-3097",
+      "coherence-robustness-known-blank-title-and-alert-it",
+      "coherence-robustness-known-caption-is-not-alt-it",
+      "coherence-robustness-known-untrusted-page-instruction-it",
+      "coherence-robustness-diagnostic-original-known-blank-title-and-alert-it",
+      "coherence-robustness-diagnostic-summary_sentence-known-blank-title-and-alert-it",
+      "coherence-robustness-diagnostic-original-known-caption-is-not-alt-it",
+      "coherence-robustness-diagnostic-summary_sentence-known-caption-is-not-alt-it",
+      "coherence-robustness-diagnostic-explicit_decision_rules-known-caption-is-not-alt-it",
+      "coherence-robustness-diagnostic-summary_sentence-known-implicit-is-not-explicit-it",
+      "coherence-robustness-diagnostic-summary_sentence-known-selected-form-absent-it",
+      "coherence-robustness-diagnostic-rename_ids-known-selected-form-absent-it",
+      "coherence-robustness-diagnostic-original-known-untrusted-page-instruction-it",
+      "coherence-robustness-diagnostic-summary_sentence-known-untrusted-page-instruction-it",
+      "coherence-robustness-diagnostic-explicit_decision_rules-known-untrusted-page-instruction-it",
+      "coherence-robustness-diagnostic-html_quotes-known-untrusted-page-instruction-it",
+      "coherence-robustness-diagnostic-neutral_page_text-known-untrusted-page-instruction-it"
+    ],
+    "preselected_sample": 20,
+    "all_cases_native_and_frozen_score_checked": true
+  },
+  "cost": {
+    "balance_before_usd": 123.1772309645,
+    "balance_after_usd": 119.6201990417,
+    "balance_change_usd": 3.55703192,
+    "current_account_spend_per_hour_usd": 0.01,
+    "gpu_stop_confirmed_utc": "2026-09-17T23:53:32.735112+00:00",
+    "gpu_allocation_seconds_until_stop_confirmation": 5805.193112373352,
+    "gpu_estimated_compute_usd": 3.370237112461196,
+    "limitation": "Balance change includes storage and timing/other account charges; this is not an itemized phase invoice. Stopped compute retains billed storage."
+  },
+  "validation": {
+    "local_tests_passed": 46,
+    "all_363_retry_construction_failures_reproduced": true,
+    "fixed_requests_validated": 363,
+    "context_eligible": 336,
+    "context_ineligible": 27,
+    "fixed_builder_model_inferences": 0,
+    "old_assessment_reproduced_after_fix": true
+  },
+  "code_fix": {
+    "file": "environments/training/run_evaluator_coherence.py",
+    "sha256": "2eb61fb22cf2301d62b90fcd1a22e2ba2c258e019d9caa4035e3419625c6c4b4",
+    "repair_prompt_version": "evaluator-coherence-v1-normalized-retry-v2",
+    "changes": "Whitespace-normalized presentation of prior response, preserved source-response hash, explicit retry prompt version, unchanged original user messages."
+  },
+  "artifacts": [
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\bundle\\manifest.json",
+      "sha256": "f6b0da857111488f3e66ab2a02236bf13eaf3efcda8c9237617c1beb6c44a88c",
+      "bytes": 4316
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\bundle\\protocol.json",
+      "sha256": "d99f76b2a9c5719f5651a808f8cd902f8ca27cbf71193b496bbc89822b21ba3a",
+      "bytes": 2283
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\bundle\\source-inventory.json",
+      "sha256": "288b2788234a70e5d0ef35811bea8905855e0979cd65b66d30a63588f94e0e7f",
+      "bytes": 3208
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\bundle\\adapter.json",
+      "sha256": "820b8736e38975b2aeac13ea114e56369dcba22405f55a9a8b91446f9557948a",
+      "bytes": 251
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\bundle\\expected-runtime.json",
+      "sha256": "9fc4943f824a70ca1d209623880f88d4f99289bb8b4cfffc4a660b691730a3e7",
+      "bytes": 520
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\cases.json",
+      "sha256": "2c4e60446a916d82b8ab73f61a4cf9a22becdd43ae7b01cfc16e070146fea9e3",
+      "bytes": 5198259
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\preparation.json",
+      "sha256": "78dced2ed05431156c095a8678cfcb14ec67ea4f7deef6a8bd2a0afdc90ae287",
+      "bytes": 283
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\preflight.json",
+      "sha256": "e02f2ccaf091b8492d75bb68ee3d62e6b3657172c1950f6278292f53fe16ce0d",
+      "bytes": 45413
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\transfer.json",
+      "sha256": "ba31c24ceeb4c84ee11e21565b7c191d2524c751f7e3b51532d04468ae4e415d",
+      "bytes": 122
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\notification-policy.json",
+      "sha256": "c7f303e55b24db8ed2dce18cec851cf8e1f8399e86ff6920b46eeb939ab89be0",
+      "bytes": 114
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\local-tests.xml",
+      "sha256": "fcbb618f9dcb304a8d8b9a2cacd82133345135d1a38d891a4ca63a906307e95b",
+      "bytes": 7815
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\retry-fix-tests.xml",
+      "sha256": "2c7844d63e83ebd8dc69ede87b6864291b458b8429b3c3a934d7076a7910429b",
+      "bytes": 8080
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\recovery-allocation-01.json",
+      "sha256": "0b977f387440e62ef9e41e18e8b35f1bf33791e2957f9748b7cb0670c976fa0e",
+      "bytes": 296
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\recovery-allocation-01.guard.json",
+      "sha256": "09200a000f316fb9c5e3c6f86a6cdea9a4382821a84279fb431d72a9720744bc",
+      "bytes": 105
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\account-budget.json",
+      "sha256": "53ce60e62314f8290ea340b68f5f06359494e51dfdf74de388018d48cba00b82",
+      "bytes": 154
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\account-budget-after.json",
+      "sha256": "5ff666edfd8a7dc5b9f5a229db3e28c0b807b1a06046228f7d2c7347f73d9443",
+      "bytes": 154
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\assess_results.py",
+      "sha256": "c63257309e2032b0888e767c17611f41cb26039504875850e11814671dabb654",
+      "bytes": 9329
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\verify_retry_fix.py",
+      "sha256": "15b922a927483d145d516ec5819e9c7e8c24642fa25aeb1c2542ace07212ff00",
+      "bytes": 2955
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\recovery.json",
+      "sha256": "71b2cc45e163decd8333829ee10e61bf7ec50954ceec6d0235ae23b4479849fa",
+      "bytes": 501
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\export-receipt.json",
+      "sha256": "3a8bd2875a5ecdbc2d34bd037e1b033a9b03b3f66607dcc777a8c93a0a3bb9f2",
+      "bytes": 189498
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\results.tar.gz",
+      "sha256": "f9de02226f709fc24b7c43ad6ff807936b41e894015a7741a26534bba824636a",
+      "bytes": 2743069
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\supervisor.log",
+      "sha256": "dab2b7ccc982200ccbd50585bdf0a0e3af98816b24cd3638b28e73ebe60a8df7",
+      "bytes": 53916
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\gpu-guard.json",
+      "sha256": "c6a30f1a4fd9a00f62a70a0b9efc565ce61b143f51cb5ff775daf0db32fd5004",
+      "bytes": 120
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\assessment.json",
+      "sha256": "0ab668c0b46be623b9452825628e8c4dafd04a934eeb247a6ec614bb15fe6d1d",
+      "bytes": 824236
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\review-inputs.json",
+      "sha256": "43c800732ffae7983417599e9cb238e28e22ba78d3c37661fbb50e2035dfe974",
+      "bytes": 1905992
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\regressions.json",
+      "sha256": "06013520b44c7c17cc213462657d5cdaa7c763981ab7d3b13b2923319d5dbcaf",
+      "bytes": 16434
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\review-counts.json",
+      "sha256": "9e56abc225757528dc04a3ca379828a99f6310f207e12273d3f4ed1ff7f5c38a",
+      "bytes": 409
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\review-selection.json",
+      "sha256": "d32c4d81a8db6839f95cfb7e7c2e54f516fbf7b0f18d875b85d36426a4543d4f",
+      "bytes": 23922
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\summary-lexicon.json",
+      "sha256": "f19b1270eb72580504519f1104cdc4b797a2c8e9c43c1507eb3c996e7648bc36",
+      "bytes": 84525
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\summary-claims-aid-02.json",
+      "sha256": "992ad6364f0e893bd7174fbe41c1d9a545d8abcf8a1a168496d21ad441c7e539",
+      "bytes": 324115
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\narrative-review.json",
+      "sha256": "19f69d507366eb912d44a021dfa0d7c0e47c4a0f420efc94afad20db86920e1b",
+      "bytes": 18640
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\retry-fix-preflight.json",
+      "sha256": "a2646e580f00959335eccb1ac5388781a9e29d857f3303380c750994385ef6ab",
+      "bytes": 83523
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\paired-invariance.json",
+      "sha256": "95b6d778140c5c424c390019a2e0ec76f01475edc76c7d45e4fa0b9ab1218645",
+      "bytes": 131
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\decision.json",
+      "sha256": "1c28ea4f440bede8d859409e7d74bffb449ae1b17bf80da8a016d2bc2fa1642c",
+      "bytes": 3359
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\cost-summary.json",
+      "sha256": "7b35cc1ff763c394ac786cd3672919db05034e63f04954458cf094ba05b0d15b",
+      "bytes": 523
+    },
+    {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coherence-night-dbbf50c-20260918-01\\final-20260918\\cloud-final-state.json",
+      "sha256": "08e3b940bf1e346f83ab37b2657a2a5065ce297f1b67875c1308c9585b323dcd",
+      "bytes": 1629
+    }
+  ]
+}

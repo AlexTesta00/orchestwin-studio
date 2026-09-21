@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "scope": "Two newly authored synthetic source-generation diagnostics; not formal held-out thesis qualification",
+  "baseline_git_head": "77cbac0aca7ca716ff82d38fef39ecaecd50c83d",
+  "started_at_utc": "2026-09-19T15:08:38.062399+00:00",
+  "finished_at_utc": "2026-09-19T15:21:59.800702+00:00",
+  "elapsed_seconds": 801.74,
+  "model_identity": {
+    "provider_id": "local-studio-model",
+    "runtime_id": "proposal-900caccb-b166-4791-a8ce-8574d071a7ad",
+    "base_model_repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "base_model_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "tokenizer_revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "configuration_sha256": "a96a950bcced4ecde11374f3ada72408bbb0b92d6797b7409adc28e55510270d",
+    "adapter_id": null,
+    "adapter_sha256": null
+  },
+  "temperature": 0.6,
+  "input_provenance": "Engineering-authored new briefs, exact public interfaces and mockup structures. Requirements/design are supplied inputs, not model-generated project stages. Independent core oracles frozen before inference.",
+  "protocol": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-baseline-20260919-01/protocol.json",
+    "sha256": "81eb9ace3548bf0a6f48b47fad347e3e89b13a03b81d433e7a3d82c45e0c1432"
+  },
+  "evidence_manifest": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-baseline-20260919-01/evidence-manifest.json",
+    "sha256": "8f704cbd0e19b6bb0f5ec9cf565701b467499cbe04e395e7585695ed464ccf5f",
+    "files": 72
+  },
+  "native_report_unchanged": {
+    "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-baseline-20260919-01/report.json",
+    "sha256": "a49c8e224d736e9054cc8af9528793404835a6fcc5af669c843134bcfc25aea0"
+  },
+  "test_environment": {
+    "image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+    "network": "none",
+    "root_filesystem": "read-only",
+    "source_mount": "read-only",
+    "user": "1000:1000",
+    "capabilities": "ALL dropped",
+    "memory": "512m",
+    "cpus": 1,
+    "per_suite_timeout_seconds": 35,
+    "rejected_sources_tested_only_for_diagnosis": true
+  },
+  "cases": [
+    {
+      "case_id": "sales-tax-en",
+      "generation_status": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "generation_seconds": 328.49,
+      "real_model_requests": 4,
+      "source_published": false,
+      "independent_core_tests": {
+        "exit_code": 1,
+        "passed_test_groups": 1,
+        "failed_test_groups": 1,
+        "oracle_frozen_before_inference": true
+      },
+      "model_authored_tests": {
+        "exit_code": 1,
+        "quality_status": "INVALID_SUITE",
+        "reason": "ReferenceError before any usable behavioral assertion"
+      },
+      "static_mockup_contract": "REJECTED",
+      "browser_behavior_verified": false,
+      "findings": [
+        "Manifest changed the required numeric rate argument into UI option strings such as 5%; original app.js rejects calculateTotal(100,20).",
+        "The implementation divides a percent-bearing string by100 and defines calculateTotal only inside the CommonJS export branch, unavailable to its browser caller.",
+        "Native app.test.cjs references assert without binding the require result; execution fails with ReferenceError. It also contains contradictory rounded/unrounded expectations.",
+        "HTML omits required and data-design-element on both input/select controls. The structure gate rejects publication."
+      ],
+      "request_response_pairs": [
+        {
+          "generation_id": "4807c3ce-d1f4-4935-aaed-dea77aeafa40",
+          "request_sha256": "5c9531e5c7600517f4b37932677323d901d1f5faeb16cd20821569fa497b1142",
+          "system_instruction_sha256": "1d961480fee4eb436dcc70524728d4a8e4d20ef2530ac531b539a261e60de669",
+          "raw_response_sha256": "8dc6ccf3ff81a404bfb858777de10fa53059fbbca8e67af7d700dd7d4adf74c0",
+          "usage": {
+            "completion_tokens": 327,
+            "prompt_tokens": 2702,
+            "total_tokens": 3029
+          }
+        },
+        {
+          "generation_id": "6daeb1d9-b59f-4dfc-b36e-8ff5a8a58d17",
+          "request_sha256": "98e13cb77969666f950e92dc096bc577615274c1803c312e7f8edad6aba9e3e2",
+          "system_instruction_sha256": "9cd9c2cfbe32d19fd0b294465dc006dc4f5e93ba9e63ca07dd1cde0f5fa3ffb1",
+          "raw_response_sha256": "5510d3e7ed78b5f27a3ecf0e35b7fa762d352e2cc9b796215d936b1448ce4151",
+          "usage": {
+            "completion_tokens": 998,
+            "prompt_tokens": 3561,
+            "total_tokens": 4559
+          }
+        },
+        {
+          "generation_id": "e42bcd05-1355-4a80-aabe-264b379fd5ff",
+          "request_sha256": "7bacbdcdf8d8db96addea825280fab43f60bcdfc71ac2a04e8d354eeeb9dc8f1",
+          "system_instruction_sha256": "02a587357db8346ae1edccd280569f613dc9ef7856cb58a2c29a6094183524da",
+          "raw_response_sha256": "5b718ca8b6cf2e10450ce2c72c95c97190c8eb4a89ff8e38cbaea4edbcd359be",
+          "usage": {
+            "completion_tokens": 1516,
+            "prompt_tokens": 3029,
+            "total_tokens": 4545
+          }
+        },
+        {
+          "generation_id": "ff3025fb-59ef-4f9a-9a5b-9bcb7f87a90b",
+          "request_sha256": "de4108e68d68e71d379af52fbedb5a183957db7f9f2585e14b6ee2cde18622b1",
+          "system_instruction_sha256": "e2ec9f1413fcab6f451a17d495491f986124626cda0a4a9d87df1094c74d16f7",
+          "raw_response_sha256": "3e5deb96f25c4722d39e1b8880659870539e72f4b4d4b5c2efde8270f24c3f0e",
+          "usage": {
+            "completion_tokens": 657,
+            "prompt_tokens": 2924,
+            "total_tokens": 3581
+          }
+        }
+      ],
+      "supplementary_diagnosis": {
+        "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-baseline-20260919-01/sales-tax-en/supplementary-core-diagnosis.json",
+        "sha256": "148f064e06984148991e44463286c4b947a37147cc4dbad6161eb9e0f9b8bcc7"
+      }
+    },
+    {
+      "case_id": "temperature-it",
+      "generation_status": "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+      "generation_seconds": 473.23,
+      "real_model_requests": 4,
+      "source_published": false,
+      "independent_core_tests": {
+        "exit_code": 0,
+        "passed_test_groups": 2,
+        "failed_test_groups": 0,
+        "oracle_frozen_before_inference": true
+      },
+      "model_authored_tests": {
+        "exit_code": 0,
+        "quality_status": "INVALID_SUITE",
+        "reason": "Six caught assertion-reference failures are printed while the process exits0"
+      },
+      "static_mockup_contract": "REJECTED",
+      "browser_behavior_verified": false,
+      "findings": [
+        "Original CommonJS numeric core passes both predeclared independent test groups, including conversions, invalid types, direction and absolute-zero limits.",
+        "Native test process exits0 but catches and logs6 assertion-reference failures before declaring assert; its wrapper process success is not a passing behavioral suite.",
+        "Implementation repeats the core in multiple branches and uses alert for UI errors. Browser behavior was not executed in this diagnostic.",
+        "HTML duplicates element markers on labels, omits field names/required/transition targets, leaves an extra enabled placeholder option, and puts the back link on the wrong screen. The structure gate rejects publication."
+      ],
+      "request_response_pairs": [
+        {
+          "generation_id": "89aa30e6-b033-4f37-a965-3b4226762271",
+          "request_sha256": "f88bc60498e2f842efe2a8070095af8ca552107a6e349bf5f940b9f0fd925c87",
+          "system_instruction_sha256": "e2ec9f1413fcab6f451a17d495491f986124626cda0a4a9d87df1094c74d16f7",
+          "raw_response_sha256": "b7ff1d720a401696f9301fc77dbc001c594b4fac0d9c54b5e3ed67ee03d87872",
+          "usage": {
+            "completion_tokens": 1391,
+            "prompt_tokens": 4426,
+            "total_tokens": 5817
+          }
+        },
+        {
+          "generation_id": "bc52817f-91b8-49c5-8e81-46b976f102de",
+          "request_sha256": "50395cb5e95b65c5ecbb5a7919f9108bcc0f92ba1282765cc8bbfa82c4600392",
+          "system_instruction_sha256": "02a587357db8346ae1edccd280569f613dc9ef7856cb58a2c29a6094183524da",
+          "raw_response_sha256": "a55bbb75ab7be11dea863a08971b4ba2a2719fea98692bb080b991b4c1d29197",
+          "usage": {
+            "completion_tokens": 984,
+            "prompt_tokens": 4558,
+            "total_tokens": 5542
+          }
+        },
+        {
+          "generation_id": "c3346ff7-5d89-450a-b592-32ed095b3526",
+          "request_sha256": "d26ce961b71ac31bef0ed0e868ff99986e30d993555248726690b6eb431f0f92",
+          "system_instruction_sha256": "1d961480fee4eb436dcc70524728d4a8e4d20ef2530ac531b539a261e60de669",
+          "raw_response_sha256": "ad92df40e9063a1d96c1676553d84cb4f3b1df0d14777339d39f620a3a98ff28",
+          "usage": {
+            "completion_tokens": 1557,
+            "prompt_tokens": 2906,
+            "total_tokens": 4463
+          }
+        },
+        {
+          "generation_id": "d846489c-0e40-4adb-884d-641d4f7e8164",
+          "request_sha256": "30916d0ada03ec9ec1a3abbf4a23052f6446a9d2222dd5b88fd4e9f1cb0ed6ee",
+          "system_instruction_sha256": "9cd9c2cfbe32d19fd0b294465dc006dc4f5e93ba9e63ca07dd1cde0f5fa3ffb1",
+          "raw_response_sha256": "327e48db0611f32e4cfb1e2227023c5a0dd549afbc19f1b06679820c7adbd129",
+          "usage": {
+            "completion_tokens": 1112,
+            "prompt_tokens": 3716,
+            "total_tokens": 4828
+          }
+        }
+      ],
+      "supplementary_diagnosis": {
+        "path": "C:/Users/alext/Desktop/Tesi/orchestwin-studio/var/studio/proposer-baseline-20260919-01/temperature-it/supplementary-core-diagnosis.json",
+        "sha256": "75b83c296b8e5db2b3105a2abafdf6b63cb438f6b3ed1114fba5008213e99933"
+      }
+    }
+  ],
+  "summary": {
+    "native_responses_captured": 8,
+    "source_proposals_accepted": 0,
+    "source_proposals_rejected": 2,
+    "independent_core_suites_passing": 1,
+    "independent_core_suites_total": 2,
+    "valid_model_authored_test_suites": 0,
+    "browser_verified_applications": 0
+  },
+  "runpod": {
+    "checked_at_utc": "2026-09-19T15:03:39.577612+00:00",
+    "balance_usd": 119.3090879313,
+    "current_account_spend_usd_per_hour": 0.01,
+    "pods_exited": 8,
+    "endpoints": 0,
+    "retained_volume_id": "pwdbxu66v4",
+    "retained_volume_gb": 100,
+    "cloud_compute_started": false,
+    "incremental_cloud_compute_cost_usd": 0,
+    "cost_note": "Existing retained storage continues billing; the local diagnostic did not start any Runpod workload."
+  },
+  "decision": {
+    "training_started": false,
+    "production_promotion": false,
+    "recommendation": "Clarify the general shared browser/CommonJS core contract, explicit test imports and assertion failure propagation, and preserve approved numeric API types across UI label conversion. Measure on fresh cases before choosing targeted coding fine-tuning or a different proposer. The previously trained evaluator is not the code-generation model.",
+    "fresh_validation_required": true,
+    "known_diagnostics_must_not_be_relabelled_as_unseen_after_fix": true
+  },
+  "constraints": {
+    "database_writes": 0,
+    "demo_mutations": 0,
+    "native_output_repairs": 0,
+    "formal_final_test_accessed": false,
+    "human_expert_validation": false,
+    "level_d_qualification": false,
+    "commit_performed": false
+  },
+  "limitations": [
+    "Two small numeric applications at one sample each cannot establish generalization or deployment readiness.",
+    "Independent checks verify exported numeric functions, not browser navigation, visuals, accessibility or the complete application.",
+    "A model test process with exit0 is insufficient evidence when assertions are caught, skipped or printed as failures.",
+    "The source guard correctly stopped both mismatching pages, but rejection is not application-generation success.",
+    "Runtime prompt changes informed by these observations need new separately frozen validation cases."
+  ]
+}

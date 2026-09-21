@@ -958,7 +958,7 @@ describe("governed User Modeling journey", () => {
     expect(store.isReadyForRequirements).toBe(false);
 
     expect(wrapper.text()).toContain(
-      "The previous Gate 3 decision does not approve the current snapshot.",
+      "The profiles have changed since your last approval. Review them again.",
     );
 
     expect(wrapper.get('[data-testid="effective-lifecycle"]').text()).toContain(
@@ -966,7 +966,7 @@ describe("governed User Modeling journey", () => {
     );
 
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "User Modeling still requires owner review.",
+      "Review and approve your user profiles to continue.",
     );
   });
 });

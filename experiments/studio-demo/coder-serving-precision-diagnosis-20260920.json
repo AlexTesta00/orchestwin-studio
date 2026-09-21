@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "report_type": "SOURCE_CODER_PRECISION_DIAGNOSIS_AND_EXPLICIT_BF16_OPTION",
+  "observed_at_utc": "2026-09-20T07:27:03.187688+00:00",
+  "status": "USER_INTERRUPTED_PARTIAL_BF16_DIAGNOSTIC_NO_CONCLUSION",
+  "base_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "source_files": {
+    "environments/training/run_model_spike.py": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\run_model_spike.py",
+      "sha256": "68932bf0daef909ee60d3c19a104140d233d44af00d7b457b103a2947a16a967"
+    },
+    "environments/training/serve_proposal_model.py": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\environments\\training\\serve_proposal_model.py",
+      "sha256": "a21c474014b40521e0942632f3ed515be8d4f2441a09fa4d317ed1013e3d5b0a"
+    },
+    "src/test/python/training/test_model_spike_loader_contract.py": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\test\\python\\training\\test_model_spike_loader_contract.py",
+      "sha256": "18e93ac1ea1475875bf4fa03ed6609dd7260cd06c197241391dec20e37a599ea"
+    },
+    "src/test/python/training/test_proposer_precision.py": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\test\\python\\training\\test_proposer_precision.py",
+      "sha256": "e279682af94457c6b3790b443abfe3042983406b88b85df1e586a5acf2426b12"
+    }
+  },
+  "current_4bit_runtime": {
+    "loader": {
+      "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-source-20260920-01\\loader.json",
+      "sha256": "07318eb96a15e7b5788f091c299aa95e98ecdd78f145d0d6cdd0f9393affa445"
+    },
+    "packages": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-source-trial-2f25d13-20260920-01\\packages.json",
+      "sha256": "a2626b59ff29bbd15b2fdad2380e4edae15a3c240146141ee3dd701dfecc9e6c"
+    },
+    "model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+    "original_server_sha256": "a7c3ef97dd041f76c99f521c4e1bf0d86428743b7b734fbb5ae84cc2a564b8e6",
+    "original_loader_sha256": "bfd9e09d9229fd90c8206ba58ce4490853d5761637afe0f137d7eba86244f661",
+    "schema_decoder_sha256": "2e0ebd0ff7707cebf999d2b0ec4805bdbaeb0efe25de1ac9b26e2eaedcb8f245",
+    "loader_policy": {
+      "fast_inference": false,
+      "import_order": [
+        "unsloth",
+        "torch",
+        "transformers"
+      ],
+      "policy_id": "unsloth-exact-revision-v1",
+      "unsupported_loader_arguments": "REJECT",
+      "use_exact_model_name": true
+    },
+    "max_sequence_length": 32768,
+    "max_output_tokens": 8192,
+    "load_duration_ms": 20293,
+    "original_remote_bundle_unchanged_by_this_task": true
+  },
+  "diagnosis": {
+    "scope": "Read-only source/config inspection; no runtime profiler, new inference, GPU benchmark, restart, or dependency installation.",
+    "observed_latency_interpretation": "Generation latency excludes import/model loading but includes prompt prefill. Output tokens divided by total latency is aggregate throughput, not isolated decoding speed.",
+    "primary_candidate": {
+      "status": "STATIC_CODE_PATH_INFERENCE_NOT_CAUSAL_PROOF",
+      "description": "The installed Unsloth Transformers-v5 MoE patch routes quantized expert tensors through helpers which dequantize whole 3D expert-weight stacks before grouped matrix multiplication. The selected exact 4-bit loader may therefore pay full expert dequantization per layer during token generation.",
+      "installed_sources_read": [
+        {
+          "package": "unsloth_zoo/temporary_patches/moe_utils_bnb4bit.py",
+          "sha256": "2dc341dc4172b9e7d03ed1b1b27348a5940bf6439b36f821f80bbe9e5808e86b",
+          "symbols": [
+            "_dequantize_bnb4bit_expert_weights",
+            "forward_moe_backend_bnb4bit"
+          ]
+        },
+        {
+          "package": "unsloth_zoo/temporary_patches/moe_utils.py",
+          "sha256": "4ae2477ba4586788038b8cb86a219e7364640bc9119fa4196ef5d0b52b1040f9",
+          "symbols": [
+            "_get_base_weight",
+            "_base_grouped_mm",
+            "forward_native_grouped_mm"
+          ]
+        }
+      ],
+      "arithmetic_estimate": {
+        "layers": 48,
+        "experts_per_layer": 128,
+        "experts_selected_per_token": 8,
+        "hidden_size": 2048,
+        "expert_intermediate_size": 768,
+        "three_bf16_expert_projection_stacks_gib_per_layer": 1.125,
+        "cumulative_full_stack_materialization_gib_per_token_all_layers": 54,
+        "caveat": "Cumulative byte estimate if this path is used once per layer/token; not resident VRAM or a measured bandwidth/time attribution."
+      }
+    },
+    "secondary_candidate": {
+      "source": {
+        "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\src\\orchestwin\\models\\schema_decoding.py",
+        "sha256": "2e0ebd0ff7707cebf999d2b0ec4805bdbaeb0efe25de1ac9b26e2eaedcb8f245"
+      },
+      "description": "Each token consumes GPU token IDs via tolist(), computes the CPU grammar mask, expands bits into a full Boolean vocabulary mask, transfers that mask to the GPU and allocates masked scores. These operations introduce synchronization and repeated allocations.",
+      "vocabulary_size": 151936,
+      "current_boolean_mask_bytes": 151936,
+      "packed_uint32_mask_bytes": 18992,
+      "pinned_library_alternative": {
+        "module": "llguidance/torch.py",
+        "version": "1.8.0",
+        "sha256": "0f0cc51a11a06c8090050b9cbabb2b03ac8081ffced9738fd8aa73eef1f8b8df",
+        "functions": [
+          "allocate_token_bitmask",
+          "fill_next_token_bitmask",
+          "apply_token_bitmask_inplace"
+        ]
+      },
+      "changed": false,
+      "caveat": "No evidence that this secondary cost explains most of the observed latency. Preserve grammar, bounded whitespace and EOS semantics in any later optimization."
+    },
+    "native_latency_measurements": [
+      {
+        "generation_id": "07f5a982-6f8f-493a-8cea-d790f673a8f2",
+        "http_response": {
+          "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-diagnostic-20260920-01\\guest-list-en-20260919\\07f5a982-6f8f-493a-8cea-d790f673a8f2\\HTTP_RESPONSE.bin",
+          "sha256": "34e29bdf486545e4db3f2b93cddf4004af109fc0978235effbd7414fea0c5d69"
+        },
+        "provider_result": {
+          "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-diagnostic-20260920-01\\guest-list-en-20260919\\07f5a982-6f8f-493a-8cea-d790f673a8f2\\PROVIDER_RESULT.json",
+          "sha256": "7957744be513328a512e8352730b14ec092b072d96a34d95f79cccebe683a97c"
+        },
+        "usage": {
+          "completion_tokens": 622,
+          "prompt_tokens": 3915,
+          "total_tokens": 4537
+        },
+        "generation_wall_time_milliseconds": 195434,
+        "aggregate_output_tokens_per_second": 3.1827
+      },
+      {
+        "generation_id": "145174ca-5439-4c78-9fea-e3d68a7986f4",
+        "http_response": {
+          "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-diagnostic-20260920-01\\guest-list-en-20260919\\145174ca-5439-4c78-9fea-e3d68a7986f4\\HTTP_RESPONSE.bin",
+          "sha256": "d97298ea6fe7b175598e2f55264ec82dc36060cb9c08f240b34bbe18cebb1a7d"
+        },
+        "provider_result": {
+          "path": "C:\\Users\\alext\\Desktop\\Tesi\\orchestwin-studio\\var\\studio\\coder-diagnostic-20260920-01\\guest-list-en-20260919\\145174ca-5439-4c78-9fea-e3d68a7986f4\\PROVIDER_RESULT.json",
+          "sha256": "fcaca7a40a8af898997a69f6a3131845761fb746c66488dd4e2751d45b784e41"
+        },
+        "usage": {
+          "completion_tokens": 644,
+          "prompt_tokens": 2558,
+          "total_tokens": 3202
+        },
+        "generation_wall_time_milliseconds": 135827,
+        "aggregate_output_tokens_per_second": 4.7413
+      }
+    ]
+  },
+  "implementation": {
+    "cli_flag": "--precision {4bit,bf16}",
+    "default": "4bit",
+    "bf16_policy_id": "unsloth-exact-revision-bf16-v1",
+    "bf16_kwargs": {
+      "dtype": "torch.bfloat16",
+      "load_in_4bit": false,
+      "device_map": "all parameters on current CUDA device"
+    },
+    "observed_guards": [
+      "Model is not quantized",
+      "All parameter tensors exist on the selected CUDA device",
+      "All parameter tensors have torch.bfloat16 storage and no quant_state",
+      "No CPU/disk/other-device entries in hf_device_map"
+    ],
+    "precision_bound_to": [
+      "loader.json precision and load_in_4bit",
+      "loader evidence policy and observed parameter storage",
+      "complete configuration hash in runtime identity",
+      "health response",
+      "per-request orchestwin_serving evidence"
+    ],
+    "preserved": [
+      "Pinned model/tokenizer revision",
+      "Offline-only standalone loading",
+      "No remote model code",
+      "No loading fallback",
+      "Default 4-bit loader policy",
+      "Frozen benchmark protocol",
+      "Current remote runtime",
+      "Schema decoder V3"
+    ],
+    "strict_limit": "Unexpected FP32 parameter storage is rejected, even if a backend considers it legitimate; no automatic cast or downgrade.",
+    "bf16_candidate_executed": true,
+    "speedup_measured": false,
+    "model_quality_claim": false
+  },
+  "next_controlled_experiment": {
+    "owner": "Root coordinates deployment and inference; this change does not deploy a variant.",
+    "command_template": [
+      "python",
+      "environments/training/serve_proposal_model.py",
+      "--output-directory",
+      "<new-variant-directory>",
+      "--model-repository",
+      "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "--model-revision",
+      "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+      "--source-only",
+      "--precision",
+      "bf16",
+      "--port",
+      "8791",
+      "--max-sequence-length",
+      "32768",
+      "--max-output-tokens",
+      "8192",
+      "--generation-timeout-seconds",
+      "540"
+    ],
+    "requires": [
+      "New separately hashed bundle, never overwrite original trial",
+      "Current 4-bit diagnostic concluded",
+      "Observe available GPU memory before loading",
+      "Keep exact prompts, schemas and request limits for comparison",
+      "Validate health/runtime/loader identity before inference",
+      "Preserve failed load or OOM and do not silently offload"
+    ],
+    "capacity_estimate": {
+      "original_bf16_safetensor_bytes": 61066575656,
+      "original_bf16_weight_gib": 56.873,
+      "bf16_kv_cache_32768_gib": 3,
+      "gpu_total_gib_approximately": 94.972,
+      "caveat": "Weights and KV estimate exclude allocator, prefill and workspace peaks. Coexistence with the approximately 17 GiB 4-bit model must be measured, not assumed."
+    },
+    "other_option": "A vLLM backend with supported Qwen3Moe architecture and structured outputs is a separate integration, not a compatible one-line fast_inference toggle.",
+    "transfer_status": "AUTHORIZED_AND_TRANSFERRED_REMOTE_DELTA_HASH_VERIFIED_ORIGINAL_BUNDLE_UNCHANGED",
+    "transfer_history": [
+      {
+        "status": "NOT_TRANSFERRED_PENDING_SPECIFIC_USER_CONSENT: automatic approval review rejected the proposed delta because it changes the previously authorized remote payload; root requested confirmation. No workaround or remote transfer performed."
+      },
+      {
+        "status": "AUTHORIZED_AND_TRANSFERRED",
+        "receipt": {
+          "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-source-trial-2f25d13-20260920-01\\bf16-transfer-receipt.json",
+          "sha256": "cbca30192ce90573c19e2a1c068415739bf62994694c698ca53679293e8ec8b8"
+        },
+        "receipt_content": {
+          "kind": "AUTHORIZED_BF16_DELTA_TRANSFER",
+          "pod_id": "26co8lvd4b2aml",
+          "bytes": 18160,
+          "sha256": "479cf30b324b09cfd469afe6f8d3d0adc00b45f453bf8939d4e82c8daa082b8c",
+          "explicit_user_consent": "Autorizzo espressamente questo nuovo trasferimento BF16",
+          "scp_exit_code": 0,
+          "remote_sha256_verified": true,
+          "original_bundle_unchanged": true,
+          "budget_ceiling_usd": 7,
+          "recorded_at_utc": "2026-09-20T07:31:20.3513711Z"
+        }
+      }
+    ],
+    "launch_observation": {
+      "source": "ROOT_OPERATOR_MESSAGE",
+      "pid": 1897,
+      "started_at_utc": "2026-09-20T07:29:23Z",
+      "state_at_report_update": "READY",
+      "readiness_verified": true,
+      "acceleration_measured": false
+    }
+  },
+  "verification": {
+    "test_files": [
+      "src/test/python/training/test_model_spike_loader_contract.py",
+      "src/test/python/training/test_proposer_precision.py",
+      "src/test/python/training/test_proposer_adapter_serving.py",
+      "src/test/python/models/test_proposal_serving.py",
+      "src/test/python/training/test_run_model_spike.py"
+    ],
+    "counts": {
+      "tests": 125,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "junit": {
+      "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-bf16-tests-20260920-01\\tests-final.xml",
+      "sha256": "365d96dc1a9e1a86f78872ee4a7c77a3a61eea76636dd4e37b70d9d067b454f1"
+    },
+    "pytest_exit_code": 0,
+    "initial_setup_failure": {
+      "junit": {
+        "path": "C:\\Users\\alext\\.codex\\visualizations\\2026\\09\\12\\01a09597-4b2a-7a30-bc8f-e6e729d91f04\\coder-bf16-tests-20260920-01\\tests.xml",
+        "sha256": "9dfc39a3362570c8b816e1a00c5187f70c0bdabb93ae51a12cbcee06f1466009"
+      },
+      "description": "First invocation used a basetemp whose parent did not exist: 55 setup errors and 70 passes. Created only that external parent and reran into a distinct basetemp; original receipt retained."
+    },
+    "ruff_check": "PASSED",
+    "ruff_format_check": "PASSED",
+    "git_diff_check": "PASSED",
+    "test_mode": "Mocked loader, CUDA residency, HTTP serving and tensor boundaries; no model weights or inference loaded.",
+    "separate_ci_fix_files_unchanged_from_ci_report": {
+      "src/test/python/models/test_local_evaluator_runtime.py": "0a2579c03a0693537f6b12ac4f5fe4d058b24a2eb101374e6eb5c3808ffe56bb",
+      "src/test/python/training/test_proposer_adapter_serving.py": "1370ba2e2aff657801b49fc5c2bf38d9bb27c219b1e8898afa87d6d47baa29af"
+    }
+  },
+  "primary_references": [
+    "https://github.com/unslothai/unsloth-zoo/blob/main/unsloth_zoo/temporary_patches/moe_utils_bnb4bit.py",
+    "https://github.com/guidance-ai/llguidance/blob/main/python/llguidance/torch.py",
+    "https://docs.vllm.ai/en/latest/models/supported_models/",
+    "https://docs.vllm.ai/en/latest/features/structured_outputs/"
+  ],
+  "git_mutations_performed": false,
+  "remote_transfer_performed": true,
+  "paid_operations_performed": false,
+  "remote_transfer_operator": "Root; no remote operation by the implementation/review subagent.",
+  "last_updated_at_utc": "2026-09-20T07:52:42.850445+00:00",
+  "bf16_readiness": {
+    "files": {
+      "loader.json": {
+        "path": "var\\studio\\coder-source-bf16-20260920-01\\loader.json",
+        "sha256": "471580446e3dfedd8a4003c53c663b9cb7b2bda1cf2f6235de9bb5493a9d2ccf"
+      },
+      "health.json": {
+        "path": "var\\studio\\coder-source-bf16-20260920-01\\health.json",
+        "sha256": "e5fd4861d4eb36251e6d6a955acb7003123f70552b2e4cce11285504e61a66e1"
+      }
+    },
+    "identity": {
+      "adapter_id": null,
+      "adapter_sha256": null,
+      "base_model_repository": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "base_model_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+      "configuration_sha256": "471580446e3dfedd8a4003c53c663b9cb7b2bda1cf2f6235de9bb5493a9d2ccf",
+      "provider_id": "local-proposal-model",
+      "runtime_id": "proposal-base-db7123f7-ab1b-4571-b9a8-6508fb07da53",
+      "tokenizer_revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+    },
+    "precision_observation": {
+      "device": "cuda:0",
+      "load_in_4bit_observed": false,
+      "offloaded_parameters": 0,
+      "parameter_count": 30532122624,
+      "parameter_dtype": "torch.bfloat16",
+      "parameter_tensor_count": 531,
+      "precision": "bf16"
+    },
+    "load_duration_ms": 23825,
+    "load_peak_reserved_gpu_memory_mb": 60486,
+    "diagnostic_status": "USER_INTERRUPTED",
+    "performance_conclusion": null
+  },
+  "interruption": {
+    "recorded_at_utc": "2026-09-20T07:52:42.850445+00:00",
+    "authority": "Explicit user stop relayed by root",
+    "root_actions": "Root cancels session13496 and stops the pod; this report does not independently certify shutdown.",
+    "resume": "Review retained partial evidence and explicit user resumption before a separately identified new diagnostic; do not overwrite or treat partial run as completed."
+  }
+}

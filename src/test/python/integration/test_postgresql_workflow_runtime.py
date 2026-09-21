@@ -100,12 +100,6 @@ BASE_TIME = datetime(
 )
 
 
-async def truncate_application_data(runtime) -> None:
-    """Reset owner-scoped rows while preserving the migrated schema."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
-
-
 async def mutation_is_rejected(
     runtime,
     statement: str,
@@ -492,8 +486,6 @@ async def run_integration_scenario() -> None:
     runtime = create_database_runtime(settings)
 
     try:
-        await truncate_application_data(runtime)
-
         owner, foreign, project = await create_owner_and_project(runtime)
 
         waiting_checkpoint, interrupt_id = await persist_interrupted_run(
@@ -551,7 +543,6 @@ async def run_integration_scenario() -> None:
         assert database_revision == current_head
 
     finally:
-        await truncate_application_data(runtime)
         await runtime.dispose()
 
 

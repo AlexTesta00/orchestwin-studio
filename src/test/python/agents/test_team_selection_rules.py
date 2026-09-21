@@ -277,3 +277,18 @@ def test_constraint_snapshot_and_hash_are_deterministic() -> None:
     assert first.content_hash == (second.content_hash)
     assert len(first.content_hash) == 64
     assert all(character in "0123456789abcdef" for character in first.content_hash)
+
+
+def test_italian_static_web_scope_keeps_designer_and_excludes_backend():
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice web accessibile",
+            technical_constraints=["WEB_STATIC: HTML CSS JavaScript", "Nessun backend o database"],
+            functional_requirements=["Tutte le azioni da tastiera"],
+        ),
+    )
+    assert not constraints.has_conflicts
+    assert AgentIdentifier.UX_UI_DESIGNER in constraints.mandatory_agent_ids
+    assert AgentIdentifier.ACCESSIBILITY_REVIEWER in constraints.mandatory_agent_ids
+    assert AgentIdentifier.BACKEND_ENGINEER in constraints.impossible_agent_ids

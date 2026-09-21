@@ -52,33 +52,12 @@ from orchestwin.projects.repository import (
 pytestmark = pytest.mark.integration
 
 
-async def truncate_application_tables(
-    runtime,
-) -> None:
-    """Reset mutable application data without removing migrations."""
-    async with runtime.engine.begin() as connection:
-        await connection.execute(
-            text(
-                "TRUNCATE TABLE "
-                "brief_assumptions, "
-                "clarification_rounds, "
-                "project_brief_versions, "
-                "projects, "
-                "auth_sessions, "
-                "users "
-                "CASCADE"
-            )
-        )
-
-
 async def run_integration_scenario() -> None:
     """Exercise identity, ownership, versioning, and DB immutability."""
     database_settings = load_database_settings(env_file=None)
     runtime = create_database_runtime(database_settings)
 
     try:
-        await truncate_application_tables(runtime)
-
         identity = LocalIdentityApplicationService(
             unit_of_work_factory=(SqlAlchemyIdentityUnitOfWorkFactory(runtime.session_factory)),
             password_service=(Argon2PasswordService()),
@@ -185,7 +164,6 @@ async def run_integration_scenario() -> None:
 
         assert revision == expected_head
     finally:
-        await truncate_application_tables(runtime)
         await runtime.dispose()
 
 

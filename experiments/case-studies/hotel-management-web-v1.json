@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "case_id": "hotel-management-web",
+  "version": 1,
+  "title": "Hotel Management Web Application",
+  "family": "WEB",
+  "execution_profile": "WEB_VUE_NODE",
+  "technologies": ["HTML", "CSS", "JavaScript", "Vue", "Node.js", "Express"],
+  "project_brief": "Create a small hotel operations application for reception and management workflows. The system must support rooms, guests, reservations, reservation status changes, and a concise operational overview through a Vue frontend and a Node.js Express API. Persistence may use a deterministic repository fixture for the formal case so the evaluation focuses on workflow completeness, traceability, execution, tests, repair, and User Twin feedback.",
+  "user_twin_roles": ["receptionist", "hotel manager"],
+  "constraints": [
+    "Use JavaScript across browser and server application code",
+    "Use Vue for the browser application",
+    "Use Node.js and Express for the API",
+    "Keep authentication local, simulated, or fixture-backed for the formal case",
+    "Do not require a paid external service"
+  ],
+  "definition_of_done": [
+    {
+      "criterion_id": "HOTEL-001",
+      "description": "Approved requirements cover rooms, guests, reservations, status changes, and operational overview behavior.",
+      "evidence": ["REQUIREMENTS", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "HOTEL-002",
+      "description": "Frontend and server install and build steps complete under the WEB_VUE_NODE profile.",
+      "evidence": ["BUILD_REPORT"]
+    },
+    {
+      "criterion_id": "HOTEL-003",
+      "description": "Server tests verify representative room, guest, reservation, validation, and status-transition behavior.",
+      "evidence": ["TEST_REPORT"]
+    },
+    {
+      "criterion_id": "HOTEL-004",
+      "description": "Browser tests verify the representative receptionist journey from reservation lookup to status update.",
+      "evidence": ["TEST_REPORT", "RUNTIME_REPORT"]
+    },
+    {
+      "criterion_id": "HOTEL-005",
+      "description": "Automated accessibility evidence contains no unresolved critical violation in the evaluated primary workflow.",
+      "evidence": ["ACCESSIBILITY_REPORT"]
+    },
+    {
+      "criterion_id": "HOTEL-006",
+      "description": "Receptionist and manager User Twin findings remain independently attributable and conflicts are preserved rather than forced into consensus.",
+      "evidence": ["USER_TWIN_FINDINGS"]
+    },
+    {
+      "criterion_id": "HOTEL-007",
+      "description": "Repairs are bounded and every changed source revision links to triggering deterministic or synthetic evidence.",
+      "evidence": ["REPAIR_HISTORY", "TRACEABILITY"]
+    },
+    {
+      "criterion_id": "HOTEL-008",
+      "description": "The approved final package contains source, run evidence, traceability, and final export metadata.",
+      "evidence": ["FINAL_EXPORT"]
+    }
+  ]
+}

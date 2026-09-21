@@ -17,6 +17,20 @@ _SBT_RELEASE_URL: Final = re.compile(
     r"sbt-(?P=version)\.tgz$"
 )
 _SHA256: Final = re.compile(r"^[0-9a-f]{64}$")
+_VERSION: Final = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_RUNNER_PATHS: Final = {
+    "jvm.gradle": "infra/jvm-runners/Dockerfile.gradle",
+    "jvm.sbt": "infra/jvm-runners/Dockerfile.sbt",
+}
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate manifest key: {key}.")
+        result[key] = value
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,26 +52,33 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
     manifest_path = root / "infra" / "jvm-runners" / "images.lock.json"
     errors: list[str] = []
     try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        if not manifest_path.resolve().is_relative_to(root):
+            raise ValueError("Manifest path must remain inside the repository.")
+        payload = json.loads(
+            manifest_path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object
+        )
+        if not isinstance(payload, dict):
+            raise ValueError("Manifest must be a JSON object.")
+    except (OSError, ValueError) as error:
         return RunnerManifestValidation(
             errors=(f"JVM runner manifest could not be read: {error}",),
             runner_ids=(),
             base_image_references=(),
         )
 
-    if payload.get("schema_version") != 1:
+    if type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
         errors.append("JVM runner manifest schema_version must equal 1.")
     sbt_distribution = payload.get("sbt_distribution")
     sbt_version: str | None = None
     sbt_sha256: str | None = None
+    sbt_url: str | None = None
     if not isinstance(sbt_distribution, dict):
         errors.append("JVM runner manifest requires an sbt_distribution object.")
     else:
         version = sbt_distribution.get("version")
         url = sbt_distribution.get("url")
         checksum = sbt_distribution.get("sha256")
-        if not isinstance(version, str) or not version:
+        if not isinstance(version, str) or _VERSION.fullmatch(version) is None:
             errors.append("JVM sbt distribution requires a normalized version.")
         elif not isinstance(url, str) or (match := _SBT_RELEASE_URL.fullmatch(url)) is None:
             errors.append("JVM sbt distribution URL must be an official versioned release asset.")
@@ -65,6 +86,7 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
             errors.append("JVM sbt distribution URL and version differ.")
         else:
             sbt_version = version
+            sbt_url = url
         if not isinstance(checksum, str) or _SHA256.fullmatch(checksum) is None:
             errors.append("JVM sbt distribution requires a lowercase SHA-256 checksum.")
         else:
@@ -110,6 +132,9 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
             errors.append("Each JVM runner requires a normalized runner_id.")
             continue
         runner_ids.append(runner_id)
+        if runner_id not in _RUNNER_PATHS:
+            errors.append(f"Unknown JVM runner ID: {runner_id}.")
+            continue
         if runner_ids.count(runner_id) > 1:
             errors.append(f"Duplicate JVM runner ID: {runner_id}.")
         if runner.get("capability_status") != _ALLOWED_CAPABILITY:
@@ -120,12 +145,17 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
             errors.append(
                 f"Runner {runner_id} must not contain a fabricated built image reference."
             )
-        if not isinstance(dockerfile_value, str) or not dockerfile_value:
-            errors.append(f"Runner {runner_id} requires dockerfile_path.")
+        if dockerfile_value != _RUNNER_PATHS[runner_id]:
+            errors.append(f"Runner {runner_id} requires its repository-owned Dockerfile path.")
             continue
-        dockerfile = root / dockerfile_value
-        if not dockerfile.is_file():
-            errors.append(f"Runner {runner_id} Dockerfile is missing: {dockerfile_value}.")
+        dockerfile = (root / dockerfile_value).resolve()
+        if not dockerfile.is_relative_to(root):
+            errors.append(f"Runner {runner_id} Dockerfile must remain inside the repository.")
+            continue
+        try:
+            dockerfile_text = dockerfile.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            errors.append(f"Runner {runner_id} Dockerfile could not be read: {error}.")
             continue
 
         declared_ids = runner.get("base_image_ids")
@@ -140,24 +170,24 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
             referenced_base_images.add(image_id)
             declared_references.add(image_references[image_id])
 
-        dockerfile_references = _dockerfile_base_references(dockerfile, errors=errors)
+        instructions = _dockerfile_instructions(dockerfile_text, runner_id, errors=errors)
+        dockerfile_references = _dockerfile_base_references(instructions, runner_id, errors=errors)
         if dockerfile_references != declared_references:
             errors.append(
                 f"Runner {runner_id} Dockerfile FROM references differ from its manifest IDs."
             )
-        if not _has_non_root_final_user(dockerfile):
+        if not _has_non_root_final_user(instructions):
             errors.append(f"Runner {runner_id} must declare a non-root final USER.")
         if runner_id == "jvm.sbt":
             declared_version = runner.get("sbt_distribution_version")
-            dockerfile_text = dockerfile.read_text(encoding="utf-8")
             if declared_version != sbt_version:
                 errors.append(
                     "Runner jvm.sbt must reference the manifest sbt distribution version."
                 )
-            if sbt_version is not None and f"ARG SBT_VERSION={sbt_version}" not in dockerfile_text:
-                errors.append("Runner jvm.sbt Dockerfile does not pin the manifest sbt version.")
-            if sbt_sha256 is not None and f"ARG SBT_SHA256={sbt_sha256}" not in dockerfile_text:
-                errors.append("Runner jvm.sbt Dockerfile does not pin the manifest sbt checksum.")
+            _validate_sbt_recipe(instructions, sbt_url, sbt_sha256, errors=errors)
+
+    if set(runner_ids) != set(_RUNNER_PATHS) or len(runner_ids) != len(_RUNNER_PATHS):
+        errors.append("JVM runner manifest must contain exactly jvm.gradle and jvm.sbt.")
 
     unused = set(image_references) - referenced_base_images
     if unused:
@@ -170,30 +200,105 @@ def validate_jvm_runner_manifest(repository_root: Path) -> RunnerManifestValidat
     )
 
 
-def _dockerfile_base_references(dockerfile: Path, *, errors: list[str]) -> set[str]:
+def _dockerfile_instructions(
+    text: str, runner_id: str, *, errors: list[str]
+) -> tuple[tuple[str, str], ...]:
+    """Parse the deliberately small, repository-owned Dockerfile syntax subset."""
+    instructions: list[tuple[str, str]] = []
+    continuation: list[str] = []
+    for line in text.splitlines():
+        normalized = line.strip()
+        if not normalized or normalized.startswith("#"):
+            if re.match(r"#\s*(syntax|escape)\s*=", normalized, re.IGNORECASE):
+                errors.append(f"Runner {runner_id} must not override Dockerfile parsing.")
+            continue
+        if normalized.endswith("\\"):
+            continuation.append(normalized[:-1].rstrip())
+            continue
+        combined = " ".join((*continuation, normalized))
+        continuation.clear()
+        parts = combined.split(maxsplit=1)
+        if len(parts) != 2:
+            errors.append(f"Runner {runner_id} contains a malformed Dockerfile instruction.")
+            continue
+        instructions.append((parts[0].upper(), parts[1]))
+    if continuation:
+        errors.append(f"Runner {runner_id} contains an incomplete Dockerfile continuation.")
+    return tuple(instructions)
+
+
+def _dockerfile_base_references(
+    instructions: tuple[tuple[str, str], ...], runner_id: str, *, errors: list[str]
+) -> set[str]:
     references: set[str] = set()
-    for line in dockerfile.read_text(encoding="utf-8").splitlines():
-        match = _FROM_REFERENCE.fullmatch(line.strip())
+    for instruction, arguments in instructions:
+        if instruction != "FROM":
+            continue
+        match = _FROM_REFERENCE.fullmatch(f"FROM {arguments}")
         if match is None:
+            errors.append(f"Runner {runner_id} contains an unsupported FROM instruction.")
             continue
         reference = match.group(1)
         if _DIGEST_REFERENCE.fullmatch(reference) is None:
-            errors.append(
-                f"Dockerfile {dockerfile.as_posix()} contains an unpinned FROM reference."
-            )
+            errors.append(f"Runner {runner_id} contains an unpinned FROM reference.")
         references.add(reference)
     if not references:
-        errors.append(f"Dockerfile {dockerfile.as_posix()} contains no FROM instruction.")
+        errors.append(f"Runner {runner_id} contains no FROM instruction.")
     return references
 
 
-def _has_non_root_final_user(dockerfile: Path) -> bool:
+def _has_non_root_final_user(instructions: tuple[tuple[str, str], ...]) -> bool:
     final_user: str | None = None
-    for line in dockerfile.read_text(encoding="utf-8").splitlines():
-        normalized = line.strip()
-        if normalized.upper().startswith("USER "):
-            final_user = normalized.split(maxsplit=1)[1].strip()
-    return final_user is not None and final_user.casefold() not in {"0", "root"}
+    for instruction, arguments in instructions:
+        if instruction == "FROM":
+            final_user = None
+        elif instruction == "USER":
+            final_user = arguments.split(":", maxsplit=1)[0]
+    return (
+        final_user is not None
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", final_user) is not None
+        and final_user.casefold() != "root"
+        and set(final_user) != {"0"}
+    )
+
+
+def _validate_sbt_recipe(
+    instructions: tuple[tuple[str, str], ...],
+    url: str | None,
+    checksum: str | None,
+    *,
+    errors: list[str],
+) -> None:
+    """Require one checked remote asset followed only by a local installation."""
+    names = tuple(instruction for instruction, _ in instructions)
+    if names != ("FROM", "ADD", "RUN", "USER", "WORKDIR", "ENTRYPOINT", "CMD"):
+        errors.append(
+            "Runner jvm.sbt requires the fixed installation sequence without ARG, "
+            "extra downloads, or package-manager instructions."
+        )
+        return
+    arguments = dict(instructions)
+    if url is not None and checksum is not None:
+        if arguments["ADD"] != f"--checksum=sha256:{checksum} {url} /tmp/sbt.tgz":
+            errors.append("Runner jvm.sbt ADD must pin the exact manifest URL and checksum.")
+        expected_install = (
+            f'echo "{checksum}  /tmp/sbt.tgz" | sha256sum --check --strict '
+            "&& tar --extract --gzip --file /tmp/sbt.tgz --directory /opt "
+            "&& ln --symbolic /opt/sbt/bin/sbt /usr/local/bin/sbt "
+            "&& rm --force /tmp/sbt.tgz"
+        )
+        if arguments["RUN"] != expected_install:
+            errors.append(
+                "Runner jvm.sbt RUN must only verify the manifest checksum and install "
+                "the local archive; network and package-manager commands are forbidden."
+            )
+    if (
+        arguments["USER"] != "65532:65532"
+        or arguments["WORKDIR"] != "/workspace"
+        or arguments["ENTRYPOINT"] != "[]"
+        or arguments["CMD"] != '["sbt", "--script-version"]'
+    ):
+        errors.append("Runner jvm.sbt must retain its non-root workspace and probe contract.")
 
 
 def main() -> int:

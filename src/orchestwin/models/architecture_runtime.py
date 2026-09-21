@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,7 @@ class ArchitectureRuntimeMode(StrEnum):
     """Architecture provider runtimes supported in the current milestone."""
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
+    MODEL_ADAPTER = "MODEL_ADAPTER"
 
 
 class ArchitectureRuntimeSettings(BaseSettings):
@@ -27,6 +29,7 @@ class ArchitectureRuntimeSettings(BaseSettings):
     )
 
     mode: ArchitectureRuntimeMode = ArchitectureRuntimeMode.FAKE_DETERMINISTIC
+    model_config_file: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +44,12 @@ def build_architecture_proposal_port(
     settings: ArchitectureRuntimeSettings,
 ) -> ArchitectureProposalPort:
     """Build the configured architecture proposal provider."""
+    if settings.mode is ArchitectureRuntimeMode.MODEL_ADAPTER:
+        from orchestwin.models.model_proposals import ModelArchitectureAdapter
+        from orchestwin.models.proposal_generation import build_proposal_generator
+
+        return ModelArchitectureAdapter(build_proposal_generator(settings.model_config_file))
+
     if settings.mode is ArchitectureRuntimeMode.FAKE_DETERMINISTIC:
         return FakeDeterministicArchitectureAdapter()
 

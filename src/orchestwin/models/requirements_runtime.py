@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +18,7 @@ class RequirementsRuntimeMode(StrEnum):
     """Requirements provider runtimes supported in the current milestone."""
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
+    MODEL_ADAPTER = "MODEL_ADAPTER"
 
 
 class RequirementsRuntimeSettings(BaseSettings):
@@ -29,6 +31,7 @@ class RequirementsRuntimeSettings(BaseSettings):
     )
 
     mode: RequirementsRuntimeMode = RequirementsRuntimeMode.FAKE_DETERMINISTIC
+    model_config_file: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +46,12 @@ def build_requirements_proposal_port(
     settings: RequirementsRuntimeSettings,
 ) -> RequirementsProposalPort:
     """Build the configured requirements proposal provider."""
+    if settings.mode is RequirementsRuntimeMode.MODEL_ADAPTER:
+        from orchestwin.models.model_proposals import ModelRequirementsAdapter
+        from orchestwin.models.proposal_generation import build_proposal_generator
+
+        return ModelRequirementsAdapter(build_proposal_generator(settings.model_config_file))
+
     if settings.mode is RequirementsRuntimeMode.FAKE_DETERMINISTIC:
         return FakeDeterministicRequirementsAdapter()
 

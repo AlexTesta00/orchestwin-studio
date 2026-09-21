@@ -31,6 +31,8 @@ _HIGH_IMPACT_NAMES: Final = frozenset(
         "gradle-wrapper.jar",
         "gradle-wrapper.properties",
         "gradle.properties",
+        "gradlew",
+        "gradlew.bat",
         "libs.versions.toml",
         "settings.gradle.kts",
         "verification-metadata.xml",

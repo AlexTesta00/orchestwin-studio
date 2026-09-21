@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceBindings
 from orchestwin.twins.persistence.repositories import (
     PersonaVersionRepository,
     SqlAlchemyPersonaVersionRepository,
@@ -61,6 +62,7 @@ class SqlAlchemyUserModelingUnitOfWork:
     ) -> None:
         """Create owner-scoped repositories over one shared session."""
         self._session = session
+        self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._completed = False
 
         self.personas = SqlAlchemyPersonaVersionRepository(

@@ -234,6 +234,28 @@ def test_partial_catalog_promotes_only_the_target_with_complete_evidence() -> No
     }
 
 
+@pytest.mark.parametrize(
+    "target", [ExecutionTarget.JVM_JAVA, ExecutionTarget.JVM_KOTLIN, ExecutionTarget.JVM_SCALA]
+)
+def test_promoted_profile_accepts_the_runtime_already_promoted_runner(target):
+    profile = create_sprint09_jvm_profile_registry(
+        evidence_catalog=_evidence_catalog(target)
+    ).for_target(target)
+    runner = replace(
+        runner_for(target),
+        capability_status=ExecutionCapabilityStatus.VALIDATED_LEVEL_D,
+        validation_evidence_refs=profile.scope.validation_evidence_refs,
+    )
+    contract = profile.create_contract(
+        snapshot_for(target),
+        declaration_for(target),
+        source_revision=source_revision_reference(),
+        runner=runner,
+    )
+    assert contract.runner == runner
+    assert contract.validation.capability_status is ExecutionCapabilityStatus.VALIDATED_LEVEL_D
+
+
 def test_promoted_profile_rejects_a_runner_not_bound_to_recorded_evidence() -> None:
     catalog = _evidence_catalog(ExecutionTarget.JVM_SCALA)
     registry = create_sprint09_jvm_profile_registry(evidence_catalog=catalog)

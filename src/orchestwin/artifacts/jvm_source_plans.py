@@ -128,6 +128,11 @@ class JvmSourcePlanPolicy:
 
 
 DEFAULT_JVM_SOURCE_PLAN_POLICY: Final = JvmSourcePlanPolicy()
+JVM_REPAIR_SOURCE_PLAN_POLICY: Final = JvmSourcePlanPolicy(
+    # Imported and generated revisions use this repository MIME type. Repair
+    # commands still require complete UTF-8 text and enforce every source guard.
+    allowed_media_types=_ALLOWED_MEDIA_TYPES | {"application/octet-stream"},
+)
 
 
 @dataclass(frozen=True, slots=True, order=True)

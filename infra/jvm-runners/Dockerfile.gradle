@@ -1,5 +1,10 @@
 FROM docker.io/library/gradle:9.5.0-jdk21-noble@sha256:41cd88d5934d5880ea7e3ebd53d711155e7e1c989390f0f9fa3dfd7d6b742a28
 
+USER root
+ADD --checksum=sha256:553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746 --chmod=0444 https://services.gradle.org/distributions/gradle-9.5.0-bin.zip /opt/orchestwin/gradle-9.5.0-bin.zip
+COPY --chmod=0444 infra/jvm-runners/resolve-dependencies.gradle.kts /opt/orchestwin/resolve-dependencies.gradle.kts
+RUN chmod 0555 /opt/orchestwin
+
 USER gradle
 WORKDIR /workspace
 ENTRYPOINT []

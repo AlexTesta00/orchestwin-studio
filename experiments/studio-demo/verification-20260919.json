@@ -1,0 +1,61 @@
+{
+  "scope": "Local Studio calculator demo and UX/UI mockup; technical verification, not an empirical study or Level D qualification",
+  "verified_at": "2026-09-19T14:24:20Z",
+  "base_git_commit": "77cbac0",
+  "project_id": "f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "demo_url": "http://127.0.0.1:8080/projects/f6d7cae8-1a22-4d68-8799-714022b4af61",
+  "source": {
+    "origin": "OWNER_EDIT",
+    "revision_id": "4061ff1f-fb53-4697-bd24-27244a86959d",
+    "version": 4,
+    "content_hash": "ad42c41778cf9b6e49de0d1b935cf7e6ecc142e11b45ce7960901909801197ee",
+    "original_model_revision_preserved": "db5ce0e9-f570-450e-bdb2-6fab338fa6ee",
+    "assisted_correction": true,
+    "final_revision_saved_through_frontend": true,
+    "download_observed_in_downloads_folder": true,
+    "download_zip_crc_valid": true,
+    "download_files_equal_stored_revision_and_reviewed_sources": true
+  },
+  "real_model_mockup": {
+    "generation_id": "7fa6afb5-a454-40bc-8d1d-8af1a4f6c5f7",
+    "design_version_id": "059623c8-25f5-4a79-b701-42b47975a766",
+    "design_content_hash": "6997d0371b85aab036a255ec96d96e9e187a464cf1cd42ae9bcba32282b52900",
+    "screens": ["Calcolatore aritmetico", "Risultato dell'operazione"],
+    "illustrative_result": "Esempio: 5 + 3 = 8",
+    "retrieved_after_browser_reload": true,
+    "approved_design_changed": false,
+    "business_logic_executed_by_mockup": false
+  },
+  "automated_checks": {
+    "backend_api_artifacts_models": {"passed": 1169, "skipped": 2, "failed": 0},
+    "skip_reason": "Torch unavailable in native Windows Python for two memory numerical tests; local inference remains active in WSL",
+    "frontend": {"passed": 227, "failed": 0},
+    "postgres_owner_edits_and_source_retry": {"passed": 12, "failed": 0},
+    "exact_downloaded_calculator_sources_node_tests": {"passed": 13, "failed": 0},
+    "frontend_typecheck": "PASSED",
+    "frontend_eslint": "PASSED",
+    "frontend_build": "PASSED",
+    "javascript_parser_container_smoke": "PASSED; non-root, read-only, no network, syntax-only",
+    "real_model_runtime_readiness": true,
+    "database_migration": "0043_source_syntax_retry"
+  },
+  "browser_observations": [
+    "One visible workflow stage; completed stages remain revisitable; saved project reopens at Result",
+    "5 + 3 = 8, 5 - 3 = 2, 5 * 3 = 15, 5 / 3 displayed as 1,66666666667 through operation-button clicks",
+    "1,5 + 2.25 displayed as 3,75",
+    "Division by zero clears result and shows an explanatory error",
+    "Reset clears inputs and result; delete-digit changes 12 to 1",
+    "Tab moves first to second input; Shift+Tab reverses; Escape clears",
+    "Native form submission: 7 + 2 through Enter = 9; changing second operand to 4 and clicking Calculate = 11",
+    "Mobile preview body width and scrollWidth both 359px: no horizontal overflow",
+    "Mockup rejects empty required fields, opens example-result screen after completing fields, and retains entered value on return",
+    "Source edit submitted through UI created immutable revision4 and preserved prior versions",
+    "Browser ZIP download exists on disk and contains three exact verified files"
+  ],
+  "limits": [
+    "Reviewed calculator is an assisted correction of real model output, not an autonomous generation success",
+    "Mockup is a model-authored clickable visual draft with explicitly illustrative results",
+    "No new training, human study, or Level D qualification was performed",
+    "Verification covers this demo and changed paths; it is not a claim that every possible generated application is correct"
+  ]
+}

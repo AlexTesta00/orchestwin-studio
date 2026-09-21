@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
@@ -44,32 +43,58 @@ from orchestwin.api.execution import (
     HighImpactApprovalApiService,
 )
 from orchestwin.api.finalization import FinalizationApiService
-from orchestwin.api.jvm_execution import JvmExecutionApiService
+from orchestwin.api.governed_jvm_runtime import build_governed_jvm_services
+from orchestwin.api.governed_web_runtime import build_governed_web_services
+from orchestwin.api.jvm_execution import (
+    JvmExecutionApiService,
+    JvmExecutionReadApiService,
+    JvmExecutionStartApiService,
+    JvmRepairApiService,
+    JvmSourceApiService,
+)
+from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.sprint07_runtime import build_sprint07_services
+from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
-from orchestwin.api.web_execution import WebExecutionApiService
+from orchestwin.api.web_execution import (
+    WebBrowserEvidenceApiService,
+    WebExecutionApiService,
+    WebExecutionReadApiService,
+    WebExecutionStartApiService,
+    WebRepairApiService,
+    WebSourceApiService,
+)
+from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
+from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
-from orchestwin.config import ApplicationSettings, load_settings
+from orchestwin.config import (
+    ApplicationSettings,
+    ModelRuntimeMode,
+    RuntimeEnvironment,
+    load_settings,
+)
+from orchestwin.evaluation.final_runtime import FinalEvaluatorRuntime, build_final_evaluator_runtime
+from orchestwin.evaluation.local_runtime import LocalEvaluatorRuntime
 from orchestwin.identity.application import (
     IdentityApplicationService,
     LocalIdentityApplicationService,
 )
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
-from orchestwin.identity.tokens import (
-    JwtAccessTokenService,
-    load_access_token_settings,
+from orchestwin.identity.tokens import JwtAccessTokenService
+from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
+from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
+from orchestwin.models.real_runtime import (
+    RealModelRuntime,
+    RealModelRuntimeError,
+    build_real_model_runtime,
 )
 from orchestwin.models.runtime import (
     create_team_proposal_port,
     load_team_proposal_runtime_settings,
 )
-from orchestwin.persistence import (
-    DatabaseRuntime,
-    create_database_runtime,
-    load_database_settings,
-)
+from orchestwin.persistence import DatabaseRuntime, create_database_runtime
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
@@ -101,6 +126,8 @@ from orchestwin.projects.requirements_runtime import (
     build_requirements_services,
 )
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
+from orchestwin.twins.runtime import UserModelingServices, build_user_modeling_services
+from orchestwin.web_execution.static_inspections import StaticInspectionService
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -168,6 +195,9 @@ class AgentTeamApprovalService(Protocol):
 class ApplicationRuntime:
     """Process-level adapters owned by one FastAPI application."""
 
+    final_evaluator_runtime: FinalEvaluatorRuntime | LocalEvaluatorRuntime | None = None
+    real_model_runtime: RealModelRuntime | None = None
+    proposal_evidence_store: SqlAlchemyProposalEvidenceStore | None = None
     identity_service: IdentityApplicationService | None = None
     project_service: ProjectApplicationService | None = None
     clarification_service: ProjectClarificationApplicationService | None = None
@@ -175,6 +205,7 @@ class ApplicationRuntime:
     database_runtime: DatabaseRuntime | None = None
     team_proposal_service: TeamProposalApplicationService | None = None
     agent_team_service: AgentTeamApprovalService | None = None
+    user_modeling_services: UserModelingServices | None = None
     requirements_generation_service: LocalRequirementsGenerationService | None = None
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
@@ -191,8 +222,20 @@ class ApplicationRuntime:
     brownfield_service: BrownfieldApiService | None = None
     execution_query_service: ExecutionQueryApiService | None = None
     high_impact_service: HighImpactApprovalApiService | None = None
+    static_inspection_service: StaticInspectionService | None = None
+    web_source_api_service: WebSourceApiService | None = None
+    web_execution_read_api_service: WebExecutionReadApiService | None = None
     web_execution_api_service: WebExecutionApiService | None = None
+    web_execution_start_api_service: WebExecutionStartApiService | None = None
+    web_browser_evidence_api_service: WebBrowserEvidenceApiService | None = None
+    web_repair_api_service: WebRepairApiService | None = None
+    web_operation_store: object | None = None
     jvm_execution_api_service: JvmExecutionApiService | None = None
+    jvm_execution_read_api_service: JvmExecutionReadApiService | None = None
+    jvm_execution_start_api_service: JvmExecutionStartApiService | None = None
+    jvm_source_api_service: JvmSourceApiService | None = None
+    jvm_repair_api_service: JvmRepairApiService | None = None
+    jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
     training_api_service: TrainingApiService | None = None
@@ -206,21 +249,40 @@ class ApplicationRuntime:
 def create_default_runtime(
     settings: ApplicationSettings | None = None,
 ) -> ApplicationRuntime:
-    """Create persistence-backed services when configuration exists."""
+    """Compose services from validated process/dotenv credentials, not os.getenv alone."""
+    connection_settings = load_runtime_connection_settings()
     resolved_settings = settings if settings is not None else load_settings()
-    database_url = os.getenv(DATABASE_URL_ENVIRONMENT)
-    jwt_secret = os.getenv(JWT_SECRET_ENVIRONMENT)
 
-    if not database_url or not jwt_secret:
+    real_required = resolved_settings.model_runtime_mode is ModelRuntimeMode.REAL_REQUIRED
+    if not real_required and resolved_settings.model_runtime_config_file is not None:
+        raise RealModelRuntimeError("REAL_MODEL_MODE_REQUIRED_FOR_CONFIGURATION")
+    if resolved_settings.environment is RuntimeEnvironment.PRODUCTION and not real_required:
+        raise RealModelRuntimeError("PRODUCTION_REQUIRES_REAL_MODEL_RUNTIME")
+
+    if connection_settings is None:
+        if real_required:
+            raise RealModelRuntimeError("REAL_MODEL_RUNTIME_REQUIRES_DATABASE_AND_AUTH")
         return ApplicationRuntime()
 
-    team_proposal_port = create_team_proposal_port(load_team_proposal_runtime_settings())
-    database_runtime = create_database_runtime(load_database_settings())
+    real_models = (
+        build_real_model_runtime(resolved_settings.model_runtime_config_file)
+        if real_required
+        else None
+    )
+    final_evaluator = (
+        real_models.final_evaluator if real_models is not None else build_final_evaluator_runtime()
+    )
+    team_proposal_port = (
+        real_models.team
+        if real_models is not None
+        else create_team_proposal_port(load_team_proposal_runtime_settings())
+    )
+    database_runtime = create_database_runtime(connection_settings.database)
 
     identity_service = LocalIdentityApplicationService(
         unit_of_work_factory=SqlAlchemyIdentityUnitOfWorkFactory(database_runtime.session_factory),
         password_service=Argon2PasswordService(),
-        access_token_service=JwtAccessTokenService(load_access_token_settings()),
+        access_token_service=JwtAccessTokenService(connection_settings.access_tokens),
     )
     project_service = LocalProjectApplicationService(
         unit_of_work_factory=SqlAlchemyProjectUnitOfWorkFactory(database_runtime.session_factory)
@@ -235,7 +297,9 @@ def create_default_runtime(
             database_runtime.session_factory
         )
     )
+    proposal_evidence_store = SqlAlchemyProposalEvidenceStore(database_runtime.session_factory)
     team_proposal_service = LocalTeamProposalApplicationService(
+        proposal_evidence_store=proposal_evidence_store,
         unit_of_work_factory=SqlAlchemyTeamProposalUnitOfWorkFactory(
             database_runtime.session_factory
         ),
@@ -244,15 +308,33 @@ def create_default_runtime(
     agent_team_service = LocalAgentTeamApprovalService(
         unit_of_work_factory=SqlAlchemyAgentTeamUnitOfWorkFactory(database_runtime.session_factory)
     )
-    requirements = build_requirements_services(database_runtime.session_factory)
-    design = build_design_services(database_runtime.session_factory)
-    architecture = build_architecture_services(database_runtime.session_factory)
+    user_modeling = build_user_modeling_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.user_modeling} if real_models is not None else {}),
+    )
+    requirements = build_requirements_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.requirements} if real_models is not None else {}),
+    )
+    design = build_design_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.design} if real_models is not None else {}),
+    )
+    architecture = build_architecture_services(
+        database_runtime.session_factory,
+        **({"proposal_runtime": real_models.architecture} if real_models is not None else {}),
+    )
     sprint07 = build_sprint07_services(
         resolved_settings,
         database_runtime.session_factory,
     )
+    governed_jvm = build_governed_jvm_services(database_runtime.session_factory, resolved_settings)
+    governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
 
     return ApplicationRuntime(
+        real_model_runtime=real_models,
+        final_evaluator_runtime=final_evaluator,
+        proposal_evidence_store=proposal_evidence_store,
         identity_service=identity_service,
         project_service=project_service,
         clarification_service=clarification_service,
@@ -260,6 +342,7 @@ def create_default_runtime(
         database_runtime=database_runtime,
         team_proposal_service=team_proposal_service,
         agent_team_service=agent_team_service,
+        user_modeling_services=user_modeling,
         requirements_generation_service=requirements.generation,
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,
@@ -278,6 +361,24 @@ def create_default_runtime(
         brownfield_service=sprint07.brownfield,
         execution_query_service=sprint07.execution_queries,
         high_impact_service=sprint07.high_impact,
+        static_inspection_service=build_static_inspection_service(
+            database_runtime.session_factory, resolved_settings
+        ),
+        web_execution_read_api_service=governed_web.reads,
+        web_execution_start_api_service=governed_web.start,
+        web_browser_evidence_api_service=governed_web.reads,
+        web_repair_api_service=governed_web.repairs,
+        web_operation_store=governed_web.operations,
+        jvm_operation_store=governed_jvm.operations,
+        jvm_source_api_service=governed_jvm.sources,
+        jvm_repair_api_service=governed_jvm.repairs,
+        jvm_execution_read_api_service=governed_jvm.reads,
+        jvm_execution_start_api_service=governed_jvm.start,
+        web_source_api_service=SqlAlchemyWebSourceApiService(
+            database_runtime.session_factory,
+            content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
+        ),
+        workflow_run_api_service=SqlAlchemyWorkflowRunApiService(database_runtime.session_factory),
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,
             adapter_registry=ContentAddressedAdapterRegistry(

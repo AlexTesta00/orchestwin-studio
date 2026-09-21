@@ -20,6 +20,12 @@ describe("ProjectBriefEditor", () => {
     });
 
     await wrapper.get("#brief-name").setValue("Project");
+    await wrapper.get("#brief-goals").setValue("Help customers\nSave time");
+
+    expect(wrapper.get('[data-testid="brief-essentials"]').findAll("textarea")).toHaveLength(6);
+    expect(
+      wrapper.get('[data-testid="brief-additional-details"]').attributes("open"),
+    ).toBeUndefined();
 
     await wrapper.get('[data-testid="brief-budget-unknown"]').setValue(true);
 
@@ -32,6 +38,7 @@ describe("ProjectBriefEditor", () => {
     expect(submitted).toEqual(
       expect.objectContaining({
         name: "Project",
+        goals: ["Help customers", "Save time"],
         budget: null,
         unknown_fields: ["budget"],
       }),

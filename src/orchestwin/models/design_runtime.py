@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,7 @@ class DesignRuntimeMode(StrEnum):
     """Design provider runtimes supported in the current milestone."""
 
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
+    MODEL_ADAPTER = "MODEL_ADAPTER"
 
 
 class DesignRuntimeSettings(BaseSettings):
@@ -27,6 +29,7 @@ class DesignRuntimeSettings(BaseSettings):
     )
 
     mode: DesignRuntimeMode = DesignRuntimeMode.FAKE_DETERMINISTIC
+    model_config_file: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +44,12 @@ def build_design_proposal_port(
     settings: DesignRuntimeSettings,
 ) -> DesignProposalPort:
     """Build the configured design proposal provider."""
+    if settings.mode is DesignRuntimeMode.MODEL_ADAPTER:
+        from orchestwin.models.model_proposals import ModelDesignAdapter
+        from orchestwin.models.proposal_generation import build_proposal_generator
+
+        return ModelDesignAdapter(build_proposal_generator(settings.model_config_file))
+
     if settings.mode is DesignRuntimeMode.FAKE_DETERMINISTIC:
         return FakeDeterministicDesignAdapter()
 

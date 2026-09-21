@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-20T07:10:04.057365+00:00",
+  "base_commit": "2f25d131e0313d2b87ebeab31a842b5018c815bc",
+  "status": "PREPARED_WAITING_FOR_NEW_MODEL_RELEASE",
+  "scope": "DEVELOPMENT_CONSOLE_MODEL_PROBE_NOT_LEVEL_D",
+  "model_calls": 0,
+  "application_executions": 0,
+  "manual_generated_source_edits": false,
+  "new_training": false,
+  "implementation": [
+    {
+      "path": "scripts/jvm_calculator_repair.py",
+      "sha256": "25d7124ccf12ff1e9427c8404548d034714ec8125b31dd0d30a05713f1ad5a97",
+      "bytes": 23097
+    },
+    {
+      "path": "scripts/jvm_calculator_development_probe.py",
+      "sha256": "434e5a41d81dbc98e3b0a0ce6a1c24b8400de1e51808f32849325a91acfe651b",
+      "bytes": 32585
+    },
+    {
+      "path": "scripts/verify_generated_jvm_calculator.py",
+      "sha256": "4e4b23d4c5c70e43a0e6bbe9daee2c6c65f7178cd109241edbcd60f7ead5b622",
+      "bytes": 26667
+    },
+    {
+      "path": "src/test/python/jvm_execution/test_calculator_repair.py",
+      "sha256": "9e32d59b2ff69764cc54768031948e61fbbab942a4c425c95d85b0491db3d8c3",
+      "bytes": 11260
+    },
+    {
+      "path": "src/test/python/jvm_execution/test_generated_calculator_verification.py",
+      "sha256": "ebc97c4feeefdf9ae0c90d2e4ef0e7a53a68dbefebae13fc6d1c47669bf3a2f5",
+      "bytes": 8205
+    }
+  ],
+  "jvm_configuration": {
+    "path": "var/studio/jvm-runtime.json",
+    "sha256": "821e6a0dc08088bba622f267c830a9289cc4ac332cd189042cd51afa1d9cf43e",
+    "bytes": 850
+  },
+  "repair_protocol": {
+    "prepare_command": "prepare-repair validates original native generation, source bytes, failed execution and SHA256-verified log excerpts without inference.",
+    "model_adapter": "ModelSourceProposalAdapter.propose(task=jvm-repair), same production repair protocol and native evidence recorder",
+    "attempt_limit": "One model request per original generation/source reference in the shared var/studio/jvm-calculator-repair-attempts registry. The key is SHA256 of canonical scope, base_generation_id and full base_source_reference; copying, renaming, moving or rehashing a preparation cannot reset the slot. Exclusive claim creation precedes transport, remains after failure, and records preparation/execution/failure/model identity hashes. Original generations only; no chained repairs.",
+    "model_selection": "A different base repository/revision or adapter SHA is required; the original unadapted 4B model cannot be blindly retried.",
+    "lineage": "REPAIR_CHANGE_SET revision 2 links original revision, failure signature, execution hash and native repair output bytes. Original source/evidence is untouched.",
+    "execution": "Separate explicit development-probe with --contract-version 2, pinned recipes, restricted dependency setup, offline subsequent phases and unchanged cleanup boundaries.",
+    "publication": "No owner gate, database publication, formal Level D promotion or graphical-preview claim.",
+    "recipe_binding": "The repair context must match the original audited build_recipe_view, build_recipes and build_recipe_metadata_only. Every recipe text must also match the exact SHA256 and byte size of its pinned original file."
+  },
+  "oracle": {
+    "version": 2,
+    "case_count": 34,
+    "historical_v1_count": 20,
+    "historical_v1_unchanged": true,
+    "additions": [
+      "positive/negative/comma tiny divisors",
+      "tiny nonzero arithmetic results",
+      "signed and leading decimal inputs",
+      "operation whitespace",
+      "partial numeric strings, inner whitespace, repeated/mixed decimal separators, hexadecimal and empty operation"
+    ],
+    "numeric_comparison": "V2 abs_tol=0 and rel_tol=1e-12, so a zero stub cannot pass a tiny nonzero result; V1 comparisons remain unchanged."
+  },
+  "validation": {
+    "pytest": {
+      "passed": 46,
+      "failed": 0,
+      "seconds": 8.92,
+      "suites": [
+        "src/test/python/jvm_execution/test_calculator_repair.py",
+        "src/test/python/jvm_execution/test_development_calculator_probe.py",
+        "src/test/python/jvm_execution/test_generated_calculator_verification.py"
+      ],
+      "scope": "Synthetic transport and executor tests, no inference or Docker application executions.",
+      "exit_code": 0
+    },
+    "ruff_check": "PASSED",
+    "ruff_format": "PASSED",
+    "initial_environment_issue": "Initial default pytest temp/cache paths were inaccessible under the sandbox. Tests passed with a fresh external basetemp and cacheprovider disabled; no permissions or old caches were changed.",
+    "adversarial_review_fixes": [
+      "Identical preparation copied to a different directory and filename with a new output is rejected by the existing shared original-source claim; transport call count remains one.",
+      "Build recipe text, view or metadata substitutions with a recalculated preparation hash are rejected before runtime construction."
+    ],
+    "original_preparation_files_unchanged": true,
+    "all_three_preparations_revalidated": true
+  },
+  "targets": [
+    {
+      "target": "JVM_KOTLIN",
+      "preparation": {
+        "path": "var/studio/jvm-kotlin-repair-preparation-01/repair-input.json",
+        "sha256": "6d12db4ff79479af117eede300526fedbc72681b2c2a472fb3e9466851f6217f",
+        "bytes": 223757
+      },
+      "preparation_report": {
+        "path": "var/studio/jvm-kotlin-repair-preparation-01/report.json",
+        "sha256": "489d1ef2360f83f7f1216f259287087e0a237989f83f6c6db6eb640359d6d51c",
+        "bytes": 1065
+      },
+      "repair_input_hash": "cfaf37d273c4f56150f35df7604bd77b155efb24e695f407d31094a204ad324a",
+      "base_generation_id": "04f6c796-9c71-4389-be27-44ce3249c769",
+      "base_revision": {
+        "revision_id": "1f643fe2-806a-44f8-81b9-20059eea3f67",
+        "project_id": "7e7c13c8-5431-4f4d-be92-15ad8f1f8d74",
+        "version_number": 1,
+        "content_hash": "a97cfcacdd890872629d88b3f47704d6f3edb5ec637ba0db5887b4f173d20a12",
+        "source_tree_hash": "c0a7861aa1ced62dbf4721617d8555e8badd5cddd2702e6fffdabd47ec44d0b6"
+      },
+      "failed_execution_id": "069dc16d-4862-4247-b85a-017982708927",
+      "failed_execution_hash": "15ab585c66280f1d3e85529008885f1509a013733fa894920d7ddc56ebfb0247",
+      "recorded_failure": {
+        "phase": "TEST",
+        "code": "KT_COMPILATION_ERROR"
+      },
+      "failure_signature": {
+        "category": "TEST",
+        "phase": "TEST",
+        "failure_code": "KT_COMPILATION_ERROR",
+        "normalized_message": "Unresolved reference 'assertEquals'.",
+        "signature": "2c61bb7ce324a482c810c18d9e0725d12a85e026620ea5b24476decc8f1d03de"
+      },
+      "verified_log_streams": 2,
+      "contract_v1_sha256": "f6db29493814a1e1f04eb61aa4a9b8d86d01479026e65d77244875517cfa73c2",
+      "contract_v2_sha256": "8ed3d7c3e9c517a918ca85eefa3bc8cbdb7fc7499b225ed38165ce95319c96cc",
+      "attempt_claim_exists": false,
+      "repair_command_template": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py repair-development --prepared-input var/studio/jvm-kotlin-repair-preparation-01/repair-input.json --runtime-config <NEW_SOURCE_RUNTIME_CONFIG> --output var/studio/jvm-kotlin-repair-01",
+      "execution_command": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py development-probe --target JVM_KOTLIN --configuration var/studio/jvm-runtime.json --source-revision var/studio/jvm-kotlin-repair-01/source-revision.json --source-root var/studio/jvm-kotlin-repair-01/sources --generation-evidence var/studio/jvm-kotlin-repair-01/generation-evidence.json --contract-version 2 --output var/studio/jvm-kotlin-repair-execution-01",
+      "attempt_registry_key": "e0f6d5f49ae3e44c6e4a97ce39f861aabb18e5cf680b2d0d8877feb9e75ab333",
+      "attempt_claim_path": "var/studio/jvm-calculator-repair-attempts/e0f6d5f49ae3e44c6e4a97ce39f861aabb18e5cf680b2d0d8877feb9e75ab333.json",
+      "preparation_revalidated": true
+    },
+    {
+      "target": "JVM_SCALA",
+      "preparation": {
+        "path": "var/studio/jvm-scala-repair-preparation-01/repair-input.json",
+        "sha256": "95bec2e3bf8241e95b31e8102fc5df2a25da309e1f2ef548c64c035f7c0da3da",
+        "bytes": 199155
+      },
+      "preparation_report": {
+        "path": "var/studio/jvm-scala-repair-preparation-01/report.json",
+        "sha256": "a6a09e4dd5bd9e15d3f2325536577a738e2e93db1b7619c371f008f547ed63ba",
+        "bytes": 1075
+      },
+      "repair_input_hash": "081f9606323ab5bee319dc50eb2f361f74fac3c77e248be27fc99cff222be57c",
+      "base_generation_id": "89019603-34e7-4b4a-9004-a66696f3aef7",
+      "base_revision": {
+        "revision_id": "35de739b-e202-43e7-b80b-b99d8ddb89c1",
+        "project_id": "7b0ead04-a488-4429-b571-0bc3f2bcd9d3",
+        "version_number": 1,
+        "content_hash": "896fc068a83bb09cbf92d771438766739859dd6889282680ca2f060dc034c29b",
+        "source_tree_hash": "bd529b77d51c7b29c19a57303e0c9a49d2d92b9d5223faba117e776895c1103b"
+      },
+      "failed_execution_id": "a8e13343-5d16-4ab8-8dbb-f185570ffbff",
+      "failed_execution_hash": "28705eafa2208ed691f1bc62ec709b1d9bf581b1ab56950b0a4a6b2589d351cb",
+      "recorded_failure": {
+        "phase": "STATIC_CHECKS",
+        "code": "SCALA_E007"
+      },
+      "failure_signature": {
+        "category": "STATIC_CHECK",
+        "phase": "STATIC_CHECKS",
+        "failure_code": "SCALA_E007",
+        "normalized_message": "Scala 3 compiler reported a typed error.",
+        "signature": "0be673c13d93744170cd405a49c07f8d3bf1d7efc150fcbc29cb33365d409f06"
+      },
+      "verified_log_streams": 2,
+      "contract_v1_sha256": "83fe0476b87a995249a28a2e72db0dabe57f5e9e3f521f099f604e9f8c1bacad",
+      "contract_v2_sha256": "13fbd7883ddca0c658a9299046ef7492185bfdfe69989d305e296f578bbab594",
+      "attempt_claim_exists": false,
+      "repair_command_template": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py repair-development --prepared-input var/studio/jvm-scala-repair-preparation-01/repair-input.json --runtime-config <NEW_SOURCE_RUNTIME_CONFIG> --output var/studio/jvm-scala-repair-01",
+      "execution_command": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py development-probe --target JVM_SCALA --configuration var/studio/jvm-runtime.json --source-revision var/studio/jvm-scala-repair-01/source-revision.json --source-root var/studio/jvm-scala-repair-01/sources --generation-evidence var/studio/jvm-scala-repair-01/generation-evidence.json --contract-version 2 --output var/studio/jvm-scala-repair-execution-01",
+      "attempt_registry_key": "ec7f6f9d0e32fdebe8e8e8ec76deeca8fdc9f9b01ab278577b3bd7f3841c831e",
+      "attempt_claim_path": "var/studio/jvm-calculator-repair-attempts/ec7f6f9d0e32fdebe8e8e8ec76deeca8fdc9f9b01ab278577b3bd7f3841c831e.json",
+      "preparation_revalidated": true
+    },
+    {
+      "target": "JVM_JAVA",
+      "preparation": {
+        "path": "var/studio/jvm-java-repair-preparation-01/repair-input.json",
+        "sha256": "d6b4554afeabf3300fedc30a35ea7dabf1835720bb4adb9b496cd0001d68a299",
+        "bytes": 218171
+      },
+      "preparation_report": {
+        "path": "var/studio/jvm-java-repair-preparation-01/report.json",
+        "sha256": "c65b8e032f63e5800a3cf233d23a3d52e6672fd09e608b7848f95f105f64d61a",
+        "bytes": 1145
+      },
+      "repair_input_hash": "ee0319c259a20b9669a527fc969d004348cf51626686e54f2f94b14052c4f837",
+      "base_generation_id": "2c00c248-16d1-4d2e-826e-09701d59c2cf",
+      "base_revision": {
+        "revision_id": "502240ba-7032-4ad1-a07a-3750ec5fe92d",
+        "project_id": "4b81c209-d50a-4100-9b44-d09eae383f05",
+        "version_number": 1,
+        "content_hash": "87387cd0e8eb3e593dc252ad80f7a12496dfb4d6b10e61b3437607978a7417b4",
+        "source_tree_hash": "0d0819e13151d27c4f6b9de921ad20870912f0d281186b8de41fe706fc3bf418"
+      },
+      "failed_execution_id": "de5f7780-6bb7-4c20-b868-8b60ea5236a3",
+      "failed_execution_hash": "1b13e61e283f394daf808bc848ea56b79dc12c129336fb0f4438cd82369c8ae5",
+      "recorded_failure": {
+        "phase": "TEST",
+        "code": "JVM_TEST_CASE_FAILED"
+      },
+      "failure_signature": {
+        "category": "TEST",
+        "phase": "TEST",
+        "failure_code": "JVM_TEST_CASE_FAILED",
+        "normalized_message": "org.opentest4j.AssertionFailedError: Expected java.lang.IllegalArgumentException to be thrown, but nothing was thrown.",
+        "signature": "c4d86c5a80bc2d0a7bf3c57aa3aab0093e3334773c86ec6b2b64b5d8452c4e40"
+      },
+      "verified_log_streams": 2,
+      "contract_v1_sha256": "bb0c0fd5c553994d50c869e12da5bf8f91a6c490a45f8447cae8fbf82da82998",
+      "contract_v2_sha256": "9030d7ae4d84ba09e747dc7a3b941980ff512b5b4d486362251ba4b104ed85a9",
+      "attempt_claim_exists": false,
+      "repair_command_template": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py repair-development --prepared-input var/studio/jvm-java-repair-preparation-01/repair-input.json --runtime-config <NEW_SOURCE_RUNTIME_CONFIG> --output var/studio/jvm-java-repair-01",
+      "execution_command": ".venv/Scripts/python.exe -B scripts/verify_generated_jvm_calculator.py development-probe --target JVM_JAVA --configuration var/studio/jvm-runtime.json --source-revision var/studio/jvm-java-repair-01/source-revision.json --source-root var/studio/jvm-java-repair-01/sources --generation-evidence var/studio/jvm-java-repair-01/generation-evidence.json --contract-version 2 --output var/studio/jvm-java-repair-execution-01",
+      "attempt_registry_key": "8050499330bd1ce8e9f54d669aaa895b1bb2455979453730b6193ce5a14927e4",
+      "attempt_claim_path": "var/studio/jvm-calculator-repair-attempts/8050499330bd1ce8e9f54d669aaa895b1bb2455979453730b6193ce5a14927e4.json",
+      "preparation_revalidated": true
+    }
+  ]
+}

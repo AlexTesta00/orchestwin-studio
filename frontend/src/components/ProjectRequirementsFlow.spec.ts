@@ -399,7 +399,7 @@ describe("ProjectRequirementsFlow", () => {
 
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Ready for design exploration",
+      "The features are approved",
     );
   });
 

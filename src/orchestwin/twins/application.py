@@ -13,10 +13,12 @@ from orchestwin.agents.catalog import (
     AGENT_CATALOG_CONTENT_HASH,
     AGENT_CATALOG_VERSION,
 )
+from orchestwin.models.proposal_evidence import bind_model_artifacts, evidence_application
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     ProposedPersonaProfile,
     ProposedUserTwinProfile,
+    UserModelingBriefInput,
     UserModelingProposalIssueCode,
     UserModelingProposalPort,
     UserModelingProposalStatus,
@@ -127,8 +129,8 @@ class GovernedUserModelingContext:
 
     project_id: UUID
 
-    brief_version: ProjectBriefVersion
-    brief_gate: HumanGate
+    brief_version: ProjectBriefVersion | None
+    brief_gate: HumanGate | None
 
     team_reference: VersionedArtifactReference | None
     approved_team_reference: VersionedArtifactReference | None
@@ -138,7 +140,7 @@ class GovernedUserModelingContext:
 
     def __post_init__(self) -> None:
         """Protect basic consistency of the supplied context."""
-        if self.brief_version.project_id != self.project_id:
+        if self.brief_version is not None and self.brief_version.project_id != self.project_id:
             raise ValueError("User Modeling brief must belong to the context project")
 
         if self.team_reference is None:
@@ -171,6 +173,8 @@ class GovernedUserModelingContext:
         self,
     ) -> VersionedArtifactReference:
         """Return the exact Project Brief reference."""
+        if self.brief_version is None:
+            raise ValueError("User Modeling context has no current Project Brief")
         return VersionedArtifactReference(
             artifact_id=(self.brief_version.id),
             version_number=(self.brief_version.version_number),
@@ -182,6 +186,8 @@ class GovernedUserModelingContext:
         self,
     ) -> UserModelingContextFingerprint:
         """Return the context identity used for stale-result checks."""
+        if self.brief_version is None:
+            raise ValueError("User Modeling context has no current Project Brief")
         return UserModelingContextFingerprint(
             brief_version_id=(self.brief_version.id),
             brief_version_number=(self.brief_version.version_number),
@@ -286,6 +292,7 @@ class LocalUserModelingApplicationService:
     def __init__(
         self,
         *,
+        proposal_evidence_store=None,
         governance: UserModelingGovernancePort,
         proposals: UserModelingProposalPort,
         uow_factory: UserModelingUnitOfWorkFactory,
@@ -301,11 +308,13 @@ class LocalUserModelingApplicationService:
     ) -> None:
         """Configure explicit application dependencies."""
         self._governance = governance
+        self._proposal_evidence_store = proposal_evidence_store
         self._proposals = proposals
         self._uow_factory = uow_factory
         self._uuid_factory = uuid_factory
         self._clock = clock if clock is not None else _utc_now
 
+    @evidence_application
     async def propose_personas(
         self,
         *,
@@ -354,6 +363,7 @@ class LocalUserModelingApplicationService:
             PersonaProposalRequest(
                 project_id=project_id,
                 candidates=(candidate_result.candidates),
+                project_brief=UserModelingBriefInput.from_version(context.brief_version),
             )
         )
 
@@ -414,6 +424,7 @@ class LocalUserModelingApplicationService:
                         persistence_status=(append_status),
                     )
 
+            await bind_model_artifacts(uow, "PERSONA", versions)
             await uow.commit()
 
         return PersonaProposalApplicationResult(
@@ -506,6 +517,14 @@ class LocalUserModelingApplicationService:
             version=next_version,
         )
 
+    async def snapshot_context_is_current(self, *, owner_user_id, project_id, snapshot):
+        context = await self._governance.load_current(
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+        )
+        return snapshot is not None and snapshot_matches_context(snapshot, context)
+
+    @evidence_application
     async def generate_grounded_snapshot(
         self,
         *,
@@ -534,12 +553,14 @@ class LocalUserModelingApplicationService:
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
-            if current_snapshot is not None:
+            if current_snapshot is not None and snapshot_matches_context(current_snapshot, context):
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.SNAPSHOT_ALREADY_EXISTS),
                 )
 
+            base_snapshot_id = None if current_snapshot is None else current_snapshot.id
+            base_version = None if current_snapshot is None else current_snapshot.version_number
             persona_versions = await uow.personas.list_current(project_id=(project_id))
 
         (
@@ -563,6 +584,7 @@ class LocalUserModelingApplicationService:
                 agent_team_reference=(team_reference),
                 catalog_version=(_require_catalog_version(context)),
                 catalog_content_hash=(_require_catalog_hash(context)),
+                project_brief=UserModelingBriefInput.from_version(context.brief_version),
             )
         )
 
@@ -596,7 +618,7 @@ class LocalUserModelingApplicationService:
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
-            if current_snapshot is not None:
+            if (None if current_snapshot is None else current_snapshot.id) != base_snapshot_id:
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.CONTEXT_CHANGED),
@@ -656,8 +678,8 @@ class LocalUserModelingApplicationService:
             snapshot_version = UserModelingSnapshotVersion(
                 id=self._uuid_factory(),
                 project_id=project_id,
-                version_number=1,
-                based_on_version_number=None,
+                version_number=1 if base_version is None else base_version + 1,
+                based_on_version_number=base_version,
                 snapshot=snapshot,
                 content_hash=(snapshot.content_hash),
                 created_by_user_id=(owner_user_id),
@@ -673,6 +695,10 @@ class LocalUserModelingApplicationService:
                     persistence_status=(snapshot_append_status),
                 )
 
+            await bind_model_artifacts(uow, "USER_TWIN", twin_versions)
+            await bind_model_artifacts(
+                uow, "USER_MODELING", (snapshot_version,), relation="ASSEMBLED"
+            )
             await uow.commit()
 
         return GroundedSnapshotGenerationResult(
@@ -765,6 +791,9 @@ def _governance_issue(
     """Return the first governance blocker for User Modeling."""
     if context is None:
         return UserModelingApplicationIssueCode.PROJECT_NOT_FOUND
+
+    if context.brief_version is None or context.brief_gate is None:
+        return UserModelingApplicationIssueCode.BRIEF_APPROVAL_REQUIRED
 
     if not (
         project_brief_gate_is_currently_approved(
@@ -1010,3 +1039,16 @@ def _is_sha256_digest(
 def _utc_now() -> datetime:
     """Return the current UTC timestamp."""
     return datetime.now(UTC)
+
+
+def snapshot_matches_context(snapshot_version, context):
+    """An old approved snapshot cannot authorize a changed brief or team."""
+    if context is None or _governance_issue(context) is not None:
+        return False
+    snapshot = snapshot_version.snapshot
+    return (
+        snapshot.project_brief_reference == context.brief_reference
+        and snapshot.agent_team_reference == context.team_reference
+        and snapshot.catalog_version == context.catalog_version
+        and snapshot.catalog_content_hash == context.catalog_content_hash
+    )

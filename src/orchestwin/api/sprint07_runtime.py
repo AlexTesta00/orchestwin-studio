@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from orchestwin.api.execution_catalog import SqlAlchemyExecutionCatalogLoader
 from orchestwin.config import ApplicationSettings
 from orchestwin.projects.brownfield_application import (
     BrownfieldSourceIntakeResult,
@@ -119,11 +120,15 @@ class LocalExecutionQueryService:
         *,
         registry: ExecutionProfileRegistry,
         sandbox_uow_factory: SandboxRunUnitOfWorkFactory,
+        catalog_loader: SqlAlchemyExecutionCatalogLoader | None = None,
     ) -> None:
         self._registry = registry
         self._sandbox_uow_factory = sandbox_uow_factory
+        self._catalog_loader = catalog_loader
 
     async def profiles(self) -> tuple[ExecutionProfileMetadata, ...]:
+        if self._catalog_loader is not None:
+            return await self._catalog_loader.load()
         return tuple(profile.metadata for profile in self._registry.profiles)
 
     async def profile(
@@ -132,11 +137,13 @@ class LocalExecutionQueryService:
         profile_id: str,
         profile_version: str | None,
     ) -> ExecutionProfileMetadata | None:
-        if profile_version is None:
-            versions = self._registry.versions_for(profile_id)
-            return None if not versions else versions[-1].metadata
-        profile = self._registry.find(profile_id, profile_version)
-        return None if profile is None else profile.metadata
+        matches = tuple(
+            profile
+            for profile in await self.profiles()
+            if profile.profile_id == profile_id
+            and (profile_version is None or profile.version == profile_version)
+        )
+        return None if not matches else matches[-1]
 
     async def sandbox_history(
         self,
@@ -188,6 +195,9 @@ def build_sprint07_services(
     execution_queries = LocalExecutionQueryService(
         registry=registry,
         sandbox_uow_factory=SqlAlchemySandboxRunUnitOfWorkFactory(session_factory),
+        catalog_loader=SqlAlchemyExecutionCatalogLoader(
+            session_factory, registry=registry, web_resources=settings.sandbox_resource_limits
+        ),
     )
     policy = HighImpactOperationPolicy(
         approved_image_references=frozenset(settings.sandbox_approved_images),

@@ -11,7 +11,7 @@ import type {
 } from "@/api/team-contracts";
 import { ApiError } from "@/api/client";
 import { createAppI18n } from "@/i18n";
-import type { TeamAuthorizedRequest } from "@/stores/team";
+import { useTeamStore, type TeamAuthorizedRequest } from "@/stores/team";
 
 import ProjectTeamSelectionFlow from "./ProjectTeamSelectionFlow.vue";
 
@@ -236,12 +236,32 @@ describe("ProjectTeamSelectionFlow", () => {
     const mandatoryCheckbox = wrapper.get('[data-testid="role-REQUIREMENTS_ANALYST"]');
 
     expect(mandatoryCheckbox.attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="save-team-changes"]').attributes("disabled")).toBeDefined();
+    await wrapper.get('[data-testid="team-selection-form"]').trigger("submit");
+    expect(submittedAgentIds).toEqual([]);
+    expect(
+      wrapper.get('[data-testid="team-technical-details"]').attributes("open"),
+    ).toBeUndefined();
+    expect(wrapper.findAll('[data-testid="twin-identity"]')).toHaveLength(2);
+    expect(wrapper.get('[data-testid="role-MOBILE_ENGINEER"]').isVisible()).toBe(false);
+    const moreRoles = wrapper.get('[aria-controls="team-role-cards"]');
+    expect(moreRoles.attributes("aria-expanded")).toBe("false");
+    await moreRoles.trigger("click");
+    expect(
+      (
+        wrapper
+          .get('[data-testid="role-MOBILE_ENGINEER"]')
+          .element.closest("article") as HTMLElement
+      ).style.display,
+    ).toBe("");
+    expect(moreRoles.attributes("aria-expanded")).toBe("true");
 
     await wrapper.get('[data-testid="role-MOBILE_ENGINEER"]').setValue(true);
 
     await wrapper
       .get('[data-testid="rationale-MOBILE_ENGINEER"]')
       .setValue("The owner wants an optional mobile companion.");
+    expect(wrapper.get('[data-testid="save-team-changes"]').attributes("disabled")).toBeUndefined();
 
     await wrapper.get('[data-testid="team-selection-form"]').trigger("submit");
 
@@ -257,5 +277,33 @@ describe("ProjectTeamSelectionFlow", () => {
     ]);
 
     expect(wrapper.text()).toContain("Owner edited");
+    expect(wrapper.get('[data-testid="save-team-changes"]').attributes("disabled")).toBeDefined();
+    const store = useTeamStore();
+    store.gate = {
+      id: "approved-gate",
+      project_id: PROJECT_ID,
+      owner_user_id: "owner-id",
+      gate_type: "AGENT_TEAM",
+      artifact: {
+        project_id: PROJECT_ID,
+        gate_type: "AGENT_TEAM",
+        artifact_id: currentVersion.id,
+        version: currentVersion.version_number,
+        content_hash: currentVersion.content_hash,
+      },
+      iteration: 1,
+      max_iterations: 3,
+      status: "APPROVED",
+      created_at: "2026-09-19T00:00:00Z",
+      updated_at: "2026-09-19T00:00:00Z",
+      event_sequence: 2,
+      resume_status: null,
+    };
+    await flushPromises();
+    expect(wrapper.find('[data-testid="submit-team-gate"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="team-gate-reason"]').exists()).toBe(false);
+    store.currentVersion = proposalVersion(["REQUIREMENTS_ANALYST", "MOBILE_ENGINEER"], 3);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="submit-team-gate"]').exists()).toBe(true);
   });
 });

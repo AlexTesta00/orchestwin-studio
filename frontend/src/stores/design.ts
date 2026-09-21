@@ -27,6 +27,7 @@ export interface DesignStoreError {
 interface DesignState {
   projectId: string | null;
   projectEpoch: number;
+  readSequence: number;
   current: DesignPackageVersionPayload | null;
   history: DesignPackageVersionPayload[];
   diffs: Record<string, DesignPackageDiffPayload>;
@@ -113,6 +114,7 @@ export const useDesignStore = defineStore("design", {
   state: (): DesignState => ({
     projectId: null,
     projectEpoch: 0,
+    readSequence: 0,
     current: null,
     history: [],
     diffs: {},
@@ -188,6 +190,7 @@ export const useDesignStore = defineStore("design", {
     },
 
     begin(operation: DesignOperation): void {
+      if (operation !== "load") this.readSequence += 1;
       this.pending[operation] = true;
       this.error = null;
     },
@@ -195,6 +198,7 @@ export const useDesignStore = defineStore("design", {
     finish(operation: DesignOperation, projectId: string, epoch: number): void {
       if (this.isCurrent(projectId, epoch)) {
         this.pending[operation] = false;
+        if (operation !== "load") this.readSequence += 1;
       }
     },
 
@@ -219,6 +223,7 @@ export const useDesignStore = defineStore("design", {
       authorize: AuthorizedRequest,
       epoch: number,
     ): Promise<void> {
+      const sequence = ++this.readSequence;
       const readiness = await authorize((token) => api.readiness(projectId, token));
       const [history, diffs] = await Promise.all([
         authorize((token) => api.history(projectId, token)),
@@ -233,7 +238,8 @@ export const useDesignStore = defineStore("design", {
           : authorize((token) => api.gateEvents(projectId, token)),
       ]);
 
-      if (!this.isCurrent(projectId, epoch)) {
+      // Ignore reads overtaken by another refresh or a completed owner command.
+      if (!this.isCurrent(projectId, epoch) || sequence !== this.readSequence) {
         return;
       }
 

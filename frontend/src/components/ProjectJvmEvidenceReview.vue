@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import GenerateRepairButton from "./GenerateRepairButton.vue";
 
 import { apiClient } from "@/api/client";
 import { jvmExecutionApi, type JvmExecutionApi } from "@/api/jvmExecution";
@@ -387,6 +388,22 @@ onMounted(async () => {
             <strong>{{ signature.failure_code }} · {{ signature.phase }}</strong>
             <p class="mb-1">{{ signature.normalized_message }}</p>
             <code class="text-xs break-all">{{ signature.signature }}</code>
+            <GenerateRepairButton
+              v-if="store.selectedExecution"
+              :project-id="projectId"
+              platform="jvm"
+              :locale="locale"
+              :execution-id="store.selectedExecution.id"
+              :base-revision-hash="store.selectedExecution.source_revision.content_hash"
+              :failure-signature="signature.signature"
+              :authorize="authorized"
+              :disabled="
+                store.selectedExecution.id !== store.currentExecution?.id ||
+                store.selectedExecution.source_revision.content_hash !==
+                  store.currentSourceRevision?.content_hash
+              "
+              @generated="loadExecution(store.selectedExecution.id)"
+            />
           </li>
         </ul>
         <p v-else>{{ copy.noSignatures }}</p>

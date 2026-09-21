@@ -1,8 +1,12 @@
+import { ApiRequestError } from "./requestError";
+
 import type {
   DesignGateDecisionPayload,
   DesignGateDecisionRequest,
   DesignGateSubmissionPayload,
   DesignGenerationPayload,
+  DesignMockupPayload,
+  DesignMockupRequest,
   DesignPackageDiffPayload,
   DesignPackageVersionPayload,
   DesignReadinessPayload,
@@ -28,28 +32,19 @@ export interface DesignApiOptions {
   fetchImpl?: typeof fetch;
 }
 
-export class DesignApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  readonly payload: unknown;
-
-  constructor(
-    message: string,
-    options: {
-      status: number;
-      code: string | null;
-      payload: unknown;
-    },
-  ) {
-    super(message);
-    this.name = "DesignApiError";
-    this.status = options.status;
-    this.code = options.code;
-    this.payload = options.payload;
-  }
-}
+export class DesignApiError extends ApiRequestError {}
 
 export interface DesignApi {
+  generateMockup(
+    projectId: string,
+    request: DesignMockupRequest,
+    accessToken: string,
+  ): Promise<DesignMockupPayload>;
+  currentMockup(
+    projectId: string,
+    alternativeId: string,
+    accessToken: string,
+  ): Promise<DesignMockupPayload | null>;
   generate(projectId: string, accessToken: string): Promise<DesignGenerationPayload>;
   current(projectId: string, accessToken: string): Promise<DesignPackageVersionPayload>;
   history(projectId: string, accessToken: string): Promise<DesignPackageVersionPayload[]>;
@@ -181,6 +176,24 @@ export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
   }
 
   return {
+    generateMockup(projectId, requestValue, accessToken) {
+      return request(`${projectPath(projectId)}/mockups`, {
+        method: "POST",
+        accessToken,
+        body: requestValue,
+      });
+    },
+
+    currentMockup(projectId, alternativeId, accessToken) {
+      return request(
+        `${projectPath(projectId)}/mockups?alternative_id=${encodeURIComponent(alternativeId)}`,
+        {
+          method: "GET",
+          accessToken,
+        },
+      );
+    },
+
     generate(projectId, accessToken) {
       return request(`${projectPath(projectId)}/proposals`, {
         method: "POST",

@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-09-19",
+  "repository_head": "d82bb48cd1db409d1f8aa5289c2d62d2b9cdf4f4",
+  "curriculum_id": "verified-proposer-web-source-v1",
+  "provenance": "SYNTHETIC_ENGINEER_AUTHORED",
+  "scope": "REFERENCE_DATA_ADMISSION_AND_TOKENIZATION_NOT_MODEL_QUALIFICATION",
+  "dataset": {
+    "path": "environments/training/artifacts/proposer-web-v1-20260919-verified",
+    "manifest_sha256": "987714f1dc2cda2ad0579146c697c9aa590c5236c1f137781e4e0cae55e0f339",
+    "train": {
+      "rows": 240,
+      "semantic_groups": 30,
+      "sha256": "ff1b36c9eab95fb1cef848d928fa3a2f422d957cd1f83ae63c3c295aa0349716"
+    },
+    "validation": {
+      "rows": 64,
+      "semantic_groups": 8,
+      "sha256": "c6d0de7468dd0d1428c56cb8894a0bdc7e684b6a8fe353b8434c11eb4bd2f790"
+    },
+    "split_policy": "Whole semantic families; English and Italian variants stay together.",
+    "excluded_semantic_families": [
+      "guest-list",
+      "expense-split",
+      "expense-splitting",
+      "sales-tax",
+      "temperature"
+    ],
+    "source_protocol": "SOURCE_FILES_V2_TEXT",
+    "manifest_contract": "SOURCE_MANIFEST_V11_SHARED_FIELD_SCHEMAS",
+    "steps": [
+      "manifest",
+      "app.js",
+      "app.test.cjs",
+      "index.html"
+    ],
+    "template_limits": {
+      "didactic_groups": 38,
+      "core_generators": 2,
+      "shared_form_layouts": 1,
+      "independent_architectures_claimed": false
+    }
+  },
+  "verification": {
+    "production_syntax_checks": "PASSED",
+    "production_prototype_structure_checks": "PASSED",
+    "python_curriculum_tests_passed": 81,
+    "docker_reference_bundles_passed": 76,
+    "docker_node_tests_passed": 380,
+    "docker_node_tests_failed": 0,
+    "node_image": "docker.io/library/node:26.7.0-bookworm-slim@sha256:4db36457f406501e6f608802e5da617e5fbd0e80b75901b6a09de1ae5a667d32",
+    "network": "none",
+    "filesystem": "read-only",
+    "runtime_user": "1000:1000",
+    "docker_stdout_sha256": "1b0418f917649d66e4149df079e3b357cfa20f0a0131cd29dd9021b4a2414c78",
+    "oracle_scope": "Literal expected outputs, invalid inputs, state retention and isolation, defensive copies, failure atomicity, classic-browser VM execution, and DOM-double submit/back/error transitions.",
+    "real_rendered_browser_verified": false,
+    "human_label_review_performed": false
+  },
+  "training_token_cache": {
+    "experiment": "proposer-pilot-d82bb48-20260919-01",
+    "relative_path": "cache/cache.json",
+    "manifest_sha256": "20d03aaeb2c71d373230238a452b0cdefd78646bd52b048353361c4fccbdff0d",
+    "database_sha256": "0cece4a026d4577f40c9d66030b80c8a5a1a29b46d32475128ca835acad355ed",
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "abcc171021d4f320b2e7f47c6f0deca67ded870c",
+    "rows": 240,
+    "total_tokens": 782072,
+    "completion_tokens": 113380,
+    "min_sequence_tokens": 2741,
+    "max_sequence_tokens": 3958,
+    "configured_max_sequence": 8192,
+    "completion_only": true,
+    "truncation": false,
+    "validation_read": false,
+    "final_cases_read": false
+  },
+  "source_sha256": {
+    "environments/training/proposer_prepare.py": "1e98aeeb580f92e747c056a7f5c4ddc9a8162f92e74980e11ef98b9340921b58",
+    "environments/training/proposer_curriculum.py": "f85a839327a9ab7f793174588c0c4d9daafa855fdf71800e0a08e1363f452a52",
+    "src/orchestwin/models/source_file_generation.py": "5b3053ab0e8810681725619b811286421b6225f367b35c3864f42dbb767b7c54",
+    "src/orchestwin/models/proposal_generation.py": "189ee0bd39b25143f8c4e829281463c422aede40d2829b54943f388b974cdc88",
+    "src/test/python/training/test_proposer_curriculum.py": "ce892ac07f36e7bc3c5f671788cdda693419c6a5ee1eeb5c225e7636c330754e"
+  },
+  "limitations": [
+    "This compact synthetic curriculum is not a large representative production corpus.",
+    "Thirty-eight didactic groups derive from two core templates and one form layout.",
+    "Reference tests and external execution oracles share engineer-authored specifications; neither measures model capability.",
+    "No inference responses, human approvals, user studies or Level D qualifications are claimed by these records.",
+    "Training and candidate qualification are separate experiments; this report admits reference data only."
+  ],
+  "posthoc_known_limitations": [
+    {
+      "recorded_at_utc": "2026-09-19T17:09:57.973287+00:00",
+      "kind": "STATIC_DESIGN_MARKER_ADMISSION_GAP",
+      "finding": "All 76 frozen v1 reference bundles omit the result TEXT marker ELM-005. The earlier validator skipped TEXT elements, so historical admission did not enforce that marker.",
+      "frozen_dataset_cache_bundle_and_results_changed": false,
+      "new_validator_replay": {
+        "path": "experiments/model-proposals/prototype-validator-replay-20260919.json",
+        "sha256": "64e9d493a56f8f3cbfc8f7db75563718ae020cb2f9477536e31f3e71428de242"
+      },
+      "future_generator_change": "Only future generated references receive the missing marker; no replacement v1 dataset or retraining has been produced.",
+      "interpretation": "Historical reference admission and training completion are preserved; neither establishes model correctness or qualification under the revised validator.",
+      "instruction_scope": "Historical V11 instructed markers only on interactive elements; subsequent V12 explicitly includes TEXT. Missing TEXT markers under revised validation are not attributed to disobeying the original V11 instruction."
+    }
+  ]
+}
