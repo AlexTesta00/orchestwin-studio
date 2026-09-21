@@ -87,7 +87,7 @@ def _model_boundary(function):
             result = await function(*args, **kwargs)
         except (ValueError, TypeError) as error:
             failure = ProposalGenerationError("INVALID_PROVIDER_OUTPUT")
-            await retain_adapter_result(error=failure)
+            await retain_adapter_result(error=failure, reason=str(error))
             raise failure from error
         except BaseException as error:
             await retain_adapter_result(error=error)
@@ -239,7 +239,9 @@ class ModelRequirementsAdapter:
                 "context.evidence; twins must be exact keys from context.twins. "
                 "Cover every brief requirement and each twin with a story and scenario. "
                 "Keep criteria concrete and testable. Include relevant risks and completion "
-                "conditions. All items are proposals, never executed tests or owner decisions. "
+                "conditions. A definition_of_done item with applicability REQUIRED must leave condition null; "
+                "only a CONDITIONAL item states the condition under which it applies. "
+                "All items are proposals, never executed tests or owner decisions. "
                 "Do not invent source evidence, identifiers, hashes or approval state."
             ),
         )

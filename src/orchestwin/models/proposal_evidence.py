@@ -161,16 +161,32 @@ def _generated_hashes(result):
     return {}
 
 
-async def retain_adapter_result(result=None, *, error=None):
+MAX_REJECTION_REASON_CHARACTERS = 200
+
+
+def bounded_rejection_reason(reason):
+    if not isinstance(reason, str):
+        return None
+    text = "".join(
+        character
+        for character in " ".join(reason.split())
+        if character.isascii() and character.isprintable()
+    )
+    return text[:MAX_REJECTION_REASON_CHARACTERS] or None
+
+
+async def retain_adapter_result(result=None, *, error=None, reason=None):
     scope = current_proposal_evidence()
     if scope is None or scope.request is None:
         return
     if error is not None:
         if not isinstance(error, ProposalEvidenceError):
+            bounded = bounded_rejection_reason(reason)
             await scope.event(
                 "ADAPTER_REJECTED",
                 {
                     "code": getattr(error, "code", type(error).__name__),
+                    **({"reason": bounded} if bounded else {}),
                 },
             )
         return
