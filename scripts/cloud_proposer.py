@@ -265,6 +265,15 @@ def remote_state(receipt, output):
         return None
 
 
+def remote_health(receipt, port):
+    probe = run_remote(
+        receipt,
+        f"curl -s -m 5 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{port}/health",
+        check=False,
+    )
+    return probe.stdout.strip() in {"200", "401", "403"}
+
+
 def command_serve(args):
     receipt = load_receipt(args.pod)
     output = f"{SERVING_ROOT}/{args.pod}"
@@ -273,7 +282,7 @@ def command_serve(args):
     current = remote_state(receipt, output)
     alive = run_remote(
         receipt,
-        "grep -l run_cloud_serving_job /proc/[0-9]*/cmdline 2>/dev/null | head -n 1 | grep -q proc && echo alive || true",
+        "grep -l '[r]un_cloud_serving_job' /proc/[0-9]*/cmdline 2>/dev/null | head -n 1 | grep -q proc && echo alive || true",
         check=False,
     ).stdout.strip()
     if current is not None and current.get("stage") == "SERVING" and alive == "alive":
@@ -290,13 +299,17 @@ def command_serve(args):
             f"--engine {args.engine} --failure-hold-minutes {args.failure_hold_minutes} ) "
             f"> {output}/nohup.log 2>&1 < /dev/null &"
         )
-        run_remote(receipt, f"mkdir -p {output} && {launch} echo started")
+        run_remote(
+            receipt,
+            f"mkdir -p {output} && rm -f {output}/stop.request {output}/supervisor-state.json "
+            f"&& {launch} echo started",
+        )
     deadline = time.time() + args.timeout
     while True:
         current = remote_state(receipt, output)
         stage = None if current is None else current.get("stage")
         print(f"stage={stage}", flush=True)
-        if stage == "SERVING":
+        if stage == "SERVING" and remote_health(receipt, args.port):
             break
         if stage in ("STOPPED", "POD_STOP_CONFIRMED", "POD_STOP_UNCONFIRMED", "DIAGNOSTIC_HOLD"):
             raise CloudError(f"supervisor stopped early; see {output}/supervisor.log")
