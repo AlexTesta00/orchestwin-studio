@@ -140,9 +140,11 @@ def report(value):
                             "index": index,
                             "kind": action["kind"],
                             "status": "PASSED",
-                            "observed_text": action["value"]
-                            if action["kind"] == "expect_text"
-                            else None,
+                            "observed_text": {
+                                "expect_text": action["value"],
+                                "expect_contains": f"observed {action['value']} here",
+                                "expect_not_text": f"{action['value']} changed",
+                            }.get(action["kind"]),
                             "failure_code": None,
                         }
                         for index, action in enumerate(plan)
@@ -537,3 +539,30 @@ def test_uninspectable_surface_keeps_captures_but_cannot_pass_even_with_actions(
     assert any(item.code == "INTERACTION_INSPECTION_FAILED" for item in result.findings)
     assert all(item["status"] == "PASSED" for item in result.metadata["screens"][0]["actions"])
     assert store.read(result.metadata["screens"][0]["artifacts"]["dom"]["storage_key"])
+
+
+def journey_actions():
+    return (
+        BrowserAction("fill", "#name", "Giulia Verdi"),
+        BrowserAction("press", "#add", "Enter"),
+        BrowserAction("expect_contains", "#result", "Giulia Verdi"),
+        BrowserAction("click", "#back", None),
+        BrowserAction("expect_not_text", "#title", "Esempio"),
+    )
+
+
+def test_contains_and_changed_assertions_count_as_independent_checks(tmp_path):
+    from orchestwin.web_execution.static_browser_jobs import StaticBrowserError
+
+    value = job(interactions=(WebBrowserInteraction("root", journey_actions()),))
+    decode(tmp_path, value, report(value))
+    output = report(value)
+    output["screens"][0]["actions"][2]["observed_text"] = "somebody else"
+    with pytest.raises(WebPhaseBrowserEvidenceError):
+        decode(tmp_path, value, output)
+    output = report(value)
+    output["screens"][0]["actions"][4]["observed_text"] = "Esempio"
+    with pytest.raises(WebPhaseBrowserEvidenceError):
+        decode(tmp_path, value, output)
+    with pytest.raises(StaticBrowserError):
+        BrowserAction("expect_contains", "#result", "")

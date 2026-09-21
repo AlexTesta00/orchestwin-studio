@@ -26,6 +26,7 @@ from orchestwin.web_execution.browser_evidence import (
 )
 from orchestwin.web_execution.reports import WebEvidenceReference, WebNormalizedFinding
 from orchestwin.web_execution.static_browser_jobs import (
+    ASSERTION_KINDS,
     VIEWPORTS,
     BrowserAction,
     canonical_bytes,
@@ -182,7 +183,7 @@ class WebBrowserInteraction:
                 if action.kind == "press":
                     _require(action.value in {"Enter", "Space"}, "BROWSER_INTERACTION_KEY_INVALID")
                 pending = action.kind
-            elif action.kind == "expect_text" and pending is not None:
+            elif action.kind in ASSERTION_KINDS and pending is not None:
                 checked.add(pending)
                 pending = None
         _require(
@@ -441,6 +442,16 @@ def _codes(value: object) -> list[str]:
     return value
 
 
+def _assertion_holds(action, observed):
+    if not isinstance(observed, str):
+        return False
+    if action["kind"] == "expect_contains":
+        return action["value"] in observed
+    if action["kind"] == "expect_not_text":
+        return observed != action["value"]
+    return observed == action["value"]
+
+
 def _actions(screen: dict, plan: list) -> None:
     records = screen["actions"]
     _require(
@@ -467,12 +478,13 @@ def _actions(screen: dict, plan: list) -> None:
                 and len(record["observed_text"].encode("utf-16-le")) <= 2000,
                 "BROWSER_ASSERTION_TEXT_LIMIT",
             )
-            _require(action["kind"] == "expect_text", "BROWSER_ACTION_OBSERVATION_INVALID")
+            _require(action["kind"] in ASSERTION_KINDS, "BROWSER_ACTION_OBSERVATION_INVALID")
         if status == "PASSED":
             _require(not failed and record["failure_code"] is None, "BROWSER_ACTION_FALSE_PASS")
-            if action["kind"] == "expect_text":
+            if action["kind"] in ASSERTION_KINDS:
                 _require(
-                    record["observed_text"] == action["value"], "BROWSER_ACTION_FALSE_ASSERTION"
+                    _assertion_holds(action, record["observed_text"]),
+                    "BROWSER_ACTION_FALSE_ASSERTION",
                 )
         else:
             if status == "NOT_RUN":
@@ -488,7 +500,7 @@ def _actions(screen: dict, plan: list) -> None:
                     "BROWSER_ACTION_PREFIX_INVALID",
                 )
                 _require(
-                    (action["kind"] == "expect_text")
+                    (action["kind"] in ASSERTION_KINDS)
                     == (record["failure_code"] != "ACTION_FAILED"),
                     "BROWSER_ACTION_FAILURE_INVALID",
                 )

@@ -364,7 +364,7 @@ class WebBrowserRouteBody(ApiModel):
 
 
 class WebBrowserActionBody(ApiModel):
-    kind: str = Field(pattern=r"^(click|fill|press|expect_text)$")
+    kind: str = Field(pattern=r"^(click|fill|press|expect_text|expect_contains|expect_not_text)$")
     selector: str = Field(min_length=1, max_length=160)
     value: str | None = Field(default=None, max_length=1000)
 
