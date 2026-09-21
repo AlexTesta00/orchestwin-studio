@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import GenerateRepairButton from "./GenerateRepairButton.vue";
+import WebExecutionOutcome from "./WebExecutionOutcome.vue";
 
 import { apiClient } from "@/api/client";
+import {
+  executionLaunchApi,
+  type ExecutionJourney,
+  type ExecutionLaunchApi,
+} from "@/api/executionLaunch";
 import { webExecutionApi, type WebExecutionApi } from "@/api/webExecution";
 import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedWebExecutionRequest, useWebExecutionStore } from "@/stores/webExecution";
@@ -22,6 +28,7 @@ const props = withDefaults(
     autoLoad?: boolean;
     authorize?: AuthorizedWebExecutionRequest;
     api?: WebExecutionApi;
+    launchApi?: ExecutionLaunchApi;
   }>(),
   {
     locale: "en",
@@ -35,9 +42,13 @@ const selectedExecutionId = ref<string | null>(null);
 const approvalIdByProposal = ref<Record<string, string>>({});
 const localError = ref<string | null>(null);
 const applyingProposalId = ref<string | null>(null);
+const journey = ref<ExecutionJourney | null>(null);
 
 const messages = {
   en: {
+    outcome: "Outcome for the owner",
+    technical: "Technical details and exact evidence",
+    repair: "Repair",
     eyebrow: "Web execution · deterministic evidence",
     title: "Execution, browser, and repair evidence",
     intro:
@@ -92,6 +103,9 @@ const messages = {
     none: "None",
   },
   it: {
+    outcome: "Esito per il committente",
+    technical: "Dettagli tecnici e prove esatte",
+    repair: "Ripara",
     eyebrow: "Esecuzione Web · evidenze deterministiche",
     title: "Evidenze di esecuzione, browser e repair",
     intro:
@@ -197,6 +211,9 @@ async function loadExecution(executionId: string): Promise<void> {
   localError.value = null;
   try {
     await store.loadExecution(props.projectId, executionId, authorized, api.value);
+    journey.value = await authorized((token) =>
+      (props.launchApi ?? executionLaunchApi).journey(props.projectId, token),
+    ).catch(() => null);
   } catch (error: unknown) {
     localError.value = error instanceof Error ? error.message : copy.value.loadError;
   }
@@ -308,236 +325,269 @@ onMounted(async () => {
     </section>
 
     <template v-if="store.selectedExecution !== null && store.selectedReport !== null">
-      <section
-        class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
-        aria-labelledby="web-report-summary-title"
+      <WebExecutionOutcome
+        :locale="locale"
+        :execution="store.selectedExecution"
+        :report="store.selectedReport"
+        :browser-evidence="store.browserEvidence"
+        :journey="journey"
       >
-        <h3 id="web-report-summary-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.reportStatus }}: {{ store.selectedReport.status }}
-        </h3>
-        <dl class="grid gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <dt class="font-bold">{{ copy.attempt }}</dt>
-            <dd class="m-0">{{ store.selectedExecution.attempt_number }}</dd>
-          </div>
-          <div>
-            <dt class="font-bold">{{ copy.trigger }}</dt>
-            <dd class="m-0">{{ store.selectedExecution.trigger }}</dd>
-          </div>
-          <div>
-            <dt class="font-bold">{{ copy.sourceRevision }}</dt>
-            <dd class="m-0">v{{ store.selectedExecution.source_revision.version_number }}</dd>
-          </div>
-          <div>
-            <dt class="font-bold">{{ copy.profile }}</dt>
-            <dd class="m-0">
-              {{ store.selectedReport.profile_id }}@{{ store.selectedReport.profile_version }}
-            </dd>
-          </div>
-          <div class="sm:col-span-2">
-            <dt class="font-bold">{{ copy.runner }}</dt>
-            <dd class="m-0 break-all">
-              <code>{{ store.selectedReport.runner_image_digest }}</code>
-            </dd>
-          </div>
-          <div class="sm:col-span-2">
-            <dt class="font-bold">{{ copy.policy }}</dt>
-            <dd class="m-0 break-all">
-              <code>{{ store.selectedReport.policy_content_hash }}</code>
-            </dd>
-          </div>
-        </dl>
-      </section>
+        <template #repair="{ signature }">
+          <GenerateRepairButton
+            :project-id="projectId"
+            platform="web"
+            :locale="locale"
+            :label="copy.repair"
+            :execution-id="store.selectedExecution.id"
+            :base-revision-hash="store.selectedExecution.source_revision.content_hash"
+            :failure-signature="signature.digest"
+            :authorize="authorized"
+            :disabled="
+              store.selectedExecution.id !== store.currentExecution?.id ||
+              store.selectedExecution.source_revision.content_hash !==
+                store.currentSourceRevision?.content_hash
+            "
+            @generated="loadExecution(store.selectedExecution.id)"
+          />
+        </template>
+      </WebExecutionOutcome>
+      <details class="grid gap-6 rounded-xl border border-slate-200 p-4">
+        <summary class="cursor-pointer font-bold text-slate-900">{{ copy.technical }}</summary>
+        <section
+          class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          aria-labelledby="web-report-summary-title"
+        >
+          <h3 id="web-report-summary-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.reportStatus }}: {{ store.selectedReport.status }}
+          </h3>
+          <dl class="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="font-bold">{{ copy.attempt }}</dt>
+              <dd class="m-0">{{ store.selectedExecution.attempt_number }}</dd>
+            </div>
+            <div>
+              <dt class="font-bold">{{ copy.trigger }}</dt>
+              <dd class="m-0">{{ store.selectedExecution.trigger }}</dd>
+            </div>
+            <div>
+              <dt class="font-bold">{{ copy.sourceRevision }}</dt>
+              <dd class="m-0">v{{ store.selectedExecution.source_revision.version_number }}</dd>
+            </div>
+            <div>
+              <dt class="font-bold">{{ copy.profile }}</dt>
+              <dd class="m-0">
+                {{ store.selectedReport.profile_id }}@{{ store.selectedReport.profile_version }}
+              </dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="font-bold">{{ copy.runner }}</dt>
+              <dd class="m-0 break-all">
+                <code>{{ store.selectedReport.runner_image_digest }}</code>
+              </dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="font-bold">{{ copy.policy }}</dt>
+              <dd class="m-0 break-all">
+                <code>{{ store.selectedReport.policy_content_hash }}</code>
+              </dd>
+            </div>
+          </dl>
+        </section>
 
-      <section class="grid gap-3" aria-labelledby="web-phase-results-title">
-        <h3 id="web-phase-results-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.phases }}
-        </h3>
-        <div class="overflow-x-auto">
-          <table class="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr>
-                <th class="border-b p-2">{{ copy.phase }}</th>
-                <th class="border-b p-2">{{ copy.status }}</th>
-                <th class="border-b p-2">{{ copy.summary }}</th>
-                <th class="border-b p-2">{{ copy.failure }}</th>
-                <th class="border-b p-2">{{ copy.exitCodes }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="phase in store.selectedReport.phase_results" :key="phase.phase">
-                <th scope="row" class="border-b p-2 font-bold">{{ phase.phase }}</th>
-                <td class="border-b p-2">
-                  <strong>{{ phase.status }}</strong>
-                </td>
-                <td class="border-b p-2">{{ phase.normalized_summary }}</td>
-                <td class="border-b p-2">{{ phase.failure_code ?? copy.none }}</td>
-                <td class="border-b p-2">{{ phase.exit_codes.join(", ") || copy.none }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <section class="grid gap-3" aria-labelledby="web-phase-results-title">
+          <h3 id="web-phase-results-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.phases }}
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr>
+                  <th class="border-b p-2">{{ copy.phase }}</th>
+                  <th class="border-b p-2">{{ copy.status }}</th>
+                  <th class="border-b p-2">{{ copy.summary }}</th>
+                  <th class="border-b p-2">{{ copy.failure }}</th>
+                  <th class="border-b p-2">{{ copy.exitCodes }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="phase in store.selectedReport.phase_results" :key="phase.phase">
+                  <th scope="row" class="border-b p-2 font-bold">{{ phase.phase }}</th>
+                  <td class="border-b p-2">
+                    <strong>{{ phase.status }}</strong>
+                  </td>
+                  <td class="border-b p-2">{{ phase.normalized_summary }}</td>
+                  <td class="border-b p-2">{{ phase.failure_code ?? copy.none }}</td>
+                  <td class="border-b p-2">{{ phase.exit_codes.join(", ") || copy.none }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <section class="grid gap-3" aria-labelledby="web-raw-evidence-title">
-        <h3 id="web-raw-evidence-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.evidence }}
-        </h3>
-        <div v-if="evidenceReferences.length > 0" class="overflow-x-auto">
-          <table class="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr>
-                <th class="border-b p-2">{{ copy.phase }}</th>
-                <th class="border-b p-2">{{ copy.kind }}</th>
-                <th class="border-b p-2">{{ copy.storageKey }}</th>
-                <th class="border-b p-2">{{ copy.digest }}</th>
-                <th class="border-b p-2">{{ copy.mediaType }}</th>
-                <th class="border-b p-2">{{ copy.bytes }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="reference in evidenceReferences"
-                :key="`${reference.phase}:${reference.kind}:${reference.storage_key}`"
-              >
-                <th scope="row" class="border-b p-2 font-bold">{{ reference.phase }}</th>
-                <td class="border-b p-2">{{ reference.kind }}</td>
-                <td class="border-b p-2">
-                  <code class="text-xs break-all">{{ reference.storage_key }}</code>
-                </td>
-                <td class="border-b p-2">
-                  <code class="text-xs break-all">{{ reference.sha256_digest }}</code>
-                </td>
-                <td class="border-b p-2">{{ reference.media_type }}</td>
-                <td class="border-b p-2">{{ reference.size_bytes }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="m-0 text-slate-600">{{ copy.noEvidence }}</p>
-      </section>
+        <section class="grid gap-3" aria-labelledby="web-raw-evidence-title">
+          <h3 id="web-raw-evidence-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.evidence }}
+          </h3>
+          <div v-if="evidenceReferences.length > 0" class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr>
+                  <th class="border-b p-2">{{ copy.phase }}</th>
+                  <th class="border-b p-2">{{ copy.kind }}</th>
+                  <th class="border-b p-2">{{ copy.storageKey }}</th>
+                  <th class="border-b p-2">{{ copy.digest }}</th>
+                  <th class="border-b p-2">{{ copy.mediaType }}</th>
+                  <th class="border-b p-2">{{ copy.bytes }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="reference in evidenceReferences"
+                  :key="`${reference.phase}:${reference.kind}:${reference.storage_key}`"
+                >
+                  <th scope="row" class="border-b p-2 font-bold">{{ reference.phase }}</th>
+                  <td class="border-b p-2">{{ reference.kind }}</td>
+                  <td class="border-b p-2">
+                    <code class="text-xs break-all">{{ reference.storage_key }}</code>
+                  </td>
+                  <td class="border-b p-2">
+                    <code class="text-xs break-all">{{ reference.sha256_digest }}</code>
+                  </td>
+                  <td class="border-b p-2">{{ reference.media_type }}</td>
+                  <td class="border-b p-2">{{ reference.size_bytes }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="m-0 text-slate-600">{{ copy.noEvidence }}</p>
+        </section>
 
-      <section class="grid gap-3" aria-labelledby="web-failure-signatures-title">
-        <h3 id="web-failure-signatures-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.signatures }}
-        </h3>
-        <ul v-if="store.selectedReport.failure_signatures.length > 0" class="grid gap-3">
-          <li
-            v-for="signature in store.selectedReport.failure_signatures"
-            :key="signature.digest"
-            class="rounded-xl border border-red-200 bg-red-50 p-4"
-          >
-            <p class="m-0 font-black text-red-950">
-              {{ signature.phase }} · {{ signature.category }} · {{ signature.failure_code }}
-            </p>
-            <p class="mt-1 mb-0 text-sm text-red-900">{{ signature.normalized_message }}</p>
-            <code class="mt-2 block text-xs break-all">{{ signature.digest }}</code>
-            <GenerateRepairButton
-              v-if="store.selectedExecution"
-              :project-id="projectId"
-              platform="web"
-              :locale="locale"
-              :execution-id="store.selectedExecution.id"
-              :base-revision-hash="store.selectedExecution.source_revision.content_hash"
-              :failure-signature="signature.digest"
-              :authorize="authorized"
-              :disabled="
-                store.selectedExecution.id !== store.currentExecution?.id ||
-                store.selectedExecution.source_revision.content_hash !==
-                  store.currentSourceRevision?.content_hash
-              "
-              @generated="loadExecution(store.selectedExecution.id)"
-            />
-          </li>
-        </ul>
-        <p v-else class="m-0 text-slate-600">{{ copy.noSignatures }}</p>
-      </section>
-
-      <section class="grid gap-3" aria-labelledby="web-browser-evidence-title">
-        <h3 id="web-browser-evidence-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.browser }}
-        </h3>
-        <div v-if="store.browserEvidence !== null" class="grid gap-4">
-          <p class="m-0 font-bold">{{ copy.status }}: {{ store.browserEvidence.status }}</p>
-          <article
-            v-for="route in store.browserEvidence.routes"
-            :key="route.route.route_id"
-            class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <h4 class="m-0 font-black text-slate-950">
-              {{ copy.route }} {{ route.route.path }} · {{ route.status }}
-            </h4>
-            <p class="m-0 text-sm">{{ copy.consoleErrors }}: {{ route.console_messages.length }}</p>
-            <p class="m-0 text-sm">{{ copy.failedRequests }}: {{ route.failed_requests.length }}</p>
-            <p class="m-0 text-sm">
-              {{ copy.axeFindings }}: {{ route.accessibility_findings.length }}
-            </p>
-            <p class="m-0 text-xs break-all">
-              {{ copy.screenshot }}:
-              <code>{{ route.screenshot_ref?.storage_key ?? copy.none }}</code>
-            </p>
-            <p class="m-0 text-xs break-all">
-              {{ copy.dom }}: <code>{{ route.dom_snapshot_ref?.storage_key ?? copy.none }}</code>
-            </p>
-            <ul v-if="route.accessibility_findings.length > 0" class="grid gap-2 pl-5 text-sm">
-              <li
-                v-for="finding in route.accessibility_findings"
-                :key="`${finding.rule_id}:${finding.targets.join(',')}`"
-              >
-                <strong>{{ finding.impact }} · {{ finding.rule_id }}</strong
-                >: {{ finding.description }}
-              </li>
-            </ul>
-          </article>
-        </div>
-        <p v-else class="m-0 text-slate-600">{{ copy.noBrowser }}</p>
-      </section>
-
-      <section class="grid gap-3" aria-labelledby="web-repair-proposals-title">
-        <h3 id="web-repair-proposals-title" class="m-0 text-xl font-black text-slate-950">
-          {{ copy.repairs }}
-        </h3>
-        <ol v-if="store.repairProposals.length > 0" class="grid gap-4">
-          <li
-            v-for="proposal in store.repairProposals"
-            :key="proposal.id"
-            class="grid gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4"
-          >
-            <p class="m-0 font-black text-amber-950">
-              {{ copy.proposalAttempt }} {{ proposal.attempt_number }} ·
-              {{ proposal.failure_signature.failure_code }}
-            </p>
-            <p class="m-0 text-sm text-amber-950">
-              {{ copy.repeated }}: {{ proposal.identical_failure_occurrences }}
-            </p>
-            <p class="m-0 text-sm text-amber-950">{{ proposal.change_set.rationale }}</p>
-            <ul class="grid gap-2 pl-5 text-sm">
-              <li v-for="change in proposal.change_set.changes" :key="change.normalized_path">
-                <strong>{{ change.operation }}</strong> · {{ change.normalized_path }} ·
-                <code>{{ change.content_sha256 ?? copy.none }}</code>
-              </li>
-            </ul>
-            <label class="grid gap-1 font-bold text-amber-950">
-              {{ copy.approvalId }}
-              <input
-                v-model="approvalIdByProposal[proposal.id]"
-                type="text"
-                class="rounded-lg border border-amber-400 bg-white p-2"
-                autocomplete="off"
-              />
-            </label>
-            <button
-              type="button"
-              class="w-fit rounded-lg bg-amber-900 px-4 py-2 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-950"
-              :disabled="applyingProposalId !== null"
-              @click="applyRepair(proposal)"
+        <section class="grid gap-3" aria-labelledby="web-failure-signatures-title">
+          <h3 id="web-failure-signatures-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.signatures }}
+          </h3>
+          <ul v-if="store.selectedReport.failure_signatures.length > 0" class="grid gap-3">
+            <li
+              v-for="signature in store.selectedReport.failure_signatures"
+              :key="signature.digest"
+              class="rounded-xl border border-red-200 bg-red-50 p-4"
             >
-              {{ applyingProposalId === proposal.id ? copy.applying : copy.apply }}
-            </button>
-          </li>
-        </ol>
-        <p v-else class="m-0 text-slate-600">{{ copy.noRepairs }}</p>
-      </section>
+              <p class="m-0 font-black text-red-950">
+                {{ signature.phase }} · {{ signature.category }} · {{ signature.failure_code }}
+              </p>
+              <p class="mt-1 mb-0 text-sm text-red-900">{{ signature.normalized_message }}</p>
+              <code class="mt-2 block text-xs break-all">{{ signature.digest }}</code>
+              <GenerateRepairButton
+                v-if="store.selectedExecution"
+                :project-id="projectId"
+                platform="web"
+                :locale="locale"
+                :execution-id="store.selectedExecution.id"
+                :base-revision-hash="store.selectedExecution.source_revision.content_hash"
+                :failure-signature="signature.digest"
+                :authorize="authorized"
+                :disabled="
+                  store.selectedExecution.id !== store.currentExecution?.id ||
+                  store.selectedExecution.source_revision.content_hash !==
+                    store.currentSourceRevision?.content_hash
+                "
+                @generated="loadExecution(store.selectedExecution.id)"
+              />
+            </li>
+          </ul>
+          <p v-else class="m-0 text-slate-600">{{ copy.noSignatures }}</p>
+        </section>
+
+        <section class="grid gap-3" aria-labelledby="web-browser-evidence-title">
+          <h3 id="web-browser-evidence-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.browser }}
+          </h3>
+          <div v-if="store.browserEvidence !== null" class="grid gap-4">
+            <p class="m-0 font-bold">{{ copy.status }}: {{ store.browserEvidence.status }}</p>
+            <article
+              v-for="route in store.browserEvidence.routes"
+              :key="route.route.route_id"
+              class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4"
+            >
+              <h4 class="m-0 font-black text-slate-950">
+                {{ copy.route }} {{ route.route.path }} · {{ route.status }}
+              </h4>
+              <p class="m-0 text-sm">
+                {{ copy.consoleErrors }}: {{ route.console_messages.length }}
+              </p>
+              <p class="m-0 text-sm">
+                {{ copy.failedRequests }}: {{ route.failed_requests.length }}
+              </p>
+              <p class="m-0 text-sm">
+                {{ copy.axeFindings }}: {{ route.accessibility_findings.length }}
+              </p>
+              <p class="m-0 text-xs break-all">
+                {{ copy.screenshot }}:
+                <code>{{ route.screenshot_ref?.storage_key ?? copy.none }}</code>
+              </p>
+              <p class="m-0 text-xs break-all">
+                {{ copy.dom }}: <code>{{ route.dom_snapshot_ref?.storage_key ?? copy.none }}</code>
+              </p>
+              <ul v-if="route.accessibility_findings.length > 0" class="grid gap-2 pl-5 text-sm">
+                <li
+                  v-for="finding in route.accessibility_findings"
+                  :key="`${finding.rule_id}:${finding.targets.join(',')}`"
+                >
+                  <strong>{{ finding.impact }} · {{ finding.rule_id }}</strong
+                  >: {{ finding.description }}
+                </li>
+              </ul>
+            </article>
+          </div>
+          <p v-else class="m-0 text-slate-600">{{ copy.noBrowser }}</p>
+        </section>
+
+        <section class="grid gap-3" aria-labelledby="web-repair-proposals-title">
+          <h3 id="web-repair-proposals-title" class="m-0 text-xl font-black text-slate-950">
+            {{ copy.repairs }}
+          </h3>
+          <ol v-if="store.repairProposals.length > 0" class="grid gap-4">
+            <li
+              v-for="proposal in store.repairProposals"
+              :key="proposal.id"
+              class="grid gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4"
+            >
+              <p class="m-0 font-black text-amber-950">
+                {{ copy.proposalAttempt }} {{ proposal.attempt_number }} ·
+                {{ proposal.failure_signature.failure_code }}
+              </p>
+              <p class="m-0 text-sm text-amber-950">
+                {{ copy.repeated }}: {{ proposal.identical_failure_occurrences }}
+              </p>
+              <p class="m-0 text-sm text-amber-950">{{ proposal.change_set.rationale }}</p>
+              <ul class="grid gap-2 pl-5 text-sm">
+                <li v-for="change in proposal.change_set.changes" :key="change.normalized_path">
+                  <strong>{{ change.operation }}</strong> · {{ change.normalized_path }} ·
+                  <code>{{ change.content_sha256 ?? copy.none }}</code>
+                </li>
+              </ul>
+              <label class="grid gap-1 font-bold text-amber-950">
+                {{ copy.approvalId }}
+                <input
+                  v-model="approvalIdByProposal[proposal.id]"
+                  type="text"
+                  class="rounded-lg border border-amber-400 bg-white p-2"
+                  autocomplete="off"
+                />
+              </label>
+              <button
+                type="button"
+                class="w-fit rounded-lg bg-amber-900 px-4 py-2 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-950"
+                :disabled="applyingProposalId !== null"
+                @click="applyRepair(proposal)"
+              >
+                {{ applyingProposalId === proposal.id ? copy.applying : copy.apply }}
+              </button>
+            </li>
+          </ol>
+          <p v-else class="m-0 text-slate-600">{{ copy.noRepairs }}</p>
+        </section>
+      </details>
     </template>
   </section>
 </template>

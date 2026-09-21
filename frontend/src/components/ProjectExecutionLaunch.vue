@@ -11,6 +11,7 @@ import {
   type BrowserExecutionChecks as BrowserChecks,
 } from "@/api/executionLaunch";
 import BrowserExecutionChecks from "./BrowserExecutionChecks.vue";
+import { journeySentence } from "./journeyText";
 import type { SourcePlatform } from "@/api/sourceGeneration";
 import { useAuthStore } from "@/stores/auth";
 import { useWebExecutionStore } from "@/stores/webExecution";
@@ -52,33 +53,7 @@ function journeyChecks(current: ExecutionJourney): BrowserChecks {
     browser_interactions: current.browser_interactions ?? [],
   };
 }
-function sentence(step: JourneyStep) {
-  const it = props.locale === "it";
-  const label = step.element_label;
-  const value = step.action.value ?? "";
-  switch (step.action.kind) {
-    case "fill":
-      return it ? `Compila «${label}» con «${value}»` : `Fill “${label}” with “${value}”`;
-    case "click":
-      return it ? `Premi «${label}»` : `Press “${label}”`;
-    case "press":
-      return it
-        ? `Attiva «${label}» da tastiera (${value})`
-        : `Activate “${label}” from the keyboard (${value})`;
-    case "expect_text":
-      return it
-        ? `Verifica che «${label}» mostri «${value}»`
-        : `Check that “${label}” shows “${value}”`;
-    case "expect_contains":
-      return it
-        ? `Verifica che «${label}» contenga «${value}»`
-        : `Check that “${label}” contains “${value}”`;
-    default:
-      return it
-        ? `Verifica che «${label}» non mostri più «${value}»`
-        : `Check that “${label}” no longer shows “${value}”`;
-  }
-}
+const sentence = (step: JourneyStep) => journeySentence(step, props.locale);
 function editSample(index: number, next: string) {
   const current = journey.value;
   if (!current?.steps || !current.browser_interactions) return;
