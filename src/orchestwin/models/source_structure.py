@@ -189,6 +189,30 @@ def _function_body(blanked, name):
     return match.start(), blanked[index:]
 
 
+_STATE_DECLARATION = re.compile(r"^\s*(const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(.*)$", re.M)
+_MUTABLE_INITIALIZER = re.compile(r"^(\[|\{|new\s+(Map|Set|Array|Object)\b|Object\.create\()")
+_MUTATION_METHODS = "push|pop|shift|unshift|splice|sort|reverse|fill|set|delete|clear|add"
+
+
+def _mutation(name):
+    escaped = re.escape(name)
+    return re.compile(
+        r"(\b" + escaped + r"\s*(\.(" + _MUTATION_METHODS + r")\s*\(|"
+        r"(\.[A-Za-z_$][\w$]*|\[[^\]]*\])*\s*(=(?!=)|\+\+|--|\+=|-=|\*=|/=))|"
+        r"(\+\+|--)\s*" + escaped + r"\b|Object\.assign\(\s*" + escaped + r"\b)"
+    )
+
+
+def validate_shared_state_updates(shared_state, bodies):
+    blanked_bodies = _blank(bodies)
+    for match in _STATE_DECLARATION.finditer(_blank(shared_state)):
+        keyword, name, initializer = match.groups()
+        if keyword == "const" and not _MUTABLE_INITIALIZER.match(initializer.strip()):
+            continue
+        if _mutation(name).search(blanked_bodies) is None:
+            raise SourceSyntaxError(reason="SHARED_STATE_NEVER_UPDATED", parser=PARSER, detail=name)
+
+
 _TEST_DOM = re.compile(
     r"\b(document|window|globalThis|localStorage|sessionStorage|navigator|fetch|XMLHttpRequest|jsdom|JSDOM)\b"
 )

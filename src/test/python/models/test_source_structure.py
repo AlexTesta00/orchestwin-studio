@@ -1,6 +1,9 @@
 import pytest
 
-from orchestwin.models.source_structure import validate_static_module_contract
+from orchestwin.models.source_structure import (
+    validate_shared_state_updates,
+    validate_static_module_contract,
+)
 from orchestwin.models.source_syntax import SourceSyntaxError
 
 COMPLIANT = """'use strict';
@@ -274,3 +277,43 @@ def test_node_tests_may_use_only_real_assert_methods(assertion, accepted):
         validate_node_test_contract(content)
     assert failure.value.diagnostic["reason"] == "NODE_TEST_UNKNOWN_ASSERTION"
     assert failure.value.diagnostic["line"] == 4
+
+
+@pytest.mark.parametrize(
+    "shared_state,bodies",
+    [
+        ("const items = [];", "  items.push(name);\n  return { ok: true, count: items.length };"),
+        ("let count = 0;", "  count += 1;\n  return count;"),
+        ("let total = 0;", "  total = total + amount;"),
+        ("const state = { count: 0 };", "  state.count += 1;"),
+        ("const byName = new Map();", "  byName.set(name, record);"),
+        ("const RATE = 0.621371;", "  return kilometers * RATE;"),
+        ("const items = [];", "function store(record) {\n  items.push(record);\n}"),
+        ("const items = [];", "  items[items.length] = record;"),
+        ("const loans = [];", "  Object.assign(loans, [record]);"),
+        ("", "  return 1;"),
+    ],
+)
+def test_shared_state_mutated_by_core_functions_passes(shared_state, bodies):
+    validate_shared_state_updates(shared_state, bodies)
+
+
+@pytest.mark.parametrize(
+    "shared_state,bodies,name",
+    [
+        ("const loans = [];", "  return loans.map((loan, index) => ({ id: index + 1 }));", "loans"),
+        (
+            "const items = [];",
+            "  if (items.length === 0) { return false; }\n  return true;",
+            "items",
+        ),
+        ("let count = 0;", "  return count;", "count"),
+        ("const items = [];\nlet last = '';", "  items.push(name);\n  return last;", "last"),
+        ("const items = [];", "  return items == null || items.length === 0;", "items"),
+    ],
+)
+def test_shared_state_never_updated_is_rejected(shared_state, bodies, name):
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_shared_state_updates(shared_state, bodies)
+    assert failure.value.diagnostic["reason"] == "SHARED_STATE_NEVER_UPDATED"
+    assert failure.value.diagnostic["detail"] == name

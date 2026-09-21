@@ -28,6 +28,7 @@ from proposer_curriculum import (  # noqa: E402
     StatefulFamily,
     all_families,
     js,
+    module_parts,
     source_bundle,
 )
 from pydantic import TypeAdapter  # noqa: E402
@@ -204,8 +205,9 @@ class _CapturePort:
 
 
 class ReferenceAuthor:
-    def __init__(self, family, locale, files, manifest):
+    def __init__(self, family, locale, files, manifest, parts):
         self.family, self.locale, self.files, self.manifest = family, locale, files, manifest
+        self.parts = parts
         self.rows = []
         self.port = _CapturePort()
         self.configuration = ProposalModelConfiguration(
@@ -233,7 +235,13 @@ class ReferenceAuthor:
             raise AssertionError("The reference author must never perform inference")
         step = kwargs["context"].get("source_step")
         path = step["file"]["normalized_path"] if step else None
-        reference = {"content": self.files[path]} if path else self.manifest
+        reference = (
+            self.parts
+            if path == "app.js"
+            else {"content": self.files[path]}
+            if path
+            else self.manifest
+        )
         result = TypeAdapter(kwargs["output_type"]).validate_json(
             canonical_json(reference), strict=True, extra="forbid"
         )
@@ -266,7 +274,9 @@ class ReferenceAuthor:
 def capture_rows(family, locale):
     files, prototype = source_bundle(family, locale)
     context = context_for(family, locale, prototype)
-    author = ReferenceAuthor(family, locale, files, manifest_for(family, context))
+    author = ReferenceAuthor(
+        family, locale, files, manifest_for(family, context), module_parts(family)
+    )
     result = asyncio.run(
         author.capture(
             owner_user_id=uuid5(NAMESPACE_URL, "synthetic-reference-owner"),
