@@ -6,6 +6,7 @@ const MAX_INPUT = 65536, MAX_ARTIFACT = 2 * 1024 * 1024, MAX_OUTPUT = 32 * 1024 
 const VIEWPORTS = [{ name: "narrow", width: 390, height: 844 }, { name: "wide", width: 1280, height: 800 }];
 const SHA = /^[0-9a-f]{64}$/, ID = /^[A-Za-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$/;
 const ACTION_KEYS = new Set(["Enter", "Space", "Tab", "Escape", "ArrowLeft", "ArrowRight", "Home", "End"]);
+const ASSERTIONS = new Set(["expect_text", "expect_contains", "expect_not_text"]);
 function check(value, code) { if (!value) throw Error(code); }
 function sha(value) { return createHash("sha256").update(value).digest("hex"); }
 function sorted(value) {
@@ -77,17 +78,18 @@ function validateJob(job) {
       plan.actions.length >= 4 && plan.actions.length <= 8, "INTERACTION_INVALID");
     for (const action of plan.actions) {
       shape(action, ["kind", "selector", "value"], "ACTION_SCHEMA");
-      check(["click", "fill", "press", "expect_text"].includes(action.kind) && typeof action.selector === "string" &&
+      check((["click", "fill", "press"].includes(action.kind) || ASSERTIONS.has(action.kind)) && typeof action.selector === "string" &&
         action.selector.length > 0 && action.selector.length <= 160 && !/[\x00-\x1f\x7f]/.test(action.selector), "ACTION_INVALID");
       check(action.kind === "click" ? action.value === null : typeof action.value === "string" &&
         action.value.length <= 1000 && !action.value.includes("\0"), "ACTION_VALUE_INVALID");
       if (action.kind === "press") check(ACTION_KEYS.has(action.value), "ACTION_KEY_INVALID");
+      if (action.kind === "expect_contains") check(action.value.length > 0, "ACTION_VALUE_INVALID");
     }
     check(plan.actions.some(a => a.kind === "click") && plan.actions.some(a => a.kind === "press" &&
       ["Enter", "Space"].includes(a.value)), "INTERACTION_COVERAGE_REQUIRED");
     for (let i = 0; i < plan.actions.length; i++) if (activation(plan.actions[i])) {
       let checked = false;
-      for (let j = i + 1; j < plan.actions.length && !activation(plan.actions[j]); j++) checked ||= plan.actions[j].kind === "expect_text";
+      for (let j = i + 1; j < plan.actions.length && !activation(plan.actions[j]); j++) checked ||= ASSERTIONS.has(plan.actions[j].kind);
       check(checked, "INTERACTION_ASSERTION_REQUIRED");
     }
     interactions.set(plan.route_id, plan.actions);
@@ -161,7 +163,7 @@ async function actionResult(page, action, index) {
         if (result.observed_text.length > 1000) {
           result.observed_text = result.observed_text.slice(0, 1000); throw Error("ASSERTION_TEXT_LIMIT");
         }
-        if (result.observed_text === action.value) return result;
+        if (matches(action, result.observed_text)) return result;
         await new Promise(resolve => setTimeout(resolve, 25));
       } while (Date.now() < deadline);
       result.status = "FAILED"; result.failure_code = "TEXT_ASSERTION_FAILED";
@@ -169,9 +171,14 @@ async function actionResult(page, action, index) {
   } catch (error) {
     result.status = "FAILED";
     result.failure_code = error.message === "ASSERTION_TEXT_LIMIT" ? "ASSERTION_TEXT_LIMIT" :
-      action.kind === "expect_text" ? "TEXT_ASSERTION_READ_FAILED" : "ACTION_FAILED";
+      ASSERTIONS.has(action.kind) ? "TEXT_ASSERTION_READ_FAILED" : "ACTION_FAILED";
   }
   return result;
+}
+function matches(action, observed) {
+  if (action.kind === "expect_contains") return observed.includes(action.value);
+  if (action.kind === "expect_not_text") return observed !== action.value;
+  return observed === action.value;
 }
 function notRun(action, index) { return { index, kind: action.kind, status: "NOT_RUN", observed_text: null, failure_code: null }; }
 async function executeActions(page, actions) {
