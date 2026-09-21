@@ -47,9 +47,6 @@ const targets: { value: ExecutionTarget; label: string }[] = [
   { value: "WEB_VUE", label: "Vue" },
   { value: "WEB_NODE_EXPRESS", label: "Node / Express" },
   { value: "WEB_VUE_NODE", label: "Vue + Node / Express" },
-  { value: "JVM_JAVA", label: "Java" },
-  { value: "JVM_KOTLIN", label: "Kotlin" },
-  { value: "JVM_SCALA", label: "Scala" },
 ];
 const approved = computed(
   () =>

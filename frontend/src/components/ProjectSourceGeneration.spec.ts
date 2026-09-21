@@ -40,7 +40,7 @@ function setup(approved = true) {
       catalogApi: {
         profiles: async () => [
           {
-            supported_targets: ["WEB_STATIC", "JVM_JAVA"],
+            supported_targets: ["WEB_STATIC", "WEB_VUE"],
             capability_status: "VALIDATED_LEVEL_D",
           } as ExecutionProfilePayload,
         ],
@@ -76,7 +76,7 @@ describe("source generation", () => {
     expect(api.source).not.toHaveBeenCalled();
   });
 
-  it.each(["WEB_STATIC", "JVM_JAVA"] as const)(
+  it.each(["WEB_STATIC", "WEB_VUE"] as const)(
     "generates %s with its approved architecture and refreshes source review",
     async (target) => {
       const { wrapper, api, webReload, jvmReload } = setup();
@@ -84,7 +84,7 @@ describe("source generation", () => {
       await wrapper.get("select").setValue(target);
       await wrapper.get("form").trigger("submit");
       await flushPromises();
-      const platform = target === "WEB_STATIC" ? "web" : "jvm";
+      const platform = "web";
       expect(api.source).toHaveBeenCalledWith(
         "project",
         platform,
@@ -95,7 +95,8 @@ describe("source generation", () => {
         }),
         "token",
       );
-      expect(target === "WEB_STATIC" ? webReload : jvmReload).toHaveBeenCalledTimes(1);
+      expect(webReload).toHaveBeenCalledTimes(1);
+      expect(jvmReload).not.toHaveBeenCalled();
       expect(wrapper.text()).toContain("Generated revision 1");
     },
   );
@@ -128,8 +129,8 @@ describe("source generation", () => {
     expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeDefined();
     await wrapper.get("form").trigger("submit");
     expect(api.source).toHaveBeenCalledTimes(1);
-    await wrapper.get("select").setValue("JVM_JAVA");
-    expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeUndefined();
-    expect(wrapper.text()).not.toContain("Generated revision 1");
+    await wrapper.get("select").setValue("WEB_VUE");
+    expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Generated revision 1");
   });
 });
