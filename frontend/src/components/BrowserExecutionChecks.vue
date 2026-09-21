@@ -32,6 +32,8 @@ const copy = computed(() =>
           click: "Clic",
           press: "Premi tasto",
           expect_text: "Verifica testo",
+          expect_contains: "Verifica che contenga",
+          expect_not_text: "Verifica che sia cambiato",
         },
       }
     : {
@@ -50,22 +52,25 @@ const copy = computed(() =>
           click: "Click",
           press: "Press key",
           expect_text: "Check text",
+          expect_contains: "Check contains",
+          expect_not_text: "Check changed",
         },
       },
 );
+const assertion = (kind: string) =>
+  ["expect_text", "expect_contains", "expect_not_text"].includes(kind);
 const checks = computed<BrowserExecutionChecks | null>(() => {
   if (!path.value.startsWith("/") || path.value.startsWith("//") || !actions.value.length)
     return null;
   let pending: string | null = null;
   const checked = new Set<string>();
   for (const action of actions.value) {
-    if (!action.selector.trim() || (action.kind === "expect_text" && !action.value?.trim()))
-      return null;
+    if (!action.selector.trim() || (assertion(action.kind) && !action.value?.trim())) return null;
     if (action.kind === "press" && !["Enter", "Space"].includes(action.value ?? "")) return null;
     if (action.kind === "click" || action.kind === "press") {
       if (pending) return null;
       pending = action.kind;
-    } else if (action.kind === "expect_text" && pending) {
+    } else if (assertion(action.kind) && pending) {
       checked.add(pending);
       pending = null;
     }

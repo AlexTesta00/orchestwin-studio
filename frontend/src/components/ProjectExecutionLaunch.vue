@@ -6,6 +6,8 @@ import {
   executionLaunchApi,
   type ExecutionLaunchApi,
   type ExecutionOperation,
+  type ExecutionJourney,
+  type JourneyStep,
   type BrowserExecutionChecks as BrowserChecks,
 } from "@/api/executionLaunch";
 import BrowserExecutionChecks from "./BrowserExecutionChecks.vue";
@@ -36,6 +38,91 @@ const pending = ref(false);
 const error = ref<string | null>(null);
 const result = ref<string | null>(null);
 const browserChecks = ref<BrowserChecks | null>(null);
+const journey = ref<ExecutionJourney | null>(null);
+const manualChecks = ref(false);
+const derived = computed(
+  () =>
+    journey.value?.status === "DERIVED" &&
+    journey.value.source_revision_id === source.value?.id &&
+    !manualChecks.value,
+);
+function journeyChecks(current: ExecutionJourney): BrowserChecks {
+  return {
+    declared_routes: current.declared_routes ?? [],
+    browser_interactions: current.browser_interactions ?? [],
+  };
+}
+function sentence(step: JourneyStep) {
+  const it = props.locale === "it";
+  const label = step.element_label;
+  const value = step.action.value ?? "";
+  switch (step.action.kind) {
+    case "fill":
+      return it ? `Compila «${label}» con «${value}»` : `Fill “${label}” with “${value}”`;
+    case "click":
+      return it ? `Premi «${label}»` : `Press “${label}”`;
+    case "press":
+      return it
+        ? `Attiva «${label}» da tastiera (${value})`
+        : `Activate “${label}” from the keyboard (${value})`;
+    case "expect_text":
+      return it
+        ? `Verifica che «${label}» mostri «${value}»`
+        : `Check that “${label}” shows “${value}”`;
+    case "expect_contains":
+      return it
+        ? `Verifica che «${label}» contenga «${value}»`
+        : `Check that “${label}” contains “${value}”`;
+    default:
+      return it
+        ? `Verifica che «${label}» non mostri più «${value}»`
+        : `Check that “${label}” no longer shows “${value}”`;
+  }
+}
+function editSample(index: number, next: string) {
+  const current = journey.value;
+  if (!current?.steps || !current.browser_interactions) return;
+  const previous = current.steps[index]?.action.value ?? "";
+  const steps = current.steps.map((step, position) => {
+    const own = position === index && step.action.kind === "fill";
+    const linked = step.action.kind === "expect_contains" && step.action.value === previous;
+    return own || linked ? { ...step, action: { ...step.action, value: next } } : step;
+  });
+  journey.value = {
+    ...current,
+    steps,
+    browser_interactions: [
+      {
+        route_id: current.browser_interactions[0]?.route_id ?? "root",
+        actions: steps.map((step) => step.action),
+      },
+    ],
+  };
+}
+watch(
+  [journey, manualChecks],
+  () => {
+    if (derived.value && journey.value) browserChecks.value = journeyChecks(journey.value);
+    else if (journey.value?.status === "DERIVED" && manualChecks.value) browserChecks.value = null;
+  },
+  { deep: true },
+);
+async function loadJourney() {
+  const revision = source.value;
+  if (!revision || props.platform !== "web" || revision.target_selection.target !== "WEB_STATIC") {
+    journey.value = null;
+    return;
+  }
+  const generation = epoch;
+  try {
+    const loaded = await authorized((token) =>
+      (props.api ?? executionLaunchApi).journey(props.projectId, token),
+    );
+    if (generation === epoch) journey.value = loaded;
+  } catch {
+    if (generation === epoch) journey.value = null;
+  }
+}
 const needsBrowser = computed(
   () => props.platform === "web" && source.value?.target_selection.target !== "WEB_NODE_EXPRESS",
 );
@@ -70,6 +157,14 @@ const copy = computed(() =>
         unavailable: "Il runtime di esecuzione non è disponibile o non è configurato.",
         running: "Operazione in corso…",
         pending: "È necessario decidere sul piano esistente prima di prepararne un altro.",
+        journey: "Percorso di verifica nel browser, derivato dal design approvato",
+        journeyIntro:
+          "La piattaforma proverà questi passi sulla pagina generata. Puoi cambiare solo i valori di esempio.",
+        sample: "Valore di esempio",
+        manual: "Definisci i passi manualmente",
+        automatic: "Torna al percorso derivato",
+        notDerivable:
+          "Il percorso non può essere derivato dal design: definisci i passi manualmente.",
       }
     : {
         title: "Run and collect evidence",
@@ -90,6 +185,13 @@ const copy = computed(() =>
         unavailable: "The execution runtime is unavailable or not configured.",
         running: "Operation in progress…",
         pending: "Decide on the existing plan before preparing another one.",
+        journey: "Browser verification journey, derived from the approved design",
+        journeyIntro:
+          "The platform will try these steps on the generated page. Only the sample values can be changed.",
+        sample: "Sample value",
+        manual: "Define the steps manually",
+        automatic: "Back to the derived journey",
+        notDerivable: "The journey cannot be derived from the design: define the steps manually.",
       },
 );
 function authorized<T>(fn: (token: string) => Promise<T>): Promise<T> {
@@ -204,7 +306,12 @@ watch(
     pending.value = false;
     result.value = null;
     error.value = null;
-    if (source.value) void refresh();
+    journey.value = null;
+    manualChecks.value = false;
+    if (source.value) {
+      void refresh();
+      void loadJourney();
+    }
   },
   { immediate: true },
 );
@@ -222,8 +329,33 @@ onUnmounted(() => {
     <h2 class="text-2xl font-black">{{ copy.title }} · {{ platform.toUpperCase() }}</h2>
     <p>{{ copy.intro }}</p>
     <p>{{ copy.revision }} {{ source.version_number }} · {{ source.target_selection.target }}</p>
+    <section v-if="needsBrowser && journey?.status === 'DERIVED'" class="space-y-2">
+      <h3 class="text-lg font-bold">{{ copy.journey }}</h3>
+      <p>{{ copy.journeyIntro }}</p>
+      <ol v-if="derived" class="list-decimal space-y-2 pl-6">
+        <li v-for="(step, index) in journey.steps" :key="index">
+          <span>{{ sentence(step) }}</span>
+          <label v-if="step.action.kind === 'fill'" class="ml-2 inline-flex items-center gap-1">
+            <span class="sr-only">{{ copy.sample }}</span>
+            <input
+              :value="step.action.value ?? ''"
+              maxlength="1000"
+              class="rounded border p-1"
+              :disabled="
+                pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'
+              "
+              @input="editSample(index, ($event.target as HTMLInputElement).value)"
+            />
+          </label>
+        </li>
+      </ol>
+      <button class="rounded border p-2" type="button" @click="manualChecks = !manualChecks">
+        {{ manualChecks ? copy.automatic : copy.manual }}
+      </button>
+    </section>
+    <p v-else-if="needsBrowser && journey?.status === 'NOT_DERIVABLE'">{{ copy.notDerivable }}</p>
     <BrowserExecutionChecks
-      v-if="needsBrowser"
+      v-if="needsBrowser && !derived"
       :key="`${projectId}:${source.id}`"
       :locale="locale"
       :disabled="pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'"
