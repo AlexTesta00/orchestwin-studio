@@ -186,6 +186,29 @@ _TEST_DOM = re.compile(
 )
 _TEST_REQUIRE = re.compile(r"require\(\s*['\"]\./app\.js['\"]\s*\)")
 _TEST_FRAMEWORK = re.compile(r"require\(\s*['\"]node:test['\"]\s*\)")
+_TEST_ASSERTION = re.compile(r"\bassert\.([A-Za-z_$][\w$]*)\s*\(")
+NODE_ASSERTIONS = frozenset(
+    {
+        "ok",
+        "equal",
+        "notEqual",
+        "deepEqual",
+        "notDeepEqual",
+        "strictEqual",
+        "notStrictEqual",
+        "deepStrictEqual",
+        "notDeepStrictEqual",
+        "throws",
+        "doesNotThrow",
+        "rejects",
+        "doesNotReject",
+        "match",
+        "doesNotMatch",
+        "fail",
+        "ifError",
+        "partialDeepStrictEqual",
+    }
+)
 
 
 def validate_node_test_contract(content):
@@ -201,3 +224,10 @@ def validate_node_test_contract(content):
             line=blanked.count("\n", 0, match.start()) + 1,
             parser=PARSER,
         )
+    for call in _TEST_ASSERTION.finditer(blanked):
+        if call.group(1) not in NODE_ASSERTIONS:
+            raise SourceSyntaxError(
+                reason="NODE_TEST_UNKNOWN_ASSERTION",
+                line=blanked.count("\n", 0, call.start()) + 1,
+                parser=PARSER,
+            )

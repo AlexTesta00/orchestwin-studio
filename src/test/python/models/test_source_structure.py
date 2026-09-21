@@ -223,3 +223,32 @@ def test_empty_statements_and_braceless_module_guards_pass():
         "if (typeof module !== 'undefined') module.exports = { core };\n"
     )
     validate_static_module_contract(content)
+
+
+@pytest.mark.parametrize(
+    "assertion,accepted",
+    [
+        ("assert.ok(value())", True),
+        ("assert.deepStrictEqual(value(), 3)", True),
+        ("assert.throws(() => value(null))", True),
+        ("assert.notOk(value())", False),
+        ("assert.isTrue(value())", False),
+        ("assert.equals(value(), 3)", False),
+    ],
+)
+def test_node_tests_may_use_only_real_assert_methods(assertion, accepted):
+    from orchestwin.models.source_structure import validate_node_test_contract
+
+    content = (
+        "const test = require('node:test');\n"
+        "const assert = require('node:assert/strict');\n"
+        "const { value } = require('./app.js');\n"
+        "test('value', () => { " + assertion + "; });\n"
+    )
+    if accepted:
+        validate_node_test_contract(content)
+        return
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_node_test_contract(content)
+    assert failure.value.diagnostic["reason"] == "NODE_TEST_UNKNOWN_ASSERTION"
+    assert failure.value.diagnostic["line"] == 4

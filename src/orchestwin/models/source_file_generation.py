@@ -425,6 +425,8 @@ def _static_file_instruction(planned):
         return (
             "Use const test = require('node:test'); const assert = require('node:assert/strict'); "
             "and import the actual exported functions with require('./app.js'). "
+            "Use only methods that exist on node:assert/strict, such as ok, equal, notEqual, strictEqual, deepStrictEqual, throws, doesNotThrow and match; "
+            "assert.notOk, isTrue, isFalse, expect and other library matchers do not exist and fail the static check. "
             "A bare require call does not create a variable: explicitly bind every test and assertion helper you use. "
             "Register every case with test(name, callback), after initializing all imports. "
             "Let failed assertions fail the test runner; never catch assertions merely to log an error and continue. "
