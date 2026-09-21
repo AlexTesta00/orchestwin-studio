@@ -318,25 +318,6 @@ class SqlAlchemyWebExecutionAttemptRepository:
         return None if row is None else web_execution_attempt_from_record(row)
 
 
-class WebExecutionAttemptUnitOfWork(Protocol):
-    """Transactional boundary for execution-attempt persistence."""
-
-    attempts: WebExecutionAttemptRepository
-
-    async def __aenter__(self) -> Self: ...
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None: ...
-
-    async def commit(self) -> None: ...
-
-    async def rollback(self) -> None: ...
-
-
 class SqlAlchemyWebExecutionAttemptUnitOfWork:
     """Async SQLAlchemy transaction coordinator for Web execution attempts."""
 

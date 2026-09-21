@@ -14,7 +14,7 @@ from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from orchestwin.api.sprint07_runtime import SqlAlchemyBrownfieldProjectQuery
+from orchestwin.api.brownfield_runtime import SqlAlchemyBrownfieldProjectQuery
 from orchestwin.identity.application import AuthenticationStatus, LocalIdentityApplicationService
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory

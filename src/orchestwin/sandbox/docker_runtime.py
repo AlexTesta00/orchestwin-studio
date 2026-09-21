@@ -6,7 +6,6 @@ import asyncio
 import mimetypes
 import re
 from collections.abc import Mapping
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -642,42 +641,6 @@ class LocalDockerContainerRuntimeAdapter(ContainerRuntimePort):
 
 class _OutputLimitExceeded(Exception):
     """Internal signal used to terminate a process with bounded retained output."""
-
-
-async def _read_bounded_stream(
-    stream: asyncio.StreamReader,
-    buffer: bytearray,
-    *,
-    maximum_bytes: int,
-) -> None:
-    """Drain one process stream and stop before retained output exceeds its limit."""
-    while True:
-        chunk = await stream.read(64 * 1024)
-        if not chunk:
-            return
-        remaining = maximum_bytes - len(buffer)
-        if len(chunk) > remaining:
-            if remaining > 0:
-                buffer.extend(chunk[:remaining])
-            raise _OutputLimitExceeded
-        buffer.extend(chunk)
-
-
-async def _terminate_process(process: asyncio.subprocess.Process) -> None:
-    """Terminate and reap one process without leaking a background child."""
-    if process.returncode is None:
-        with suppress(ProcessLookupError):
-            process.kill()
-    with suppress(ProcessLookupError, OSError):
-        await process.wait()
-
-
-async def _cancel_tasks(tasks: set[asyncio.Task[object]]) -> None:
-    """Cancel and retrieve remaining reader/wait tasks."""
-    for task in tasks:
-        task.cancel()
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def _normalize_process_result(

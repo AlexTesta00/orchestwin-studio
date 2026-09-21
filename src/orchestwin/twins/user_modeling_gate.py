@@ -199,48 +199,6 @@ class UserModelingGateDecisionResult:
     issue: HumanGateIssueCode | None = None
 
 
-class UserModelingGateService(Protocol):
-    """Use cases exposed to the future Gate 3 API adapter."""
-
-    async def submit(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> UserModelingGateSubmissionResult:
-        """Submit the current User Modeling snapshot."""
-
-    async def decide(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        action: HumanGateAction,
-        reason: str | None = None,
-    ) -> UserModelingGateDecisionResult:
-        """Apply an owner decision to Gate 3."""
-
-    async def current_gate(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> HumanGate | None:
-        """Return the latest Gate 3."""
-
-    async def gate_events(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        gate_id: UUID,
-    ) -> tuple[
-        HumanGateEvent,
-        ...,
-    ]:
-        """Return the owner-scoped Gate 3 history."""
-
-
 Clock = Callable[
     [],
     datetime,

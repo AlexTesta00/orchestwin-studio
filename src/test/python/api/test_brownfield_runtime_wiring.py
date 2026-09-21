@@ -13,9 +13,9 @@ from pydantic import ValidationError
 from orchestwin.api import services as services_module
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings
+from orchestwin.api.brownfield_runtime import build_brownfield_services
 from orchestwin.api.execution_catalog import SqlAlchemyExecutionCatalogLoader
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
-from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.config import ApplicationSettings, RuntimeEnvironment
 
 IMAGE = "example/web@sha256:" + "a" * 64
@@ -41,7 +41,7 @@ def _settings(tmp_path: Path) -> ApplicationSettings:
     )
 
 
-def test_sprint07_settings_enforce_distinct_roots_digest_images_and_limits(
+def test_brownfield_settings_enforce_distinct_roots_digest_images_and_limits(
     tmp_path: Path,
 ) -> None:
     settings = _settings(tmp_path)
@@ -68,7 +68,7 @@ def test_builder_composes_profiles_brownfield_queries_and_gate_7_without_side_ef
 ) -> None:
     settings = _settings(tmp_path)
 
-    bundle = build_sprint07_services(settings, object())  # type: ignore[arg-type]
+    bundle = build_brownfield_services(settings, object())  # type: ignore[arg-type]
     load = AsyncMock(return_value=tuple(p.metadata for p in bundle.profile_registry.profiles))
     monkeypatch.setattr(SqlAlchemyExecutionCatalogLoader, "load", load)
     profiles = asyncio.run(bundle.execution_queries.profiles())
@@ -83,7 +83,7 @@ def test_builder_composes_profiles_brownfield_queries_and_gate_7_without_side_ef
     assert not settings.sandbox_evidence_storage_root.exists()
 
 
-def test_default_runtime_wires_sprint07_services_with_the_database_factory(
+def test_default_runtime_wires_brownfield_services_with_the_database_factory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -94,7 +94,7 @@ def test_default_runtime_wires_sprint07_services_with_the_database_factory(
         queries=object(),
         gate=object(),
     )
-    sprint07_marker = SimpleNamespace(
+    brownfield_marker = SimpleNamespace(
         brownfield=object(),
         execution_queries=object(),
         high_impact=object(),
@@ -130,19 +130,19 @@ def test_default_runtime_wires_sprint07_services_with_the_database_factory(
         lambda _session_factory: stage_marker,
     )
 
-    def build_sprint07(settings: ApplicationSettings, session_factory: object):
+    def build_brownfield(settings: ApplicationSettings, session_factory: object):
         captured.append((settings, session_factory))
-        return sprint07_marker
+        return brownfield_marker
 
-    monkeypatch.setattr(services_module, "build_sprint07_services", build_sprint07)
+    monkeypatch.setattr(services_module, "build_brownfield_services", build_brownfield)
     settings = _settings(tmp_path)
 
     runtime = create_default_runtime(settings)
 
     assert captured == [(settings, database.session_factory)]
-    assert runtime.brownfield_service is sprint07_marker.brownfield
-    assert runtime.execution_query_service is sprint07_marker.execution_queries
-    assert runtime.high_impact_service is sprint07_marker.high_impact
+    assert runtime.brownfield_service is brownfield_marker.brownfield
+    assert runtime.execution_query_service is brownfield_marker.execution_queries
+    assert runtime.high_impact_service is brownfield_marker.high_impact
 
     asyncio.run(runtime.close())
     assert database.disposed is True

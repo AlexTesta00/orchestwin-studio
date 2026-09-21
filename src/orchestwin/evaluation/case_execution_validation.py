@@ -10,11 +10,11 @@ from orchestwin.evaluation.case_campaign import (
     CaseCampaignPhase,
     build_formal_case_campaign_plan,
 )
-from orchestwin.evaluation.pipeline_validation import verify_sprint12_evidence_pipeline
+from orchestwin.evaluation.pipeline_validation import verify_evidence_pipeline
 
 
 @dataclass(frozen=True, slots=True)
-class Sprint12CaseExecutionPipelineSummary:
+class CaseCaseExecutionPipelineSummary:
     """Inspectable readiness summary before real formal case results are materialized."""
 
     campaign_id: str
@@ -47,13 +47,13 @@ class Sprint12CaseExecutionPipelineSummary:
         }
 
 
-def verify_sprint12_case_execution_pipeline(
+def verify_case_execution_pipeline(
     repo_root: Path,
     *,
     platform_commit: str,
-) -> Sprint12CaseExecutionPipelineSummary:
+) -> CaseCaseExecutionPipelineSummary:
     """Verify that real case capture is generic, evidence-backed, and within revised scope."""
-    evidence_summary = verify_sprint12_evidence_pipeline(repo_root)
+    evidence_summary = verify_evidence_pipeline(repo_root)
     campaign = build_formal_case_campaign_plan(repo_root, platform_commit=platform_commit)
     formal_case_ids = tuple(case.case_id for case in campaign.cases)
     if formal_case_ids != evidence_summary.formal_case_ids:
@@ -79,7 +79,7 @@ def verify_sprint12_case_execution_pipeline(
         )
 
     required_profiles = tuple(sorted({case.execution_profile for case in campaign.cases}))
-    return Sprint12CaseExecutionPipelineSummary(
+    return CaseCaseExecutionPipelineSummary(
         campaign_id=campaign.campaign_id,
         formal_case_ids=formal_case_ids,
         required_execution_profiles=required_profiles,

@@ -25,7 +25,7 @@ from orchestwin.jvm_execution.source_policy import pinned_build_files
 from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import wire_value
-from orchestwin.models.repair_diagnostics import failure_log_context
+from orchestwin.models.repair_diagnostics import browser_final_state, failure_log_context
 from orchestwin.models.source_context import compact_implementation_references
 from orchestwin.models.source_proposals import MAX_CONTEXT_BYTES, file_entry
 from orchestwin.projects.persistence.models import ProjectRecord
@@ -427,6 +427,15 @@ class ModelSourceApplication:
                             "failure_code": phase.failure_code,
                             "normalized_summary": phase.normalized_summary,
                             "findings": [finding.to_snapshot() for finding in phase.findings],
+                            **(
+                                {
+                                    "browser_final_state": browser_final_state(
+                                        phase, getattr(backend, "evidence_root", None)
+                                    )
+                                }
+                                if phase.phase.value == "BROWSER_EVIDENCE"
+                                else {}
+                            ),
                         }
                         for phase in attempt.report.phase_results
                         if phase.phase == signature.phase

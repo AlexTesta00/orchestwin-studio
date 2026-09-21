@@ -42,6 +42,7 @@ from orchestwin.models.proposal_generation import (
 from orchestwin.models.proposal_tasks import SOURCE_TASKS, TASKS
 from orchestwin.models.requirements_runtime import RequirementsRuntime, RequirementsRuntimeMode
 from orchestwin.models.schema_decoding import POLICY as SCHEMA_DECODING_POLICY
+from orchestwin.models.schema_decoding import VERSION as SCHEMA_DECODER_VERSION
 from orchestwin.models.serialized_generation import SerializedGenerationPort
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.strict_evaluator_json import strict_json_object
@@ -133,6 +134,19 @@ def _read(path, maximum=32768):
     return raw
 
 
+def _compatible_schema_decoder(value):
+    if not isinstance(value, str):
+        return False
+    pinned = SCHEMA_DECODER_VERSION.split(".")
+    parts = value.split(".")
+    return (
+        len(parts) == 3
+        and all(part.isdigit() for part in parts)
+        and parts[0] == pinned[0]
+        and int(parts[1]) >= int(pinned[1]) - 1
+    )
+
+
 def _proposal_health(config, token, supported_tasks=TASKS):
     endpoint = urlsplit(config.base_url)
     connection = http.client.HTTPConnection(endpoint.hostname, endpoint.port, timeout=10)
@@ -156,7 +170,7 @@ def _proposal_health(config, token, supported_tasks=TASKS):
             and health.get("model_identity") == config.identity.to_snapshot()
             and health.get("supported_tasks") == sorted(supported_tasks)
             and health.get("schema_decoding") == SCHEMA_DECODING_POLICY
-            and health.get("schema_decoder_version") == "1.8.0"
+            and _compatible_schema_decoder(health.get("schema_decoder_version"))
             and type(health.get("max_output_tokens")) is int
             and health["max_output_tokens"] >= config.max_output_tokens
             and type(health.get("max_sequence_length")) is int

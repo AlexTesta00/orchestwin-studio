@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from orchestwin.evaluation.matrix_validation import verify_sprint12_evaluation_matrix
+from orchestwin.evaluation.matrix_validation import verify_evaluation_matrix
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_revised_sprint12_matrix_is_web_formal_cases_plus_jvm_language_fixtures() -> None:
-    summary = verify_sprint12_evaluation_matrix(_REPO_ROOT)
+def test_revised_case_matrix_is_web_formal_cases_plus_jvm_language_fixtures() -> None:
+    summary = verify_evaluation_matrix(_REPO_ROOT)
 
     assert summary.formal_case_ids == (
         "web-calculator",

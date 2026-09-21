@@ -303,25 +303,6 @@ class SqlAlchemyWebSourceRevisionRepository:
         return None if row is None else web_source_revision_from_record(row)
 
 
-class WebSourceRevisionUnitOfWork(Protocol):
-    """Transactional boundary for one or more source revision operations."""
-
-    revisions: WebSourceRevisionRepository
-
-    async def __aenter__(self) -> Self: ...
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None: ...
-
-    async def commit(self) -> None: ...
-
-    async def rollback(self) -> None: ...
-
-
 class SqlAlchemyWebSourceRevisionUnitOfWork:
     """Async SQLAlchemy transaction coordinator for Web source revisions."""
 

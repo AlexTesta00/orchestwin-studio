@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from orchestwin.evaluation.pipeline_validation import verify_sprint12_evidence_pipeline
+from orchestwin.evaluation.pipeline_validation import verify_evidence_pipeline
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_sprint12_pipeline_freezes_case_and_expert_evidence_boundaries() -> None:
-    summary = verify_sprint12_evidence_pipeline(REPO_ROOT)
+def test_case_pipeline_freezes_case_and_expert_evidence_boundaries() -> None:
+    summary = verify_evidence_pipeline(REPO_ROOT)
 
     assert summary.formal_case_ids == (
         "web-calculator",

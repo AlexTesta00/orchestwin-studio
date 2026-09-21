@@ -115,12 +115,19 @@ def complete_output():
             {
                 "normalized_path": "app.js",
                 "media_type": "text/javascript",
-                "content": "exports.value = 3;",
+                "content": (
+                    "function value() { return 3; }\n"
+                    "if (typeof module !== 'undefined') { module.exports = { value }; }"
+                ),
             },
             {
                 "normalized_path": "app.test.cjs",
                 "media_type": "text/javascript",
-                "content": "require('node:assert/strict').equal(require('./app.js').value, 3);",
+                "content": (
+                    "const test = require('node:test');\n"
+                    "const assert = require('node:assert/strict');\n"
+                    "test('value', () => { assert.equal(require('./app.js').value(), 3); });"
+                ),
             },
         ]
     )
@@ -130,7 +137,10 @@ def complete_output():
 
 def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
-    payload["files"][0]["content"] = 'const label = "è";\nconst s = "\\n";'
+    payload["files"][0]["content"] = (
+        'const label = "è";\nconst s = "\\n";\nfunction value() { return label + s; }\n'
+        "if (typeof module !== 'undefined') { module.exports = { value }; }"
+    )
     generator, transport = source_sequence_generator(tmp_path, payload)
     result = execute(generator, ctx, store)
     assert len(transport.calls) == len(store.requests) == 4
@@ -664,3 +674,31 @@ def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, f
     with pytest.raises(ProposalGenerationError):
         execute(generator, ctx, MemoryEvidence())
     assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "interface,kept,removed",
+    [
+        (
+            "addGuest(name: string): object; listGuests(): object[]",
+            ["addGuest(name: string): object", "listGuests(): object[]"],
+            [],
+        ),
+        (
+            "addGuest(name: string): object; displayGuestList(): void; getGuestInputField(): object",
+            ["addGuest(name: string): object"],
+            ["displayGuestList", "getGuestInputField"],
+        ),
+        ("isUserRegistrationRequired(): boolean", None, None),
+        ("hasExternalDependencies(): boolean; saveGuestsToStorage(): void", None, None),
+        ("DOM: ELM-001, ELM-002", None, None),
+    ],
+)
+def test_static_interface_keeps_only_pure_business_functions(interface, kept, removed):
+    from orchestwin.models.source_file_generation import _validate_static_interface
+
+    if kept is None:
+        with pytest.raises(ValueError):
+            _validate_static_interface(interface)
+        return
+    assert _validate_static_interface(interface) == (kept, removed)

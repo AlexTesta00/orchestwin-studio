@@ -31,6 +31,8 @@ def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_pro
     versions = artifacts()
     output = source_output(ExecutionTarget.WEB_STATIC)
     content = "\n".join(f"// città, reserved line {number}" for number in range(72))
+    content += "\nfunction value() { return 'città'; }"
+    content += "\nif (typeof module !== 'undefined') { module.exports = { value }; }"
     content += "\n" if final_newline else ""
     output["files"][0]["content"] = content
     generator, _ = source_sequence_generator(tmp_path, output)

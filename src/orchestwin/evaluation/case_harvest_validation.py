@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from orchestwin.evaluation.case_metric_bindings import METRIC_FIELD_TYPES
-from orchestwin.evaluation.matrix_validation import verify_sprint12_evaluation_matrix
+from orchestwin.evaluation.matrix_validation import verify_evaluation_matrix
 
 
 @dataclass(frozen=True, slots=True)
-class Sprint12HarvestContractSummary:
+class CaseHarvestContractSummary:
     """Thesis-safe summary of what the evidence harvester can and cannot claim."""
 
     formal_case_ids: tuple[str, ...]
@@ -40,9 +40,9 @@ class Sprint12HarvestContractSummary:
         }
 
 
-def verify_sprint12_case_harvest_contract(repo_root: Path) -> Sprint12HarvestContractSummary:
+def verify_case_harvest_contract(repo_root: Path) -> CaseHarvestContractSummary:
     """Verify the generic harvester remains aligned with frozen scope and evidence boundaries."""
-    matrix = verify_sprint12_evaluation_matrix(repo_root)
+    matrix = verify_evaluation_matrix(repo_root)
     contract = json.loads(
         (
             repo_root / "experiments" / "case-studies" / "observed-metric-bindings-contract-v1.json"
@@ -55,7 +55,7 @@ def verify_sprint12_case_harvest_contract(repo_root: Path) -> Sprint12HarvestCon
         raise ValueError("formal metric harvesting must read values from actual evidence files")
     if contract["fabricated_values_allowed"] or contract["case_specific_logic_allowed"]:
         raise ValueError("formal metric harvesting permits fabricated or case-specific logic")
-    return Sprint12HarvestContractSummary(
+    return CaseHarvestContractSummary(
         formal_case_ids=matrix.formal_case_ids,
         metric_field_count=len(METRIC_FIELD_TYPES),
         binding_kind=contract["binding_kind"],

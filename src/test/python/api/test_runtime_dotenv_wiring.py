@@ -56,7 +56,7 @@ def factory_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNa
     monkeypatch.setattr(services, "build_requirements_services", lambda _factory: stage)
     monkeypatch.setattr(services, "build_design_services", lambda _factory: stage)
     monkeypatch.setattr(services, "build_architecture_services", lambda _factory: stage)
-    monkeypatch.setattr(services, "build_sprint07_services", lambda _settings, _factory: sandbox)
+    monkeypatch.setattr(services, "build_brownfield_services", lambda _settings, _factory: sandbox)
     monkeypatch.setattr(services, "ContentAddressedAdapterRegistry", lambda _root: object())
     monkeypatch.setattr(services, "SqlAlchemyTrainingApiService", lambda **_kwargs: object())
     return SimpleNamespace(

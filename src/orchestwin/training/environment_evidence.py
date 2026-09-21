@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
-import importlib.metadata
-import os
-import platform
 import subprocess
-import sys
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -543,42 +538,6 @@ def create_adapter_export_load_evidence(
         observed_at=observed_at,
         content_hash=content_hash,
     )
-
-
-class LocalTrainingEnvironmentProbe:
-    """Fixed-command local probe suitable for WSL2 evidence capture, never shell input."""
-
-    async def observe(
-        self,
-        probe_id: TrainingEnvironmentProbeId,
-    ) -> TrainingEnvironmentObservation:
-        if probe_id is TrainingEnvironmentProbeId.OPERATING_SYSTEM:
-            return _observed(probe_id, platform.platform(), source="python:platform.platform")
-        if probe_id is TrainingEnvironmentProbeId.PYTHON_VERSION:
-            version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            return _observed(probe_id, version, source="python:sys.version_info")
-        if probe_id is TrainingEnvironmentProbeId.WSL_DISTRIBUTION:
-            distribution = os.environ.get("WSL_DISTRO_NAME")
-            if distribution:
-                return _observed(probe_id, distribution, source="env:WSL_DISTRO_NAME")
-            return _unavailable(probe_id, source="env:WSL_DISTRO_NAME", detail="Not in WSL")
-        if probe_id is TrainingEnvironmentProbeId.TORCH_VERSION:
-            try:
-                version = importlib.metadata.version("torch")
-            except importlib.metadata.PackageNotFoundError:
-                return _unavailable(
-                    probe_id,
-                    source="python:importlib.metadata",
-                    detail="torch is not installed",
-                )
-            return _observed(probe_id, version, source="python:importlib.metadata")
-        query = {
-            TrainingEnvironmentProbeId.NVIDIA_DRIVER_VERSION: "driver_version",
-            TrainingEnvironmentProbeId.CUDA_VISIBLE_VERSION: "cuda_version",
-            TrainingEnvironmentProbeId.GPU_NAME: "name",
-            TrainingEnvironmentProbeId.GPU_MEMORY_MB: "memory.total",
-        }[probe_id]
-        return await asyncio.to_thread(_observe_nvidia_smi, probe_id, query)
 
 
 def _observe_nvidia_smi(

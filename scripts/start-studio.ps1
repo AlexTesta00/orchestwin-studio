@@ -22,8 +22,21 @@ if (-not (Test-Path -LiteralPath $node -PathType Leaf)) { throw 'Configure the N
 $node = (Resolve-Path -LiteralPath $node).ProviderPath
 # The API uses this same selected Node binary for syntax-only source validation.
 $env:PATH = [IO.Path]::GetDirectoryName($node) + [IO.Path]::PathSeparator + $env:PATH
+$tunnelPort = $null
+$remoteConfig = $settings.remote_proposal_config_file
+$remotePod = $settings.remote_pod
+if (-not [string]::IsNullOrWhiteSpace($remoteConfig)) {
+    if ($remoteConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $remoteConfig -PathType Leaf)) { throw 'The remote proposal configuration must be an existing absolute file path.' }
+    if ([string]::IsNullOrWhiteSpace($remotePod) -or $remotePod -notmatch '^[A-Za-z0-9_-]+$') { throw 'The remote proposal configuration requires the pod identifier.' }
+    if ($null -ne $sourcePort -or -not [string]::IsNullOrWhiteSpace($sourceConfig)) { throw 'The remote proposer replaces the local source configuration.' }
+    $remoteRuntime = Get-Content -LiteralPath $remoteConfig -Raw | ConvertFrom-Json
+    if ($remoteRuntime.base_url -notmatch '^http://127\.0\.0\.1:([0-9]+)$') { throw 'The remote proposal configuration must target a loopback tunnel port.' }
+    $tunnelPort = [int]$Matches[1]
+    if ($tunnelPort -in @(8000, 8080, 8787, 8788)) { throw 'The tunnel port must not collide with Studio ports.' }
+}
 $ports = @(8000, 8080, 8787, 8788)
 if ($null -ne $sourcePort) { $ports += $sourcePort }
+if ($null -ne $tunnelPort) { $ports += $tunnelPort }
 foreach ($port in $ports) {
     if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
         throw "Port $port is already in use. Stop the previous Studio session first."
@@ -81,7 +94,24 @@ try {
         if ((Get-Date) -gt $deadline) { throw 'Model startup timed out.' }
         Start-Sleep -Seconds 3
     }
-    & $python scripts/studio_runtime.py check --models $models > (Join-Path $session 'readiness.json')
+    if ($null -ne $tunnelPort) {
+        $children += Start-StudioProcess $python @('scripts/cloud_proposer.py', 'tunnel', '--pod', $remotePod) 'tunnel' $repo
+        Write-Host "Opening the proposer tunnel on port $tunnelPort."
+        $deadline = (Get-Date).AddSeconds(90)
+        while (-not (Get-NetTCPConnection -LocalPort $tunnelPort -State Listen -ErrorAction SilentlyContinue)) {
+            if (@($children | Where-Object HasExited).Count) { throw 'The proposer tunnel stopped. See var/studio/logs/tunnel.stderr.log.' }
+            if ((Get-Date) -gt $deadline) { throw 'The proposer tunnel did not open.' }
+            Start-Sleep -Seconds 2
+        }
+        $manifest = Get-Content -LiteralPath $models -Raw | ConvertFrom-Json
+        $models = Join-Path $session 'models-remote.json'
+        [ordered]@{
+            schema_version = 1
+            proposal_config_file = $remoteConfig.Replace('\', '/')
+            final_evaluator_config_file = $manifest.final_evaluator_config_file
+        } | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
+    }
+    & $python scripts/studio_runtime.py check --models $models | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii
     if ($LASTEXITCODE -ne 0) { throw 'Real model readiness failed.' }
     $children += Start-StudioProcess $python @('scripts/studio_runtime.py', 'api', '--models', (Quote-Argument $models)) 'api' $repo
     $children += Start-StudioProcess $node @('node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '8080', '--strictPort') 'frontend' (Join-Path $repo 'frontend')
@@ -89,7 +119,7 @@ try {
     do {
         Start-Sleep -Seconds 1
         if (@($children | Where-Object HasExited).Count) { throw 'A Studio service stopped. See var/studio/logs.' }
-        try { $ready = (Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 2).StatusCode -eq 200 } catch { $ready = $false }
+        try { $ready = (Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/v1/health' -TimeoutSec 2 -UseBasicParsing).StatusCode -eq 200 } catch { $ready = $false }
     } until ($ready -or (Get-Date) -gt $deadline)
     if (-not $ready) { throw 'API startup timed out.' }
     [ordered]@{session = $session; processes = @($children | ForEach-Object { @{id = $_.Id; started = $_.StartTime.ToUniversalTime().ToString('o')} })} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath 'var/studio/active-session.json'

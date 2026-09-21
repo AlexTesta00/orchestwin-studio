@@ -376,11 +376,6 @@ def web_scope_for(target: ExecutionTarget) -> WebValidationScope:
         raise ValueError("target has no Sprint 08 Web validation scope") from error
 
 
-def is_sprint08_web_target(target: ExecutionTarget) -> bool:
-    """Return whether the target belongs to the approved Web family set."""
-    return target in _WEB_TARGETS
-
-
 def _validate_target_shape(scope: WebValidationScope) -> None:
     expected_layout = (
         WebProjectLayout.FRONTEND_BACKEND

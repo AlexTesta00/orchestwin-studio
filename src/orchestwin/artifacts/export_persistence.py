@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import (
@@ -143,19 +142,6 @@ class StoredExportBundle:
 
 class ExportBundlePersistenceConflict(RuntimeError):
     """Raised when append-only export identity or content conflicts."""
-
-
-class ExportBundleRepository(Protocol):
-    """Owner-scoped append-only export metadata port."""
-
-    async def append(self, bundle: StoredExportBundle) -> StoredExportBundle: ...
-
-    async def get_owned(
-        self,
-        *,
-        export_id: UUID,
-        owner_user_id: UUID,
-    ) -> StoredExportBundle | None: ...
 
 
 class InMemoryExportBundleRepository:

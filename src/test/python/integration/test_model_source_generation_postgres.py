@@ -197,7 +197,13 @@ def source_output(target):
             "media_type": "text/javascript"
             if target is ExecutionTarget.WEB_STATIC
             else "text/plain",
-            "content": "// Synthetic test source; this fixture checks persistence only.",
+            "content": (
+                "const test = require('node:test');\n"
+                "const assert = require('node:assert/strict');\n"
+                "test('value', () => { assert.equal(require('./app.js').value(), 'Fixture'); });\n"
+            )
+            if target is ExecutionTarget.WEB_STATIC
+            else "// Synthetic test source; this fixture checks persistence only.",
         }
     ]
     if target is ExecutionTarget.WEB_STATIC:
@@ -206,7 +212,10 @@ def source_output(target):
             {
                 "normalized_path": "app.js",
                 "media_type": "text/javascript",
-                "content": "const synthetic = 'Fixture';",
+                "content": (
+                    "function value() { return 'Fixture'; }\n"
+                    "if (typeof module !== 'undefined') { module.exports = { value }; }\n"
+                ),
             },
         )
     entry = {

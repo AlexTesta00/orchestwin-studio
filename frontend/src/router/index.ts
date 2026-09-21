@@ -15,7 +15,7 @@ declare module "vue-router" {
   }
 }
 
-export const applicationRoutes = Object.freeze([
+const applicationRoutes = Object.freeze([
   {
     path: "/",
     name: "overview",
