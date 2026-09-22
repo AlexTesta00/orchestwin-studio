@@ -186,6 +186,7 @@ class ProposalGenerator:
         output_type,
         instruction: str,
         max_output_tokens: int | None = None,
+        temperature: float | None = None,
     ):
         if task not in TASKS:
             raise ValueError("unsupported proposal task")
@@ -230,7 +231,7 @@ class ProposalGenerator:
             input_payload={"context": serialized_context, "output_schema": schema_payload},
             allowed_evidence_refs=(),
             prompt_version_ref=f"proposal-{task}-v{contract_version}",
-            temperature=self.configuration.temperature,
+            temperature=self.configuration.temperature if temperature is None else temperature,
             max_output_tokens=budget,
             timeout_seconds=self.configuration.timeout_seconds,
         )

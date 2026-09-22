@@ -46,6 +46,7 @@ from orchestwin.models.source_syntax import validate_source_syntax
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 PROTOCOL = "SOURCE_FILES_V3_PARTS"
+PARTS_TEMPERATURE = 0.2
 MANIFEST_BUDGET = 3200
 FILE_BUDGET = 4096
 MAX_FILES = 8
@@ -779,6 +780,7 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     context=child_context,
                     output_type=parts_type or SourceText,
                     max_output_tokens=FILE_BUDGET,
+                    temperature=PARTS_TEMPERATURE if parts_type else None,
                     instruction=_file_instruction(planned, target)
                     + (_static_file_instruction(planned) if target == "WEB_STATIC" else "")
                     + _jvm_file_instruction(planned, entrypoint, target)
