@@ -177,6 +177,8 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         json.loads(store.requests[parent][0].input_payload_json)["context"]["runtime_contract"]
         == STATIC_RUNTIME_CONTRACT
     )
+    assert store.requests[parent][0].temperature == 0.6
+    assert [store.requests[child][0].temperature for child in children] == [0.2, 0.6, 0.6]
     assert [s["generation_id"] for s in result.generation_steps] == list(map(str, children))
     for ordinal, child in enumerate(children, 1):
         request = store.requests[child][0]
