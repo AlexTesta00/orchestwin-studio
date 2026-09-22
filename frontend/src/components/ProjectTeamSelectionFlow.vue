@@ -16,6 +16,7 @@ import type { HumanGateEventResponse } from "@/api/workflow-contracts";
 import { useAuthStore } from "@/stores/auth";
 import { type TeamAuthorizedRequest, useTeamStore } from "@/stores/team";
 import TwinIdentity from "./TwinIdentity.vue";
+import UiButton from "./UiButton.vue";
 
 const props = defineProps<{
   projectId: string;
@@ -66,6 +67,7 @@ const { t, locale } = useI18n({
         gateTitle: "Confirm your team",
         noGate: "The Agent Team has not been submitted for approval.",
         submitGate: "Review this team for approval",
+        moreActions: "Other actions",
         gateReason: "Decision rationale",
         approve: "Approve",
         reject: "Reject",
@@ -238,6 +240,7 @@ const { t, locale } = useI18n({
         gateTitle: "Conferma il tuo team",
         noGate: "L'Agent Team non è ancora stato sottoposto ad approvazione.",
         submitGate: "Porta questo team all'approvazione",
+        moreActions: "Altre azioni",
         gateReason: "Motivazione della decisione",
         approve: "Approva",
         reject: "Rifiuta",
@@ -651,11 +654,11 @@ function eventLabel(event: HumanGateEventResponse): string {
 <template>
   <section class="grid gap-4" aria-labelledby="team-selection-title">
     <header class="grid gap-2">
-      <h2 id="team-selection-title" class="text-2xl font-black text-slate-950">
+      <h2 id="team-selection-title" class="text-2xl font-semibold text-ink">
         {{ t("flow.title") }}
       </h2>
 
-      <p class="m-0 max-w-3xl text-slate-600">
+      <p class="m-0 max-w-3xl text-ink-2">
         {{ t("flow.intro") }}
       </p>
     </header>
@@ -671,13 +674,13 @@ function eventLabel(event: HumanGateEventResponse): string {
       aria-live="polite"
       aria-atomic="true"
     >
-      <p v-if="store.busy" class="m-0 text-sm font-semibold text-slate-700">
+      <p v-if="store.busy" class="m-0 text-sm font-semibold text-ink-2">
         {{ t("flow.loading") }}
       </p>
 
       <p
         v-else-if="localError !== null || store.errorDetail !== null"
-        class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
+        class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 text-sm font-semibold text-fail-dark"
         role="alert"
       >
         {{
@@ -689,7 +692,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 
       <p
         v-else-if="latestOperationStatus !== null"
-        class="m-0 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-900"
+        class="m-0 rounded-panel border border-action-soft-line bg-action-soft p-4 text-sm font-semibold text-ink-2"
       >
         {{
           t("flow.latestOperation", {
@@ -702,7 +705,7 @@ function eventLabel(event: HumanGateEventResponse): string {
     <div class="flex flex-wrap gap-3">
       <button
         type="button"
-        class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:opacity-60"
+        class="min-h-11 rounded-panel border border-field bg-white px-4 py-2 font-bold text-ink hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy"
         @click="load"
       >
@@ -711,7 +714,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 
       <button
         type="button"
-        class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+        class="min-h-11 rounded-panel bg-action px-4 py-2 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy"
         @click="generateProposal"
       >
@@ -722,9 +725,7 @@ function eventLabel(event: HumanGateEventResponse): string {
     <p
       v-if="store.readiness !== null"
       class="m-0 text-sm font-medium"
-      :class="
-        store.readiness.status === 'READY_FOR_MAIN_WORKFLOW' ? 'text-emerald-700' : 'text-amber-800'
-      "
+      :class="store.readiness.status === 'READY_FOR_MAIN_WORKFLOW' ? 'text-ok-dark' : 'text-warn'"
     >
       {{
         store.readiness.status === "READY_FOR_MAIN_WORKFLOW"
@@ -736,14 +737,14 @@ function eventLabel(event: HumanGateEventResponse): string {
     <details
       v-if="store.currentVersion !== null"
       data-testid="team-technical-details"
-      class="text-sm text-slate-500"
+      class="text-sm text-ink-3"
     >
       <summary class="cursor-pointer font-medium">
         {{ t("flow.version", { number: store.currentVersion.version_number }) }} ·
         {{ t("flow.technicalDetails") }}
       </summary>
-      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-4">
-        <p class="m-0 font-medium text-slate-800">
+      <div class="mt-3 rounded-panel border border-line bg-white p-4">
+        <p class="m-0 font-medium text-ink-2">
           {{
             t("flow.version", {
               number: store.currentVersion.version_number,
@@ -755,7 +756,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 
         <p
           v-if="store.currentVersion.based_on_version_number !== null"
-          class="m-0 text-sm text-slate-600"
+          class="m-0 text-sm text-ink-2"
         >
           {{
             t("flow.basedOn", {
@@ -765,10 +766,10 @@ function eventLabel(event: HumanGateEventResponse): string {
         </p>
         <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div class="grid gap-1">
-            <dt class="font-black text-slate-800">
+            <dt class="font-semibold text-ink-2">
               {{ t("flow.provider") }}
             </dt>
-            <dd class="m-0 text-slate-600">
+            <dd class="m-0 text-ink-2">
               {{ store.currentVersion.provider_kind }}
               ·
               {{ store.currentVersion.provider_id }}
@@ -776,51 +777,51 @@ function eventLabel(event: HumanGateEventResponse): string {
           </div>
 
           <div class="grid gap-1">
-            <dt class="font-black text-slate-800">
+            <dt class="font-semibold text-ink-2">
               {{ t("flow.briefVersion") }}
             </dt>
-            <dd class="m-0 text-slate-600">
+            <dd class="m-0 text-ink-2">
               {{ store.currentVersion.brief_version_number }}
             </dd>
           </div>
 
           <div class="grid gap-1">
-            <dt class="font-black text-slate-800">
+            <dt class="font-semibold text-ink-2">
               {{ t("flow.catalogVersion") }}
             </dt>
-            <dd class="m-0 text-slate-600">
+            <dd class="m-0 text-ink-2">
               {{ store.currentVersion.catalog_version }}
             </dd>
           </div>
 
           <div class="grid gap-1 sm:col-span-2 lg:col-span-3">
-            <dt class="font-black text-slate-800">
+            <dt class="font-semibold text-ink-2">
               {{ t("flow.contentHash") }}
             </dt>
-            <dd class="m-0 font-mono text-xs break-all text-slate-600">
+            <dd class="m-0 font-mono text-xs break-all text-ink-2">
               {{ store.currentVersion.content_hash }}
             </dd>
           </div>
 
           <div class="grid gap-1 sm:col-span-2 lg:col-span-3">
-            <dt class="font-black text-slate-800">
+            <dt class="font-semibold text-ink-2">
               {{ t("flow.constraintsHash") }}
             </dt>
-            <dd class="m-0 font-mono text-xs break-all text-slate-600">
+            <dd class="m-0 font-mono text-xs break-all text-ink-2">
               {{ store.currentVersion.constraints_content_hash }}
             </dd>
           </div>
         </dl>
       </div>
     </details>
-    <p v-else class="m-0 text-sm text-slate-600">{{ t("flow.noProposal") }}</p>
+    <p v-else class="m-0 text-sm text-ink-2">{{ t("flow.noProposal") }}</p>
 
     <section
       v-if="store.lastGeneration?.issues.length || store.currentVersion?.constraint_issues.length"
-      class="grid gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900"
+      class="grid gap-3 rounded-card border border-fail-line bg-fail-bg p-5 text-fail-dark"
       aria-labelledby="team-constraint-issues-title"
     >
-      <h3 id="team-constraint-issues-title" class="text-lg font-black">
+      <h3 id="team-constraint-issues-title" class="text-lg font-semibold">
         {{ t("flow.constraintIssues") }}
       </h3>
 
@@ -840,23 +841,23 @@ function eventLabel(event: HumanGateEventResponse): string {
     </section>
 
     <form
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
       data-testid="team-selection-form"
       @submit.prevent="saveTeam"
     >
       <fieldset class="grid gap-4">
-        <legend class="text-xl font-black text-slate-950">
+        <legend class="text-xl font-semibold text-ink">
           {{ t("flow.teamEditor") }}
         </legend>
 
-        <p class="m-0 text-sm text-slate-600">
+        <p class="m-0 text-sm text-ink-2">
           {{ t("flow.teamEditorIntro") }}
         </p>
 
         <button
           v-if="store.currentVersion !== null"
           type="button"
-          class="justify-self-start text-sm font-semibold text-indigo-700 hover:underline"
+          class="justify-self-start text-sm font-semibold text-action hover:underline"
           :aria-expanded="showAllRoles"
           aria-controls="team-role-cards"
           @click="showAllRoles = !showAllRoles"
@@ -881,7 +882,7 @@ function eventLabel(event: HumanGateEventResponse): string {
               store.currentVersion === null ||
               (entry.kind === 'SPECIALIST' && isSelected(entry.agent_id))
             "
-            class="grid gap-4 rounded-xl border border-slate-200 p-4"
+            class="grid gap-4 rounded-panel border border-line p-4"
           >
             <header class="flex items-start justify-between gap-4">
               <h4 :id="`team-role-${entry.agent_id}`" class="min-w-0">
@@ -891,11 +892,10 @@ function eventLabel(event: HumanGateEventResponse): string {
               <span
                 class="rounded-full px-2 py-1 text-xs font-semibold"
                 :class="{
-                  'bg-emerald-100 text-emerald-800':
-                    constraintFor(entry.agent_id)?.kind === 'MANDATORY',
-                  'bg-blue-100 text-blue-800': constraintFor(entry.agent_id)?.kind === 'OPTIONAL',
-                  'bg-slate-200 text-slate-700': constraintFor(entry.agent_id) === null,
-                  'bg-red-100 text-red-800': ['IMPOSSIBLE', 'CONFLICT'].includes(
+                  'bg-ok-bg text-ok-dark': constraintFor(entry.agent_id)?.kind === 'MANDATORY',
+                  'bg-action-soft text-ink-2': constraintFor(entry.agent_id)?.kind === 'OPTIONAL',
+                  'bg-surface-3 text-ink-2': constraintFor(entry.agent_id) === null,
+                  'bg-fail-bg text-fail-dark': ['IMPOSSIBLE', 'CONFLICT'].includes(
                     constraintFor(entry.agent_id)?.kind ?? '',
                   ),
                 }"
@@ -905,7 +905,7 @@ function eventLabel(event: HumanGateEventResponse): string {
             </header>
 
             <label
-              class="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 p-3 font-bold text-slate-800"
+              class="flex min-h-11 items-center gap-3 rounded-control border border-line p-3 font-bold text-ink-2"
             >
               <input
                 type="checkbox"
@@ -920,11 +920,11 @@ function eventLabel(event: HumanGateEventResponse): string {
             </label>
 
             <details class="text-sm">
-              <summary class="cursor-pointer font-medium text-slate-600">
+              <summary class="cursor-pointer font-medium text-ink-2">
                 {{ t("flow.roleDetails") }}
               </summary>
               <div v-if="entry.capabilities.length > 0" class="mt-3 grid gap-2">
-                <p class="m-0 text-sm font-black text-slate-800">
+                <p class="m-0 text-sm font-semibold text-ink-2">
                   {{ t("flow.capabilities") }}
                 </p>
 
@@ -932,7 +932,7 @@ function eventLabel(event: HumanGateEventResponse): string {
                   <li
                     v-for="capability in entry.capabilities"
                     :key="capability"
-                    class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                    class="rounded-full bg-surface-3 px-3 py-1 text-xs font-semibold text-ink-2"
                   >
                     {{ capabilityText(capability) }}
                   </li>
@@ -943,18 +943,18 @@ function eventLabel(event: HumanGateEventResponse): string {
                 <div
                   v-for="reason in constraintFor(entry.agent_id)?.reasons ?? []"
                   :key="reason.code"
-                  class="rounded-lg bg-slate-50 p-3 text-sm"
+                  class="rounded-control bg-surface-2 p-3 text-sm"
                 >
-                  <p class="m-0 font-black text-slate-800">
+                  <p class="m-0 font-semibold text-ink-2">
                     {{ reasonText(reason) }}
                   </p>
 
-                  <p v-if="reason.evidence.fields.length > 0" class="m-0 mt-2 text-slate-600">
+                  <p v-if="reason.evidence.fields.length > 0" class="m-0 mt-2 text-ink-2">
                     {{ t("flow.evidenceFields") }}:
                     {{ reason.evidence.fields.join(", ") }}
                   </p>
 
-                  <p v-if="reason.evidence.terms.length > 0" class="m-0 mt-1 text-slate-600">
+                  <p v-if="reason.evidence.terms.length > 0" class="m-0 mt-1 text-ink-2">
                     {{ t("flow.evidenceTerms") }}:
                     {{ reason.evidence.terms.join(", ") }}
                   </p>
@@ -963,7 +963,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 
               <p
                 v-if="memberFor(entry.agent_id) !== null"
-                class="m-0 text-sm font-semibold text-slate-700"
+                class="m-0 text-sm font-semibold text-ink-2"
               >
                 {{ t("flow.source") }}:
                 {{ sourceText(memberFor(entry.agent_id)?.source ?? "") }}
@@ -972,13 +972,13 @@ function eventLabel(event: HumanGateEventResponse): string {
 
             <label
               v-if="requiresRationale(entry.agent_id)"
-              class="grid gap-2 text-sm font-bold text-slate-800"
+              class="grid gap-2 text-sm font-bold text-ink-2"
             >
               {{ t("flow.ownerRationale") }}
 
               <textarea
                 :data-testid="`rationale-${entry.agent_id}`"
-                class="min-h-24 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+                class="min-h-24 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none"
                 :placeholder="t('flow.rationalePlaceholder')"
                 :value="rationaleDraft[entry.agent_id] ?? ''"
                 @input="setRationale(entry.agent_id, $event)"
@@ -991,7 +991,7 @@ function eventLabel(event: HumanGateEventResponse): string {
       <button
         v-if="store.currentVersion !== null"
         type="submit"
-        class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+        class="min-h-12 rounded-panel bg-action px-5 py-3 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy || !hasTeamChanges"
         data-testid="save-team-changes"
       >
@@ -1000,12 +1000,12 @@ function eventLabel(event: HumanGateEventResponse): string {
     </form>
 
     <details
-      class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       aria-labelledby="team-proposal-history-title"
     >
       <summary
         id="team-proposal-history-title"
-        class="cursor-pointer text-sm font-semibold text-slate-600"
+        class="cursor-pointer text-sm font-semibold text-ink-2"
       >
         {{ t("flow.proposalHistory") }}
       </summary>
@@ -1014,9 +1014,9 @@ function eventLabel(event: HumanGateEventResponse): string {
         <li
           v-for="version in store.history"
           :key="version.id"
-          class="grid gap-2 rounded-xl border border-slate-200 p-4"
+          class="grid gap-2 rounded-panel border border-line p-4"
         >
-          <p class="m-0 font-black text-slate-900">
+          <p class="m-0 font-semibold text-ink">
             {{
               t("flow.version", {
                 number: version.version_number,
@@ -1024,41 +1024,41 @@ function eventLabel(event: HumanGateEventResponse): string {
             }}
           </p>
 
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{ revisionText(version.revision_kind) }}
           </p>
 
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{ formatDate(version.created_at) }}
           </p>
 
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{ version.selected_agent_ids.length }}
             agents
           </p>
 
-          <code class="text-xs break-all text-slate-500">
+          <code class="text-xs break-all text-ink-3">
             {{ version.content_hash }}
           </code>
         </li>
       </ol>
 
-      <p v-else class="m-0 text-slate-600">
+      <p v-else class="m-0 text-ink-2">
         {{ t("flow.noHistory") }}
       </p>
     </details>
 
     <section
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
       aria-labelledby="agent-team-gate-title"
     >
       <header class="grid gap-2">
-        <h3 id="agent-team-gate-title" class="text-xl font-black text-slate-950">
+        <h3 id="agent-team-gate-title" class="text-xl font-semibold text-ink">
           {{ t("flow.gateTitle") }}
         </h3>
 
         <template v-if="store.gate !== null">
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{
               t("flow.status", {
                 status: statusText(store.gate.status),
@@ -1066,7 +1066,7 @@ function eventLabel(event: HumanGateEventResponse): string {
             }}
           </p>
 
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{
               t("flow.version", {
                 number: store.gate.artifact.version,
@@ -1075,112 +1075,88 @@ function eventLabel(event: HumanGateEventResponse): string {
           </p>
         </template>
 
-        <p v-else class="m-0 text-sm text-slate-600">
+        <p v-else class="m-0 text-sm text-ink-2">
           {{ t("flow.noGate") }}
         </p>
       </header>
 
-      <button
-        v-if="canSubmitGate"
-        type="button"
-        class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy || store.currentVersion === null"
-        data-testid="submit-team-gate"
-        @click="submitGate"
-      >
-        {{ t("flow.submitGate") }}
-      </button>
+      <div v-if="canSubmitGate">
+        <UiButton
+          :disabled="store.busy || store.currentVersion === null"
+          data-testid="submit-team-gate"
+          @click="submitGate"
+        >
+          {{ t("flow.submitGate") }}
+        </UiButton>
+      </div>
 
       <template v-if="store.gate !== null">
+        <div
+          v-if="gateTargetsCurrentVersion && store.gate.status === 'PENDING_APPROVAL'"
+          class="flex flex-wrap gap-3"
+        >
+          <UiButton :disabled="store.busy" @click="decideGate('APPROVE')">
+            {{ t("flow.approve") }}
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            :disabled="store.busy"
+            @click="decideGate('REQUEST_REVISION')"
+          >
+            {{ t("flow.requestRevision") }}
+          </UiButton>
+        </div>
+
+        <div v-else-if="store.gate.status === 'PAUSED'" class="flex flex-wrap gap-3">
+          <UiButton :disabled="store.busy" @click="decideGate('RESUME')">
+            {{ t("flow.resume") }}
+          </UiButton>
+          <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('CANCEL')">
+            {{ t("flow.cancel") }}
+          </UiButton>
+        </div>
+
+        <div v-else-if="['REVISION_REQUESTED', 'PAUSED_NEEDS_HUMAN'].includes(store.gate.status)">
+          <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('CANCEL')">
+            {{ t("flow.cancel") }}
+          </UiButton>
+        </div>
+
         <label
           v-if="
             gateTargetsCurrentVersion && ['PENDING_APPROVAL', 'PAUSED'].includes(store.gate.status)
           "
-          class="grid gap-2 font-bold text-slate-800"
+          class="grid gap-2 text-sm font-semibold"
         >
           {{ t("flow.gateReason") }}
 
           <textarea
             v-model="gateReason"
             data-testid="team-gate-reason"
-            class="min-h-24 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+            class="min-h-24 rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
           ></textarea>
         </label>
 
-        <div
+        <details
           v-if="gateTargetsCurrentVersion && store.gate.status === 'PENDING_APPROVAL'"
-          class="flex flex-wrap gap-3"
+          class="text-sm"
         >
-          <button
-            type="button"
-            class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('APPROVE')"
-          >
-            {{ t("flow.approve") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('REJECT')"
-          >
-            {{ t("flow.reject") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 font-bold text-amber-900 hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('REQUEST_REVISION')"
-          >
-            {{ t("flow.requestRevision") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-800 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('PAUSE')"
-          >
-            {{ t("flow.pause") }}
-          </button>
-        </div>
-
-        <div v-else-if="store.gate.status === 'PAUSED'" class="flex flex-wrap gap-3">
-          <button
-            type="button"
-            class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('RESUME')"
-          >
-            {{ t("flow.resume") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('CANCEL')"
-          >
-            {{ t("flow.cancel") }}
-          </button>
-        </div>
-
-        <button
-          v-else-if="['REVISION_REQUESTED', 'PAUSED_NEEDS_HUMAN'].includes(store.gate.status)"
-          type="button"
-          class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-          :disabled="store.busy"
-          @click="decideGate('CANCEL')"
-        >
-          {{ t("flow.cancel") }}
-        </button>
+          <summary class="cursor-pointer font-semibold text-ink-2">
+            {{ t("flow.moreActions") }}
+          </summary>
+          <div class="mt-3 flex flex-wrap gap-3">
+            <UiButton variant="danger" :disabled="store.busy" @click="decideGate('REJECT')">
+              {{ t("flow.reject") }}
+            </UiButton>
+            <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('PAUSE')">
+              {{ t("flow.pause") }}
+            </UiButton>
+          </div>
+        </details>
       </template>
 
       <details class="grid gap-3">
-        <summary class="cursor-pointer text-sm font-semibold text-slate-600">
+        <summary class="cursor-pointer text-sm font-semibold text-ink-2">
           {{ t("flow.eventHistory") }}
         </summary>
 
@@ -1188,13 +1164,13 @@ function eventLabel(event: HumanGateEventResponse): string {
           <li
             v-for="event in store.gateEvents"
             :key="event.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
-            <p class="m-0 font-bold text-slate-900">
+            <p class="m-0 font-bold text-ink">
               {{ eventLabel(event) }}
             </p>
 
-            <p class="m-0 mt-1 text-sm text-slate-600">
+            <p class="m-0 mt-1 text-sm text-ink-2">
               {{ statusText(event.previous_status) }}
               →
               {{ statusText(event.resulting_status) }}
@@ -1202,13 +1178,13 @@ function eventLabel(event: HumanGateEventResponse): string {
               {{ formatDate(event.occurred_at) }}
             </p>
 
-            <p v-if="event.reason" class="m-0 mt-2 text-sm text-slate-700">
+            <p v-if="event.reason" class="m-0 mt-2 text-sm text-ink-2">
               {{ event.reason }}
             </p>
           </li>
         </ol>
 
-        <p v-else class="m-0 text-slate-600">
+        <p v-else class="m-0 text-ink-2">
           {{ t("flow.noEvents") }}
         </p>
       </details>

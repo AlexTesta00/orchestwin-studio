@@ -71,14 +71,14 @@ onUnmounted(() => {
 
 <template>
   <section
-    class="rounded-xl border border-slate-300 bg-white p-4"
+    class="rounded-panel border border-field bg-white p-4"
     aria-labelledby="model-runtime-status-title"
     :aria-busy="pending"
   >
     <h2 id="model-runtime-status-title" class="font-bold">{{ copy.title }}</h2>
     <p role="status">{{ pending ? copy.checking : description }}</p>
     <button
-      class="rounded border border-slate-400 px-3 py-2 font-semibold"
+      class="rounded border border-line-strong px-3 py-2 font-semibold"
       type="button"
       :disabled="pending"
       @click="refresh"

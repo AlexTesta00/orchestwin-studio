@@ -315,9 +315,9 @@ function parseCapabilityIssue(record: JsonRecord): CapabilityIssueView | null {
 
 function capabilityClass(status: ExecutionCapabilityStatus | null): string {
   const classes: Record<ExecutionCapabilityStatus, string> = {
-    VALIDATED_LEVEL_D: "border-emerald-300 bg-emerald-50 text-emerald-900",
-    EXPERIMENTAL_LEVEL_D: "border-amber-300 bg-amber-50 text-amber-950",
-    DESIGN_ONLY_LEVEL_C: "border-slate-300 bg-slate-100 text-slate-900",
+    VALIDATED_LEVEL_D: "border-ok-line bg-ok-bg text-ok-dark",
+    EXPERIMENTAL_LEVEL_D: "border-line-strong bg-surface-2 text-warn",
+    DESIGN_ONLY_LEVEL_C: "border-field bg-surface-3 text-ink",
   };
 
   return status === null ? classes.DESIGN_ONLY_LEVEL_C : classes[status];
@@ -441,72 +441,72 @@ watch(
 <template>
   <section class="grid gap-6" aria-labelledby="brownfield-source-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-indigo-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-action uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="brownfield-source-title" class="text-2xl font-black text-slate-950">
+      <h2 id="brownfield-source-title" class="text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-slate-700">{{ copy.intro }}</p>
-      <p class="m-0 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
+      <p
+        class="m-0 rounded-panel border border-action-soft-line bg-action-soft p-4 text-sm text-action"
+      >
         {{ copy.trustBoundary }}
       </p>
     </header>
 
     <p
       v-if="localError !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 text-fail-dark"
       role="alert"
     >
       {{ localError }}
     </p>
     <p
       v-if="successMessage !== null"
-      class="m-0 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"
+      class="m-0 rounded-panel border border-ok-line bg-ok-bg p-4 text-ok-dark"
       role="status"
     >
       {{ successMessage }}
     </p>
 
     <form
-      class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       @submit.prevent="upload"
     >
       <div class="grid gap-2">
-        <label for="brownfield-archive" class="font-bold text-slate-900">{{ copy.archive }}</label>
+        <label for="brownfield-archive" class="font-bold text-ink">{{ copy.archive }}</label>
         <input
           id="brownfield-archive"
           type="file"
           accept=".zip,application/zip"
-          class="rounded-lg border border-slate-300 p-3"
+          class="rounded-control border border-field p-3"
           @change="selectArchive"
         />
       </div>
 
       <div class="grid gap-2 sm:grid-cols-2">
         <div class="grid gap-2">
-          <label for="brownfield-target" class="font-bold text-slate-900">{{ copy.target }}</label>
+          <label for="brownfield-target" class="font-bold text-ink">{{ copy.target }}</label>
           <select
             id="brownfield-target"
             v-model="requestedTarget"
-            class="rounded-lg border border-slate-300 bg-white p-3"
+            class="rounded-control border border-field bg-white p-3"
           >
             <option value="">{{ copy.automaticTarget }}</option>
             <option v-for="target in targets" :key="target" :value="target">{{ target }}</option>
           </select>
         </div>
         <div class="grid gap-2">
-          <label for="brownfield-runners" class="font-bold text-slate-900">{{
-            copy.runners
-          }}</label>
+          <label for="brownfield-runners" class="font-bold text-ink">{{ copy.runners }}</label>
           <textarea
             id="brownfield-runners"
             v-model="availableRunners"
             rows="3"
-            class="rounded-lg border border-slate-300 p-3"
+            class="rounded-control border border-field p-3"
             :aria-describedby="`${props.projectId}-runner-hint`"
           />
-          <p :id="`${props.projectId}-runner-hint`" class="m-0 text-sm text-slate-600">
+          <p :id="`${props.projectId}-runner-hint`" class="m-0 text-sm text-ink-2">
             {{ copy.runnersHint }}
           </p>
         </div>
@@ -515,14 +515,14 @@ watch(
       <div class="flex flex-wrap gap-3">
         <button
           type="submit"
-          class="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-control bg-action px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="store.pending.upload"
         >
           {{ store.pending.upload ? copy.uploading : copy.upload }}
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 px-4 py-3 font-bold text-slate-900"
+          class="rounded-control border border-field px-4 py-3 font-bold text-ink"
           :disabled="store.pending.load"
           @click="load"
         >
@@ -532,21 +532,21 @@ watch(
     </form>
 
     <section class="grid gap-4" aria-labelledby="brownfield-history-title">
-      <h3 id="brownfield-history-title" class="text-xl font-black text-slate-950">
+      <h3 id="brownfield-history-title" class="text-xl font-semibold text-ink">
         {{ copy.history }}
       </h3>
       <ol v-if="store.intakes.length > 0" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <li
           v-for="intake in store.intakes"
           :key="intake.id"
-          class="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-2 rounded-panel border border-line bg-surface-2 p-4"
         >
           <strong>{{ copy.version.replace("{number}", String(intake.version_number)) }}</strong>
-          <span class="text-sm text-slate-700">{{ intake.effective_capability_status }}</span>
-          <code class="text-xs break-all text-slate-500">{{ intake.content_hash }}</code>
+          <span class="text-sm text-ink-2">{{ intake.effective_capability_status }}</span>
+          <code class="text-xs break-all text-ink-3">{{ intake.content_hash }}</code>
           <button
             type="button"
-            class="justify-self-start rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold"
+            class="justify-self-start rounded-control border border-field bg-white px-3 py-2 font-bold"
             :disabled="store.pending['load-inventory']"
             @click="inspectInventory(intake.id)"
           >
@@ -554,23 +554,23 @@ watch(
           </button>
         </li>
       </ol>
-      <p v-else class="m-0 text-slate-600">{{ copy.noHistory }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noHistory }}</p>
     </section>
 
     <section
       v-if="currentIntake !== null"
-      class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       aria-labelledby="brownfield-capability-title"
     >
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="grid gap-1">
-          <p class="m-0 text-sm font-bold text-slate-600">{{ copy.current }}</p>
-          <h3 id="brownfield-capability-title" class="text-xl font-black text-slate-950">
+          <p class="m-0 text-sm font-bold text-ink-2">{{ copy.current }}</p>
+          <h3 id="brownfield-capability-title" class="text-xl font-semibold text-ink">
             {{ copy.capability }}
           </h3>
         </div>
         <span
-          class="rounded-full border px-3 py-1 text-sm font-black"
+          class="rounded-full border px-3 py-1 text-sm font-semibold"
           :class="capabilityClass(capabilityStatus)"
         >
           {{ capabilityStatus ?? "DESIGN_ONLY_LEVEL_C" }}
@@ -593,15 +593,15 @@ watch(
           </dd>
         </div>
       </dl>
-      <p class="m-0 text-sm text-slate-700">{{ copy.capabilityExplanation }}</p>
+      <p class="m-0 text-sm text-ink-2">{{ copy.capabilityExplanation }}</p>
 
       <div class="grid gap-3">
-        <h4 class="font-black text-slate-950">{{ copy.candidates }}</h4>
+        <h4 class="font-semibold text-ink">{{ copy.candidates }}</h4>
         <ul v-if="capabilityCandidates.length > 0" class="grid gap-3 lg:grid-cols-2">
           <li
             v-for="candidate in capabilityCandidates"
             :key="candidate.key"
-            class="grid gap-2 rounded-xl border border-slate-200 p-4"
+            class="grid gap-2 rounded-panel border border-line p-4"
           >
             <strong>{{ candidate.profileId }} · {{ candidate.profileVersion }}</strong>
             <span>{{ candidate.capabilityStatus }}</span>
@@ -621,16 +621,16 @@ watch(
             >
           </li>
         </ul>
-        <p v-else class="m-0 text-slate-600">{{ copy.noCandidates }}</p>
+        <p v-else class="m-0 text-ink-2">{{ copy.noCandidates }}</p>
       </div>
 
       <div v-if="capabilityIssues.length > 0" class="grid gap-2">
-        <h4 class="font-black text-slate-950">{{ copy.issues }}</h4>
+        <h4 class="font-semibold text-ink">{{ copy.issues }}</h4>
         <ul class="grid gap-2">
           <li
             v-for="issue in capabilityIssues"
             :key="issue.key"
-            class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950"
+            class="rounded-control border border-line-strong bg-surface-2 p-3 text-warn"
           >
             <strong>{{ issue.code }}</strong
             >: {{ issue.message }}
@@ -640,7 +640,7 @@ watch(
     </section>
 
     <section class="grid gap-4" aria-labelledby="brownfield-inventory-title">
-      <h3 id="brownfield-inventory-title" class="text-xl font-black text-slate-950">
+      <h3 id="brownfield-inventory-title" class="text-xl font-semibold text-ink">
         {{ copy.inventory }}
       </h3>
       <template v-if="store.inventory !== null">
@@ -651,7 +651,7 @@ watch(
               id="inventory-search"
               v-model="inventorySearch"
               type="search"
-              class="rounded-lg border border-slate-300 p-3"
+              class="rounded-control border border-field p-3"
             />
           </div>
           <div class="grid gap-2">
@@ -659,7 +659,7 @@ watch(
             ><select
               id="inventory-disposition"
               v-model="inventoryFilter"
-              class="rounded-lg border border-slate-300 bg-white p-3"
+              class="rounded-control border border-field bg-white p-3"
             >
               <option value="ALL">{{ copy.all }}</option>
               <option value="INCLUDE">{{ copy.included }}</option>
@@ -667,9 +667,9 @@ watch(
             </select>
           </div>
         </div>
-        <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <div class="overflow-x-auto rounded-panel border border-line">
           <table class="min-w-full border-collapse text-left text-sm">
-            <thead class="bg-slate-100">
+            <thead class="bg-surface-3">
               <tr>
                 <th class="p-3">{{ copy.path }}</th>
                 <th class="p-3">{{ copy.classification }}</th>
@@ -684,7 +684,7 @@ watch(
               <tr
                 v-for="entry in visibleInventoryEntries"
                 :key="entry.normalizedPath"
-                class="border-t border-slate-200"
+                class="border-t border-line"
               >
                 <td class="p-3 font-semibold">{{ entry.normalizedPath }}</td>
                 <td class="p-3">{{ entry.classification }}</td>
@@ -699,11 +699,11 @@ watch(
             </tbody>
           </table>
         </div>
-        <p v-if="visibleInventoryEntries.length === 0" class="m-0 text-slate-600">
+        <p v-if="visibleInventoryEntries.length === 0" class="m-0 text-ink-2">
           {{ copy.noEntries }}
         </p>
       </template>
-      <p v-else class="m-0 text-slate-600">{{ copy.inventoryUnavailable }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.inventoryUnavailable }}</p>
     </section>
   </section>
 </template>

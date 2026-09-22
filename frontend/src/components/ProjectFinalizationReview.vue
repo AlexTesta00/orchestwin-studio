@@ -184,14 +184,14 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
 <template>
   <section class="grid gap-8" aria-labelledby="project-finalization-title">
     <header class="grid gap-3">
-      <p class="m-0 text-sm font-bold tracking-wide text-violet-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-hypothesis uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="project-finalization-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="project-finalization-title" class="m-0 text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
       <p
-        class="m-0 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+        class="m-0 rounded-panel border border-line-strong bg-surface-2 p-4 text-sm text-warn"
         role="note"
         data-testid="synthetic-feedback-disclaimer"
       >
@@ -201,7 +201,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
 
     <div class="grid gap-6 lg:grid-cols-2">
       <section class="grid content-start gap-3" aria-labelledby="deterministic-findings-title">
-        <h3 id="deterministic-findings-title" class="m-0 text-xl font-black">
+        <h3 id="deterministic-findings-title" class="m-0 text-xl font-semibold">
           {{ copy.deterministic }}
         </h3>
         <p v-if="deterministicFindings.length === 0">{{ copy.noFindings }}</p>
@@ -209,12 +209,12 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
           <li
             v-for="finding in deterministicFindings"
             :key="finding.finding_id"
-            class="rounded-xl border border-slate-300 bg-white p-4"
+            class="rounded-panel border border-field bg-white p-4"
             data-finding-origin="DETERMINISTIC"
           >
             <strong>{{ finding.summary }}</strong>
-            <span class="mt-1 block text-sm text-slate-700">{{ findingOrigin(finding) }}</span>
-            <span class="block text-sm text-slate-700">
+            <span class="mt-1 block text-sm text-ink-2">{{ findingOrigin(finding) }}</span>
+            <span class="block text-sm text-ink-2">
               {{ finding.severity }} · {{ finding.criterion }}
             </span>
           </li>
@@ -222,21 +222,23 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
       </section>
 
       <section class="grid content-start gap-3" aria-labelledby="model-findings-title">
-        <h3 id="model-findings-title" class="m-0 text-xl font-black">{{ copy.model }}</h3>
+        <h3 id="model-findings-title" class="m-0 text-xl font-semibold">{{ copy.model }}</h3>
         <p v-if="modelFindings.length === 0">{{ copy.noFindings }}</p>
         <ol v-else class="m-0 grid list-decimal gap-3 pl-6">
           <li
             v-for="finding in modelFindings"
             :key="finding.finding_id"
-            class="rounded-xl border border-violet-200 bg-violet-50 p-4"
+            class="rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4"
             data-finding-origin="MODEL_GENERATED"
           >
             <strong>{{ finding.summary }}</strong>
-            <span class="mt-1 block text-sm text-violet-950">{{ findingOrigin(finding) }}</span>
-            <span class="block text-sm text-violet-950">
+            <span class="mt-1 block text-sm text-hypothesis-text">{{
+              findingOrigin(finding)
+            }}</span>
+            <span class="block text-sm text-hypothesis-text">
               {{ finding.severity }} · {{ finding.criterion }} · {{ finding.epistemic_status }}
             </span>
-            <span class="block text-sm text-violet-950">
+            <span class="block text-sm text-hypothesis-text">
               {{ copy.confidence }}: {{ finding.confidence }}
             </span>
             <strong v-if="finding.requires_human_validation" class="mt-2 block text-sm">
@@ -248,7 +250,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
     </div>
 
     <section class="grid gap-4" aria-labelledby="evaluation-conflicts-title">
-      <h3 id="evaluation-conflicts-title" class="m-0 text-xl font-black">
+      <h3 id="evaluation-conflicts-title" class="m-0 text-xl font-semibold">
         {{ copy.conflicts }}
       </h3>
       <p v-if="!aggregation || aggregation.direct_conflicts.length === 0">
@@ -258,7 +260,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         <li
           v-for="conflict in aggregation.direct_conflicts"
           :key="conflict.conflict_id"
-          class="rounded-xl border border-orange-300 bg-orange-50 p-4"
+          class="rounded-panel border border-orange-300 bg-orange-50 p-4"
           data-testid="direct-conflict"
         >
           <strong>{{ conflict.summary }}</strong>
@@ -268,21 +270,21 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
 
       <div v-if="aggregation" class="grid gap-4 md:grid-cols-3">
         <section aria-labelledby="tradeoff-list-title">
-          <h4 id="tradeoff-list-title" class="m-0 font-black">{{ copy.tradeoffs }}</h4>
+          <h4 id="tradeoff-list-title" class="m-0 font-semibold">{{ copy.tradeoffs }}</h4>
           <p v-if="aggregation.unresolved_trade_offs.length === 0">{{ copy.none }}</p>
           <ul v-else class="pl-5">
             <li v-for="item in aggregation.unresolved_trade_offs" :key="item">{{ item }}</li>
           </ul>
         </section>
         <section aria-labelledby="evidence-gap-list-title">
-          <h4 id="evidence-gap-list-title" class="m-0 font-black">{{ copy.evidenceGaps }}</h4>
+          <h4 id="evidence-gap-list-title" class="m-0 font-semibold">{{ copy.evidenceGaps }}</h4>
           <p v-if="aggregation.evidence_gaps.length === 0">{{ copy.none }}</p>
           <ul v-else class="pl-5">
             <li v-for="item in aggregation.evidence_gaps" :key="item">{{ item }}</li>
           </ul>
         </section>
         <section aria-labelledby="human-question-list-title">
-          <h4 id="human-question-list-title" class="m-0 font-black">{{ copy.questions }}</h4>
+          <h4 id="human-question-list-title" class="m-0 font-semibold">{{ copy.questions }}</h4>
           <p v-if="aggregation.human_validation_questions.length === 0">{{ copy.none }}</p>
           <ul v-else class="pl-5">
             <li v-for="item in aggregation.human_validation_questions" :key="item">{{ item }}</li>
@@ -292,10 +294,10 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
     </section>
 
     <section class="grid gap-4" aria-labelledby="final-review-title">
-      <h3 id="final-review-title" class="m-0 text-xl font-black">{{ copy.review }}</h3>
+      <h3 id="final-review-title" class="m-0 text-xl font-semibold">{{ copy.review }}</h3>
       <p v-if="!review">{{ copy.noReview }}</p>
       <template v-else>
-        <dl class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-3">
+        <dl class="grid gap-3 rounded-card border border-line bg-white p-5 sm:grid-cols-3">
           <div>
             <dt class="font-bold">Version</dt>
             <dd class="m-0">{{ review.version_number }}</dd>
@@ -311,9 +313,9 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </dl>
 
         <p
-          class="m-0 rounded-xl border p-4 font-bold"
+          class="m-0 rounded-panel border p-4 font-bold"
           :class="
-            review.ready_for_gate8 ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'
+            review.ready_for_gate8 ? 'border-ok-line bg-ok-bg' : 'border-fail-line bg-fail-bg'
           "
           aria-live="polite"
           data-testid="gate8-readiness"
@@ -323,7 +325,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
 
         <div class="grid gap-5 lg:grid-cols-3">
           <section aria-labelledby="final-check-list-title">
-            <h4 id="final-check-list-title" class="m-0 font-black">{{ copy.checks }}</h4>
+            <h4 id="final-check-list-title" class="m-0 font-semibold">{{ copy.checks }}</h4>
             <p v-if="review.checks.length === 0">{{ copy.none }}</p>
             <ul v-else class="grid gap-2 pl-5">
               <li v-for="check in review.checks" :key="check.check_id">
@@ -335,7 +337,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
             </ul>
           </section>
           <section aria-labelledby="final-issue-list-title">
-            <h4 id="final-issue-list-title" class="m-0 font-black">{{ copy.issues }}</h4>
+            <h4 id="final-issue-list-title" class="m-0 font-semibold">{{ copy.issues }}</h4>
             <p v-if="review.unresolved_issues.length === 0">{{ copy.none }}</p>
             <ul v-else class="grid gap-2 pl-5">
               <li v-for="issue in review.unresolved_issues" :key="issue.issue_id">
@@ -347,7 +349,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
             </ul>
           </section>
           <section aria-labelledby="accepted-limitation-list-title">
-            <h4 id="accepted-limitation-list-title" class="m-0 font-black">
+            <h4 id="accepted-limitation-list-title" class="m-0 font-semibold">
               {{ copy.limitations }}
             </h4>
             <p v-if="review.accepted_limitations.length === 0">{{ copy.none }}</p>
@@ -363,8 +365,10 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
     </section>
 
     <section class="grid gap-4" aria-labelledby="gate8-controls-title">
-      <h3 id="gate8-controls-title" class="m-0 text-xl font-black">{{ copy.gate8 }}</h3>
-      <p class="m-0 rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-950">
+      <h3 id="gate8-controls-title" class="m-0 text-xl font-semibold">{{ copy.gate8 }}</h3>
+      <p
+        class="m-0 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4 text-hypothesis-text"
+      >
         {{ copy.ownerBoundary }}
       </p>
       <p aria-live="polite" data-testid="gate8-status">
@@ -373,7 +377,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
       <div class="flex flex-wrap gap-3">
         <button
           type="button"
-          class="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-hypothesis-line bg-hypothesis-bg px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canSubmitGate8"
           @click="emit('submitGate8')"
         >
@@ -381,7 +385,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-ok-line bg-ok-bg px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDecideGate8"
           @click="emit('decideGate8', 'APPROVE')"
         >
@@ -389,7 +393,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-red-300 bg-red-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-fail-line bg-fail-bg px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDecideGate8"
           @click="emit('decideGate8', 'REJECT')"
         >
@@ -397,7 +401,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-orange-300 bg-orange-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDecideGate8"
           @click="emit('decideGate8', 'REQUEST_REVISION')"
         >
@@ -405,7 +409,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-field bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDecideGate8"
           @click="emit('decideGate8', 'PAUSE')"
         >
@@ -413,7 +417,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-500 bg-slate-100 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-line-strong bg-surface-3 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDecideGate8"
           @click="emit('decideGate8', 'CANCEL')"
         >
@@ -423,10 +427,10 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
     </section>
 
     <section class="grid gap-4" aria-labelledby="final-export-title">
-      <h3 id="final-export-title" class="m-0 text-xl font-black">{{ copy.export }}</h3>
+      <h3 id="final-export-title" class="m-0 text-xl font-semibold">{{ copy.export }}</h3>
       <p v-if="!exportBundle">{{ copy.noExport }}</p>
       <template v-else>
-        <dl class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-3">
+        <dl class="grid gap-3 rounded-card border border-line bg-white p-5 sm:grid-cols-3">
           <div>
             <dt class="font-bold">{{ copy.archiveHash }}</dt>
             <dd class="m-0 font-mono text-xs break-all">{{ exportBundle.archive_hash }}</dd>
@@ -443,7 +447,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
 
         <div v-if="exportBundle.manifest" class="grid gap-5 lg:grid-cols-2">
           <section aria-labelledby="manifest-entry-list-title">
-            <h4 id="manifest-entry-list-title" class="m-0 font-black">
+            <h4 id="manifest-entry-list-title" class="m-0 font-semibold">
               {{ copy.manifestEntries }}
             </h4>
             <ol class="grid gap-2 pl-6">
@@ -456,7 +460,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
             </ol>
           </section>
           <section aria-labelledby="manifest-omission-list-title">
-            <h4 id="manifest-omission-list-title" class="m-0 font-black">
+            <h4 id="manifest-omission-list-title" class="m-0 font-semibold">
               {{ copy.manifestOmissions }}
             </h4>
             <p v-if="exportBundle.manifest.omissions.length === 0">{{ copy.none }}</p>
@@ -473,7 +477,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
       <div class="flex flex-wrap gap-3">
         <button
           type="button"
-          class="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-hypothesis-line bg-hypothesis-bg px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canCreateExport"
           @click="emit('createExport')"
         >
@@ -481,7 +485,7 @@ function findingOrigin(finding: SyntheticFindingPayload): string {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-field bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canDownloadExport"
           @click="emit('downloadExport')"
         >

@@ -374,19 +374,21 @@ watch(
 <template>
   <section class="grid gap-6" aria-labelledby="sandbox-governance-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-indigo-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-action uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="sandbox-governance-title" class="text-2xl font-black text-slate-950">
+      <h2 id="sandbox-governance-title" class="text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-slate-700">{{ copy.intro }}</p>
-      <p class="m-0 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
+      <p
+        class="m-0 rounded-panel border border-action-soft-line bg-action-soft p-4 text-sm text-action"
+      >
         {{ copy.methodology }}
       </p>
       <button
         type="button"
-        class="justify-self-start rounded-lg border border-slate-300 px-4 py-3 font-bold"
+        class="justify-self-start rounded-control border border-field px-4 py-3 font-bold"
         :disabled="store.pending.load"
         @click="load"
       >
@@ -396,34 +398,34 @@ watch(
 
     <p
       v-if="localError !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 text-fail-dark"
       role="alert"
     >
       {{ localError }}
     </p>
-    <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ copy.loading }}
     </p>
 
     <section class="grid gap-4" aria-labelledby="execution-profiles-title">
-      <h3 id="execution-profiles-title" class="text-xl font-black text-slate-950">
+      <h3 id="execution-profiles-title" class="text-xl font-semibold text-ink">
         {{ copy.profiles }}
       </h3>
       <ul v-if="store.profiles.length > 0" class="grid gap-4 lg:grid-cols-2">
         <li
           v-for="profile in store.profiles"
           :key="`${profile.profile_id}:${profile.version}:${profile.content_hash}`"
-          class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          class="grid gap-3 rounded-card border border-line bg-white p-5 shadow-sm"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <strong class="text-lg text-slate-950">{{ profile.name }}</strong>
+            <strong class="text-lg text-ink">{{ profile.name }}</strong>
             <span
-              class="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-sm font-black"
+              class="rounded-full border border-field bg-surface-3 px-3 py-1 text-sm font-semibold"
             >
               {{ profile.capability_status }}
             </span>
           </div>
-          <code class="text-xs break-all text-slate-500">{{ profile.content_hash }}</code>
+          <code class="text-xs break-all text-ink-3">{{ profile.content_hash }}</code>
           <dl class="grid gap-2 text-sm sm:grid-cols-2">
             <div>
               <dt class="font-bold">{{ copy.targets }}</dt>
@@ -451,22 +453,22 @@ watch(
                 <code>{{ reference }}</code>
               </li>
             </ul>
-            <p v-else class="m-0 mt-2 text-sm text-slate-600">{{ copy.noEvidence }}</p>
+            <p v-else class="m-0 mt-2 text-sm text-ink-2">{{ copy.noEvidence }}</p>
           </div>
         </li>
       </ul>
-      <p v-else class="m-0 text-slate-600">{{ copy.noProfiles }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noProfiles }}</p>
     </section>
 
     <section class="grid gap-4" aria-labelledby="sandbox-runs-title">
-      <h3 id="sandbox-runs-title" class="text-xl font-black text-slate-950">
+      <h3 id="sandbox-runs-title" class="text-xl font-semibold text-ink">
         {{ copy.runs }}
       </h3>
       <ol v-if="store.sandboxRuns.length > 0" class="grid gap-3 lg:grid-cols-2">
         <li
           v-for="sandboxRun in store.sandboxRuns"
           :key="sandboxRun.run_id"
-          class="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-2 rounded-panel border border-line bg-surface-2 p-4"
         >
           <strong>{{ sandboxRun.run_id }}</strong>
           <span>{{ copy.status }}: {{ evidenceValue(sandboxRun, "status") ?? copy.none }}</span>
@@ -474,7 +476,7 @@ watch(
           <code class="text-xs break-all">{{ sandboxRun.evidence_content_hash }}</code>
           <button
             type="button"
-            class="justify-self-start rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold"
+            class="justify-self-start rounded-control border border-field bg-white px-3 py-2 font-bold"
             :disabled="store.pending['load-sandbox-evidence']"
             @click="inspectRun(sandboxRun.run_id)"
           >
@@ -482,11 +484,11 @@ watch(
           </button>
         </li>
       </ol>
-      <p v-else class="m-0 text-slate-600">{{ copy.noRuns }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noRuns }}</p>
 
       <article
         v-if="selectedRun !== null"
-        class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       >
         <dl class="grid gap-3 sm:grid-cols-2">
           <div>
@@ -512,14 +514,14 @@ watch(
           </div>
         </dl>
 
-        <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <div class="overflow-x-auto rounded-panel border border-line">
           <table class="min-w-full border-collapse text-left text-sm">
-            <caption class="p-3 text-left text-base font-black">
+            <caption class="p-3 text-left text-base font-semibold">
               {{
                 copy.commands
               }}
             </caption>
-            <thead class="bg-slate-100">
+            <thead class="bg-surface-3">
               <tr>
                 <th class="p-3" scope="col">{{ copy.command }}</th>
                 <th class="p-3" scope="col">{{ copy.status }}</th>
@@ -532,7 +534,7 @@ watch(
               <tr
                 v-for="commandResult in selectedRun.command_results"
                 :key="commandResult.command_id"
-                class="border-t border-slate-200"
+                class="border-t border-line"
               >
                 <td class="p-3 font-semibold">{{ commandResult.command_id }}</td>
                 <td class="p-3">{{ commandResult.status }}</td>
@@ -544,14 +546,14 @@ watch(
           </table>
         </div>
 
-        <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <div class="overflow-x-auto rounded-panel border border-line">
           <table class="min-w-full border-collapse text-left text-sm">
-            <caption class="p-3 text-left text-base font-black">
+            <caption class="p-3 text-left text-base font-semibold">
               {{
                 copy.logs
               }}
             </caption>
-            <thead class="bg-slate-100">
+            <thead class="bg-surface-3">
               <tr>
                 <th class="p-3" scope="col">{{ copy.command }}</th>
                 <th class="p-3" scope="col">{{ copy.stream }}</th>
@@ -564,7 +566,7 @@ watch(
               <tr
                 v-for="reference in rawLogReferences"
                 :key="`${reference.commandId}:${reference.stream}`"
-                class="border-t border-slate-200"
+                class="border-t border-line"
               >
                 <td class="p-3">{{ reference.commandId }}</td>
                 <td class="p-3">{{ reference.stream }}</td>
@@ -579,27 +581,27 @@ watch(
             </tbody>
           </table>
         </div>
-        <p v-if="rawLogReferences.length === 0" class="m-0 text-slate-600">
+        <p v-if="rawLogReferences.length === 0" class="m-0 text-ink-2">
           {{ copy.noLogs }}
         </p>
       </article>
     </section>
 
     <section class="grid gap-4" aria-labelledby="high-impact-operations-title">
-      <h3 id="high-impact-operations-title" class="text-xl font-black text-slate-950">
+      <h3 id="high-impact-operations-title" class="text-xl font-semibold text-ink">
         {{ copy.operations }}
       </h3>
       <ol v-if="store.highImpactOperations.length > 0" class="grid gap-3 lg:grid-cols-2">
         <li
           v-for="operation in store.highImpactOperations"
           :key="operation.version.id"
-          class="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-2 rounded-panel border border-line bg-surface-2 p-4"
         >
           <strong class="break-all">{{ exactReference(operation) }}</strong>
           <span>{{ copy.classification }}: {{ operation.classification.classification }}</span>
           <button
             type="button"
-            class="justify-self-start rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold"
+            class="justify-self-start rounded-control border border-field bg-white px-3 py-2 font-bold"
             :disabled="store.pending['load-high-impact-review']"
             @click="reviewOperation(operation.version.id)"
           >
@@ -607,11 +609,11 @@ watch(
           </button>
         </li>
       </ol>
-      <p v-else class="m-0 text-slate-600">{{ copy.noOperations }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noOperations }}</p>
 
       <article
         v-if="selectedOperation !== null"
-        class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       >
         <dl class="grid gap-3 sm:grid-cols-2">
           <div>
@@ -638,7 +640,7 @@ watch(
             <li
               v-for="reason in classificationReasons"
               :key="reason.key"
-              class="rounded-lg border border-amber-200 bg-amber-50 p-3"
+              class="rounded-control border border-line-strong bg-surface-2 p-3"
             >
               <strong>{{ reason.code }}</strong
               >: {{ reason.message }}
@@ -647,14 +649,14 @@ watch(
         </div>
         <p
           v-if="selectedOperation.classification.classification === 'FORBIDDEN_BY_POLICY'"
-          class="m-0 rounded-lg border border-red-200 bg-red-50 p-3 text-red-900"
+          class="m-0 rounded-control border border-fail-line bg-fail-bg p-3 text-fail-dark"
           role="status"
         >
           {{ copy.forbidden }}
         </p>
         <p
           v-if="readinessStatus === 'APPROVAL_NOT_REQUIRED'"
-          class="m-0 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950"
+          class="m-0 rounded-control border border-ok-line bg-ok-bg p-3 text-ok-dark"
           role="status"
         >
           {{ copy.approvalNotRequired }}
@@ -666,7 +668,7 @@ watch(
             id="gate-7-reason"
             v-model="decisionReason"
             rows="3"
-            class="rounded-lg border border-slate-300 p-3"
+            class="rounded-control border border-field p-3"
           />
         </div>
 
@@ -674,7 +676,7 @@ watch(
           <button
             v-if="canSubmit"
             type="button"
-            class="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white"
+            class="rounded-control bg-action px-4 py-3 font-bold text-white"
             :disabled="store.pending['submit-gate']"
             @click="submitGate"
           >
@@ -683,7 +685,7 @@ watch(
           <template v-if="gatePending">
             <button
               type="button"
-              class="rounded-lg bg-emerald-700 px-4 py-3 font-bold text-white"
+              class="rounded-control bg-ok px-4 py-3 font-bold text-white"
               :disabled="store.pending['decide-gate']"
               @click="decideGate('APPROVE')"
             >
@@ -691,7 +693,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-lg border border-red-300 px-4 py-3 font-bold text-red-800"
+              class="rounded-control border border-fail-line px-4 py-3 font-bold text-fail-dark"
               :disabled="store.pending['decide-gate']"
               @click="decideGate('REJECT')"
             >
@@ -699,7 +701,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-lg border border-amber-300 px-4 py-3 font-bold text-amber-900"
+              class="rounded-control border border-line-strong px-4 py-3 font-bold text-warn"
               :disabled="store.pending['decide-gate']"
               @click="decideGate('REQUEST_REVISION')"
             >
@@ -707,7 +709,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-lg border border-slate-300 px-4 py-3 font-bold"
+              class="rounded-control border border-field px-4 py-3 font-bold"
               :disabled="store.pending['decide-gate']"
               @click="decideGate('PAUSE')"
             >
@@ -715,7 +717,7 @@ watch(
             </button>
             <button
               type="button"
-              class="rounded-lg border border-slate-300 px-4 py-3 font-bold"
+              class="rounded-control border border-field px-4 py-3 font-bold"
               :disabled="store.pending['decide-gate']"
               @click="decideGate('CANCEL')"
             >
@@ -725,7 +727,7 @@ watch(
           <button
             v-if="gatePaused"
             type="button"
-            class="rounded-lg border border-slate-300 px-4 py-3 font-bold"
+            class="rounded-control border border-field px-4 py-3 font-bold"
             :disabled="store.pending['decide-gate']"
             @click="decideGate('RESUME')"
           >
@@ -739,14 +741,14 @@ watch(
             <li
               v-for="event in store.highImpactEvents"
               :key="event.id"
-              class="rounded-lg border border-slate-200 p-3"
+              class="rounded-control border border-line p-3"
             >
               {{ event.sequence_number }} · {{ event.kind }} · {{ event.previous_status }} →
               {{ event.resulting_status }}
               <span v-if="event.reason !== null"> · {{ event.reason }}</span>
             </li>
           </ol>
-          <p v-else class="m-0 text-slate-600">{{ copy.noEvents }}</p>
+          <p v-else class="m-0 text-ink-2">{{ copy.noEvents }}</p>
         </div>
       </article>
     </section>

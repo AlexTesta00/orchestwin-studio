@@ -276,28 +276,28 @@ watch(
 
 <template>
   <section
-    class="grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"
+    class="grid gap-6 rounded-card border border-line bg-white p-5 shadow-sm sm:p-7"
     data-testid="project-artifact-graph"
   >
     <header class="grid gap-2">
-      <p class="m-0 text-xs font-black tracking-widest text-cyan-700 uppercase">
+      <p class="m-0 text-xs font-semibold tracking-widest text-cyan-700 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 class="text-2xl font-black text-slate-950">{{ copy.title }}</h2>
-      <p class="m-0 max-w-4xl text-slate-600">{{ copy.intro }}</p>
+      <h2 class="text-2xl font-semibold text-ink">{{ copy.title }}</h2>
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
     </header>
 
-    <p class="m-0 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+    <p class="m-0 rounded-panel border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
       {{ copy.methodology }}
     </p>
 
-    <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ copy.loading }}
     </p>
 
     <p
       v-if="localError !== null || store.error !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{ localError ?? store.error?.message ?? copy.loadError }}
@@ -306,7 +306,7 @@ watch(
     <div class="flex flex-wrap gap-3">
       <button
         type="button"
-        class="rounded-xl border border-slate-300 bg-white px-4 py-2 font-black text-slate-800 hover:bg-slate-100"
+        class="rounded-panel border border-field bg-white px-4 py-2 font-semibold text-ink-2 hover:bg-surface-3"
         :disabled="store.isBusy"
         @click="load"
       >
@@ -314,7 +314,7 @@ watch(
       </button>
       <button
         type="button"
-        class="rounded-xl bg-cyan-700 px-4 py-2 font-black text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-panel bg-cyan-700 px-4 py-2 font-semibold text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="graph === null || store.isBusy"
         @click="exportGraph"
       >
@@ -322,44 +322,44 @@ watch(
       </button>
     </div>
 
-    <p v-if="graph === null" class="m-0 text-slate-600">{{ copy.unavailable }}</p>
+    <p v-if="graph === null" class="m-0 text-ink-2">{{ copy.unavailable }}</p>
 
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-3">
-        <div class="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+        <div class="rounded-card border border-cyan-200 bg-cyan-50 p-4">
           <p class="m-0 text-sm font-bold text-cyan-800">{{ copy.nodes }}</p>
-          <p class="mt-1 text-3xl font-black text-cyan-950">{{ store.nodeCount }}</p>
+          <p class="mt-1 text-3xl font-semibold text-cyan-950">{{ store.nodeCount }}</p>
         </div>
-        <div class="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-          <p class="m-0 text-sm font-bold text-violet-800">{{ copy.links }}</p>
-          <p class="mt-1 text-3xl font-black text-violet-950">{{ store.linkCount }}</p>
+        <div class="rounded-card border border-hypothesis-line bg-hypothesis-bg p-4">
+          <p class="m-0 text-sm font-bold text-hypothesis">{{ copy.links }}</p>
+          <p class="mt-1 text-3xl font-semibold text-hypothesis-text">{{ store.linkCount }}</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p class="m-0 text-sm font-bold text-slate-700">{{ copy.hash }}</p>
-          <code class="mt-2 block text-xs break-all text-slate-600">
+        <div class="rounded-card border border-line bg-surface-2 p-4">
+          <p class="m-0 text-sm font-bold text-ink-2">{{ copy.hash }}</p>
+          <code class="mt-2 block text-xs break-all text-ink-2">
             {{ graph.content_hash }}
           </code>
         </div>
       </div>
 
-      <section class="grid gap-3 rounded-2xl border border-slate-200 p-5">
-        <h3 class="text-xl font-black text-slate-950">{{ copy.exactRoots }}</h3>
+      <section class="grid gap-3 rounded-card border border-line p-5">
+        <h3 class="text-xl font-semibold text-ink">{{ copy.exactRoots }}</h3>
         <dl class="grid gap-3 text-sm">
           <div>
-            <dt class="font-black text-slate-900">{{ copy.requirements }}</dt>
-            <dd class="m-0 break-all text-slate-600">
+            <dt class="font-semibold text-ink">{{ copy.requirements }}</dt>
+            <dd class="m-0 break-all text-ink-2">
               {{ exactReferenceLabel(graph.requirements_reference) }}
             </dd>
           </div>
           <div>
-            <dt class="font-black text-slate-900">{{ copy.design }}</dt>
-            <dd class="m-0 break-all text-slate-600">
+            <dt class="font-semibold text-ink">{{ copy.design }}</dt>
+            <dd class="m-0 break-all text-ink-2">
               {{ exactReferenceLabel(graph.design_reference) }}
             </dd>
           </div>
           <div>
-            <dt class="font-black text-slate-900">{{ copy.architecture }}</dt>
-            <dd class="m-0 break-all text-slate-600">
+            <dt class="font-semibold text-ink">{{ copy.architecture }}</dt>
+            <dd class="m-0 break-all text-ink-2">
               {{ exactReferenceLabel(graph.architecture_reference) }}
             </dd>
           </div>
@@ -370,11 +370,11 @@ watch(
         <article
           v-for="stage in stages"
           :key="stage"
-          class="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+          class="grid gap-4 rounded-card border border-line bg-surface-2 p-5"
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-xl font-black text-slate-950">{{ stageLabel(stage) }}</h3>
-            <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">
+            <h3 class="text-xl font-semibold text-ink">{{ stageLabel(stage) }}</h3>
+            <span class="rounded-full bg-action px-3 py-1 text-xs font-semibold text-white">
               {{ graph.stage_counts[stage] }}
             </span>
           </div>
@@ -382,13 +382,13 @@ watch(
             <li
               v-for="node in nodesByStage[stage]"
               :key="referenceKey(node.reference)"
-              class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              class="grid gap-2 rounded-panel border border-line bg-white p-4 shadow-sm"
             >
-              <p class="m-0 text-xs font-black tracking-wide text-slate-500 uppercase">
+              <p class="m-0 text-xs font-semibold tracking-wide text-ink-3 uppercase">
                 {{ node.display_code }}
               </p>
-              <h4 class="font-black text-slate-950">{{ node.title }}</h4>
-              <dl class="grid gap-1 text-xs text-slate-600">
+              <h4 class="font-semibold text-ink">{{ node.title }}</h4>
+              <dl class="grid gap-1 text-xs text-ink-2">
                 <div>
                   <dt class="inline font-bold">{{ copy.nodeKind }}:</dt>
                   <dd class="m-0 inline">{{ node.reference.kind }}</dd>
@@ -413,14 +413,14 @@ watch(
 
       <section class="grid gap-4" aria-labelledby="artifact-relationships-title">
         <div class="flex flex-wrap items-end justify-between gap-4">
-          <h3 id="artifact-relationships-title" class="text-xl font-black text-slate-950">
+          <h3 id="artifact-relationships-title" class="text-xl font-semibold text-ink">
             {{ copy.relationships }}
           </h3>
-          <label class="grid gap-2 text-sm font-bold text-slate-900">
+          <label class="grid gap-2 text-sm font-bold text-ink">
             {{ copy.filter }}
             <select
               v-model="stageFilter"
-              class="rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal"
+              class="rounded-panel border border-field bg-white px-3 py-2 font-normal"
             >
               <option value="ALL">{{ copy.allStages }}</option>
               <option v-for="stage in stages" :key="stage" :value="stage">
@@ -430,12 +430,9 @@ watch(
           </label>
         </div>
 
-        <div
-          v-if="visibleLinks.length > 0"
-          class="overflow-x-auto rounded-2xl border border-slate-200"
-        >
+        <div v-if="visibleLinks.length > 0" class="overflow-x-auto rounded-card border border-line">
           <table class="w-full min-w-4xl border-collapse text-left text-sm">
-            <thead class="bg-slate-100 text-slate-900">
+            <thead class="bg-surface-3 text-ink">
               <tr>
                 <th class="px-4 py-3" scope="col">{{ copy.relationship }}</th>
                 <th class="px-4 py-3" scope="col">{{ copy.source }}</th>
@@ -446,18 +443,18 @@ watch(
               <tr
                 v-for="link in visibleLinks"
                 :key="`${link.kind}:${referenceKey(link.source)}:${referenceKey(link.target)}`"
-                class="border-t border-slate-200"
+                class="border-t border-line"
               >
-                <th class="px-4 py-3 font-black text-slate-900" scope="row">
+                <th class="px-4 py-3 font-semibold text-ink" scope="row">
                   {{ link.kind }}
                 </th>
-                <td class="px-4 py-3 text-slate-700">{{ nodeLabel(link.source) }}</td>
-                <td class="px-4 py-3 text-slate-700">{{ nodeLabel(link.target) }}</td>
+                <td class="px-4 py-3 text-ink-2">{{ nodeLabel(link.source) }}</td>
+                <td class="px-4 py-3 text-ink-2">{{ nodeLabel(link.target) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-else class="m-0 text-slate-600">{{ copy.noRelationships }}</p>
+        <p v-else class="m-0 text-ink-2">{{ copy.noRelationships }}</p>
       </section>
     </template>
   </section>

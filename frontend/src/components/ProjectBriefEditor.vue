@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { BriefField, ProjectBriefInput, ProjectBriefResponse } from "@/api/contracts";
+import UiButton from "./UiButton.vue";
 
 const props = defineProps<{
   initial: ProjectBriefResponse | null;
@@ -203,7 +204,7 @@ function submit(): void {
 <template>
   <form class="grid gap-5" @submit.prevent="submit">
     <div
-      class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
+      class="rounded-panel border border-line bg-surface-2 px-4 py-3 text-sm text-ink-2"
       role="status"
     >
       {{
@@ -217,40 +218,37 @@ function submit(): void {
       :is="group.essential ? 'fieldset' : 'details'"
       v-for="group in fieldGroups"
       :key="group.title"
-      class="rounded-xl border border-slate-200 p-4"
+      class="rounded-card border border-line bg-surface p-5 shadow-card"
       :data-testid="group.essential ? 'brief-essentials' : 'brief-additional-details'"
     >
       <component
         :is="group.essential ? 'legend' : 'summary'"
-        class="font-semibold text-slate-950"
+        class="px-1 text-lg font-semibold tracking-block"
         :class="{ 'cursor-pointer': !group.essential }"
       >
         {{ group.title }}
       </component>
       <div class="mt-4 grid gap-5 sm:grid-cols-2">
         <div v-for="field in group.fields" :key="field" class="grid gap-2">
-          <label class="text-sm font-semibold text-slate-800" :for="`brief-${field}`">
+          <label class="text-sm font-semibold" :for="`brief-${field}`">
             {{ t(`brief.fields.${field}`) }}
           </label>
           <textarea
             :id="`brief-${field}`"
             :value="fieldValue(field)"
             :rows="field === 'name' ? 1 : 3"
-            class="rounded-lg border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:outline-none"
+            class="rounded-control border border-field bg-surface px-3 py-2 text-[15px] disabled:bg-surface-3 disabled:text-ink-3"
             :disabled="isUnknown(field)"
             :aria-describedby="isListField(field) ? `brief-${field}-hint` : undefined"
             @input="updateField(field, $event)"
           ></textarea>
-          <p
-            v-if="isListField(field)"
-            :id="`brief-${field}-hint`"
-            class="m-0 text-xs text-slate-500"
-          >
+          <p v-if="isListField(field)" :id="`brief-${field}-hint`" class="m-0 text-xs text-ink-3">
             {{ t("brief.oneItemPerLine") }}
           </p>
-          <label class="flex items-center gap-2 text-sm text-slate-600">
+          <label class="flex items-center gap-2 text-sm text-ink-2">
             <input
               type="checkbox"
+              class="h-4 w-4 accent-action"
               :checked="isUnknown(field)"
               :data-testid="`brief-${field}-unknown`"
               @change="onUnknownChange(field, $event)"
@@ -261,12 +259,10 @@ function submit(): void {
       </div>
     </component>
 
-    <button
-      class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-sm hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-      type="submit"
-      :disabled="busy"
-    >
-      {{ busy ? t("brief.saving") : t("brief.saveVersion") }}
-    </button>
+    <div>
+      <UiButton type="submit" :disabled="busy">
+        {{ busy ? t("brief.saving") : t("brief.saveVersion") }}
+      </UiButton>
+    </div>
   </form>
 </template>

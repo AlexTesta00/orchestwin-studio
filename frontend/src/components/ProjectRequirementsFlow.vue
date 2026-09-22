@@ -10,6 +10,8 @@ import RequirementsVersionComparison from "./RequirementsVersionComparison.vue";
 import { requirementsApi, type RequirementsApi } from "../api/requirements";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useRequirementsStore } from "../stores/requirements";
+import UiButton from "./UiButton.vue";
+import UiCard from "./UiCard.vue";
 import type {
   RequirementKind,
   RequirementPayload,
@@ -101,6 +103,8 @@ const messages = {
     gate: "Confirm the features",
     gateStatus: "Status",
     submitGate: "Prepare for approval",
+    decisionCounter: "Decision {n} of {max}",
+    moreActions: "Other actions",
     approveGate: "Approve features",
     rejectGate: "Reject",
     requestRevision: "Request revision",
@@ -169,6 +173,8 @@ const messages = {
     gate: "Conferma le funzionalità",
     gateStatus: "Stato",
     submitGate: "Prepara per l'approvazione",
+    decisionCounter: "Decisione {n} di {max}",
+    moreActions: "Altre azioni",
     approveGate: "Approva le funzionalità",
     rejectGate: "Rifiuta",
     requestRevision: "Richiedi revisione",
@@ -238,6 +244,11 @@ const gatePending = computed(
   () => gateTargetsCurrent.value && store.gate?.status === "PENDING_APPROVAL",
 );
 const gatePaused = computed(() => gateTargetsCurrent.value && store.gate?.status === "PAUSED");
+const decisionCounter = computed(() =>
+  copy.value.decisionCounter
+    .replace("{n}", String(store.gate?.iteration ?? 1))
+    .replace("{max}", String(store.gate?.max_iterations ?? 1)),
+);
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
   if (props.authorize !== undefined) {
@@ -452,23 +463,23 @@ watch(
 
 <template>
   <section class="grid gap-6" aria-labelledby="requirements-flow-title">
-    <header class="grid gap-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <header class="grid gap-2 rounded-card border border-line bg-white p-5 shadow-sm">
       <TwinIdentity role="REQUIREMENTS_ANALYST" :locale="locale" compact />
-      <p class="m-0 text-xs font-bold tracking-[0.16em] text-slate-500 uppercase">
+      <p class="m-0 text-xs font-bold tracking-[0.16em] text-ink-3 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="requirements-flow-title" class="text-xl font-bold text-slate-950">
+      <h2 id="requirements-flow-title" class="text-xl font-bold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-sm leading-6 text-slate-600">
+      <p class="m-0 max-w-4xl text-sm leading-6 text-ink-2">
         {{ copy.intro }}
       </p>
-      <p v-if="store.isBusy" class="m-0 text-sm font-semibold text-slate-600" role="status">
+      <p v-if="store.isBusy" class="m-0 text-sm font-semibold text-ink-2" role="status">
         {{ store.pending.generate ? generationProgress(locale) : copy.loading }}
       </p>
       <p
         v-if="localError !== null || store.error !== null"
-        class="m-0 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800"
+        class="m-0 rounded-control border border-fail-line bg-fail-bg p-3 text-sm font-semibold text-fail-dark"
         role="alert"
       >
         {{
@@ -482,12 +493,12 @@ watch(
 
     <section
       v-if="current === null"
-      class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
     >
-      <p class="m-0 text-slate-600">
+      <p class="m-0 text-ink-2">
         {{ copy.noSpecification }}
       </p>
-      <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
+      <p v-if="!prerequisiteReady" role="status" class="text-sm text-ink-2">
         {{
           locale === "it"
             ? "Approva i profili degli utenti per definire le funzionalità."
@@ -496,7 +507,7 @@ watch(
       </p>
       <button
         type="button"
-        class="w-fit rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+        class="w-fit rounded-control bg-action px-4 py-2 text-sm font-bold text-white hover:bg-action-hover disabled:opacity-50"
         :disabled="store.isBusy || !prerequisiteReady"
         data-testid="generate-requirements"
         @click="generate"
@@ -506,60 +517,58 @@ watch(
     </section>
 
     <template v-else-if="specification !== null">
-      <section class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 class="text-xl font-black text-slate-950">
+            <h3 class="text-xl font-semibold text-ink">
               {{ copy.current }}
             </h3>
-            <p class="m-0 text-sm text-slate-600">
-              {{ copy.version }} {{ current.version_number }}
-            </p>
+            <p class="m-0 text-sm text-ink-2">{{ copy.version }} {{ current.version_number }}</p>
           </div>
-          <details class="max-w-full text-xs text-slate-500">
+          <details class="max-w-full text-xs text-ink-3">
             <summary class="cursor-pointer">{{ copy.audit }}</summary>
             <code class="break-all">{{ current.content_hash }}</code>
           </details>
         </div>
 
         <section class="grid gap-3" aria-labelledby="requirements-list-title">
-          <h4 id="requirements-list-title" class="text-lg font-black text-slate-950">
+          <h4 id="requirements-list-title" class="text-lg font-semibold text-ink">
             {{ copy.requirements }}
           </h4>
           <article
             v-for="requirement in specification.requirements"
             :key="requirement.id"
-            class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+            class="grid gap-3 rounded-panel border border-line bg-surface-2 p-4"
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p class="m-0 text-xs font-bold tracking-wide text-slate-500 uppercase">
+                <p class="m-0 text-xs font-bold tracking-wide text-ink-3 uppercase">
                   {{ kindLabel(requirement.kind) }} · {{ priorityLabel(requirement.priority) }}
                 </p>
-                <h5 class="mt-1 font-black text-slate-950">
+                <h5 class="mt-1 font-semibold text-ink">
                   {{ requirement.title }}
                 </h5>
-                <p class="mt-2 text-sm leading-6 text-slate-700">
+                <p class="mt-2 text-sm leading-6 text-ink-2">
                   {{ requirement.statement }}
                 </p>
               </div>
               <button
                 type="button"
-                class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                class="rounded-control border border-field bg-white px-3 py-2 text-xs font-bold text-ink-2 hover:bg-surface-3"
                 data-testid="edit-requirement"
                 @click="startEdit(requirement)"
               >
                 {{ copy.edit }}
               </button>
             </div>
-            <details class="text-xs text-slate-500">
+            <details class="text-xs text-ink-3">
               <summary class="cursor-pointer">{{ copy.sources }}</summary>
               <p class="my-2">{{ requirement.code }}</p>
-              <p class="m-0 text-xs text-slate-500">
+              <p class="m-0 text-xs text-ink-3">
                 {{ copy.sources }}:
                 {{ formatRequirementSources(requirement) }}
               </p>
-              <p class="m-0 text-xs text-slate-500">
+              <p class="m-0 text-xs text-ink-3">
                 {{ copy.twins }}:
                 {{ formatRequirementTwins(requirement) }}
               </p>
@@ -569,34 +578,34 @@ watch(
 
         <form
           v-if="editingRequirementId !== null"
-          class="grid gap-4 rounded-xl border border-slate-300 bg-slate-50 p-4"
+          class="grid gap-4 rounded-panel border border-field bg-surface-2 p-4"
           @submit.prevent="submitRevision"
         >
-          <label class="grid gap-1 text-sm font-bold text-slate-700">
+          <label class="grid gap-1 text-sm font-bold text-ink-2">
             {{ copy.titleLabel }}
-            <input v-model="edit.title" class="rounded-lg border border-slate-300 px-3 py-2" />
+            <input v-model="edit.title" class="rounded-control border border-field px-3 py-2" />
           </label>
-          <label class="grid gap-1 text-sm font-bold text-slate-700">
+          <label class="grid gap-1 text-sm font-bold text-ink-2">
             {{ copy.statementLabel }}
             <textarea
               v-model="edit.statement"
               rows="4"
-              class="rounded-lg border border-slate-300 px-3 py-2"
+              class="rounded-control border border-field px-3 py-2"
               data-testid="requirement-statement"
             />
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
-            <label class="grid gap-1 text-sm font-bold text-slate-700">
+            <label class="grid gap-1 text-sm font-bold text-ink-2">
               {{ copy.kindLabel }}
-              <select v-model="edit.kind" class="rounded-lg border border-slate-300 px-3 py-2">
+              <select v-model="edit.kind" class="rounded-control border border-field px-3 py-2">
                 <option value="FUNCTIONAL">{{ copy.functional }}</option>
                 <option value="NON_FUNCTIONAL">{{ copy.quality }}</option>
                 <option value="CONSTRAINT">{{ copy.constraint }}</option>
               </select>
             </label>
-            <label class="grid gap-1 text-sm font-bold text-slate-700">
+            <label class="grid gap-1 text-sm font-bold text-ink-2">
               {{ copy.priorityLabel }}
-              <select v-model="edit.priority" class="rounded-lg border border-slate-300 px-3 py-2">
+              <select v-model="edit.priority" class="rounded-control border border-field px-3 py-2">
                 <option value="MUST">{{ copy.must }}</option>
                 <option value="SHOULD">{{ copy.should }}</option>
                 <option value="COULD">{{ copy.could }}</option>
@@ -607,14 +616,14 @@ watch(
           <div class="flex flex-wrap gap-2">
             <button
               type="submit"
-              class="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+              class="rounded-control bg-action px-4 py-2 text-sm font-bold text-white"
               data-testid="submit-requirements-revision"
             >
               {{ copy.saveRevision }}
             </button>
             <button
               type="button"
-              class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold"
+              class="rounded-control border border-field px-4 py-2 text-sm font-bold"
               @click="cancelEdit"
             >
               {{ copy.cancel }}
@@ -622,84 +631,84 @@ watch(
           </div>
         </form>
 
-        <details class="rounded-xl border border-slate-200 p-3">
-          <summary class="cursor-pointer font-semibold text-slate-950">
+        <details class="rounded-panel border border-line p-3">
+          <summary class="cursor-pointer font-semibold text-ink">
             {{ copy.userStories }}
           </summary>
           <article
             v-for="story in specification.user_stories"
             :key="story.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
             <strong>{{ story.code }} · {{ story.user_twin_reference.name }}</strong>
-            <p class="mt-2 text-sm text-slate-700">{{ copy.goal }}: {{ story.goal }}</p>
-            <p class="m-0 text-sm text-slate-700">{{ copy.benefit }}: {{ story.benefit }}</p>
+            <p class="mt-2 text-sm text-ink-2">{{ copy.goal }}: {{ story.goal }}</p>
+            <p class="m-0 text-sm text-ink-2">{{ copy.benefit }}: {{ story.benefit }}</p>
           </article>
         </details>
 
-        <details class="rounded-xl border border-slate-200 p-3">
-          <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.criteria }}</summary>
+        <details class="rounded-panel border border-line p-3">
+          <summary class="cursor-pointer font-semibold text-ink">{{ copy.criteria }}</summary>
           <article
             v-for="criterion in specification.acceptance_criteria"
             :key="criterion.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
             <strong>{{ criterion.code }}</strong>
-            <p class="mt-2 text-sm text-slate-700">{{ criterion.statement }}</p>
-            <p class="m-0 text-xs text-slate-500">
+            <p class="mt-2 text-sm text-ink-2">{{ criterion.statement }}</p>
+            <p class="m-0 text-xs text-ink-3">
               {{ copy.verification }}: {{ criterion.verification_method }}
             </p>
           </article>
         </details>
 
-        <details class="rounded-xl border border-slate-200 p-3">
-          <summary class="cursor-pointer font-semibold text-slate-950">
+        <details class="rounded-panel border border-line p-3">
+          <summary class="cursor-pointer font-semibold text-ink">
             {{ copy.scenarios }}
           </summary>
           <article
             v-for="scenario in specification.scenarios"
             :key="scenario.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
             <strong>{{ scenario.code }} · {{ scenario.title }}</strong>
-            <p class="mt-2 text-sm text-slate-700">{{ copy.trigger }}: {{ scenario.trigger }}</p>
-            <ol class="mt-2 list-decimal pl-5 text-sm text-slate-700">
+            <p class="mt-2 text-sm text-ink-2">{{ copy.trigger }}: {{ scenario.trigger }}</p>
+            <ol class="mt-2 list-decimal pl-5 text-sm text-ink-2">
               <li v-for="step in scenario.steps" :key="step">{{ step }}</li>
             </ol>
-            <p class="mt-2 text-sm text-slate-700">
+            <p class="mt-2 text-sm text-ink-2">
               {{ copy.outcome }}: {{ scenario.expected_outcome }}
             </p>
           </article>
         </details>
 
-        <details class="rounded-xl border border-slate-200 p-3">
-          <summary class="cursor-pointer font-semibold text-slate-950">
+        <details class="rounded-panel border border-line p-3">
+          <summary class="cursor-pointer font-semibold text-ink">
             {{ copy.risks }} ({{ specification.risks.length }})
           </summary>
-          <p v-if="specification.risks.length === 0" class="m-0 text-sm text-slate-500">
+          <p v-if="specification.risks.length === 0" class="m-0 text-sm text-ink-3">
             {{ copy.none }}
           </p>
           <article
             v-for="risk in specification.risks"
             :key="risk.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
             <strong>{{ risk.code }} · {{ risk.likelihood }} / {{ risk.impact }}</strong>
-            <p class="mt-2 text-sm text-slate-700">{{ risk.summary }}</p>
-            <p class="m-0 text-sm text-slate-700">{{ copy.mitigation }}: {{ risk.mitigation }}</p>
+            <p class="mt-2 text-sm text-ink-2">{{ risk.summary }}</p>
+            <p class="m-0 text-sm text-ink-2">{{ copy.mitigation }}: {{ risk.mitigation }}</p>
           </article>
         </details>
 
-        <details class="rounded-xl border border-slate-200 p-3">
-          <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.done }}</summary>
+        <details class="rounded-panel border border-line p-3">
+          <summary class="cursor-pointer font-semibold text-ink">{{ copy.done }}</summary>
           <article
             v-for="item in specification.definition_of_done"
             :key="item.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
             <strong>{{ item.code }} · {{ item.applicability }}</strong>
-            <p class="mt-2 text-sm text-slate-700">{{ item.statement }}</p>
-            <p v-if="item.condition !== null" class="m-0 text-xs text-slate-500">
+            <p class="mt-2 text-sm text-ink-2">{{ item.statement }}</p>
+            <p v-if="item.condition !== null" class="m-0 text-xs text-ink-3">
               {{ copy.condition }}: {{ item.condition }}
             </p>
           </article>
@@ -709,16 +718,16 @@ watch(
       <details
         v-if="diffs.length > 0"
         :open="diffs.some((diff) => diff.status === 'PROPOSED')"
-        class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
       >
-        <summary class="cursor-pointer font-semibold text-slate-950">{{ copy.diffs }}</summary>
+        <summary class="cursor-pointer font-semibold text-ink">{{ copy.diffs }}</summary>
         <article
           v-for="diff in diffs"
           :key="diff.id"
-          class="grid gap-4 rounded-xl border border-slate-200 p-4"
+          class="grid gap-4 rounded-panel border border-line p-4"
         >
           <div class="flex flex-wrap justify-between gap-2">
-            <details class="text-xs text-slate-500">
+            <details class="text-xs text-ink-3">
               <summary class="cursor-pointer">{{ copy.audit }}</summary>
               <code class="break-all">{{ diff.id }}</code>
             </details>
@@ -727,34 +736,34 @@ watch(
           <div
             v-for="operation in diff.operations"
             :key="`${operation.artifact_kind}:${operation.artifact_id}`"
-            class="grid gap-3 rounded-lg bg-slate-50 p-3 md:grid-cols-2"
+            class="grid gap-3 rounded-control bg-surface-2 p-3 md:grid-cols-2"
           >
             <div>
-              <strong class="text-xs tracking-wide text-slate-500 uppercase">
+              <strong class="text-xs tracking-wide text-ink-3 uppercase">
                 {{ copy.before }} · {{ operation.display_code }}
               </strong>
-              <p class="mt-2 text-sm text-slate-700">{{ envelopeSummary(operation.before) }}</p>
+              <p class="mt-2 text-sm text-ink-2">{{ envelopeSummary(operation.before) }}</p>
             </div>
             <div>
-              <strong class="text-xs tracking-wide text-slate-500 uppercase">
+              <strong class="text-xs tracking-wide text-ink-3 uppercase">
                 {{ copy.after }} · {{ operation.operation }}
               </strong>
-              <p class="mt-2 text-sm text-slate-700">{{ envelopeSummary(operation.after) }}</p>
+              <p class="mt-2 text-sm text-ink-2">{{ envelopeSummary(operation.after) }}</p>
             </div>
           </div>
           <div v-if="diff.status === 'PROPOSED'" class="grid gap-3 border-t pt-4">
-            <label class="grid gap-1 text-sm font-bold text-slate-700">
+            <label class="grid gap-1 text-sm font-bold text-ink-2">
               {{ copy.reason }}
               <textarea
                 v-model="diffReasons[diff.id]"
                 rows="2"
-                class="rounded-lg border px-3 py-2"
+                class="rounded-control border px-3 py-2"
               />
             </label>
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
-                class="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white"
+                class="rounded-control bg-ok px-3 py-2 text-sm font-bold text-white"
                 data-testid="approve-requirements-diff"
                 @click="decideDiff(diff, 'APPROVE')"
               >
@@ -762,7 +771,7 @@ watch(
               </button>
               <button
                 type="button"
-                class="rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-700"
+                class="rounded-control border border-fail-line px-3 py-2 text-sm font-bold text-fail-dark"
                 :disabled="diffReason(diff.id).trim().length === 0"
                 @click="decideDiff(diff, 'REJECT')"
               >
@@ -773,8 +782,8 @@ watch(
         </article>
       </details>
 
-      <details class="rounded-xl border border-slate-200 bg-white p-4">
-        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.history }}</summary>
+      <details class="rounded-panel border border-line bg-white p-4">
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.history }}</summary>
         <div class="mt-4 grid gap-4">
           <RequirementsVersionComparison :versions="store.history" :locale="locale" />
 
@@ -787,95 +796,84 @@ watch(
         </div>
       </details>
 
-      <section class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 class="text-xl font-black text-slate-950">{{ copy.gate }}</h3>
-        <details class="text-xs text-slate-500">
-          <summary class="cursor-pointer">{{ copy.audit }}</summary>
-          <p class="mt-2">{{ copy.methodology }}</p>
+      <div class="grid gap-4">
+        <UiCard tone="elevated">
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h3 class="m-0 text-2xl font-semibold tracking-card">{{ copy.gate }}</h3>
+            <span v-if="store.gate" class="font-mono text-xs text-ink-3">
+              {{ decisionCounter }}
+            </span>
+          </div>
+          <p class="mt-2 mb-0 text-sm text-ink-2">
+            {{ copy.gateStatus }}:
+            <strong>{{ workflowStatusLabel(store.gate?.status, locale) }}</strong>
+          </p>
+          <p
+            class="mt-2 mb-0 text-[15px] font-semibold"
+            :class="store.isReadyForDesign ? 'text-ok-dark' : 'text-warn'"
+            data-testid="requirements-readiness"
+          >
+            {{ store.isReadyForDesign ? copy.ready : copy.notReady }}
+          </p>
+          <div v-if="canSubmitGate" class="mt-5">
+            <UiButton data-testid="submit-requirements-gate" @click="submitGate">
+              {{ copy.submitGate }}
+            </UiButton>
+          </div>
+          <div v-if="gatePending || gatePaused" class="mt-5 grid gap-3">
+            <div v-if="gatePending" class="flex flex-wrap gap-3">
+              <UiButton data-testid="approve-requirements-gate" @click="decideGate('APPROVE')">
+                {{ copy.approveGate }}
+              </UiButton>
+              <UiButton
+                variant="secondary"
+                :disabled="gateReason.trim().length === 0"
+                @click="decideGate('REQUEST_REVISION')"
+              >
+                {{ copy.requestRevision }}
+              </UiButton>
+            </div>
+            <div v-else class="flex flex-wrap gap-3">
+              <UiButton @click="decideGate('RESUME')">{{ copy.resume }}</UiButton>
+              <UiButton variant="secondary" @click="decideGate('CANCEL')">
+                {{ copy.cancelGate }}
+              </UiButton>
+            </div>
+            <label class="grid gap-1 text-sm font-semibold">
+              {{ copy.reason }}
+              <textarea
+                v-model="gateReason"
+                rows="2"
+                class="min-h-20 rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
+              />
+            </label>
+            <details v-if="gatePending" class="text-sm">
+              <summary class="cursor-pointer font-semibold text-ink-2">
+                {{ copy.moreActions }}
+              </summary>
+              <div class="mt-3 flex flex-wrap gap-3">
+                <UiButton
+                  variant="danger"
+                  :disabled="gateReason.trim().length === 0"
+                  @click="decideGate('REJECT')"
+                >
+                  {{ copy.rejectGate }}
+                </UiButton>
+                <UiButton variant="secondary" @click="decideGate('PAUSE')">{{
+                  copy.pause
+                }}</UiButton>
+                <UiButton variant="secondary" @click="decideGate('CANCEL')">
+                  {{ copy.cancelGate }}
+                </UiButton>
+              </div>
+            </details>
+          </div>
+        </UiCard>
+        <details class="rounded-panel border border-line px-4 py-3 text-sm">
+          <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.audit }}</summary>
+          <p class="mt-2 mb-0 text-ink-3">{{ copy.methodology }}</p>
         </details>
-        <p class="m-0 text-sm text-slate-700">
-          {{ copy.gateStatus }}:
-          <strong>{{ workflowStatusLabel(store.gate?.status, locale) }}</strong>
-        </p>
-        <p
-          class="m-0 text-sm font-black"
-          :class="store.isReadyForDesign ? 'text-emerald-700' : 'text-amber-700'"
-          data-testid="requirements-readiness"
-        >
-          {{ store.isReadyForDesign ? copy.ready : copy.notReady }}
-        </p>
-        <button
-          v-if="canSubmitGate"
-          type="button"
-          class="w-fit rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white"
-          data-testid="submit-requirements-gate"
-          @click="submitGate"
-        >
-          {{ copy.submitGate }}
-        </button>
-        <div v-if="gatePending || gatePaused" class="grid gap-3">
-          <label class="grid gap-1 text-sm font-bold text-slate-700">
-            {{ copy.reason }}
-            <textarea v-model="gateReason" rows="2" class="rounded-lg border px-3 py-2" />
-          </label>
-          <div v-if="gatePending" class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white"
-              data-testid="approve-requirements-gate"
-              @click="decideGate('APPROVE')"
-            >
-              {{ copy.approveGate }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-amber-300 px-3 py-2 text-sm font-bold text-amber-800"
-              :disabled="gateReason.trim().length === 0"
-              @click="decideGate('REQUEST_REVISION')"
-            >
-              {{ copy.requestRevision }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-700"
-              :disabled="gateReason.trim().length === 0"
-              @click="decideGate('REJECT')"
-            >
-              {{ copy.rejectGate }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border px-3 py-2 text-sm font-bold"
-              @click="decideGate('PAUSE')"
-            >
-              {{ copy.pause }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border px-3 py-2 text-sm font-bold"
-              @click="decideGate('CANCEL')"
-            >
-              {{ copy.cancelGate }}
-            </button>
-          </div>
-          <div v-else class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"
-              @click="decideGate('RESUME')"
-            >
-              {{ copy.resume }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border px-3 py-2 text-sm font-bold"
-              @click="decideGate('CANCEL')"
-            >
-              {{ copy.cancelGate }}
-            </button>
-          </div>
-        </div>
-      </section>
+      </div>
     </template>
   </section>
 </template>
