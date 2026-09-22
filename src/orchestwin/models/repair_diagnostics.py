@@ -11,6 +11,8 @@ from orchestwin.jvm_execution.workspaces import read_regular_file
 MAX_LOG_BYTES = 8 * 1024 * 1024
 EXCERPT_BYTES = 3072
 MAX_EXCERPTS = 2
+_TAP_HEADER = b"TAP version "
+_TAP_FAILURE = re.compile(rb"^ *not ok [0-9]+ - ", re.MULTILINE)
 
 
 def failure_log_context(phase, evidence_root: Path | None):
@@ -29,15 +31,17 @@ def failure_log_context(phase, evidence_root: Path | None):
     ]
     for stream, reference in references[:MAX_EXCERPTS]:
         raw = _verified_bytes(reference, evidence_root, MAX_LOG_BYTES)
-        text = raw.decode("utf-8")
-        prefix = raw[:EXCERPT_BYTES].decode("utf-8", errors="ignore")
+        raw.decode("utf-8")
+        start = _excerpt_start(raw)
+        prefix = raw[start : start + EXCERPT_BYTES].decode("utf-8", errors="ignore")
+        end = start + len(prefix.encode("utf-8"))
         excerpts.append(
             {
                 "stream": stream,
                 "reference": reference.to_snapshot(),
-                "start_byte": 0,
-                "end_byte": len(prefix.encode("utf-8")),
-                "truncated": prefix != text,
+                "start_byte": start,
+                "end_byte": end,
+                "truncated": start > 0 or end < len(raw),
                 "text": prefix,
             }
         )
@@ -46,6 +50,13 @@ def failure_log_context(phase, evidence_root: Path | None):
         "excerpts": excerpts,
         "omitted_reference_count": max(0, len(references) - MAX_EXCERPTS),
     }
+
+
+def _excerpt_start(raw):
+    if not raw.startswith(_TAP_HEADER):
+        return 0
+    match = _TAP_FAILURE.search(raw)
+    return 0 if match is None else match.start()
 
 
 def _verified_bytes(reference, evidence_root, maximum_bytes):
