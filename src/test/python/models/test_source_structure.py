@@ -1,6 +1,8 @@
 import pytest
 
 from orchestwin.models.source_structure import (
+    validate_browser_setup,
+    validate_core_calls,
     validate_shared_state_updates,
     validate_static_module_contract,
 )
@@ -279,19 +281,30 @@ def test_node_tests_may_use_only_real_assert_methods(assertion, accepted):
     assert failure.value.diagnostic["line"] == 4
 
 
+def _declaration(kind, name, initializer):
+    return {"kind": kind, "name": name, "initializer": initializer}
+
+
 @pytest.mark.parametrize(
     "shared_state,bodies",
     [
-        ("const items = [];", "  items.push(name);\n  return { ok: true, count: items.length };"),
-        ("let count = 0;", "  count += 1;\n  return count;"),
-        ("let total = 0;", "  total = total + amount;"),
-        ("const state = { count: 0 };", "  state.count += 1;"),
-        ("const byName = new Map();", "  byName.set(name, record);"),
-        ("const RATE = 0.621371;", "  return kilometers * RATE;"),
-        ("const items = [];", "function store(record) {\n  items.push(record);\n}"),
-        ("const items = [];", "  items[items.length] = record;"),
-        ("const loans = [];", "  Object.assign(loans, [record]);"),
-        ("", "  return 1;"),
+        (
+            [_declaration("const", "items", "[]")],
+            "  items.push(name);\n  return { ok: true, count: items.length };",
+        ),
+        ([_declaration("let", "count", "0")], "  count += 1;\n  return count;"),
+        ([_declaration("let", "total", "0")], "  total = total + amount;"),
+        ([_declaration("const", "state", "{}")], "  state.count += 1;"),
+        ([_declaration("const", "byName", "new Map()")], "  byName.set(name, record);"),
+        ([_declaration("const", "RATE", "0.621371")], "  return kilometers * RATE;"),
+        ([_declaration("const", "LABEL", "'Totale'")], "  return LABEL;"),
+        (
+            [_declaration("const", "items", "[]")],
+            "function store(record) {\n  items.push(record);\n}",
+        ),
+        ([_declaration("const", "items", "[]")], "  items[items.length] = record;"),
+        ([_declaration("const", "loans", "[]")], "  Object.assign(loans, [record]);"),
+        ([], "  return 1;"),
     ],
 )
 def test_shared_state_mutated_by_core_functions_passes(shared_state, bodies):
@@ -301,15 +314,22 @@ def test_shared_state_mutated_by_core_functions_passes(shared_state, bodies):
 @pytest.mark.parametrize(
     "shared_state,bodies,name",
     [
-        ("const loans = [];", "  return loans.map((loan, index) => ({ id: index + 1 }));", "loans"),
         (
-            "const items = [];",
-            "  if (items.length === 0) { return false; }\n  return true;",
+            [_declaration("const", "loans", "[]")],
+            "  return loans.map((loan, index) => ({ id: index + 1 }));",
+            "loans",
+        ),
+        (
+            [_declaration("const", "items", "[]")],
+            "  return items == null || items.length === 0;",
             "items",
         ),
-        ("let count = 0;", "  return count;", "count"),
-        ("const items = [];\nlet last = '';", "  items.push(name);\n  return last;", "last"),
-        ("const items = [];", "  return items == null || items.length === 0;", "items"),
+        ([_declaration("let", "count", "0")], "  return count;", "count"),
+        (
+            [_declaration("const", "items", "[]"), _declaration("let", "last", "''")],
+            "  items.push(name);\n  return last;",
+            "last",
+        ),
     ],
 )
 def test_shared_state_never_updated_is_rejected(shared_state, bodies, name):
@@ -317,3 +337,61 @@ def test_shared_state_never_updated_is_rejected(shared_state, bodies, name):
         validate_shared_state_updates(shared_state, bodies)
     assert failure.value.diagnostic["reason"] == "SHARED_STATE_NEVER_UPDATED"
     assert failure.value.diagnostic["detail"] == name
+
+
+def _parts(body, browser_setup, private_helpers=""):
+    return {
+        "shared_state": [{"kind": "let", "name": "items", "initializer": "[]"}],
+        "private_helpers": private_helpers,
+        "functions": [{"name": "validateInput", "parameters": "amount, render", "body": body}],
+        "browser_setup": browser_setup,
+    }
+
+
+BROWSER = "function showErrorMessage(message) {\n  error.textContent = message;\n}"
+
+
+def test_core_function_calling_a_browser_helper_is_rejected():
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_core_calls(_parts("  showErrorMessage('x');\n  return false;", BROWSER))
+    assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_CALLS_BROWSER_HELPER"
+    assert failure.value.diagnostic["detail"] == "validateInput calls showErrorMessage"
+    assert failure.value.diagnostic["line"] == 4
+
+
+@pytest.mark.parametrize(
+    "body,private_helpers",
+    [
+        ("  return clean(amount);", "function clean(value) {\n  return String(value).trim();\n}"),
+        ("  function showErrorMessage() { return 1; }\n  return showErrorMessage();", ""),
+        ("  return render(amount);", ""),
+        ("  return Number.isFinite(parseFloat(amount));", ""),
+        ("  const showErrorMessage = () => 1;\n  return showErrorMessage();", ""),
+    ],
+)
+def test_core_functions_calling_module_scope_locals_or_globals_pass(body, private_helpers):
+    validate_core_calls(_parts(body, BROWSER, private_helpers))
+
+
+@pytest.mark.parametrize(
+    "browser_setup",
+    [
+        "document.addEventListener('DOMContentLoaded', function () {\n  wire();\n});",
+        "window.addEventListener('load', wire);",
+        "window.onload = wire;",
+    ],
+)
+def test_browser_setup_nesting_a_ready_listener_is_rejected(browser_setup):
+    parts = _parts(
+        "  return true;", "  const out = document.getElementById('o');\n" + browser_setup
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_browser_setup(parts)
+    assert failure.value.diagnostic["reason"] == "BROWSER_SETUP_NESTS_DOM_READY"
+    assert failure.value.diagnostic["line"] == 10
+
+
+def test_browser_setup_with_direct_listeners_passes():
+    validate_browser_setup(
+        _parts("  return true;", "  document.getElementById('b').addEventListener('click', wire);")
+    )
