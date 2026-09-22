@@ -1,4 +1,62 @@
 const messages = {
+  ui: {
+    claim: {
+      hypothesis: "Proposta dell'AI, non validata",
+      proof: "Osservato nella sandbox",
+    },
+    status: {
+      approved: "Approvato",
+      rejected: "Rifiutato",
+      pending: "In attesa",
+      blocked: "Attenzione",
+      observed: "Osservato nella sandbox",
+      failed: "Non superato",
+      passed: "Superato",
+    },
+    stepper: {
+      label: "Passi",
+      pending: "in attesa",
+      approved: "Approvato",
+      decision: "Decisione {n} di {max}",
+      current: "Passo corrente",
+    },
+    decision: {
+      title: "La tua decisione",
+      counter: "Decisione {n} di {max}",
+      approve: "Approva e continua",
+      reject: "Rifiuta e chiedi una revisione",
+      noteLabel: "Perché la rifiuti?",
+      noteError: "Scrivi un motivo prima di inviare.",
+      confirm: "Invia il rifiuto",
+      cancel: "Annulla",
+      history: "Storico delle decisioni",
+      locked: "La decisione si apre quando il passo ha materiale da decidere.",
+      busy: "Attendi la fine dell'operazione in corso.",
+    },
+    running: {
+      cancel: "Annulla",
+      elapsed: "{seconds} s trascorsi",
+      proposal: "di solito 10-40 secondi",
+      execution: "circa 30 secondi",
+      repair: "circa 10 secondi",
+    },
+    drawer: {
+      show: "Dettagli tecnici",
+      hide: "Nascondi i dettagli",
+    },
+    findings: {
+      chip: "Controllo non superato",
+      what: "Cosa è successo",
+      where: "Dove",
+      change: "Cosa cambia la riparazione",
+    },
+    panel: {
+      close: "Chiudi",
+    },
+    state: {
+      loading: "Caricamento in corso",
+    },
+  },
   app: {
     homeAriaLabel: "Pagina iniziale di OrchesTwin Studio",
     title: "OrchesTwin Studio",
@@ -22,6 +80,11 @@ const messages = {
     skip: "Vai al contenuto principale",
   },
   auth: {
+    points: {
+      one: "Descrivi l'idea in un brief: pensano gli agenti, decidi tu a ogni passo.",
+      two: "Ogni proposta è etichettata come ipotesi finché la sandbox non la osserva.",
+      three: "Prove, decisioni e provenienza restano tue, esportabili in ogni momento.",
+    },
     email: "Indirizzo email",
     password: "Password",
     passwordHint: "Usa almeno 15 caratteri. Sono supportati spazi e passphrase.",
@@ -74,6 +137,15 @@ const messages = {
     begin: "Crea il tuo primo progetto",
   },
   projects: {
+    new: "Nuovo progetto",
+    cancel: "Annulla",
+    note: "I progetti restano fermi finché non sei tu a farli avanzare.",
+    table: {
+      name: "Progetto",
+      mode: "Punto di partenza",
+      updated: "Aggiornato",
+      open: "Apri",
+    },
     eyebrow: "Il tuo spazio",
     title: "Progetti",
     description: "Riprendi un’idea o inizia qualcosa di nuovo.",

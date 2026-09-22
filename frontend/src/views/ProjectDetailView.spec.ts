@@ -55,7 +55,10 @@ describe("project route requests", () => {
         id === "first" ? oldRequest : project(id),
       );
       const wrapper = shallowMount(ProjectDetailView, {
-        global: { plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })] },
+        global: {
+          plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })],
+          stubs: { UiStepper: false, UiCard: false },
+        },
       });
       state.route.params.projectId = "second";
       await flushPromises();
@@ -143,7 +146,10 @@ describe("progressive project workspace", () => {
   function mountWorkspace(pinia = createPinia()) {
     return shallowMount(ProjectDetailView, {
       attachTo: document.body,
-      global: { plugins: [pinia, createI18n({ legacy: false, locale: "en" })] },
+      global: {
+        plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
+        stubs: { UiStepper: false, UiCard: false },
+      },
     });
   }
 

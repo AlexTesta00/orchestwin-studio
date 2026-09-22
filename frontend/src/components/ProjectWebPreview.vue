@@ -6,6 +6,8 @@ import { useWebExecutionStore } from "@/stores/webExecution";
 import { buildWebPreview, type PreviewContent } from "./webPreview";
 import WebSourceEditor from "./WebSourceEditor.vue";
 import type { WebSourceRevisionPayload } from "@/types/webExecution";
+import UiButton from "./UiButton.vue";
+import UiCard from "./UiCard.vue";
 
 const props = withDefaults(defineProps<{ projectId: string; locale?: "it" | "en" }>(), {
   locale: "en",
@@ -134,83 +136,99 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section
-    class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"
-    :aria-busy="busy"
-  >
-    <h2 class="text-lg font-bold">{{ copy.title }}</h2>
-    <p class="text-sm text-slate-500">{{ copy.info }}</p>
-    <p v-if="revision?.origin === 'OWNER_EDIT'" class="text-xs text-slate-600">
-      {{ copy.revised }}
-    </p>
-    <p v-if="!revision">{{ copy.empty }}</p>
-    <template v-else>
-      <div class="flex flex-wrap gap-3">
-        <button
-          v-if="revision.target_selection.target === 'WEB_STATIC' && !document"
-          class="rounded-xl bg-slate-900 px-4 py-2 font-bold text-white disabled:opacity-50"
-          :disabled="busy"
-          @click="request('content')"
+  <UiCard :aria-busy="busy">
+    <div class="grid gap-4">
+      <div class="grid gap-1">
+        <h2 class="m-0 text-2xl font-semibold tracking-card">{{ copy.title }}</h2>
+        <p class="m-0 text-[15px] text-ink-2">{{ copy.info }}</p>
+        <p v-if="revision?.origin === 'OWNER_EDIT'" class="m-0 font-mono text-xs text-ink-3">
+          {{ copy.revised }}
+        </p>
+      </div>
+      <p v-if="!revision" class="m-0 text-[15px] text-ink-2">{{ copy.empty }}</p>
+      <template v-else>
+        <div class="flex flex-wrap gap-3">
+          <UiButton
+            v-if="revision.target_selection.target === 'WEB_STATIC' && !document"
+            :disabled="busy"
+            @click="request('content')"
+          >
+            {{ copy.open }}
+          </UiButton>
+          <UiButton variant="secondary" :disabled="busy" @click="request('download')">
+            {{ copy.download }}
+          </UiButton>
+          <UiButton v-if="document" variant="secondary" @click="document = null">
+            {{ copy.close }}
+          </UiButton>
+        </div>
+        <p v-if="revision.target_selection.target !== 'WEB_STATIC'" class="m-0 text-[15px]">
+          {{ copy.unsupported }}
+        </p>
+      </template>
+      <p v-if="error" class="m-0 text-[15px] font-semibold text-fail-dark" role="alert">
+        {{ copy.failed }}
+      </p>
+      <details v-if="revision" class="rounded-panel border border-line px-4 py-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.tools }}</summary>
+        <p class="my-3 text-ink-3">{{ copy.technicalInfo }}</p>
+        <UiButton
+          v-if="revision.target_selection.target === 'WEB_STATIC'"
+          variant="secondary"
+          :disabled="busy || !!editing"
+          @click="request('edit')"
         >
-          {{ copy.open }}
-        </button>
+          {{ copy.edit }}
+        </UiButton>
+      </details>
+      <WebSourceEditor
+        v-if="editing"
+        :key="editing.revision_id"
+        :project-id="projectId"
+        :content="editing"
+        :locale="locale"
+        @saved="saved"
+        @cancel="editing = null"
+      />
+      <div
+        v-if="document"
+        class="inline-flex rounded-pill border border-line-strong bg-surface p-0.5"
+      >
         <button
-          class="rounded-xl border px-4 py-2 font-bold"
-          :disabled="busy"
-          @click="request('download')"
+          v-for="size in ['desktop', 'mobile'] as const"
+          :key="size"
+          type="button"
+          :aria-pressed="viewport === size"
+          :class="[
+            'rounded-pill px-3 py-1.5 font-mono text-xs font-medium transition-colors',
+            viewport === size ? 'bg-ink text-white' : 'text-ink-2 hover:bg-surface-3',
+          ]"
+          @click="viewport = size"
         >
-          {{ copy.download }}
-        </button>
-        <button v-if="document" class="rounded-xl border px-4 py-2" @click="document = null">
-          {{ copy.close }}
+          {{ copy[size] }}
         </button>
       </div>
-      <p v-if="revision.target_selection.target !== 'WEB_STATIC'">{{ copy.unsupported }}</p>
-    </template>
-    <p v-if="error" role="alert">{{ copy.failed }}</p>
-    <details v-if="revision" class="rounded-xl border border-slate-200 px-3 py-2 text-sm">
-      <summary class="cursor-pointer font-semibold text-slate-500">{{ copy.tools }}</summary>
-      <p class="my-3 text-slate-500">{{ copy.technicalInfo }}</p>
-      <button
-        v-if="revision.target_selection.target === 'WEB_STATIC'"
-        class="rounded-xl border px-4 py-2"
-        :disabled="busy || !!editing"
-        @click="request('edit')"
+      <div
+        v-if="document"
+        class="overflow-hidden rounded-panel border border-line-strong bg-surface-3"
       >
-        {{ copy.edit }}
-      </button>
-    </details>
-    <WebSourceEditor
-      v-if="editing"
-      :key="editing.revision_id"
-      :project-id="projectId"
-      :content="editing"
-      :locale="locale"
-      @saved="saved"
-      @cancel="editing = null"
-    />
-    <div v-if="document" class="flex gap-2">
-      <button
-        v-for="size in ['desktop', 'mobile'] as const"
-        :key="size"
-        :aria-pressed="viewport === size"
-        class="rounded-lg border px-3 py-1 text-xs"
-        :class="viewport === size ? 'bg-slate-100 font-bold' : ''"
-        @click="viewport = size"
-      >
-        {{ copy[size] }}
-      </button>
+        <div
+          class="flex items-center gap-1.5 border-b border-line-strong px-3 py-2"
+          aria-hidden="true"
+        >
+          <span class="h-2.5 w-2.5 rounded-full bg-button-line" />
+          <span class="h-2.5 w-2.5 rounded-full bg-button-line" />
+          <span class="h-2.5 w-2.5 rounded-full bg-button-line" />
+        </div>
+        <iframe
+          :title="copy.title"
+          :srcdoc="document"
+          sandbox="allow-scripts allow-forms"
+          referrerpolicy="no-referrer"
+          class="mx-auto block h-[600px] w-full bg-white"
+          :class="viewport === 'mobile' ? 'max-w-[375px]' : ''"
+        ></iframe>
+      </div>
     </div>
-    <!-- Native validation and submit events require allow-forms; the injected
-         form-action 'none' CSP still prevents every form navigation. -->
-    <iframe
-      v-if="document"
-      :title="copy.title"
-      :srcdoc="document"
-      sandbox="allow-scripts allow-forms"
-      referrerpolicy="no-referrer"
-      class="mx-auto block h-[600px] w-full rounded-xl border bg-white"
-      :class="viewport === 'mobile' ? 'max-w-[375px]' : ''"
-    ></iframe>
-  </section>
+  </UiCard>
 </template>

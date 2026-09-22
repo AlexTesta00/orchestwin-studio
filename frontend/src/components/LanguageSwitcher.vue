@@ -34,20 +34,26 @@ const localeOptions = computed(() =>
 </script>
 
 <template>
-  <div class="col-span-full flex items-center gap-2 md:col-span-1 md:justify-self-end">
-    <label class="text-sm font-semibold text-slate-700" for="language-selector" hidden>
-      {{ t("locale.label") }}
-    </label>
-
-    <select
-      id="language-selector"
-      v-model="selectedLocale"
-      class="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
-      data-testid="language-selector"
+  <div
+    class="inline-flex items-center rounded-pill border border-line-strong bg-surface p-0.5"
+    role="group"
+    :aria-label="t('locale.label')"
+    data-testid="language-switcher"
+  >
+    <button
+      v-for="option in localeOptions"
+      :key="option.value"
+      type="button"
+      :class="[
+        'min-w-11 rounded-pill px-3 py-1.5 font-mono text-xs font-medium uppercase transition-colors',
+        option.value === selectedLocale ? 'bg-ink text-white' : 'text-ink-2 hover:bg-surface-3',
+      ]"
+      :aria-pressed="option.value === selectedLocale ? 'true' : 'false'"
+      :aria-label="option.label"
+      :lang="option.value"
+      @click="selectedLocale = option.value"
     >
-      <option v-for="option in localeOptions" :key="option.value" :value="option.value">
-        {{ option.label }}
-      </option>
-    </select>
+      {{ option.value }}
+    </button>
   </div>
 </template>

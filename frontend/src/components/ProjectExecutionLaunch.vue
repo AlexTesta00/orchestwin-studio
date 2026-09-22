@@ -12,6 +12,8 @@ import {
 } from "@/api/executionLaunch";
 import BrowserExecutionChecks from "./BrowserExecutionChecks.vue";
 import { journeySentence } from "./journeyText";
+import UiButton from "./UiButton.vue";
+import UiCard from "./UiCard.vue";
 import type { SourcePlatform } from "@/api/sourceGeneration";
 import { useAuthStore } from "@/stores/auth";
 import { useWebExecutionStore } from "@/stores/webExecution";
@@ -296,119 +298,144 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section
-    v-if="source"
-    class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
-    :aria-busy="pending"
-  >
-    <h2 class="text-2xl font-black">{{ copy.title }} · {{ platform.toUpperCase() }}</h2>
-    <p>{{ copy.intro }}</p>
-    <p>{{ copy.revision }} {{ source.version_number }} · {{ source.target_selection.target }}</p>
-    <section v-if="needsBrowser && journey?.status === 'DERIVED'" class="space-y-2">
-      <h3 class="text-lg font-bold">{{ copy.journey }}</h3>
-      <p>{{ copy.journeyIntro }}</p>
-      <ol v-if="derived" class="list-decimal space-y-2 pl-6">
-        <li v-for="(step, index) in journey.steps" :key="index">
-          <span>{{ sentence(step) }}</span>
-          <label v-if="step.action.kind === 'fill'" class="ml-2 inline-flex items-center gap-1">
-            <span class="sr-only">{{ copy.sample }}</span>
-            <input
-              :value="step.action.value ?? ''"
-              maxlength="1000"
-              class="rounded border p-1"
-              :disabled="
-                pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'
-              "
-              @input="editSample(index, ($event.target as HTMLInputElement).value)"
-            />
-          </label>
-        </li>
-      </ol>
-      <button class="rounded border p-2" type="button" @click="manualChecks = !manualChecks">
-        {{ manualChecks ? copy.automatic : copy.manual }}
-      </button>
-    </section>
-    <p v-else-if="needsBrowser && journey?.status === 'NOT_DERIVABLE'">{{ copy.notDerivable }}</p>
-    <BrowserExecutionChecks
-      v-if="needsBrowser && !derived"
-      :key="`${projectId}:${source.id}`"
-      :locale="locale"
-      :disabled="pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'"
-      @change="browserChecks = $event"
-    />
-    <div class="flex flex-wrap gap-3">
-      <button class="rounded border p-2 disabled:opacity-50" :disabled="pending" @click="refresh">
-        {{ copy.refresh }}
-      </button>
-      <button
-        class="rounded border p-2 disabled:opacity-50"
-        :disabled="
-          pending ||
-          (needsBrowser && !browserChecks) ||
-          operation?.state === 'RUNNING' ||
-          (operation?.gate_current &&
-            operation.state === 'PENDING' &&
-            !['CANCELLED', 'REJECTED'].includes(operation.gate.status))
-        "
-        @click="prepare"
+  <UiCard v-if="source" :aria-busy="pending">
+    <div class="grid gap-5">
+      <div class="grid gap-2">
+        <h2 class="m-0 text-2xl font-semibold tracking-card">
+          {{ copy.title }} · {{ platform.toUpperCase() }}
+        </h2>
+        <p class="m-0 text-[15px] text-ink-2">{{ copy.intro }}</p>
+        <p class="m-0 font-mono text-xs text-ink-3">
+          {{ copy.revision }} {{ source.version_number }} · {{ source.target_selection.target }}
+        </p>
+      </div>
+      <UiCard v-if="needsBrowser && journey?.status === 'DERIVED'" tone="soft">
+        <h3 class="m-0 text-lg font-semibold tracking-block">{{ copy.journey }}</h3>
+        <p class="mt-1 mb-0 text-sm text-ink-2">{{ copy.journeyIntro }}</p>
+        <ol v-if="derived" class="m-0 mt-3 grid list-none gap-0 p-0 text-[15px]">
+          <li
+            v-for="(step, index) in journey.steps"
+            :key="index"
+            class="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2 rounded-control px-2 py-2 odd:bg-row-alt"
+          >
+            <span class="font-mono text-xs text-ink-3">{{ index + 1 }}</span>
+            <span class="flex flex-wrap items-center gap-2">
+              <span>{{ sentence(step) }}</span>
+              <label v-if="step.action.kind === 'fill'" class="inline-flex items-center gap-1">
+                <span class="sr-only">{{ copy.sample }}</span>
+                <input
+                  :value="step.action.value ?? ''"
+                  maxlength="1000"
+                  class="min-h-9 rounded-control border border-dashed border-sample-line bg-sample-bg px-2 font-mono text-[13px] text-ink"
+                  :disabled="
+                    pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'
+                  "
+                  @input="editSample(index, ($event.target as HTMLInputElement).value)"
+                />
+              </label>
+            </span>
+          </li>
+        </ol>
+        <div class="mt-4">
+          <UiButton variant="secondary" @click="manualChecks = !manualChecks">
+            {{ manualChecks ? copy.automatic : copy.manual }}
+          </UiButton>
+        </div>
+      </UiCard>
+      <p
+        v-else-if="needsBrowser && journey?.status === 'NOT_DERIVABLE'"
+        class="m-0 text-[15px] text-ink-2"
       >
-        {{ copy.prepare }}
-      </button>
-    </div>
-    <template v-if="operation">
-      <p>{{ copy.state }}: {{ operation.state }} · {{ operation.gate.status }}</p>
-      <p v-if="operation.payload.effective_phases">
-        {{ copy.phases }}: {{ operation.payload.effective_phases.join(" → ") }}
+        {{ copy.notDerivable }}
       </p>
-      <p>
-        Gate 7 · {{ operation.kind }} · <code>{{ operation.id }}</code>
-      </p>
-      <details>
-        <summary>{{ copy.details }}</summary>
-        <pre class="max-h-80 overflow-auto text-xs whitespace-pre-wrap">{{
-          JSON.stringify(operation.payload, null, 2)
-        }}</pre>
-      </details>
+      <BrowserExecutionChecks
+        v-if="needsBrowser && !derived"
+        :key="`${projectId}:${source.id}`"
+        :locale="locale"
+        :disabled="pending || operation?.state === 'PENDING' || operation?.state === 'RUNNING'"
+        @change="browserChecks = $event"
+      />
       <div class="flex flex-wrap gap-3">
-        <button
-          class="rounded border p-2 disabled:opacity-50"
-          :disabled="pending || !active || operation.gate.status !== 'PENDING_APPROVAL'"
-          @click="decide('APPROVE')"
-        >
-          {{ copy.approve }}
-        </button>
-        <button
-          class="rounded border p-2 disabled:opacity-50"
+        <UiButton variant="secondary" :disabled="pending" @click="refresh">
+          {{ copy.refresh }}
+        </UiButton>
+        <UiButton
           :disabled="
             pending ||
-            !operation.gate_current ||
-            operation.state !== 'PENDING' ||
-            !['PENDING_APPROVAL', 'APPROVED'].includes(operation.gate.status)
+            (needsBrowser && !browserChecks) ||
+            operation?.state === 'RUNNING' ||
+            (operation?.gate_current &&
+              operation.state === 'PENDING' &&
+              !['CANCELLED', 'REJECTED'].includes(operation.gate.status))
           "
-          @click="decide('CANCEL')"
+          @click="prepare"
         >
-          {{ copy.cancel }}
-        </button>
-        <button
-          v-if="operation.kind === 'EXECUTION'"
-          class="rounded bg-slate-900 p-2 text-white disabled:opacity-50"
-          :disabled="pending || !active || operation.gate.status !== 'APPROVED'"
-          @click="start"
-        >
-          {{ copy.start }}
-        </button>
-        <button
-          v-else-if="operation.kind === 'REPAIR'"
-          class="rounded bg-slate-900 p-2 text-white disabled:opacity-50"
-          :disabled="pending || !active || operation.gate.status !== 'APPROVED'"
-          @click="applyRepair"
-        >
-          {{ copy.applyRepair }}
-        </button>
+          {{ copy.prepare }}
+        </UiButton>
       </div>
-    </template>
-    <p v-if="pending" role="status">{{ copy.running }}</p>
-    <p v-if="result" role="status">{{ copy.saved }}: {{ result }}</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-  </section>
+      <template v-if="operation">
+        <div class="grid gap-1 font-mono text-xs text-ink-3">
+          <p class="m-0">{{ copy.state }}: {{ operation.state }} · {{ operation.gate.status }}</p>
+          <p v-if="operation.payload.effective_phases" class="m-0">
+            {{ copy.phases }}: {{ operation.payload.effective_phases.join(" → ") }}
+          </p>
+          <p class="m-0">
+            Gate 7 · {{ operation.kind }} · <code>{{ operation.id }}</code>
+          </p>
+        </div>
+        <details class="rounded-panel border border-line px-4 py-3">
+          <summary class="cursor-pointer text-sm font-semibold text-ink-2">
+            {{ copy.details }}
+          </summary>
+          <pre class="mt-3 max-h-80 overflow-auto font-mono text-xs whitespace-pre-wrap">{{
+            JSON.stringify(operation.payload, null, 2)
+          }}</pre>
+        </details>
+        <div class="flex flex-wrap gap-3">
+          <UiButton
+            variant="secondary"
+            :disabled="pending || !active || operation.gate.status !== 'PENDING_APPROVAL'"
+            @click="decide('APPROVE')"
+          >
+            {{ copy.approve }}
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            :disabled="
+              pending ||
+              !operation.gate_current ||
+              operation.state !== 'PENDING' ||
+              !['PENDING_APPROVAL', 'APPROVED'].includes(operation.gate.status)
+            "
+            @click="decide('CANCEL')"
+          >
+            {{ copy.cancel }}
+          </UiButton>
+          <UiButton
+            v-if="operation.kind === 'EXECUTION'"
+            :disabled="pending || !active || operation.gate.status !== 'APPROVED'"
+            @click="start"
+          >
+            {{ copy.start }}
+          </UiButton>
+          <UiButton
+            v-else-if="operation.kind === 'REPAIR'"
+            :disabled="pending || !active || operation.gate.status !== 'APPROVED'"
+            @click="applyRepair"
+          >
+            {{ copy.applyRepair }}
+          </UiButton>
+        </div>
+      </template>
+      <p v-if="pending" class="m-0 font-mono text-xs text-ink-3" role="status">
+        {{ copy.running }}
+      </p>
+      <p v-if="result" class="m-0 text-[15px] font-semibold text-ok-dark" role="status">
+        {{ copy.saved }}: {{ result }}
+      </p>
+      <p v-if="error" class="m-0 text-[15px] font-semibold text-fail-dark" role="alert">
+        {{ error }}
+      </p>
+    </div>
+  </UiCard>
 </template>
