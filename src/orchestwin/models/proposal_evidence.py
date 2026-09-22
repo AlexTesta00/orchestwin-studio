@@ -70,6 +70,20 @@ class ProposalEvidenceScope:
         )
         self.observed_events.add(kind)
 
+    def retire(self, *, role, code):
+        self.related_generations.append(
+            {
+                "role": role,
+                "generation_id": str(self.request.request_id),
+                "request_hash": self.request.content_hash,
+                "code": code,
+            }
+        )
+        self.request = None
+        self.result = None
+        self.accepted_hashes = {}
+        self.observed_events = set()
+
 
 _SCOPE: ContextVar[ProposalEvidenceScope | None] = ContextVar(
     "proposal_evidence_scope", default=None

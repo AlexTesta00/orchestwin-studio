@@ -1,13 +1,15 @@
 """Synthetic completions exercise source boundaries, never model quality."""
 
 import asyncio
+import hashlib
 import json
 from copy import deepcopy
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter, file_entry
 from src.test.python.models.test_proposal_evidence import Command, MemoryEvidence, audited_generator
 
@@ -270,3 +272,218 @@ def test_unchanged_replacement_beside_a_real_change_is_dropped_not_rejected(tmp_
     )
     result, _, _ = run_proposal(tmp_path, task, payload, ctx)
     assert [item["normalized_path"] for item in result.source_binding["changes"]] == ["index.html"]
+
+
+STATEFUL_PARTS = {
+    "shared_state": [{"kind": "const", "name": "items", "initializer": "[]"}],
+    "private_helpers": "",
+    "functions": [
+        {
+            "name": "addItem",
+            "parameters": "name",
+            "body": "  items.push(name);\n  return { ok: true, count: items.length };",
+        }
+    ],
+    "browser_setup": "    document.title = String(addItem('x').count);",
+}
+BASE_APP = assemble_static_module(STATEFUL_PARTS)
+BASE_TEST = (
+    "const test = require('node:test');\n"
+    "const assert = require('node:assert/strict');\n"
+    "const { addItem, resetSharedState } = require('./app.js');\n"
+    "test.beforeEach(resetSharedState);\n"
+    "test('adds', () => { assert.equal(addItem('a').count, 1); });\n"
+)
+
+
+def app_with(body):
+    return assemble_static_module(
+        {**STATEFUL_PARTS, "functions": [{**STATEFUL_PARTS["functions"][0], "body": body}]}
+    )
+
+
+def static_repair_context():
+    ctx = context("web-repair")
+    files = [
+        ("index.html", "<h1>Base</h1>", "text/html"),
+        ("app.js", BASE_APP, "text/javascript"),
+        ("app.test.cjs", BASE_TEST, "text/javascript"),
+    ]
+    ctx["base_files"] = [file_entry(p, content.encode(), media) for p, content, media in files]
+    ctx["source_files"] = [
+        {"normalized_path": p, "content": content, "media_type": media}
+        for p, content, media in files
+    ]
+    return ctx
+
+
+def repair_change(path, content, media_type="text/javascript"):
+    return {
+        "rationale": "Repair the recorded failure.",
+        "changes": [
+            {
+                "normalized_path": path,
+                "operation": "REPLACE",
+                "content": content,
+                "media_type": media_type,
+            }
+        ],
+    }
+
+
+def sequence_generator(tmp_path, payloads):
+    generator, transport = audited_generator(tmp_path, payloads[0])
+    post = transport.post_json
+
+    async def sequential(**kwargs):
+        transport.output = payloads[min(len(transport.calls), len(payloads) - 1)]
+        return await post(**kwargs)
+
+    transport.post_json = sequential
+    return generator, transport
+
+
+def run_static_repair(tmp_path, ctx, payloads):
+    generator, transport = sequence_generator(tmp_path, payloads)
+    adapter = ModelSourceProposalAdapter(generator)
+    store = MemoryEvidence()
+    operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
+    result = asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
+    return result, store, transport
+
+
+def outcome_events(store, generation_id):
+    return [
+        (kind, data.get("code"))
+        for kind, data, _ in store.events[generation_id]
+        if kind in {"ADAPTER_REJECTED", "ADAPTER_ACCEPTED", "APPLICATION_RESULT"}
+    ]
+
+
+def test_static_repair_is_validated_and_retried_once_with_the_diagnostic(tmp_path):
+    ctx = static_repair_context()
+    broken = app_with("  document.title = name;\n  items.push(name);\n  return { ok: true };")
+    fixed = app_with(
+        "  items.push(String(name).trim());\n  return { ok: true, count: items.length };"
+    )
+    result, store, transport = run_static_repair(
+        tmp_path, ctx, [repair_change("app.js", broken), repair_change("app.js", fixed)]
+    )
+    assert len(transport.calls) == 2
+    rejected, accepted = store.requests
+    assert outcome_events(store, rejected) == [
+        ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+        ("APPLICATION_RESULT", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+    ]
+    before = json.loads(store.requests[rejected][0].input_payload_json)["context"]
+    retried = json.loads(store.requests[accepted][0].input_payload_json)["context"]
+    assert retried.pop("repair_retry") == {
+        "attempt": 2,
+        "previous_generation_id": str(rejected),
+        "previous_request_hash": store.requests[rejected][0].content_hash,
+        "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+    }
+    assert retried == before
+    feedback = json.loads(
+        store.requests[accepted][0].system_instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]
+    )
+    assert feedback["diagnostic"]["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
+    assert feedback["diagnostic"]["detail"] == "addItem uses document"
+    assert "Return the complete file" in store.requests[accepted][0].system_instruction
+    assert feedback["previous_source_sha256"] == hashlib.sha256(broken.encode()).hexdigest()
+    assert outcome_events(store, accepted) == [
+        ("ADAPTER_ACCEPTED", None),
+        ("APPLICATION_RESULT", None),
+    ]
+    accepted_payload = next(
+        data for kind, data, _ in store.events[accepted] if kind == "ADAPTER_ACCEPTED"
+    )
+    assert accepted_payload["related_generations"] == [
+        {
+            "role": "REJECTED_REPAIR_ATTEMPT",
+            "generation_id": str(rejected),
+            "request_hash": store.requests[rejected][0].content_hash,
+            "code": "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+        }
+    ]
+    assert result.source_binding["changes"][0]["content_sha256"] == (
+        hashlib.sha256(fixed.encode()).hexdigest()
+    )
+
+
+def test_repeated_static_repair_failure_stops_after_one_retry(tmp_path):
+    ctx = static_repair_context()
+    broken = app_with("  document.title = name;\n  items.push(name);\n  return { ok: true };")
+    generator, transport = sequence_generator(tmp_path, [repair_change("app.js", broken)])
+    adapter = ModelSourceProposalAdapter(generator)
+    store = MemoryEvidence()
+    operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
+    with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
+        asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
+    assert len(transport.calls) == 2
+    assert len(store.requests) == 2
+    for generation_id in store.requests:
+        assert outcome_events(store, generation_id) == [
+            ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+            ("APPLICATION_RESULT", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+        ]
+
+
+@pytest.mark.parametrize(
+    "path,content,reason,detail",
+    [
+        (
+            "app.test.cjs",
+            BASE_TEST.replace("test.beforeEach(resetSharedState);\n", ""),
+            "NODE_TEST_MISSING_STATE_RESET",
+            "resetSharedState",
+        ),
+        (
+            "app.js",
+            BASE_APP.replace(", resetSharedState };", " };"),
+            "EXPORTS_REMOVED",
+            "resetSharedState",
+        ),
+        (
+            "app.js",
+            BASE_APP[: -len("}\n")],
+            "UNEXPECTED_END_OF_INPUT",
+            None,
+        ),
+    ],
+)
+def test_static_repair_rejections_reach_the_retry_prompt(tmp_path, path, content, reason, detail):
+    ctx = static_repair_context()
+    generator, transport = sequence_generator(tmp_path, [repair_change(path, content)])
+    adapter = ModelSourceProposalAdapter(generator)
+    store = MemoryEvidence()
+    operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
+    with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
+        asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
+    assert len(transport.calls) == 2
+    retry_request = list(store.requests.values())[1][0]
+    feedback = json.loads(
+        retry_request.system_instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]
+    )
+    assert feedback["diagnostic"]["reason"] == reason
+    assert feedback["diagnostic"].get("detail") == detail
+
+
+def test_stateless_repairs_and_other_files_need_no_reset_registration(tmp_path):
+    ctx = static_repair_context()
+    stateless = assemble_static_module({**STATEFUL_PARTS, "shared_state": []})
+    ctx["source_files"][1]["content"] = stateless
+    ctx["base_files"][1] = file_entry("app.js", stateless.encode(), "text/javascript")
+    tests = BASE_TEST.replace("test.beforeEach(resetSharedState);\n", "")
+    result, store, transport = run_static_repair(
+        tmp_path, ctx, [repair_change("app.test.cjs", tests)]
+    )
+    assert len(transport.calls) == 1
+    assert [item["normalized_path"] for item in result.source_binding["changes"]] == [
+        "app.test.cjs"
+    ]
+    assert "related_generations" not in next(
+        data
+        for kind, data, _ in store.events[next(iter(store.requests))]
+        if kind == "ADAPTER_ACCEPTED"
+    )
