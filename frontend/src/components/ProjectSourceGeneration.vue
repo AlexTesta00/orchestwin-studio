@@ -4,6 +4,8 @@ import { apiClient } from "@/api/client";
 import { ApiRequestError } from "@/api/requestError";
 import { generationProgress, modelFeedback } from "./modelFeedback";
 import TwinIdentity from "./TwinIdentity.vue";
+import UiButton from "./UiButton.vue";
+import UiEvidenceDrawer, { type EvidenceEntry } from "./UiEvidenceDrawer.vue";
 import { executionApi, type ExecutionApi } from "@/api/execution";
 import {
   sourceGenerationApi,
@@ -40,6 +42,32 @@ const error = ref<string | null>(null);
 const generatedVersions = ref<Partial<Record<"web" | "jvm", number>>>({});
 let epoch = 0;
 const platform = computed(() => (target.value.startsWith("JVM_") ? "jvm" : "web"));
+const currentRevision = computed(() => web.currentSourceRevision);
+const revisionEvidence = computed<EvidenceEntry[]>(() => {
+  const revision = currentRevision.value;
+  if (revision === null) {
+    return [];
+  }
+  return [
+    { key: "version", value: String(revision.version_number) },
+    { key: "content", value: revision.content_hash },
+    { key: "tree", value: revision.source_tree_hash },
+    { key: "scope", value: revision.validation_scope_hash },
+    ...revision.files.map((file) => ({ key: file.normalized_path, value: file.sha256_digest })),
+  ];
+});
+
+function fileDescription(path: string): string {
+  const name = path.split("/").pop() ?? path;
+  return copy.value.fileWhat[name] ?? copy.value.fileOther;
+}
+
+function formatSize(bytes: number): string {
+  const kilobytes = new Intl.NumberFormat(props.locale, { maximumFractionDigits: 1 }).format(
+    bytes / 1024,
+  );
+  return `${kilobytes} KB`;
+}
 const generatedVersion = computed(() => generatedVersions.value[platform.value] ?? null);
 const selectedStore = computed(() => (platform.value === "web" ? web : jvm));
 const targets: { value: ExecutionTarget; label: string }[] = [
@@ -89,6 +117,13 @@ const copy = computed(() =>
         generate: "Crea applicazione",
         busy: generationProgress("it"),
         created: "Revisione generata",
+        files: "I file della tua applicazione",
+        fileWhat: {
+          "index.html": "La pagina che si apre nel browser",
+          "app.js": "La logica dell'applicazione",
+          "app.test.cjs": "I controlli automatici",
+        } as Record<string, string>,
+        fileOther: "File di supporto",
         failed:
           "Generazione non completata. Controlla lo stato del modello e aggiorna le revisioni prima di riprovare.",
         refreshFailed:
@@ -114,6 +149,13 @@ const copy = computed(() =>
         generate: "Create application",
         busy: generationProgress("en"),
         created: "Generated revision",
+        files: "Your application files",
+        fileWhat: {
+          "index.html": "The page that opens in the browser",
+          "app.js": "The application logic",
+          "app.test.cjs": "The automatic checks",
+        } as Record<string, string>,
+        fileOther: "Supporting file",
         failed:
           "Generation did not complete. Check the model and refresh source revisions before retrying.",
         refreshFailed:
@@ -258,14 +300,42 @@ onUnmounted(() => {
       <p v-else-if="profilesLoading" role="status">{{ copy.loadingProfiles }}</p>
       <p v-else-if="!profile" role="status">{{ copy.unavailable }}</p>
       <p v-else-if="profile.capability_status === 'DESIGN_ONLY_LEVEL_C'">{{ copy.levelC }}</p>
-      <button
-        type="submit"
-        class="rounded-panel bg-action px-4 py-2 font-bold text-white disabled:opacity-50"
-        :disabled="!canGenerate"
-      >
-        {{ pending ? copy.busy : copy.generate }}
-      </button>
+      <div class="flex">
+        <UiButton type="submit" :disabled="!canGenerate">
+          {{ pending ? copy.busy : copy.generate }}
+        </UiButton>
+      </div>
     </form>
+
+    <section
+      v-if="platform === 'web' && currentRevision !== null"
+      class="grid gap-4"
+      data-testid="source-files"
+    >
+      <h3 class="m-0 text-base font-semibold tracking-block text-ink">{{ copy.files }}</h3>
+      <ul
+        class="m-0 grid list-none gap-px overflow-hidden rounded-card border border-line bg-line p-0"
+      >
+        <li
+          v-for="file in currentRevision.files"
+          :key="file.normalized_path"
+          class="flex flex-wrap items-start gap-4 bg-surface px-5 py-4"
+        >
+          <span
+            class="rounded-control border border-line bg-surface-3 px-2.5 py-1 font-mono text-[12.5px] text-ink"
+          >
+            {{ file.normalized_path }}
+          </span>
+          <p class="m-0 min-w-0 flex-1 text-[14.5px] leading-6 text-ink-2">
+            {{ fileDescription(file.normalized_path) }}
+          </p>
+          <span class="font-mono text-xs leading-6 text-ink-3">{{
+            formatSize(file.size_bytes)
+          }}</span>
+        </li>
+      </ul>
+      <UiEvidenceDrawer :entries="revisionEvidence" />
+    </section>
     <p v-if="generatedVersion !== null" role="status">{{ copy.created }} {{ generatedVersion }}</p>
     <p v-if="error" role="alert">{{ error }}</p>
   </section>

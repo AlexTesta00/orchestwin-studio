@@ -7,6 +7,7 @@ import TwinIdentity from "./TwinIdentity.vue";
 import { workflowStatusLabel } from "./workflowLabels";
 import UiButton from "./UiButton.vue";
 import UiCard from "./UiCard.vue";
+import UiClaimLabel from "./UiClaimLabel.vue";
 
 import { useUserModelingStore } from "../stores/userModeling";
 
@@ -594,6 +595,26 @@ function profileDescription(observations: ProfileObservationPayload[]): string |
   return role && ["TEXT", "ITEMS"].includes(role.value.kind) ? formatObservation(role) : undefined;
 }
 
+const keyFactFields: readonly UserTwinField[] = [
+  "goals",
+  "frustrations",
+  "context_of_use",
+  "accessibility_needs",
+];
+
+function keyFacts(observations: ProfileObservationPayload[]): ProfileObservationPayload[] {
+  const preferred = keyFactFields.flatMap((field) => {
+    const observation = observations.find((item) => observationField(item) === field);
+    return observation ? [observation] : [];
+  });
+  if (preferred.length > 0) {
+    return preferred;
+  }
+  return observations
+    .filter((item) => observationField(item) !== null && observationField(item) !== "role")
+    .slice(0, 4);
+}
+
 function observationSummary(observation: ProfileObservationPayload): string {
   const labels = {
     MODEL_INFERRED: ["Ipotesi del modello", "Model suggestion"],
@@ -953,60 +974,73 @@ watch(
           </p>
         </div>
 
-        <button
+        <UiButton
           v-if="personas.length === 0 && store.currentSnapshot === null"
-          type="button"
-          class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white transition hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="store.isBusy"
           data-testid="propose-personas"
           @click="proposePersonas"
         >
           {{ copy.proposePersonas }}
-        </button>
+        </UiButton>
       </div>
 
       <p v-if="personas.length === 0" class="mt-5 text-sm text-ink-3">
         {{ copy.noPersonas }}
       </p>
 
-      <div v-else class="mt-5 grid gap-4">
+      <div v-else class="mt-5 grid gap-5 md:grid-cols-2">
         <article
           v-for="persona in personas"
           :key="persona.id"
-          class="rounded-panel border border-line p-4"
+          class="grid content-start gap-4 rounded-card border border-line p-5 shadow-card"
+          :class="
+            persona.profile.confirmation_status === 'REJECTED' ? 'bg-surface-3' : 'bg-surface'
+          "
         >
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h4>
-                <TwinIdentity
-                  :identity-key="persona.persona_id"
-                  :name="persona.profile.name"
-                  :description="profileDescription(persona.profile.observations)"
-                  :locale="locale"
-                />
-              </h4>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <h4 class="m-0 min-w-0">
+              <TwinIdentity
+                :identity-key="persona.persona_id"
+                :name="persona.profile.name"
+                :description="profileDescription(persona.profile.observations)"
+                :locale="locale"
+              />
+            </h4>
 
-              <p class="mt-1 text-xs font-medium tracking-wide text-ink-3 uppercase">
-                {{ personaStatusLabel(persona) }}
-                · v{{ persona.version_number }}
-              </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <UiClaimLabel kind="hypothesis" />
+              <span
+                class="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2"
+              >
+                {{ personaStatusLabel(persona) }} · v{{ persona.version_number }}
+              </span>
             </div>
           </div>
 
-          <details
-            class="mt-4"
-            :open="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'"
-          >
+          <dl v-if="keyFacts(persona.profile.observations).length > 0" class="m-0 grid gap-2.5">
+            <div
+              v-for="observation in keyFacts(persona.profile.observations)"
+              :key="observation.observation_key"
+              class="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <dt class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                {{ fieldLabel(observationField(observation) as UserTwinField) }}
+              </dt>
+              <dd class="m-0 text-sm leading-6 text-ink-2">{{ formatObservation(observation) }}</dd>
+            </div>
+          </dl>
+
+          <details>
             <summary class="cursor-pointer text-sm font-semibold text-ink-2">
               {{ copy.profileDetails }}
             </summary>
-            <div class="mt-3 space-y-3">
+            <div class="mt-3 grid gap-3">
               <div
                 v-for="observation in persona.profile.observations"
                 :key="observation.observation_key"
                 class="rounded-control bg-surface-2 p-3"
               >
-                <p class="text-xs font-semibold tracking-wide text-ink-3 uppercase">
+                <p class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
                   {{
                     observationField(observation)
                       ? fieldLabel(observationField(observation) as UserTwinField)
@@ -1016,11 +1050,11 @@ watch(
                   }}
                 </p>
 
-                <p class="mt-1 text-sm text-ink">
+                <p class="m-0 mt-1 text-sm text-ink">
                   {{ formatObservation(observation) }}
                 </p>
 
-                <p class="mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
+                <p class="m-0 mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
                 <details class="mt-3">
                   <summary class="cursor-pointer text-xs font-medium text-ink-3">
                     {{ copy.evidenceDetails }}
@@ -1041,50 +1075,46 @@ watch(
               </div>
             </div>
           </details>
-          <details class="mt-3 text-xs text-ink-3" data-testid="persona-technical-details">
+          <details class="text-xs text-ink-3" data-testid="persona-technical-details">
             <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
             <p class="mt-2">{{ persona.profile.kind }} · {{ persona.persona_id }}</p>
           </details>
 
           <div
             v-if="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'"
-            class="mt-4 border-t border-line pt-4"
+            class="grid gap-3 border-t border-line pt-4"
           >
             <label
-              class="block text-sm font-medium text-ink-2"
+              class="grid gap-2 text-sm font-medium text-ink-2"
               :for="`persona-reason-${persona.persona_id}`"
             >
               {{ copy.rejectionReason }}
+              <textarea
+                :id="`persona-reason-${persona.persona_id}`"
+                v-model="personaReasons[persona.persona_id]"
+                rows="2"
+                class="w-full rounded-control border border-field bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none"
+                :placeholder="copy.reasonPlaceholder"
+              />
             </label>
 
-            <textarea
-              :id="`persona-reason-${persona.persona_id}`"
-              v-model="personaReasons[persona.persona_id]"
-              rows="2"
-              class="mt-2 w-full rounded-control border border-field px-3 py-2 text-sm text-ink shadow-sm focus:border-action focus:ring-2 focus:ring-action-soft-line focus:outline-none"
-              :placeholder="copy.reasonPlaceholder"
-            />
-
-            <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-control bg-ok px-3 py-2 text-sm font-semibold text-white hover:bg-ok-dark disabled:opacity-50"
+            <div class="flex flex-wrap gap-2">
+              <UiButton
                 :disabled="store.isBusy"
                 data-testid="confirm-persona"
                 @click="decidePersona(persona, 'CONFIRM')"
               >
                 {{ copy.confirm }}
-              </button>
+              </UiButton>
 
-              <button
-                type="button"
-                class="rounded-control border border-fail-line bg-white px-3 py-2 text-sm font-semibold text-fail-dark hover:bg-fail-bg disabled:opacity-50"
+              <UiButton
+                variant="secondary"
                 :disabled="store.isBusy || personaReason(persona.persona_id).trim().length === 0"
                 data-testid="reject-persona"
                 @click="decidePersona(persona, 'REJECT')"
               >
                 {{ copy.reject }}
-              </button>
+              </UiButton>
             </div>
           </div>
         </article>
@@ -1101,15 +1131,13 @@ watch(
               : "The brief or team changed: generate and approve a new User Twin version before continuing."
           }}
         </p>
-        <button
-          type="button"
-          class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white transition hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50"
+        <UiButton
           :disabled="!canGenerateTwins || store.isBusy"
           data-testid="generate-twins"
           @click="generateTwins"
         >
           {{ copy.generateTwins }}
-        </button>
+        </UiButton>
 
         <p class="mt-2 text-xs text-ink-3">
           {{ copy.generationHint }}
@@ -1144,60 +1172,82 @@ watch(
         </details>
       </div>
 
-      <div class="mt-5 grid gap-5">
-        <article v-for="twin in twins" :key="twin.id" class="rounded-panel border border-line p-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h4>
-                <TwinIdentity
-                  :identity-key="twin.profile.persona_reference.persona_id"
-                  :name="twin.profile.name"
-                  :description="profileDescription(twin.profile.observations)"
-                  :locale="locale"
-                />
-              </h4>
-              <p class="mt-2 text-xs font-medium text-ink-2">{{ lifecycleLabel(twin) }}</p>
+      <div class="mt-5 grid gap-5 md:grid-cols-2">
+        <article
+          v-for="twin in twins"
+          :key="twin.id"
+          class="grid content-start gap-4 rounded-card border border-line bg-surface p-5 shadow-card"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <h4 class="m-0 min-w-0">
+              <TwinIdentity
+                :identity-key="twin.profile.persona_reference.persona_id"
+                :name="twin.profile.name"
+                :description="profileDescription(twin.profile.observations)"
+                :locale="locale"
+              />
+            </h4>
 
-              <details class="mt-2 text-xs text-ink-3" data-testid="twin-technical-details">
-                <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-                <dl class="mt-2 grid gap-1 text-xs text-ink-2">
-                  <div>
-                    <dt class="inline font-semibold">{{ copy.persistedLifecycle }}:</dt>
-
-                    <dd class="inline">
-                      {{ twin.profile.validation_status }}
-                    </dd>
-                  </div>
-
-                  <div>
-                    <dt class="inline font-semibold">{{ copy.effectiveLifecycle }}:</dt>
-
-                    <dd class="inline" data-testid="effective-lifecycle">
-                      {{ effectiveLifecycle(twin) }}
-                    </dd>
-                  </div>
-                </dl>
-              </details>
+            <div class="flex flex-wrap items-center gap-2">
+              <UiClaimLabel kind="hypothesis" />
+              <span
+                class="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2"
+              >
+                {{ lifecycleLabel(twin) }}
+              </span>
             </div>
           </div>
 
+          <dl v-if="keyFacts(twin.profile.observations).length > 0" class="m-0 grid gap-2.5">
+            <div
+              v-for="observation in keyFacts(twin.profile.observations)"
+              :key="observation.observation_key"
+              class="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <dt class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                {{ fieldLabel(observationField(observation) as UserTwinField) }}
+              </dt>
+              <dd class="m-0 text-sm leading-6 text-ink-2">{{ formatObservation(observation) }}</dd>
+            </div>
+          </dl>
+
+          <details class="text-xs text-ink-3" data-testid="twin-technical-details">
+            <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
+            <dl class="mt-2 grid gap-1 text-xs text-ink-2">
+              <div>
+                <dt class="inline font-semibold">{{ copy.persistedLifecycle }}:</dt>
+
+                <dd class="inline">
+                  {{ twin.profile.validation_status }}
+                </dd>
+              </div>
+
+              <div>
+                <dt class="inline font-semibold">{{ copy.effectiveLifecycle }}:</dt>
+
+                <dd class="inline" data-testid="effective-lifecycle">
+                  {{ effectiveLifecycle(twin) }}
+                </dd>
+              </div>
+            </dl>
+          </details>
+
           <details
-            class="mt-4"
             :open="!store.readiness?.approved_current_snapshot"
             data-testid="twin-profile-details"
           >
             <summary class="cursor-pointer text-sm font-semibold text-ink-2">
               {{ copy.profileDetails }}
             </summary>
-            <div class="mt-3 grid gap-4">
+            <div class="mt-3 grid gap-3">
               <article
                 v-for="observation in twin.profile.observations"
                 :key="observation.observation_key"
-                class="rounded-panel border border-line bg-surface-2 p-4"
+                class="rounded-control bg-surface-2 p-3"
               >
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h5 class="text-sm font-semibold text-ink">
+                  <div class="min-w-0">
+                    <h5 class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
                       {{
                         observationField(observation) !== null
                           ? fieldLabel(observationField(observation) as UserTwinField)
@@ -1205,28 +1255,27 @@ watch(
                       }}
                     </h5>
 
-                    <p class="mt-1 text-sm leading-6 whitespace-pre-line text-ink-2">
+                    <p class="m-0 mt-1 text-sm leading-6 whitespace-pre-line text-ink">
                       {{ formatObservation(observation) }}
                     </p>
                   </div>
 
-                  <button
+                  <UiButton
                     v-if="observationField(observation) !== null"
-                    type="button"
-                    class="shrink-0 rounded-control border border-field bg-white px-3 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-3 disabled:opacity-50"
+                    variant="secondary"
                     :disabled="store.isBusy"
                     data-testid="edit-twin-observation"
                     @click="startRevision(twin, observation)"
                   >
                     {{ copy.edit }}
-                  </button>
+                  </UiButton>
 
                   <span v-else class="text-xs text-ink-3">
                     {{ copy.observationUnavailable }}
                   </span>
                 </div>
 
-                <p class="mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
+                <p class="m-0 mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
                 <details class="mt-3">
                   <summary class="cursor-pointer text-xs font-medium text-ink-3">
                     {{ copy.evidenceDetails }}
@@ -1311,22 +1360,13 @@ watch(
         </p>
 
         <div class="mt-4 flex flex-wrap gap-2">
-          <button
-            type="submit"
-            class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white hover:bg-action-hover disabled:opacity-50"
-            :disabled="store.isBusy"
-            data-testid="submit-revision"
-          >
+          <UiButton type="submit" :disabled="store.isBusy" data-testid="submit-revision">
             {{ copy.proposeRevision }}
-          </button>
+          </UiButton>
 
-          <button
-            type="button"
-            class="rounded-control border border-field px-4 py-2 text-sm font-semibold text-ink-2 hover:bg-white"
-            @click="cancelRevision"
-          >
+          <UiButton variant="secondary" @click="cancelRevision">
             {{ copy.cancel }}
-          </button>
+          </UiButton>
         </div>
       </form>
     </section>

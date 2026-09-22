@@ -248,11 +248,8 @@ describe("ProjectTeamSelectionFlow", () => {
     expect(moreRoles.attributes("aria-expanded")).toBe("false");
     await moreRoles.trigger("click");
     expect(
-      (
-        wrapper
-          .get('[data-testid="role-MOBILE_ENGINEER"]')
-          .element.closest("article") as HTMLElement
-      ).style.display,
+      (wrapper.get('[data-testid="role-MOBILE_ENGINEER"]').element.closest("li") as HTMLElement)
+        .style.display,
     ).toBe("");
     expect(moreRoles.attributes("aria-expanded")).toBe("true");
 

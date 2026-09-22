@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
+import { createAppI18n } from "@/i18n";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { useArchitectureStore } from "@/stores/architecture";
@@ -46,7 +47,7 @@ function setup(approved = true) {
         ],
       },
     },
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia, createAppI18n("en")] },
   });
   return { wrapper, api, webReload, jvmReload };
 }

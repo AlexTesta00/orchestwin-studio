@@ -5,6 +5,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectUserModelingFlow from "./ProjectUserModelingFlow.vue";
+import { createAppI18n } from "@/i18n";
 
 import { userModelingApi } from "../api/userModeling";
 
@@ -432,6 +433,9 @@ const proposedDiff: UserTwinProfileDiffPayload = {
 
 function mountFlow() {
   return mount(ProjectUserModelingFlow, {
+    global: {
+      plugins: [createAppI18n("en")],
+    },
     props: {
       projectId: PROJECT_ID,
 
