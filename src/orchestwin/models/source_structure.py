@@ -1,6 +1,6 @@
 import re
 
-from orchestwin.models.source_assembly import assemble_static_module
+from orchestwin.models.source_assembly import RESET_FUNCTION, assemble_static_module
 from orchestwin.models.source_syntax import SourceSyntaxError
 
 PARSER = "static-module-contract"
@@ -91,6 +91,11 @@ def _names(fragment):
     return names
 
 
+def exported_names(content):
+    match = _EXPORTS.search(_blank(content))
+    return (_names(match.group(1)) or set()) if match else set()
+
+
 def validate_static_module_contract(content):
     blanked = _blank(content)
     declared = set()
@@ -103,12 +108,13 @@ def validate_static_module_contract(content):
             continue
         function = _FUNCTION.match(text)
         if function:
-            if _DOM.search(statement):
+            touched = _DOM.search(statement)
+            if touched:
                 raise SourceSyntaxError(
                     reason="MODULE_FUNCTION_TOUCHES_DOM",
                     line=line,
                     parser=PARSER,
-                    detail=function.group(2),
+                    detail=function.group(2) + " uses " + touched.group(1),
                 )
             declared.add(function.group(2))
             continue
@@ -203,9 +209,11 @@ def _mutation(name):
     )
 
 
-_CALL = re.compile(r"\b([A-Za-z_$][\w$]*)\s*\(")
+_CALL = re.compile(r"(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(")
 _DECLARED = re.compile(r"\b(?:function\s+|const\s+|let\s+|var\s+)([A-Za-z_$][\w$]*)")
 _PARAMETER = re.compile(r"[A-Za-z_$][\w$]*")
+_HELPER_PARAMETERS = re.compile(r"function\s+[A-Za-z_$][\w$]*\s*\(([^)]*)\)")
+_OBJECT_KEY = re.compile(r"[{,]\s*([A-Za-z_$][\w$]*)\s*:")
 
 
 def _part(value, key):
@@ -213,6 +221,16 @@ def _part(value, key):
 
 
 _NESTED_READY = re.compile(r"DOMContentLoaded|addEventListener\(\s*['\"]load['\"]|\.onload\s*=")
+
+
+def validate_reserved_names(parts):
+    declared = (
+        [_part(declaration, "name") for declaration in _part(parts, "shared_state")]
+        + _DECLARED.findall(_blank(_part(parts, "private_helpers")))
+        + [_part(function, "name") for function in _part(parts, "functions")]
+    )
+    if RESET_FUNCTION in declared:
+        raise SourceSyntaxError(reason="RESERVED_MODULE_NAME", parser=PARSER, detail=RESET_FUNCTION)
 
 
 def validate_browser_setup(parts):
@@ -231,7 +249,11 @@ def validate_browser_setup(parts):
 
 def _call_line(parts, name, callee):
     content = _blank(assemble_static_module(parts))
-    header = content.find("function " + name + "(")
+    header = (
+        content.find(_blank(_part(parts, "private_helpers")))
+        if name == "private_helpers"
+        else content.find("function " + name + "(")
+    )
     if header < 0:
         return None
     position = content.find(callee + "(", header)
@@ -242,7 +264,19 @@ def _call_line(parts, name, callee):
     return content.count("\n", 0, position) + 1
 
 
-_IDENTIFIER_USE = re.compile(r"\b([A-Za-z_$][\w$]*)\b")
+_IDENTIFIER_USE = re.compile(r"(?<![.\w$])([A-Za-z_$][\w$]*)")
+
+
+def _scopes(parts):
+    helpers = _blank(_part(parts, "private_helpers"))
+    if helpers.strip():
+        yield "private_helpers", helpers, ", ".join(_HELPER_PARAMETERS.findall(helpers))
+    for function in _part(parts, "functions"):
+        yield (
+            _part(function, "name"),
+            _blank(_part(function, "body")),
+            _part(function, "parameters"),
+        )
 
 
 def validate_core_calls(parts):
@@ -255,14 +289,10 @@ def validate_core_calls(parts):
     )
     offences = []
     first_line = None
-    for function in functions:
-        name = _part(function, "name")
-        body = _blank(_part(function, "body"))
-        local = set(_DECLARED.findall(body)) | set(
-            _PARAMETER.findall(_part(function, "parameters"))
-        )
+    for name, body, parameters in _scopes(parts):
+        local = set(_DECLARED.findall(body)) | set(_PARAMETER.findall(parameters))
         called = set(_CALL.findall(body))
-        used = set(_IDENTIFIER_USE.findall(body)) - called
+        used = set(_IDENTIFIER_USE.findall(body)) - called - set(_OBJECT_KEY.findall(body))
         excluded = module_names | local
         calls = sorted(item for item in called if item in browser_names and item not in excluded)
         uses = sorted(item for item in used if item in browser_names and item not in excluded)
@@ -299,6 +329,7 @@ _TEST_DOM = re.compile(
 _TEST_REQUIRE = re.compile(r"require\(\s*['\"]\./app\.js['\"]\s*\)")
 _TEST_FRAMEWORK = re.compile(r"require\(\s*['\"]node:test['\"]\s*\)")
 _TEST_ASSERTION = re.compile(r"\bassert\.([A-Za-z_$][\w$]*)\s*\(")
+_TEST_STATE_RESET = re.compile(r"\bbeforeEach\s*\([^;]*?\b" + RESET_FUNCTION + r"\b")
 NODE_ASSERTIONS = frozenset(
     {
         "ok",
@@ -323,7 +354,7 @@ NODE_ASSERTIONS = frozenset(
 )
 
 
-def validate_node_test_contract(content):
+def validate_node_test_contract(content, *, stateful=False):
     blanked = _blank(content)
     if _TEST_FRAMEWORK.search(content) is None:
         raise SourceSyntaxError(reason="NODE_TEST_FRAMEWORK_MISSING", parser=PARSER)
@@ -335,6 +366,10 @@ def validate_node_test_contract(content):
             reason="NODE_TEST_REFERENCES_DOM",
             line=blanked.count("\n", 0, match.start()) + 1,
             parser=PARSER,
+        )
+    if stateful and _TEST_STATE_RESET.search(blanked) is None:
+        raise SourceSyntaxError(
+            reason="NODE_TEST_MISSING_STATE_RESET", parser=PARSER, detail=RESET_FUNCTION
         )
     for call in _TEST_ASSERTION.finditer(blanked):
         if call.group(1) not in NODE_ASSERTIONS:

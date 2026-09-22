@@ -3,6 +3,8 @@ import pytest
 from orchestwin.models.source_structure import (
     validate_browser_setup,
     validate_core_calls,
+    validate_node_test_contract,
+    validate_reserved_names,
     validate_shared_state_updates,
     validate_static_module_contract,
 )
@@ -123,7 +125,7 @@ def test_exported_functions_must_not_touch_the_dom():
         validate_static_module_contract(content)
     assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
     assert failure.value.diagnostic["line"] == 2
-    assert failure.value.diagnostic["detail"] == "render"
+    assert failure.value.diagnostic["detail"] == "render uses document"
 
 
 def test_exported_functions_must_not_reach_the_dom_through_helpers():
@@ -136,7 +138,7 @@ def test_exported_functions_must_not_reach_the_dom_through_helpers():
         validate_static_module_contract(content)
     assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
     assert failure.value.diagnostic["line"] == 2
-    assert failure.value.diagnostic["detail"] == "showError"
+    assert failure.value.diagnostic["detail"] == "showError uses document"
 
 
 def test_top_level_dom_helpers_are_rejected_even_when_only_the_guard_calls_them():
@@ -151,7 +153,7 @@ def test_top_level_dom_helpers_are_rejected_even_when_only_the_guard_calls_them(
     with pytest.raises(SourceSyntaxError) as failure:
         validate_static_module_contract(content)
     assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
-    assert failure.value.diagnostic["detail"] == "render"
+    assert failure.value.diagnostic["detail"] == "render uses document"
 
 
 def test_dom_helpers_inside_the_document_guard_pass():
@@ -285,6 +287,53 @@ def _declaration(kind, name, initializer):
     return {"kind": kind, "name": name, "initializer": initializer}
 
 
+STATEFUL_TEST = (
+    "const test = require('node:test');\n"
+    "const assert = require('node:assert/strict');\n"
+    "const { addItem, resetSharedState } = require('./app.js');\n"
+)
+
+
+@pytest.mark.parametrize(
+    "registration",
+    [
+        "test.beforeEach(resetSharedState);\n",
+        "test.beforeEach(() => resetSharedState());\n",
+        "test.beforeEach(() => {\n  resetSharedState();\n});\n",
+    ],
+)
+def test_stateful_module_tests_register_the_platform_reset(registration):
+    content = (
+        STATEFUL_TEST + registration + "test('adds', () => { assert.ok(addItem('a').ok); });\n"
+    )
+    validate_node_test_contract(content, stateful=True)
+
+
+def test_stateful_module_tests_without_the_reset_are_rejected():
+    content = STATEFUL_TEST + "test('adds', () => { assert.ok(addItem('a').ok); });\n"
+    validate_node_test_contract(content)
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_node_test_contract(content, stateful=True)
+    assert failure.value.diagnostic["reason"] == "NODE_TEST_MISSING_STATE_RESET"
+    assert failure.value.diagnostic["detail"] == "resetSharedState"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"shared_state": [_declaration("let", "resetSharedState", "0")]},
+        {"private_helpers": "function resetSharedState() {\n  return 1;\n}"},
+        {"functions": [{"name": "resetSharedState", "parameters": "", "body": "  return 1;"}]},
+    ],
+)
+def test_reserved_reset_name_is_rejected_in_every_part(overrides):
+    parts = {**_parts("  return true;", "  wire();"), **overrides}
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_reserved_names(parts)
+    assert failure.value.diagnostic["reason"] == "RESERVED_MODULE_NAME"
+    validate_reserved_names(_parts("  return true;", "  wire();"))
+
+
 @pytest.mark.parametrize(
     "shared_state,bodies",
     [
@@ -388,13 +437,41 @@ def test_browser_setup_nesting_a_ready_listener_is_rejected(browser_setup):
     with pytest.raises(SourceSyntaxError) as failure:
         validate_browser_setup(parts)
     assert failure.value.diagnostic["reason"] == "BROWSER_SETUP_NESTS_DOM_READY"
-    assert failure.value.diagnostic["line"] == 10
+    assert failure.value.diagnostic["line"] == 14
 
 
 def test_browser_setup_with_direct_listeners_passes():
     validate_browser_setup(
         _parts("  return true;", "  document.getElementById('b').addEventListener('click', wire);")
     )
+
+
+def test_private_helper_calling_a_browser_helper_is_rejected():
+    parts = _parts(
+        "  return clean(amount);",
+        BROWSER,
+        "function clean(value) {\n  showErrorMessage(value);\n  return String(value).trim();\n}",
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_core_calls(parts)
+    assert failure.value.diagnostic["detail"] == "private_helpers calls showErrorMessage"
+    assert failure.value.diagnostic["line"] == 4
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "  return { error: record.error, screen: 1 };",
+        "  return items.map(function (item) { return item.error; });",
+        "  return record?.error;",
+    ],
+)
+def test_property_access_and_object_keys_are_not_browser_uses(body):
+    browser_setup = (
+        BROWSER
+        + "\nconst error = document.getElementById('e');\nconst screen = document.getElementById('s');"
+    )
+    validate_core_calls(_parts(body, browser_setup))
 
 
 def test_core_function_offences_are_listed_exhaustively_with_the_first_line():
