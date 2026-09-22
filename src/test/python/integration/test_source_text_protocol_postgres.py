@@ -33,10 +33,16 @@ def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_pro
 ):
     versions = artifacts()
     output = source_output(ExecutionTarget.WEB_STATIC)
-    shared_state = "\n".join(f"const reserved{number} = 'città {number}';" for number in range(72))
-    shared_state += "\n" if trailing_newline else ""
+    shared_state = [
+        {"kind": "const", "name": f"reserved{number}", "initializer": f"'città {number}'"}
+        for number in range(4)
+    ]
+    helpers = "\n".join(
+        f"function helper{number}() {{\n  return 'città {number}';\n}}" for number in range(24)
+    ) + ("\n" if trailing_newline else "")
     output["files"][0] = app_file(
         shared_state=shared_state,
+        private_helpers=helpers,
         functions=[{"name": "value", "parameters": "", "body": "  return 'città';"}],
     )
     content = output["files"][0]["content"]
@@ -81,7 +87,7 @@ def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_pro
         with engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0045_source_module_parts"
+                == "0046_source_state_declarations"
             )
             assert (
                 connection.scalar(sa.text("SELECT count(*) FROM model_proposal_generations"))

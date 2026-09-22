@@ -9,7 +9,12 @@ ROUTE_ID = "root"
 TEXT_SAMPLE = "Giulia Verdi"
 _NUMERIC = re.compile(
     r"(amount|price|prezzo|import|quant|qty|number|numero|count|age|anni|eta|year|score|total|"
-    r"totale|percent|rate|tasso|length|width|height|weight|peso|hours|ore|minutes|minuti|days|giorni)",
+    r"totale|percent|rate|tasso|length|width|height|weight|peso|hours|ore|minutes|minuti|days|giorni|"
+    r"km|chilometr|kilomet|migli|mile|metr|distan|valore|value|euro|eur\b|litr|liter|grad|degree|"
+    r"temperat|speed|velocit|pace|calor|volume|area|larghezza|lunghezza|altezza|profond|depth|"
+    r"conto|bill|mancia|tip\b|sconto|discount|tax|budget|cost|salar|stipendio|income|reddito|"
+    r"spesa|spend|ratio|rapport|fattore|factor|coefficient|scala|scale|porzion|portion|"
+    r"capacit|capacity|size|dimension|misura|measure|unit|units|units)",
     re.IGNORECASE,
 )
 _EMAIL = re.compile(r"(mail)", re.IGNORECASE)

@@ -7,7 +7,7 @@ from orchestwin.models.source_structure import validate_static_module_contract
 from orchestwin.projects.requirements_primitives import canonical_json
 
 PARTS = {
-    "shared_state": "const items = [];",
+    "shared_state": [{"kind": "const", "name": "items", "initializer": "[]"}],
     "private_helpers": "function clean(name) {\n  return String(name).trim();\n}",
     "functions": [
         {
@@ -39,7 +39,7 @@ def test_assembly_places_parts_between_fixed_guards_in_a_deterministic_layout():
 
 
 def test_empty_sections_leave_no_blank_prefix():
-    parts = {**PARTS, "shared_state": "", "private_helpers": ""}
+    parts = {**PARTS, "shared_state": [], "private_helpers": ""}
     assert assemble_static_module(parts).startswith("function addItem(name) {\n")
 
 
@@ -59,13 +59,23 @@ def test_model_output_and_plain_mapping_assemble_identically():
         lambda parts: parts["functions"][0].update(parameters="name: string, amount: number"),
         lambda parts: parts["functions"][0].update(body="  return 1;\r\n"),
         lambda parts: parts.update(browser_setup=""),
-        lambda parts: parts.update(shared_state="\x01"),
+        lambda parts: parts.update(private_helpers="\x01"),
+        lambda parts: parts["shared_state"].append(
+            {"kind": "const", "name": "input", "initializer": "document.getElementById('x')"}
+        ),
+        lambda parts: parts["shared_state"].append(
+            {"kind": "var", "name": "x", "initializer": "0"}
+        ),
+        lambda parts: parts["shared_state"].append(
+            {"kind": "let", "name": "x", "initializer": "a + 1"}
+        ),
         lambda parts: parts.update(content="complete file"),
     ],
 )
 def test_schema_pins_exported_names_order_and_bounded_text(mutation):
     parts = {
         **PARTS,
+        "shared_state": [dict(declaration) for declaration in PARTS["shared_state"]],
         "functions": [dict(function) for function in PARTS["functions"]],
     }
     mutation(parts)

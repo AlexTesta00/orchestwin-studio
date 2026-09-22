@@ -1,5 +1,6 @@
 import re
 
+from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_syntax import SourceSyntaxError
 
 PARSER = "static-module-contract"
@@ -189,8 +190,7 @@ def _function_body(blanked, name):
     return match.start(), blanked[index:]
 
 
-_STATE_DECLARATION = re.compile(r"^\s*(const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(.*)$", re.M)
-_MUTABLE_INITIALIZER = re.compile(r"^(\[|\{|new\s+(Map|Set|Array|Object)\b|Object\.create\()")
+_MUTABLE_INITIALIZERS = frozenset({"[]", "{}", "new Map()", "new Set()"})
 _MUTATION_METHODS = "push|pop|shift|unshift|splice|sort|reverse|fill|set|delete|clear|add"
 
 
@@ -203,13 +203,75 @@ def _mutation(name):
     )
 
 
+_CALL = re.compile(r"\b([A-Za-z_$][\w$]*)\s*\(")
+_DECLARED = re.compile(r"\b(?:function\s+|const\s+|let\s+|var\s+)([A-Za-z_$][\w$]*)")
+_PARAMETER = re.compile(r"[A-Za-z_$][\w$]*")
+
+
+def _part(value, key):
+    return value[key] if isinstance(value, dict) else getattr(value, key)
+
+
+_NESTED_READY = re.compile(r"DOMContentLoaded|addEventListener\(\s*['\"]load['\"]|\.onload\s*=")
+
+
+def validate_browser_setup(parts):
+    browser_setup = _part(parts, "browser_setup")
+    match = _NESTED_READY.search(browser_setup)
+    if match is None:
+        return
+    content = assemble_static_module(parts)
+    offset = content.find(browser_setup)
+    raise SourceSyntaxError(
+        reason="BROWSER_SETUP_NESTS_DOM_READY",
+        line=content.count("\n", 0, offset + match.start()) + 1 if offset >= 0 else None,
+        parser=PARSER,
+    )
+
+
+def _call_line(parts, name, callee):
+    content = _blank(assemble_static_module(parts))
+    header = content.find("function " + name + "(")
+    if header < 0:
+        return None
+    position = content.find(callee + "(", header)
+    if position < 0:
+        return None
+    return content.count("\n", 0, position) + 1
+
+
+def validate_core_calls(parts):
+    functions = _part(parts, "functions")
+    browser_names = set(_DECLARED.findall(_blank(_part(parts, "browser_setup"))))
+    module_names = (
+        {_part(declaration, "name") for declaration in _part(parts, "shared_state")}
+        | set(_DECLARED.findall(_blank(_part(parts, "private_helpers"))))
+        | {_part(function, "name") for function in functions}
+    )
+    for function in functions:
+        body = _blank(_part(function, "body"))
+        local = set(_DECLARED.findall(body)) | set(
+            _PARAMETER.findall(_part(function, "parameters"))
+        )
+        for callee in sorted(set(_CALL.findall(body))):
+            if callee in browser_names and callee not in module_names and callee not in local:
+                raise SourceSyntaxError(
+                    reason="MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+                    line=_call_line(parts, _part(function, "name"), callee),
+                    parser=PARSER,
+                    detail=_part(function, "name") + " calls " + callee,
+                )
+
+
 def validate_shared_state_updates(shared_state, bodies):
     blanked_bodies = _blank(bodies)
-    for match in _STATE_DECLARATION.finditer(_blank(shared_state)):
-        keyword, name, initializer = match.groups()
-        if keyword == "const" and not _MUTABLE_INITIALIZER.match(initializer.strip()):
-            continue
-        if _mutation(name).search(blanked_bodies) is None:
+    for declaration in shared_state:
+        name = _part(declaration, "name")
+        mutable = (
+            _part(declaration, "kind") == "let"
+            or _part(declaration, "initializer") in _MUTABLE_INITIALIZERS
+        )
+        if mutable and _mutation(name).search(blanked_bodies) is None:
             raise SourceSyntaxError(reason="SHARED_STATE_NEVER_UPDATED", parser=PARSER, detail=name)
 
 

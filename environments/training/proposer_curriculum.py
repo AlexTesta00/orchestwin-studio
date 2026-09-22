@@ -647,7 +647,7 @@ def module_parts(family):
         "    });"
     )
     return {
-        "shared_state": "",
+        "shared_state": [],
         "private_helpers": "",
         "functions": module_functions(family),
         "browser_setup": browser_setup,

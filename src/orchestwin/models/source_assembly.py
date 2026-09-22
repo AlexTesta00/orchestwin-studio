@@ -14,10 +14,21 @@ def _field(value, key):
 
 def assemble_static_module(parts):
     text = ""
-    for key in ("shared_state", "private_helpers"):
-        section = _field(parts, key)
-        if section:
-            text += section + "\n\n"
+    declarations = _field(parts, "shared_state")
+    if declarations:
+        text += "\n".join(
+            _field(declaration, "kind")
+            + " "
+            + _field(declaration, "name")
+            + " = "
+            + _field(declaration, "initializer")
+            + ";"
+            for declaration in declarations
+        )
+        text += "\n\n"
+    helpers = _field(parts, "private_helpers")
+    if helpers:
+        text += helpers + "\n\n"
     functions = _field(parts, "functions")
     for function in functions:
         text += (

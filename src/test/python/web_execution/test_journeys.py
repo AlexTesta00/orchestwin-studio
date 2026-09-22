@@ -122,9 +122,14 @@ def test_journey_is_not_derivable_without_an_entry_transition():
 @pytest.mark.parametrize(
     "kind,field_name,content,options,expected",
     [
-        ("TEXT_INPUT", "guest_name", "Nome ospite", (), "Giulia Verdi"),
         ("TEXT_INPUT", "email", "E-mail", (), "giulia.verdi@example.com"),
         ("TEXT_INPUT", "amount", "Importo", (), "12"),
+        ("TEXT_INPUT", "kilometers", "Chilometri", (), "12"),
+        ("TEXT_INPUT", "distanza_km", "Distanza", (), "12"),
+        ("TEXT_INPUT", "bill_total", "Conto in euro", (), "12"),
+        ("TEXT_INPUT", "temperature", "Gradi", (), "12"),
+        ("TEXT_INPUT", "guest_name", "Nome ospite", (), "Giulia Verdi"),
+        ("TEXT_INPUT", "book_title", "Titolo del libro", (), "Giulia Verdi"),
         ("TEXT_INPUT", "start_date", "Data inizio", (), "2026-10-01"),
         ("SELECT", "mode", "Operazione", ("Area", "Perimetro"), "Area"),
     ],

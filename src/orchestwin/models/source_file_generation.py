@@ -36,6 +36,8 @@ from orchestwin.models.source_proposals import (
     file_entry,
 )
 from orchestwin.models.source_structure import (
+    validate_browser_setup,
+    validate_core_calls,
     validate_node_test_contract,
     validate_shared_state_updates,
     validate_static_module_contract,
@@ -140,6 +142,15 @@ class SourceText(_Output):
 PART_TEXT = r"^[^\x00-\x08\x0b-\x1f\x7f]*$"
 
 
+STATE_INITIALIZER = r"^(\[\]|\{\}|new Map\(\)|new Set\(\)|null|true|false|-?[0-9]+(\.[0-9]+)?|'[^'\\\x00-\x1f\x7f]*')$"
+
+
+class StateDeclaration(_Output):
+    kind: Literal["const", "let"]
+    name: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+    initializer: str = Field(min_length=1, max_length=200, pattern=STATE_INITIALIZER)
+
+
 class ModuleFunction(_Output):
     name: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z_$][A-Za-z0-9_$]*$")
     parameters: str = Field(max_length=200, pattern=r"^[^\x00-\x1f\x7f(){};:]*$")
@@ -147,7 +158,7 @@ class ModuleFunction(_Output):
 
 
 class ModuleParts(_Output):
-    shared_state: str = Field(max_length=4000, pattern=PART_TEXT)
+    shared_state: tuple[StateDeclaration, ...] = Field(max_length=8)
     private_helpers: str = Field(max_length=8000, pattern=PART_TEXT)
     functions: tuple[ModuleFunction, ...] = Field(min_length=1, max_length=12)
     browser_setup: str = Field(min_length=1, max_length=12000, pattern=PART_TEXT)
@@ -498,7 +509,7 @@ def _static_file_instruction(planned):
             "The platform assembles app.js from the parts you return, in this order: shared_state, private_helpers, one function declaration per functions entry, "
             "then a document guard if (typeof document !== 'undefined') { document.addEventListener('DOMContentLoaded', function () { browser_setup }); } "
             "and finally a module guard exporting exactly the functions entries. Never write those guards, module.exports, require, import or export yourself. "
-            "shared_state: module-scope const or let declarations for state kept across calls, such as const items = [];, or an empty string when the module is stateless; no other statement. "
+            "shared_state: the list of module-scope declarations for state kept across calls, each with kind const or let, a name and a literal initializer such as [], {}, 0, '' or new Map(); an empty list when the module is stateless. Constants such as a conversion factor are const with a number literal. "
             "Records live only in these in-memory declarations for the page lifetime; localStorage and sessionStorage are forbidden everywhere. "
             "private_helpers: additional top-level pure function declarations used by the exported functions, or an empty string. "
             "functions: one entry per exported name in the given order; parameters lists only the parameter names separated by commas, without parentheses, types or annotations, such as name or amount, percent; "
@@ -805,6 +816,8 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     if item.normalized_path == "app.js":
                         validate_static_module_contract(item.content)
                         if parts_type:
+                            validate_core_calls(output)
+                            validate_browser_setup(output)
                             validate_shared_state_updates(
                                 output.shared_state,
                                 "\n".join(
@@ -964,16 +977,25 @@ _SYNTAX_REMEDIES = {
         "The function named in diagnostic.detail reads a browser global: keep every functions entry and private_helpers declaration pure, "
         "move element lookups, rendering and screen switching into browser_setup, and keep records in a shared_state array instead of localStorage or sessionStorage. "
     ),
+    "BROWSER_SETUP_NESTS_DOM_READY": (
+        "browser_setup already runs inside the DOMContentLoaded handler that the platform writes: put the element lookups, helper functions and listeners directly in browser_setup, "
+        "and never register another DOMContentLoaded or load listener around them, because a nested listener never fires and no control gets wired. "
+    ),
+    "MODULE_FUNCTION_CALLS_BROWSER_HELPER": (
+        "The core function named in diagnostic.detail calls a helper that exists only inside browser_setup, on the reported line of the assembled module: "
+        "core functions run in Node without the browser, so remove that call, keep the declared return type by returning false or the error result, "
+        "and let the click handler in browser_setup show or hide the message after calling the core. "
+    ),
     "SHARED_STATE_NEVER_UPDATED": (
         "shared_state declares the variable named in diagnostic.detail but no functions entry or private helper changes it: "
         "the exported function that adds, registers or records must push the validated record into it or assign the new value, "
         "then return a result object with the stored record and count, and the reset function must clear it. "
     ),
     "MODULE_SCOPE_DOM_ACCESS": (
-        "shared_state and private_helpers never read a browser global: move that code into browser_setup. "
+        "private_helpers never reads a browser global: move that code into browser_setup. "
     ),
     "MODULE_SCOPE_SIDE_EFFECT": (
-        "shared_state holds only const or let declarations and private_helpers only function declarations: "
+        "private_helpers holds only function declarations: "
         "move every other statement into a function body or browser_setup. "
     ),
     "MISSING_GUARDED_MODULE_EXPORTS": (

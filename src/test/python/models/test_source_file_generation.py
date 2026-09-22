@@ -28,7 +28,7 @@ from src.test.python.models.test_proposal_evidence import Command, MemoryEvidenc
 from src.test.python.models.test_source_proposals import context, output
 
 APP_PARTS = {
-    "shared_state": "",
+    "shared_state": [],
     "private_helpers": "",
     "functions": [{"name": "value", "parameters": "", "body": "  return 3;"}],
     "browser_setup": "  document.title = String(value());",
@@ -47,7 +47,7 @@ def app_file(**overrides):
 
 def broken(value, text):
     if "functions" in value:
-        return {**value, "shared_state": text}
+        return {**value, "private_helpers": text}
     return {"content": text}
 
 
@@ -156,7 +156,10 @@ def complete_output():
 def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
     payload["files"][0] = app_file(
-        shared_state='const label = "è";\nconst s = "\\n";',
+        shared_state=[
+            {"kind": "const", "name": "label", "initializer": "'è'"},
+            {"kind": "const", "name": "s", "initializer": "'-'"},
+        ],
         functions=[{"name": "value", "parameters": "", "body": "  return label + s;"}],
     )
     generator, transport = source_sequence_generator(tmp_path, payload)
@@ -559,7 +562,7 @@ def test_html_is_not_accepted_as_javascript_or_json(tmp_path, path):
     payload["files"] = [f for f in payload["files"] if f["normalized_path"] != path]
     html = "<!DOCTYPE html><html></html>"
     payload["files"].append(
-        {**app_file(shared_state=html), "media_type": "text/plain"}
+        {**app_file(private_helpers=html), "media_type": "text/plain"}
         if path == "app.js"
         else {"normalized_path": path, "media_type": "text/plain", "content": html}
     )

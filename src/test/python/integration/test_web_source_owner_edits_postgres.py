@@ -159,7 +159,7 @@ def test_owner_edit_constraint_migration_roundtrip_without_history(database):
             assert "OWNER_EDIT" in definition
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0045_source_module_parts"
+                == "0046_source_state_declarations"
             )
     finally:
         engine.dispose()
