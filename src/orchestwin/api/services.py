@@ -44,6 +44,7 @@ from orchestwin.api.execution import (
     HighImpactApprovalApiService,
 )
 from orchestwin.api.finalization import FinalizationApiService
+from orchestwin.api.finalization_runtime import SqlAlchemyFinalizationApiService
 from orchestwin.api.governed_jvm_runtime import build_governed_jvm_services
 from orchestwin.api.governed_web_runtime import build_governed_web_services
 from orchestwin.api.jvm_execution import (
@@ -330,6 +331,9 @@ def create_default_runtime(
     )
     governed_jvm = build_governed_jvm_services(database_runtime.session_factory, resolved_settings)
     governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
+    artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
+        database_runtime.session_factory
+    )
 
     return ApplicationRuntime(
         real_model_runtime=real_models,
@@ -355,8 +359,12 @@ def create_default_runtime(
         architecture_revision_service=architecture.revisions,
         architecture_query_service=architecture.queries,
         architecture_gate_service=architecture.gate,
-        artifact_graph_query_service=SqlAlchemyArtifactGraphQueryService(
-            database_runtime.session_factory
+        artifact_graph_query_service=artifact_graph_query_service,
+        finalization_api_service=SqlAlchemyFinalizationApiService(
+            database_runtime.session_factory,
+            content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
+            export_root=resolved_settings.final_export_storage_root,
+            artifact_graph_query_service=artifact_graph_query_service,
         ),
         brownfield_service=brownfield.brownfield,
         execution_query_service=brownfield.execution_queries,
