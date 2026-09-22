@@ -1,4 +1,62 @@
 const messages = {
+  ui: {
+    claim: {
+      hypothesis: "AI proposal, not validated",
+      proof: "Observed in the sandbox",
+    },
+    status: {
+      approved: "Approved",
+      rejected: "Rejected",
+      pending: "Waiting",
+      blocked: "Attention",
+      observed: "Observed in the sandbox",
+      failed: "Not passed",
+      passed: "Passed",
+    },
+    stepper: {
+      label: "Steps",
+      pending: "waiting",
+      approved: "Approved",
+      decision: "Decision {n} of {max}",
+      current: "Current step",
+    },
+    decision: {
+      title: "Your decision",
+      counter: "Decision {n} of {max}",
+      approve: "Approve and continue",
+      reject: "Reject and ask for a revision",
+      noteLabel: "Why do you reject it?",
+      noteError: "Write a reason before sending.",
+      confirm: "Send the rejection",
+      cancel: "Cancel",
+      history: "Decision history",
+      locked: "The decision opens when the step has material to decide on.",
+      busy: "Wait for the current operation to finish.",
+    },
+    running: {
+      cancel: "Cancel",
+      elapsed: "{seconds} s elapsed",
+      proposal: "usually 10-40 seconds",
+      execution: "about 30 seconds",
+      repair: "about 10 seconds",
+    },
+    drawer: {
+      show: "Technical details",
+      hide: "Hide the details",
+    },
+    findings: {
+      chip: "Check not passed",
+      what: "What happened",
+      where: "Where",
+      change: "What the repair changes",
+    },
+    panel: {
+      close: "Close",
+    },
+    state: {
+      loading: "Loading",
+    },
+  },
   app: {
     homeAriaLabel: "OrchesTwin Studio home",
     title: "OrchesTwin Studio",
@@ -22,6 +80,11 @@ const messages = {
     skip: "Skip to main content",
   },
   auth: {
+    points: {
+      one: "Describe the idea in a brief: the agents think, you decide at every step.",
+      two: "Every proposal stays labelled as a hypothesis until the sandbox observes it.",
+      three: "Evidence, decisions and provenance remain yours, exportable at any time.",
+    },
     email: "Email address",
     password: "Password",
     passwordHint: "Use at least 15 characters. Spaces and passphrases are supported.",
@@ -74,6 +137,15 @@ const messages = {
     begin: "Create your first project",
   },
   projects: {
+    new: "New project",
+    cancel: "Cancel",
+    note: "Projects stay still until you move them forward.",
+    table: {
+      name: "Project",
+      mode: "Starting point",
+      updated: "Updated",
+      open: "Open",
+    },
     eyebrow: "Your space",
     title: "Projects",
     description: "Pick up an idea or start something new.",

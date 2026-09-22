@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
 import LanguageSwitcher from "@/components/LanguageSwitcher.vue";
+import UiBrandMark from "@/components/UiBrandMark.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useShellStore } from "@/stores/shell";
 
@@ -30,12 +31,8 @@ const navigationToggleText = computed(() =>
 
 function navigationLinkClasses(isExactActive: boolean): string[] {
   return [
-    "block rounded-lg px-3 py-2 text-sm font-semibold transition-colors duration-150",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900",
-    "focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-    isExactActive
-      ? "bg-slate-900 text-white shadow-sm"
-      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+    "block rounded-control px-3 py-2 text-sm font-semibold transition-colors duration-150",
+    isExactActive ? "bg-surface-3 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
   ];
 }
 
@@ -49,29 +46,32 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 text-slate-950">
+  <div class="min-h-screen bg-page text-ink">
     <a
-      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-lg bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 focus:outline-none"
+      class="fixed top-4 left-4 z-50 -translate-y-32 rounded-control bg-ink px-4 py-3 font-semibold text-white shadow-decision transition-transform focus:translate-y-0"
       data-testid="skip-link"
       href="#main-content"
     >
       {{ t("navigation.skip") }}
     </a>
 
-    <header class="border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+    <header
+      class="sticky top-0 z-40 border-b border-topbar-line bg-surface/78 backdrop-blur-xl backdrop-saturate-150"
+    >
       <div
-        class="mx-auto grid max-w-5xl grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto]"
+        class="mx-auto grid max-w-[1180px] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto]"
       >
         <RouterLink
-          class="rounded-md text-lg font-black tracking-tight text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
+          class="inline-flex items-center gap-2.5 rounded-control text-[15px] font-semibold tracking-block"
           to="/"
           :aria-label="t('app.homeAriaLabel')"
         >
-          {{ t("app.title") }}
+          <UiBrandMark :size="26" />
+          <span>{{ t("app.title") }}</span>
         </RouterLink>
 
         <button
-          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none md:hidden"
+          class="inline-flex min-h-11 items-center justify-center rounded-control border border-button-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 md:hidden"
           type="button"
           aria-controls="primary-navigation"
           :aria-expanded="isNavigationOpen"
@@ -85,7 +85,7 @@ async function logout(): Promise<void> {
         <nav
           id="primary-navigation"
           :class="[
-            'col-span-full w-full flex-col gap-2 md:col-span-1 md:w-auto md:flex-row md:items-center md:justify-self-end',
+            'col-span-full w-full flex-col gap-1 md:col-span-1 md:w-auto md:flex-row md:items-center md:justify-self-end',
             isNavigationOpen ? 'flex' : 'hidden md:flex',
           ]"
           :aria-label="t('navigation.label')"
@@ -140,7 +140,7 @@ async function logout(): Promise<void> {
 
           <button
             v-if="isAuthenticated"
-            class="rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
+            class="rounded-control px-3 py-2 text-left text-sm font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
             type="button"
             :disabled="authenticationStatus === 'loading'"
             data-testid="logout-button"
@@ -153,7 +153,7 @@ async function logout(): Promise<void> {
         <div
           class="col-span-full flex items-center justify-between gap-4 md:col-span-1 md:justify-end"
         >
-          <span v-if="user" class="hidden text-sm text-slate-600 lg:inline">
+          <span v-if="user" class="hidden font-mono text-xs text-ink-3 lg:inline">
             {{ user.email }}
           </span>
 
@@ -164,7 +164,7 @@ async function logout(): Promise<void> {
 
     <main
       id="main-content"
-      class="mx-auto min-h-[calc(100vh-4.5rem)] w-full max-w-5xl px-4 py-6 focus:outline-none sm:px-6 sm:py-8"
+      class="mx-auto min-h-[calc(100vh-4.5rem)] w-full max-w-[1180px] px-4 py-8 focus:outline-none sm:px-6 sm:py-10"
       tabindex="-1"
     >
       <RouterView />

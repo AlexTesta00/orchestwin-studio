@@ -11,6 +11,7 @@ import type {
   WebPhaseResultPayload,
 } from "@/types/webExecution";
 import { journeySentence } from "./journeyText";
+import UiCard from "./UiCard.vue";
 
 type Locale = "it" | "en";
 
@@ -277,88 +278,91 @@ const cards = computed(() => {
 </script>
 
 <template>
-  <section v-if="report" class="grid gap-4" aria-labelledby="web-outcome-title">
-    <div
-      v-if="report.status === 'PASSED'"
-      class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"
-    >
-      <h3 id="web-outcome-title" class="m-0 text-xl font-black">{{ copy.passedTitle }}</h3>
-      <p class="mt-1 mb-0">{{ copy.passedBody }}</p>
-    </div>
-    <div v-else-if="report.status === 'FAILED'" class="grid gap-3">
-      <h3 id="web-outcome-title" class="m-0 text-xl font-black text-slate-950">
+  <section v-if="report" class="grid gap-5" aria-labelledby="web-outcome-title">
+    <UiCard v-if="report.status === 'PASSED'" tone="success">
+      <h3 id="web-outcome-title" class="m-0 text-2xl font-semibold tracking-card">
+        {{ copy.passedTitle }}
+      </h3>
+      <p class="mt-2 mb-0 text-[15px]">{{ copy.passedBody }}</p>
+    </UiCard>
+    <div v-else-if="report.status === 'FAILED'" class="grid gap-4">
+      <h3 id="web-outcome-title" class="m-0 text-2xl font-semibold tracking-card">
         {{ copy.failedTitle }}
       </h3>
-      <article
-        v-for="item in cards"
-        :key="item.key"
-        class="grid gap-2 rounded-2xl border border-red-200 bg-red-50 p-5"
-      >
-        <p class="m-0 flex flex-wrap items-center gap-2 text-sm">
+      <UiCard v-for="item in cards" :key="item.key" tone="failure">
+        <p class="m-0 flex flex-wrap items-center gap-3">
           <span
-            class="rounded-full border border-red-300 bg-white px-3 py-1 font-bold text-red-900"
+            class="inline-flex items-center gap-1.5 rounded-pill border border-fail-line bg-surface px-2.5 py-1 text-xs font-semibold text-fail-dark"
           >
+            <span aria-hidden="true">!</span>
             {{ copy.failedChip }}
           </span>
-          <code class="text-xs text-red-900">{{ copy.rule }}: {{ item.code }}</code>
+          <code class="font-mono text-xs text-fail-dark">{{ copy.rule }}: {{ item.code }}</code>
         </p>
-        <h4 class="m-0 text-lg font-black text-red-950">{{ item.title }}</h4>
-        <dl class="m-0 grid gap-1 text-sm text-red-950">
-          <div class="grid gap-0.5 sm:grid-cols-[160px_minmax(0,1fr)]">
-            <dt class="font-bold">{{ copy.happened }}</dt>
-            <dd class="m-0">{{ item.happened }}</dd>
-          </div>
-          <div class="grid gap-0.5 sm:grid-cols-[160px_minmax(0,1fr)]">
-            <dt class="font-bold">{{ copy.where }}</dt>
-            <dd class="m-0">{{ item.where }}</dd>
-          </div>
-          <div class="grid gap-0.5 sm:grid-cols-[160px_minmax(0,1fr)]">
-            <dt class="font-bold">{{ copy.change }}</dt>
-            <dd class="m-0">{{ item.change }}</dd>
-          </div>
+        <h4 class="mt-3 mb-0 text-lg font-semibold tracking-block">{{ item.title }}</h4>
+        <dl class="mt-3 mb-0 grid gap-y-2 text-[15px] sm:grid-cols-[180px_minmax(0,1fr)]">
+          <dt class="font-semibold">{{ copy.happened }}</dt>
+          <dd class="m-0">{{ item.happened }}</dd>
+          <dt class="font-semibold">{{ copy.where }}</dt>
+          <dd class="m-0">{{ item.where }}</dd>
+          <dt class="font-semibold">{{ copy.change }}</dt>
+          <dd class="m-0">{{ item.change }}</dd>
         </dl>
-      </article>
-      <div v-if="signature" class="grid gap-1">
+      </UiCard>
+      <div v-if="signature" class="grid gap-2">
         <slot name="repair" :signature="signature" />
-        <p class="m-0 text-sm text-slate-700">{{ copy.repairHint }}</p>
+        <p class="m-0 font-mono text-xs text-ink-3">{{ copy.repairHint }}</p>
       </div>
     </div>
-    <p v-else class="m-0 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+    <p
+      v-else
+      class="m-0 rounded-panel border border-line-strong bg-surface-2 px-4 py-3 text-[15px] font-semibold text-warn"
+    >
       {{ copy.incomplete }}
     </p>
-    <section class="grid gap-2">
-      <h4 class="m-0 font-bold text-slate-950">{{ copy.phases }}</h4>
-      <ul class="m-0 grid gap-1 pl-0" style="list-style: none">
+    <UiCard tone="dense">
+      <h4 class="m-0 font-mono text-xs tracking-wide text-ink-3 uppercase">{{ copy.phases }}</h4>
+      <ul class="m-0 mt-3 grid list-none gap-1 p-0">
         <li
           v-for="phase in phases"
           :key="phase.key"
-          class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          class="flex items-center justify-between gap-3 border-b border-line-soft py-2 text-[15px] last:border-b-0"
         >
           <span>{{ phase.name }}</span>
           <span
-            :class="
+            :class="[
+              'inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold',
               phase.tone === 'passed'
-                ? 'font-bold text-emerald-800'
+                ? 'border-ok-line bg-ok-bg text-ok-text'
                 : phase.tone === 'failed'
-                  ? 'font-bold text-red-800'
-                  : 'text-slate-600'
-            "
+                  ? 'border-fail-line bg-fail-bg text-fail-dark'
+                  : 'border-line-strong bg-surface text-ink-3',
+            ]"
           >
-            {{ phase.tone === "passed" ? "✓ " : phase.tone === "failed" ? "! " : ""
-            }}{{ phase.status }}
+            <span aria-hidden="true">{{
+              phase.tone === "passed" ? "✓" : phase.tone === "failed" ? "!" : "•"
+            }}</span>
+            {{ phase.status }}
           </span>
         </li>
       </ul>
-    </section>
-    <section v-if="journeyForExecution" class="grid gap-2">
-      <h4 class="m-0 font-bold text-slate-950">{{ copy.journey }}</h4>
-      <p class="m-0 text-sm text-slate-700">{{ copy.journeyNote }}</p>
-      <ol class="m-0 grid gap-1 pl-6 text-sm">
-        <li v-for="(step, index) in journeyForExecution.steps" :key="index">
-          {{ journeySentence(step, locale) }}
+    </UiCard>
+    <UiCard v-if="journeyForExecution" tone="soft">
+      <h4 class="m-0 text-lg font-semibold tracking-block">{{ copy.journey }}</h4>
+      <p class="mt-1 mb-0 text-sm text-ink-2">{{ copy.journeyNote }}</p>
+      <ol class="m-0 mt-3 grid list-none gap-0 p-0 text-[15px]">
+        <li
+          v-for="(step, index) in journeyForExecution.steps"
+          :key="index"
+          class="grid grid-cols-[28px_minmax(0,1fr)] gap-2 rounded-control px-2 py-2 odd:bg-row-alt"
+        >
+          <span class="font-mono text-xs text-ink-3">{{ index + 1 }}</span>
+          <span>{{ journeySentence(step, locale) }}</span>
         </li>
       </ol>
-      <p v-if="journeyOutcome" class="m-0 text-sm font-bold text-slate-900">{{ journeyOutcome }}</p>
-    </section>
+      <p v-if="journeyOutcome" class="mt-3 mb-0 font-mono text-xs font-medium text-ink-2">
+        {{ journeyOutcome }}
+      </p>
+    </UiCard>
   </section>
 </template>
