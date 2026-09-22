@@ -20,6 +20,7 @@ import type {
   UserTwinProfileDiffPayload,
   UserTwinVersionPayload,
 } from "../types/userModeling";
+import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -484,6 +485,7 @@ describe("ProjectUserModelingFlow", () => {
     await wrapper.get('[data-testid="confirm-persona"]').trigger("click");
 
     await flushPromises();
+    await expectAccessible(wrapper.element);
 
     expect(decidePersona).toHaveBeenCalledWith(
       PROJECT_ID,

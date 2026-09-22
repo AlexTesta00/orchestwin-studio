@@ -13,6 +13,7 @@ import type { ExecutionProfilePayload } from "@/types/execution";
 import type { GeneratedSource, SourceGenerationApi } from "@/api/sourceGeneration";
 import { SourceGenerationApiError } from "@/api/sourceGeneration";
 import ProjectSourceGeneration from "./ProjectSourceGeneration.vue";
+import { expectAccessible } from "@/test/axe";
 
 function setup(approved = true) {
   const pinia = createPinia();
@@ -133,5 +134,11 @@ describe("source generation", () => {
     await wrapper.get("select").setValue("WEB_VUE");
     expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain("Generated revision 1");
+  });
+
+  it("has no axe violations", async () => {
+    const { wrapper } = setup();
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

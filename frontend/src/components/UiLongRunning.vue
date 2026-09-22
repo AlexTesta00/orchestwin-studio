@@ -37,6 +37,7 @@ const width = computed(() => `${Math.min(100, Math.max(0, props.progress))}%`);
       <div
         class="mt-4 h-1.5 overflow-hidden rounded-pill bg-bar-track-end"
         role="progressbar"
+        :aria-label="title"
         :aria-valuenow="Math.round(progress)"
         aria-valuemin="0"
         aria-valuemax="100"

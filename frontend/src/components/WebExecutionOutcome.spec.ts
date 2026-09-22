@@ -8,6 +8,7 @@ import type {
   WebPhaseResultPayload,
 } from "@/types/webExecution";
 import WebExecutionOutcome from "./WebExecutionOutcome.vue";
+import { expectAccessible } from "@/test/axe";
 
 function phase(
   name: WebPhaseResultPayload["phase"],
@@ -99,7 +100,7 @@ const browserEvidence = {
 } as unknown as WebBrowserEvidencePayload;
 
 describe("web execution outcome", () => {
-  it("explains accessibility findings in plain Italian with the design labels", () => {
+  it("explains accessibility findings in plain Italian with the design labels", async () => {
     const failed = phase("BROWSER_EVIDENCE", "FAILED", [
       {
         code: "AXE_COLOR_CONTRAST",
@@ -124,6 +125,7 @@ describe("web execution outcome", () => {
       },
       slots: { repair: ({ signature }) => `RIPARA ${signature.digest.slice(0, 4)}` },
     });
+    await expectAccessible(wrapper.element);
     const text = wrapper.text();
     expect(text).toContain("Testo poco leggibile");
     expect(text).toContain("«Aggiungi» (SCR-001)");

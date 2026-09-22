@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createAppI18n } from "@/i18n";
 
 import AuthenticationForm from "./AuthenticationForm.vue";
+import { expectAccessible } from "@/test/axe";
 
 enableAutoUnmount(afterEach);
 
@@ -65,5 +66,13 @@ describe("AuthenticationForm", () => {
 
     expect(alert.text()).toBe("The email or password is not valid.");
     expect(alert.attributes("tabindex")).toBe("-1");
+  });
+
+  it("has no axe violations in registration mode", async () => {
+    const wrapper = mount(AuthenticationForm, {
+      props: { mode: "register", busy: false, error: null },
+      global: { plugins: [createAppI18n()] },
+    });
+    await expectAccessible(wrapper.element);
   });
 });

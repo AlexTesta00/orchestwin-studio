@@ -11,6 +11,7 @@ import { useJvmExecutionStore } from "@/stores/jvmExecution";
 import { useWebExecutionStore } from "@/stores/webExecution";
 import type { WebSourceRevisionPayload } from "@/types/webExecution";
 import ProjectExecutionLaunch from "./ProjectExecutionLaunch.vue";
+import { expectAccessible } from "@/test/axe";
 
 function operation(): ExecutionOperation {
   return {
@@ -281,5 +282,11 @@ describe("derived web journey", () => {
       .find((b) => b.text() === "Define the steps manually")!
       .trigger("click");
     expect(wrapper.text()).toContain("CSS selector");
+  });
+
+  it("has no axe violations", async () => {
+    const { wrapper } = setup();
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

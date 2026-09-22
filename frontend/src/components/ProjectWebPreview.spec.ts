@@ -6,6 +6,7 @@ import type { WebSourceRevisionPayload } from "@/types/webExecution";
 import ProjectWebPreview from "./ProjectWebPreview.vue";
 import WebSourceEditor from "./WebSourceEditor.vue";
 import type { PreviewContent } from "./webPreview";
+import { expectAccessible } from "@/test/axe";
 
 const authorize = vi.hoisted(() => vi.fn());
 const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
@@ -215,5 +216,12 @@ describe("project source preview", () => {
     expect(wrapper.findComponent(WebSourceEditor).exists()).toBe(false);
     expect(wrapper.text()).toContain("original model output preserved");
     wrapper.unmount();
+  });
+
+  it("has no axe violations", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(content())));
+    const { wrapper } = setup();
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

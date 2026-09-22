@@ -998,14 +998,14 @@ watch(
           "
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <h4 class="m-0 min-w-0">
+            <h3 class="m-0 min-w-0">
               <TwinIdentity
                 :identity-key="persona.persona_id"
                 :name="persona.profile.name"
                 :description="profileDescription(persona.profile.observations)"
                 :locale="locale"
               />
-            </h4>
+            </h3>
 
             <div class="flex flex-wrap items-center gap-2">
               <UiClaimLabel kind="hypothesis" />

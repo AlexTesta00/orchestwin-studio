@@ -28,6 +28,7 @@ function stateOf(step: number): "done" | "current" | "pending" {
       class="grid gap-1"
       :style="{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }"
       role="progressbar"
+      :aria-label="text"
       :aria-valuenow="current"
       aria-valuemin="1"
       :aria-valuemax="total"

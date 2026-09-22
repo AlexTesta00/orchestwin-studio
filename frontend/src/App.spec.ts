@@ -7,6 +7,7 @@ import App from "./App.vue";
 import { createAppI18n, type SupportedLocale } from "./i18n";
 import { createAppRouter } from "./router";
 import { useAuthStore } from "./stores/auth";
+import { expectAccessible } from "@/test/axe";
 
 enableAutoUnmount(afterEach);
 
@@ -88,4 +89,14 @@ describe("App", () => {
 
     expect(toggle.attributes("aria-expanded")).toBe("false");
   });
+
+  it(
+    "has no axe violations in the shell for an authenticated owner",
+    { timeout: 30000 },
+    async () => {
+      const { wrapper } = await mountApplication("/", "it", true);
+      await flushPromises();
+      await expectAccessible(wrapper.element, { page: true });
+    },
+  );
 });

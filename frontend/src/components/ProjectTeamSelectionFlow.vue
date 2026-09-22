@@ -875,13 +875,13 @@ function eventLabel(event: HumanGateEventResponse): string {
           >
             <div class="flex flex-wrap items-start gap-4">
               <div class="grid min-w-0 flex-1 gap-1">
-                <h4 :id="`team-role-${entry.agent_id}`" class="m-0 min-w-0">
+                <h3 :id="`team-role-${entry.agent_id}`" class="m-0 min-w-0">
                   <TwinIdentity
                     :role="entry.agent_id"
                     :locale="locale === 'it' ? 'it' : 'en'"
                     compact
                   />
-                </h4>
+                </h3>
                 <p
                   v-if="constraintFor(entry.agent_id)?.reasons.length"
                   class="m-0 text-sm leading-6 text-ink-2"

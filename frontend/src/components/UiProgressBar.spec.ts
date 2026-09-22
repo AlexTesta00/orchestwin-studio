@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createAppI18n } from "@/i18n";
 import UiProgressBar from "./UiProgressBar.vue";
+import { expectAccessible } from "@/test/axe";
 
 function states(wrapper: ReturnType<typeof mount>): (string | undefined)[] {
   return wrapper.findAll("[data-step-state]").map((node) => node.attributes("data-step-state"));
@@ -47,5 +48,13 @@ describe("progress bar", () => {
       "pending",
       "pending",
     ]);
+  });
+
+  it("has no axe violations", async () => {
+    const wrapper = mount(UiProgressBar, {
+      props: { current: 3, total: 8 },
+      global: { plugins: [createAppI18n("it")] },
+    });
+    await expectAccessible(wrapper.element);
   });
 });

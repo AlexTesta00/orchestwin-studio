@@ -13,6 +13,7 @@ import { useDesignStore } from "@/stores/design";
 import { useArchitectureStore } from "@/stores/architecture";
 import { useWebExecutionStore } from "@/stores/webExecution";
 import ProjectDetailView from "./ProjectDetailView.vue";
+import { expectAccessible } from "@/test/axe";
 
 const state = vi.hoisted(() => ({ route: {} as { params: { projectId: string } } }));
 vi.mock("vue-router", () => ({ useRoute: () => state.route }));
@@ -237,6 +238,13 @@ describe("progressive project workspace", () => {
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("has no axe violations in the workspace shell", async () => {
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    await expectAccessible(wrapper.element);
     wrapper.unmount();
   });
 });

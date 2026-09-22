@@ -6,6 +6,7 @@ import UiEvidenceDrawer from "./UiEvidenceDrawer.vue";
 import UiFindingsCard from "./UiFindingsCard.vue";
 import UiLongRunning from "./UiLongRunning.vue";
 import UiStepper from "./UiStepper.vue";
+import { expectAccessible } from "@/test/axe";
 
 function plugins(locale: "en" | "it" = "it") {
   return { global: { plugins: [createAppI18n(locale)] } };
@@ -89,5 +90,32 @@ describe("findings card", () => {
       "Cosa cambia la riparazione",
     ]);
     expect(wrapper.find("button").text()).toBe("Ripara");
+  });
+
+  it("has no axe violations across the primitives", async () => {
+    const wrappers = [
+      mount(UiStepper, { props: { steps, active: "team" }, ...plugins() }),
+      mount(UiLongRunning, {
+        props: {
+          title: "Attesa",
+          expected: "circa 30 secondi",
+          elapsed: 3,
+          progress: 20,
+          cancellable: true,
+        },
+        ...plugins(),
+      }),
+      mount(UiEvidenceDrawer, {
+        props: { entries: [{ key: "sha256", value: "abc" }] },
+        ...plugins(),
+      }),
+      mount(UiFindingsCard, {
+        props: { rule: "AXE_COLOR_CONTRAST", title: "T", what: "w", where: "d", change: "c" },
+        ...plugins(),
+      }),
+    ];
+    for (const wrapper of wrappers) {
+      await expectAccessible(wrapper.element);
+    }
   });
 });
