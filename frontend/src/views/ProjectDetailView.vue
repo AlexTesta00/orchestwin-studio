@@ -27,6 +27,7 @@ import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue"
 import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiCard from "@/components/UiCard.vue";
+import UiProgressBar from "@/components/UiProgressBar.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSidePanel from "@/components/UiSidePanel.vue";
 import UiStepper, { type StepItem } from "@/components/UiStepper.vue";
@@ -82,7 +83,6 @@ const { t, locale } = useI18n({
         allProjects: "All projects",
         principle: "AI proposes, you decide",
         provenance: "Provenance",
-        stepOf: "Step {n} of 8",
         readOnly: "Step already closed. You can reread it, not change it.",
         backToCurrent: "Back to the current step",
         unlockHint: "The next step unlocks after your approval.",
@@ -111,7 +111,6 @@ const { t, locale } = useI18n({
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
         provenance: "Provenienza",
-        stepOf: "Passo {n} di 8",
         readOnly: "Passo già chiuso. Puoi rileggerlo, non modificarlo.",
         backToCurrent: "Torna al passo attuale",
         unlockHint: "Il passo successivo si sblocca dopo la tua approvazione.",
@@ -419,9 +418,7 @@ onUnmounted(() => {
 
       <div class="grid content-start gap-6">
         <header class="grid gap-3">
-          <p class="m-0 font-mono text-xs tracking-wide text-ink-3 uppercase">
-            {{ t("detail.stepOf", { n: activeStage + 1 }) }}
-          </p>
+          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="8" />
           <h1 class="m-0 text-[34px] leading-[1.2] font-semibold tracking-title">
             {{ stageLabels[activeStage] }}
           </h1>
