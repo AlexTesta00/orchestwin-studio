@@ -178,7 +178,7 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         == STATIC_RUNTIME_CONTRACT
     )
     assert store.requests[parent][0].temperature == 0.6
-    assert [store.requests[child][0].temperature for child in children] == [0.2, 0.6, 0.6]
+    assert [store.requests[child][0].temperature for child in children] == [0.6, 0.6, 0.6]
     assert [s["generation_id"] for s in result.generation_steps] == list(map(str, children))
     for ordinal, child in enumerate(children, 1):
         request = store.requests[child][0]
@@ -718,7 +718,7 @@ def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, f
             "updateResultDisplay(tipAmount: number, totalAmount: number): void; "
             "validateAndShowErrorForAmount(inputValue: string): void; "
             "toggleScreen(screenId: string): void; hideError(): void; "
-            "processCalculation(): void; resetApplication(): void; resetItems(): void; "
+            "processCalculation(): void; resetApplication(): void; resetItems(): void; clearError(): void; "
             "getGuestCount(): number",
             [
                 "calculateTip(amount: number, tipPercentage: number): object",
@@ -732,6 +732,7 @@ def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, f
                 "hideError",
                 "processCalculation",
                 "resetApplication",
+                "clearError",
             ],
         ),
         ("isUserRegistrationRequired(): boolean", None, None),

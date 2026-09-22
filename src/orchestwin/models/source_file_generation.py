@@ -46,7 +46,6 @@ from orchestwin.models.source_syntax import validate_source_syntax
 from orchestwin.projects.requirements_primitives import canonical_json, snapshot_content_hash
 
 PROTOCOL = "SOURCE_FILES_V3_PARTS"
-PARTS_TEMPERATURE = 0.2
 MANIFEST_BUDGET = 3200
 FILE_BUDGET = 4096
 MAX_FILES = 8
@@ -324,7 +323,7 @@ IMPURE_INTERFACE_WORD = re.compile(
 )
 VOID_WITHOUT_PARAMETERS = re.compile(r"^[A-Za-z_$][\w$]*\(\s*\)\s*:\s*void\s*$")
 FLAG_WITHOUT_PARAMETERS = re.compile(r"^[A-Za-z_$][\w$]*\(\s*\)\s*:\s*boolean\s*$")
-STATE_RESET_NAME = re.compile(r"^(reset|clear)")
+STATE_RESET_NAME = re.compile(r"^reset")
 
 
 def _pure_interface(interface):
@@ -780,7 +779,6 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     context=child_context,
                     output_type=parts_type or SourceText,
                     max_output_tokens=FILE_BUDGET,
-                    temperature=PARTS_TEMPERATURE if parts_type else None,
                     instruction=_file_instruction(planned, target)
                     + (_static_file_instruction(planned) if target == "WEB_STATIC" else "")
                     + _jvm_file_instruction(planned, entrypoint, target)
@@ -984,9 +982,9 @@ _SYNTAX_REMEDIES = {
         "and never register another DOMContentLoaded or load listener around them, because a nested listener never fires and no control gets wired. "
     ),
     "MODULE_FUNCTION_CALLS_BROWSER_HELPER": (
-        "The core function named in diagnostic.detail calls a helper that exists only inside browser_setup, on the reported line of the assembled module: "
-        "core functions run in Node without the browser, so remove that call, keep the declared return type by returning false or the error result, "
-        "and let the click handler in browser_setup show or hide the message after calling the core. "
+        "The core function named in diagnostic.detail calls helpers or uses elements that exist only inside browser_setup, starting on the reported line of the assembled module: "
+        "rewrite that function so that it only validates its parameters, updates shared_state and returns a plain result such as { ok: true, record } or { ok: false, error: 'message' }, "
+        "then move showing or hiding messages, rendering the list and switching screens into the click handler in browser_setup, which calls the function and renders what it returns. "
     ),
     "SHARED_STATE_NEVER_UPDATED": (
         "shared_state declares the variable named in diagnostic.detail but no functions entry or private helper changes it: "
