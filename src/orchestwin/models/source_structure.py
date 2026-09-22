@@ -236,8 +236,13 @@ def _call_line(parts, name, callee):
         return None
     position = content.find(callee + "(", header)
     if position < 0:
+        position = content.find(callee, header)
+    if position < 0:
         return None
     return content.count("\n", 0, position) + 1
+
+
+_IDENTIFIER_USE = re.compile(r"\b([A-Za-z_$][\w$]*)\b")
 
 
 def validate_core_calls(parts):
@@ -248,19 +253,32 @@ def validate_core_calls(parts):
         | set(_DECLARED.findall(_blank(_part(parts, "private_helpers"))))
         | {_part(function, "name") for function in functions}
     )
+    offences = []
+    first_line = None
     for function in functions:
+        name = _part(function, "name")
         body = _blank(_part(function, "body"))
         local = set(_DECLARED.findall(body)) | set(
             _PARAMETER.findall(_part(function, "parameters"))
         )
-        for callee in sorted(set(_CALL.findall(body))):
-            if callee in browser_names and callee not in module_names and callee not in local:
-                raise SourceSyntaxError(
-                    reason="MODULE_FUNCTION_CALLS_BROWSER_HELPER",
-                    line=_call_line(parts, _part(function, "name"), callee),
-                    parser=PARSER,
-                    detail=_part(function, "name") + " calls " + callee,
-                )
+        called = set(_CALL.findall(body))
+        used = set(_IDENTIFIER_USE.findall(body)) - called
+        excluded = module_names | local
+        calls = sorted(item for item in called if item in browser_names and item not in excluded)
+        uses = sorted(item for item in used if item in browser_names and item not in excluded)
+        if calls:
+            offences.append(name + " calls " + ", ".join(calls))
+        if uses:
+            offences.append(name + " uses " + ", ".join(uses))
+        if (calls or uses) and first_line is None:
+            first_line = _call_line(parts, name, (calls or uses)[0])
+    if offences:
+        raise SourceSyntaxError(
+            reason="MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+            line=first_line,
+            parser=PARSER,
+            detail="; ".join(offences),
+        )
 
 
 def validate_shared_state_updates(shared_state, bodies):

@@ -395,3 +395,17 @@ def test_browser_setup_with_direct_listeners_passes():
     validate_browser_setup(
         _parts("  return true;", "  document.getElementById('b').addEventListener('click', wire);")
     )
+
+
+def test_core_function_offences_are_listed_exhaustively_with_the_first_line():
+    parts = _parts(
+        "  showError('x');\n  screen.hidden = true;\n  return false;",
+        "function showError(message) {\n  error.textContent = message;\n}\nconst screen = document.getElementById('s');",
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_core_calls(parts)
+    assert (
+        failure.value.diagnostic["detail"]
+        == "validateInput calls showError; validateInput uses screen"
+    )
+    assert failure.value.diagnostic["line"] == 4
