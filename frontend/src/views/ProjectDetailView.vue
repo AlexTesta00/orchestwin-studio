@@ -17,6 +17,7 @@ import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue"
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
+import ProjectFinalePanel, { type FinaleRecapRow } from "@/components/ProjectFinalePanel.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
@@ -248,6 +249,41 @@ const stepItems = computed<StepItem[]>(() =>
           : "pending",
   })),
 );
+const projectComplete = computed(
+  () => hasWebSource.value && web.currentExecution?.report.status === "PASSED",
+);
+const finalRecap = computed<FinaleRecapRow[]>(() => {
+  const gates = [
+    clarification.gate,
+    team.gate,
+    modeling.currentGate,
+    requirements.gate,
+    design.gate,
+    architecture.gate,
+  ];
+  return stageLabels.value.map((label, index) => {
+    const gate = gates[index] ?? null;
+    const outcome =
+      index === 6
+        ? hasWebSource.value
+          ? "generated"
+          : "pending"
+        : index === 7
+          ? projectComplete.value
+            ? "approved"
+            : "pending"
+          : completedStages.value[index]
+            ? "approved"
+            : "pending";
+    return {
+      key: `step-${index}`,
+      label,
+      outcome,
+      decisions: gate?.iteration ?? null,
+      max: gate?.max_iterations ?? null,
+    };
+  });
+});
 const provenanceOpen = ref(false);
 
 function selectStep(key: string): void {
@@ -576,6 +612,14 @@ onUnmounted(() => {
             v-show="hasWebSource"
             :project-id="projectId"
             :locale="locale === 'it' ? 'it' : 'en'"
+          />
+          <ProjectFinalePanel
+            v-if="projectComplete"
+            :key="`${projectId}:finale`"
+            :project-id="projectId"
+            :recap="finalRecap"
+            @open-provenance="provenanceOpen = true"
+            @open-sources="selectedStage = 6"
           />
         </div>
 

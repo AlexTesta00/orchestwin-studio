@@ -234,6 +234,56 @@ const messages = {
       stack: "Vue 3 · TypeScript · Pinia · Tailwind",
     },
   },
+  finale: {
+    title: "Project complete",
+    body: "Eight approved steps and one passing execution with observed evidence. You can export everything or review where each thing came from.",
+    recap: {
+      step: "Step",
+      outcome: "Outcome",
+      decisions: "Decisions",
+      approved: "Approved",
+      generated: "Generated",
+      pending: "Pending",
+      count: "{n} of {max}",
+    },
+    export: {
+      title: "Export",
+      eventMissing:
+        "The export uses the approval given in this session: if you reloaded the page, refresh the review and approve again.",
+    },
+    status: {
+      loading: "Loading the final review…",
+      missing: "The final review is not available yet.",
+      blocked: "Some final checks are not satisfied:",
+      review: "The final review is ready: send your decision.",
+      decision: "Approve to close the project, or request a revision.",
+      approved:
+        "Project approved: you can create the full package, a zip archive with sources, hashes and provenance.",
+      exported: "The package is ready to download.",
+      decided: "The final decision is {status}.",
+    },
+    actions: {
+      reload: "Refresh",
+      submit: "Send the final review",
+      approve: "Approve and close the project",
+      revise: "Request a revision",
+      sendRevision: "Send the request",
+      export: "Export the full package",
+      download: "Download the archive",
+      sources: "Open the sources",
+      provenance: "Open provenance",
+    },
+    reason: {
+      label: "Why do you request a revision?",
+      missing: "Write a reason before sending.",
+    },
+    evidence: {
+      archive: "archive hash",
+      size: "size",
+      manifest: "manifest hash",
+      created: "created",
+    },
+  },
   projects: {
     new: "New project",
     cancel: "Cancel",
