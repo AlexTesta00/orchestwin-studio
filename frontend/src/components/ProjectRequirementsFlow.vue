@@ -72,6 +72,7 @@ const messages = {
     scenarios: "Usage scenarios",
     risks: "Project risks",
     done: "When the app is ready",
+    risksAndDone: "Risks and definition of done",
     edit: "Propose revision",
     saveRevision: "Review changes",
     cancel: "Cancel",
@@ -122,6 +123,8 @@ const messages = {
     quality: "Quality",
     constraint: "Constraint",
     must: "Essential",
+    mustGroup: "Must do",
+    shouldGroup: "Should do",
     should: "Important",
     could: "Optional",
     later: "For later",
@@ -142,6 +145,7 @@ const messages = {
     scenarios: "Scenari d'uso",
     risks: "Rischi di progetto",
     done: "Quando l'app sarà pronta",
+    risksAndDone: "Rischi e definizione di fatto",
     edit: "Proponi revisione",
     saveRevision: "Controlla le modifiche",
     cancel: "Annulla",
@@ -192,6 +196,8 @@ const messages = {
     quality: "Qualità",
     constraint: "Vincolo",
     must: "Essenziale",
+    mustGroup: "Deve fare",
+    shouldGroup: "Dovrebbe fare",
     should: "Importante",
     could: "Facoltativo",
     later: "Per il futuro",
@@ -217,6 +223,22 @@ const current = computed(() => store.current);
 const specification = computed<RequirementsSpecificationPayload | null>(
   () => store.current?.specification ?? null,
 );
+const requirementGroups = computed(() => {
+  const requirements = specification.value?.requirements ?? [];
+  return [
+    {
+      key: "must",
+      title: copy.value.mustGroup,
+      items: requirements.filter((item) => item.priority === "MUST"),
+    },
+    {
+      key: "should",
+      title: copy.value.shouldGroup,
+      items: requirements.filter((item) => item.priority !== "MUST"),
+    },
+  ].filter((group) => group.items.length > 0);
+});
+
 const diffs = computed(() => store.diffHistory);
 const gateTargetsCurrent = computed(() => {
   if (store.gate === null || store.current === null) {
@@ -531,81 +553,85 @@ watch(
           </details>
         </div>
 
-        <section class="grid gap-3" aria-labelledby="requirements-list-title">
-          <h4 id="requirements-list-title" class="text-lg font-semibold text-ink">
-            {{ copy.requirements }}
-          </h4>
-          <article
-            v-for="requirement in specification.requirements"
-            :key="requirement.id"
-            class="grid gap-3 rounded-panel border border-line bg-surface-2 p-4"
-          >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p class="m-0 text-xs font-bold tracking-wide text-ink-3 uppercase">
-                  {{ kindLabel(requirement.kind) }} · {{ priorityLabel(requirement.priority) }}
-                </p>
-                <h5 class="mt-1 font-semibold text-ink">
-                  {{ requirement.title }}
-                </h5>
-                <p class="mt-2 text-sm leading-6 text-ink-2">
-                  {{ requirement.statement }}
-                </p>
-              </div>
-              <button
-                type="button"
-                class="rounded-control border border-field bg-white px-3 py-2 text-xs font-bold text-ink-2 hover:bg-surface-3"
-                data-testid="edit-requirement"
-                @click="startEdit(requirement)"
-              >
-                {{ copy.edit }}
-              </button>
-            </div>
-            <details class="text-xs text-ink-3">
-              <summary class="cursor-pointer">{{ copy.sources }}</summary>
-              <p class="my-2">{{ requirement.code }}</p>
-              <p class="m-0 text-xs text-ink-3">
-                {{ copy.sources }}:
-                {{ formatRequirementSources(requirement) }}
-              </p>
-              <p class="m-0 text-xs text-ink-3">
-                {{ copy.twins }}:
-                {{ formatRequirementTwins(requirement) }}
-              </p>
-            </details>
-          </article>
-        </section>
+        <div class="grid gap-4" data-testid="requirements-groups">
+          <UiCard v-for="group in requirementGroups" :key="group.key" tone="dense">
+            <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ group.title }}</h4>
+            <ul class="m-0 mt-4 grid list-none gap-4 p-0">
+              <li v-for="requirement in group.items" :key="requirement.id" class="grid gap-2">
+                <div
+                  class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3 sm:grid-cols-[58px_minmax(0,1fr)_auto]"
+                >
+                  <span class="font-mono text-[11.5px] leading-6 text-ink-3">
+                    {{ requirement.code }}
+                  </span>
+                  <div class="min-w-0">
+                    <p class="m-0 text-[15px] leading-6 text-ink">
+                      <strong class="font-semibold">{{ requirement.title }}</strong>
+                      <span class="text-ink-2"> · {{ requirement.statement }}</span>
+                    </p>
+                    <p class="m-0 mt-1 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                      {{ kindLabel(requirement.kind) }} · {{ priorityLabel(requirement.priority) }}
+                    </p>
+                  </div>
+                  <UiButton
+                    variant="secondary"
+                    data-testid="edit-requirement"
+                    @click="startEdit(requirement)"
+                  >
+                    {{ copy.edit }}
+                  </UiButton>
+                </div>
+                <details class="text-xs text-ink-3 sm:pl-[70px]">
+                  <summary class="cursor-pointer">{{ copy.sources }}</summary>
+                  <p class="m-0 mt-2">
+                    {{ copy.sources }}: {{ formatRequirementSources(requirement) }}
+                  </p>
+                  <p class="m-0">{{ copy.twins }}: {{ formatRequirementTwins(requirement) }}</p>
+                </details>
+              </li>
+            </ul>
+          </UiCard>
+        </div>
 
         <form
           v-if="editingRequirementId !== null"
           class="grid gap-4 rounded-panel border border-field bg-surface-2 p-4"
           @submit.prevent="submitRevision"
         >
-          <label class="grid gap-1 text-sm font-bold text-ink-2">
+          <label class="grid gap-1 text-sm font-semibold text-ink-2">
             {{ copy.titleLabel }}
-            <input v-model="edit.title" class="rounded-control border border-field px-3 py-2" />
+            <input
+              v-model="edit.title"
+              class="rounded-control border border-field bg-surface px-3 py-2 text-ink"
+            />
           </label>
-          <label class="grid gap-1 text-sm font-bold text-ink-2">
+          <label class="grid gap-1 text-sm font-semibold text-ink-2">
             {{ copy.statementLabel }}
             <textarea
               v-model="edit.statement"
               rows="4"
-              class="rounded-control border border-field px-3 py-2"
+              class="rounded-control border border-field bg-surface px-3 py-2 text-ink"
               data-testid="requirement-statement"
             />
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
-            <label class="grid gap-1 text-sm font-bold text-ink-2">
+            <label class="grid gap-1 text-sm font-semibold text-ink-2">
               {{ copy.kindLabel }}
-              <select v-model="edit.kind" class="rounded-control border border-field px-3 py-2">
+              <select
+                v-model="edit.kind"
+                class="rounded-control border border-field bg-surface px-3 py-2 text-ink"
+              >
                 <option value="FUNCTIONAL">{{ copy.functional }}</option>
                 <option value="NON_FUNCTIONAL">{{ copy.quality }}</option>
                 <option value="CONSTRAINT">{{ copy.constraint }}</option>
               </select>
             </label>
-            <label class="grid gap-1 text-sm font-bold text-ink-2">
+            <label class="grid gap-1 text-sm font-semibold text-ink-2">
               {{ copy.priorityLabel }}
-              <select v-model="edit.priority" class="rounded-control border border-field px-3 py-2">
+              <select
+                v-model="edit.priority"
+                class="rounded-control border border-field bg-surface px-3 py-2 text-ink"
+              >
                 <option value="MUST">{{ copy.must }}</option>
                 <option value="SHOULD">{{ copy.should }}</option>
                 <option value="COULD">{{ copy.could }}</option>
@@ -614,105 +640,119 @@ watch(
             </label>
           </div>
           <div class="flex flex-wrap gap-2">
-            <button
-              type="submit"
-              class="rounded-control bg-action px-4 py-2 text-sm font-bold text-white"
-              data-testid="submit-requirements-revision"
-            >
+            <UiButton type="submit" data-testid="submit-requirements-revision">
               {{ copy.saveRevision }}
-            </button>
-            <button
-              type="button"
-              class="rounded-control border border-field px-4 py-2 text-sm font-bold"
-              @click="cancelEdit"
-            >
+            </UiButton>
+            <UiButton variant="secondary" @click="cancelEdit">
               {{ copy.cancel }}
-            </button>
+            </UiButton>
           </div>
         </form>
 
-        <details class="rounded-panel border border-line p-3">
-          <summary class="cursor-pointer font-semibold text-ink">
+        <UiCard tone="dense">
+          <h4 class="m-0 text-base font-semibold tracking-block text-ink">
             {{ copy.userStories }}
-          </summary>
-          <article
-            v-for="story in specification.user_stories"
-            :key="story.id"
-            class="rounded-panel border border-line p-4"
-          >
-            <strong>{{ story.code }} · {{ story.user_twin_reference.name }}</strong>
-            <p class="mt-2 text-sm text-ink-2">{{ copy.goal }}: {{ story.goal }}</p>
-            <p class="m-0 text-sm text-ink-2">{{ copy.benefit }}: {{ story.benefit }}</p>
-          </article>
-        </details>
+          </h4>
+          <ul class="m-0 mt-4 grid list-none gap-3 p-0">
+            <li
+              v-for="story in specification.user_stories"
+              :key="story.id"
+              class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <span class="font-mono text-[11.5px] leading-6 text-ink-3">{{ story.code }}</span>
+              <p class="m-0 text-[15px] leading-6 text-ink-2">
+                <strong class="font-semibold text-ink">{{ story.user_twin_reference.name }}</strong>
+                · {{ copy.goal }}: {{ story.goal }} · {{ copy.benefit }}: {{ story.benefit }}
+              </p>
+            </li>
+          </ul>
+        </UiCard>
 
-        <details class="rounded-panel border border-line p-3">
-          <summary class="cursor-pointer font-semibold text-ink">{{ copy.criteria }}</summary>
-          <article
-            v-for="criterion in specification.acceptance_criteria"
-            :key="criterion.id"
-            class="rounded-panel border border-line p-4"
-          >
-            <strong>{{ criterion.code }}</strong>
-            <p class="mt-2 text-sm text-ink-2">{{ criterion.statement }}</p>
-            <p class="m-0 text-xs text-ink-3">
-              {{ copy.verification }}: {{ criterion.verification_method }}
-            </p>
-          </article>
-        </details>
+        <UiCard tone="dense">
+          <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ copy.criteria }}</h4>
+          <ul class="m-0 mt-4 grid list-none gap-3 p-0">
+            <li
+              v-for="criterion in specification.acceptance_criteria"
+              :key="criterion.id"
+              class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <span class="font-mono text-[11.5px] leading-6 text-ink-3">{{ criterion.code }}</span>
+              <div class="min-w-0">
+                <p class="m-0 text-[15px] leading-6 text-ink-2">{{ criterion.statement }}</p>
+                <p class="m-0 mt-1 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                  {{ copy.verification }}: {{ criterion.verification_method }}
+                </p>
+              </div>
+            </li>
+          </ul>
+        </UiCard>
 
-        <details class="rounded-panel border border-line p-3">
-          <summary class="cursor-pointer font-semibold text-ink">
-            {{ copy.scenarios }}
-          </summary>
-          <article
-            v-for="scenario in specification.scenarios"
-            :key="scenario.id"
-            class="rounded-panel border border-line p-4"
-          >
-            <strong>{{ scenario.code }} · {{ scenario.title }}</strong>
-            <p class="mt-2 text-sm text-ink-2">{{ copy.trigger }}: {{ scenario.trigger }}</p>
-            <ol class="mt-2 list-decimal pl-5 text-sm text-ink-2">
-              <li v-for="step in scenario.steps" :key="step">{{ step }}</li>
-            </ol>
-            <p class="mt-2 text-sm text-ink-2">
-              {{ copy.outcome }}: {{ scenario.expected_outcome }}
-            </p>
-          </article>
-        </details>
+        <UiCard v-if="specification.scenarios.length > 0" tone="dense">
+          <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ copy.scenarios }}</h4>
+          <ul class="m-0 mt-4 grid list-none gap-4 p-0">
+            <li
+              v-for="scenario in specification.scenarios"
+              :key="scenario.id"
+              class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <span class="font-mono text-[11.5px] leading-6 text-ink-3">{{ scenario.code }}</span>
+              <div class="min-w-0">
+                <p class="m-0 text-[15px] leading-6 text-ink">
+                  <strong class="font-semibold">{{ scenario.title }}</strong>
+                  <span class="text-ink-2"> · {{ copy.trigger }}: {{ scenario.trigger }}</span>
+                </p>
+                <ol class="mt-2 list-decimal pl-5 text-sm leading-6 text-ink-2">
+                  <li v-for="step in scenario.steps" :key="step">{{ step }}</li>
+                </ol>
+                <p class="m-0 mt-2 text-sm leading-6 text-ink-2">
+                  {{ copy.outcome }}: {{ scenario.expected_outcome }}
+                </p>
+              </div>
+            </li>
+          </ul>
+        </UiCard>
 
-        <details class="rounded-panel border border-line p-3">
-          <summary class="cursor-pointer font-semibold text-ink">
-            {{ copy.risks }} ({{ specification.risks.length }})
-          </summary>
-          <p v-if="specification.risks.length === 0" class="m-0 text-sm text-ink-3">
-            {{ copy.none }}
+        <UiCard tone="dense">
+          <h4 class="m-0 text-base font-semibold tracking-block text-ink">
+            {{ copy.risksAndDone }}
+          </h4>
+          <p v-if="specification.risks.length === 0" class="m-0 mt-3 text-sm text-ink-3">
+            {{ copy.risks }}: {{ copy.none }}
           </p>
-          <article
-            v-for="risk in specification.risks"
-            :key="risk.id"
-            class="rounded-panel border border-line p-4"
-          >
-            <strong>{{ risk.code }} · {{ risk.likelihood }} / {{ risk.impact }}</strong>
-            <p class="mt-2 text-sm text-ink-2">{{ risk.summary }}</p>
-            <p class="m-0 text-sm text-ink-2">{{ copy.mitigation }}: {{ risk.mitigation }}</p>
-          </article>
-        </details>
-
-        <details class="rounded-panel border border-line p-3">
-          <summary class="cursor-pointer font-semibold text-ink">{{ copy.done }}</summary>
-          <article
-            v-for="item in specification.definition_of_done"
-            :key="item.id"
-            class="rounded-panel border border-line p-4"
-          >
-            <strong>{{ item.code }} · {{ item.applicability }}</strong>
-            <p class="mt-2 text-sm text-ink-2">{{ item.statement }}</p>
-            <p v-if="item.condition !== null" class="m-0 text-xs text-ink-3">
-              {{ copy.condition }}: {{ item.condition }}
-            </p>
-          </article>
-        </details>
+          <ul class="m-0 mt-4 grid list-none gap-3 p-0">
+            <li
+              v-for="risk in specification.risks"
+              :key="risk.id"
+              class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <span class="font-mono text-[11.5px] leading-6 text-ink-3">{{ risk.code }}</span>
+              <div class="min-w-0">
+                <p class="m-0 text-[15px] leading-6 text-ink-2">
+                  {{ risk.summary }} · {{ copy.mitigation }}: {{ risk.mitigation }}
+                </p>
+                <p class="m-0 mt-1 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                  {{ risk.likelihood }} / {{ risk.impact }}
+                </p>
+              </div>
+            </li>
+            <li
+              v-for="item in specification.definition_of_done"
+              :key="item.id"
+              class="grid grid-cols-[58px_minmax(0,1fr)] items-baseline gap-3"
+            >
+              <span class="font-mono text-[11.5px] leading-6 text-ink-3">{{ item.code }}</span>
+              <div class="min-w-0">
+                <p class="m-0 text-[15px] leading-6 text-ink-2">{{ item.statement }}</p>
+                <p class="m-0 mt-1 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                  {{ item.applicability
+                  }}<template v-if="item.condition !== null">
+                    · {{ copy.condition }}: {{ item.condition }}</template
+                  >
+                </p>
+              </div>
+            </li>
+          </ul>
+        </UiCard>
       </section>
 
       <details

@@ -86,6 +86,8 @@ const messages = {
     notReady: "Review and approve the solution to continue.",
     history: "Previous versions",
     technical: "Technical plan and checks",
+    parts: "The parts of the application",
+    links: "How the parts connect",
     audit: "Version and decision details",
     loadError: "The Architecture stage could not be loaded.",
   },
@@ -131,6 +133,8 @@ const messages = {
     notReady: "Controlla e approva la soluzione per continuare.",
     history: "Versioni precedenti",
     technical: "Piano tecnico e verifiche",
+    parts: "Le parti dell'applicazione",
+    links: "Come si collegano le parti",
     audit: "Dettagli di versione e decisioni",
     loadError: "Non è stato possibile caricare la fase di architettura.",
   },
@@ -308,6 +312,12 @@ watch(
   },
   { immediate: true },
 );
+function componentName(id: string): string {
+  return (
+    current.value?.package.architecture.components.find((component) => component.id === id)?.name ??
+    id
+  );
+}
 </script>
 
 <template>
@@ -373,12 +383,54 @@ watch(
         </p>
       </details>
 
-      <section class="grid gap-2 rounded-panel bg-surface-2 p-4">
-        <h3 class="font-semibold text-ink">{{ current.package.architecture.title }}</h3>
-        <p class="m-0 text-sm leading-6 text-ink-2">
-          {{ current.package.architecture.summary }}
-        </p>
-      </section>
+      <UiCard tone="dense">
+        <div class="grid gap-1">
+          <h3 class="m-0 text-base font-semibold tracking-block text-ink">
+            {{ current.package.architecture.title }}
+          </h3>
+          <p class="m-0 text-sm leading-6 text-ink-2">
+            {{ current.package.architecture.summary }}
+          </p>
+        </div>
+
+        <h4 class="m-0 mt-5 text-base font-semibold tracking-block text-ink">{{ copy.parts }}</h4>
+        <ul
+          class="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2"
+          data-testid="architecture-parts"
+        >
+          <li
+            v-for="component in current.package.architecture.components"
+            :key="component.id"
+            class="grid content-start gap-1 rounded-panel border border-line bg-surface-2 p-4"
+          >
+            <strong class="text-[14.5px] font-semibold text-ink">{{ component.name }}</strong>
+            <p class="m-0 text-[13.5px] leading-6 text-ink-2">{{ component.responsibility }}</p>
+            <p class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+              {{ component.technology }}
+            </p>
+          </li>
+        </ul>
+
+        <template v-if="current.package.architecture.connections.length > 0">
+          <h4 class="m-0 mt-6 text-base font-semibold tracking-block text-ink">{{ copy.links }}</h4>
+          <ul class="m-0 mt-3 grid list-none gap-2.5 p-0">
+            <li
+              v-for="connection in current.package.architecture.connections"
+              :key="connection.id"
+              class="flex items-start gap-3 text-[15px] leading-6 text-ink-2"
+            >
+              <span class="mt-2.5 size-1.5 shrink-0 rounded-full bg-action" aria-hidden="true" />
+              <span>
+                <strong class="font-semibold text-ink">
+                  {{ componentName(connection.source_component_id) }} →
+                  {{ componentName(connection.target_component_id) }}
+                </strong>
+                · {{ connection.description }}
+              </span>
+            </li>
+          </ul>
+        </template>
+      </UiCard>
       <details
         class="rounded-panel border border-line p-3"
         data-testid="architecture-technical-details"

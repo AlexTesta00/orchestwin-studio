@@ -703,23 +703,13 @@ function eventLabel(event: HumanGateEventResponse): string {
     </div>
 
     <div class="flex flex-wrap gap-3">
-      <button
-        type="button"
-        class="min-h-11 rounded-panel border border-field bg-white px-4 py-2 font-bold text-ink hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
-        @click="load"
-      >
+      <UiButton variant="secondary" :disabled="store.busy" @click="load">
         {{ t("flow.refresh") }}
-      </button>
+      </UiButton>
 
-      <button
-        type="button"
-        class="min-h-11 rounded-panel bg-action px-4 py-2 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
-        @click="generateProposal"
-      >
+      <UiButton :disabled="store.busy" @click="generateProposal">
         {{ t("flow.generate") }}
-      </button>
+      </UiButton>
     </div>
 
     <p
@@ -840,13 +830,9 @@ function eventLabel(event: HumanGateEventResponse): string {
       </ul>
     </section>
 
-    <form
-      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
-      data-testid="team-selection-form"
-      @submit.prevent="saveTeam"
-    >
+    <form class="grid gap-5" data-testid="team-selection-form" @submit.prevent="saveTeam">
       <fieldset class="grid gap-4">
-        <legend class="text-xl font-semibold text-ink">
+        <legend class="text-xl font-semibold tracking-block text-ink">
           {{ t("flow.teamEditor") }}
         </legend>
 
@@ -873,8 +859,11 @@ function eventLabel(event: HumanGateEventResponse): string {
           }}
         </button>
 
-        <div id="team-role-cards" class="grid gap-4 lg:grid-cols-2">
-          <article
+        <ul
+          id="team-role-cards"
+          class="m-0 grid list-none gap-px overflow-hidden rounded-card border border-line bg-line p-0"
+        >
+          <li
             v-for="entry in store.catalog?.agents ?? []"
             :key="entry.agent_id"
             v-show="
@@ -882,42 +871,60 @@ function eventLabel(event: HumanGateEventResponse): string {
               store.currentVersion === null ||
               (entry.kind === 'SPECIALIST' && isSelected(entry.agent_id))
             "
-            class="grid gap-4 rounded-panel border border-line p-4"
+            class="grid gap-3 bg-surface px-5 py-4"
           >
-            <header class="flex items-start justify-between gap-4">
-              <h4 :id="`team-role-${entry.agent_id}`" class="min-w-0">
-                <TwinIdentity :role="entry.agent_id" :locale="locale === 'it' ? 'it' : 'en'" />
-              </h4>
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="grid min-w-0 flex-1 gap-1">
+                <h4 :id="`team-role-${entry.agent_id}`" class="m-0 min-w-0">
+                  <TwinIdentity
+                    :role="entry.agent_id"
+                    :locale="locale === 'it' ? 'it' : 'en'"
+                    compact
+                  />
+                </h4>
+                <p
+                  v-if="constraintFor(entry.agent_id)?.reasons.length"
+                  class="m-0 text-sm leading-6 text-ink-2"
+                >
+                  {{ reasonText(constraintFor(entry.agent_id)!.reasons[0]!) }}
+                </p>
+              </div>
 
-              <span
-                class="rounded-full px-2 py-1 text-xs font-semibold"
-                :class="{
-                  'bg-ok-bg text-ok-dark': constraintFor(entry.agent_id)?.kind === 'MANDATORY',
-                  'bg-action-soft text-ink-2': constraintFor(entry.agent_id)?.kind === 'OPTIONAL',
-                  'bg-surface-3 text-ink-2': constraintFor(entry.agent_id) === null,
-                  'bg-fail-bg text-fail-dark': ['IMPOSSIBLE', 'CONFLICT'].includes(
-                    constraintFor(entry.agent_id)?.kind ?? '',
-                  ),
-                }"
-              >
-                {{ constraintText(constraintFor(entry.agent_id)?.kind ?? "NOT_EVALUATED") }}
-              </span>
-            </header>
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class="inline-flex items-center rounded-pill border px-2.5 py-1 text-xs font-semibold"
+                  :class="{
+                    'border-line bg-surface-3 text-ink-2': ['MANDATORY', 'OPTIONAL'].includes(
+                      constraintFor(entry.agent_id)?.kind ?? '',
+                    ),
+                    'border-line-soft bg-surface-2 text-ink-3':
+                      constraintFor(entry.agent_id) === null,
+                    'border-fail-line bg-fail-bg text-fail-dark': [
+                      'IMPOSSIBLE',
+                      'CONFLICT',
+                    ].includes(constraintFor(entry.agent_id)?.kind ?? ''),
+                  }"
+                >
+                  {{ constraintText(constraintFor(entry.agent_id)?.kind ?? "NOT_EVALUATED") }}
+                </span>
 
-            <label
-              class="flex min-h-11 items-center gap-3 rounded-control border border-line p-3 font-bold text-ink-2"
-            >
-              <input
-                type="checkbox"
-                :data-testid="`role-${entry.agent_id}`"
-                :aria-labelledby="`team-role-${entry.agent_id}`"
-                :checked="isSelected(entry.agent_id)"
-                :disabled="!canEditRole(entry.agent_id)"
-                @change="setSelected(entry.agent_id, $event)"
-              />
+                <label
+                  class="inline-flex min-h-11 items-center gap-2 rounded-control border border-button-line bg-surface px-3 text-sm font-semibold text-ink-2"
+                >
+                  <input
+                    type="checkbox"
+                    class="size-4 accent-action"
+                    :data-testid="`role-${entry.agent_id}`"
+                    :aria-labelledby="`team-role-${entry.agent_id}`"
+                    :checked="isSelected(entry.agent_id)"
+                    :disabled="!canEditRole(entry.agent_id)"
+                    @change="setSelected(entry.agent_id, $event)"
+                  />
 
-              {{ isSelected(entry.agent_id) ? t("flow.selected") : t("flow.notSelected") }}
-            </label>
+                  {{ isSelected(entry.agent_id) ? t("flow.selected") : t("flow.notSelected") }}
+                </label>
+              </div>
+            </div>
 
             <details class="text-sm">
               <summary class="cursor-pointer font-medium text-ink-2">
@@ -932,14 +939,14 @@ function eventLabel(event: HumanGateEventResponse): string {
                   <li
                     v-for="capability in entry.capabilities"
                     :key="capability"
-                    class="rounded-full bg-surface-3 px-3 py-1 text-xs font-semibold text-ink-2"
+                    class="rounded-pill bg-surface-3 px-3 py-1 text-xs font-semibold text-ink-2"
                   >
                     {{ capabilityText(capability) }}
                   </li>
                 </ul>
               </div>
 
-              <div v-if="constraintFor(entry.agent_id)?.reasons.length" class="grid gap-3">
+              <div v-if="constraintFor(entry.agent_id)?.reasons.length" class="mt-3 grid gap-3">
                 <div
                   v-for="reason in constraintFor(entry.agent_id)?.reasons ?? []"
                   :key="reason.code"
@@ -963,7 +970,7 @@ function eventLabel(event: HumanGateEventResponse): string {
 
               <p
                 v-if="memberFor(entry.agent_id) !== null"
-                class="m-0 text-sm font-semibold text-ink-2"
+                class="m-0 mt-3 text-sm font-semibold text-ink-2"
               >
                 {{ t("flow.source") }}:
                 {{ sourceText(memberFor(entry.agent_id)?.source ?? "") }}
@@ -972,31 +979,31 @@ function eventLabel(event: HumanGateEventResponse): string {
 
             <label
               v-if="requiresRationale(entry.agent_id)"
-              class="grid gap-2 text-sm font-bold text-ink-2"
+              class="grid gap-2 text-sm font-semibold text-ink-2"
             >
               {{ t("flow.ownerRationale") }}
 
               <textarea
                 :data-testid="`rationale-${entry.agent_id}`"
-                class="min-h-24 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none"
+                class="min-h-24 rounded-control border border-field bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none"
                 :placeholder="t('flow.rationalePlaceholder')"
                 :value="rationaleDraft[entry.agent_id] ?? ''"
                 @input="setRationale(entry.agent_id, $event)"
               ></textarea>
             </label>
-          </article>
-        </div>
+          </li>
+        </ul>
       </fieldset>
 
-      <button
-        v-if="store.currentVersion !== null"
-        type="submit"
-        class="min-h-12 rounded-panel bg-action px-5 py-3 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy || !hasTeamChanges"
-        data-testid="save-team-changes"
-      >
-        {{ t("flow.saveTeam") }}
-      </button>
+      <div v-if="store.currentVersion !== null" class="flex">
+        <UiButton
+          type="submit"
+          :disabled="store.busy || !hasTeamChanges"
+          data-testid="save-team-changes"
+        >
+          {{ t("flow.saveTeam") }}
+        </UiButton>
+      </div>
     </form>
 
     <details

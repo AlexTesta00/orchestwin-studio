@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { userModelingApi } from "../api/userModeling";
 
 import ProjectUserModelingFlow from "./ProjectUserModelingFlow.vue";
+import { createAppI18n } from "@/i18n";
 
 import { useUserModelingStore } from "../stores/userModeling";
 
@@ -610,6 +611,9 @@ const readinessStaleGate: UserModelingReadinessPayload = {
 
 function mountJourney() {
   return mount(ProjectUserModelingFlow, {
+    global: {
+      plugins: [createAppI18n("en")],
+    },
     props: {
       projectId: PROJECT_ID,
 
