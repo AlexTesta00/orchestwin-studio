@@ -116,6 +116,8 @@ def derive_static_journey(prototype):
             )
         )
     for element in inputs:
+        if element["kind"] == "SELECT":
+            continue
         steps.append(
             _step(
                 BrowserAction("fill", f"#{element['code']}", sample_value(element)), element, entry

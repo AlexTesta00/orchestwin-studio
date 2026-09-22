@@ -323,6 +323,24 @@ def test_failed_actions_preserve_observed_prefix_and_not_run_tail(tmp_path):
     assert result.metadata["screens"][0]["actions"] == screen["actions"]
 
 
+def test_failed_action_finding_names_the_step_and_the_control(tmp_path):
+    value = job(interactions=(WebBrowserInteraction("root", actions()),))
+    output = report(value)
+    screen = output["screens"][0]
+    screen["actions"][1].update(
+        status="FAILED", observed_text="wrong", failure_code="TEXT_ASSERTION_FAILED"
+    )
+    for action in screen["actions"][2:]:
+        action.update(status="NOT_RUN", observed_text=None, failure_code=None)
+    screen.update(interaction_status="FAILED", failure_codes=["INTERACTION_FAILED"])
+    result, _ = decode(tmp_path, value, output)
+    finding = next(item for item in result.findings if item.code == "INTERACTION_FAILED")
+    assert finding.message == (
+        "Step 2 of 4 failed: expect_text on output with «1» (TEXT_ASSERTION_FAILED, observed «wrong»)."
+    )
+    assert finding.location == "output"
+
+
 def test_failed_route_keeps_partial_artifacts_and_raw_manifest(tmp_path):
     value = job(WebBrowserRouteSpec("details", "/details"))
     output = report(value)
