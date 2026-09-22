@@ -445,6 +445,19 @@ def test_core_call_retry_names_the_caller_and_the_helper_to_move():
     assert "In resetGuests delete every statement that calls updateGuestList" in instruction
     assert "right after the statement that calls resetGuests(), call updateGuestList" in instruction
     assert "In validateInput delete every reference to screen, error" in instruction
+    helper = _syntax_retry_instruction(
+        {
+            "diagnostic": {
+                "reason": "MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+                "detail": "private_helpers uses errorMessage",
+                "line": 3,
+                "parser": "static-module-contract",
+                "input_type": "commonjs",
+            },
+        },
+        "WEB_STATIC",
+    )
+    assert "The private helper that references errorMessage belongs in browser_setup" in helper
 
 
 def test_retry_guidance_preserves_es_modules_for_other_execution_targets():

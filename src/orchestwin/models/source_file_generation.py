@@ -15,7 +15,11 @@ from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError, wire_value
-from orchestwin.models.source_assembly import assemble_static_module
+from orchestwin.models.source_assembly import (
+    RESET_FUNCTION,
+    assemble_static_module,
+    module_keeps_state,
+)
 from orchestwin.models.source_context import (
     IMPLEMENTATION_VIEW,
     implementation_contract,
@@ -39,6 +43,7 @@ from orchestwin.models.source_structure import (
     validate_browser_setup,
     validate_core_calls,
     validate_node_test_contract,
+    validate_reserved_names,
     validate_shared_state_updates,
     validate_static_module_contract,
 )
@@ -354,6 +359,8 @@ def _validate_static_interface(interface):
     if not kept:
         raise ValueError("app.js interface must declare pure business functions")
     names = list(dict.fromkeys(INTERFACE_NAME.match(signature).group(1) for signature in kept))
+    if RESET_FUNCTION in names:
+        raise ValueError("app.js interface cannot declare the platform reset function")
     return kept, removed, names
 
 
@@ -488,7 +495,8 @@ def _static_file_instruction(planned):
             "Use only methods that exist on node:assert/strict, such as ok, equal, notEqual, strictEqual, deepStrictEqual, throws, doesNotThrow and match; "
             "assert.notOk, isTrue, isFalse, expect and other library matchers do not exist and fail the static check. "
             "For a falsy value write assert.ok(!value) or assert.equal(value, false); for an error result check its fields with assert.equal. "
-            "Every test must pass on its own and in any order: call the exported reset function at the start of each test when the module keeps state, and never assume a list is empty or has a given length unless this test made it so. "
+            "Every test must pass on its own and in any order: app.js exports the platform function resetSharedState(), which restores every shared_state declaration to its initializer. "
+            "Never assume a list is empty or has a given length unless this test made it so. "
             "A bare require call does not create a variable: explicitly bind every test and assertion helper you use. "
             "Register every case with test(name, callback), after initializing all imports. "
             "Let failed assertions fail the test runner; never catch assertions merely to log an error and continue. "
@@ -510,11 +518,13 @@ def _static_file_instruction(planned):
             "then a document guard if (typeof document !== 'undefined') { document.addEventListener('DOMContentLoaded', function () { browser_setup }); } "
             "and finally a module guard exporting exactly the functions entries. Never write those guards, module.exports, require, import or export yourself. "
             "shared_state: the list of module-scope declarations for state kept across calls, each with kind const or let, a name and a literal initializer such as [], {}, 0, '' or new Map(); an empty list when the module is stateless. Constants such as a conversion factor are const with a number literal. "
-            "Records live only in these in-memory declarations for the page lifetime; localStorage and sessionStorage are forbidden everywhere. "
+            "Records live only in these in-memory declarations for the page lifetime; localStorage and sessionStorage are forbidden everywhere, "
+            "even when an approved requirement mentions saving data between sessions: satisfy it with shared_state, and read records from shared_state in getters. "
             "private_helpers: additional top-level pure function declarations used by the exported functions, or an empty string. "
             "functions: one entry per exported name in the given order; parameters lists only the parameter names separated by commas, without parentheses, types or annotations, such as name or amount, percent; "
             "body holds the indented statements of a pure function that validates input, changes shared state, computes and returns plain values or result objects "
             "such as { ok: true, record } or { ok: false, error: 'message' }. A reset function listed in the interface clears the shared state. "
+            "The platform appends and exports resetSharedState(), which restores every shared_state declaration to its initializer: never declare a function, helper or variable with that name. "
             "Every function body and helper runs in Node without a browser: it never reads document, window, localStorage, sessionStorage, navigator, fetch or any browser global "
             "and never renders, shows errors or switches screens; the assembled module is rejected as MODULE_FUNCTION_TOUCHES_DOM when a top-level function does. "
             "browser_setup: the statements executed inside the DOMContentLoaded handler: element lookups by the ids in index.html, rendering helper functions declared inside this block, "
@@ -525,6 +535,21 @@ def _static_file_instruction(planned):
             "Use explicit arithmetic, never eval, Function, comments, console.log, simulated DOM helpers, localStorage, sessionStorage, network requests or external resources. "
         )
     return ""
+
+
+def _state_reset_instruction(context):
+    stateful = any(
+        module_keeps_state(completed["content"])
+        for completed in context.get("completed_files", ())
+        if completed["normalized_path"] == "app.js"
+    )
+    if stateful:
+        return (
+            "app.js keeps shared state: import resetSharedState from './app.js' together with the tested functions "
+            "and register test.beforeEach(resetSharedState) once, before the first test, so every test starts from the initial state; "
+            "the static check rejects a test file for a stateful module without that beforeEach registration. "
+        )
+    return "app.js keeps no shared state (its resetSharedState body is empty), so no beforeEach registration is needed. "
 
 
 def _jvm_file_instruction(planned, entrypoint, target):
@@ -781,6 +806,11 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     max_output_tokens=FILE_BUDGET,
                     instruction=_file_instruction(planned, target)
                     + (_static_file_instruction(planned) if target == "WEB_STATIC" else "")
+                    + (
+                        _state_reset_instruction(context)
+                        if target == "WEB_STATIC" and planned.normalized_path == "app.test.cjs"
+                        else ""
+                    )
                     + _jvm_file_instruction(planned, entrypoint, target)
                     + (
                         "Return one JSON object with the fields shared_state, private_helpers, functions and browser_setup; "
@@ -816,6 +846,7 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     if item.normalized_path == "app.js":
                         validate_static_module_contract(item.content)
                         if parts_type:
+                            validate_reserved_names(output)
                             validate_core_calls(output)
                             validate_browser_setup(output)
                             validate_shared_state_updates(
@@ -828,7 +859,14 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                                 ),
                             )
                     if item.normalized_path == "app.test.cjs":
-                        validate_node_test_contract(item.content)
+                        validate_node_test_contract(
+                            item.content,
+                            stateful=any(
+                                module_keeps_state(completed["content"])
+                                for completed in context["completed_files"]
+                                if completed["normalized_path"] == "app.js"
+                            ),
+                        )
                     if item.normalized_path == "index.html":
                         validate_prototype_html(
                             item.content,
@@ -968,14 +1006,23 @@ _SYNTAX_REMEDIES = {
     ),
     "NODE_TEST_DOES_NOT_LOAD_MODULE": "Load the implementation with require('./app.js'). ",
     "NODE_TEST_FRAMEWORK_MISSING": "Use const test = require('node:test') and register cases with test(). ",
+    "NODE_TEST_MISSING_STATE_RESET": (
+        "app.js keeps shared state: import resetSharedState from './app.js' and register "
+        "test.beforeEach(resetSharedState) once, before the first test, so every test starts from the initial state. "
+    ),
+    "RESERVED_MODULE_NAME": (
+        "resetSharedState is generated and exported by the platform: rename or remove your own declaration with that name. "
+    ),
     "EXPORTED_FUNCTION_TOUCHES_DOM": (
         "The exported function named in diagnostic.detail reaches a browser global, directly or through "
         "the helper it calls: make it return a plain result or error object instead, and keep rendering, "
         "error display and screen switching inside browser_setup. "
     ),
     "MODULE_FUNCTION_TOUCHES_DOM": (
-        "The function named in diagnostic.detail reads a browser global: keep every functions entry and private_helpers declaration pure, "
-        "move element lookups, rendering and screen switching into browser_setup, and keep records in a shared_state array instead of localStorage or sessionStorage. "
+        "diagnostic.detail names the function and the browser global it reads: keep every functions entry and private_helpers declaration pure, "
+        "move element lookups, rendering and screen switching into browser_setup, and keep records in a shared_state array. "
+        "When the global is localStorage or sessionStorage, delete every storage read and write: this prototype keeps records in shared_state for the page lifetime "
+        "even when an approved requirement mentions saving data between sessions, and getters return the shared_state records directly. "
     ),
     "BROWSER_SETUP_NESTS_DOM_READY": (
         "browser_setup already runs inside the DOMContentLoaded handler that the platform writes: put the element lookups, helper functions and listeners directly in browser_setup, "
@@ -1000,8 +1047,14 @@ _SYNTAX_REMEDIES = {
     ),
     "MISSING_GUARDED_MODULE_EXPORTS": (
         "End the file with if (typeof module !== 'undefined') { module.exports = { ... }; }. "
+        "A REPLACE of app.js is the complete file: copy the base content from source_files, keep every declaration, function, "
+        "the document guard and the module guard, and change only the lines that fix the failure; never return a single function. "
     ),
     "EXPORTS_UNDECLARED_FUNCTION": "Export only functions declared at the top level of this file. ",
+    "EXPORTS_REMOVED": (
+        "The repaired app.js no longer exports the functions named in diagnostic.detail: keep every export "
+        "of the base revision, including the platform function resetSharedState, because the tests and the page require them. "
+    ),
 }
 
 
@@ -1018,7 +1071,12 @@ def _core_call_moves(detail):
             continue
         caller, verb, names = match.groups()
         listed = ", ".join(name.strip() for name in names.split(","))
-        if verb == "calls":
+        if caller == "private_helpers":
+            sentences.append(
+                f"The private helper that {'calls' if verb == 'calls' else 'references'} {listed} "
+                "belongs in browser_setup: move it there and keep only pure helpers in private_helpers. "
+            )
+        elif verb == "calls":
             sentences.append(
                 f"In {caller} delete every statement that calls {listed}; in browser_setup, right after "
                 f"the statement that calls {caller}(), call {listed} yourself with the returned result. "
