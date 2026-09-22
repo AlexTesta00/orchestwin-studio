@@ -633,7 +633,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.studio-workspace :deep(section.rounded-3xl) {
+.studio-workspace :deep(section.rounded-card) {
   border-radius: 18px;
   padding: 1.5rem;
 }

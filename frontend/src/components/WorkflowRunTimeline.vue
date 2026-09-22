@@ -110,46 +110,48 @@ function lifecycle(action: WorkflowLifecycleAction): void {
 <template>
   <section class="grid gap-6" aria-labelledby="workflow-run-timeline-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-violet-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-hypothesis uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="workflow-run-timeline-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="workflow-run-timeline-title" class="m-0 text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+      <p
+        class="m-0 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4 text-sm text-hypothesis-text"
+      >
         {{ copy.methodological }}
       </p>
     </header>
 
     <dl
-      class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4"
+      class="grid gap-3 rounded-card border border-line bg-white p-5 sm:grid-cols-2 lg:grid-cols-4"
     >
       <div>
-        <dt class="font-bold text-slate-700">{{ copy.stage }}</dt>
+        <dt class="font-bold text-ink-2">{{ copy.stage }}</dt>
         <dd class="m-0" data-testid="workflow-stage">{{ run.current_stage }}</dd>
       </div>
       <div>
-        <dt class="font-bold text-slate-700">{{ copy.status }}</dt>
+        <dt class="font-bold text-ink-2">{{ copy.status }}</dt>
         <dd class="m-0" aria-live="polite" data-testid="workflow-status">{{ run.status }}</dd>
       </div>
       <div>
-        <dt class="font-bold text-slate-700">{{ copy.stateVersion }}</dt>
+        <dt class="font-bold text-ink-2">{{ copy.stateVersion }}</dt>
         <dd class="m-0">{{ run.state_version }}</dd>
       </div>
       <div>
-        <dt class="font-bold text-slate-700">{{ copy.checkpointSequence }}</dt>
+        <dt class="font-bold text-ink-2">{{ copy.checkpointSequence }}</dt>
         <dd class="m-0">{{ run.checkpoint_sequence }}</dd>
       </div>
     </dl>
 
     <section class="grid gap-3" aria-labelledby="workflow-owner-controls-title">
-      <h3 id="workflow-owner-controls-title" class="m-0 text-xl font-black">
+      <h3 id="workflow-owner-controls-title" class="m-0 text-xl font-semibold">
         {{ copy.controls }}
       </h3>
       <div class="flex flex-wrap gap-3">
         <button
           type="button"
-          class="rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-field bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canPause"
           @click="lifecycle('pause')"
         >
@@ -157,7 +159,7 @@ function lifecycle(action: WorkflowLifecycleAction): void {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-field bg-white px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canResume"
           @click="lifecycle('resume')"
         >
@@ -165,7 +167,7 @@ function lifecycle(action: WorkflowLifecycleAction): void {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-red-300 bg-red-50 px-4 py-2 font-bold text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-fail-line bg-fail-bg px-4 py-2 font-bold text-fail-dark disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy || !canCancel"
           @click="lifecycle('cancel')"
         >
@@ -173,7 +175,7 @@ function lifecycle(action: WorkflowLifecycleAction): void {
         </button>
         <button
           type="button"
-          class="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 font-bold text-violet-950 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-control border border-hypothesis-line bg-hypothesis-bg px-4 py-2 font-bold text-hypothesis-text disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="busy"
           @click="emit('replay')"
         >
@@ -183,7 +185,7 @@ function lifecycle(action: WorkflowLifecycleAction): void {
     </section>
 
     <section class="grid gap-3" aria-labelledby="workflow-checkpoint-list-title">
-      <h3 id="workflow-checkpoint-list-title" class="m-0 text-xl font-black">
+      <h3 id="workflow-checkpoint-list-title" class="m-0 text-xl font-semibold">
         {{ copy.checkpoints }}
       </h3>
       <p v-if="orderedCheckpoints.length === 0">{{ copy.noCheckpoints }}</p>
@@ -191,14 +193,14 @@ function lifecycle(action: WorkflowLifecycleAction): void {
         <li
           v-for="checkpoint in orderedCheckpoints"
           :key="checkpoint.id"
-          class="rounded-xl border border-slate-200 bg-white p-4"
+          class="rounded-panel border border-line bg-white p-4"
         >
           <strong>
             {{
               copy.checkpointSequenceLabel.replace("{sequence}", String(checkpoint.sequence_number))
             }}
           </strong>
-          <span class="block text-sm text-slate-600">
+          <span class="block text-sm text-ink-2">
             {{ formatTimestamp(checkpoint.created_at) }} · state {{ checkpoint.state_version }}
           </span>
         </li>
@@ -206,7 +208,7 @@ function lifecycle(action: WorkflowLifecycleAction): void {
     </section>
 
     <section class="grid gap-3" aria-labelledby="workflow-event-list-title">
-      <h3 id="workflow-event-list-title" class="m-0 text-xl font-black">
+      <h3 id="workflow-event-list-title" class="m-0 text-xl font-semibold">
         {{ copy.events }}
       </h3>
       <p v-if="orderedEvents.length === 0" aria-live="polite">{{ copy.noEvents }}</p>
@@ -214,11 +216,11 @@ function lifecycle(action: WorkflowLifecycleAction): void {
         <li
           v-for="event in orderedEvents"
           :key="event.id"
-          class="rounded-xl border border-slate-200 bg-white p-4"
+          class="rounded-panel border border-line bg-white p-4"
           :data-event-sequence="event.sequence_number"
         >
           <strong>{{ event.event_type }}</strong>
-          <span class="block text-sm text-slate-600">
+          <span class="block text-sm text-ink-2">
             {{ copy.eventSequence.replace("{sequence}", String(event.sequence_number)) }} ·
             {{ formatTimestamp(event.occurred_at) }}
           </span>

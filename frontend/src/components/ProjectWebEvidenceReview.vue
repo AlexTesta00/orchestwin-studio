@@ -271,19 +271,21 @@ onMounted(async () => {
 <template>
   <section class="grid gap-6" aria-labelledby="web-evidence-review-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-violet-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-hypothesis uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="web-evidence-review-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="web-evidence-review-title" class="m-0 text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-slate-700">{{ copy.intro }}</p>
-      <p class="m-0 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
+      <p
+        class="m-0 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4 text-sm text-hypothesis-text"
+      >
         {{ copy.methodology }}
       </p>
       <button
         type="button"
-        class="w-fit rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-700"
+        class="w-fit rounded-control border border-field bg-white px-4 py-2 font-bold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         :disabled="store.isBusy"
         @click="loadProject"
       >
@@ -291,29 +293,26 @@ onMounted(async () => {
       </button>
     </header>
 
-    <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ copy.loading }}
     </p>
     <p
       v-if="localError !== null || store.errorCode !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{ localError ?? store.errorCode ?? copy.loadError }}
     </p>
 
     <section class="grid gap-3" aria-labelledby="web-attempt-list-title">
-      <h3 id="web-attempt-list-title" class="m-0 text-xl font-black text-slate-950">
+      <h3 id="web-attempt-list-title" class="m-0 text-xl font-semibold text-ink">
         {{ copy.attempts }}
       </h3>
-      <label
-        v-if="store.executions.length > 0"
-        class="grid max-w-xl gap-1 font-bold text-slate-900"
-      >
+      <label v-if="store.executions.length > 0" class="grid max-w-xl gap-1 font-bold text-ink">
         {{ copy.inspect }}
         <select
           v-model="selectedExecutionId"
-          class="rounded-lg border border-slate-300 bg-white p-2"
+          class="rounded-control border border-field bg-white p-2"
         >
           <option v-for="attempt in store.executions" :key="attempt.id" :value="attempt.id">
             {{ copy.attempt }} {{ attempt.attempt_number }} · {{ attempt.report.status }} ·
@@ -321,7 +320,7 @@ onMounted(async () => {
           </option>
         </select>
       </label>
-      <p v-else class="m-0 text-slate-600">{{ copy.noAttempts }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noAttempts }}</p>
     </section>
 
     <template v-if="store.selectedExecution !== null && store.selectedReport !== null">
@@ -351,13 +350,13 @@ onMounted(async () => {
           />
         </template>
       </WebExecutionOutcome>
-      <details class="grid gap-6 rounded-xl border border-slate-200 p-4">
-        <summary class="cursor-pointer font-bold text-slate-900">{{ copy.technical }}</summary>
+      <details class="grid gap-6 rounded-panel border border-line p-4">
+        <summary class="cursor-pointer font-bold text-ink">{{ copy.technical }}</summary>
         <section
-          class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-3 rounded-panel border border-line bg-surface-2 p-4"
           aria-labelledby="web-report-summary-title"
         >
-          <h3 id="web-report-summary-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-report-summary-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.reportStatus }}: {{ store.selectedReport.status }}
           </h3>
           <dl class="grid gap-2 text-sm sm:grid-cols-2">
@@ -395,7 +394,7 @@ onMounted(async () => {
         </section>
 
         <section class="grid gap-3" aria-labelledby="web-phase-results-title">
-          <h3 id="web-phase-results-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-phase-results-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.phases }}
           </h3>
           <div class="overflow-x-auto">
@@ -425,7 +424,7 @@ onMounted(async () => {
         </section>
 
         <section class="grid gap-3" aria-labelledby="web-raw-evidence-title">
-          <h3 id="web-raw-evidence-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-raw-evidence-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.evidence }}
           </h3>
           <div v-if="evidenceReferences.length > 0" class="overflow-x-auto">
@@ -459,23 +458,23 @@ onMounted(async () => {
               </tbody>
             </table>
           </div>
-          <p v-else class="m-0 text-slate-600">{{ copy.noEvidence }}</p>
+          <p v-else class="m-0 text-ink-2">{{ copy.noEvidence }}</p>
         </section>
 
         <section class="grid gap-3" aria-labelledby="web-failure-signatures-title">
-          <h3 id="web-failure-signatures-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-failure-signatures-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.signatures }}
           </h3>
           <ul v-if="store.selectedReport.failure_signatures.length > 0" class="grid gap-3">
             <li
               v-for="signature in store.selectedReport.failure_signatures"
               :key="signature.digest"
-              class="rounded-xl border border-red-200 bg-red-50 p-4"
+              class="rounded-panel border border-fail-line bg-fail-bg p-4"
             >
-              <p class="m-0 font-black text-red-950">
+              <p class="m-0 font-semibold text-fail-dark">
                 {{ signature.phase }} · {{ signature.category }} · {{ signature.failure_code }}
               </p>
-              <p class="mt-1 mb-0 text-sm text-red-900">{{ signature.normalized_message }}</p>
+              <p class="mt-1 mb-0 text-sm text-fail-dark">{{ signature.normalized_message }}</p>
               <code class="mt-2 block text-xs break-all">{{ signature.digest }}</code>
               <GenerateRepairButton
                 v-if="store.selectedExecution"
@@ -495,11 +494,11 @@ onMounted(async () => {
               />
             </li>
           </ul>
-          <p v-else class="m-0 text-slate-600">{{ copy.noSignatures }}</p>
+          <p v-else class="m-0 text-ink-2">{{ copy.noSignatures }}</p>
         </section>
 
         <section class="grid gap-3" aria-labelledby="web-browser-evidence-title">
-          <h3 id="web-browser-evidence-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-browser-evidence-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.browser }}
           </h3>
           <div v-if="store.browserEvidence !== null" class="grid gap-4">
@@ -507,9 +506,9 @@ onMounted(async () => {
             <article
               v-for="route in store.browserEvidence.routes"
               :key="route.route.route_id"
-              class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4"
+              class="grid gap-2 rounded-panel border border-line bg-white p-4"
             >
-              <h4 class="m-0 font-black text-slate-950">
+              <h4 class="m-0 font-semibold text-ink">
                 {{ copy.route }} {{ route.route.path }} · {{ route.status }}
               </h4>
               <p class="m-0 text-sm">
@@ -539,45 +538,45 @@ onMounted(async () => {
               </ul>
             </article>
           </div>
-          <p v-else class="m-0 text-slate-600">{{ copy.noBrowser }}</p>
+          <p v-else class="m-0 text-ink-2">{{ copy.noBrowser }}</p>
         </section>
 
         <section class="grid gap-3" aria-labelledby="web-repair-proposals-title">
-          <h3 id="web-repair-proposals-title" class="m-0 text-xl font-black text-slate-950">
+          <h3 id="web-repair-proposals-title" class="m-0 text-xl font-semibold text-ink">
             {{ copy.repairs }}
           </h3>
           <ol v-if="store.repairProposals.length > 0" class="grid gap-4">
             <li
               v-for="proposal in store.repairProposals"
               :key="proposal.id"
-              class="grid gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4"
+              class="grid gap-3 rounded-panel border border-line-strong bg-surface-2 p-4"
             >
-              <p class="m-0 font-black text-amber-950">
+              <p class="m-0 font-semibold text-warn">
                 {{ copy.proposalAttempt }} {{ proposal.attempt_number }} ·
                 {{ proposal.failure_signature.failure_code }}
               </p>
-              <p class="m-0 text-sm text-amber-950">
+              <p class="m-0 text-sm text-warn">
                 {{ copy.repeated }}: {{ proposal.identical_failure_occurrences }}
               </p>
-              <p class="m-0 text-sm text-amber-950">{{ proposal.change_set.rationale }}</p>
+              <p class="m-0 text-sm text-warn">{{ proposal.change_set.rationale }}</p>
               <ul class="grid gap-2 pl-5 text-sm">
                 <li v-for="change in proposal.change_set.changes" :key="change.normalized_path">
                   <strong>{{ change.operation }}</strong> · {{ change.normalized_path }} ·
                   <code>{{ change.content_sha256 ?? copy.none }}</code>
                 </li>
               </ul>
-              <label class="grid gap-1 font-bold text-amber-950">
+              <label class="grid gap-1 font-bold text-warn">
                 {{ copy.approvalId }}
                 <input
                   v-model="approvalIdByProposal[proposal.id]"
                   type="text"
-                  class="rounded-lg border border-amber-400 bg-white p-2"
+                  class="rounded-control border border-line-strong bg-white p-2"
                   autocomplete="off"
                 />
               </label>
               <button
                 type="button"
-                class="w-fit rounded-lg bg-amber-900 px-4 py-2 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-950"
+                class="w-fit rounded-control bg-warn px-4 py-2 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                 :disabled="applyingProposalId !== null"
                 @click="applyRepair(proposal)"
               >
@@ -585,7 +584,7 @@ onMounted(async () => {
               </button>
             </li>
           </ol>
-          <p v-else class="m-0 text-slate-600">{{ copy.noRepairs }}</p>
+          <p v-else class="m-0 text-ink-2">{{ copy.noRepairs }}</p>
         </section>
       </details>
     </template>

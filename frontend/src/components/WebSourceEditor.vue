@@ -114,20 +114,20 @@ async function save() {
 
 <template>
   <form
-    class="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+    class="space-y-3 rounded-panel border border-line bg-surface-2 p-4"
     :aria-busy="busy"
     @submit.prevent="save"
   >
     <h3 class="font-bold">{{ copy.title }}</h3>
-    <p class="text-sm text-slate-600">{{ copy.info }}</p>
+    <p class="text-sm text-ink-2">{{ copy.info }}</p>
     <div class="flex flex-wrap gap-2" :aria-label="copy.title">
       <button
         v-for="(file, index) in files"
         :key="file.normalized_path"
         type="button"
         :aria-pressed="selected === index"
-        class="rounded-lg border px-3 py-1.5 text-sm"
-        :class="selected === index ? 'bg-slate-900 text-white' : 'bg-white'"
+        class="rounded-control border px-3 py-1.5 text-sm"
+        :class="selected === index ? 'bg-action text-white' : 'bg-white'"
         @click="selected = index"
       >
         {{ file.normalized_path }}
@@ -145,7 +145,7 @@ async function save() {
         :disabled="busy"
         spellcheck="false"
         rows="16"
-        class="w-full rounded-lg border bg-white p-3 font-mono text-xs leading-5"
+        class="w-full rounded-control border bg-white p-3 font-mono text-xs leading-5"
       />
     </label>
     <label class="block text-sm font-medium"
@@ -155,23 +155,23 @@ async function save() {
         :disabled="busy"
         required
         maxlength="1000"
-        class="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+        class="mt-1 w-full rounded-control border bg-white px-3 py-2"
     /></label>
-    <p v-if="failed || conflict" role="alert" class="text-sm text-red-700">
+    <p v-if="failed || conflict" role="alert" class="text-sm text-fail-dark">
       {{ modelFeedback(rejectionCode, locale) ?? (conflict ? copy.conflict : copy.failed) }}
     </p>
     <div class="flex gap-2">
       <button
         type="submit"
         :disabled="busy || !changed || !rationale.trim()"
-        class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
         {{ copy.save }}
       </button>
       <button
         type="button"
         :disabled="busy"
-        class="rounded-lg border px-4 py-2 text-sm"
+        class="rounded-control border px-4 py-2 text-sm"
         @click="emit('cancel')"
       >
         {{ copy.cancel }}

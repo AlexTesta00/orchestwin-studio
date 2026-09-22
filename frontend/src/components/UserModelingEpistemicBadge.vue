@@ -36,15 +36,15 @@ const statusLabels: Record<Locale, Record<EpistemicStatus, string>> = {
 };
 
 const statusClassByStatus: Record<EpistemicStatus, string> = {
-  USER_PROVIDED: "border-blue-300 bg-blue-50 text-blue-800",
+  USER_PROVIDED: "border-action-soft-line bg-action-soft text-ink-2",
 
-  EMPIRICALLY_SUPPORTED: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  EMPIRICALLY_SUPPORTED: "border-ok-line bg-ok-bg text-ok-dark",
 
   HUMAN_VALIDATED: "border-teal-300 bg-teal-50 text-teal-800",
 
-  MODEL_INFERRED: "border-violet-300 bg-violet-50 text-violet-800",
+  MODEL_INFERRED: "border-hypothesis-line bg-hypothesis-bg text-hypothesis",
 
-  UNSUPPORTED_ASSUMPTION: "border-amber-300 bg-amber-50 text-amber-900",
+  UNSUPPORTED_ASSUMPTION: "border-line-strong bg-surface-2 text-warn",
 };
 
 const confidenceLabel = computed(() => (props.locale === "it" ? "Confidenza" : "Confidence"));
@@ -80,7 +80,7 @@ const statusClasses = computed(() => statusClassByStatus[props.status]);
       {{ statusLabel }}
     </span>
 
-    <span class="text-xs font-medium text-slate-600">
+    <span class="text-xs font-medium text-ink-2">
       {{ confidenceLabel }}
       {{ confidencePercent }}%
     </span>
@@ -92,14 +92,11 @@ const statusClasses = computed(() => statusClassByStatus[props.status]);
       :aria-label="`${confidenceLabel}: ${confidencePercent}%`"
     />
 
-    <span
-      class="inline-flex items-center gap-1 text-xs text-slate-600"
-      data-testid="human-validation"
-    >
+    <span class="inline-flex items-center gap-1 text-xs text-ink-2" data-testid="human-validation">
       <span
         aria-hidden="true"
         class="h-2 w-2 rounded-full"
-        :class="humanValidation === 'REQUIRED' ? 'bg-amber-500' : 'bg-emerald-500'"
+        :class="humanValidation === 'REQUIRED' ? 'bg-warn' : 'bg-ok'"
       />
 
       {{ validationLabel }}

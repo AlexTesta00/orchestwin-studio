@@ -178,19 +178,19 @@ onMounted(async () => {
 <template>
   <section class="grid gap-6" aria-labelledby="jvm-source-review-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-violet-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-hypothesis uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="jvm-source-review-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="jvm-source-review-title" class="m-0 text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-slate-700">{{ copy.intro }}</p>
-      <p class="m-0 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
+      <p class="m-0 rounded-panel border border-line-strong bg-surface-2 p-4 text-sm text-warn">
         {{ copy.honesty }}
       </p>
       <button
         type="button"
-        class="w-fit rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold"
+        class="w-fit rounded-control border border-field bg-white px-4 py-2 font-bold"
         :disabled="store.isBusy"
         @click="load"
       >
@@ -201,19 +201,19 @@ onMounted(async () => {
     <p v-if="store.isBusy" aria-live="polite">{{ copy.loading }}</p>
     <p
       v-if="localError !== null || store.errorCode !== null"
-      class="rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{ localError ?? store.errorCode ?? copy.loadError }}
     </p>
 
     <section class="grid gap-3" aria-labelledby="jvm-profile-list-title">
-      <h3 id="jvm-profile-list-title" class="text-xl font-black">{{ copy.profiles }}</h3>
+      <h3 id="jvm-profile-list-title" class="text-xl font-semibold">{{ copy.profiles }}</h3>
       <ul v-if="store.profiles.length > 0" class="grid gap-3 lg:grid-cols-3">
         <li
           v-for="profile in store.profiles"
           :key="`${profile.profile_id}:${profile.profile_version}`"
-          class="grid gap-2 rounded-xl border border-slate-200 p-4"
+          class="grid gap-2 rounded-panel border border-line p-4"
         >
           <strong>{{ profile.profile_id }} · {{ profile.profile_version }}</strong>
           <span>{{ copy.capability }}: {{ profile.capability_status }}</span>
@@ -230,7 +230,7 @@ onMounted(async () => {
                 <code class="text-xs break-all">{{ reference }}</code>
               </li>
             </ul>
-            <p v-else class="m-0 text-sm text-slate-600">{{ copy.noEvidence }}</p>
+            <p v-else class="m-0 text-sm text-ink-2">{{ copy.noEvidence }}</p>
           </div>
         </li>
       </ul>
@@ -238,12 +238,12 @@ onMounted(async () => {
     </section>
 
     <section class="grid gap-3" aria-labelledby="jvm-revision-list-title">
-      <h3 id="jvm-revision-list-title" class="text-xl font-black">{{ copy.revisions }}</h3>
+      <h3 id="jvm-revision-list-title" class="text-xl font-semibold">{{ copy.revisions }}</h3>
       <ol v-if="store.sourceRevisions.length > 0" class="grid gap-4">
         <li
           v-for="revision in store.sourceRevisions"
           :key="revision.id"
-          class="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-4 rounded-panel border border-line bg-surface-2 p-4"
         >
           <dl class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
@@ -281,7 +281,7 @@ onMounted(async () => {
             {{ copy.scopeHash }}: <code>{{ revision.validation_scope_hash ?? "—" }}</code>
           </p>
           <div>
-            <h4 class="font-black">{{ copy.files }}</h4>
+            <h4 class="font-semibold">{{ copy.files }}</h4>
             <table class="w-full text-left text-sm">
               <thead>
                 <tr>
@@ -302,7 +302,7 @@ onMounted(async () => {
             </table>
           </div>
           <div>
-            <h4 class="font-black">{{ copy.provenance }}</h4>
+            <h4 class="font-semibold">{{ copy.provenance }}</h4>
             <ul v-if="revision.provenance_references.length > 0" class="pl-5">
               <li
                 v-for="item in revision.provenance_references"
@@ -319,7 +319,7 @@ onMounted(async () => {
     </section>
 
     <section class="grid gap-3" aria-labelledby="jvm-revision-compare-title">
-      <h3 id="jvm-revision-compare-title" class="text-xl font-black">{{ copy.compare }}</h3>
+      <h3 id="jvm-revision-compare-title" class="text-xl font-semibold">{{ copy.compare }}</h3>
       <div class="grid gap-3 sm:grid-cols-2">
         <label
           >{{ copy.base
@@ -360,7 +360,7 @@ onMounted(async () => {
         <li
           v-for="change in fileChanges"
           :key="`${change.kind}:${change.path}`"
-          class="rounded-lg border border-slate-200 p-3"
+          class="rounded-control border border-line p-3"
         >
           <strong>{{ changeLabel(change.kind) }}</strong> · <code>{{ change.path }}</code>
         </li>

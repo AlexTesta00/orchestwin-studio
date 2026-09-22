@@ -199,7 +199,7 @@ onUnmounted(() => {
 
 <template>
   <section
-    class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
+    class="space-y-4 rounded-card border border-line bg-white p-6"
     aria-labelledby="source-generation-title"
     :aria-busy="pending"
   >
@@ -209,10 +209,10 @@ onUnmounted(() => {
       compact
     />
     <h2 id="source-generation-title" class="text-xl font-bold">{{ copy.title }}</h2>
-    <p class="text-sm leading-6 text-slate-600">{{ copy.intro }}</p>
+    <p class="text-sm leading-6 text-ink-2">{{ copy.intro }}</p>
     <p v-if="!approved" role="status">{{ copy.waiting }}</p>
     <form class="space-y-3" @submit.prevent="generate">
-      <div class="rounded-xl bg-indigo-50 p-4 text-sm text-indigo-950">
+      <div class="rounded-panel bg-action-soft p-4 text-sm text-action">
         <p class="font-semibold">
           {{ copy.selection }}:
           {{
@@ -223,12 +223,12 @@ onUnmounted(() => {
               : targets.find((option) => option.value === target)?.label
           }}
         </p>
-        <p class="mt-1 text-indigo-800">
+        <p class="mt-1 text-action">
           {{ target === "WEB_STATIC" ? copy.previewHint : copy.otherHint }}
         </p>
       </div>
-      <details class="rounded-xl border border-slate-200 p-3 text-sm">
-        <summary class="cursor-pointer font-semibold text-slate-600">{{ copy.settings }}</summary>
+      <details class="rounded-panel border border-line p-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.settings }}</summary>
         <div class="mt-3 space-y-3">
           <label class="block"
             >{{ copy.target }}
@@ -260,7 +260,7 @@ onUnmounted(() => {
       <p v-else-if="profile.capability_status === 'DESIGN_ONLY_LEVEL_C'">{{ copy.levelC }}</p>
       <button
         type="submit"
-        class="rounded-xl bg-slate-900 px-4 py-2 font-bold text-white disabled:opacity-50"
+        class="rounded-panel bg-action px-4 py-2 font-bold text-white disabled:opacity-50"
         :disabled="!canGenerate"
       >
         {{ pending ? copy.busy : copy.generate }}

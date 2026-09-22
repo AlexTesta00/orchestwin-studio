@@ -104,7 +104,7 @@ watch(checks, (value) => emit("change", value), { immediate: true });
       <li
         v-for="(action, index) in actions"
         :key="index"
-        class="grid gap-2 rounded bg-slate-50 p-3 sm:grid-cols-3"
+        class="grid gap-2 rounded bg-surface-2 p-3 sm:grid-cols-3"
       >
         <label class="grid gap-1"
           >{{ index + 1 }} · {{ copy.action }}
@@ -139,6 +139,6 @@ watch(checks, (value) => emit("change", value), { immediate: true });
     >
       {{ copy.add }}
     </button>
-    <p v-if="!checks" class="text-sm text-amber-900">{{ copy.invalid }}</p>
+    <p v-if="!checks" class="text-sm text-warn">{{ copy.invalid }}</p>
   </fieldset>
 </template>
