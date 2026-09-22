@@ -53,6 +53,9 @@ const messages = {
     panel: {
       close: "Chiudi",
     },
+    progress: {
+      step: "Passo {n} di {total}",
+    },
     state: {
       loading: "Caricamento in corso",
     },
@@ -121,20 +124,141 @@ const messages = {
       unexpected_error: "Si è verificato un errore inatteso.",
     },
   },
-  overview: {
-    capabilities: {
-      api: "Conosci i tuoi utenti",
-      backend: "Racconta la tua idea",
-      frontend: "Prova il risultato",
+  home: {
+    eyebrow: "Tesi · Agentic User-Centred Design",
+    title: "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
+    lead: "OrchesTwin Studio orchestra una squadra di agenti AI lungo otto passi governati: propone la squadra, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design, genera il codice e lo esegue davvero in una sandbox. Ogni passo si chiude con la tua approvazione.",
+    enter: "Entra nello Studio",
+    twinsLink: "Come funzionano i twin",
+    rules: {
+      one: {
+        label: "Regola uno",
+        title: "Niente accade senza il committente",
+        text: "Ogni passo termina con un cancello umano: l'AI propone, tu approvi o rifiuti con una nota. Un rifiuto rimanda il passo indietro e ne genera una nuova versione.",
+      },
+      two: {
+        label: "Regola due",
+        title: "Un'ipotesi resta tale finché non è verificata",
+        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. La prova è solo ciò che la sandbox ha osservato: test superati, controlli nel browser, audit di accessibilità.",
+      },
     },
-    capabilitiesTitle: "Dall’idea alla prima prova",
-    description:
-      "Un team di assistenti AI ti accompagna nella progettazione. I twin rappresentano utenti simulati: aiutano a esplorare le esigenze, mentre tu rivedi e approvi ogni passaggio.",
-    eyebrow: "OrchesTwin Studio",
-    status: "Un passo alla volta, con le persone al centro.",
-    title: "Dai forma alla tua idea.",
-    start: "Apri i tuoi progetti",
-    begin: "Crea il tuo primo progetto",
+    twins: {
+      eyebrow: "Come funzionano i twin",
+      title: "Utenti sintetici, dichiarati per quello che sono",
+      lead: "Un User Twin è una persona ipotetica derivata dal brief: obiettivi, frustrazioni, contesto d'uso, esigenze di accessibilità. Serve a mettere alla prova le scelte di design prima di scrivere una riga di codice, e ogni sua opinione resta etichettata come ipotesi.",
+      items: {
+        brief: {
+          label: "Uno",
+          title: "Nascono dal brief",
+          text: "Dal testo che hai scritto lo Studio ricava da due a quattro twin. Ognuno porta con sé il grado di certezza: ipotizzato, oppure dedotto dal brief.",
+          alt: "Un foglio di brief che si trasforma in tre figure umane tratteggiate, collegate da linee sottili",
+        },
+        critique: {
+          label: "Due",
+          title: "Criticano le alternative",
+          text: "Su ogni alternativa di design ciascun twin dice cosa lo aiuta e cosa lo blocca. Le critiche stanno una accanto all'altra: scegli sapendo chi stai favorendo.",
+          alt: "Tre figure tratteggiate disposte attorno a uno schermo, collegate da linee sottili, con fumetti vuoti sopra",
+        },
+        proof: {
+          label: "Tre",
+          title: "Non diventano mai prove",
+          text: "Quello che dice un twin resta un'ipotesi. La verifica arriva dalla sandbox, che esegue l'applicazione e riporta ciò che ha osservato davvero.",
+          alt: "Composizione divisa: a sinistra una figura tratteggiata sospesa, a destra la stessa forma solida appoggiata su una griglia con tacche di misura",
+        },
+      },
+    },
+    steps: {
+      eyebrow: "Il percorso",
+      title: "Otto passi, otto decisioni tue",
+      items: {
+        brief: {
+          title: "Brief",
+          text: "Descrivi il problema e rispondi a poche domande di chiarimento.",
+        },
+        team: {
+          title: "Squadra",
+          text: "I ruoli degli agenti per questo progetto, con quelli obbligatori segnalati.",
+        },
+        twins: {
+          title: "User Twin",
+          text: "Da due a quattro utenti sintetici: obiettivi, contesto, accessibilità.",
+        },
+        requirements: {
+          title: "Requisiti",
+          text: "Una base leggibile: cosa deve fare, per chi, con quali criteri.",
+        },
+        design: {
+          title: "Design",
+          text: "Alternative con le critiche dei twin, poi un modello cliccabile.",
+        },
+        architecture: {
+          title: "Architettura",
+          text: "Di cosa è fatta l'applicazione e come si collegano le parti.",
+        },
+        sources: {
+          title: "Sorgenti",
+          text: "I file generati, spiegati in parole semplici, con i controlli statici.",
+        },
+        execution: {
+          title: "Esecuzione",
+          text: "La sandbox esegue, il browser verifica, l'AI propone la riparazione.",
+        },
+      },
+    },
+    objectives: {
+      eyebrow: "Obiettivi dell'interfaccia",
+      title: "Sette principi, verificabili uno per uno",
+      items: {
+        results: {
+          title: "Orientata al risultato",
+          text: "Prima esiti, decisioni e prossima azione. La meccanica tecnica arriva dopo, solo su richiesta.",
+        },
+        minimal: {
+          title: "Minimale",
+          text: "Un'azione principale per schermata, testi brevi, nessun cruscotto pieno di numeri.",
+        },
+        clear: {
+          title: "Chiara",
+          text: "Ogni schermata risponde a tre domande: dove sono, cosa è successo, cosa decido adesso.",
+        },
+        stepwise: {
+          title: "A passi",
+          text: "Una sequenza visibile di otto passi con il loro stato. Si agisce sul passo corrente, i precedenti si rileggono.",
+        },
+        plain: {
+          title: "Senza gergo",
+          text: "Verbi e nomi comuni. Niente identificatori, hash o codici di stato in primo piano. Italiano e inglese.",
+        },
+        accessible: {
+          title: "Accessibile",
+          text: "Contrasto WCAG 2 AA su ogni testo, un solo h1 per pagina, uso completo da tastiera. La piattaforma scarta le app che falliscono axe-core: lo Studio si tiene allo stesso metro.",
+        },
+        honest: {
+          title: "Stati onesti",
+          text: "Le attese mostrano avanzamento e durata prevista. I fallimenti dicono qual è la prossima mossa.",
+        },
+      },
+    },
+    users: {
+      primary: {
+        label: "Utente principale",
+        title: "Il committente",
+        text: "Una persona di business o un esperto del dominio: chi organizza un evento, chi gestisce un negozio, chi insegna. Conosce il problema, non l'ingegneria del software. Non deve mai incontrare identificatori, hash o selettori.",
+      },
+      secondary: {
+        label: "Utente secondario",
+        title: "Il revisore esperto",
+        text: "Relatore o ingegnere: vuole aprire il dettaglio di ogni passo, con prove, hash, file generati e log. Tutto esiste, ma resta dietro un'affordance «Dettagli».",
+      },
+    },
+    closing: {
+      title: "Prova il percorso completo, dal brief alla prova osservata",
+      text: "Otto passi, un cancello umano per ciascuno, una sandbox che dice come è andata davvero.",
+    },
+    footer: {
+      thesis: "OrchesTwin Studio · tesi in Agentic User-Centred Design",
+      stack: "Vue 3 · TypeScript · Pinia · Tailwind",
+    },
   },
   projects: {
     new: "Nuovo progetto",
