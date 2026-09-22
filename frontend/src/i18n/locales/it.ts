@@ -234,6 +234,56 @@ const messages = {
       stack: "Vue 3 · TypeScript · Pinia · Tailwind",
     },
   },
+  finale: {
+    title: "Progetto completato",
+    body: "Otto passi approvati, un'esecuzione superata con prove osservate. Puoi esportare tutto o rivedere da dove viene ogni cosa.",
+    recap: {
+      step: "Passo",
+      outcome: "Esito",
+      decisions: "Decisioni",
+      approved: "Approvato",
+      generated: "Generato",
+      pending: "In attesa",
+      count: "{n} di {max}",
+    },
+    export: {
+      title: "Esporta",
+      eventMissing:
+        "L'esportazione usa l'approvazione data in questa sessione: se hai ricaricato la pagina, aggiorna la revisione e approva di nuovo.",
+    },
+    status: {
+      loading: "Sto caricando la revisione finale…",
+      missing: "La revisione finale non è ancora disponibile.",
+      blocked: "Alcuni controlli finali non sono superati:",
+      review: "La revisione finale è pronta: invia la tua decisione.",
+      decision: "Approva per chiudere il progetto, oppure chiedi una revisione.",
+      approved:
+        "Progetto approvato: puoi creare il pacchetto completo, un archivio zip con sorgenti, hash e provenienza.",
+      exported: "Il pacchetto è pronto da scaricare.",
+      decided: "La decisione finale è {status}.",
+    },
+    actions: {
+      reload: "Aggiorna",
+      submit: "Invia la revisione finale",
+      approve: "Approva e chiudi il progetto",
+      revise: "Chiedi una revisione",
+      sendRevision: "Invia la richiesta",
+      export: "Esporta il pacchetto completo",
+      download: "Scarica l'archivio",
+      sources: "Apri i sorgenti",
+      provenance: "Apri la provenienza",
+    },
+    reason: {
+      label: "Perché chiedi una revisione?",
+      missing: "Scrivi un motivo prima di inviare.",
+    },
+    evidence: {
+      archive: "hash archivio",
+      size: "dimensione",
+      manifest: "hash manifesto",
+      created: "creato",
+    },
+  },
   projects: {
     new: "Nuovo progetto",
     cancel: "Annulla",

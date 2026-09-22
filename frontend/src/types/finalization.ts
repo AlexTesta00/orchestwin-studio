@@ -141,6 +141,7 @@ export interface FinalApprovalPayload {
     | "CANCELLED"
     | "STALE";
   updated_at: string;
+  approval_event_id?: string | null;
 }
 
 export interface FinalExportEntryPayload {
