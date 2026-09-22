@@ -92,6 +92,26 @@ def test_journey_with_return_transition_fills_activates_by_keyboard_and_returns(
     )
 
 
+def test_journey_leaves_select_inputs_on_their_default_option():
+    proto = prototype(inputs=1)
+    proto["screens"][0]["elements"].insert(
+        2,
+        element(
+            "ELM-101",
+            "SELECT",
+            "Percentuale",
+            field_name="percentage",
+            options=("10%", "15%"),
+            required=True,
+        ),
+    )
+    result = derive_static_journey(proto)
+    assert result["status"] == "DERIVED"
+    actions = result["browser_interactions"][0]["actions"]
+    assert [action["selector"] for action in actions if action["kind"] == "fill"] == ["#ELM-100"]
+    assert all(action["selector"] != "#ELM-101" for action in actions)
+
+
 def test_journey_without_return_uses_field_focus_as_pointer_check():
     result = derive_static_journey(prototype(back=False))
     assert kinds(result) == [
