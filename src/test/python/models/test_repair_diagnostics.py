@@ -147,3 +147,24 @@ def test_browser_final_state_fails_closed_on_tampered_dom(tmp_path):
     bundle_ref = artifact(tmp_path, "bundle.json", json.dumps(bundle).encode(), "application/json")
     with pytest.raises(ValueError, match="REPAIR_LOG_CONTENT_MISMATCH"):
         browser_final_state(SimpleNamespace(artifact_refs=(bundle_ref,)), tmp_path)
+
+
+def test_tap_excerpt_starts_at_the_first_failing_record(tmp_path):
+    passing = b"TAP version 13\n# Subtest: ok\nok 1 - ok\n  ---\n  type: 'test'\n  ...\n"
+    failing = b"# Subtest: broken\nnot ok 2 - broken\n  ---\n  error: 'boom'\n  ...\n"
+    raw = passing + failing + b"x" * EXCERPT_BYTES
+    reference, _ = log(tmp_path, raw)
+    excerpt = failure_log_context(phase(reference), tmp_path)["excerpts"][0]
+    assert excerpt["start_byte"] == len(passing) + len(b"# Subtest: broken\n")
+    assert excerpt["text"].startswith("not ok 2 - broken")
+    assert excerpt["truncated"] is True
+    assert excerpt["end_byte"] == excerpt["start_byte"] + EXCERPT_BYTES
+    assert excerpt["text"].encode() == raw[excerpt["start_byte"] : excerpt["end_byte"]]
+
+
+def test_tap_log_without_failures_keeps_the_leading_window(tmp_path):
+    raw = b"TAP version 13\n# Subtest: ok\nok 1 - ok\n  ---\n  type: 'test'\n  ...\n"
+    reference, _ = log(tmp_path, raw)
+    excerpt = failure_log_context(phase(reference), tmp_path)["excerpts"][0]
+    assert (excerpt["start_byte"], excerpt["truncated"]) == (0, False)
+    assert excerpt["text"].encode() == raw
