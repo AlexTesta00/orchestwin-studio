@@ -284,6 +284,31 @@ const messages = {
       created: "creato",
     },
   },
+  twinChat: {
+    title: "Parla con {name}",
+    version: "Profilo, versione {n}",
+    notice:
+      "Le risposte sono generate dall'AI a partire dal profilo approvato: sono ipotesi da verificare con persone reali, non risultati di ricerca.",
+    stale:
+      "Questa conversazione è iniziata con la versione {n} del profilo: le prossime risposte useranno la versione corrente.",
+    you: "Tu:",
+    insights: "Spunti emersi",
+    confidence: "confidenza {value}",
+    groundedOn: "Basato su: {fields}",
+    empty:
+      "Nessuna domanda ancora. Chiedi a {name} come lavora, cosa la frustra o cosa si aspetta dall'applicazione.",
+    thinking: "{name} sta rispondendo…",
+    questionLabel: "La tua domanda per {name}",
+    questionMissing: "Scrivi una domanda prima di inviare.",
+    ask: "Chiedi",
+    kinds: {
+      NEED: "Bisogno",
+      FRUSTRATION: "Frustrazione",
+      PREFERENCE: "Preferenza",
+      RISK: "Rischio",
+      OPEN_QUESTION: "Domanda aperta",
+    },
+  },
   projects: {
     new: "Nuovo progetto",
     cancel: "Annulla",

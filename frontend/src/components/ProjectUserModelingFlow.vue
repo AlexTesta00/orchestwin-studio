@@ -42,6 +42,8 @@ const props = withDefaults(
 
 const store = useUserModelingStore();
 
+const emit = defineEmits<{ "open-chat": [twin: UserTwinVersionPayload] }>();
+
 const personaReasons = reactive<Record<string, string>>({});
 
 const diffReasons = reactive<Record<string, string>>({});
@@ -180,6 +182,7 @@ const messages = {
       "Confirm at least one profile and review every remaining suggestion before continuing.",
 
     twins: "Your users' digital representatives",
+    talk: "Talk to",
 
     snapshot: "User profiles",
     technicalDetails: "Technical details and sources",
@@ -325,6 +328,7 @@ const messages = {
       "Conferma almeno un profilo e valuta tutte le altre proposte prima di proseguire.",
 
     twins: "I rappresentanti digitali dei tuoi utenti",
+    talk: "Parla con",
 
     snapshot: "Profili degli utenti",
     technicalDetails: "Dettagli tecnici e fonti",
@@ -1196,6 +1200,16 @@ watch(
                 {{ lifecycleLabel(twin) }}
               </span>
             </div>
+          </div>
+
+          <div class="flex">
+            <UiButton
+              variant="secondary"
+              data-testid="open-twin-chat"
+              @click="emit('open-chat', twin)"
+            >
+              {{ copy.talk }} {{ twin.profile.name }}
+            </UiButton>
           </div>
 
           <dl v-if="keyFacts(twin.profile.observations).length > 0" class="m-0 grid gap-2.5">
