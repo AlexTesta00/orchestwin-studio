@@ -305,7 +305,7 @@ function browser() {
     value:'',textContent:'',hidden:id === 'result',handlers:{},
     addEventListener(type, handler) { this.handlers[type] = handler; }, focus() { this.focused = true; }
   }]));
-  const context = {document:{getElementById(id) { assert.ok(nodes[id], 'unknown DOM id'); return nodes[id]; }}};
+  const context = {document:{getElementById(id) { assert.ok(nodes[id], 'unknown DOM id'); return nodes[id]; }, addEventListener(type, handler) { if (type === 'DOMContentLoaded') handler(); }}};
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(__dirname + '/app.js','utf8'), context, {timeout:1000});
   return {nodes,context,submit() { nodes.form.handlers.submit({preventDefault(){}}); }};
