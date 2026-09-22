@@ -22,6 +22,7 @@ import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceF
 import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
+import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectWebPreview from "@/components/ProjectWebPreview.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
@@ -40,6 +41,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
 import { useArchitectureStore } from "@/stores/architecture";
 import { useWebExecutionStore } from "@/stores/webExecution";
+import type { UserTwinVersionPayload } from "@/types/userModeling";
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -285,6 +287,7 @@ const finalRecap = computed<FinaleRecapRow[]>(() => {
   });
 });
 const provenanceOpen = ref(false);
+const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
 function selectStep(key: string): void {
   const index = Number(key.replace("step-", ""));
@@ -561,6 +564,7 @@ onUnmounted(() => {
             :access-token="auth.accessToken"
             :authorize="authorized"
             :locale="locale === 'it' ? 'it' : 'en'"
+            @open-chat="chatTwin = $event"
           />
         </div>
         <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">
@@ -667,6 +671,19 @@ onUnmounted(() => {
           :key="`${projectId}:${currentBrief?.version_number ?? 0}:artifact-graph`"
           :project-id="projectId"
           :locale="locale === 'it' ? 'it' : 'en'"
+        />
+      </UiSidePanel>
+      <UiSidePanel
+        :open="chatTwin !== null"
+        :title="chatTwin ? t('twinChat.title', { name: chatTwin.profile.name }) : ''"
+        @close="chatTwin = null"
+      >
+        <TwinChatPanel
+          v-if="chatTwin"
+          :key="chatTwin.id"
+          :project-id="projectId"
+          :twin="chatTwin"
+          :authorize="authorized"
         />
       </UiSidePanel>
     </template>

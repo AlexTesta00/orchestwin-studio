@@ -690,4 +690,17 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.text()).toContain("Approved profile");
     expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
   });
+
+  it("offers a conversation with every User Twin and hands the twin to the owner", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const wrapper = mountFlow();
+    await flushPromises();
+
+    const button = wrapper.get('[data-testid="open-twin-chat"]');
+    expect(button.text()).toBe(`Talk to ${twinVersion.profile.name}`);
+    await button.trigger("click");
+    expect(wrapper.emitted("open-chat")?.[0]?.[0]).toEqual(twinVersion);
+  });
 });
