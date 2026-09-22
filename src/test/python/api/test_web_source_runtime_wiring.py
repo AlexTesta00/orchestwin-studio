@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from orchestwin.api import services as services_module
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings
+from orchestwin.api.finalization_runtime import SqlAlchemyFinalizationApiService
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
 from orchestwin.config import ApplicationSettings
@@ -49,7 +50,7 @@ def test_default_factory_wires_source_service_without_connecting_or_writing(monk
         assert runtime.workflow_run_api_service is not None
         assert runtime.web_execution_api_service is None
         assert runtime.jvm_execution_api_service is None
-        assert runtime.finalization_api_service is None
+        assert isinstance(runtime.finalization_api_service, SqlAlchemyFinalizationApiService)
     finally:
         asyncio.run(runtime.close())
     database.dispose.assert_awaited_once()
