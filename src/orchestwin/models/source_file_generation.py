@@ -1039,11 +1039,16 @@ _SYNTAX_REMEDIES = {
         "then return a result object with the stored record and count, and the reset function must clear it. "
     ),
     "MODULE_SCOPE_DOM_ACCESS": (
-        "private_helpers never reads a browser global: move that code into browser_setup. "
+        "No statement outside a function may read a browser global: in the parts move that code into browser_setup; "
+        "in a complete file move it inside the document guard if (typeof document !== 'undefined') { document.addEventListener('DOMContentLoaded', function () { ... }); }. "
     ),
     "MODULE_SCOPE_SIDE_EFFECT": (
-        "private_helpers holds only function declarations: "
-        "move every other statement into a function body or browser_setup. "
+        "Outside functions only declarations are allowed: in the parts private_helpers holds only function declarations and every other statement goes into a function body or browser_setup; "
+        "in a complete file every statement that touches the page, such as element lookups, listeners or screen switches, lives inside the document guard, never at module scope. "
+    ),
+    "IDENTIFIER_ALREADY_DECLARED": (
+        "The identifier named in diagnostic.detail is declared twice in the same scope on the reported line, usually a parameter redeclared with const or let: "
+        "keep the parameter name and give the local variable a different name, such as parsedValue. "
     ),
     "MISSING_GUARDED_MODULE_EXPORTS": (
         "End the file with if (typeof module !== 'undefined') { module.exports = { ... }; }. "
