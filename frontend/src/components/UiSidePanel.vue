@@ -11,13 +11,19 @@ const { t } = useI18n({ useScope: "global" });
 const panel = ref<HTMLElement | null>(null);
 const titleId = useId();
 
+let opener: HTMLElement | null = null;
+
 watch(
   () => props.open,
   async (open) => {
     if (open) {
+      opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       await nextTick();
       panel.value?.focus();
+      return;
     }
+    opener?.focus();
+    opener = null;
   },
 );
 </script>
@@ -31,7 +37,7 @@ watch(
       data-testid="side-panel-veil"
       @click="emit('close')"
     />
-    <aside
+    <div
       ref="panel"
       class="relative flex h-full w-full max-w-[560px] flex-col overflow-y-auto bg-surface shadow-decision outline-none"
       role="dialog"
@@ -56,6 +62,6 @@ watch(
       <div class="grid gap-5 px-6 py-5">
         <slot />
       </div>
-    </aside>
+    </div>
   </div>
 </template>

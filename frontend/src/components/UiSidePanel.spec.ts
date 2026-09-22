@@ -1,8 +1,9 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
 import { createAppI18n } from "@/i18n";
 import UiSidePanel from "./UiSidePanel.vue";
+import { expectAccessible } from "@/test/axe";
 
 function mountPanel(open = true) {
   return mount(UiSidePanel, {
@@ -33,5 +34,26 @@ describe("side panel", () => {
     const wrapper = mountPanel(false);
     expect(wrapper.find("[data-testid='side-panel']").exists()).toBe(false);
     wrapper.unmount();
+  });
+
+  it("has no axe violations while open", async () => {
+    const wrapper = mountPanel(true);
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("returns the focus to the element that opened it", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const wrapper = mountPanel(false);
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get("[role='dialog']").element);
+    await wrapper.setProps({ open: false });
+    await flushPromises();
+    expect(document.activeElement).toBe(opener);
+    wrapper.unmount();
+    opener.remove();
   });
 });

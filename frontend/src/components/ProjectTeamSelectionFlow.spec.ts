@@ -14,6 +14,7 @@ import { createAppI18n } from "@/i18n";
 import { useTeamStore, type TeamAuthorizedRequest } from "@/stores/team";
 
 import ProjectTeamSelectionFlow from "./ProjectTeamSelectionFlow.vue";
+import { expectAccessible } from "@/test/axe";
 
 enableAutoUnmount(afterEach);
 
@@ -232,6 +233,7 @@ describe("ProjectTeamSelectionFlow", () => {
     });
 
     await flushPromises();
+    await expectAccessible(wrapper.element);
 
     const mandatoryCheckbox = wrapper.get('[data-testid="role-REQUIREMENTS_ANALYST"]');
 

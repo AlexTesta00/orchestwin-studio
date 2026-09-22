@@ -7,6 +7,7 @@ import { createAppI18n } from "@/i18n";
 import { createAppRouter } from "@/router";
 import { useAuthStore } from "@/stores/auth";
 import HomeView from "./HomeView.vue";
+import { expectAccessible } from "@/test/axe";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -68,5 +69,10 @@ describe("home page", () => {
 
     expect(wrapper.findAll("video")).toHaveLength(0);
     expect(wrapper.findAll("figure img")).toHaveLength(3);
+  });
+
+  it("has no axe violations", { timeout: 30000 }, async () => {
+    const wrapper = await mountHome();
+    await expectAccessible(wrapper.element);
   });
 });

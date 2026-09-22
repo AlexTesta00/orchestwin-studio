@@ -2,6 +2,7 @@ import { createPinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import GenerateRepairButton from "./GenerateRepairButton.vue";
+import { expectAccessible } from "@/test/axe";
 
 describe("model repair proposal", () => {
   it("binds the proposal to the failure and emits for review without applying it", async () => {
@@ -48,5 +49,21 @@ describe("model repair proposal", () => {
     });
     await wrapper.get("button").trigger("click");
     expect(api.repair).not.toHaveBeenCalled();
+  });
+
+  it("has no axe violations", async () => {
+    const wrapper = mount(GenerateRepairButton, {
+      props: {
+        projectId: "project",
+        platform: "web",
+        executionId: "execution",
+        baseRevisionHash: "base-hash",
+        failureSignature: "failure-hash",
+        api: { source: vi.fn(), repair: vi.fn() },
+        authorize: <T>(operation: (token: string) => Promise<T>) => operation("token"),
+      },
+      global: { plugins: [createPinia()] },
+    });
+    await expectAccessible(wrapper.element);
   });
 });

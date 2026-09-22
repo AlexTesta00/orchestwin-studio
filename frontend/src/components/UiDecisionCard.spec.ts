@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createAppI18n } from "@/i18n";
 import UiDecisionCard from "./UiDecisionCard.vue";
+import { expectAccessible } from "@/test/axe";
 
 function mountCard(props: Record<string, unknown> = {}, locale: "en" | "it" = "it") {
   return mount(UiDecisionCard, {
@@ -54,5 +55,9 @@ describe("human decision card", () => {
     expect(rows[0]?.text()).toContain("Approvato");
     expect(rows[0]?.text()).toContain("Decisione 2 di 4");
     expect(rows[1]?.text()).toContain("Troppo generico");
+  });
+
+  it("has no axe violations", async () => {
+    await expectAccessible(mountCard().element);
   });
 });
