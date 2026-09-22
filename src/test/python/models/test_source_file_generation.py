@@ -460,6 +460,22 @@ def test_core_call_retry_names_the_caller_and_the_helper_to_move():
     assert "The private helper that references errorMessage belongs in browser_setup" in helper
 
 
+def test_redeclared_identifier_retry_names_the_identifier_to_rename():
+    instruction = _syntax_retry_instruction(
+        {
+            "diagnostic": {
+                "reason": "IDENTIFIER_ALREADY_DECLARED",
+                "detail": "km",
+                "line": 2,
+                "parser": "node --check",
+                "input_type": "commonjs",
+            },
+        },
+        "WEB_STATIC",
+    )
+    assert "declared twice in the same scope" in instruction
+
+
 def test_retry_guidance_preserves_es_modules_for_other_execution_targets():
     feedback = {"diagnostic": {"input_type": "module", "reason": "UNEXPECTED_END_OF_INPUT"}}
     instruction = _syntax_retry_instruction(feedback, "WEB_VITE")

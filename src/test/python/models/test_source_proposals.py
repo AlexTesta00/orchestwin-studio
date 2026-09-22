@@ -390,6 +390,9 @@ def test_static_repair_is_validated_and_retried_once_with_the_diagnostic(tmp_pat
     assert feedback["diagnostic"]["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
     assert feedback["diagnostic"]["detail"] == "addItem uses document"
     assert "Return the complete file" in store.requests[accepted][0].system_instruction
+    assert "never move page statements to module scope" in (
+        store.requests[accepted][0].system_instruction
+    )
     assert feedback["previous_source_sha256"] == hashlib.sha256(broken.encode()).hexdigest()
     assert outcome_events(store, accepted) == [
         ("ADAPTER_ACCEPTED", None),

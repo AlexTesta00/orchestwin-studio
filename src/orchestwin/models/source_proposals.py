@@ -366,7 +366,11 @@ async def _repair_retry(rejection):
         scope.retire(role="REJECTED_REPAIR_ATTEMPT", code=code)
     feedback = _syntax_retry_feedback(rejection.item, rejection.error)
     return retry, (
-        " Return the complete file: start from the base content in source_files and apply only the correction."
+        " Return the complete file: start from the base content in source_files and apply only the correction. "
+        "The complete app.js keeps its layout: shared declarations, pure functions, resetSharedState, one document guard "
+        "if (typeof document !== 'undefined') { document.addEventListener('DOMContentLoaded', function () { ... }); } "
+        "holding every statement that touches the page, and the final module guard with module.exports; "
+        "never move page statements to module scope."
         + _syntax_retry_instruction(feedback, "WEB_STATIC")
     )
 

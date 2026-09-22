@@ -87,3 +87,15 @@ def test_safe_diagnostic_does_not_retain_stderr_source_or_paths():
         "line": 8,
     }
     assert "SECRET" not in repr(error.diagnostic) and "/private" not in repr(error.diagnostic)
+
+
+def test_redeclared_parameter_is_named_in_the_bounded_diagnostic():
+    item = source(
+        "app.js",
+        "function validateInput(km) {\n  const km = parseFloat(km);\n  return km >= 0;\n}\n",
+    )
+    with pytest.raises(ProposalGenerationError) as failure:
+        validate_source_syntax(item)
+    assert failure.value.diagnostic["reason"] == "IDENTIFIER_ALREADY_DECLARED"
+    assert failure.value.diagnostic["detail"] == "km"
+    assert failure.value.diagnostic["line"] == 2
