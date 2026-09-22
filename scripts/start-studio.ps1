@@ -28,7 +28,7 @@ $remotePod = $settings.remote_pod
 if (-not [string]::IsNullOrWhiteSpace($remoteConfig)) {
     if ($remoteConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $remoteConfig -PathType Leaf)) { throw 'The remote proposal configuration must be an existing absolute file path.' }
     if ([string]::IsNullOrWhiteSpace($remotePod) -or $remotePod -notmatch '^[A-Za-z0-9_-]+$') { throw 'The remote proposal configuration requires the pod identifier.' }
-    if ($null -ne $sourcePort -or -not [string]::IsNullOrWhiteSpace($sourceConfig)) { throw 'The remote proposer replaces the local source configuration.' }
+    if (-not [string]::IsNullOrWhiteSpace($sourceConfig)) { throw 'The remote proposer replaces the external source configuration.' }
     $remoteRuntime = Get-Content -LiteralPath $remoteConfig -Raw | ConvertFrom-Json
     if ($remoteRuntime.base_url -notmatch '^http://127\.0\.0\.1:([0-9]+)$') { throw 'The remote proposal configuration must target a loopback tunnel port.' }
     $tunnelPort = [int]$Matches[1]
@@ -105,11 +105,13 @@ try {
         }
         $manifest = Get-Content -LiteralPath $models -Raw | ConvertFrom-Json
         $models = Join-Path $session 'models-remote.json'
-        [ordered]@{
+        $remoteManifest = [ordered]@{
             schema_version = 1
             proposal_config_file = $remoteConfig.Replace('\', '/')
             final_evaluator_config_file = $manifest.final_evaluator_config_file
-        } | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
+        }
+        if (-not [string]::IsNullOrWhiteSpace($manifest.source_proposal_config_file)) { $remoteManifest['source_proposal_config_file'] = $manifest.source_proposal_config_file }
+        $remoteManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
     }
     & $python scripts/studio_runtime.py check --models $models | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii
     if ($LASTEXITCODE -ne 0) { throw 'Real model readiness failed.' }
