@@ -153,6 +153,9 @@ def test_accepts_dynamic_result_without_requiring_placeholder_text(tag, value):
         '<table><tr><th data-design-element="ELM-005">Result</th></tr></table>',
         '<table><caption data-design-element="ELM-005">Result</caption></table>',
         '<figure><figcaption data-design-element="ELM-005">12</figcaption></figure>',
+        '<ul data-design-element="ELM-005"><li>12</li></ul>',
+        '<table data-design-element="ELM-005"><tbody><tr><td>12</td></tr></tbody></table>',
+        '<table><tbody data-design-element="ELM-005"><tr><td>12</td></tr></tbody></table>',
     ],
 )
 def test_accepts_semantic_text_containers_in_the_selected_screen(markup):

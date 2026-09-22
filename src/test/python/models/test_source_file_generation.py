@@ -431,6 +431,22 @@ def test_long_preceding_line_does_not_hide_the_actual_failure_from_retry_excerpt
     assert excerpt["text"] == content[excerpt["start_character"] : excerpt["end_character"]]
 
 
+def test_core_call_retry_names_the_caller_and_the_helper_to_move():
+    feedback = {
+        "diagnostic": {
+            "reason": "MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+            "detail": "resetGuests calls updateGuestList; validateInput uses screen, error",
+            "line": 20,
+            "parser": "static-module-contract",
+            "input_type": "commonjs",
+        },
+    }
+    instruction = _syntax_retry_instruction(feedback, "WEB_STATIC")
+    assert "In resetGuests delete every statement that calls updateGuestList" in instruction
+    assert "right after the statement that calls resetGuests(), call updateGuestList" in instruction
+    assert "In validateInput delete every reference to screen, error" in instruction
+
+
 def test_retry_guidance_preserves_es_modules_for_other_execution_targets():
     feedback = {"diagnostic": {"input_type": "module", "reason": "UNEXPECTED_END_OF_INPUT"}}
     instruction = _syntax_retry_instruction(feedback, "WEB_VITE")
