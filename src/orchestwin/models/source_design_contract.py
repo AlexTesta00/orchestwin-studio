@@ -45,6 +45,11 @@ _TEXT_TAGS = {
     "h6",
     "td",
     "th",
+    "ul",
+    "ol",
+    "dl",
+    "table",
+    "tbody",
 }
 
 
