@@ -253,3 +253,20 @@ def test_oversized_context_never_calls_provider(tmp_path):
     ctx["unexpectedly_large_artifact"] = "x" * 131073
     with pytest.raises(ProposalGenerationError, match="SOURCE_CONTEXT_LIMIT_EXCEEDED"):
         run_proposal(tmp_path, "web-source", output(), ctx)
+
+
+def test_unchanged_replacement_beside_a_real_change_is_dropped_not_rejected(tmp_path):
+    task = "web-repair"
+    ctx = context(task)
+    ctx["base_files"].append(file_entry("app.test.cjs", b"old tests", "text/plain"))
+    payload = output(task)
+    payload["changes"].append(
+        {
+            "normalized_path": "app.test.cjs",
+            "operation": "REPLACE",
+            "content": "old tests",
+            "media_type": "text/plain",
+        }
+    )
+    result, _, _ = run_proposal(tmp_path, task, payload, ctx)
+    assert [item["normalized_path"] for item in result.source_binding["changes"]] == ["index.html"]
