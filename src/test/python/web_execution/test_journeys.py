@@ -92,6 +92,16 @@ def test_journey_with_return_transition_fills_activates_by_keyboard_and_returns(
     )
 
 
+@pytest.mark.parametrize("content", ["1", "0", "12", "10%", "OK"])
+def test_journey_does_not_expect_numeric_or_short_examples_to_change(content):
+    proto = prototype()
+    proto["screens"][1]["elements"][1] = element("ELM-007", "STATUS", content)
+    result = derive_static_journey(proto)
+    assert result["status"] == "DERIVED"
+    assert kinds(result) == ["fill", "press", "expect_contains", "click", "expect_text"]
+    assert result["browser_interactions"][0]["actions"][2]["selector"] == "#ELM-007"
+
+
 def test_journey_leaves_select_inputs_on_their_default_option():
     proto = prototype(inputs=1)
     proto["screens"][0]["elements"].insert(

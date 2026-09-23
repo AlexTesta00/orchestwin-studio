@@ -185,7 +185,6 @@ def test_repair_cannot_drop_all_tests_but_can_rename_a_test(
         "unchanged",
         "missing_base",
         "delete_content",
-        "noncanonical_rationale",
         "wrong_entrypoint",
     ],
 )
@@ -223,12 +222,23 @@ def test_invalid_source_output_is_rejected_without_fallback(tmp_path, scenario):
         payload[key][0]["normalized_path"] = "absent.html"
     elif scenario == "delete_content":
         payload[key][0]["operation"] = "DELETE"
-    elif scenario == "noncanonical_rationale":
-        payload["rationale"] = "multiline\nreason"
     elif scenario == "wrong_entrypoint":
         payload[key][0]["normalized_path"] = "src/main/resources/index.html"
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
         run_proposal(tmp_path, task, payload, ctx)
+
+
+@pytest.mark.parametrize("task", ["web-source", "web-repair"])
+def test_multiline_rationale_is_normalized_in_the_binding(tmp_path, task):
+    payload = output(task)
+    payload["rationale"] = "The fix\n  trims the input\t before validating."
+    result, _, _ = run_proposal(tmp_path, task, payload)
+    if task == "web-repair":
+        assert result.source_binding["rationale"] == "The fix trims the input before validating."
+    else:
+        assert [item["normalized_path"] for item in result.source_binding["files"]] == [
+            "index.html"
+        ]
 
 
 @pytest.mark.parametrize(
