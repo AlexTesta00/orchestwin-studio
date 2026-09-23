@@ -62,6 +62,13 @@ def _label(element):
     return element.get("accessible_name") or element["content"]
 
 
+_EXAMPLE_WORD = re.compile(r"[^\W\d_]{2,}")
+
+
+def _example_like(content):
+    return len(content.strip()) >= 4 and _EXAMPLE_WORD.search(content) is not None
+
+
 def _step(action, element, screen):
     return {
         "action": action.snapshot(),
@@ -124,13 +131,14 @@ def derive_static_journey(prototype):
             )
         )
     steps.append(_step(BrowserAction("press", f"#{trigger['code']}", "Enter"), trigger, entry))
-    steps.append(
-        _step(
-            BrowserAction("expect_not_text", f"#{output['code']}", output["content"]),
-            output,
-            target,
+    if _example_like(output["content"]):
+        steps.append(
+            _step(
+                BrowserAction("expect_not_text", f"#{output['code']}", output["content"]),
+                output,
+                target,
+            )
         )
-    )
     text_sample = next(
         (sample_value(element) for element in inputs if sample_value(element) == TEXT_SAMPLE), None
     )

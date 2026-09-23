@@ -180,8 +180,9 @@ def _has_test_sources(target, entries):
 
 
 def build_source_binding(task, context, output):
-    if output.rationale != " ".join(output.rationale.split()):
-        raise ValueError("normalized rationale required")
+    rationale = " ".join(output.rationale.split())
+    if not rationale:
+        raise ValueError("rationale required")
     repair = task.endswith("repair")
     items = output.changes if repair else output.files
     _validate_files(items, task=task)
@@ -261,7 +262,7 @@ def build_source_binding(task, context, output):
         raise ValueError("model repair cannot remove all existing test sources")
     return {
         "changes": canonical_paths(changes),
-        "rationale": output.rationale,
+        "rationale": rationale,
         **{
             key: context[key]
             for key in (

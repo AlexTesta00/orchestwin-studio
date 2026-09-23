@@ -156,7 +156,14 @@ class FakeGenerator:
         )
 
     async def generate(self, *, task, context, output_type, max_output_tokens, instruction):
-        self.calls.append({"task": task, "context": context, "instruction": instruction})
+        self.calls.append(
+            {
+                "task": task,
+                "context": context,
+                "instruction": instruction,
+                "max_output_tokens": max_output_tokens,
+            }
+        )
         return output_type(**self.outputs.pop(0))
 
 
@@ -213,6 +220,7 @@ def test_evaluator_grounds_the_context_and_binds_findings_as_hypotheses():
     )
     call = generator.calls[0]
     assert call["task"] == "user-twin-evaluation"
+    assert call["max_output_tokens"] == 4096
     assert call["context"]["purpose"] == "SYNTHETIC_EVALUATION"
     assert call["context"]["user_twin"]["profile"]["name"] == twin.name
     kinds = {item["kind"]: item for item in call["context"]["artifacts"]}
