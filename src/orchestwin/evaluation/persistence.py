@@ -138,11 +138,6 @@ class SyntheticFindingRecord(OrmBase):
         ),
         UniqueConstraint(
             "evaluation_run_id",
-            "finding_id",
-            name="uq_synthetic_findings_identity",
-        ),
-        UniqueConstraint(
-            "evaluation_run_id",
             "sequence_number",
             name="uq_synthetic_findings_sequence",
         ),
@@ -164,12 +159,12 @@ class SyntheticFindingRecord(OrmBase):
     )
 
     evaluation_run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    twin_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    twin_version: Mapped[int] = mapped_column(Integer, primary_key=True)
     finding_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     project_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     owner_user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    twin_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
-    twin_version: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     artifact_version: Mapped[int] = mapped_column(Integer, nullable=False)
     criterion: Mapped[str] = mapped_column(String(32), nullable=False)

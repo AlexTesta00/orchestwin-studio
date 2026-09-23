@@ -22,6 +22,7 @@ from orchestwin.persistence import create_database_runtime
 from orchestwin.twins.user_twins import (
     UserModelingSnapshotVersion,
     UserTwinLifecycleStatus,
+    create_project_grounded_user_twin,
     create_user_modeling_snapshot,
 )
 from orchestwin.web_execution.attempt_persistence import SqlAlchemyWebExecutionAttemptRepository
@@ -34,6 +35,7 @@ from src.test.python.twins.test_user_modeling_persistence import (
     CATALOG_HASH,
     TEAM_REFERENCE,
     persona_version,
+    twin_observations,
     twin_version,
 )
 
@@ -81,27 +83,52 @@ def screens_for(root):
     ]
 
 
+TWIN_NAMES = ("Receptionist Twin", "Night Porter Twin")
+
+
 def modeling_snapshot(owner, project):
-    persona = replace(persona_version(), project_id=project, created_by_user_id=owner)
-    twin = twin_version()
-    profile = replace(
-        twin.profile, validation_status=UserTwinLifecycleStatus.EMPIRICALLY_GROUNDED_UT
-    )
-    version = replace(
-        twin,
-        project_id=project,
-        created_by_user_id=owner,
-        profile=profile,
-        content_hash=profile.content_hash,
-    )
+    personas = []
+    versions = []
+    for name in TWIN_NAMES:
+        persona = replace(
+            persona_version(),
+            id=uuid4(),
+            persona_id=uuid4(),
+            project_id=project,
+            created_by_user_id=owner,
+        )
+        profile = replace(
+            create_project_grounded_user_twin(
+                name=name,
+                persona_version=persona,
+                project_brief_reference=BRIEF_REFERENCE,
+                agent_team_reference=TEAM_REFERENCE,
+                catalog_version=1,
+                catalog_content_hash=CATALOG_HASH,
+                observations=twin_observations(),
+            ),
+            validation_status=UserTwinLifecycleStatus.EMPIRICALLY_GROUNDED_UT,
+        )
+        personas.append(persona)
+        versions.append(
+            replace(
+                twin_version(),
+                id=uuid4(),
+                twin_id=uuid4(),
+                project_id=project,
+                created_by_user_id=owner,
+                profile=profile,
+                content_hash=profile.content_hash,
+            )
+        )
     snapshot = create_user_modeling_snapshot(
         project_id=project,
         project_brief_reference=BRIEF_REFERENCE,
         agent_team_reference=TEAM_REFERENCE,
         catalog_version=1,
         catalog_content_hash=CATALOG_HASH,
-        persona_versions=(persona,),
-        twin_versions=(version,),
+        persona_versions=tuple(personas),
+        twin_versions=tuple(versions),
     )
     return UserModelingSnapshotVersion(
         id=uuid4(),
@@ -114,7 +141,7 @@ def modeling_snapshot(owner, project):
     )
 
 
-def model_output(dom_reference, twin):
+def model_output(dom_reference):
     return {
         "summary": "Il calcolo è immediato, ma non vedo un messaggio di conferma dopo l'invio.",
         "findings": [
@@ -127,10 +154,7 @@ def model_output(dom_reference, twin):
                 "severity": "moderate",
                 "confidence": 0.7,
                 "recommended_action": "Mostrare la valuta e un esempio di importo accanto al campo.",
-                "evidence_refs": [
-                    artifact_reference_id(dom_reference),
-                    f"user-twin:{twin.twin_id}:v{twin.version_number}",
-                ],
+                "evidence_refs": [artifact_reference_id(dom_reference)],
             }
         ],
         "evidence_gaps": ["Non vedo la schermata del risultato."],
@@ -167,14 +191,13 @@ def test_synthetic_evaluation_api_records_audited_findings_seen_by_the_final_rev
 
             monkeypatch.setattr(read, "browser_evidence", browser_evidence)
             snapshot = modeling_snapshot(owner, project)
-            twin = snapshot.snapshot.twin_versions[0]
             references = execution_artifact_references(
                 execution_id=attempt.id, attempt_number=attempt.attempt_number, screens=screens
             )
             dom_reference = next(item for item in references if item.kind.value == "DOM_SNAPSHOT")
             (tmp_path / "model").mkdir()
             generator, transport = audited_generator(
-                tmp_path / "model", model_output(dom_reference, twin)
+                tmp_path / "model", model_output(dom_reference)
             )
             finalization = SqlAlchemyFinalizationApiService(
                 sessions, content_root=content_root, export_root=tmp_path / "exports"
@@ -209,14 +232,20 @@ def test_synthetic_evaluation_api_records_audited_findings_seen_by_the_final_rev
                 payload = created.json()
                 assert payload["status"] == "SYNTHETIC_EVALUATION_RECORDED"
                 run_snapshot = payload["snapshot"]
-                assert run_snapshot["response_count"] == 1
-                assert run_snapshot["finding_count"] == 1
+                assert run_snapshot["response_count"] == 2
+                assert run_snapshot["finding_count"] == 2
                 assert run_snapshot["simulated_feedback"] is True
-                finding = payload["findings"][0]
-                assert finding["origin"] == "MODEL_GENERATED"
-                assert finding["epistemic_status"] == "MODEL_INFERRED"
-                assert finding["requires_human_validation"] is True
-                assert finding["artifact_id"] == str(dom_reference.artifact_id)
+                assert [item["finding_id"] for item in payload["findings"]] == [
+                    "UTF-001",
+                    "UTF-001",
+                ]
+                assert len({item["twin_id"] for item in payload["findings"]}) == 2
+                for finding in payload["findings"]:
+                    assert finding["origin"] == "MODEL_GENERATED"
+                    assert finding["epistemic_status"] == "MODEL_INFERRED"
+                    assert finding["requires_human_validation"] is True
+                    assert finding["artifact_id"] == str(dom_reference.artifact_id)
+                assert len(payload["aggregation"]["shared_findings"]) == 1
                 assert payload["aggregation"]["evaluation_run_id"] == run_snapshot["id"]
                 assert payload["aggregation"]["is_empirical_evidence"] is False
                 listed = await client.get(path)
@@ -225,7 +254,10 @@ def test_synthetic_evaluation_api_records_audited_findings_seen_by_the_final_rev
                 assert detail.status_code == 200
                 assert detail.json()["snapshot"]["content_hash"] == run_snapshot["content_hash"]
                 findings = await client.get(f"/evaluation-runs/{run_snapshot['id']}/findings")
-                assert [item["finding_id"] for item in findings.json()["items"]] == ["UTF-001"]
+                assert [item["finding_id"] for item in findings.json()["items"]] == [
+                    "UTF-001",
+                    "UTF-001",
+                ]
                 aggregation = await client.get(f"/evaluation-runs/{run_snapshot['id']}/aggregation")
                 assert (
                     aggregation.json()["snapshot"]["evaluation_run_hash"]
@@ -239,11 +271,14 @@ def test_synthetic_evaluation_api_records_audited_findings_seen_by_the_final_rev
                 assert (
                     await foreign.get(f"/evaluation-runs/{run_snapshot['id']}")
                 ).status_code == 404
-            assert len(transport.calls) == 1
-            sent = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])["context"]
-            assert sent["purpose"] == "SYNTHETIC_EVALUATION"
-            assert sent["scenario"]["name"] == "Tip calculator"
-            assert sent["user_twin"]["name"] == twin.profile.name
+            assert len(transport.calls) == 2
+            contexts = [
+                json.loads(call["payload"]["messages"][1]["content"])["context"]
+                for call in transport.calls
+            ]
+            assert {sent["purpose"] for sent in contexts} == {"SYNTHETIC_EVALUATION"}
+            assert {sent["scenario"]["name"] for sent in contexts} == {"Tip calculator"}
+            assert {sent["user_twin"]["name"] for sent in contexts} == set(TWIN_NAMES)
             reviews = await finalization.final_reviews(owner_user_id=owner, project_id=project)
             check = next(
                 item for item in reviews[-1]["checks"] if item["kind"] == "SYNTHETIC_EVALUATION"
@@ -263,25 +298,40 @@ def test_synthetic_evaluation_api_records_audited_findings_seen_by_the_final_rev
                     .scalars()
                     .all()
                 )
-                assert len(generations) == 1
-                events = (
-                    await session.execute(
-                        sa.text(
-                            "SELECT kind, snapshot_json FROM model_proposal_generation_events "
-                            "WHERE generation_id = :generation"
-                        ),
-                        {"generation": generations[0]},
-                    )
-                ).all()
-                payloads = {kind: json.loads(raw)["payload"] for kind, raw in events}
-                assert payloads["ADAPTER_ACCEPTED"]["generated_content_hashes"] == {
+                assert len(generations) == 2
+                outcomes = {}
+                for generation in generations:
+                    events = (
+                        await session.execute(
+                            sa.text(
+                                "SELECT kind, snapshot_json FROM model_proposal_generation_events "
+                                "WHERE generation_id = :generation"
+                            ),
+                            {"generation": generation},
+                        )
+                    ).all()
+                    outcomes[generation] = {
+                        kind: json.loads(raw)["payload"] for kind, raw in events
+                    }
+                statuses = sorted(
+                    payloads["APPLICATION_RESULT"]["status"] for payloads in outcomes.values()
+                )
+                assert statuses == ["SYNTHETIC_EVALUATION_RECORDED", "TWIN_EVALUATED"]
+                final = next(
+                    payloads
+                    for payloads in outcomes.values()
+                    if payloads["APPLICATION_RESULT"]["status"] == "SYNTHETIC_EVALUATION_RECORDED"
+                )
+                assert final["ADAPTER_ACCEPTED"]["generated_content_hashes"] == {
                     "SYNTHETIC_EVALUATION": [run_snapshot["content_hash"]]
                 }
-                assert payloads["APPLICATION_RESULT"]["status"] == ("SYNTHETIC_EVALUATION_RECORDED")
+                assert [
+                    item["role"] for item in final["ADAPTER_ACCEPTED"]["related_generations"]
+                ] == ["TWIN_EVALUATION"]
                 stored_findings = await session.scalar(
                     sa.text("SELECT count(*) FROM synthetic_findings")
                 )
-                assert stored_findings == 1
+                assert stored_findings == 2
         finally:
             await db.dispose()
 
