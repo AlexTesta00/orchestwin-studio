@@ -51,27 +51,73 @@ export interface SyntheticEvaluationRunPayload {
   completed_at: string;
   content_hash: string;
   simulated_feedback: boolean;
+  evaluator?: {
+    evaluator_id: string;
+    evaluator_version: string;
+    model_config_ref: string;
+    prompt_version_ref: string;
+  };
 }
 
-export interface FindingConflictPayload {
+export interface EvaluationSharedFindingGroupPayload {
+  group_id: string;
+  comparison_key: string[];
+  findings: SyntheticFindingPayload[];
+}
+
+export interface EvaluationRoleSpecificFindingPayload {
+  finding: SyntheticFindingPayload;
+}
+
+export interface EvaluationConflictDeclarationPayload {
   conflict_id: string;
   finding_ids: string[];
   summary: string;
-  evidence_refs: string[];
-  requires_owner_decision: boolean;
+  owner_decision_question: string;
+}
+
+export interface EvaluationDirectConflictPayload {
+  declaration: EvaluationConflictDeclarationPayload;
+  findings: SyntheticFindingPayload[];
+}
+
+export interface EvaluationEvidenceGapPayload {
+  twin_id: string;
+  twin_version: number;
+  gap: string;
+}
+
+export interface EvaluationValidationQuestionPayload {
+  question_id: string;
+  related_finding_ids: string[];
+  question: string;
 }
 
 export interface EvaluationAggregationPayload {
   evaluation_run_id: string;
   evaluation_run_hash: string;
-  shared_finding_groups: Array<{ group_id: string; finding_ids: string[]; summary: string }>;
-  role_specific_finding_ids: string[];
-  direct_conflicts: FindingConflictPayload[];
+  shared_findings: EvaluationSharedFindingGroupPayload[];
+  role_specific_findings: EvaluationRoleSpecificFindingPayload[];
+  direct_conflicts: EvaluationDirectConflictPayload[];
   unresolved_trade_offs: string[];
-  evidence_gaps: string[];
-  human_validation_questions: string[];
+  evidence_gaps: EvaluationEvidenceGapPayload[];
+  human_validation_questions: EvaluationValidationQuestionPayload[];
+  aggregation_policy: string;
+  independent_human_sample_count: number;
   content_hash: string;
   disclaimer: string;
+  is_empirical_evidence: boolean;
+}
+
+export interface CreateEvaluationRunInput {
+  execution_id: string;
+}
+
+export interface SyntheticEvaluationCreationPayload {
+  status: string;
+  snapshot: SyntheticEvaluationRunPayload;
+  findings: SyntheticFindingPayload[];
+  aggregation: EvaluationAggregationPayload;
 }
 
 export type FinalReviewCheckStatus =

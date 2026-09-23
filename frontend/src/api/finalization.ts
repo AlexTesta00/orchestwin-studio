@@ -1,6 +1,7 @@
 import { ApiRequestError } from "./requestError";
 
 import type {
+  CreateEvaluationRunInput,
   CreateFinalExportInput,
   DecideFinalApprovalInput,
   EvaluationAggregationPayload,
@@ -9,6 +10,7 @@ import type {
   FinalExportPayload,
   FinalReviewPayload,
   SubmitFinalReviewInput,
+  SyntheticEvaluationCreationPayload,
   SyntheticEvaluationRunPayload,
   SyntheticFindingPayload,
 } from "../types/finalization";
@@ -38,6 +40,12 @@ export interface FinalizationApi {
   evaluationRun(id: string, accessToken: string): Promise<SyntheticEvaluationRunPayload>;
   findings(id: string, accessToken: string): Promise<SyntheticFindingPayload[]>;
   aggregation(id: string, accessToken: string): Promise<EvaluationAggregationPayload>;
+  evaluationRuns(projectId: string, accessToken: string): Promise<SyntheticEvaluationRunPayload[]>;
+  createEvaluationRun(
+    projectId: string,
+    input: CreateEvaluationRunInput,
+    accessToken: string,
+  ): Promise<SyntheticEvaluationCreationPayload>;
   finalReviews(projectId: string, accessToken: string): Promise<FinalReviewPayload[]>;
   submitFinalReview(
     reviewId: string,
@@ -157,6 +165,22 @@ export function createFinalizationApi(options: FinalizationApiOptions = {}): Fin
         accessToken,
       );
       return response.snapshot;
+    },
+
+    async evaluationRuns(projectId, accessToken) {
+      const response = await request<SnapshotListResponse<SyntheticEvaluationRunPayload>>(
+        `${basePath}/projects/${encodeURIComponent(projectId)}/evaluation-runs`,
+        accessToken,
+      );
+      return response.items;
+    },
+
+    async createEvaluationRun(projectId, input, accessToken) {
+      return request<SyntheticEvaluationCreationPayload>(
+        `${basePath}/projects/${encodeURIComponent(projectId)}/evaluation-runs`,
+        accessToken,
+        { method: "POST", body: JSON.stringify(input) },
+      );
     },
 
     async finalReviews(projectId, accessToken) {
