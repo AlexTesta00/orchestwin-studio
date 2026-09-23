@@ -3,12 +3,15 @@
 import asyncio
 import hashlib
 import json
+from copy import deepcopy
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_file_generation import (
     FILE_BUDGET,
     MANIFEST_BUDGET,
@@ -19,11 +22,35 @@ from orchestwin.models.source_file_generation import (
     _manifest_observation_instruction,
     _syntax_retry_feedback,
     _syntax_retry_instruction,
+    _validate_static_module,
 )
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.source_syntax import SourceSyntaxError
 from src.test.python.models.test_proposal_evidence import Command, MemoryEvidence, audited_generator
 from src.test.python.models.test_source_proposals import context, output
+
+APP_PARTS = {
+    "shared_state": [],
+    "private_helpers": "",
+    "functions": [{"name": "value", "parameters": "", "body": "  return 3;"}],
+    "browser_setup": "  document.title = String(value());",
+}
+
+
+def app_file(**overrides):
+    parts = {**deepcopy(APP_PARTS), **overrides}
+    return {
+        "normalized_path": "app.js",
+        "media_type": "text/javascript",
+        "parts": parts,
+        "content": assemble_static_module(parts),
+    }
+
+
+def broken(value, text):
+    if "functions" in value:
+        return {**value, "private_helpers": text}
+    return {"content": text}
 
 
 def source_sequence_generator(tmp_path, payload, *, mutate=None):
@@ -40,7 +67,7 @@ def source_sequence_generator(tmp_path, payload, *, mutate=None):
                 for f in payload["files"]
                 if f["normalized_path"] == step["file"]["normalized_path"]
             )
-            value = {"content": item["content"]}
+            value = deepcopy(item["parts"]) if "parts" in item else {"content": item["content"]}
         else:
             planned_files = (
                 sorted(
@@ -112,15 +139,15 @@ def complete_output():
     payload = output()
     payload["files"].extend(
         [
-            {
-                "normalized_path": "app.js",
-                "media_type": "text/javascript",
-                "content": "exports.value = 3;",
-            },
+            app_file(),
             {
                 "normalized_path": "app.test.cjs",
                 "media_type": "text/javascript",
-                "content": "require('node:assert/strict').equal(require('./app.js').value, 3);",
+                "content": (
+                    "const test = require('node:test');\n"
+                    "const assert = require('node:assert/strict');\n"
+                    "test('value', () => { assert.equal(require('./app.js').value(), 3); });"
+                ),
             },
         ]
     )
@@ -130,7 +157,13 @@ def complete_output():
 
 def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
-    payload["files"][0]["content"] = 'const label = "è";\nconst s = "\\n";'
+    payload["files"][0] = app_file(
+        shared_state=[
+            {"kind": "const", "name": "label", "initializer": "'è'"},
+            {"kind": "const", "name": "s", "initializer": "'-'"},
+        ],
+        functions=[{"name": "value", "parameters": "", "body": "  return label + s;"}],
+    )
     generator, transport = source_sequence_generator(tmp_path, payload)
     result = execute(generator, ctx, store)
     assert len(transport.calls) == len(store.requests) == 4
@@ -146,6 +179,8 @@ def test_files_have_separate_requests_exact_bytes_and_parent_links(tmp_path):
         json.loads(store.requests[parent][0].input_payload_json)["context"]["runtime_contract"]
         == STATIC_RUNTIME_CONTRACT
     )
+    assert store.requests[parent][0].temperature == 0.6
+    assert [store.requests[child][0].temperature for child in children] == [0.6, 0.6, 0.6]
     assert [s["generation_id"] for s in result.generation_steps] == list(map(str, children))
     for ordinal, child in enumerate(children, 1):
         request = store.requests[child][0]
@@ -245,10 +280,11 @@ def test_static_manifest_cannot_carry_module_declarations_or_implementation_bodi
 
 def test_module_mismatch_retry_receives_original_excerpt_and_exact_diagnostic(tmp_path):
     previous = "// Original Unicode: è\n\nexport const calculate = (a, b) => a + b;"
+    assembled = assemble_static_module(broken(APP_PARTS, previous))
 
     def mutate(ctx, value):
         if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
-            return {"content": previous}
+            return broken(value, previous)
         return value
 
     store = MemoryEvidence()
@@ -259,8 +295,8 @@ def test_module_mismatch_retry_receives_original_excerpt_and_exact_diagnostic(tm
     feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
     assert feedback["diagnostic"]["reason"] == "ES_MODULE_EXPORT_IN_CLASSIC_SCRIPT"
     assert feedback["diagnostic"]["line"] == 3
-    assert feedback["source_excerpt"]["text"] == previous
-    assert feedback["previous_source_sha256"] == hashlib.sha256(previous.encode()).hexdigest()
+    assert feedback["source_excerpt"]["text"] == assembled
+    assert feedback["previous_source_sha256"] == hashlib.sha256(assembled.encode()).hexdigest()
     assert "no ES-module import/export declarations" in prompt
     assert "SYNTAX_RETRY_FEEDBACK_JSON=" not in store.requests[rejected][0].system_instruction
 
@@ -348,10 +384,11 @@ def test_all_web_profiles_preserve_browser_observation_scope(target):
 
 def test_escaped_unicode_feedback_respects_the_normalized_request_text_budget(tmp_path):
     previous = "const value = (" + "\U0001f600" * 1000
+    assembled = assemble_static_module(broken(APP_PARTS, previous))
 
     def mutate(ctx, value):
         if ctx.get("source_step", {}).get("ordinal") == 1 and "syntax_retry" not in ctx:
-            return {"content": previous}
+            return broken(value, previous)
         return value
 
     store = MemoryEvidence()
@@ -362,7 +399,7 @@ def test_escaped_unicode_feedback_respects_the_normalized_request_text_budget(tm
     assert len(prompt) <= 16000 and " ".join(prompt.split()) == prompt
     feedback = json.loads(prompt.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
     excerpt = feedback["source_excerpt"]
-    assert excerpt["text"] == previous[excerpt["start_character"] : excerpt["end_character"]]
+    assert excerpt["text"] == assembled[excerpt["start_character"] : excerpt["end_character"]]
     assert excerpt["truncated"] and len(excerpt["text"]) <= SYNTAX_EXCERPT_CHARACTERS
 
 
@@ -396,6 +433,137 @@ def test_long_preceding_line_does_not_hide_the_actual_failure_from_retry_excerpt
     assert excerpt["text"] == content[excerpt["start_character"] : excerpt["end_character"]]
 
 
+def test_core_call_retry_names_the_caller_and_the_helper_to_move():
+    feedback = {
+        "diagnostic": {
+            "reason": "MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+            "detail": "resetGuests calls updateGuestList; validateInput uses screen, error",
+            "line": 20,
+            "parser": "static-module-contract",
+            "input_type": "commonjs",
+        },
+    }
+    instruction = _syntax_retry_instruction(feedback, "WEB_STATIC")
+    assert "In resetGuests delete every statement that calls updateGuestList" in instruction
+    assert "right after the statement that calls resetGuests(), call updateGuestList" in instruction
+    assert "In validateInput delete every reference to screen, error" in instruction
+    helper = _syntax_retry_instruction(
+        {
+            "diagnostic": {
+                "reason": "MODULE_FUNCTION_CALLS_BROWSER_HELPER",
+                "detail": "private_helpers uses errorMessage",
+                "line": 3,
+                "parser": "static-module-contract",
+                "input_type": "commonjs",
+            },
+        },
+        "WEB_STATIC",
+    )
+    assert "The private helper that references errorMessage belongs in browser_setup" in helper
+
+
+def test_static_module_feedback_lists_every_violation():
+    parts = SimpleNamespace(
+        shared_state=[],
+        private_helpers="",
+        functions=[
+            SimpleNamespace(
+                name="save",
+                parameters="value",
+                body=(
+                    "  localStorage.setItem('value', value);\n"
+                    "  errorBox.textContent = '';\n"
+                    "  return value;"
+                ),
+            )
+        ],
+        browser_setup=(
+            "    const errorBox = document.getElementById('error');\n"
+            "    save(errorBox.textContent);"
+        ),
+    )
+    item = SimpleNamespace(normalized_path="app.js", content=assemble_static_module(parts))
+    with pytest.raises(SourceSyntaxError) as raised:
+        _validate_static_module(item, parts)
+    diagnostic = raised.value.diagnostic
+    assert diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
+    assert diagnostic["detail"] == "save uses localStorage"
+    assert [extra["reason"] for extra in diagnostic["additional"]] == [
+        "MODULE_FUNCTION_CALLS_BROWSER_HELPER"
+    ]
+    assert diagnostic["additional"][0]["detail"] == "save uses errorBox"
+    instruction = _syntax_retry_instruction({"diagnostic": diagnostic}, "WEB_STATIC")
+    assert "delete every storage read and write" in instruction
+    assert "In save delete every reference to errorBox" in instruction
+    assert "correct all of them in this single regeneration" in instruction
+
+
+def test_redeclared_identifier_retry_names_the_identifier_to_rename():
+    instruction = _syntax_retry_instruction(
+        {
+            "diagnostic": {
+                "reason": "IDENTIFIER_ALREADY_DECLARED",
+                "detail": "km",
+                "line": 2,
+                "parser": "node --check",
+                "input_type": "commonjs",
+            },
+        },
+        "WEB_STATIC",
+    )
+    assert "declared twice in the same scope" in instruction
+
+
+def test_new_static_reasons_carry_remedies():
+    for reason, expected in (
+        ("MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION", "implement it in private_helpers"),
+        ("BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS", "write the page statements directly"),
+        ("NODE_TEST_USES_UNEXPORTED_NAME", "never through internal variables"),
+        ("REPAIR_UNCHANGED", "previous_rationale"),
+    ):
+        instruction = _syntax_retry_instruction({"diagnostic": {"reason": reason}}, "WEB_STATIC")
+        assert expected in instruction
+
+
+def test_shared_state_retry_names_the_statement_to_insert():
+    instruction = _syntax_retry_instruction(
+        {"diagnostic": {"reason": "SHARED_STATE_NEVER_UPDATED", "detail": "presents"}},
+        "WEB_STATIC",
+    )
+    assert "write presents.push(record) when presents is an array" in instruction
+    assert "browser_setup only calls it and never modifies presents itself" in instruction
+
+
+def test_second_syntax_retry_binds_to_the_rejected_second_attempt(tmp_path):
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
+
+    def mutate(child_context, value):
+        attempt = child_context.get("syntax_retry", {}).get("attempt", 1)
+        if child_context.get("source_step", {}).get("ordinal") == 2 and attempt < 3:
+            return {"content": "assert.equal(result, \\\n"}
+        return value
+
+    generator, transport = source_sequence_generator(tmp_path, payload, mutate=mutate)
+    execute(generator, ctx, store)
+    _parent, _core, rejected, rejected_again, accepted, _html = store.requests
+    assert len(transport.calls) == 6
+    second = json.loads(store.requests[rejected_again][0].input_payload_json)["context"]
+    third = json.loads(store.requests[accepted][0].input_payload_json)["context"]
+    assert second["syntax_retry"]["attempt"] == 2
+    assert second["syntax_retry"]["previous_generation_id"] == str(rejected)
+    assert third["syntax_retry"]["attempt"] == 3
+    assert third["syntax_retry"]["previous_generation_id"] == str(rejected_again)
+    assert third["syntax_retry"]["previous_request_hash"] == (
+        store.requests[rejected_again][0].content_hash
+    )
+    assert {key: value for key, value in third.items() if key != "syntax_retry"} == {
+        key: value for key, value in second.items() if key != "syntax_retry"
+    }
+    for generation in (rejected, rejected_again):
+        assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[generation])
+    assert any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[accepted])
+
+
 def test_retry_guidance_preserves_es_modules_for_other_execution_targets():
     feedback = {"diagnostic": {"input_type": "module", "reason": "UNEXPECTED_END_OF_INPUT"}}
     instruction = _syntax_retry_instruction(feedback, "WEB_VITE")
@@ -423,16 +591,16 @@ def test_different_mockup_structure_is_rejected_before_file_acceptance(tmp_path)
     )
 
 
-def test_repeated_syntax_failure_stops_after_one_retry_and_never_accepts_parent(tmp_path):
+def test_repeated_syntax_failure_stops_after_two_retries_and_never_accepts_parent(tmp_path):
     store = MemoryEvidence()
 
     def mutate(child_context, value):
-        return {"content": "const value = ("} if child_context.get("source_step") else value
+        return broken(value, "const value = (") if child_context.get("source_step") else value
 
     generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
         execute(generator, context(), store)
-    assert len(transport.calls) == len(store.requests) == 3
+    assert len(transport.calls) == len(store.requests) == 4
     for events in store.events.values():
         assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in events)
         assert events[-1][0] == "APPLICATION_RESULT" and events[-1][1]["status"] == "FAILED"
@@ -490,11 +658,11 @@ def test_failed_manifest_or_file_never_produces_accepted_parent(tmp_path, failur
             if failure == "coverage_omitted":
                 del value["acceptance_checks"]
         elif failure == "carriage_return":
-            value["content"] = "one\rtwo"
+            value = broken(value, "one\rtwo")
         elif failure == "line_control":
-            value["content"] = "\x01"
+            value = broken(value, "\x01")
         elif failure == "content_large":
-            value["content"] = "x" * 32769
+            value = broken(value, "x" * 32769)
         elif failure == "extra":
             value["approved"] = True
         elif failure == "second_file" and step["ordinal"] == 2:
@@ -527,12 +695,11 @@ def test_file_generation_requires_auditing(tmp_path):
 def test_html_is_not_accepted_as_javascript_or_json(tmp_path, path):
     payload = complete_output()
     payload["files"] = [f for f in payload["files"] if f["normalized_path"] != path]
+    html = "<!DOCTYPE html><html></html>"
     payload["files"].append(
-        {
-            "normalized_path": path,
-            "media_type": "text/plain",
-            "content": "<!DOCTYPE html><html></html>",
-        }
+        {**app_file(private_helpers=html), "media_type": "text/plain"}
+        if path == "app.js"
+        else {"normalized_path": path, "media_type": "text/plain", "content": html}
     )
     store = MemoryEvidence()
     generator, _ = source_sequence_generator(tmp_path, payload)
@@ -664,3 +831,55 @@ def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, f
     with pytest.raises(ProposalGenerationError):
         execute(generator, ctx, MemoryEvidence())
     assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "interface,kept,removed",
+    [
+        (
+            "addGuest(name: string): object; listGuests(): object[]",
+            ["addGuest(name: string): object", "listGuests(): object[]"],
+            [],
+        ),
+        (
+            "addGuest(name: string): object; displayGuestList(): void; getGuestInputField(): object",
+            ["addGuest(name: string): object"],
+            ["displayGuestList", "getGuestInputField"],
+        ),
+        (
+            "calculateTip(amount: number, tipPercentage: number): object; "
+            "updateResultDisplay(tipAmount: number, totalAmount: number): void; "
+            "validateAndShowErrorForAmount(inputValue: string): void; "
+            "toggleScreen(screenId: string): void; hideError(): void; "
+            "processCalculation(): void; resetApplication(): void; resetItems(): void; clearError(): void; "
+            "getGuestCount(): number",
+            [
+                "calculateTip(amount: number, tipPercentage: number): object",
+                "resetItems(): void",
+                "getGuestCount(): number",
+            ],
+            [
+                "updateResultDisplay",
+                "validateAndShowErrorForAmount",
+                "toggleScreen",
+                "hideError",
+                "processCalculation",
+                "resetApplication",
+                "clearError",
+            ],
+        ),
+        ("isUserRegistrationRequired(): boolean", None, None),
+        ("hasExternalDependencies(): boolean; saveGuestsToStorage(): void", None, None),
+        ("DOM: ELM-001, ELM-002", None, None),
+    ],
+)
+def test_static_interface_keeps_only_pure_business_functions(interface, kept, removed):
+    from orchestwin.models.source_file_generation import _validate_static_interface
+
+    if kept is None:
+        with pytest.raises(ValueError):
+            _validate_static_interface(interface)
+        return
+    kept_signatures, removed_names, names = _validate_static_interface(interface)
+    assert (kept_signatures, removed_names) == (kept, removed)
+    assert names == list(dict.fromkeys(signature.split("(")[0] for signature in kept))

@@ -19,6 +19,7 @@ import type {
   ArchitectureRevisionRequest,
 } from "../types/architecture";
 import ProjectArchitectureFlow from "./ProjectArchitectureFlow.vue";
+import { expectAccessible } from "@/test/axe";
 
 class FakeArchitectureApi implements ArchitectureApi {
   proposedPackage: ArchitecturePackagePayload | null = null;
@@ -199,5 +200,11 @@ describe("ProjectArchitectureFlow", () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain("A reason is required");
     expect(api.gateDecision).toBeNull();
+  });
+
+  it("has no axe violations", async () => {
+    const wrapper = mountFlow(new FakeArchitectureApi());
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

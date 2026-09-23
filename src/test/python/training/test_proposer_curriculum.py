@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_design_contract import validate_prototype_html
+from orchestwin.models.source_structure import validate_static_module_contract
 
 TRAINING = Path(__file__).resolve().parents[4] / "environments" / "training"
 sys.path.insert(0, str(TRAINING))
@@ -40,6 +42,14 @@ def test_reference_markup_preserves_approved_controls_and_separate_screens(famil
     assert "require('./app.js')" in files["app.test.cjs"]
     assert "assert.throws" in files["app.test.cjs"]
     assert "if (typeof document !== 'undefined')" in files["app.js"]
+    parts = curriculum.module_parts(family)
+    assert assemble_static_module(parts) == files["app.js"]
+    assert [function["name"] for function in parts["functions"]] == (
+        ["createService", "readNumber"]
+        if isinstance(family, curriculum.StatefulFamily)
+        else ["compute", "readNumber"]
+    )
+    validate_static_module_contract(files["app.js"])
     with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
         validate_prototype_html(
             files["index.html"].replace('name="mode"', 'name="wrong"'), prototype
@@ -69,9 +79,11 @@ def test_capture_uses_production_messages_without_inference_or_fake_provider_res
             "forbidden_module_declarations": ["import", "export"],
         }
         if row["source_path"]:
-            assert json.loads(row["messages"][2]["content"]) == {
-                "content": files[row["source_path"]]
-            }
+            assert json.loads(row["messages"][2]["content"]) == (
+                curriculum.module_parts(family)
+                if row["source_path"] == "app.js"
+                else {"content": files[row["source_path"]]}
+            )
             assert (
                 visible["context"]["source_step"]["file"]["normalized_path"] == row["source_path"]
             )

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="OrchesTwin">
+  <circle cx="27" cy="8" r="3.4" fill="#0a5fba"/>
+  <circle cx="40.44" cy="13.56" r="3.4" fill="#1c1c1e"/>
+  <circle cx="46" cy="27" r="3.4" fill="#c9c9d1"/>
+  <circle cx="40.44" cy="40.44" r="3.4" fill="#c9c9d1"/>
+  <circle cx="27" cy="46" r="3.4" fill="#1c1c1e"/>
+  <circle cx="13.56" cy="40.44" r="3.4" fill="#c9c9d1"/>
+  <circle cx="8" cy="27" r="3.4" fill="#c9c9d1"/>
+  <circle cx="13.56" cy="13.56" r="3.4" fill="#c9c9d1"/>
+</svg>

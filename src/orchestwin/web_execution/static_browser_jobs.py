@@ -98,6 +98,9 @@ class StaticFile:
         }
 
 
+ASSERTION_KINDS = frozenset({"expect_text", "expect_contains", "expect_not_text"})
+
+
 @dataclass(frozen=True, slots=True)
 class BrowserAction:
     kind: str
@@ -105,7 +108,7 @@ class BrowserAction:
     value: str | None = None
 
     def __post_init__(self) -> None:
-        if self.kind not in {"click", "fill", "press", "expect_text"}:
+        if self.kind not in {"click", "fill", "press", *ASSERTION_KINDS}:
             raise StaticBrowserError("BROWSER_ACTION_UNSUPPORTED")
         if not isinstance(self.selector, str) or not 1 <= len(self.selector) <= 160:
             raise StaticBrowserError("BROWSER_SELECTOR_INVALID")
@@ -113,6 +116,8 @@ class BrowserAction:
             if self.value is not None:
                 raise StaticBrowserError("CLICK_VALUE_FORBIDDEN")
         elif not isinstance(self.value, str) or len(self.value) > 1000:
+            raise StaticBrowserError("BROWSER_ACTION_VALUE_INVALID")
+        if self.kind == "expect_contains" and not self.value:
             raise StaticBrowserError("BROWSER_ACTION_VALUE_INVALID")
         if self.kind == "press" and self.value not in {
             "Enter",
@@ -147,7 +152,7 @@ class BrowserScenario:
                 raise StaticBrowserError("SCENARIO_REQUIRES_HTML")
         if not isinstance(self.actions, tuple) or not 1 <= len(self.actions) <= 8:
             raise StaticBrowserError("SCENARIO_ACTION_LIMIT")
-        if not any(action.kind == "expect_text" for action in self.actions):
+        if not any(action.kind in ASSERTION_KINDS for action in self.actions):
             raise StaticBrowserError("SCENARIO_ASSERTION_REQUIRED")
 
     def snapshot(self) -> dict[str, object]:

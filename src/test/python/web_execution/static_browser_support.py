@@ -8,7 +8,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from orchestwin.web_execution.static_browser_executor import HARNESS_PATH
-from orchestwin.web_execution.static_browser_jobs import VIEWPORTS, canonical_bytes, content_hash
+from orchestwin.web_execution.static_browser_jobs import (
+    ASSERTION_KINDS,
+    VIEWPORTS,
+    canonical_bytes,
+    content_hash,
+)
 from orchestwin.web_execution.static_browser_validation import FIXTURE_PATH, fixture_job
 from orchestwin.web_execution.verified_browser_runner import CHECK_NAMES
 
@@ -132,8 +137,12 @@ def inspection_result(job, *, fail=False):
             stopped = False
             for index, action in enumerate(scenario.actions):
                 state = "NOT_RUN" if stopped else "PASSED"
-                value = action.value if action.kind == "expect_text" else None
-                if fail and action.kind == "expect_text" and not stopped:
+                value = {
+                    "expect_text": action.value,
+                    "expect_contains": f"observed {action.value} here",
+                    "expect_not_text": f"{action.value} changed",
+                }.get(action.kind)
+                if fail and action.kind in ASSERTION_KINDS and not stopped:
                     state = "FAILED"
                     value = "different"
                     stopped = True

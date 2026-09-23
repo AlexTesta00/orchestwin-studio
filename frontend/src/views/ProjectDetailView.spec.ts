@@ -13,6 +13,7 @@ import { useDesignStore } from "@/stores/design";
 import { useArchitectureStore } from "@/stores/architecture";
 import { useWebExecutionStore } from "@/stores/webExecution";
 import ProjectDetailView from "./ProjectDetailView.vue";
+import { expectAccessible } from "@/test/axe";
 
 const state = vi.hoisted(() => ({ route: {} as { params: { projectId: string } } }));
 vi.mock("vue-router", () => ({ useRoute: () => state.route }));
@@ -55,7 +56,10 @@ describe("project route requests", () => {
         id === "first" ? oldRequest : project(id),
       );
       const wrapper = shallowMount(ProjectDetailView, {
-        global: { plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })] },
+        global: {
+          plugins: [createPinia(), createI18n({ legacy: false, locale: "en" })],
+          stubs: { UiStepper: false, UiCard: false },
+        },
       });
       state.route.params.projectId = "second";
       await flushPromises();
@@ -143,7 +147,10 @@ describe("progressive project workspace", () => {
   function mountWorkspace(pinia = createPinia()) {
     return shallowMount(ProjectDetailView, {
       attachTo: document.body,
-      global: { plugins: [pinia, createI18n({ legacy: false, locale: "en" })] },
+      global: {
+        plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
+        stubs: { UiStepper: false, UiCard: false },
+      },
     });
   }
 
@@ -231,6 +238,13 @@ describe("progressive project workspace", () => {
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("has no axe violations in the workspace shell", async () => {
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    await expectAccessible(wrapper.element);
     wrapper.unmount();
   });
 });

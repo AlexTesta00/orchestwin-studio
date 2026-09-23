@@ -140,9 +140,11 @@ def report(value):
                             "index": index,
                             "kind": action["kind"],
                             "status": "PASSED",
-                            "observed_text": action["value"]
-                            if action["kind"] == "expect_text"
-                            else None,
+                            "observed_text": {
+                                "expect_text": action["value"],
+                                "expect_contains": f"observed {action['value']} here",
+                                "expect_not_text": f"{action['value']} changed",
+                            }.get(action["kind"]),
                             "failure_code": None,
                         }
                         for index, action in enumerate(plan)
@@ -319,6 +321,24 @@ def test_failed_actions_preserve_observed_prefix_and_not_run_tail(tmp_path):
     result, _ = decode(tmp_path, value, output)
     assert result.failed is True
     assert result.metadata["screens"][0]["actions"] == screen["actions"]
+
+
+def test_failed_action_finding_names_the_step_and_the_control(tmp_path):
+    value = job(interactions=(WebBrowserInteraction("root", actions()),))
+    output = report(value)
+    screen = output["screens"][0]
+    screen["actions"][1].update(
+        status="FAILED", observed_text="wrong", failure_code="TEXT_ASSERTION_FAILED"
+    )
+    for action in screen["actions"][2:]:
+        action.update(status="NOT_RUN", observed_text=None, failure_code=None)
+    screen.update(interaction_status="FAILED", failure_codes=["INTERACTION_FAILED"])
+    result, _ = decode(tmp_path, value, output)
+    finding = next(item for item in result.findings if item.code == "INTERACTION_FAILED")
+    assert finding.message == (
+        "Step 2 of 4 failed: expect_text on output with «1» (TEXT_ASSERTION_FAILED, observed «wrong»)."
+    )
+    assert finding.location == "output"
 
 
 def test_failed_route_keeps_partial_artifacts_and_raw_manifest(tmp_path):
@@ -537,3 +557,30 @@ def test_uninspectable_surface_keeps_captures_but_cannot_pass_even_with_actions(
     assert any(item.code == "INTERACTION_INSPECTION_FAILED" for item in result.findings)
     assert all(item["status"] == "PASSED" for item in result.metadata["screens"][0]["actions"])
     assert store.read(result.metadata["screens"][0]["artifacts"]["dom"]["storage_key"])
+
+
+def journey_actions():
+    return (
+        BrowserAction("fill", "#name", "Giulia Verdi"),
+        BrowserAction("press", "#add", "Enter"),
+        BrowserAction("expect_contains", "#result", "Giulia Verdi"),
+        BrowserAction("click", "#back", None),
+        BrowserAction("expect_not_text", "#title", "Esempio"),
+    )
+
+
+def test_contains_and_changed_assertions_count_as_independent_checks(tmp_path):
+    from orchestwin.web_execution.static_browser_jobs import StaticBrowserError
+
+    value = job(interactions=(WebBrowserInteraction("root", journey_actions()),))
+    decode(tmp_path, value, report(value))
+    output = report(value)
+    output["screens"][0]["actions"][2]["observed_text"] = "somebody else"
+    with pytest.raises(WebPhaseBrowserEvidenceError):
+        decode(tmp_path, value, output)
+    output = report(value)
+    output["screens"][0]["actions"][4]["observed_text"] = "Esempio"
+    with pytest.raises(WebPhaseBrowserEvidenceError):
+        decode(tmp_path, value, output)
+    with pytest.raises(StaticBrowserError):
+        BrowserAction("expect_contains", "#result", "")

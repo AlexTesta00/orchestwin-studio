@@ -380,54 +380,6 @@ class QloraTrainingOutcome:
         return {**self.semantic_snapshot(), "content_hash": self.content_hash}
 
 
-class AsyncioUnslothProcessAdapter:
-    """Execute the repository-owned trainer without invoking a shell."""
-
-    async def run(self, invocation: UnslothProcessInvocation) -> UnslothProcessResult:
-        environment = {
-            key: value
-            for key in invocation.allowed_environment_keys
-            if (value := os.environ.get(key)) is not None
-        }
-        process = await asyncio.create_subprocess_exec(
-            invocation.executable,
-            *invocation.arguments,
-            cwd=invocation.working_directory,
-            env=environment,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        started = asyncio.get_running_loop().time()
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(),
-                timeout=invocation.timeout_seconds,
-            )
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            return UnslothProcessResult(
-                exit_code=None,
-                stdout="",
-                stderr="Training process exceeded its configured timeout.",
-                duration_milliseconds=_elapsed_milliseconds(started),
-                timed_out=True,
-                interrupted=False,
-            )
-        except asyncio.CancelledError:
-            process.terminate()
-            await process.wait()
-            raise
-        return UnslothProcessResult(
-            exit_code=process.returncode,
-            stdout=stdout_bytes.decode("utf-8", errors="replace"),
-            stderr=stderr_bytes.decode("utf-8", errors="replace"),
-            duration_milliseconds=_elapsed_milliseconds(started),
-            timed_out=False,
-            interrupted=False,
-        )
-
-
 class UnslothQloraTrainingAdapter:
     """Stage one request, invoke the isolated trainer, and validate its result."""
 

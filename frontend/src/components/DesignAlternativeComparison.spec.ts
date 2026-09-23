@@ -7,6 +7,7 @@ import {
   SECOND_DESIGN_ALTERNATIVE_ID,
 } from "../test/designFixtures";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
+import { expectAccessible } from "@/test/axe";
 
 describe("DesignAlternativeComparison", () => {
   it("renders provider recommendations and explicit synthetic-feedback safeguards", () => {
@@ -38,5 +39,17 @@ describe("DesignAlternativeComparison", () => {
       .setValue(true);
 
     expect(wrapper.emitted("select")).toEqual([[SECOND_DESIGN_ALTERNATIVE_ID]]);
+  });
+
+  it("has no axe violations", async () => {
+    const wrapper = mount(DesignAlternativeComparison, {
+      props: {
+        alternatives: BASE_DESIGN_PACKAGE.alternatives,
+        critiques: BASE_DESIGN_PACKAGE.critiques,
+        recommendedAlternativeId: DESIGN_ALTERNATIVE_ID,
+        selectedAlternativeId: DESIGN_ALTERNATIVE_ID,
+      },
+    });
+    await expectAccessible(wrapper.element);
   });
 });

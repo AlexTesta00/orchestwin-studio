@@ -2,6 +2,8 @@
 import TwinIdentity from "./TwinIdentity.vue";
 import { modelFeedback, generationProgress } from "./modelFeedback";
 import { workflowStatusLabel } from "./workflowLabels";
+import UiButton from "./UiButton.vue";
+import UiCard from "./UiCard.vue";
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
@@ -86,6 +88,8 @@ const messages = {
     gate: "Confirm the design",
     gateStatus: "Status",
     submitGate: "Prepare for approval",
+    decisionCounter: "Decision {n} of {max}",
+    moreActions: "Other actions",
     approveGate: "Approve design",
     rejectGate: "Reject",
     requestRevision: "Request revision",
@@ -153,6 +157,8 @@ const messages = {
     gate: "Conferma l'aspetto",
     gateStatus: "Stato",
     submitGate: "Prepara per l'approvazione",
+    decisionCounter: "Decisione {n} di {max}",
+    moreActions: "Altre azioni",
     approveGate: "Approva l'aspetto",
     rejectGate: "Rifiuta",
     requestRevision: "Richiedi revisione",
@@ -239,6 +245,11 @@ const gatePending = computed(
   () => gateTargetsCurrent.value && store.gate?.status === "PENDING_APPROVAL",
 );
 const gatePaused = computed(() => gateTargetsCurrent.value && store.gate?.status === "PAUSED");
+const decisionCounter = computed(() =>
+  copy.value.decisionCounter
+    .replace("{n}", String(store.gate?.iteration ?? 1))
+    .replace("{max}", String(store.gate?.max_iterations ?? 1)),
+);
 const canProposeSelection = computed(() => {
   if (packageValue.value === null || selectedAlternativeId.value === null) {
     return false;
@@ -470,23 +481,23 @@ watch(
 </script>
 
 <template>
-  <section class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+  <section class="grid gap-5 rounded-card border border-line bg-white p-4 shadow-sm sm:p-5">
     <header class="grid gap-2">
       <TwinIdentity role="UX_UI_DESIGNER" :locale="locale" compact />
-      <p class="m-0 text-xs font-black tracking-widest text-indigo-700 uppercase">
+      <p class="m-0 text-xs font-semibold tracking-widest text-action uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 class="text-xl font-bold text-slate-950">{{ copy.title }}</h2>
-      <p class="m-0 max-w-4xl text-slate-600">{{ copy.intro }}</p>
+      <h2 class="text-xl font-bold text-ink">{{ copy.title }}</h2>
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
     </header>
 
-    <p v-if="store.isBusy || mockupBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy || mockupBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ store.pending.generate || mockupBusy ? generationProgress(locale) : copy.loading }}
     </p>
 
     <p
       v-if="localError !== null || store.error !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{
@@ -498,8 +509,8 @@ watch(
     </p>
 
     <template v-if="current === null">
-      <p class="m-0 text-slate-600">{{ copy.noPackage }}</p>
-      <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
+      <p class="m-0 text-ink-2">{{ copy.noPackage }}</p>
+      <p v-if="!prerequisiteReady" role="status" class="text-sm text-ink-2">
         {{
           locale === "it"
             ? "Approva le funzionalità per vedere le proposte del designer."
@@ -508,7 +519,7 @@ watch(
       </p>
       <button
         type="button"
-        class="justify-self-start rounded-xl bg-indigo-700 px-5 py-3 font-black text-white hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+        class="justify-self-start rounded-panel bg-action px-5 py-3 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-surface-3"
         :disabled="store.isBusy || !prerequisiteReady"
         @click="generate"
       >
@@ -517,31 +528,25 @@ watch(
     </template>
 
     <template v-else>
-      <details class="rounded-xl border border-slate-200 p-3 text-sm">
-        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.audit }}</summary>
-        <p class="my-3 text-slate-600">{{ copy.methodology }}</p>
+      <details class="rounded-panel border border-line p-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.audit }}</summary>
+        <p class="my-3 text-ink-2">{{ copy.methodology }}</p>
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="m-0 font-black text-slate-950">
-            {{ copy.version }} {{ current.version_number }}
-          </p>
+          <p class="m-0 font-semibold text-ink">{{ copy.version }} {{ current.version_number }}</p>
           <span
-            class="rounded-full px-3 py-1 text-xs font-black"
-            :class="
-              current.ready_for_gate
-                ? 'bg-emerald-100 text-emerald-800'
-                : 'bg-amber-100 text-amber-900'
-            "
+            class="rounded-full px-3 py-1 text-xs font-semibold"
+            :class="current.ready_for_gate ? 'bg-ok-bg text-ok-dark' : 'bg-surface-2 text-warn'"
           >
             {{ current.ready_for_gate ? copy.readyForGate : copy.notReadyForGate }}
           </span>
         </div>
-        <p class="m-0 text-xs break-all text-slate-500">
+        <p class="m-0 text-xs break-all text-ink-3">
           {{ copy.contentHash }}: <code>{{ current.content_hash }}</code>
         </p>
       </details>
 
       <details :open="current.package.owner_selected_alternative_id === null">
-        <summary class="mb-3 cursor-pointer font-semibold text-slate-900">
+        <summary class="mb-3 cursor-pointer font-semibold text-ink">
           {{ copy.alternativeDetails }}
         </summary>
         <DesignAlternativeComparison
@@ -556,7 +561,7 @@ watch(
       </details>
 
       <section v-if="sourceRevision" class="grid gap-3" data-source-design>
-        <h3 class="text-lg font-bold text-slate-950">
+        <h3 class="text-lg font-bold text-ink">
           {{
             (sourceDesign?.owner_mockup ? copy.sourceMockup : copy.sourcePrototype).replace(
               "{version}",
@@ -564,23 +569,23 @@ watch(
             )
           }}
         </h3>
-        <p v-if="sourceDesignBusy" role="status" class="m-0 text-sm text-slate-600">
+        <p v-if="sourceDesignBusy" role="status" class="m-0 text-sm text-ink-2">
           {{ copy.sourceLoading }}
         </p>
         <p
           v-else-if="sourceDesignFailed"
           role="alert"
-          class="m-0 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
+          class="m-0 rounded-control bg-surface-2 p-3 text-sm text-warn"
         >
           {{ copy.sourceUnavailable }}
         </p>
         <template v-else-if="sourceDesign">
-          <p v-if="sourceDesign.owner_mockup" class="m-0 text-sm text-slate-600">
+          <p v-if="sourceDesign.owner_mockup" class="m-0 text-sm text-ink-2">
             {{ copy.ownerReference }}
           </p>
           <p
             v-if="sourceDesign.design_status === 'STALE'"
-            class="m-0 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
+            class="m-0 rounded-control bg-surface-2 p-3 text-sm text-warn"
           >
             {{ copy.sourceOlderDesign }}
           </p>
@@ -590,8 +595,8 @@ watch(
             :prototype="sourcePrototype"
             :locale="locale"
           />
-          <p v-else class="m-0 text-sm text-slate-600">{{ copy.sourceNoPrototype }}</p>
-          <p class="m-0 text-xs text-slate-500">
+          <p v-else class="m-0 text-sm text-ink-2">{{ copy.sourceNoPrototype }}</p>
+          <p class="m-0 text-xs text-ink-3">
             {{
               sourceDesign.structure_contract === "VERIFIED"
                 ? copy.structureVerified
@@ -600,7 +605,7 @@ watch(
           </p>
           <button
             type="button"
-            class="justify-self-start rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800"
+            class="justify-self-start rounded-control border border-field px-4 py-2 text-sm font-semibold text-ink-2"
             @click="emit('show-result')"
           >
             {{ copy.compareResult }}
@@ -610,10 +615,10 @@ watch(
 
       <section v-if="selectedAlternativeId !== null" class="grid gap-3" data-design-mockup>
         <header class="flex flex-wrap items-center justify-between gap-3">
-          <h3 class="text-lg font-bold text-slate-950">{{ copy.mockupTitle }}</h3>
+          <h3 class="text-lg font-bold text-ink">{{ copy.mockupTitle }}</h3>
           <button
             type="button"
-            class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+            class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white disabled:bg-surface-3"
             :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
             @click="generateMockup"
           >
@@ -622,32 +627,32 @@ watch(
         </header>
         <details
           v-if="sourceRevision && hasSeparateDraft && mockup?.package.prototype"
-          class="rounded-xl border border-slate-200 p-3"
+          class="rounded-panel border border-line p-3"
           data-unapplied-mockup
         >
-          <summary class="cursor-pointer text-sm font-semibold text-slate-700">
+          <summary class="cursor-pointer text-sm font-semibold text-ink-2">
             {{ copy.separateDraft }}
           </summary>
-          <p class="my-3 text-sm text-slate-600">{{ copy.mockupHelp }}</p>
+          <p class="my-3 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
           <DeclarativePrototypePreview
             :key="mockup.generation_id"
             :prototype="mockup.package.prototype"
             :locale="locale"
           />
-          <details class="mt-3 text-xs text-slate-500">
+          <details class="mt-3 text-xs text-ink-3">
             <summary class="cursor-pointer">{{ copy.audit }}</summary>
             <p class="break-all">{{ mockup.generation_id }}</p>
           </details>
         </details>
         <template v-else-if="!sourceRevision && mockup?.package.prototype">
-          <p class="m-0 text-xs font-semibold text-indigo-700">{{ copy.mockupDraft }}</p>
-          <p class="m-0 text-sm text-slate-600">{{ copy.mockupHelp }}</p>
+          <p class="m-0 text-xs font-semibold text-action">{{ copy.mockupDraft }}</p>
+          <p class="m-0 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
           <DeclarativePrototypePreview
             :key="mockup.generation_id"
             :prototype="mockup.package.prototype"
             :locale="locale"
           />
-          <details class="text-xs text-slate-500">
+          <details class="text-xs text-ink-3">
             <summary class="cursor-pointer">{{ copy.audit }}</summary>
             <p class="break-all">{{ mockup.generation_id }}</p>
           </details>
@@ -658,22 +663,22 @@ watch(
             current.package.prototype?.design_alternative_id === selectedAlternativeId
           "
         >
-          <p class="m-0 text-sm text-slate-600">{{ copy.approvedPrototype }}</p>
+          <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
           <DeclarativePrototypePreview :prototype="current.package.prototype" :locale="locale" />
         </template>
-        <p v-else-if="!sourceRevision" class="m-0 text-sm text-slate-600">
+        <p v-else-if="!sourceRevision" class="m-0 text-sm text-ink-2">
           {{ copy.mockupRequired }}
         </p>
       </section>
 
       <section
         v-if="mockup !== null && (!sourceRevision || hasSeparateDraft)"
-        class="grid gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4"
+        class="grid gap-3 rounded-panel border border-action-soft-line bg-action-soft p-4"
       >
-        <p class="m-0 text-sm text-indigo-950">{{ copy.selectionHelp }}</p>
+        <p class="m-0 text-sm text-action">{{ copy.selectionHelp }}</p>
         <button
           type="button"
-          class="justify-self-start rounded-xl bg-indigo-700 px-5 py-3 font-black text-white hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+          class="justify-self-start rounded-panel bg-action px-5 py-3 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-surface-3"
           :disabled="store.isBusy || mockupBusy || !canProposeSelection"
           @click="proposeSelection"
         >
@@ -682,34 +687,34 @@ watch(
       </section>
 
       <section v-if="pendingDiff !== null" class="grid gap-4" aria-labelledby="design-diffs-title">
-        <h3 id="design-diffs-title" class="text-xl font-black text-slate-950">
+        <h3 id="design-diffs-title" class="text-xl font-semibold text-ink">
           {{ copy.diffs }}
         </h3>
 
-        <p v-if="diffs.length === 0" class="m-0 text-slate-600">{{ copy.noDiffs }}</p>
+        <p v-if="diffs.length === 0" class="m-0 text-ink-2">{{ copy.noDiffs }}</p>
 
         <article
           v-for="diff in store.pendingDiffs"
           :key="diff.id"
-          class="grid gap-4 rounded-2xl border border-slate-200 p-4"
+          class="grid gap-4 rounded-card border border-line p-4"
         >
           <header class="flex flex-wrap items-center justify-between gap-3">
-            <p class="m-0 font-black text-slate-950">
+            <p class="m-0 font-semibold text-ink">
               {{ workflowStatusLabel(diff.status, locale) }}
             </p>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+            <span class="rounded-full bg-surface-3 px-3 py-1 text-xs font-semibold text-ink-2">
               {{ diff.changes.length }} {{ copy.changes }}
             </span>
           </header>
 
-          <details class="text-sm text-slate-600">
+          <details class="text-sm text-ink-2">
             <summary class="cursor-pointer">{{ copy.audit }}</summary>
             <p class="text-xs break-all">{{ diff.id }} · {{ diff.status }}</p>
-            <ul class="mt-3 grid gap-2 text-sm text-slate-700">
+            <ul class="mt-3 grid gap-2 text-sm text-ink-2">
               <li
                 v-for="change in diff.changes"
                 :key="`${change.artifact_kind}:${change.artifact_id}`"
-                class="rounded-lg bg-slate-50 p-3"
+                class="rounded-control bg-surface-2 p-3"
               >
                 {{ change.kind }} · {{ change.artifact_kind }} · {{ change.artifact_id }}
               </li>
@@ -717,19 +722,19 @@ watch(
           </details>
 
           <template v-if="diff.status === 'PROPOSED'">
-            <label class="grid gap-2 text-sm font-black text-slate-900">
+            <label class="grid gap-2 text-sm font-semibold text-ink">
               {{ copy.reason }}
               <textarea
                 v-model="diffReasons[diff.id]"
                 rows="3"
-                class="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                class="rounded-panel border border-field px-3 py-2 font-normal"
               />
             </label>
 
             <div class="flex flex-wrap gap-3">
               <button
                 type="button"
-                class="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white hover:bg-emerald-600 disabled:bg-slate-400"
+                class="rounded-panel bg-ok px-4 py-2 font-semibold text-white hover:bg-ok-dark disabled:bg-surface-3"
                 :disabled="store.isBusy"
                 @click="decideDiff(diff, 'APPROVE')"
               >
@@ -737,7 +742,7 @@ watch(
               </button>
               <button
                 type="button"
-                class="rounded-xl border border-red-300 px-4 py-2 font-black text-red-800 hover:bg-red-50 disabled:text-slate-400"
+                class="rounded-panel border border-fail-line px-4 py-2 font-semibold text-fail-dark hover:bg-fail-bg disabled:text-ink-3"
                 :disabled="store.isBusy"
                 @click="decideDiff(diff, 'REJECT')"
               >
@@ -750,22 +755,22 @@ watch(
 
       <div class="grid gap-5 lg:grid-cols-2">
         <section v-if="current.package.concerns.length > 0">
-          <h3 class="text-xl font-black text-slate-950">{{ copy.concerns }}</h3>
+          <h3 class="text-xl font-semibold text-ink">{{ copy.concerns }}</h3>
           <ul class="mt-3 grid gap-3">
             <li
               v-for="concern in current.package.concerns"
               :key="concern.id"
-              class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+              class="rounded-panel border border-line-strong bg-surface-2 p-4 text-sm text-warn"
             >
-              <p class="m-0 font-black">{{ concern.code }} · {{ concern.summary }}</p>
+              <p class="m-0 font-semibold">{{ concern.code }} · {{ concern.summary }}</p>
               <p class="mt-2 mb-0">{{ concern.mitigation }}</p>
             </li>
           </ul>
         </section>
 
         <section v-if="current.package.open_questions.length > 0">
-          <h3 class="text-xl font-black text-slate-950">{{ copy.openQuestions }}</h3>
-          <ul class="mt-3 list-disc space-y-2 pl-5 text-slate-700">
+          <h3 class="text-xl font-semibold text-ink">{{ copy.openQuestions }}</h3>
+          <ul class="mt-3 list-disc space-y-2 pl-5 text-ink-2">
             <li v-for="question in current.package.open_questions" :key="question">
               {{ question }}
             </li>
@@ -773,120 +778,98 @@ watch(
         </section>
       </div>
 
-      <section class="grid gap-4 rounded-2xl border border-slate-300 bg-slate-50 p-5">
-        <h3 class="text-xl font-black text-slate-950">{{ copy.gate }}</h3>
-        <p class="m-0 text-sm text-slate-700">
-          {{ copy.gateStatus }}: {{ workflowStatusLabel(store.gate?.status, locale) }}
-        </p>
-
-        <p
-          class="m-0 rounded-xl p-3 font-bold"
-          :class="
-            store.isReadyForArchitecture
-              ? 'bg-emerald-100 text-emerald-900'
-              : 'bg-amber-100 text-amber-950'
-          "
-          aria-live="polite"
-        >
-          {{ store.isReadyForArchitecture ? copy.ready : copy.notReady }}
-        </p>
-
-        <button
-          v-if="canSubmitGate"
-          type="button"
-          class="justify-self-start rounded-xl bg-indigo-700 px-5 py-3 font-black text-white hover:bg-indigo-600 disabled:bg-slate-400"
-          :disabled="store.isBusy"
-          @click="submitGate"
-        >
-          {{ copy.submitGate }}
-        </button>
-
-        <template v-if="gatePending || gatePaused">
-          <label class="grid gap-2 text-sm font-black text-slate-900">
-            {{ copy.reason }}
-            <textarea
-              v-model="gateReason"
-              rows="3"
-              class="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-            />
-          </label>
-
-          <div class="flex flex-wrap gap-3">
-            <button
-              v-if="gatePending"
-              type="button"
-              class="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white hover:bg-emerald-600 disabled:bg-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('APPROVE')"
-            >
-              {{ copy.approveGate }}
-            </button>
-            <button
-              v-if="gatePending"
-              type="button"
-              class="rounded-xl border border-amber-400 px-4 py-2 font-black text-amber-900 hover:bg-amber-50 disabled:text-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('REQUEST_REVISION')"
-            >
-              {{ copy.requestRevision }}
-            </button>
-            <button
-              v-if="gatePending"
-              type="button"
-              class="rounded-xl border border-red-300 px-4 py-2 font-black text-red-800 hover:bg-red-50 disabled:text-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('REJECT')"
-            >
-              {{ copy.rejectGate }}
-            </button>
-            <button
-              v-if="gatePending"
-              type="button"
-              class="rounded-xl border border-slate-300 px-4 py-2 font-black text-slate-700 hover:bg-white disabled:text-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('PAUSE')"
-            >
-              {{ copy.pause }}
-            </button>
-            <button
-              v-if="gatePaused"
-              type="button"
-              class="rounded-xl border border-slate-300 px-4 py-2 font-black text-slate-700 hover:bg-white disabled:text-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('RESUME')"
-            >
-              {{ copy.resume }}
-            </button>
-            <button
-              type="button"
-              class="rounded-xl border border-slate-300 px-4 py-2 font-black text-slate-700 hover:bg-white disabled:text-slate-400"
-              :disabled="store.isBusy"
-              @click="decideGate('CANCEL')"
-            >
-              {{ copy.cancelGate }}
-            </button>
+      <div class="grid gap-4">
+        <UiCard tone="elevated">
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h3 class="m-0 text-2xl font-semibold tracking-card">{{ copy.gate }}</h3>
+            <span v-if="store.gate" class="font-mono text-xs text-ink-3">
+              {{ decisionCounter }}
+            </span>
           </div>
-        </template>
-      </section>
+          <p class="mt-2 mb-0 text-sm text-ink-2">
+            {{ copy.gateStatus }}: {{ workflowStatusLabel(store.gate?.status, locale) }}
+          </p>
+          <p
+            class="mt-2 mb-0 text-[15px] font-semibold"
+            :class="store.isReadyForArchitecture ? 'text-ok-dark' : 'text-warn'"
+            aria-live="polite"
+          >
+            {{ store.isReadyForArchitecture ? copy.ready : copy.notReady }}
+          </p>
+          <div v-if="canSubmitGate" class="mt-5">
+            <UiButton :disabled="store.isBusy" @click="submitGate">{{ copy.submitGate }}</UiButton>
+          </div>
+          <div v-if="gatePending || gatePaused" class="mt-5 grid gap-3">
+            <div v-if="gatePending" class="flex flex-wrap gap-3">
+              <UiButton :disabled="store.isBusy" @click="decideGate('APPROVE')">
+                {{ copy.approveGate }}
+              </UiButton>
+              <UiButton
+                variant="secondary"
+                :disabled="store.isBusy"
+                @click="decideGate('REQUEST_REVISION')"
+              >
+                {{ copy.requestRevision }}
+              </UiButton>
+            </div>
+            <div v-else class="flex flex-wrap gap-3">
+              <UiButton :disabled="store.isBusy" @click="decideGate('RESUME')">
+                {{ copy.resume }}
+              </UiButton>
+              <UiButton variant="secondary" :disabled="store.isBusy" @click="decideGate('CANCEL')">
+                {{ copy.cancelGate }}
+              </UiButton>
+            </div>
+            <label class="grid gap-1 text-sm font-semibold">
+              {{ copy.reason }}
+              <textarea
+                v-model="gateReason"
+                rows="3"
+                class="min-h-20 rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
+              />
+            </label>
+            <details v-if="gatePending" class="text-sm">
+              <summary class="cursor-pointer font-semibold text-ink-2">
+                {{ copy.moreActions }}
+              </summary>
+              <div class="mt-3 flex flex-wrap gap-3">
+                <UiButton variant="danger" :disabled="store.isBusy" @click="decideGate('REJECT')">
+                  {{ copy.rejectGate }}
+                </UiButton>
+                <UiButton variant="secondary" :disabled="store.isBusy" @click="decideGate('PAUSE')">
+                  {{ copy.pause }}
+                </UiButton>
+                <UiButton
+                  variant="secondary"
+                  :disabled="store.isBusy"
+                  @click="decideGate('CANCEL')"
+                >
+                  {{ copy.cancelGate }}
+                </UiButton>
+              </div>
+            </details>
+          </div>
+        </UiCard>
+      </div>
 
       <details class="grid gap-3">
-        <summary class="cursor-pointer text-sm font-semibold text-slate-700">
+        <summary class="cursor-pointer text-sm font-semibold text-ink-2">
           {{ copy.history }}
         </summary>
-        <h3 class="text-xl font-black text-slate-950">{{ copy.history }}</h3>
+        <h3 class="text-xl font-semibold text-ink">{{ copy.history }}</h3>
         <ol class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <li
             v-for="version in store.history"
             :key="version.id"
-            class="grid gap-2 rounded-xl border border-slate-200 p-4"
+            class="grid gap-2 rounded-panel border border-line p-4"
           >
-            <p class="m-0 font-black text-slate-950">
+            <p class="m-0 font-semibold text-ink">
               {{ copy.version }} {{ version.version_number }}
             </p>
-            <p class="m-0 text-sm text-slate-600">
+            <p class="m-0 text-sm text-ink-2">
               {{ copy.createdAt.replace("{date}", formatDate(version.created_at)) }}
             </p>
-            <code class="text-xs break-all text-slate-500">{{ version.content_hash }}</code>
+            <code class="text-xs break-all text-ink-3">{{ version.content_hash }}</code>
           </li>
         </ol>
       </details>

@@ -17,8 +17,8 @@ def configure_jvm(configuration: Path | None = None):
     """Load trusted local runner settings without starting Docker or changing the live API."""
     from orchestwin.api.governed_jvm_context import GovernedJvmSettings
 
-    selected = configuration or ROOT / "var/studio/jvm-runtime.json"
-    if not selected.is_file():
+    selected = configuration
+    if selected is None or not selected.is_file():
         if configuration is not None:
             raise ValueError("JVM_RUNTIME_CONFIGURATION_NOT_FOUND")
         # Source generation needs pinned recipes even while execution remains disabled.

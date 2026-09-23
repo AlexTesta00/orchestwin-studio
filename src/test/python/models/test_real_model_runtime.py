@@ -69,7 +69,7 @@ def source_configuration(configuration):
     return path
 
 
-def test_real_factory_builds_all_ten_tasks_and_keeps_evaluator_separate(configuration):
+def test_real_factory_builds_all_twelve_tasks_and_keeps_evaluator_separate(configuration):
     runtime = build_real_model_runtime(configuration[0])
     assert type(runtime.team).__name__ == "ModelTeamProposalAdapter"
     for member, expected in (
@@ -85,7 +85,7 @@ def test_real_factory_builds_all_ten_tasks_and_keeps_evaluator_separate(configur
     assert runtime.proposal_configuration.temperature > 0
     assert type(runtime.sources).__name__ == "ModelSourceProposalAdapter"
     assert runtime.sources.generator is runtime.team.generator
-    assert len(TASKS) == 10
+    assert len(TASKS) == 12
     assert runtime.final_evaluator.session.identity["adapter_id"] == "s67-final-user-twin-evaluator"
     assert runtime.final_evaluator.generation_lock is runtime.team.generator.port._lock
     assert "proposal-secret-" not in repr(runtime)
@@ -619,3 +619,22 @@ def test_readiness_is_authenticated_and_rechecked_after_startup(configuration):
         state["ready"] = False
         assert client.get("/api/v1/model-runtime/readiness").status_code == 503
         assert client.get("/api/v1/health").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "value,accepted",
+    [
+        ("1.8.0", True),
+        ("1.7.6", True),
+        ("1.9.3", True),
+        ("1.6.0", False),
+        ("0.7.3", False),
+        ("2.0.0", False),
+        ("1.8", False),
+        (None, False),
+    ],
+)
+def test_compatible_schema_decoder_versions(value, accepted):
+    from orchestwin.models.real_runtime import _compatible_schema_decoder
+
+    assert _compatible_schema_decoder(value) is accepted

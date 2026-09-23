@@ -15,6 +15,8 @@ import type {
 import ArchitecturePlanReview from "./ArchitecturePlanReview.vue";
 import { buildArchitecturePackageRevision } from "./architecturePlanning";
 import { workflowStatusLabel } from "./workflowLabels";
+import UiButton from "./UiButton.vue";
+import UiCard from "./UiCard.vue";
 
 type Locale = "en" | "it";
 
@@ -72,6 +74,8 @@ const messages = {
     gate: "Confirm the solution",
     gateStatus: "Status",
     submitGate: "Prepare for approval",
+    decisionCounter: "Decision {n} of {max}",
+    moreActions: "Other actions",
     approveGate: "Approve solution",
     rejectGate: "Reject",
     requestRevision: "Request revision",
@@ -82,6 +86,8 @@ const messages = {
     notReady: "Review and approve the solution to continue.",
     history: "Previous versions",
     technical: "Technical plan and checks",
+    parts: "The parts of the application",
+    links: "How the parts connect",
     audit: "Version and decision details",
     loadError: "The Architecture stage could not be loaded.",
   },
@@ -115,6 +121,8 @@ const messages = {
     gate: "Conferma la soluzione",
     gateStatus: "Stato",
     submitGate: "Prepara per l'approvazione",
+    decisionCounter: "Decisione {n} di {max}",
+    moreActions: "Altre azioni",
     approveGate: "Approva la soluzione",
     rejectGate: "Rifiuta",
     requestRevision: "Richiedi revisione",
@@ -125,6 +133,8 @@ const messages = {
     notReady: "Controlla e approva la soluzione per continuare.",
     history: "Versioni precedenti",
     technical: "Piano tecnico e verifiche",
+    parts: "Le parti dell'applicazione",
+    links: "Come si collegano le parti",
     audit: "Dettagli di versione e decisioni",
     loadError: "Non è stato possibile caricare la fase di architettura.",
   },
@@ -160,6 +170,11 @@ const gatePending = computed(
   () => gateTargetsCurrent.value && store.gate?.status === "PENDING_APPROVAL",
 );
 const gatePaused = computed(() => gateTargetsCurrent.value && store.gate?.status === "PAUSED");
+const decisionCounter = computed(() =>
+  copy.value.decisionCounter
+    .replace("{n}", String(store.gate?.iteration ?? 1))
+    .replace("{max}", String(store.gate?.max_iterations ?? 1)),
+);
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
   if (props.authorize !== undefined) {
@@ -297,29 +312,35 @@ watch(
   },
   { immediate: true },
 );
+function componentName(id: string): string {
+  return (
+    current.value?.package.architecture.components.find((component) => component.id === id)?.name ??
+    id
+  );
+}
 </script>
 
 <template>
   <section
-    class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+    class="grid gap-5 rounded-card border border-line bg-white p-4 shadow-sm sm:p-5"
     data-testid="project-architecture-flow"
   >
     <header class="grid gap-2">
       <TwinIdentity role="SOFTWARE_ARCHITECT" :locale="locale" compact />
-      <p class="m-0 text-xs font-black tracking-widest text-violet-700 uppercase">
+      <p class="m-0 text-xs font-semibold tracking-widest text-hypothesis uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 class="text-xl font-bold text-slate-950">{{ copy.title }}</h2>
-      <p class="m-0 max-w-4xl text-slate-600">{{ copy.intro }}</p>
+      <h2 class="text-xl font-bold text-ink">{{ copy.title }}</h2>
+      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
     </header>
 
-    <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ store.pending.generate ? generationProgress(locale) : copy.loading }}
     </p>
 
     <p
       v-if="localError !== null || store.error !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{
@@ -331,8 +352,8 @@ watch(
     </p>
 
     <div v-if="current === null" class="grid justify-items-start gap-4">
-      <p class="m-0 text-slate-600">{{ copy.noPackage }}</p>
-      <p v-if="!prerequisiteReady" role="status" class="text-sm text-slate-700">
+      <p class="m-0 text-ink-2">{{ copy.noPackage }}</p>
+      <p v-if="!prerequisiteReady" role="status" class="text-sm text-ink-2">
         {{
           locale === "it"
             ? "Scegli e approva l'aspetto della tua app per continuare."
@@ -341,7 +362,7 @@ watch(
       </p>
       <button
         type="button"
-        class="rounded-xl bg-violet-700 px-4 py-3 font-black text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-panel bg-action px-4 py-3 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-60"
         :disabled="store.isBusy || !prerequisiteReady"
         @click="generate"
       >
@@ -350,49 +371,91 @@ watch(
     </div>
 
     <template v-else>
-      <details class="rounded-xl border border-slate-200 p-3 text-sm">
-        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.audit }}</summary>
-        <p class="my-3 text-slate-600">{{ copy.methodology }}</p>
-        <p class="m-0 font-black text-slate-900">{{ copy.version }} {{ current.version_number }}</p>
-        <p class="m-0 text-slate-600">
+      <details class="rounded-panel border border-line p-3 text-sm">
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.audit }}</summary>
+        <p class="my-3 text-ink-2">{{ copy.methodology }}</p>
+        <p class="m-0 font-semibold text-ink">{{ copy.version }} {{ current.version_number }}</p>
+        <p class="m-0 text-ink-2">
           {{ copy.createdAt.replace("{date}", formatDate(current.created_at)) }}
         </p>
-        <p class="m-0 text-xs break-all text-slate-500">
+        <p class="m-0 text-xs break-all text-ink-3">
           {{ copy.contentHash }}: <code>{{ current.content_hash }}</code>
         </p>
       </details>
 
-      <section class="grid gap-2 rounded-xl bg-slate-50 p-4">
-        <h3 class="font-semibold text-slate-950">{{ current.package.architecture.title }}</h3>
-        <p class="m-0 text-sm leading-6 text-slate-700">
-          {{ current.package.architecture.summary }}
-        </p>
-      </section>
+      <UiCard tone="dense">
+        <div class="grid gap-1">
+          <h3 class="m-0 text-base font-semibold tracking-block text-ink">
+            {{ current.package.architecture.title }}
+          </h3>
+          <p class="m-0 text-sm leading-6 text-ink-2">
+            {{ current.package.architecture.summary }}
+          </p>
+        </div>
+
+        <h4 class="m-0 mt-5 text-base font-semibold tracking-block text-ink">{{ copy.parts }}</h4>
+        <ul
+          class="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2"
+          data-testid="architecture-parts"
+        >
+          <li
+            v-for="component in current.package.architecture.components"
+            :key="component.id"
+            class="grid content-start gap-1 rounded-panel border border-line bg-surface-2 p-4"
+          >
+            <strong class="text-[14.5px] font-semibold text-ink">{{ component.name }}</strong>
+            <p class="m-0 text-[13.5px] leading-6 text-ink-2">{{ component.responsibility }}</p>
+            <p class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+              {{ component.technology }}
+            </p>
+          </li>
+        </ul>
+
+        <template v-if="current.package.architecture.connections.length > 0">
+          <h4 class="m-0 mt-6 text-base font-semibold tracking-block text-ink">{{ copy.links }}</h4>
+          <ul class="m-0 mt-3 grid list-none gap-2.5 p-0">
+            <li
+              v-for="connection in current.package.architecture.connections"
+              :key="connection.id"
+              class="flex items-start gap-3 text-[15px] leading-6 text-ink-2"
+            >
+              <span class="mt-2.5 size-1.5 shrink-0 rounded-full bg-action" aria-hidden="true" />
+              <span>
+                <strong class="font-semibold text-ink">
+                  {{ componentName(connection.source_component_id) }} →
+                  {{ componentName(connection.target_component_id) }}
+                </strong>
+                · {{ connection.description }}
+              </span>
+            </li>
+          </ul>
+        </template>
+      </UiCard>
       <details
-        class="rounded-xl border border-slate-200 p-3"
+        class="rounded-panel border border-line p-3"
         data-testid="architecture-technical-details"
       >
-        <summary class="cursor-pointer font-semibold text-slate-700">{{ copy.technical }}</summary>
+        <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.technical }}</summary>
         <div class="mt-4">
           <ArchitecturePlanReview :package-value="current.package" :locale="locale" />
         </div>
       </details>
 
-      <details class="rounded-xl border border-slate-200 p-4">
-        <summary class="cursor-pointer font-semibold text-slate-900">{{ copy.revision }}</summary>
+      <details class="rounded-panel border border-line p-4">
+        <summary class="cursor-pointer font-semibold text-ink">{{ copy.revision }}</summary>
         <div class="mt-4 grid gap-4">
-          <p class="m-0 text-sm text-slate-600">{{ copy.revisionHelp }}</p>
-          <label class="grid gap-2 font-bold text-slate-900">
+          <p class="m-0 text-sm text-ink-2">{{ copy.revisionHelp }}</p>
+          <label class="grid gap-2 font-bold text-ink">
             {{ copy.questionsLabel }}
             <textarea
               v-model="openQuestionsDraft"
-              class="min-h-32 rounded-xl border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+              class="min-h-32 rounded-panel border border-field bg-white px-3 py-2 font-normal text-ink"
               :disabled="pendingDiff !== null || store.isBusy"
             />
           </label>
           <button
             type="button"
-            class="justify-self-start rounded-xl bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            class="justify-self-start rounded-panel bg-action px-4 py-3 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="pendingDiff !== null || store.isBusy"
             @click="proposeRevision"
           >
@@ -404,28 +467,28 @@ watch(
       <details
         v-if="store.diffHistory.length"
         :open="pendingDiff !== null"
-        class="rounded-xl border border-slate-200 p-4"
+        class="rounded-panel border border-line p-4"
       >
-        <summary id="architecture-diff-title" class="cursor-pointer font-semibold text-slate-950">
+        <summary id="architecture-diff-title" class="cursor-pointer font-semibold text-ink">
           {{ copy.diffs }}
         </summary>
-        <p v-if="store.diffHistory.length === 0" class="m-0 text-slate-600">
+        <p v-if="store.diffHistory.length === 0" class="m-0 text-ink-2">
           {{ copy.noDiffs }}
         </p>
         <article
           v-for="diff in store.diffHistory"
           :key="diff.id"
-          class="mt-4 grid gap-4 rounded-xl border border-slate-200 p-4"
+          class="mt-4 grid gap-4 rounded-panel border border-line p-4"
         >
           <div class="grid gap-1">
-            <p class="m-0 font-black text-slate-950">
+            <p class="m-0 font-semibold text-ink">
               {{ workflowStatusLabel(diff.status, locale) }} · {{ copy.changes }}:
               {{ diff.changes.length }}
             </p>
           </div>
           <div
             v-if="diff.changes.some((change) => change.artifact_kind === 'OPEN_QUESTIONS')"
-            class="grid gap-2 text-sm text-slate-700"
+            class="grid gap-2 text-sm text-ink-2"
           >
             <strong>{{ copy.revision }}</strong>
             <ul v-if="diff.proposed_package.open_questions.length" class="list-disc pl-5">
@@ -437,10 +500,10 @@ watch(
               {{ locale === "it" ? "Nessuna domanda rimasta." : "No remaining questions." }}
             </p>
           </div>
-          <details class="text-sm text-slate-600">
+          <details class="text-sm text-ink-2">
             <summary class="cursor-pointer">{{ copy.audit }}</summary>
             <p class="text-xs break-all">{{ diff.id }} · {{ diff.status }}</p>
-            <ul class="list-disc pl-5 text-sm text-slate-700">
+            <ul class="list-disc pl-5 text-sm text-ink-2">
               <li
                 v-for="change in diff.changes"
                 :key="`${change.artifact_kind}:${change.artifact_id}`"
@@ -450,24 +513,24 @@ watch(
             </ul>
           </details>
           <template v-if="diff.status === 'PROPOSED'">
-            <label class="grid gap-2 font-bold text-slate-900">
+            <label class="grid gap-2 font-bold text-ink">
               {{ copy.reason }}
               <textarea
                 v-model="diffReasons[diff.id]"
-                class="min-h-24 rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                class="min-h-24 rounded-panel border border-field px-3 py-2 font-normal"
               />
             </label>
             <div class="flex flex-wrap gap-3">
               <button
                 type="button"
-                class="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white hover:bg-emerald-800"
+                class="rounded-panel bg-ok px-4 py-2 font-semibold text-white hover:bg-ok-dark"
                 @click="decideDiff(diff, 'APPROVE')"
               >
                 {{ copy.approveDiff }}
               </button>
               <button
                 type="button"
-                class="rounded-xl border border-red-300 bg-red-50 px-4 py-2 font-black text-red-800 hover:bg-red-100"
+                class="rounded-panel border border-fail-line bg-fail-bg px-4 py-2 font-semibold text-fail-dark hover:bg-fail-bg"
                 @click="decideDiff(diff, 'REJECT')"
               >
                 {{ copy.rejectDiff }}
@@ -477,106 +540,81 @@ watch(
         </article>
       </details>
 
-      <section class="grid gap-4 rounded-2xl border border-violet-200 bg-violet-50 p-5">
-        <div class="grid gap-1">
-          <h3 class="text-xl font-black text-violet-950">{{ copy.gate }}</h3>
-          <p class="m-0 font-bold text-violet-900">
+      <div class="grid gap-4">
+        <UiCard tone="elevated">
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h3 class="m-0 text-2xl font-semibold tracking-card">{{ copy.gate }}</h3>
+            <span v-if="store.gate" class="font-mono text-xs text-ink-3">
+              {{ decisionCounter }}
+            </span>
+          </div>
+          <p class="mt-2 mb-0 text-sm text-ink-2">
             {{ copy.gateStatus }}: {{ workflowStatusLabel(store.gate?.status, locale) }}
           </p>
-        </div>
-
-        <button
-          v-if="canSubmitGate"
-          type="button"
-          class="justify-self-start rounded-xl bg-violet-700 px-4 py-3 font-black text-white hover:bg-violet-800"
-          @click="submitGate"
-        >
-          {{ copy.submitGate }}
-        </button>
-
-        <template v-if="gatePending || gatePaused">
-          <label class="grid gap-2 font-bold text-violet-950">
-            {{ copy.reason }}
-            <textarea
-              v-model="gateReason"
-              class="min-h-24 rounded-xl border border-violet-300 bg-white px-3 py-2 font-normal text-slate-900"
-            />
-          </label>
-          <div class="flex flex-wrap gap-3">
-            <template v-if="gatePending">
-              <button
-                type="button"
-                class="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white hover:bg-emerald-800"
-                @click="decideGate('APPROVE')"
-              >
-                {{ copy.approveGate }}
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 font-black text-amber-900"
-                @click="decideGate('REQUEST_REVISION')"
-              >
-                {{ copy.requestRevision }}
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-red-300 bg-red-50 px-4 py-2 font-black text-red-800"
-                @click="decideGate('REJECT')"
-              >
-                {{ copy.rejectGate }}
-              </button>
-              <button
-                type="button"
-                class="rounded-xl border border-slate-300 bg-white px-4 py-2 font-black text-slate-800"
-                @click="decideGate('PAUSE')"
-              >
-                {{ copy.pause }}
-              </button>
-            </template>
-            <button
-              v-if="gatePaused"
-              type="button"
-              class="rounded-xl bg-violet-700 px-4 py-2 font-black text-white"
-              @click="decideGate('RESUME')"
-            >
-              {{ copy.resume }}
-            </button>
-            <button
-              type="button"
-              class="rounded-xl border border-slate-300 bg-white px-4 py-2 font-black text-slate-800"
-              @click="decideGate('CANCEL')"
-            >
-              {{ copy.cancelGate }}
-            </button>
+          <p
+            class="mt-2 mb-0 text-[15px] font-semibold"
+            :class="store.isReadyForImplementation ? 'text-ok-dark' : 'text-warn'"
+          >
+            {{ store.isReadyForImplementation ? copy.ready : copy.notReady }}
+          </p>
+          <div v-if="canSubmitGate" class="mt-5">
+            <UiButton @click="submitGate">{{ copy.submitGate }}</UiButton>
           </div>
-        </template>
+          <div v-if="gatePending || gatePaused" class="mt-5 grid gap-3">
+            <div v-if="gatePending" class="flex flex-wrap gap-3">
+              <UiButton @click="decideGate('APPROVE')">{{ copy.approveGate }}</UiButton>
+              <UiButton variant="secondary" @click="decideGate('REQUEST_REVISION')">
+                {{ copy.requestRevision }}
+              </UiButton>
+            </div>
+            <div v-else class="flex flex-wrap gap-3">
+              <UiButton @click="decideGate('RESUME')">{{ copy.resume }}</UiButton>
+              <UiButton variant="secondary" @click="decideGate('CANCEL')">
+                {{ copy.cancelGate }}
+              </UiButton>
+            </div>
+            <label class="grid gap-1 text-sm font-semibold">
+              {{ copy.reason }}
+              <textarea
+                v-model="gateReason"
+                class="min-h-24 rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
+              />
+            </label>
+            <details v-if="gatePending" class="text-sm">
+              <summary class="cursor-pointer font-semibold text-ink-2">
+                {{ copy.moreActions }}
+              </summary>
+              <div class="mt-3 flex flex-wrap gap-3">
+                <UiButton variant="danger" @click="decideGate('REJECT')">
+                  {{ copy.rejectGate }}
+                </UiButton>
+                <UiButton variant="secondary" @click="decideGate('PAUSE')">{{
+                  copy.pause
+                }}</UiButton>
+                <UiButton variant="secondary" @click="decideGate('CANCEL')">
+                  {{ copy.cancelGate }}
+                </UiButton>
+              </div>
+            </details>
+          </div>
+        </UiCard>
+      </div>
 
-        <p
-          class="m-0 font-black"
-          :class="store.isReadyForImplementation ? 'text-emerald-800' : 'text-violet-900'"
-        >
-          {{ store.isReadyForImplementation ? copy.ready : copy.notReady }}
-        </p>
-      </section>
-
-      <details class="rounded-xl border border-slate-200 p-4">
-        <summary
-          id="architecture-history-title"
-          class="cursor-pointer font-semibold text-slate-700"
-        >
+      <details class="rounded-panel border border-line p-4">
+        <summary id="architecture-history-title" class="cursor-pointer font-semibold text-ink-2">
           {{ copy.history }}
         </summary>
         <ol class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <li
             v-for="version in store.history"
             :key="version.id"
-            class="grid gap-2 rounded-xl border border-slate-200 p-4"
+            class="grid gap-2 rounded-panel border border-line p-4"
           >
-            <p class="m-0 font-black text-slate-900">
+            <p class="m-0 font-semibold text-ink">
               {{ copy.version }} {{ version.version_number }}
             </p>
-            <p class="m-0 text-sm text-slate-600">{{ formatDate(version.created_at) }}</p>
-            <code class="text-xs break-all text-slate-500">{{ version.content_hash }}</code>
+            <p class="m-0 text-sm text-ink-2">{{ formatDate(version.created_at) }}</p>
+            <code class="text-xs break-all text-ink-3">{{ version.content_hash }}</code>
           </li>
         </ol>
       </details>

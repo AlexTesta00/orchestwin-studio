@@ -195,22 +195,22 @@ function statusLabel(status: ComparisonStatus): string {
 
 <template>
   <section
-    class="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
     aria-labelledby="requirements-version-comparison-title"
   >
-    <h3 id="requirements-version-comparison-title" class="text-xl font-black text-slate-950">
+    <h3 id="requirements-version-comparison-title" class="text-xl font-semibold text-ink">
       {{ copy.title }}
     </h3>
 
-    <p v-if="orderedVersions.length < 2" class="m-0 text-sm text-slate-600">
+    <p v-if="orderedVersions.length < 2" class="m-0 text-sm text-ink-2">
       {{ copy.empty }}
     </p>
 
     <template v-else>
       <div class="grid gap-3 sm:grid-cols-2">
-        <label class="grid gap-1 text-sm font-bold text-slate-700">
+        <label class="grid gap-1 text-sm font-bold text-ink-2">
           {{ copy.base }}
-          <select v-model="baseVersionNumber" class="rounded-lg border px-3 py-2">
+          <select v-model="baseVersionNumber" class="rounded-control border px-3 py-2">
             <option
               v-for="version in orderedVersions"
               :key="`base:${version.id}`"
@@ -220,9 +220,9 @@ function statusLabel(status: ComparisonStatus): string {
             </option>
           </select>
         </label>
-        <label class="grid gap-1 text-sm font-bold text-slate-700">
+        <label class="grid gap-1 text-sm font-bold text-ink-2">
           {{ copy.target }}
-          <select v-model="targetVersionNumber" class="rounded-lg border px-3 py-2">
+          <select v-model="targetVersionNumber" class="rounded-control border px-3 py-2">
             <option
               v-for="version in orderedVersions"
               :key="`target:${version.id}`"
@@ -237,7 +237,7 @@ function statusLabel(status: ComparisonStatus): string {
       <div class="overflow-x-auto">
         <table class="w-full border-collapse text-left text-sm" data-testid="version-comparison">
           <thead>
-            <tr class="border-b text-xs tracking-wide text-slate-500 uppercase">
+            <tr class="border-b text-xs tracking-wide text-ink-3 uppercase">
               <th class="px-2 py-2">{{ copy.artifact }}</th>
               <th class="px-2 py-2">{{ copy.kind }}</th>
               <th class="px-2 py-2">{{ copy.status }}</th>
@@ -245,8 +245,8 @@ function statusLabel(status: ComparisonStatus): string {
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="`${row.kind}:${row.code}`" class="border-b">
-              <td class="px-2 py-2 font-black text-slate-900">{{ row.code }}</td>
-              <td class="px-2 py-2 text-slate-600">{{ row.kind }}</td>
+              <td class="px-2 py-2 font-semibold text-ink">{{ row.code }}</td>
+              <td class="px-2 py-2 text-ink-2">{{ row.kind }}</td>
               <td class="px-2 py-2 font-bold">{{ statusLabel(row.status) }}</td>
             </tr>
           </tbody>

@@ -41,6 +41,8 @@
     "check": "npm run quality && npm run test && npm run bundle"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.2.6",
+    "@fontsource/libre-franklin": "5.2.6",
     "pinia": "4.0.3",
     "vue": "3.5.42",
     "vue-i18n": "11.4.9",
@@ -54,6 +56,7 @@
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/test-utils": "2.4.11",
     "@vue/tsconfig": "0.9.1",
+    "axe-core": "4.13.0",
     "eslint": "10.9.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-vue": "10.10.0",

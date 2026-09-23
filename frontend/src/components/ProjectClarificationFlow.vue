@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedRequest, useClarificationStore } from "@/stores/clarification";
 import TwinIdentity from "./TwinIdentity.vue";
+import UiButton from "./UiButton.vue";
 
 interface AnswerDraft {
   text: string;
@@ -85,6 +86,7 @@ const { t, locale } = useI18n({
         gateTitle: "Conferma la tua idea di progetto",
         noGate: "When your idea is complete, prepare it for your approval.",
         submitGate: "Prepare for approval",
+        moreActions: "Other actions",
         gateReason: "Decision rationale",
         approve: "Approve",
         requestRevision: "Request revision",
@@ -269,6 +271,7 @@ const { t, locale } = useI18n({
         gateTitle: "Conferma la tua idea di progetto",
         noGate: "Quando la tua idea è completa, preparala per l’approvazione.",
         submitGate: "Prepara per l’approvazione",
+        moreActions: "Altre azioni",
         gateReason: "Motivazione della decisione",
         approve: "Approva",
         requestRevision: "Richiedi revisione",
@@ -703,11 +706,11 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         :locale="locale.startsWith('it') ? 'it' : 'en'"
         compact
       />
-      <h2 id="clarification-flow-title" class="text-xl font-bold text-slate-950">
+      <h2 id="clarification-flow-title" class="text-xl font-bold text-ink">
         {{ t("flow.title") }}
       </h2>
 
-      <p class="m-0 max-w-3xl text-slate-600">
+      <p class="m-0 max-w-3xl text-ink-2">
         {{ t("flow.intro") }}
       </p>
     </header>
@@ -724,13 +727,13 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       aria-live="polite"
       aria-atomic="true"
     >
-      <p v-if="store.busy" class="m-0 text-sm font-semibold text-slate-700">
+      <p v-if="store.busy" class="m-0 text-sm font-semibold text-ink-2">
         {{ t("flow.loading") }}
       </p>
 
       <p
         v-else-if="localError !== null || store.errorDetail !== null"
-        class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
+        class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 text-sm font-semibold text-fail-dark"
         role="alert"
       >
         {{
@@ -742,7 +745,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 
       <p
         v-else-if="store.lastRoundAnswer?.next_step"
-        class="m-0 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"
+        class="m-0 rounded-panel border border-ok-line bg-ok-bg p-4 text-sm font-semibold text-ok-dark"
       >
         {{
           t("flow.nextStep", {
@@ -755,7 +758,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
     <div class="flex flex-wrap gap-3">
       <button
         type="button"
-        class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:opacity-60"
+        class="min-h-11 rounded-panel border border-field bg-white px-4 py-2 font-bold text-ink hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy"
         @click="load"
       >
@@ -765,7 +768,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
       <button
         v-if="store.currentRound === null"
         type="button"
-        class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+        class="min-h-11 rounded-panel bg-action px-4 py-2 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         :disabled="store.busy"
         @click="startRound"
       >
@@ -774,12 +777,12 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
     </div>
 
     <section
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
       aria-labelledby="current-round-title"
     >
       <template v-if="store.currentRound !== null">
         <header class="grid gap-1">
-          <h3 id="current-round-title" class="text-xl font-black text-slate-950">
+          <h3 id="current-round-title" class="text-xl font-semibold text-ink">
             {{
               t("flow.roundTitle", {
                 number: store.currentRound.round_number,
@@ -787,7 +790,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             }}
           </h3>
 
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{
               t("flow.versionLabel", {
                 version: store.currentRound.source_brief_version_number,
@@ -810,13 +813,13 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           <fieldset
             v-for="question in store.currentRound.questions"
             :key="question.question_id"
-            class="grid gap-3 rounded-xl border border-slate-200 p-4"
+            class="grid gap-3 rounded-panel border border-line p-4"
           >
-            <legend class="px-1 font-black text-slate-900">
+            <legend class="px-1 font-semibold text-ink">
               {{ questionPrompt(question) }}
             </legend>
 
-            <p class="m-0 text-sm text-slate-600">
+            <p class="m-0 text-sm text-ink-2">
               {{ questionHint(question) }}
             </p>
 
@@ -824,7 +827,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
               v-if="question.answer_type === 'text'"
               v-model="draftFor(question.question_id).text"
               :data-testid="`question-${question.field}-text`"
-              class="min-h-28 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:bg-slate-100"
+              class="min-h-28 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:bg-surface-3"
               :placeholder="t('flow.textPlaceholder')"
               :disabled="draftFor(question.question_id).unknown"
             ></textarea>
@@ -833,14 +836,14 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
               v-else
               v-model="draftFor(question.question_id).items"
               :data-testid="`question-${question.field}-items`"
-              class="min-h-32 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:bg-slate-100"
+              class="min-h-32 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:bg-surface-3"
               :placeholder="t('flow.listPlaceholder')"
               :disabled="draftFor(question.question_id).unknown"
             ></textarea>
 
             <label
               v-if="question.unknown_allowed"
-              class="flex min-h-11 items-center gap-3 rounded-lg p-2 text-sm font-semibold text-slate-700"
+              class="flex min-h-11 items-center gap-3 rounded-control p-2 text-sm font-semibold text-ink-2"
             >
               <input
                 v-model="draftFor(question.question_id).unknown"
@@ -854,7 +857,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 
           <button
             type="submit"
-            class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+            class="min-h-12 rounded-panel bg-action px-5 py-3 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
             :disabled="store.busy"
           >
             {{ t("flow.submitAnswers") }}
@@ -862,17 +865,17 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         </form>
       </template>
 
-      <p v-else id="current-round-title" class="m-0 text-slate-600">
+      <p v-else id="current-round-title" class="m-0 text-ink-2">
         {{ t("flow.noOpenRound") }}
       </p>
     </section>
 
     <details
       v-if="store.roundHistory.length > 0"
-      class="rounded-xl border border-slate-200 bg-white p-4"
+      class="rounded-panel border border-line bg-white p-4"
       aria-labelledby="clarification-history-title"
     >
-      <summary id="clarification-history-title" class="cursor-pointer font-semibold text-slate-700">
+      <summary id="clarification-history-title" class="cursor-pointer font-semibold text-ink-2">
         {{ t("flow.historyTitle") }}
       </summary>
 
@@ -880,9 +883,9 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         <li
           v-for="round in store.roundHistory"
           :key="round.id"
-          class="rounded-xl border border-slate-200 p-4"
+          class="rounded-panel border border-line p-4"
         >
-          <p class="m-0 font-bold text-slate-900">
+          <p class="m-0 font-bold text-ink">
             {{
               t("flow.roundTitle", {
                 number: round.round_number,
@@ -890,7 +893,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             }}
           </p>
 
-          <p class="m-0 mt-1 text-sm text-slate-600">
+          <p class="m-0 mt-1 text-sm text-ink-2">
             {{ statusText(round.status) }}
             ·
             {{ formatDate(round.created_at) }}
@@ -898,7 +901,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 
           <p
             v-if="round.resulting_brief_version_number !== null"
-            class="m-0 mt-1 text-sm text-slate-600"
+            class="m-0 mt-1 text-sm text-ink-2"
           >
             {{
               t("flow.versionLabel", {
@@ -909,31 +912,31 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         </li>
       </ol>
 
-      <p v-else class="m-0 text-slate-600">
+      <p v-else class="m-0 text-ink-2">
         {{ t("flow.noHistory") }}
       </p>
     </details>
 
     <details
       :open="store.assumptions.some((assumption) => assumption.status === 'PROPOSED')"
-      class="rounded-xl border border-slate-200 bg-white p-4"
+      class="rounded-panel border border-line bg-white p-4"
       aria-labelledby="assumptions-title"
     >
-      <summary id="assumptions-title" class="cursor-pointer font-semibold text-slate-950">
+      <summary id="assumptions-title" class="cursor-pointer font-semibold text-ink">
         {{ t("flow.assumptionsTitle") }}
       </summary>
       <div class="mt-4 grid gap-4">
-        <p class="m-0 text-sm text-slate-600">
+        <p class="m-0 text-sm text-ink-2">
           {{ t("flow.assumptionsIntro") }}
         </p>
 
         <form class="grid gap-4 md:grid-cols-2" @submit.prevent="createAssumption">
-          <label class="grid gap-2 font-bold text-slate-800">
+          <label class="grid gap-2 font-bold text-ink-2">
             {{ t("flow.assumptionField") }}
 
             <select
               v-model="assumptionField"
-              class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+              class="min-h-11 rounded-panel border border-field bg-white px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none"
             >
               <option v-for="field in BRIEF_FIELDS" :key="field" :value="field">
                 {{ fieldText(field) }}
@@ -941,19 +944,19 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             </select>
           </label>
 
-          <label class="grid gap-2 font-bold text-slate-800">
+          <label class="grid gap-2 font-bold text-ink-2">
             {{ t("flow.assumptionStatement") }}
 
             <textarea
               v-model="assumptionStatement"
-              class="min-h-28 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+              class="min-h-28 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none"
               :placeholder="t('flow.assumptionPlaceholder')"
             ></textarea>
           </label>
 
           <button
             type="submit"
-            class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60 md:col-span-2"
+            class="min-h-11 rounded-panel bg-action px-4 py-2 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60 md:col-span-2"
             :disabled="store.busy"
           >
             {{ t("flow.createAssumption") }}
@@ -964,38 +967,38 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           <li
             v-for="assumption in store.assumptions"
             :key="assumption.id"
-            class="grid gap-3 rounded-xl border border-slate-200 p-4"
+            class="grid gap-3 rounded-panel border border-line p-4"
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="grid gap-1">
-                <p class="m-0 font-black text-slate-900">
+                <p class="m-0 font-semibold text-ink">
                   {{ fieldText(assumption.field) }}
                 </p>
 
-                <p class="m-0 text-slate-700">
+                <p class="m-0 text-ink-2">
                   {{ assumption.statement }}
                 </p>
               </div>
 
-              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+              <span class="rounded-full bg-surface-3 px-3 py-1 text-xs font-semibold text-ink-2">
                 {{ statusText(assumption.status) }}
               </span>
             </div>
 
             <template v-if="assumption.status === 'PROPOSED'">
-              <label class="grid gap-2 text-sm font-bold text-slate-800">
+              <label class="grid gap-2 text-sm font-bold text-ink-2">
                 {{ t("flow.decisionReason") }}
 
                 <textarea
                   v-model="assumptionReasons[assumption.id]"
-                  class="min-h-20 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+                  class="min-h-20 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none"
                 ></textarea>
               </label>
 
               <div class="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+                  class="min-h-11 rounded-panel bg-ok px-4 py-2 font-bold text-white hover:bg-ok-dark focus-visible:ring-2 focus-visible:ring-ok focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
                   :disabled="store.busy"
                   @click="acceptAssumption(assumption)"
                 >
@@ -1004,7 +1007,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 
                 <button
                   type="button"
-                  class="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+                  class="min-h-11 rounded-panel border border-fail-line bg-white px-4 py-2 font-bold text-fail-dark hover:bg-fail-bg focus-visible:ring-2 focus-visible:ring-fail focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
                   :disabled="store.busy"
                   @click="rejectAssumption(assumption)"
                 >
@@ -1013,29 +1016,29 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
               </div>
             </template>
 
-            <p v-else-if="assumption.decision_reason" class="m-0 text-sm text-slate-600">
+            <p v-else-if="assumption.decision_reason" class="m-0 text-sm text-ink-2">
               {{ assumption.decision_reason }}
             </p>
           </li>
         </ul>
 
-        <p v-else class="m-0 text-slate-600">
+        <p v-else class="m-0 text-ink-2">
           {{ t("flow.noAssumptions") }}
         </p>
       </div>
     </details>
 
     <section
-      class="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
       aria-labelledby="brief-gate-title"
     >
       <header class="grid gap-1">
-        <h3 id="brief-gate-title" class="text-xl font-black text-slate-950">
+        <h3 id="brief-gate-title" class="text-xl font-semibold text-ink">
           {{ t("flow.gateTitle") }}
         </h3>
 
         <template v-if="store.gate !== null">
-          <p class="m-0 text-sm text-slate-600">
+          <p class="m-0 text-sm text-ink-2">
             {{
               t("flow.statusLabel", {
                 status: statusText(gateTargetsBrief ? store.gate.status : "STALE"),
@@ -1043,9 +1046,9 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             }}
           </p>
 
-          <details class="text-xs text-slate-500">
+          <details class="text-xs text-ink-3">
             <summary class="cursor-pointer">{{ t("flow.audit") }}</summary>
-            <p class="mt-2 text-sm text-slate-600">
+            <p class="mt-2 text-sm text-ink-2">
               {{
                 t("flow.versionLabel", {
                   version: store.gate.artifact.version,
@@ -1059,14 +1062,14 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           </details>
         </template>
 
-        <p v-else class="m-0 text-sm text-slate-600">
+        <p v-else class="m-0 text-sm text-ink-2">
           {{ t("flow.noGate") }}
         </p>
       </header>
 
       <div
         v-if="store.lastGateSubmission?.missing_fields.length"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900"
+        class="rounded-panel border border-line-strong bg-surface-2 p-4 text-warn"
       >
         <p class="m-0 font-bold">
           {{ t("flow.missingForApproval") }}
@@ -1079,100 +1082,68 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
         </ul>
       </div>
 
-      <button
-        v-if="canSubmitBrief"
-        type="button"
-        class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
-        @click="submitGate"
-      >
-        {{ t("flow.submitGate") }}
-      </button>
+      <div v-if="canSubmitBrief">
+        <UiButton :disabled="store.busy" @click="submitGate">{{ t("flow.submitGate") }}</UiButton>
+      </div>
 
       <template v-if="store.gate !== null && gateTargetsBrief">
+        <div v-if="store.gate.status === 'PENDING_APPROVAL'" class="flex flex-wrap gap-3">
+          <UiButton :disabled="store.busy" @click="decideGate('APPROVE')">
+            {{ t("flow.approve") }}
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            :disabled="store.busy"
+            @click="decideGate('REQUEST_REVISION')"
+          >
+            {{ t("flow.requestRevision") }}
+          </UiButton>
+        </div>
+
+        <div v-else-if="store.gate.status === 'PAUSED'" class="flex flex-wrap gap-3">
+          <UiButton :disabled="store.busy" @click="decideGate('RESUME')">
+            {{ t("flow.resume") }}
+          </UiButton>
+          <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('CANCEL')">
+            {{ t("flow.cancel") }}
+          </UiButton>
+        </div>
+
+        <div v-else-if="['REVISION_REQUESTED', 'PAUSED_NEEDS_HUMAN'].includes(store.gate.status)">
+          <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('CANCEL')">
+            {{ t("flow.cancel") }}
+          </UiButton>
+        </div>
+
         <label
           v-if="['PENDING_APPROVAL', 'PAUSED'].includes(store.gate.status)"
-          class="grid gap-2 font-bold text-slate-800"
+          class="grid gap-2 text-sm font-semibold"
         >
           {{ t("flow.gateReason") }}
 
           <textarea
             v-model="gateReason"
-            class="min-h-24 rounded-xl border border-slate-300 px-3 py-2 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none"
+            class="min-h-24 rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
           ></textarea>
         </label>
 
-        <div v-if="store.gate.status === 'PENDING_APPROVAL'" class="flex flex-wrap gap-3">
-          <button
-            type="button"
-            class="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('APPROVE')"
-          >
-            {{ t("flow.approve") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('REJECT')"
-          >
-            {{ t("flow.rejectIdea") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-amber-300 px-4 py-2 font-bold text-amber-900 hover:bg-amber-50 focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('REQUEST_REVISION')"
-          >
-            {{ t("flow.requestRevision") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-slate-300 px-4 py-2 font-bold text-slate-800 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('PAUSE')"
-          >
-            {{ t("flow.pause") }}
-          </button>
-        </div>
-
-        <div v-else-if="store.gate.status === 'PAUSED'" class="flex flex-wrap gap-3">
-          <button
-            type="button"
-            class="min-h-11 rounded-xl bg-slate-950 px-4 py-2 font-bold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('RESUME')"
-          >
-            {{ t("flow.resume") }}
-          </button>
-
-          <button
-            type="button"
-            class="min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-            @click="decideGate('CANCEL')"
-          >
-            {{ t("flow.cancel") }}
-          </button>
-        </div>
-
-        <button
-          v-else-if="['REVISION_REQUESTED', 'PAUSED_NEEDS_HUMAN'].includes(store.gate.status)"
-          type="button"
-          class="min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-800 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-          :disabled="store.busy"
-          @click="decideGate('CANCEL')"
-        >
-          {{ t("flow.cancel") }}
-        </button>
+        <details v-if="store.gate.status === 'PENDING_APPROVAL'" class="text-sm">
+          <summary class="cursor-pointer font-semibold text-ink-2">
+            {{ t("flow.moreActions") }}
+          </summary>
+          <div class="mt-3 flex flex-wrap gap-3">
+            <UiButton variant="danger" :disabled="store.busy" @click="decideGate('REJECT')">
+              {{ t("flow.rejectIdea") }}
+            </UiButton>
+            <UiButton variant="secondary" :disabled="store.busy" @click="decideGate('PAUSE')">
+              {{ t("flow.pause") }}
+            </UiButton>
+          </div>
+        </details>
       </template>
 
       <details class="text-sm">
-        <summary class="cursor-pointer font-semibold text-slate-700">
+        <summary class="cursor-pointer font-semibold text-ink-2">
           {{ t("flow.eventHistory") }}
         </summary>
 
@@ -1180,13 +1151,13 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           <li
             v-for="event in store.gateEvents"
             :key="event.id"
-            class="rounded-xl border border-slate-200 p-4"
+            class="rounded-panel border border-line p-4"
           >
-            <p class="m-0 font-bold text-slate-900">
+            <p class="m-0 font-bold text-ink">
               {{ statusText(event.kind) }}
             </p>
 
-            <p class="m-0 mt-1 text-sm text-slate-600">
+            <p class="m-0 mt-1 text-sm text-ink-2">
               {{ statusText(event.previous_status) }}
               →
               {{ statusText(event.resulting_status) }}
@@ -1194,13 +1165,13 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
               {{ formatDate(event.occurred_at) }}
             </p>
 
-            <p v-if="event.reason" class="m-0 mt-2 text-sm text-slate-700">
+            <p v-if="event.reason" class="m-0 mt-2 text-sm text-ink-2">
               {{ event.reason }}
             </p>
           </li>
         </ol>
 
-        <p v-else class="m-0 text-slate-600">
+        <p v-else class="m-0 text-ink-2">
           {{ t("flow.noEvents") }}
         </p>
       </details>

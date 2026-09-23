@@ -1,1 +1,112 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Libre Franklin", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-page: #f2f2f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f7fa;
+  --color-surface-3: #efeff3;
+  --color-line-strong: #dedee4;
+  --color-line: #e3e3e8;
+  --color-line-soft: #ededf1;
+  --color-field: #d2d2d9;
+  --color-button-line: #c9c9d1;
+  --color-topbar-line: #e7e7ed;
+  --color-ink: #1c1c1e;
+  --color-ink-2: #48484f;
+  --color-ink-3: #6a6a72;
+  --color-ink-on-dark: #d8d8de;
+  --color-ink-on-dark-2: #a8a8b0;
+  --color-action: #0a5fba;
+  --color-action-hover: #08498f;
+  --color-action-soft: #edf2fb;
+  --color-action-soft-line: #c9d8f0;
+  --color-ok: #1f6b4a;
+  --color-ok-dark: #14503a;
+  --color-ok-text: #1b5e43;
+  --color-ok-bg: #edf5f0;
+  --color-ok-line: #cfe0d6;
+  --color-fail: #a32c2c;
+  --color-fail-dark: #6e2113;
+  --color-fail-strong: #8e2418;
+  --color-fail-bg: #fdf3f0;
+  --color-fail-line: #ebccc4;
+  --color-warn: #8a5a00;
+  --color-hypothesis: #5b3e72;
+  --color-hypothesis-bg: #f7f2f9;
+  --color-hypothesis-line: #e0d3ea;
+  --color-hypothesis-text: #2e2038;
+  --color-proof: #3a3a40;
+  --color-proof-bg: #efeff3;
+  --color-proof-line: #dcdce2;
+  --color-evidence-key: #9fb0cc;
+  --color-evidence-value: #f2efe9;
+  --color-bar-track: #efe7da;
+  --color-bar-track-end: #ededf1;
+  --color-chain: #e0d6c6;
+  --color-sample-line: #a9bee0;
+  --color-sample-bg: #f2f6fd;
+  --color-row-alt: #fafafc;
+
+  --radius-control: 10px;
+  --radius-panel: 14px;
+  --radius-card: 18px;
+  --radius-block: 22px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-decision: 0 8px 28px rgba(28, 28, 30, 0.07);
+
+  --tracking-hero: -0.035em;
+  --tracking-title: -0.028em;
+  --tracking-section: -0.03em;
+  --tracking-card: -0.025em;
+  --tracking-block: -0.015em;
+
+  --animate-spin-arc: spin-arc 900ms linear infinite;
+  --animate-reveal: reveal 760ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+
+  @keyframes spin-arc {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(22px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-action);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

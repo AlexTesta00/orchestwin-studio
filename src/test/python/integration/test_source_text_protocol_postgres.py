@@ -19,20 +19,34 @@ from src.test.python.integration.test_model_source_generation_postgres import (
     source_output,
 )
 from src.test.python.integration.test_proposal_evidence_postgres import database, pytestmark, run
-from src.test.python.models.test_source_file_generation import source_sequence_generator
+from src.test.python.models.test_source_file_generation import (
+    app_file,
+    source_sequence_generator,
+)
 
 __all__ = ["database", "pytestmark"]
 
 
-@pytest.mark.parametrize("final_newline", [False, True])
+@pytest.mark.parametrize("trailing_newline", [False, True])
 def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_protection(
-    database, tmp_path, final_newline
+    database, tmp_path, trailing_newline
 ):
     versions = artifacts()
     output = source_output(ExecutionTarget.WEB_STATIC)
-    content = "\n".join(f"// città, reserved line {number}" for number in range(72))
-    content += "\n" if final_newline else ""
-    output["files"][0]["content"] = content
+    shared_state = [
+        {"kind": "const", "name": f"reserved{number}", "initializer": f"'città {number}'"}
+        for number in range(4)
+    ]
+    helpers = "\n".join(
+        f"function helper{number}() {{\n  return 'città {number}';\n}}" for number in range(24)
+    ) + ("\n" if trailing_newline else "")
+    output["files"][0] = app_file(
+        shared_state=shared_state,
+        private_helpers=helpers,
+        functions=[{"name": "value", "parameters": "", "body": "  return 'città';"}],
+    )
+    content = output["files"][0]["content"]
+    assert content.count("\n") > 72
     generator, _ = source_sequence_generator(tmp_path, output)
 
     async def scenario():
@@ -73,7 +87,7 @@ def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_pro
         with engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0044_source_design_retry"
+                == "0051_source_third_attempt"
             )
             assert (
                 connection.scalar(sa.text("SELECT count(*) FROM model_proposal_generations"))

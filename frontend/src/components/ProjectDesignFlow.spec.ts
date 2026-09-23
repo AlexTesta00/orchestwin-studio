@@ -28,6 +28,7 @@ import { useDesignStore } from "../stores/design";
 import { useWebExecutionStore } from "../stores/webExecution";
 import type { WebSourceRevisionPayload } from "../types/webExecution";
 import type { SourceDesignApi, SourceDesignReferencePayload } from "../api/webDesignReference";
+import { expectAccessible } from "@/test/axe";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("access-token");
 
@@ -480,5 +481,11 @@ describe("ProjectDesignFlow", () => {
 
     expect((recommended.element as HTMLInputElement).checked).toBe(false);
     expect(BASE_DESIGN_PACKAGE.owner_selected_alternative_id).toBeNull();
+  });
+
+  it("has no axe violations with a source-bound design", async () => {
+    const { wrapper } = mountWithSource(sourceReference());
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

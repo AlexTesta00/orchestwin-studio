@@ -58,7 +58,10 @@ from src.test.python.integration.test_proposal_evidence_postgres import database
 from src.test.python.jvm_execution import attempt_support as jvm_fixture
 from src.test.python.models.test_fake_architecture import proposal_request, propose
 from src.test.python.models.test_proposal_evidence import audited_generator
-from src.test.python.models.test_source_file_generation import source_sequence_generator
+from src.test.python.models.test_source_file_generation import (
+    app_file,
+    source_sequence_generator,
+)
 
 __all__ = ["database"]
 pytestmark = [
@@ -197,17 +200,21 @@ def source_output(target):
             "media_type": "text/javascript"
             if target is ExecutionTarget.WEB_STATIC
             else "text/plain",
-            "content": "// Synthetic test source; this fixture checks persistence only.",
+            "content": (
+                "const test = require('node:test');\n"
+                "const assert = require('node:assert/strict');\n"
+                "test('value', () => { assert.equal(require('./app.js').value(), 'Fixture'); });\n"
+            )
+            if target is ExecutionTarget.WEB_STATIC
+            else "// Synthetic test source; this fixture checks persistence only.",
         }
     ]
     if target is ExecutionTarget.WEB_STATIC:
         test_files.insert(
             0,
-            {
-                "normalized_path": "app.js",
-                "media_type": "text/javascript",
-                "content": "const synthetic = 'Fixture';",
-            },
+            app_file(
+                functions=[{"name": "value", "parameters": "", "body": "  return 'Fixture';"}]
+            ),
         )
     entry = {
         "normalized_path": path,
@@ -532,7 +539,7 @@ def test_generated_repairs_remain_pending_and_exact(
                     "rationale": "Repair the recorded synthetic failure.",
                     "changes": [
                         {
-                            **output["files"][0],
+                            **{k: v for k, v in output["files"][0].items() if k != "parts"},
                             "operation": "REPLACE",
                             "content": output["files"][0]["content"].replace("Fixture", "Repaired"),
                             "media_type": (

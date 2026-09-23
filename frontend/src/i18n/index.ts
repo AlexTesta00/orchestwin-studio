@@ -13,7 +13,7 @@ export function isSupportedLocale(value: string): value is SupportedLocale {
   return value === "en" || value === "it";
 }
 
-export function savedLocale(): SupportedLocale {
+function savedLocale(): SupportedLocale {
   try {
     const saved = localStorage.getItem("orchestwin.locale");
     return saved && isSupportedLocale(saved) ? saved : defaultLocale;

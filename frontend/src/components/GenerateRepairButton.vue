@@ -8,6 +8,7 @@ import {
 } from "@/api/sourceGeneration";
 import { useAuthStore } from "@/stores/auth";
 import type { AuthorizedRequest } from "@/stores/architecture";
+import UiButton from "./UiButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +21,7 @@ const props = withDefaults(
     disabled?: boolean;
     authorize?: AuthorizedRequest;
     api?: SourceGenerationApi;
+    label?: string;
   }>(),
   { locale: "en", disabled: false },
 );
@@ -90,16 +92,17 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="mt-3 space-y-2" :aria-busy="pending">
-    <button
-      type="button"
-      class="rounded-lg bg-slate-900 px-4 py-2 font-bold text-white disabled:opacity-50"
-      :disabled="pending || disabled || complete"
-      @click="generate"
-    >
-      {{ pending ? copy.busy : copy.action }}
-    </button>
-    <p v-if="complete" role="status">{{ copy.complete }}</p>
-    <p v-if="error" role="alert">{{ copy.error }}</p>
+  <div class="mt-3 grid gap-2" :aria-busy="pending">
+    <div>
+      <UiButton :disabled="pending || disabled || complete" @click="generate">
+        {{ pending ? copy.busy : (label ?? copy.action) }}
+      </UiButton>
+    </div>
+    <p v-if="complete" class="m-0 text-[15px] font-semibold text-ok-dark" role="status">
+      {{ copy.complete }}
+    </p>
+    <p v-if="error" class="m-0 text-[15px] font-semibold text-fail-dark" role="alert">
+      {{ copy.error }}
+    </p>
   </div>
 </template>

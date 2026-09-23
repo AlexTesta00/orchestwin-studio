@@ -60,7 +60,7 @@ class EvaluationMatrixSummary:
         }
 
 
-def verify_sprint12_evaluation_matrix(repo_root: Path) -> EvaluationMatrixSummary:
+def verify_evaluation_matrix(repo_root: Path) -> EvaluationMatrixSummary:
     """Verify that formal cases exercise generic Web profiles and JVM stays a fixture matrix."""
     case_dir = repo_root / "experiments" / "case-studies"
     cases = tuple(load_case_study_definition(case_dir / name) for name in _FORMAL_CASE_FILES)

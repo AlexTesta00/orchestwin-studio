@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import (
@@ -97,29 +96,6 @@ class FinalReviewRecord(OrmBase):
 
 class FinalReviewPersistenceConflict(RuntimeError):
     """Raised when append-only final-review identity or lineage conflicts."""
-
-
-class FinalReviewRepository(Protocol):
-    """Owner-scoped append-only final-review persistence port."""
-
-    async def append(self, review: FinalReviewAssessment) -> FinalReviewAssessment:
-        """Append one exact review version."""
-
-    async def get_owned(
-        self,
-        *,
-        review_id: UUID,
-        owner_user_id: UUID,
-    ) -> FinalReviewAssessment | None:
-        """Return one owned review by identity."""
-
-    async def list_for_run_owned(
-        self,
-        *,
-        workflow_run_id: UUID,
-        owner_user_id: UUID,
-    ) -> tuple[FinalReviewAssessment, ...]:
-        """Return all owned review versions in order."""
 
 
 class InMemoryFinalReviewRepository:

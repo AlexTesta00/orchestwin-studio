@@ -5,6 +5,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectUserModelingFlow from "./ProjectUserModelingFlow.vue";
+import { createAppI18n } from "@/i18n";
 
 import { userModelingApi } from "../api/userModeling";
 
@@ -19,6 +20,7 @@ import type {
   UserTwinProfileDiffPayload,
   UserTwinVersionPayload,
 } from "../types/userModeling";
+import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -432,6 +434,9 @@ const proposedDiff: UserTwinProfileDiffPayload = {
 
 function mountFlow() {
   return mount(ProjectUserModelingFlow, {
+    global: {
+      plugins: [createAppI18n("en")],
+    },
     props: {
       projectId: PROJECT_ID,
 
@@ -480,6 +485,7 @@ describe("ProjectUserModelingFlow", () => {
     await wrapper.get('[data-testid="confirm-persona"]').trigger("click");
 
     await flushPromises();
+    await expectAccessible(wrapper.element);
 
     expect(decidePersona).toHaveBeenCalledWith(
       PROJECT_ID,
@@ -683,5 +689,18 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.get('[data-testid="twin-profile-details"]').attributes("open")).toBeUndefined();
     expect(wrapper.text()).toContain("Approved profile");
     expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
+  });
+
+  it("offers a conversation with every User Twin and hands the twin to the owner", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const wrapper = mountFlow();
+    await flushPromises();
+
+    const button = wrapper.get('[data-testid="open-twin-chat"]');
+    expect(button.text()).toBe(`Talk to ${twinVersion.profile.name}`);
+    await button.trigger("click");
+    expect(wrapper.emitted("open-chat")?.[0]?.[0]).toEqual(twinVersion);
   });
 });

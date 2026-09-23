@@ -224,3 +224,145 @@ def test_route_revalidates_source_and_only_prepares(monkeypatch, case, status):
     if case == "valid":
         assert reads == [project]
         assert service.prepare_execution.call_args.kwargs["command"].authorization_id is None
+
+
+def static_prototype():
+    def element(code, kind, content, **extra):
+        return {
+            "id": "id-" + code,
+            "code": code,
+            "kind": kind,
+            "content": content,
+            "accessible_name": None,
+            **extra,
+        }
+
+    return {
+        "entry_screen_id": "s1",
+        "screens": [
+            {
+                "id": "s1",
+                "code": "SCR-001",
+                "title": "Inserimento",
+                "elements": [
+                    element("ELM-001", "HEADING", "Aggiungi un ospite"),
+                    element(
+                        "ELM-002",
+                        "TEXT_INPUT",
+                        "Nome ospite",
+                        field_name="guest_name",
+                        required=True,
+                    ),
+                    element("ELM-003", "BUTTON", "Aggiungi"),
+                ],
+            },
+            {
+                "id": "s2",
+                "code": "SCR-002",
+                "title": "Conferma",
+                "elements": [
+                    element("ELM-006", "HEADING", "Ospite aggiunto"),
+                    element("ELM-007", "TEXT", "Esempio: 1. Mario Rossi"),
+                    element("ELM-008", "LINK", "Torna"),
+                ],
+            },
+        ],
+        "transitions": [
+            {
+                "trigger_element_id": "id-ELM-003",
+                "source_screen_id": "s1",
+                "target_screen_id": "s2",
+            },
+            {
+                "trigger_element_id": "id-ELM-008",
+                "source_screen_id": "s2",
+                "target_screen_id": "s1",
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize("case", ["derived", "non_static", "missing"])
+def test_journey_route_derives_the_static_journey_from_the_approved_prototype(monkeypatch, case):
+    owner, project = uuid4(), uuid4()
+    architecture_id, design_id = uuid4(), uuid4()
+    target = ExecutionTarget.WEB_VUE if case == "non_static" else ExecutionTarget.WEB_STATIC
+    source = SimpleNamespace(
+        id=uuid4(),
+        content_hash="a" * 64,
+        target_selection=SimpleNamespace(target=target),
+        provenance_references=(
+            SimpleNamespace(
+                kind=SimpleNamespace(value="ARCHITECTURE"),
+                reference_id=f"architecture:{architecture_id}",
+                content_hash="e" * 64,
+            ),
+        ),
+    )
+
+    class Sources:
+        def __init__(self, session, *, owner_user_id):
+            assert owner_user_id == owner
+
+        async def current(self, *, project_id):
+            assert project_id == project
+            return None if case == "missing" else source
+
+    class Architectures(Sources):
+        async def get(self, *, project_id, version_id):
+            assert (project_id, version_id) == (project, architecture_id)
+            return SimpleNamespace(
+                content_hash="e" * 64,
+                package=SimpleNamespace(
+                    grounding=SimpleNamespace(
+                        design_package_reference=SimpleNamespace(
+                            artifact_id=design_id, content_hash="f" * 64
+                        )
+                    )
+                ),
+            )
+
+    class Designs(Sources):
+        async def get(self, *, project_id, version_id):
+            assert (project_id, version_id) == (project, design_id)
+            return SimpleNamespace(
+                content_hash="f" * 64,
+                to_snapshot=lambda: {"package": {"prototype": static_prototype()}},
+            )
+
+    @asynccontextmanager
+    async def sessions():
+        yield object()
+
+    monkeypatch.setattr(launch, "SqlAlchemyWebSourceRevisionRepository", Sources)
+    monkeypatch.setattr(launch, "SqlAlchemyArchitecturePackageRepository", Architectures)
+    monkeypatch.setattr(launch, "SqlAlchemyDesignPackageRepository", Designs)
+    app = FastAPI()
+    app.state.web_execution_start_api_service = SimpleNamespace(sessions=sessions)
+    app.dependency_overrides[current_user_dependency] = lambda: SimpleNamespace(id=owner)
+    app.include_router(launch.create_execution_launch_router())
+
+    async def call():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://fixture"
+        ) as client:
+            return await client.get(f"/projects/{project}/execution-launch/web/journey")
+
+    response = asyncio.run(call())
+    if case == "missing":
+        assert response.status_code == 404
+        return
+    payload = response.json()
+    assert response.status_code == 200 and payload["source_revision_id"] == str(source.id)
+    if case == "non_static":
+        assert payload == {
+            "status": "NOT_DERIVABLE",
+            "reason": "JOURNEY_REQUIRES_STATIC_TARGET",
+            "source_revision_id": str(source.id),
+        }
+        return
+    assert payload["status"] == "DERIVED"
+    kinds = [step["action"]["kind"] for step in payload["steps"]]
+    assert kinds == ["fill", "press", "expect_not_text", "expect_contains", "click", "expect_text"]
+    assert payload["browser_interactions"][0]["actions"][0]["selector"] == "#ELM-002"
+    assert payload["steps"][1]["element_label"] == "Aggiungi"

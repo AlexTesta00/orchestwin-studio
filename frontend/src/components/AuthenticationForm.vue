@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { AuthenticationInput } from "@/api/contracts";
+import UiButton from "./UiButton.vue";
 
 const props = defineProps<{
   mode: "login" | "register";
@@ -56,7 +57,7 @@ function submit(): void {
     <div
       v-if="visibleError"
       ref="errorSummary"
-      class="rounded-xl border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-900"
+      class="rounded-panel border border-fail-line bg-fail-bg px-4 py-3 text-sm font-semibold text-fail-dark"
       role="alert"
       tabindex="-1"
     >
@@ -64,14 +65,14 @@ function submit(): void {
     </div>
 
     <div class="grid gap-2">
-      <label class="text-sm font-bold text-slate-800" for="authentication-email">
+      <label class="text-sm font-semibold" for="authentication-email">
         {{ t("auth.email") }}
       </label>
 
       <input
         id="authentication-email"
         v-model="email"
-        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
+        class="min-h-11 rounded-control border border-field bg-surface px-4 py-2.5 text-[15px] text-ink"
         name="email"
         type="email"
         autocomplete="email"
@@ -80,14 +81,14 @@ function submit(): void {
     </div>
 
     <div class="grid gap-2">
-      <label class="text-sm font-bold text-slate-800" for="authentication-password">
+      <label class="text-sm font-semibold" for="authentication-password">
         {{ t("auth.password") }}
       </label>
 
       <input
         id="authentication-password"
         v-model="password"
-        class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 shadow-sm focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 focus-visible:outline-none"
+        class="min-h-11 rounded-control border border-field bg-surface px-4 py-2.5 text-[15px] text-ink"
         name="password"
         type="password"
         :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
@@ -98,17 +99,13 @@ function submit(): void {
         required
       />
 
-      <p v-if="mode === 'register'" id="password-hint" class="m-0 text-sm leading-6 text-slate-600">
+      <p v-if="mode === 'register'" id="password-hint" class="m-0 text-sm leading-6 text-ink-3">
         {{ t("auth.passwordHint") }}
       </p>
     </div>
 
-    <button
-      class="min-h-12 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-      type="submit"
-      :disabled="busy"
-    >
+    <UiButton type="submit" full :disabled="busy">
       {{ busy ? t("auth.submitting") : t(`auth.${mode}.submit`) }}
-    </button>
+    </UiButton>
   </form>
 </template>

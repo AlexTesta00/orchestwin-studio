@@ -14,6 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from orchestwin.api import jvm_execution, web_execution
 from orchestwin.api.auth import current_user_dependency
+from orchestwin.artifacts.architecture_persistence import SqlAlchemyArchitecturePackageRepository
+from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.artifacts.jvm_source_persistence import SqlAlchemyJvmSourceRevisionRepository
 from orchestwin.artifacts.web_source_persistence import SqlAlchemyWebSourceRevisionRepository
 from orchestwin.identity.domain import UserAccount
@@ -27,6 +29,7 @@ from orchestwin.sandbox.container_runtime import ContainerImageReference
 from orchestwin.sandbox.execution_profiles import ExecutionTarget
 from orchestwin.web_execution.attempt_persistence import SqlAlchemyWebExecutionAttemptRepository
 from orchestwin.web_execution.attempts import WebExecutionAttemptTrigger
+from orchestwin.web_execution.journeys import derive_static_journey
 from orchestwin.web_execution.phase_runner import load_phase_runner_identity
 from orchestwin.web_execution.plans import WebExecutionPhase
 from orchestwin.web_execution.targets import web_scope_for
@@ -108,8 +111,71 @@ def default_execution_command(platform, backend, revision, previous):
     )
 
 
+async def approved_prototype(session, *, owner_user_id, project_id, revision):
+    references = [ref for ref in revision.provenance_references if ref.kind.value == "ARCHITECTURE"]
+    if len(references) != 1 or not references[0].reference_id.startswith("architecture:"):
+        return None
+    reference = references[0]
+    architecture = await SqlAlchemyArchitecturePackageRepository(
+        session, owner_user_id=owner_user_id
+    ).get(
+        project_id=project_id, version_id=UUID(reference.reference_id.removeprefix("architecture:"))
+    )
+    if architecture is None or architecture.content_hash != reference.content_hash:
+        return None
+    design_reference = architecture.package.grounding.design_package_reference
+    design = await SqlAlchemyDesignPackageRepository(session, owner_user_id=owner_user_id).get(
+        project_id=project_id, version_id=design_reference.artifact_id
+    )
+    if design is None or design.content_hash != design_reference.content_hash:
+        return None
+    return design.to_snapshot()["package"].get("prototype")
+
+
 def create_execution_launch_router():
     router = APIRouter(tags=["execution-launch"])
+
+    @router.get(
+        "/projects/{project_id}/execution-launch/web/journey",
+        operation_id="deriveWebExecutionJourney",
+    )
+    async def journey(
+        project_id: UUID,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+    ):
+        service = getattr(request.app.state, "web_execution_start_api_service", None)
+        if service is None or not hasattr(service, "sessions"):
+            raise HTTPException(503, detail={"code": "CONFIGURED_EXECUTION_UNAVAILABLE"})
+        try:
+            async with service.sessions() as session:
+                revision = await SqlAlchemyWebSourceRevisionRepository(
+                    session, owner_user_id=user.id
+                ).current(project_id=project_id)
+                if revision is None:
+                    raise HTTPException(404, detail={"code": "EXECUTION_SOURCE_NOT_FOUND"})
+                if revision.target_selection.target is not ExecutionTarget.WEB_STATIC:
+                    return {
+                        "status": "NOT_DERIVABLE",
+                        "reason": "JOURNEY_REQUIRES_STATIC_TARGET",
+                        "source_revision_id": str(revision.id),
+                    }
+                prototype = await approved_prototype(
+                    session, owner_user_id=user.id, project_id=project_id, revision=revision
+                )
+        except SQLAlchemyError:
+            raise HTTPException(503, detail={"code": "EXECUTION_STORAGE_UNAVAILABLE"}) from None
+        if not prototype or not prototype.get("screens"):
+            return {
+                "status": "NOT_DERIVABLE",
+                "reason": "APPROVED_PROTOTYPE_UNAVAILABLE",
+                "source_revision_id": str(revision.id),
+            }
+        return {
+            **derive_static_journey(prototype),
+            "source_revision_id": str(revision.id),
+            "source_revision_content_hash": revision.content_hash,
+        }
 
     @router.post(
         "/projects/{project_id}/execution-launch/{platform}/prepare",

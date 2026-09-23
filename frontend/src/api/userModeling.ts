@@ -164,7 +164,7 @@ function projectPath(basePath: string, projectId: string): string {
   return `${basePath}/projects/` + `${encodeURIComponent(projectId)}/user-modeling`;
 }
 
-export function createUserModelingApi(options: UserModelingApiOptions = {}): UserModelingApi {
+function createUserModelingApi(options: UserModelingApiOptions = {}): UserModelingApi {
   const basePath = normalizeBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
 
   async function requestJson<T>(path: string, requestOptions: RequestOptions): Promise<T> {

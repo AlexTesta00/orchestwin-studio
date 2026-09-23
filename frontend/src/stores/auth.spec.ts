@@ -11,7 +11,6 @@ import { JvmExecutionApiError } from "@/api/jvmExecution";
 import { RequirementsApiError } from "@/api/requirements";
 import { UserModelingApiError } from "@/api/userModeling";
 import { WebExecutionApiError } from "@/api/webExecution";
-import { WorkflowRunsApiError } from "@/api/workflowRuns";
 import type {
   AuthenticationApi,
   AuthenticationInput,
@@ -174,7 +173,6 @@ describe("useAuthStore", () => {
     RequirementsApiError,
     UserModelingApiError,
     WebExecutionApiError,
-    WorkflowRunsApiError,
   ])("refreshes expired authentication for domain client %s", async (ErrorType) => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();

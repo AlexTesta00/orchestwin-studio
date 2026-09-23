@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createAppI18n } from "@/i18n";
 
 import ProjectBriefEditor from "./ProjectBriefEditor.vue";
+import { expectAccessible } from "@/test/axe";
 
 enableAutoUnmount(afterEach);
 
@@ -43,5 +44,13 @@ describe("ProjectBriefEditor", () => {
         unknown_fields: ["budget"],
       }),
     );
+  });
+
+  it("has no axe violations", async () => {
+    const wrapper = mount(ProjectBriefEditor, {
+      props: { initial: null, busy: false },
+      global: { plugins: [createAppI18n()] },
+    });
+    await expectAccessible(wrapper.element);
   });
 });

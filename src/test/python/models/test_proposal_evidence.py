@@ -331,3 +331,33 @@ def test_artifact_binding_fails_closed(tmp_path, mismatch):
         asyncio.run(
             Command(MemoryEvidence(), operation).run(owner_user_id=owner, project_id=project)
         )
+
+
+def test_rejected_requirements_record_the_bounded_binding_reason(tmp_path):
+    from orchestwin.models.model_proposals import ModelRequirementsAdapter
+    from orchestwin.models.proposal_evidence import bounded_rejection_reason
+    from src.test.python.models.draft_fixtures import proposal_draft
+
+    request = fixtures.requirements_fixtures.proposal_request()
+    expected = asyncio.run(
+        fixtures.requirements_fixtures.FakeDeterministicRequirementsAdapter().propose(request)
+    )
+    output = proposal_draft("requirements", expected.specification, request)
+    item = output["definition_of_done"][0]
+    item["applicability"] = "REQUIRED"
+    item["condition"] = "Only when the owner asks for it"
+    generator, _ = audited_generator(tmp_path, output)
+    store = MemoryEvidence()
+    command = Command(store, lambda: ModelRequirementsAdapter(generator).propose(request))
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(command.run(owner_user_id=uuid4(), project_id=uuid4()))
+    events = next(iter(store.events.values()))
+    rejected = next(event[1] for event in events if event[0] == "ADAPTER_REJECTED")
+    assert rejected["code"] == "INVALID_PROVIDER_OUTPUT"
+    assert "must not define a condition" in rejected["reason"]
+    assert (
+        bounded_rejection_reason("  spaced\n\tout  caf\u00e9 " + "x" * 300)
+        == ("spaced out caf " + "x" * 300)[:200]
+    )
+    assert bounded_rejection_reason("\u00e9\u00e8") is None
+    assert bounded_rejection_reason(None) is None

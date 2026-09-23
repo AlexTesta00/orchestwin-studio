@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -32,6 +33,7 @@ from orchestwin.api.architecture import (
 )
 from orchestwin.api.artifacts import ArtifactGraphQueryService
 from orchestwin.api.brownfield import BrownfieldApiService
+from orchestwin.api.brownfield_runtime import build_brownfield_services
 from orchestwin.api.design import (
     DesignGateService,
     DesignGenerationService,
@@ -43,6 +45,7 @@ from orchestwin.api.execution import (
     HighImpactApprovalApiService,
 )
 from orchestwin.api.finalization import FinalizationApiService
+from orchestwin.api.finalization_runtime import SqlAlchemyFinalizationApiService
 from orchestwin.api.governed_jvm_runtime import build_governed_jvm_services
 from orchestwin.api.governed_web_runtime import build_governed_web_services
 from orchestwin.api.jvm_execution import (
@@ -53,7 +56,6 @@ from orchestwin.api.jvm_execution import (
     JvmSourceApiService,
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
-from orchestwin.api.sprint07_runtime import build_sprint07_services
 from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.api.web_execution import (
@@ -238,6 +240,7 @@ class ApplicationRuntime:
     jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
+    sandbox_evidence_root: Path | None = None
     training_api_service: TrainingApiService | None = None
 
     async def close(self) -> None:
@@ -324,12 +327,15 @@ def create_default_runtime(
         database_runtime.session_factory,
         **({"proposal_runtime": real_models.architecture} if real_models is not None else {}),
     )
-    sprint07 = build_sprint07_services(
+    brownfield = build_brownfield_services(
         resolved_settings,
         database_runtime.session_factory,
     )
     governed_jvm = build_governed_jvm_services(database_runtime.session_factory, resolved_settings)
     governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
+    artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
+        database_runtime.session_factory
+    )
 
     return ApplicationRuntime(
         real_model_runtime=real_models,
@@ -355,12 +361,17 @@ def create_default_runtime(
         architecture_revision_service=architecture.revisions,
         architecture_query_service=architecture.queries,
         architecture_gate_service=architecture.gate,
-        artifact_graph_query_service=SqlAlchemyArtifactGraphQueryService(
-            database_runtime.session_factory
+        artifact_graph_query_service=artifact_graph_query_service,
+        finalization_api_service=SqlAlchemyFinalizationApiService(
+            database_runtime.session_factory,
+            content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
+            export_root=resolved_settings.final_export_storage_root,
+            artifact_graph_query_service=artifact_graph_query_service,
         ),
-        brownfield_service=sprint07.brownfield,
-        execution_query_service=sprint07.execution_queries,
-        high_impact_service=sprint07.high_impact,
+        sandbox_evidence_root=resolved_settings.sandbox_evidence_storage_root,
+        brownfield_service=brownfield.brownfield,
+        execution_query_service=brownfield.execution_queries,
+        high_impact_service=brownfield.high_impact,
         static_inspection_service=build_static_inspection_service(
             database_runtime.session_factory, resolved_settings
         ),

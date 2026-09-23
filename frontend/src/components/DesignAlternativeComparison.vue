@@ -40,6 +40,7 @@ const messages = {
     security: "Security considerations",
     workflows: "Workflows",
     critiques: "Synthetic User Twin critiques",
+    details: "Alternative details",
     confidence: "Self-assessed confidence",
     provenance: "Provenance",
     concerns: "Concerns",
@@ -61,6 +62,7 @@ const messages = {
     security: "Considerazioni di sicurezza",
     workflows: "Flussi",
     critiques: "Critiche sintetiche dei User Twin",
+    details: "Dettagli dell'alternativa",
     confidence: "Confidenza auto-valutata",
     provenance: "Provenienza",
     concerns: "Criticità",
@@ -91,40 +93,35 @@ function choose(alternativeId: string): void {
 
 <template>
   <section class="grid gap-5" aria-labelledby="design-alternatives-title">
-    <h3 id="design-alternatives-title" class="text-xl font-black text-slate-950">
-      {{ copy.title }}
-    </h3>
+    <div class="grid gap-1">
+      <h3 id="design-alternatives-title" class="m-0 text-xl font-semibold tracking-block text-ink">
+        {{ copy.title }}
+      </h3>
+      <p class="m-0 text-sm leading-6 text-ink-3">{{ copy.methodology }}</p>
+    </div>
 
-    <p class="m-0 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-      {{ copy.methodology }}
-    </p>
-
-    <div class="grid gap-5 xl:grid-cols-2">
+    <div class="grid gap-5 md:grid-cols-2">
       <article
         v-for="alternative in alternatives"
         :key="alternative.id"
         :data-test="`alternative-${alternative.code}`"
-        class="grid content-start gap-5 rounded-2xl border bg-white p-5 shadow-sm"
-        :class="
-          alternative.id === selectedAlternativeId
-            ? 'border-indigo-500 ring-2 ring-indigo-100'
-            : 'border-slate-200'
-        "
+        class="grid content-start gap-4 rounded-card border bg-surface p-5 shadow-card"
+        :class="alternative.id === selectedAlternativeId ? 'border-2 border-ok' : 'border-line'"
       >
         <header class="grid gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+            <span class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">
               {{ alternative.code }}
             </span>
             <span
               v-if="alternative.id === recommendedAlternativeId"
-              class="rounded-full bg-sky-100 px-3 py-1 text-xs font-black text-sky-800"
+              class="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2"
             >
               {{ copy.recommended }}
             </span>
             <span
               v-if="alternative.id === selectedAlternativeId"
-              class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-black text-indigo-800"
+              class="inline-flex items-center rounded-pill border border-ok-line bg-ok-bg px-2.5 py-1 text-xs font-semibold text-ok-dark"
             >
               {{ copy.selected }}
             </span>
@@ -134,7 +131,7 @@ function choose(alternativeId: string): void {
             <input
               :name="groupName"
               type="radio"
-              class="mt-1 size-4 accent-indigo-600"
+              class="mt-1.5 size-4 accent-action"
               :value="alternative.id"
               :checked="alternative.id === selectedAlternativeId"
               :disabled="disabled"
@@ -142,143 +139,170 @@ function choose(alternativeId: string): void {
               :data-alternative-id="alternative.id"
               @change="choose(alternative.id)"
             />
-            <span>
-              <span class="block text-lg font-black text-slate-950">
+            <span class="min-w-0">
+              <span class="block text-[17px] font-semibold tracking-block text-ink">
                 {{ alternative.title }}
               </span>
-              <span class="mt-1 block text-sm text-slate-600">
+              <span class="mt-1 block text-[14.5px] leading-6 text-ink-2">
                 {{ alternative.summary }}
               </span>
             </span>
           </label>
         </header>
 
-        <dl class="grid gap-3 text-sm">
-          <div>
-            <dt class="font-black text-slate-900">{{ copy.approach }}</dt>
-            <dd class="m-0 mt-1 text-slate-700">{{ alternative.approach }}</dd>
-          </div>
-          <div>
-            <dt class="font-black text-slate-900">{{ copy.rationale }}</dt>
-            <dd class="m-0 mt-1 text-slate-700">{{ alternative.rationale }}</dd>
-          </div>
-        </dl>
-
-        <div class="grid gap-4 md:grid-cols-2">
-          <section>
-            <h4 class="font-black text-slate-900">{{ copy.advantages }}</h4>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li v-for="item in alternative.advantages" :key="item">{{ item }}</li>
-            </ul>
-          </section>
-          <section>
-            <h4 class="font-black text-slate-900">{{ copy.tradeOffs }}</h4>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li v-for="item in alternative.trade_offs" :key="item">{{ item }}</li>
-            </ul>
-          </section>
-        </div>
-
-        <section>
-          <h4 class="font-black text-slate-900">{{ copy.informationArchitecture }}</h4>
-          <ol class="mt-2 flex flex-wrap gap-2 text-sm text-slate-700">
+        <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-2">
+          <h4 class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+            {{ copy.critiques }}
+          </h4>
+          <ul class="m-0 grid list-none gap-2 p-0">
             <li
-              v-for="(item, index) in alternative.information_architecture"
-              :key="item"
-              class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              v-for="critique in critiquesFor(alternative.id)"
+              :key="critique.id"
+              class="text-sm leading-6 text-ink-2"
             >
-              {{ index + 1 }}. {{ item }}
+              <strong class="font-semibold text-ink">{{
+                critique.user_twin_reference.name
+              }}</strong>
+              {{ critique.rationale }}
             </li>
-          </ol>
+          </ul>
         </section>
 
-        <div class="grid gap-4 md:grid-cols-2">
-          <section>
-            <h4 class="font-black text-slate-900">{{ copy.accessibility }}</h4>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li v-for="item in alternative.accessibility_considerations" :key="item">
-                {{ item }}
-              </li>
-            </ul>
-          </section>
-          <section>
-            <h4 class="font-black text-slate-900">{{ copy.security }}</h4>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-              <li v-for="item in alternative.security_considerations" :key="item">
-                {{ item }}
-              </li>
-            </ul>
-          </section>
-        </div>
+        <details class="text-sm">
+          <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.details }}</summary>
+          <div class="mt-4 grid gap-5">
+            <dl class="m-0 grid gap-3 text-sm">
+              <div>
+                <dt class="font-semibold text-ink">{{ copy.approach }}</dt>
+                <dd class="m-0 mt-1 text-ink-2">{{ alternative.approach }}</dd>
+              </div>
+              <div>
+                <dt class="font-semibold text-ink">{{ copy.rationale }}</dt>
+                <dd class="m-0 mt-1 text-ink-2">{{ alternative.rationale }}</dd>
+              </div>
+            </dl>
 
-        <section v-if="alternative.workflows.length > 0">
-          <h4 class="font-black text-slate-900">{{ copy.workflows }}</h4>
-          <ol class="mt-2 grid gap-3">
-            <li
-              v-for="workflow in alternative.workflows"
-              :key="workflow.id"
-              class="rounded-xl border border-slate-200 p-3"
-            >
-              <p class="m-0 font-bold text-slate-900">{{ workflow.code }} · {{ workflow.title }}</p>
-              <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
-                <li v-for="step in workflow.steps" :key="step">{{ step }}</li>
-              </ol>
-            </li>
-          </ol>
-        </section>
+            <div class="grid gap-4 md:grid-cols-2">
+              <section>
+                <h4 class="m-0 font-semibold text-ink">{{ copy.advantages }}</h4>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+                  <li v-for="item in alternative.advantages" :key="item">{{ item }}</li>
+                </ul>
+              </section>
+              <section>
+                <h4 class="m-0 font-semibold text-ink">{{ copy.tradeOffs }}</h4>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+                  <li v-for="item in alternative.trade_offs" :key="item">{{ item }}</li>
+                </ul>
+              </section>
+            </div>
 
-        <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-3">
-          <h4 class="font-black text-slate-900">{{ copy.critiques }}</h4>
-          <article
-            v-for="critique in critiquesFor(alternative.id)"
-            :key="critique.id"
-            class="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
-          >
-            <header class="flex flex-wrap items-center justify-between gap-2">
-              <p class="m-0 font-black text-amber-950">
-                {{ critique.code }} · {{ critique.user_twin_reference.name }}
-              </p>
-              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-900">
-                {{ critique.epistemic_status }} · {{ critique.human_validation }}
-              </span>
-            </header>
-
-            <p class="m-0 text-sm text-amber-950">{{ critique.rationale }}</p>
-            <p class="m-0 text-xs font-bold text-amber-900">
-              {{ copy.confidence }}: {{ confidenceLabel(critique.confidence) }}
-            </p>
-
-            <section v-if="critique.concerns.length > 0">
-              <h5 class="text-sm font-black text-amber-950">{{ copy.concerns }}</h5>
-              <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-950">
-                <li v-for="item in critique.concerns" :key="item">{{ item }}</li>
-              </ul>
-            </section>
-
-            <section v-if="critique.questions.length > 0">
-              <h5 class="text-sm font-black text-amber-950">{{ copy.questions }}</h5>
-              <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-950">
-                <li v-for="item in critique.questions" :key="item">{{ item }}</li>
-              </ul>
-            </section>
-
-            <details>
-              <summary class="cursor-pointer text-sm font-black text-amber-950">
-                {{ copy.provenance }}
-              </summary>
-              <ul class="mt-2 grid gap-2 text-xs text-amber-950">
+            <section>
+              <h4 class="m-0 font-semibold text-ink">{{ copy.informationArchitecture }}</h4>
+              <ol class="mt-2 flex flex-wrap gap-2 text-sm text-ink-2">
                 <li
-                  v-for="reference in critique.provenance"
-                  :key="`${reference.source_kind}:${reference.source_id}:${reference.locator}`"
-                  class="rounded-lg bg-white/70 p-2 break-all"
+                  v-for="(item, index) in alternative.information_architecture"
+                  :key="item"
+                  class="rounded-control border border-line bg-surface-2 px-3 py-2"
                 >
-                  {{ reference.source_kind }} · {{ reference.source_id }}
-                  <span v-if="reference.locator !== null"> · {{ reference.locator }}</span>
+                  {{ index + 1 }}. {{ item }}
                 </li>
-              </ul>
-            </details>
-          </article>
-        </section>
+              </ol>
+            </section>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <section>
+                <h4 class="m-0 font-semibold text-ink">{{ copy.accessibility }}</h4>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+                  <li v-for="item in alternative.accessibility_considerations" :key="item">
+                    {{ item }}
+                  </li>
+                </ul>
+              </section>
+              <section>
+                <h4 class="m-0 font-semibold text-ink">{{ copy.security }}</h4>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+                  <li v-for="item in alternative.security_considerations" :key="item">
+                    {{ item }}
+                  </li>
+                </ul>
+              </section>
+            </div>
+
+            <section v-if="alternative.workflows.length > 0">
+              <h4 class="m-0 font-semibold text-ink">{{ copy.workflows }}</h4>
+              <ol class="mt-2 grid gap-3">
+                <li
+                  v-for="workflow in alternative.workflows"
+                  :key="workflow.id"
+                  class="rounded-panel border border-line p-3"
+                >
+                  <p class="m-0 font-semibold text-ink">
+                    {{ workflow.code }} · {{ workflow.title }}
+                  </p>
+                  <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-2">
+                    <li v-for="step in workflow.steps" :key="step">{{ step }}</li>
+                  </ol>
+                </li>
+              </ol>
+            </section>
+
+            <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-3">
+              <h4 class="m-0 font-semibold text-ink">{{ copy.critiques }}</h4>
+              <article
+                v-for="critique in critiquesFor(alternative.id)"
+                :key="critique.id"
+                class="grid gap-3 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4 text-hypothesis-text"
+              >
+                <header class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="m-0 font-semibold">
+                    {{ critique.code }} · {{ critique.user_twin_reference.name }}
+                  </p>
+                  <span
+                    class="rounded-pill border border-hypothesis-line bg-surface px-2.5 py-1 font-mono text-[11px]"
+                  >
+                    {{ critique.epistemic_status }} · {{ critique.human_validation }}
+                  </span>
+                </header>
+
+                <p class="m-0 text-sm">{{ critique.rationale }}</p>
+                <p class="m-0 font-mono text-[11px] tracking-wide uppercase">
+                  {{ copy.confidence }}: {{ confidenceLabel(critique.confidence) }}
+                </p>
+
+                <section v-if="critique.concerns.length > 0">
+                  <h5 class="m-0 text-sm font-semibold">{{ copy.concerns }}</h5>
+                  <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
+                    <li v-for="item in critique.concerns" :key="item">{{ item }}</li>
+                  </ul>
+                </section>
+
+                <section v-if="critique.questions.length > 0">
+                  <h5 class="m-0 text-sm font-semibold">{{ copy.questions }}</h5>
+                  <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
+                    <li v-for="item in critique.questions" :key="item">{{ item }}</li>
+                  </ul>
+                </section>
+
+                <details>
+                  <summary class="cursor-pointer text-sm font-semibold">
+                    {{ copy.provenance }}
+                  </summary>
+                  <ul class="mt-2 grid gap-2 text-xs">
+                    <li
+                      v-for="reference in critique.provenance"
+                      :key="`${reference.source_kind}:${reference.source_id}:${reference.locator}`"
+                      class="rounded-control bg-surface p-2 break-all"
+                    >
+                      {{ reference.source_kind }} · {{ reference.source_id }}
+                      <span v-if="reference.locator !== null"> · {{ reference.locator }}</span>
+                    </li>
+                  </ul>
+                </details>
+              </article>
+            </section>
+          </div>
+        </details>
       </article>
     </div>
   </section>

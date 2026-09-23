@@ -2,13 +2,29 @@ import { ApiRequestError } from "./requestError";
 import type { SourcePlatform } from "./sourceGeneration";
 
 export interface BrowserAction {
-  kind: "fill" | "click" | "press" | "expect_text";
+  kind: "fill" | "click" | "press" | "expect_text" | "expect_contains" | "expect_not_text";
   selector: string;
   value: string | null;
 }
 export interface BrowserExecutionChecks {
   declared_routes: { route_id: string; path: string }[];
   browser_interactions: { route_id: string; actions: BrowserAction[] }[];
+}
+export interface JourneyStep {
+  action: BrowserAction;
+  element_code: string;
+  element_label: string;
+  screen_code: string;
+  screen_title: string;
+}
+export interface ExecutionJourney {
+  status: "DERIVED" | "NOT_DERIVABLE";
+  reason?: string;
+  source_revision_id: string;
+  source_revision_content_hash?: string;
+  declared_routes?: { route_id: string; path: string }[];
+  browser_interactions?: { route_id: string; actions: BrowserAction[] }[];
+  steps?: JourneyStep[];
 }
 
 export interface ExecutionOperation {
@@ -29,6 +45,7 @@ export interface ExecutionOperation {
 }
 export interface ExecutionLaunchApi {
   history(project: string, platform: SourcePlatform, token: string): Promise<ExecutionOperation[]>;
+  journey(project: string, token: string): Promise<ExecutionJourney>;
   prepare(
     project: string,
     platform: SourcePlatform,
@@ -90,6 +107,11 @@ export function createExecutionLaunchApi(
   return {
     history: async (project, platform, token) =>
       (await request(base(project, platform) + "-operations", token)).items,
+    journey: async (project, token) =>
+      (await request(
+        `/projects/${encodeURIComponent(project)}/execution-launch/web/journey`,
+        token,
+      )) as ExecutionJourney,
     prepare: async (project, platform, source, token, checks) =>
       (
         await request(

@@ -10,6 +10,7 @@ import type {
   RequirementsSpecificationVersionPayload,
 } from "../types/requirements";
 import ProjectRequirementsFlow from "./ProjectRequirementsFlow.vue";
+import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
 const OWNER_ID = "00000000-0000-4000-8000-000000000001";
@@ -423,5 +424,12 @@ describe("ProjectRequirementsFlow", () => {
     expect(revisionButton).toBeDefined();
     expect(revisionButton?.attributes("disabled")).toBeDefined();
     expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("has no axe violations with a generated specification", async () => {
+    const wrapper = mountFlow(new FakeApi());
+    await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

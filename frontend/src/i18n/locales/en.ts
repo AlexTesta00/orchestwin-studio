@@ -1,4 +1,39 @@
 const messages = {
+  ui: {
+    claim: {
+      hypothesis: "AI proposal, not validated",
+      proof: "Observed in the sandbox",
+    },
+    status: {
+      approved: "Approved",
+      rejected: "Rejected",
+      pending: "Waiting",
+      blocked: "Attention",
+      observed: "Observed in the sandbox",
+      failed: "Not passed",
+      passed: "Passed",
+    },
+    stepper: {
+      label: "Steps",
+      pending: "waiting",
+      approved: "Approved",
+      decision: "Decision {n} of {max}",
+      current: "Current step",
+    },
+    drawer: {
+      show: "Technical details",
+      hide: "Hide the details",
+    },
+    panel: {
+      close: "Close",
+    },
+    progress: {
+      step: "Step {n} of {total}",
+    },
+    state: {
+      loading: "Loading",
+    },
+  },
   app: {
     homeAriaLabel: "OrchesTwin Studio home",
     title: "OrchesTwin Studio",
@@ -22,6 +57,11 @@ const messages = {
     skip: "Skip to main content",
   },
   auth: {
+    points: {
+      one: "Describe the idea in a brief: the agents think, you decide at every step.",
+      two: "Every proposal stays labelled as a hypothesis until the sandbox observes it.",
+      three: "Evidence, decisions and provenance remain yours, exportable at any time.",
+    },
     email: "Email address",
     password: "Password",
     passwordHint: "Use at least 15 characters. Spaces and passphrases are supported.",
@@ -58,22 +98,268 @@ const messages = {
       unexpected_error: "An unexpected error occurred.",
     },
   },
-  overview: {
-    capabilities: {
-      api: "Understand your users",
-      backend: "Describe your idea",
-      frontend: "Try the result",
+  home: {
+    eyebrow: "Thesis · Agentic User-Centred Design",
+    title: "An idea becomes an application. You decide at every step.",
+    lead: "OrchesTwin Studio orchestrates a team of AI agents across eight governed steps: it proposes the team, builds synthetic users from your brief, writes the requirements, explores the design, generates the code and actually runs it in a sandbox. Every step closes with your approval.",
+    enter: "Enter the Studio",
+    twinsLink: "How twins work",
+    rules: {
+      one: {
+        label: "Rule one",
+        title: "Nothing happens without the owner",
+        text: "Every step ends with a human gate: the AI proposes, you approve or reject with a note. A rejection sends the step back and produces a new version.",
+      },
+      two: {
+        label: "Rule two",
+        title: "A hypothesis stays a hypothesis until it is verified",
+        text: "The twins' opinions, the requirements and the critiques are proposals, never proof. Proof is only what the sandbox observed: passed tests, checks in the browser, accessibility audits.",
+      },
     },
-    capabilitiesTitle: "From an idea to a first try",
-    description:
-      "A team of AI assistants helps you design your product. Twins represent simulated users to explore their needs, while you review and approve each step.",
-    eyebrow: "OrchesTwin Studio",
-    status: "One step at a time, with people at the centre.",
-    title: "Give your idea shape.",
-    start: "Open your projects",
-    begin: "Create your first project",
+    twins: {
+      eyebrow: "How twins work",
+      title: "Synthetic users, declared for what they are",
+      lead: "A User Twin is a hypothetical person derived from the brief: goals, frustrations, context of use, accessibility needs. It puts design choices to the test before a single line of code is written, and each of its opinions stays labelled as a hypothesis.",
+      items: {
+        brief: {
+          label: "One",
+          title: "They are born from the brief",
+          text: "From the text you wrote, the Studio derives two to four twins. Each one carries its degree of certainty: assumed, or inferred from the brief.",
+          alt: "A brief sheet turning into three sketched human figures, connected by thin lines",
+        },
+        critique: {
+          label: "Two",
+          title: "They critique the alternatives",
+          text: "On every design alternative each twin says what helps it and what blocks it. The critiques sit side by side: you choose knowing whom you are favouring.",
+          alt: "Three sketched figures arranged around a screen, connected by thin lines, with empty speech bubbles above",
+        },
+        proof: {
+          label: "Three",
+          title: "They never become proof",
+          text: "What a twin says remains a hypothesis. Verification comes from the sandbox, which runs the application and reports what it actually observed.",
+          alt: "A split composition: on the left a sketched figure floating, on the right the same shape solid, resting on a grid with measurement marks",
+        },
+      },
+    },
+    steps: {
+      eyebrow: "The path",
+      title: "Eight steps, eight decisions of yours",
+      items: {
+        brief: {
+          title: "Brief",
+          text: "Describe the problem and answer a few clarifying questions.",
+        },
+        team: {
+          title: "Team",
+          text: "The agent roles for this project, with the mandatory ones flagged.",
+        },
+        twins: {
+          title: "User Twin",
+          text: "Two to four synthetic users: goals, context, accessibility.",
+        },
+        requirements: {
+          title: "Requirements",
+          text: "A readable baseline: what it must do, for whom, by which criteria.",
+        },
+        design: {
+          title: "Design",
+          text: "Alternatives with the twins' critiques, then a clickable model.",
+        },
+        architecture: {
+          title: "Architecture",
+          text: "What the application is made of and how the parts connect.",
+        },
+        sources: {
+          title: "Sources",
+          text: "The generated files, explained in plain words, with the static checks.",
+        },
+        execution: {
+          title: "Execution",
+          text: "The sandbox runs, the browser verifies, the AI proposes the repair.",
+        },
+      },
+    },
+    objectives: {
+      eyebrow: "Interface goals",
+      title: "Seven principles, each one verifiable",
+      items: {
+        results: {
+          title: "Outcome-oriented",
+          text: "Outcomes, decisions and the next action come first. The technical mechanics come later, only on request.",
+        },
+        minimal: {
+          title: "Minimal",
+          text: "One main action per screen, short texts, no dashboard full of numbers.",
+        },
+        clear: {
+          title: "Clear",
+          text: "Every screen answers three questions: where am I, what happened, what do I decide now.",
+        },
+        stepwise: {
+          title: "Step by step",
+          text: "A visible sequence of eight steps with their status. You act on the current step and reread the previous ones.",
+        },
+        plain: {
+          title: "No jargon",
+          text: "Common verbs and nouns. No identifiers, hashes or status codes in the foreground. Italian and English.",
+        },
+        accessible: {
+          title: "Accessible",
+          text: "WCAG 2 AA contrast on every text, a single h1 per page, full keyboard use. The platform discards apps that fail axe-core: the Studio holds itself to the same standard.",
+        },
+        honest: {
+          title: "Honest states",
+          text: "Waits show progress and expected duration. Failures say what the next move is.",
+        },
+      },
+    },
+    users: {
+      primary: {
+        label: "Primary user",
+        title: "The owner",
+        text: "A business person or a domain expert: someone who organises an event, runs a shop, teaches. They know the problem, not software engineering. They must never meet identifiers, hashes or selectors.",
+      },
+      secondary: {
+        label: "Secondary user",
+        title: "The expert reviewer",
+        text: "Supervisor or engineer: they want to open the detail of every step, with proofs, hashes, generated files and logs. Everything exists, but stays behind a “Details” affordance.",
+      },
+    },
+    closing: {
+      title: "Try the full path, from the brief to the observed proof",
+      text: "Eight steps, one human gate for each, a sandbox that tells how it really went.",
+    },
+    footer: {
+      thesis: "OrchesTwin Studio · thesis in Agentic User-Centred Design",
+      stack: "Vue 3 · TypeScript · Pinia · Tailwind",
+    },
+  },
+  finale: {
+    title: "Project complete",
+    body: "Eight approved steps and one passing execution with observed evidence. You can export everything or review where each thing came from.",
+    recap: {
+      step: "Step",
+      outcome: "Outcome",
+      decisions: "Decisions",
+      approved: "Approved",
+      generated: "Generated",
+      pending: "Pending",
+      count: "{n} of {max}",
+    },
+    export: {
+      title: "Export",
+      evaluationRecorded:
+        "The User Twins evaluated the executed prototype: their findings are recorded as hypotheses in step 8.",
+      eventMissing:
+        "The export uses the approval given in this session: if you reloaded the page, refresh the review and approve again.",
+    },
+    status: {
+      loading: "Loading the final review…",
+      missing: "The final review is not available yet.",
+      blocked: "Some final checks are not satisfied:",
+      review: "The final review is ready: send your decision.",
+      decision: "Approve to close the project, or request a revision.",
+      approved:
+        "Project approved: you can create the full package, a zip archive with sources, hashes and provenance.",
+      exported: "The package is ready to download.",
+      decided: "The final decision is {status}.",
+    },
+    actions: {
+      reload: "Refresh",
+      submit: "Send the final review",
+      approve: "Approve and close the project",
+      revise: "Request a revision",
+      sendRevision: "Send the request",
+      export: "Export the full package",
+      download: "Download the archive",
+      sources: "Open the sources",
+      provenance: "Open provenance",
+    },
+    reason: {
+      label: "Why do you request a revision?",
+      missing: "Write a reason before sending.",
+    },
+    evidence: {
+      archive: "archive hash",
+      size: "size",
+      manifest: "manifest hash",
+      created: "created",
+    },
+  },
+  twinChat: {
+    title: "Talk to {name}",
+    version: "Profile, version {n}",
+    notice:
+      "Answers are generated by the AI from the approved profile: they are hypotheses to verify with real people, not research results.",
+    stale:
+      "This conversation started with version {n} of the profile: the next answers will use the current version.",
+    you: "You:",
+    insights: "Insights",
+    confidence: "confidence {value}",
+    groundedOn: "Based on: {fields}",
+    empty:
+      "No questions yet. Ask {name} how they work, what frustrates them or what they expect from the application.",
+    thinking: "{name} is answering…",
+    questionLabel: "Your question for {name}",
+    questionMissing: "Write a question before sending.",
+    ask: "Ask",
+    kinds: {
+      NEED: "Need",
+      FRUSTRATION: "Frustration",
+      PREFERENCE: "Preference",
+      RISK: "Risk",
+      OPEN_QUESTION: "Open question",
+    },
+  },
+  evaluation: {
+    title: "User Twin evaluation",
+    body: "The twins try the executed prototype from the evidence recorded in the sandbox (screens, DOM, accessibility) and report what would help or stop them. These are hypotheses to verify with real people, not results.",
+    ask: "Ask the twins to try it",
+    askAgain: "Ask the twins again",
+    busy: "The twins are trying the prototype…",
+    empty: "No evaluation yet.",
+    meta: "{twins} twins, {findings} findings, {when}",
+    unknownTwin: "User Twin",
+    findingCount: "{n} findings",
+    confidence: "confidence {value}",
+    why: "Why they say it",
+    action: "What to do:",
+    severity: {
+      critical: "Critical",
+      major: "Major",
+      moderate: "Moderate",
+      minor: "Minor",
+      observation: "Observation",
+    },
+    criterion: {
+      usefulness: "Usefulness",
+      comprehensibility: "Comprehensibility",
+      actionability: "Actionability",
+      cognitive_load: "Cognitive load",
+      trust: "Trust",
+      accessibility: "Accessibility",
+      task_alignment: "Task alignment",
+    },
+    aggregation: {
+      title: "What they share and where they disagree",
+      body: "Automatic comparison across twins: shared findings, conflicts for you to decide, gaps and questions for validation with real users.",
+      shared: "Shared findings ({n})",
+      conflicts: "Conflicts between twins ({n})",
+      gaps: "Reported gaps",
+      questions: "Questions for real users",
+      none: "None",
+    },
   },
   projects: {
+    new: "New project",
+    cancel: "Cancel",
+    note: "Projects stay still until you move them forward.",
+    table: {
+      name: "Project",
+      mode: "Starting point",
+      updated: "Updated",
+      open: "Open",
+    },
     eyebrow: "Your space",
     title: "Projects",
     description: "Pick up an idea or start something new.",

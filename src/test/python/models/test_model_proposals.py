@@ -170,12 +170,12 @@ def test_failure_is_not_retried_or_replaced_by_fake(tmp_path, options, code):
     assert len(transport.calls) == 1
 
 
-def test_team_cannot_suggest_mandatory_roles(tmp_path):
+def test_team_ignores_redundant_mandatory_suggestions(tmp_path):
     request = team_fixtures.build_request()
     generator, _ = make_generator(
         tmp_path,
         {
-            "rationale": "Invalid selection",
+            "rationale": "Redundant selection",
             "suggestions": [
                 {
                     "agent_id": request.constraints.mandatory_agent_ids[0].value,
@@ -184,8 +184,9 @@ def test_team_cannot_suggest_mandatory_roles(tmp_path):
             ],
         },
     )
-    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
-        asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
+    result = asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
+    assert result.proposal.suggested_agent_ids == ()
+    assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
 
 
 @pytest.mark.parametrize("stage", ["requirements", "design", "architecture"])

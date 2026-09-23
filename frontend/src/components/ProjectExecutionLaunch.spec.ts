@@ -1,10 +1,17 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import type { ExecutionLaunchApi, ExecutionOperation } from "@/api/executionLaunch";
+import type {
+  BrowserExecutionChecks,
+  ExecutionLaunchApi,
+  ExecutionOperation,
+} from "@/api/executionLaunch";
 import type { JvmSourceRevisionPayload } from "@/types/jvmExecution";
 import { useJvmExecutionStore } from "@/stores/jvmExecution";
+import { useWebExecutionStore } from "@/stores/webExecution";
+import type { WebSourceRevisionPayload } from "@/types/webExecution";
 import ProjectExecutionLaunch from "./ProjectExecutionLaunch.vue";
+import { expectAccessible } from "@/test/axe";
 
 function operation(): ExecutionOperation {
   return {
@@ -41,6 +48,11 @@ function setup(existing: ExecutionOperation[] = []) {
   vi.spyOn(store, "loadExecution").mockResolvedValue();
   const api: ExecutionLaunchApi = {
     history: vi.fn().mockResolvedValue(existing),
+    journey: vi.fn().mockResolvedValue({
+      status: "NOT_DERIVABLE",
+      reason: "APPROVED_PROTOTYPE_UNAVAILABLE",
+      source_revision_id: "source",
+    }),
     prepare: vi.fn().mockResolvedValue(operation()),
     decide: vi.fn().mockImplementation(async (_p, _f, current, action) => ({
       ...current,
@@ -149,5 +161,132 @@ describe("configured execution launch", () => {
     expect(wrapper.text()).toContain("Recorded outcome: FAILED");
     expect(api.history).toHaveBeenCalledOnce();
     expect(store.loadExecution).toHaveBeenCalledOnce();
+  });
+});
+
+describe("derived web journey", () => {
+  function journey() {
+    const steps = [
+      {
+        kind: "fill",
+        selector: "#ELM-002",
+        value: "Giulia Verdi",
+        label: "Nome ospite",
+        screen: "SCR-001",
+      },
+      { kind: "press", selector: "#ELM-003", value: "Enter", label: "Aggiungi", screen: "SCR-001" },
+      {
+        kind: "expect_not_text",
+        selector: "#ELM-007",
+        value: "Esempio: 1. Mario Rossi",
+        label: "Esempio",
+        screen: "SCR-002",
+      },
+      {
+        kind: "expect_contains",
+        selector: "#ELM-007",
+        value: "Giulia Verdi",
+        label: "Esempio",
+        screen: "SCR-002",
+      },
+      { kind: "click", selector: "#ELM-008", value: null, label: "Torna", screen: "SCR-002" },
+      {
+        kind: "expect_text",
+        selector: "#ELM-001",
+        value: "Aggiungi un ospite",
+        label: "Aggiungi un ospite",
+        screen: "SCR-001",
+      },
+    ].map((item) => ({
+      action: { kind: item.kind, selector: item.selector, value: item.value },
+      element_code: item.selector.slice(1),
+      element_label: item.label,
+      screen_code: item.screen,
+      screen_title: item.screen,
+    }));
+    return {
+      status: "DERIVED" as const,
+      source_revision_id: "source",
+      source_revision_content_hash: "a".repeat(64),
+      declared_routes: [],
+      browser_interactions: [{ route_id: "root", actions: steps.map((item) => item.action) }],
+      steps,
+    };
+  }
+  function setupWeb() {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useWebExecutionStore();
+    store.$patch({
+      activeProjectId: "project",
+      sourceRevisions: [
+        {
+          id: "source",
+          version_number: 1,
+          content_hash: "a".repeat(64),
+          target_selection: { target: "WEB_STATIC" },
+        } as WebSourceRevisionPayload,
+      ],
+    });
+    vi.spyOn(store, "loadProject").mockResolvedValue();
+    vi.spyOn(store, "loadExecution").mockResolvedValue();
+    const api: ExecutionLaunchApi = {
+      history: vi.fn().mockResolvedValue([]),
+      journey: vi.fn().mockResolvedValue(journey()),
+      prepare: vi.fn().mockResolvedValue({ ...operation(), payload: { command: {} } }),
+      decide: vi.fn(),
+      start: vi.fn(),
+      applyRepair: vi.fn(),
+    };
+    const wrapper = mount(ProjectExecutionLaunch, {
+      props: {
+        projectId: "project",
+        platform: "web",
+        api,
+        authorize: <T>(fn: (token: string) => Promise<T>) => fn("token"),
+      },
+      global: { plugins: [pinia] },
+    });
+    return { wrapper, api };
+  }
+
+  it("shows the derived steps in plain language and sends them as the browser checks", async () => {
+    const { wrapper, api } = setupWeb();
+    await flushPromises();
+    expect(api.journey).toHaveBeenCalledWith("project", "token");
+    expect(wrapper.text()).toContain("Fill “Nome ospite” with “Giulia Verdi”");
+    expect(wrapper.text()).toContain(
+      "Check that “Esempio” no longer shows “Esempio: 1. Mario Rossi”",
+    );
+    expect(wrapper.text()).not.toContain("CSS selector");
+    const sample = wrapper.find("ol input");
+    await sample.setValue("Anna Bianchi");
+    const prepare = wrapper.findAll("button").find((b) => b.text() === "Prepare plan")!;
+    await prepare.trigger("click");
+    await flushPromises();
+    const checks = (api.prepare as ReturnType<typeof vi.fn>).mock
+      .calls[0]![4] as BrowserExecutionChecks;
+    expect(checks.browser_interactions[0]!.actions[0]).toEqual({
+      kind: "fill",
+      selector: "#ELM-002",
+      value: "Anna Bianchi",
+    });
+    expect(checks.browser_interactions[0]!.actions[3]).toEqual({
+      kind: "expect_contains",
+      selector: "#ELM-007",
+      value: "Anna Bianchi",
+    });
+    expect(checks.browser_interactions[0]!.actions[2]!.value).toBe("Esempio: 1. Mario Rossi");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Define the steps manually")!
+      .trigger("click");
+    expect(wrapper.text()).toContain("CSS selector");
+  });
+
+  it("has no axe violations", async () => {
+    const { wrapper } = setup();
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

@@ -138,11 +138,6 @@ class SyntheticFindingRecord(OrmBase):
         ),
         UniqueConstraint(
             "evaluation_run_id",
-            "finding_id",
-            name="uq_synthetic_findings_identity",
-        ),
-        UniqueConstraint(
-            "evaluation_run_id",
             "sequence_number",
             name="uq_synthetic_findings_sequence",
         ),
@@ -164,12 +159,12 @@ class SyntheticFindingRecord(OrmBase):
     )
 
     evaluation_run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    twin_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    twin_version: Mapped[int] = mapped_column(Integer, primary_key=True)
     finding_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     project_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     owner_user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    twin_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
-    twin_version: Mapped[int] = mapped_column(Integer, nullable=False)
     artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     artifact_version: Mapped[int] = mapped_column(Integer, nullable=False)
     criterion: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -407,6 +402,32 @@ class SqlAlchemySyntheticEvaluationRepository:
             .order_by(SyntheticFindingRecord.sequence_number)
         )
         return tuple(synthetic_finding_record_to_domain(record) for record in records.all())
+
+    async def list_owned(self, *, project_id: UUID) -> tuple[StoredSyntheticEvaluationRun, ...]:
+        records = await self._session.scalars(
+            select(EvaluationRunRecord)
+            .where(
+                EvaluationRunRecord.project_id == project_id,
+                EvaluationRunRecord.owner_user_id == self._owner_user_id,
+            )
+            .order_by(EvaluationRunRecord.completed_at.desc(), EvaluationRunRecord.id.desc())
+        )
+        return tuple(evaluation_run_record_to_domain(record) for record in records.all())
+
+    async def latest_owned(self, *, project_id: UUID) -> StoredSyntheticEvaluationRun | None:
+        runs = await self.list_owned(project_id=project_id)
+        return runs[0] if runs else None
+
+    async def get_owned_snapshot(self, *, run_id: UUID) -> dict[str, object] | None:
+        record = await self._session.scalar(
+            select(EvaluationRunRecord).where(
+                EvaluationRunRecord.id == run_id,
+                EvaluationRunRecord.owner_user_id == self._owner_user_id,
+            )
+        )
+        if record is None:
+            return None
+        return _object_payload(record.run_snapshot_json, label="evaluation run snapshot")
 
 
 def evaluation_run_to_record(run: SyntheticEvaluationRun) -> EvaluationRunRecord:

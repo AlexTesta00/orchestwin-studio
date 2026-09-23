@@ -120,6 +120,19 @@ test("failed assertion stops all following actions without inventing success", a
   assert.deepEqual(result.map(item => item.status), ["PASSED", "FAILED", "NOT_RUN", "NOT_RUN"]);
   assert.equal(result[1].failure_code, "TEXT_ASSERTION_FAILED");
 });
+test("contains and changed assertions use the observed text without inventing equality", async () => {
+  const page = { locator: () => ({ innerText: async () => "Esempio: 1. Giulia Verdi" }) };
+  const contains = { kind: "expect_contains", selector: "output", value: "Giulia Verdi" };
+  const changed = { kind: "expect_not_text", selector: "output", value: "Esempio: 1. Mario Rossi" };
+  const same = { kind: "expect_not_text", selector: "output", value: "Esempio: 1. Giulia Verdi" };
+  assert.equal((await actionResult(page, contains, 0)).status, "PASSED");
+  assert.equal((await actionResult(page, changed, 1)).status, "PASSED");
+  assert.equal((await actionResult(page, same, 2)).failure_code, "TEXT_ASSERTION_FAILED");
+  const value = job(); value.interactions = [{ route_id: "root", actions: [actions()[0], contains, actions()[2], changed] }];
+  assert.equal(validateJob(sign(value)).interactions.size, 1);
+  value.interactions[0].actions[1] = { kind: "expect_contains", selector: "output", value: "" };
+  assert.throws(() => validateJob(sign(value)), /ACTION_VALUE_INVALID/);
+});
 test("locator absence is distinct from observed assertion mismatch", async () => {
   const page = { locator: () => ({ innerText: async () => { throw Error("missing"); } }) };
   assert.equal((await actionResult(page, actions()[1], 0)).failure_code, "TEXT_ASSERTION_READ_FAILED");

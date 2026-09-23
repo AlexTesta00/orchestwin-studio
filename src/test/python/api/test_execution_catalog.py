@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings
+from orchestwin.api.brownfield_runtime import LocalExecutionQueryService
 from orchestwin.api.execution_catalog import project_execution_catalog
 from orchestwin.api.services import ApplicationRuntime
-from orchestwin.api.sprint07_runtime import LocalExecutionQueryService
 from orchestwin.config import ApplicationSettings, RuntimeEnvironment
 from orchestwin.jvm_execution.profile_loader import LoadedJvmProfileCatalog
 from orchestwin.jvm_execution.validation_evidence import JvmProfileValidationEvidenceCatalog

@@ -6,6 +6,12 @@ import { apiClient } from "./api/client";
 import { createAppI18n, defaultLocale } from "./i18n";
 import { installAuthenticationGuard } from "./router/authentication";
 import { createAppRouter } from "./router";
+import "@fontsource/libre-franklin/400.css";
+import "@fontsource/libre-franklin/500.css";
+import "@fontsource/libre-franklin/600.css";
+import "@fontsource/libre-franklin/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import "./styles/tailwind.css";
 
 const application = createApp(App);

@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
+import { createAppI18n } from "@/i18n";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { useArchitectureStore } from "@/stores/architecture";
@@ -12,6 +13,7 @@ import type { ExecutionProfilePayload } from "@/types/execution";
 import type { GeneratedSource, SourceGenerationApi } from "@/api/sourceGeneration";
 import { SourceGenerationApiError } from "@/api/sourceGeneration";
 import ProjectSourceGeneration from "./ProjectSourceGeneration.vue";
+import { expectAccessible } from "@/test/axe";
 
 function setup(approved = true) {
   const pinia = createPinia();
@@ -40,13 +42,13 @@ function setup(approved = true) {
       catalogApi: {
         profiles: async () => [
           {
-            supported_targets: ["WEB_STATIC", "JVM_JAVA"],
+            supported_targets: ["WEB_STATIC", "WEB_VUE"],
             capability_status: "VALIDATED_LEVEL_D",
           } as ExecutionProfilePayload,
         ],
       },
     },
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia, createAppI18n("en")] },
   });
   return { wrapper, api, webReload, jvmReload };
 }
@@ -76,7 +78,7 @@ describe("source generation", () => {
     expect(api.source).not.toHaveBeenCalled();
   });
 
-  it.each(["WEB_STATIC", "JVM_JAVA"] as const)(
+  it.each(["WEB_STATIC", "WEB_VUE"] as const)(
     "generates %s with its approved architecture and refreshes source review",
     async (target) => {
       const { wrapper, api, webReload, jvmReload } = setup();
@@ -84,7 +86,7 @@ describe("source generation", () => {
       await wrapper.get("select").setValue(target);
       await wrapper.get("form").trigger("submit");
       await flushPromises();
-      const platform = target === "WEB_STATIC" ? "web" : "jvm";
+      const platform = "web";
       expect(api.source).toHaveBeenCalledWith(
         "project",
         platform,
@@ -95,7 +97,8 @@ describe("source generation", () => {
         }),
         "token",
       );
-      expect(target === "WEB_STATIC" ? webReload : jvmReload).toHaveBeenCalledTimes(1);
+      expect(webReload).toHaveBeenCalledTimes(1);
+      expect(jvmReload).not.toHaveBeenCalled();
       expect(wrapper.text()).toContain("Generated revision 1");
     },
   );
@@ -128,8 +131,14 @@ describe("source generation", () => {
     expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeDefined();
     await wrapper.get("form").trigger("submit");
     expect(api.source).toHaveBeenCalledTimes(1);
-    await wrapper.get("select").setValue("JVM_JAVA");
-    expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeUndefined();
-    expect(wrapper.text()).not.toContain("Generated revision 1");
+    await wrapper.get("select").setValue("WEB_VUE");
+    expect(wrapper.get('button[type="submit"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Generated revision 1");
+  });
+
+  it("has no axe violations", async () => {
+    const { wrapper } = setup();
+    await flushPromises();
+    await expectAccessible(wrapper.element);
   });
 });

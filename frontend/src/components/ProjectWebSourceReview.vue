@@ -260,21 +260,21 @@ onMounted(async () => {
 <template>
   <section class="grid gap-6" aria-labelledby="web-source-review-title">
     <header class="grid gap-2">
-      <p class="m-0 text-sm font-bold tracking-wide text-sky-700 uppercase">
+      <p class="m-0 text-sm font-bold tracking-wide text-ink-2 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 id="web-source-review-title" class="m-0 text-2xl font-black text-slate-950">
+      <h2 id="web-source-review-title" class="m-0 text-2xl font-semibold text-ink">
         {{ copy.title }}
       </h2>
-      <p class="m-0 max-w-4xl text-slate-700">
+      <p class="m-0 max-w-4xl text-ink-2">
         {{ copy.intro }}
       </p>
-      <p class="m-0 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+      <p class="m-0 rounded-panel border border-line-strong bg-surface-2 p-4 text-sm text-warn">
         {{ copy.capabilityNotice }}
       </p>
       <button
         type="button"
-        class="w-fit rounded-lg border border-slate-300 bg-white px-4 py-2 font-bold text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+        class="w-fit rounded-control border border-field bg-white px-4 py-2 font-bold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         :disabled="store.isBusy"
         @click="load"
       >
@@ -282,61 +282,61 @@ onMounted(async () => {
       </button>
     </header>
 
-    <p v-if="store.isBusy" class="m-0 text-slate-700" aria-live="polite">
+    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
       {{ copy.loading }}
     </p>
     <p
       v-if="localError !== null || store.errorCode !== null"
-      class="m-0 rounded-xl border border-red-200 bg-red-50 p-4 font-semibold text-red-800"
+      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
       role="alert"
     >
       {{ localError ?? store.errorCode ?? copy.loadError }}
     </p>
 
     <section class="grid gap-4" aria-labelledby="web-profile-list-title">
-      <h3 id="web-profile-list-title" class="m-0 text-xl font-black text-slate-950">
+      <h3 id="web-profile-list-title" class="m-0 text-xl font-semibold text-ink">
         {{ copy.profiles }}
       </h3>
       <ul v-if="webProfiles.length > 0" class="grid gap-3 lg:grid-cols-2">
         <li
           v-for="profile in webProfiles"
           :key="`${profile.profile_id}:${profile.version}`"
-          class="grid gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          class="grid gap-2 rounded-panel border border-line bg-white p-4 shadow-sm"
         >
-          <p class="m-0 font-black text-slate-950">{{ profile.name }}</p>
-          <p class="m-0 text-sm text-slate-700">
+          <p class="m-0 font-semibold text-ink">{{ profile.name }}</p>
+          <p class="m-0 text-sm text-ink-2">
             {{ copy.capability }}: <strong>{{ profile.capability_status }}</strong>
           </p>
-          <p class="m-0 text-sm text-slate-700">
+          <p class="m-0 text-sm text-ink-2">
             {{ copy.targets }}: {{ profile.supported_targets.join(", ") }}
           </p>
-          <p class="m-0 text-sm text-slate-700">
+          <p class="m-0 text-sm text-ink-2">
             {{ copy.ownerApproval }}:
             {{ profile.requires_owner_approval ? copy.yes : copy.no }}
           </p>
           <div>
-            <p class="m-0 text-sm font-bold text-slate-900">{{ copy.evidence }}</p>
+            <p class="m-0 text-sm font-bold text-ink">{{ copy.evidence }}</p>
             <ul v-if="profile.validation_evidence_refs.length > 0" class="mt-1 grid gap-1 pl-5">
               <li v-for="reference in profile.validation_evidence_refs" :key="reference">
                 <code class="text-xs break-all">{{ reference }}</code>
               </li>
             </ul>
-            <p v-else class="m-0 text-sm text-slate-600">{{ copy.noEvidence }}</p>
+            <p v-else class="m-0 text-sm text-ink-2">{{ copy.noEvidence }}</p>
           </div>
         </li>
       </ul>
-      <p v-else class="m-0 text-slate-600">{{ copy.noProfiles }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noProfiles }}</p>
     </section>
 
     <section class="grid gap-4" aria-labelledby="web-revision-list-title">
-      <h3 id="web-revision-list-title" class="m-0 text-xl font-black text-slate-950">
+      <h3 id="web-revision-list-title" class="m-0 text-xl font-semibold text-ink">
         {{ copy.revisions }}
       </h3>
       <ol v-if="store.sourceRevisions.length > 0" class="grid gap-4">
         <li
           v-for="revision in store.sourceRevisions"
           :key="revision.id"
-          class="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+          class="grid gap-4 rounded-panel border border-line bg-surface-2 p-4"
         >
           <dl class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
@@ -390,7 +390,7 @@ onMounted(async () => {
               v-if="revision.files.length > 0"
               class="w-full border-collapse text-left text-sm"
             >
-              <caption class="pb-2 text-left font-black text-slate-950">
+              <caption class="pb-2 text-left font-semibold text-ink">
                 {{
                   copy.files
                 }}
@@ -414,11 +414,11 @@ onMounted(async () => {
                 </tr>
               </tbody>
             </table>
-            <p v-else class="m-0 text-slate-600">{{ copy.noFiles }}</p>
+            <p v-else class="m-0 text-ink-2">{{ copy.noFiles }}</p>
           </div>
 
           <div>
-            <p class="m-0 font-black text-slate-950">{{ copy.provenance }}</p>
+            <p class="m-0 font-semibold text-ink">{{ copy.provenance }}</p>
             <ul
               v-if="revision.provenance_references.length > 0"
               class="mt-2 grid gap-2 pl-5 text-sm"
@@ -434,23 +434,23 @@ onMounted(async () => {
                 <code class="text-xs break-all">{{ reference.content_hash }}</code>
               </li>
             </ul>
-            <p v-else class="m-0 text-slate-600">{{ copy.noProvenance }}</p>
+            <p v-else class="m-0 text-ink-2">{{ copy.noProvenance }}</p>
           </div>
         </li>
       </ol>
-      <p v-else class="m-0 text-slate-600">{{ copy.noRevisions }}</p>
+      <p v-else class="m-0 text-ink-2">{{ copy.noRevisions }}</p>
     </section>
 
     <section class="grid gap-4" aria-labelledby="web-revision-comparison-title">
-      <h3 id="web-revision-comparison-title" class="m-0 text-xl font-black text-slate-950">
+      <h3 id="web-revision-comparison-title" class="m-0 text-xl font-semibold text-ink">
         {{ copy.compare }}
       </h3>
       <div class="grid gap-3 sm:grid-cols-2">
-        <label class="grid gap-1 font-bold text-slate-900">
+        <label class="grid gap-1 font-bold text-ink">
           {{ copy.previous }}
           <select
             v-model="comparisonBaseId"
-            class="rounded-lg border border-slate-300 bg-white p-2"
+            class="rounded-control border border-field bg-white p-2"
           >
             <option :value="null">{{ copy.none }}</option>
             <option
@@ -462,11 +462,11 @@ onMounted(async () => {
             </option>
           </select>
         </label>
-        <label class="grid gap-1 font-bold text-slate-900">
+        <label class="grid gap-1 font-bold text-ink">
           {{ copy.current }}
           <select
             v-model="comparisonTargetId"
-            class="rounded-lg border border-slate-300 bg-white p-2"
+            class="rounded-control border border-field bg-white p-2"
           >
             <option :value="null">{{ copy.none }}</option>
             <option
@@ -485,20 +485,18 @@ onMounted(async () => {
           selectedRevision === undefined ||
           selectedBaseRevision.id === selectedRevision.id
         "
-        class="m-0 text-slate-600"
+        class="m-0 text-ink-2"
       >
         {{ copy.noComparison }}
       </p>
-      <p v-else-if="fileChanges.length === 0" class="m-0 text-slate-600">{{ copy.noChanges }}</p>
+      <p v-else-if="fileChanges.length === 0" class="m-0 text-ink-2">{{ copy.noChanges }}</p>
       <ul v-else class="grid gap-2">
         <li
           v-for="change in fileChanges"
           :key="change.path"
-          class="rounded-lg border border-slate-200 bg-white p-3"
+          class="rounded-control border border-line bg-white p-3"
         >
-          <p class="m-0 font-bold text-slate-950">
-            {{ changeLabel(change.kind) }} · {{ change.path }}
-          </p>
+          <p class="m-0 font-bold text-ink">{{ changeLabel(change.kind) }} · {{ change.path }}</p>
           <code class="mt-1 block text-xs break-all"
             >{{ change.previousDigest ?? copy.none }} →
             {{ change.currentDigest ?? copy.none }}</code

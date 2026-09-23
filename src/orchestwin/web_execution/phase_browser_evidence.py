@@ -26,6 +26,7 @@ from orchestwin.web_execution.browser_evidence import (
 )
 from orchestwin.web_execution.reports import WebEvidenceReference, WebNormalizedFinding
 from orchestwin.web_execution.static_browser_jobs import (
+    ASSERTION_KINDS,
     VIEWPORTS,
     BrowserAction,
     canonical_bytes,
@@ -182,7 +183,7 @@ class WebBrowserInteraction:
                 if action.kind == "press":
                     _require(action.value in {"Enter", "Space"}, "BROWSER_INTERACTION_KEY_INVALID")
                 pending = action.kind
-            elif action.kind == "expect_text" and pending is not None:
+            elif action.kind in ASSERTION_KINDS and pending is not None:
                 checked.add(pending)
                 pending = None
         _require(
@@ -441,8 +442,35 @@ def _codes(value: object) -> list[str]:
     return value
 
 
-def _actions(screen: dict, plan: list) -> None:
+def _assertion_holds(action, observed):
+    if not isinstance(observed, str):
+        return False
+    if action["kind"] == "expect_contains":
+        return action["value"] in observed
+    if action["kind"] == "expect_not_text":
+        return observed != action["value"]
+    return observed == action["value"]
+
+
+def _failure_message(code: str, failure: dict | None) -> str:
+    if code != "INTERACTION_FAILED" or failure is None:
+        return "Browser automation reported a failure."
+    target = f"{failure['kind']} on {failure['selector']}"
+    if failure["value"] is not None:
+        target += f" with «{failure['value']}»"
+    observed = (
+        "" if failure["observed_text"] is None else f", observed «{failure['observed_text']}»"
+    )
+    message = (
+        f"Step {failure['index'] + 1} of {failure['total']} failed: {target} "
+        f"({failure['failure_code']}{observed})."
+    )
+    return " ".join(message.split())
+
+
+def _actions(screen: dict, plan: list) -> dict | None:
     records = screen["actions"]
+    failure = None
     _require(
         isinstance(records, list) and len(records) == len(plan), "BROWSER_ACTION_RESULTS_INVALID"
     )
@@ -467,12 +495,13 @@ def _actions(screen: dict, plan: list) -> None:
                 and len(record["observed_text"].encode("utf-16-le")) <= 2000,
                 "BROWSER_ASSERTION_TEXT_LIMIT",
             )
-            _require(action["kind"] == "expect_text", "BROWSER_ACTION_OBSERVATION_INVALID")
+            _require(action["kind"] in ASSERTION_KINDS, "BROWSER_ACTION_OBSERVATION_INVALID")
         if status == "PASSED":
             _require(not failed and record["failure_code"] is None, "BROWSER_ACTION_FALSE_PASS")
-            if action["kind"] == "expect_text":
+            if action["kind"] in ASSERTION_KINDS:
                 _require(
-                    record["observed_text"] == action["value"], "BROWSER_ACTION_FALSE_ASSERTION"
+                    _assertion_holds(action, record["observed_text"]),
+                    "BROWSER_ACTION_FALSE_ASSERTION",
                 )
         else:
             if status == "NOT_RUN":
@@ -487,8 +516,17 @@ def _actions(screen: dict, plan: list) -> None:
                     not failed and record["failure_code"] in _ACTION_FAILURES,
                     "BROWSER_ACTION_PREFIX_INVALID",
                 )
+                failure = {
+                    "index": index,
+                    "total": len(plan),
+                    "kind": action["kind"],
+                    "selector": action["selector"],
+                    "value": action.get("value"),
+                    "failure_code": record["failure_code"],
+                    "observed_text": record["observed_text"],
+                }
                 _require(
-                    (action["kind"] == "expect_text")
+                    (action["kind"] in ASSERTION_KINDS)
                     == (record["failure_code"] != "ACTION_FAILED"),
                     "BROWSER_ACTION_FAILURE_INVALID",
                 )
@@ -508,6 +546,7 @@ def _actions(screen: dict, plan: list) -> None:
             status == "FAILED" and bool(screen["failure_codes"]),
             "BROWSER_INTERACTION_FAILURE_INVALID",
         )
+    return failure
 
 
 def _events(data: bytes, policy: WebBrowserEvidencePolicy):
@@ -763,7 +802,7 @@ def _decode(
             )
             codes = _codes(screen["failure_codes"])
             route_codes.update(codes)
-            _actions(screen, plans.get(route.route_id, []))
+            action_failure = _actions(screen, plans.get(route.route_id, []))
             if screen["final_path"] is not None:
                 _path(screen["final_path"])
                 _require(
@@ -816,7 +855,12 @@ def _decode(
             for code in codes:
                 extra_findings.append(
                     WebNormalizedFinding(
-                        code, "Browser automation reported a failure.", "playwright", route.path
+                        code,
+                        _failure_message(code, action_failure),
+                        "playwright",
+                        action_failure["selector"]
+                        if code == "INTERACTION_FAILED" and action_failure is not None
+                        else route.path,
                     )
                 )
             failed |= bool(codes) or screen["interaction_status"] == "FAILED" or status != 200

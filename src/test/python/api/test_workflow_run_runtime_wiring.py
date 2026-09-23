@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from orchestwin.api import services as services_module
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings
+from orchestwin.api.finalization_runtime import SqlAlchemyFinalizationApiService
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
 from orchestwin.config import ApplicationSettings
@@ -42,7 +43,7 @@ def test_default_factory_constructs_workflow_service_without_opening_a_connectio
         assert runtime.user_modeling_services is not None  # C53 is preserved.
         assert runtime.web_execution_api_service is None  # Not claimed by this commit.
         assert runtime.jvm_execution_api_service is None
-        assert runtime.finalization_api_service is None
+        assert isinstance(runtime.finalization_api_service, SqlAlchemyFinalizationApiService)
     finally:
         asyncio.run(runtime.close())
     database.dispose.assert_awaited_once()

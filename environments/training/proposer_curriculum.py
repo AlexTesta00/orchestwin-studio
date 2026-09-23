@@ -10,6 +10,8 @@ import json
 from dataclasses import dataclass
 from html import escape
 
+from orchestwin.models.source_assembly import assemble_static_module
+
 CURRICULUM_ID = "verified-proposer-web-source-v1"
 EXCLUDED_FAMILIES = ("guest-list", "expense-split", "expense-splitting", "sales-tax", "temperature")
 
@@ -514,15 +516,12 @@ def js(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
 
-PARSE_NUMBER = """function readNumber(raw) {
-  if (typeof raw !== 'string' || !/^[+-]?(?:\\d+(?:[.,]\\d*)?|[.,]\\d+)$/.test(raw.trim())) {
+READ_NUMBER_BODY = """  if (typeof raw !== 'string' || !/^[+-]?(?:\\d+(?:[.,]\\d*)?|[.,]\\d+)$/.test(raw.trim())) {
     throw new Error('Enter a valid decimal number');
   }
   const value = Number(raw.trim().replace(',', '.'));
   if (!Number.isFinite(value)) throw new Error('Number is outside the finite range');
-  return value;
-}
-"""
+  return value;"""
 
 
 def prototype(family, locale):
@@ -582,83 +581,82 @@ def prototype(family, locale):
     )
 
 
-def core_source(family):
+def module_functions(family):
+    read_number = {"name": "readNumber", "parameters": "raw", "body": READ_NUMBER_BODY}
     if isinstance(family, NumericFamily):
         cases = "\n".join(
             f"    case {js(mode[0])}: result = {mode[2]}; break;" for mode in family.modes
         )
-        return (
-            PARSE_NUMBER
-            + f"""function compute(a, b, mode) {{
-  if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) throw new Error('Finite numbers required');
-  if (!({family.domain})) throw new Error('Inputs outside allowed domain');
-  let result;
-  switch (mode) {{
-{cases}
-    default: throw new Error('Choose a valid operation');
-  }}
-  if (!Number.isFinite(result)) throw new Error('Result is outside the finite range');
-  return result;
-}}
-if (typeof module !== 'undefined') module.exports = {{ readNumber, compute }};
-"""
+        body = (
+            "  if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) throw new Error('Finite numbers required');\n"
+            f"  if (!({family.domain})) throw new Error('Inputs outside allowed domain');\n"
+            "  let result;\n"
+            "  switch (mode) {\n"
+            f"{cases}\n"
+            "    default: throw new Error('Choose a valid operation');\n"
+            "  }\n"
+            "  if (!Number.isFinite(result)) throw new Error('Result is outside the finite range');\n"
+            "  return result;"
         )
-    return (
-        PARSE_NUMBER
-        + f"""function createService() {{
-  const store = Object.create(null);
-  function snapshot() {{ return {{ ...store }}; }}
-  function apply(action, name, amount) {{
-    if (!{js([mode[0] for mode in family.modes])}.includes(action)) throw new Error('Choose a valid operation');
-    if (typeof name !== 'string' || !name.trim()) throw new Error('Name is required');
-    if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Positive integer required');
-    const label = name.trim();
-    {family.body}
-    return snapshot();
-  }}
-  return {{ apply, snapshot }};
-}}
-if (typeof module !== 'undefined') module.exports = {{ readNumber, createService }};
-"""
+        return [{"name": "compute", "parameters": "a, b, mode", "body": body}, read_number]
+    body = (
+        "  const store = Object.create(null);\n"
+        "  function snapshot() { return { ...store }; }\n"
+        "  function apply(action, name, amount) {\n"
+        f"    if (!{js([mode[0] for mode in family.modes])}.includes(action)) throw new Error('Choose a valid operation');\n"
+        "    if (typeof name !== 'string' || !name.trim()) throw new Error('Name is required');\n"
+        "    if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Positive integer required');\n"
+        "    const label = name.trim();\n"
+        f"    {family.body}\n"
+        "    return snapshot();\n"
+        "  }\n"
+        "  return { apply, snapshot };"
     )
+    return [{"name": "createService", "parameters": "", "body": body}, read_number]
 
 
-def source_bundle(family, locale):
-    proto = prototype(family, locale)
+def module_parts(family):
     stateful = isinstance(family, StatefulFamily)
-    core = core_source(family)
-    binding = "  const service = createService();\n" if stateful else ""
+    binding = "    const service = createService();\n" if stateful else ""
     invocation = (
         "service.apply(mode.value, first.value, readNumber(second.value))"
         if stateful
         else "compute(readNumber(first.value), readNumber(second.value), mode.value)"
     )
-    app = (
-        core
-        + f"""if (typeof document !== 'undefined') {{
-{binding}  const form = document.getElementById('form');
-  const first = document.getElementById('first');
-  const second = document.getElementById('second');
-  const mode = document.getElementById('mode');
-  const entry = document.getElementById('entry');
-  const result = document.getElementById('result');
-  const output = document.getElementById('output');
-  const error = document.getElementById('error');
-  form.addEventListener('submit', event => {{
-    event.preventDefault();
-    error.textContent = '';
-    try {{
-      const value = {invocation};
-      output.textContent = {"JSON.stringify(value)" if stateful else "String(Number(value.toPrecision(12)))"};
-      entry.hidden = true; result.hidden = false; output.focus();
-    }} catch (failure) {{ error.textContent = failure.message; }}
-  }});
-  document.getElementById('back').addEventListener('click', event => {{
-    event.preventDefault(); result.hidden = true; entry.hidden = false; first.focus();
-  }});
-}}
-"""
+    shown = "JSON.stringify(value)" if stateful else "String(Number(value.toPrecision(12)))"
+    browser_setup = (
+        binding + "    const form = document.getElementById('form');\n"
+        "    const first = document.getElementById('first');\n"
+        "    const second = document.getElementById('second');\n"
+        "    const mode = document.getElementById('mode');\n"
+        "    const entry = document.getElementById('entry');\n"
+        "    const result = document.getElementById('result');\n"
+        "    const output = document.getElementById('output');\n"
+        "    const error = document.getElementById('error');\n"
+        "    form.addEventListener('submit', event => {\n"
+        "      event.preventDefault();\n"
+        "      error.textContent = '';\n"
+        "      try {\n"
+        f"        const value = {invocation};\n"
+        f"        output.textContent = {shown};\n"
+        "        entry.hidden = true; result.hidden = false; output.focus();\n"
+        "      } catch (failure) { error.textContent = failure.message; }\n"
+        "    });\n"
+        "    document.getElementById('back').addEventListener('click', event => {\n"
+        "      event.preventDefault(); result.hidden = true; entry.hidden = false; first.focus();\n"
+        "    });"
     )
+    return {
+        "shared_state": [],
+        "private_helpers": "",
+        "functions": module_functions(family),
+        "browser_setup": browser_setup,
+    }
+
+
+def source_bundle(family, locale):
+    proto = prototype(family, locale)
+    app = assemble_static_module(module_parts(family))
     page = html_source(proto, family, locale)
     tests = tests_source(family)
     return {"app.js": app, "app.test.cjs": tests, "index.html": page}, proto

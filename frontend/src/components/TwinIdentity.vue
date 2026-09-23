@@ -29,7 +29,7 @@ const displayDescription = computed(() => {
 <template>
   <span class="inline-flex min-w-0 items-start gap-3" data-testid="twin-identity">
     <span
-      class="relative inline-flex size-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset"
+      class="relative inline-flex size-10 shrink-0 items-center justify-center rounded-panel ring-1 ring-inset"
       :class="identity.accent"
       aria-hidden="true"
     >
@@ -49,10 +49,10 @@ const displayDescription = computed(() => {
       <span v-else class="text-sm font-bold">{{ identityInitials(displayName) || "UT" }}</span>
     </span>
     <span class="min-w-0">
-      <span class="block text-sm font-semibold break-words text-slate-950">{{ displayName }}</span>
+      <span class="block text-sm font-semibold break-words text-ink">{{ displayName }}</span>
       <span
         v-if="!compact && displayDescription"
-        class="mt-0.5 block text-xs leading-5 text-slate-600"
+        class="mt-0.5 block text-xs leading-5 text-ink-2"
         >{{ displayDescription }}</span
       >
     </span>

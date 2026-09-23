@@ -89,3 +89,108 @@ def test_same_message_with_known_and_unknown_locations_remains_valid():
 )
 def test_missing_empty_skipped_failed_or_inconsistent_summaries_are_rejected(raw):
     assert not has_executed_passing_tests(raw)
+
+
+TAP_FAILURES = (
+    b"TAP version 13\n"
+    b"# Subtest: calculateTip calcola correttamente la mancia e il totale\n"
+    b"ok 1 - calculateTip calcola correttamente la mancia e il totale\n"
+    b"  ---\n  duration_ms: 0.787863\n  type: 'test'\n  ...\n"
+    b"# Subtest: calculateTip gestisce valori decimali correttamente\n"
+    b"not ok 2 - calculateTip gestisce valori decimali correttamente\n"
+    b"  ---\n  duration_ms: 0.758694\n  type: 'test'\n"
+    b"  location: '/workspace/app.test.cjs:17:1'\n"
+    b"  failureType: 'testCodeFailure'\n"
+    b"  error: |-\n    Expected values to be strictly equal:\n    \n    4.575 !== 4.58\n    \n"
+    b"  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 4.58\n  actual: 4.575\n"
+    b"  operator: 'strictEqual'\n"
+    b"  stack: |-\n    TestContext.<anonymous> (/workspace/app.test.cjs:19:10)\n"
+    b"    Test.runInAsyncScope (node:async_hooks:226:14)\n"
+    b"  ...\n"
+    b"# Subtest: validateInput accetta input validi\n"
+    b"not ok 3 - validateInput accetta input validi\n"
+    b"  ---\n  duration_ms: 0.123052\n  type: 'test'\n"
+    b"  location: '/workspace/app.test.cjs:23:1'\n"
+    b"  failureType: 'testCodeFailure'\n"
+    b"  error: 'hideErrorMessage is not defined'\n"
+    b"  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'\n"
+    b"  stack: |-\n    validateInput (/workspace/app.js:24:3)\n"
+    b"    TestContext.<anonymous> (/workspace/app.test.cjs:24:19)\n"
+    b"  ...\n"
+    b"1..3\n# tests 3\n# suites 0\n# pass 1\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n"
+    b"# duration_ms 70\n"
+)
+
+
+def test_tap_records_name_the_failing_test_its_error_and_the_raising_frame():
+    findings = failure_findings(TAP_FAILURES, b"")
+    assert [(item.code, item.message, item.location) for item in findings] == [
+        (
+            "NODE_TEST_ASSERTIONERROR",
+            "calculateTip gestisce valori decimali correttamente: "
+            "Expected values to be strictly equal: 4.575 !== 4.58",
+            "app.test.cjs:19:10",
+        ),
+        (
+            "NODE_TEST_REFERENCEERROR",
+            "validateInput accetta input validi: hideErrorMessage is not defined",
+            "app.js:24:3",
+        ),
+    ]
+    assert all(item.source_tool == "node:test" for item in findings)
+
+
+def test_first_error_and_stack_win_when_an_assertion_wraps_an_inner_error():
+    raw = (
+        b"TAP version 13\n# Subtest: validateInput throws error for negative number\n"
+        b"not ok 1 - validateInput throws error for negative number\n"
+        b"  ---\n  duration_ms: 0.5\n  type: 'test'\n  location: '/workspace/app.test.cjs:16:1'\n"
+        b"  failureType: 'testCodeFailure'\n"
+        b"  error: |-\n    The input did not match the regular expression /negativa/. Input:\n"
+        b"    \n    'Error: Input non valido'\n    \n"
+        b"  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n  actual:\n"
+        b"  error: 'Input non valido'\n"
+        b"  stack: |-\n    validateInput (/workspace/app.js:18:11)\n    /workspace/app.test.cjs:18:5\n"
+        b"  operator: 'throws'\n"
+        b"  stack: |-\n    TestContext.<anonymous> (/workspace/app.test.cjs:17:10)\n"
+        b"  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n"
+        b"# todo 0\n# duration_ms 7\n"
+    )
+    (finding,) = failure_findings(raw, b"")
+    assert finding.code == "NODE_TEST_ASSERTIONERROR"
+    assert finding.message == (
+        "validateInput throws error for negative number: The input did not match the regular "
+        "expression /negativa/. Input: 'Error: Input non valido'"
+    )
+    assert finding.location == "app.js:18:11"
+
+
+def test_suite_records_are_skipped_and_nested_leaves_keep_their_own_location():
+    raw = (
+        b"TAP version 13\n# Subtest: suite\n"
+        b"    # Subtest: leaf\n    not ok 1 - leaf\n      ---\n      duration_ms: 1\n"
+        b"      type: 'test'\n      location: '/workspace/app.test.cjs:5:3'\n"
+        b"      failureType: 'testCodeFailure'\n      error: 'boom'\n"
+        b"      code: 'ERR_TEST_FAILURE'\n      name: 'Error'\n"
+        b"      stack: |-\n        TestContext.<anonymous> (node:internal/test_runner/test:1:1)\n"
+        b"      ...\n    1..1\n"
+        b"not ok 1 - suite\n  ---\n  duration_ms: 2\n  type: 'suite'\n"
+        b"  location: '/workspace/app.test.cjs:4:1'\n  failureType: 'subtestsFailed'\n"
+        b"  error: '1 subtest failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n"
+        b"1..1\n# tests 1\n# suites 1\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n"
+        b"# todo 0\n# duration_ms 3\n"
+    )
+    (finding,) = failure_findings(raw, b"")
+    assert (finding.code, finding.message, finding.location) == (
+        "NODE_TEST_ERROR",
+        "leaf: boom",
+        "app.test.cjs:5:3",
+    )
+
+
+def test_tap_findings_stay_bounded_to_eight_records():
+    record = "# Subtest: t{n}\nnot ok {n} - t{n}\n  ---\n  type: 'test'\n  error: 'e{n}'\n  ...\n"
+    raw = ("TAP version 13\n" + "".join(record.format(n=n) for n in range(1, 12))).encode()
+    findings = failure_findings(raw, b"")
+    assert len(findings) == 8
+    assert {item.code for item in findings} == {"NODE_TEST_FAILURE"}

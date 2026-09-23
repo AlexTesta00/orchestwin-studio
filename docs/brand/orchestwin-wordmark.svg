@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="372" height="72" viewBox="0 0 372 72" role="img" aria-label="OrchesTwin Studio">
+  <g transform="translate(9 9)">
+    <circle cx="27" cy="8" r="3.4" fill="#0a5fba"/>
+    <circle cx="40.44" cy="13.56" r="3.4" fill="#1c1c1e"/>
+    <circle cx="46" cy="27" r="3.4" fill="#c9c9d1"/>
+    <circle cx="40.44" cy="40.44" r="3.4" fill="#c9c9d1"/>
+    <circle cx="27" cy="46" r="3.4" fill="#1c1c1e"/>
+    <circle cx="13.56" cy="40.44" r="3.4" fill="#c9c9d1"/>
+    <circle cx="8" cy="27" r="3.4" fill="#c9c9d1"/>
+    <circle cx="13.56" cy="13.56" r="3.4" fill="#c9c9d1"/>
+  </g>
+  <text x="78" y="41" font-family="Libre Franklin, Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#1c1c1e">OrchesTwin</text>
+  <text x="80" y="60" font-family="Libre Franklin, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="500" letter-spacing="2.2" fill="#6a6a72">STUDIO</text>
+</svg>

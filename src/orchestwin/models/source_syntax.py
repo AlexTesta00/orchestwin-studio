@@ -13,14 +13,18 @@ from orchestwin.models.proposal_generation import ProposalGenerationError
 class SourceSyntaxError(ProposalGenerationError):
     """A bounded parser diagnostic without generated text or process stderr."""
 
-    def __init__(self, *, reason, module=False, line=None, parser="node --check"):
+    def __init__(self, *, reason, module=False, line=None, parser="node --check", detail=None):
         super().__init__("SOURCE_JAVASCRIPT_SYNTAX_INVALID")
         self.diagnostic = {
             "parser": parser,
             "input_type": "module" if module else "commonjs",
             "reason": reason,
             "line": line,
+            **({"detail": detail} if detail else {}),
         }
+
+
+_REDECLARED = re.compile(r"SyntaxError: Identifier '([^']+)' has already been declared")
 
 
 def _syntax_diagnostic(stderr, *, module):
@@ -38,9 +42,15 @@ def _syntax_diagnostic(stderr, *, module):
     )
     if module and reason.startswith("ES_MODULE_"):
         reason = "JAVASCRIPT_PARSE_ERROR"
+    redeclared = _REDECLARED.search(text)
+    if redeclared:
+        reason = "IDENTIFIER_ALREADY_DECLARED"
     position = re.search(r"^\[stdin\]:(\d+)\s*$", text, re.MULTILINE)
     return SourceSyntaxError(
-        reason=reason, module=module, line=int(position[1]) if position else None
+        reason=reason,
+        module=module,
+        line=int(position[1]) if position else None,
+        detail=redeclared.group(1) if redeclared else None,
     )
 
 
