@@ -87,7 +87,7 @@ def test_more_than_sixty_lines_preserve_exact_text_and_cannot_lose_migration_pro
         with engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0048_twin_conversations"
+                == "0049_twin_evaluation_task"
             )
             assert (
                 connection.scalar(sa.text("SELECT count(*) FROM model_proposal_generations"))

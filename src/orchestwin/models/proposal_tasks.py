@@ -3,7 +3,16 @@
 SOURCE_TASKS = frozenset({"web-source", "web-repair", "jvm-source", "jvm-repair"})
 TASKS = (
     frozenset(
-        {"team", "personas", "user-twins", "twin-chat", "requirements", "design", "architecture"}
+        {
+            "team",
+            "personas",
+            "user-twins",
+            "twin-chat",
+            "user-twin-evaluation",
+            "requirements",
+            "design",
+            "architecture",
+        }
     )
     | SOURCE_TASKS
 )

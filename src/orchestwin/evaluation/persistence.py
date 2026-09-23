@@ -408,6 +408,32 @@ class SqlAlchemySyntheticEvaluationRepository:
         )
         return tuple(synthetic_finding_record_to_domain(record) for record in records.all())
 
+    async def list_owned(self, *, project_id: UUID) -> tuple[StoredSyntheticEvaluationRun, ...]:
+        records = await self._session.scalars(
+            select(EvaluationRunRecord)
+            .where(
+                EvaluationRunRecord.project_id == project_id,
+                EvaluationRunRecord.owner_user_id == self._owner_user_id,
+            )
+            .order_by(EvaluationRunRecord.completed_at.desc(), EvaluationRunRecord.id.desc())
+        )
+        return tuple(evaluation_run_record_to_domain(record) for record in records.all())
+
+    async def latest_owned(self, *, project_id: UUID) -> StoredSyntheticEvaluationRun | None:
+        runs = await self.list_owned(project_id=project_id)
+        return runs[0] if runs else None
+
+    async def get_owned_snapshot(self, *, run_id: UUID) -> dict[str, object] | None:
+        record = await self._session.scalar(
+            select(EvaluationRunRecord).where(
+                EvaluationRunRecord.id == run_id,
+                EvaluationRunRecord.owner_user_id == self._owner_user_id,
+            )
+        )
+        if record is None:
+            return None
+        return _object_payload(record.run_snapshot_json, label="evaluation run snapshot")
+
 
 def evaluation_run_to_record(run: SyntheticEvaluationRun) -> EvaluationRunRecord:
     """Translate one immutable domain run into its append-only record."""
