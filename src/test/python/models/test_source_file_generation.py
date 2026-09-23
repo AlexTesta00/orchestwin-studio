@@ -514,6 +514,47 @@ def test_redeclared_identifier_retry_names_the_identifier_to_rename():
     assert "declared twice in the same scope" in instruction
 
 
+def test_new_static_reasons_carry_remedies():
+    for reason, expected in (
+        ("MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION", "implement it in private_helpers"),
+        ("BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS", "write the page statements directly"),
+        ("NODE_TEST_USES_UNEXPORTED_NAME", "never through internal variables"),
+        ("REPAIR_UNCHANGED", "previous_rationale"),
+    ):
+        instruction = _syntax_retry_instruction({"diagnostic": {"reason": reason}}, "WEB_STATIC")
+        assert expected in instruction
+
+
+def test_second_syntax_retry_binds_to_the_rejected_second_attempt(tmp_path):
+    ctx, payload, store = context(), complete_output(), MemoryEvidence()
+
+    def mutate(child_context, value):
+        attempt = child_context.get("syntax_retry", {}).get("attempt", 1)
+        if child_context.get("source_step", {}).get("ordinal") == 2 and attempt < 3:
+            return {"content": "assert.equal(result, \\\n"}
+        return value
+
+    generator, transport = source_sequence_generator(tmp_path, payload, mutate=mutate)
+    execute(generator, ctx, store)
+    _parent, _core, rejected, rejected_again, accepted, _html = store.requests
+    assert len(transport.calls) == 6
+    second = json.loads(store.requests[rejected_again][0].input_payload_json)["context"]
+    third = json.loads(store.requests[accepted][0].input_payload_json)["context"]
+    assert second["syntax_retry"]["attempt"] == 2
+    assert second["syntax_retry"]["previous_generation_id"] == str(rejected)
+    assert third["syntax_retry"]["attempt"] == 3
+    assert third["syntax_retry"]["previous_generation_id"] == str(rejected_again)
+    assert third["syntax_retry"]["previous_request_hash"] == (
+        store.requests[rejected_again][0].content_hash
+    )
+    assert {key: value for key, value in third.items() if key != "syntax_retry"} == {
+        key: value for key, value in second.items() if key != "syntax_retry"
+    }
+    for generation in (rejected, rejected_again):
+        assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[generation])
+    assert any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in store.events[accepted])
+
+
 def test_retry_guidance_preserves_es_modules_for_other_execution_targets():
     feedback = {"diagnostic": {"input_type": "module", "reason": "UNEXPECTED_END_OF_INPUT"}}
     instruction = _syntax_retry_instruction(feedback, "WEB_VITE")
@@ -541,7 +582,7 @@ def test_different_mockup_structure_is_rejected_before_file_acceptance(tmp_path)
     )
 
 
-def test_repeated_syntax_failure_stops_after_one_retry_and_never_accepts_parent(tmp_path):
+def test_repeated_syntax_failure_stops_after_two_retries_and_never_accepts_parent(tmp_path):
     store = MemoryEvidence()
 
     def mutate(child_context, value):
@@ -550,7 +591,7 @@ def test_repeated_syntax_failure_stops_after_one_retry_and_never_accepts_parent(
     generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
         execute(generator, context(), store)
-    assert len(transport.calls) == len(store.requests) == 3
+    assert len(transport.calls) == len(store.requests) == 4
     for events in store.events.values():
         assert not any(kind == "ADAPTER_ACCEPTED" for kind, _, _ in events)
         assert events[-1][0] == "APPLICATION_RESULT" and events[-1][1]["status"] == "FAILED"

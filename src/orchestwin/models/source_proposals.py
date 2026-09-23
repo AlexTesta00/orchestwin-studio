@@ -288,7 +288,8 @@ def _source_instruction(task, repair):
             "Correct the implementation without weakening assertions, removing tests, bypassing validation or replacing behavior with constants. "
             "At least one changed file must differ from base_files: returning unchanged content is rejected as no repair, so list only files whose content changes. NODE_TEST findings name the failing test and its error in message and the frame that raised it in location: make the implementation satisfy the test, and fix the test only when it contradicts approved_context. When the tests assume state the implementation does not reset, fix the tests to use the exported reset function or the observed state, and keep implementation and tests consistent with each other. "
             "app.js ends with the platform function resetSharedState(), exported with the business functions: keep it and every existing export unchanged; when app.js keeps shared state the tests register test.beforeEach(resetSharedState). "
-            "Repaired JavaScript is checked statically before acceptance: exported functions and top-level helpers never read document, window or storage, and a rejected repair gets one retry with the diagnostic. "
+            "Repaired JavaScript is checked statically before acceptance: exported functions and top-level helpers never read document, window or storage, and a rejected repair gets up to two retries with the diagnostic. "
+            "When a repair changes what a function returns, update in the same REPLACE every browser_setup statement that reads the old shape. "
             "For axe-core findings apply the rule's actual remedy: color-contrast means changing the foreground or background colour of the located element until the ratio is at least 4.5:1, for example white text on #0b5394 or #333333 and never on #4CAF50; page-has-heading-one means a visible h1 in every screen state, placed outside the hidden screen containers. "
             "Browser findings are observed on the screens listed in recorded_failure.browser_final_state at the end of the recorded journey; a fix must hold in every state. "
             if repair
@@ -353,19 +354,23 @@ async def _validate_static_repair(context, output):
                         detail=", ".join(sorted(missing)),
                     )
             elif item.normalized_path == "app.test.cjs":
-                validate_node_test_contract(item.content, stateful=module_keeps_state(app))
+                validate_node_test_contract(
+                    item.content,
+                    stateful=module_keeps_state(app),
+                    exports=exported_names(app) if app else None,
+                )
         except ProposalGenerationError as error:
             raise _RepairRejection(item, error) from error
 
 
-async def _repair_retry(rejection, rationale):
+async def _repair_retry(rejection, rationale, attempt):
     from orchestwin.models.source_file_generation import (
         _syntax_retry_feedback,
         _syntax_retry_instruction,
     )
 
     code = rejection.error.code
-    retry = {"attempt": 2, "code": code}
+    retry = {"attempt": attempt, "code": code}
     scope = current_proposal_evidence()
     if scope is not None and scope.request is not None:
         await scope.event("ADAPTER_REJECTED", {"code": code})
@@ -410,7 +415,7 @@ class ModelSourceProposalAdapter:
         static_repair = repair and context["target_selection"]["target"] == "WEB_STATIC"
         retry = None
         retry_instruction = ""
-        for attempt in range(2):
+        for attempt in range(3):
             output = await self.generator.generate(
                 task=task,
                 context={**context, **({"repair_retry": retry} if retry else {})},
@@ -426,8 +431,10 @@ class ModelSourceProposalAdapter:
                 try:
                     await _validate_static_repair(context, output)
                 except _RepairRejection as rejection:
-                    if attempt == 0 and rejection.error.code == "SOURCE_JAVASCRIPT_SYNTAX_INVALID":
-                        retry, retry_instruction = await _repair_retry(rejection, output.rationale)
+                    if attempt < 2 and rejection.error.code == "SOURCE_JAVASCRIPT_SYNTAX_INVALID":
+                        retry, retry_instruction = await _repair_retry(
+                            rejection, output.rationale, attempt + 2
+                        )
                         continue
                     raise rejection.error from rejection
             binding = build_source_binding(task, context, output)

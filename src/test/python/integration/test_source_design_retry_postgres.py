@@ -99,7 +99,7 @@ def test_design_retry_retains_failed_bytes_and_only_publishes_complete_atomic_tr
         response.status_code
         == {"success": 201, "second_failure": 502, "publication_rollback": 503}[outcome]
     ), response.text
-    assert len(transport.calls) == len(requests) == (3 if outcome == "second_failure" else 5)
+    assert len(transport.calls) == len(requests) == (4 if outcome == "second_failure" else 5)
     contexts = {
         str(identifier): json.loads(json.loads(snapshot)["request"]["input_payload_json"])[
             "context"

@@ -40,8 +40,10 @@ from orchestwin.models.source_proposals import (
     file_entry,
 )
 from orchestwin.models.source_structure import (
+    exported_names,
     validate_browser_setup,
     validate_core_calls,
+    validate_defined_calls,
     validate_node_test_contract,
     validate_reserved_names,
     validate_shared_state_updates,
@@ -361,6 +363,7 @@ def _validate_static_module(item, parts):
             (
                 lambda: validate_reserved_names(parts),
                 lambda: validate_core_calls(parts),
+                lambda: validate_defined_calls(parts),
                 lambda: validate_browser_setup(parts),
                 lambda: validate_shared_state_updates(
                     parts.shared_state,
@@ -821,7 +824,7 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
     retry = None
     retry_kind = None
     retry_feedback = None
-    for attempt in range(2):
+    for attempt in range(3):
         child_context = {**context, **({retry_kind: retry} if retry else {})}
         if len(canonical_json(wire_value(child_context)).encode()) > MAX_CONTEXT_BYTES:
             raise ProposalGenerationError("SOURCE_FILE_CONTEXT_LIMIT_EXCEEDED")
@@ -875,13 +878,15 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     if item.normalized_path == "app.js":
                         _validate_static_module(item, output if parts_type else None)
                     if item.normalized_path == "app.test.cjs":
+                        completed_app = "".join(
+                            completed["content"]
+                            for completed in context["completed_files"]
+                            if completed["normalized_path"] == "app.js"
+                        )
                         validate_node_test_contract(
                             item.content,
-                            stateful=any(
-                                module_keeps_state(completed["content"])
-                                for completed in context["completed_files"]
-                                if completed["normalized_path"] == "app.js"
-                            ),
+                            stateful=module_keeps_state(completed_app),
+                            exports=exported_names(completed_app) if completed_app else None,
                         )
                     if item.normalized_path == "index.html":
                         validate_prototype_html(
@@ -923,8 +928,10 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                         "APPLICATION_RESULT",
                         {"status": "FAILED", "code": getattr(error, "code", type(error).__name__)},
                     )
+                next_kind = "design_retry" if design_feedback else "syntax_retry"
                 if (
-                    attempt == 0
+                    attempt < 2
+                    and retry_kind in (None, next_kind)
                     and target == "WEB_STATIC"
                     and isinstance(error, ProposalGenerationError)
                     and (
@@ -935,12 +942,12 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     and item is not None
                 ):
                     retry = {
-                        "attempt": 2,
+                        "attempt": attempt + 2,
                         "previous_generation_id": str(child.request.request_id),
                         "previous_request_hash": child.request.content_hash,
                         "code": error.code,
                     }
-                    retry_kind = "design_retry" if design_feedback else "syntax_retry"
+                    retry_kind = next_kind
                     if design_feedback:
                         retry.update(
                             previous_source_sha256=design_feedback["previous_source_sha256"],
@@ -964,6 +971,10 @@ def _design_retry_instruction():
         "declared control and TEXT output, and data-design-target on each transition trigger. "
         "Use the required_screens order and the full approved prototype in implementation_contract. "
         "Do not remove controls, modify app.js, substitute controls, or claim validation succeeded. "
+        "When feedback.diagnostic.reason is HTML_IDS_MUST_BE_UNIQUE: the ids listed in duplicates appear more "
+        "than once; every id in the page is unique, each approved code is the id and marker of exactly one "
+        "element inside its own screen, and extra elements such as error messages use their own ids that are "
+        "not SCR or ELM codes. "
         "When feedback.diagnostic.reason is EXACTLY_ONE_MARKER_REQUIRED: actual_count 2 means a second element carries that code, so remove the marker from the extra element and keep the one in the approved screen and order; actual_count 0 means the element is missing, so add exactly one element with that code in the required position. "
         "When feedback.diagnostic.reason is APPROVED_CONTROL_KIND_REQUIRED: the element with that code uses the wrong tag (actual_tag); an expected_kind TEXT output must be a single p, div, span, output, pre, ul, ol or table element whose text app.js updates, never an input, while TEXT_INPUT is input, SELECT is select, BUTTON is button and LINK is a."
     )
@@ -1017,6 +1028,25 @@ _SYNTAX_REMEDIES = {
         "recorded failure still stands. Apply the correction described in previous_rationale to the complete "
         "file: change the function or page statement that produces the observed behaviour, and when the "
         "recorded failure names a page element, make that element show the expected content. "
+    ),
+    "MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION": (
+        "MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION means a function or private helper calls a name that no part "
+        "defines, which throws ReferenceError in Node: when the callee is a pure computation, implement it in "
+        "private_helpers with that exact name; when it updates the page, delete the call from the function and "
+        "perform the page update in browser_setup right after the statement that calls the function, using its "
+        "returned value. "
+    ),
+    "BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS": (
+        "BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS means browser_setup contains only function declarations that "
+        "nothing calls, so the page never wires its controls: write the page statements directly in "
+        "browser_setup (element lookups, listeners, initial rendering) and keep declared helpers only when a "
+        "statement in browser_setup calls them. "
+    ),
+    "NODE_TEST_USES_UNEXPORTED_NAME": (
+        "NODE_TEST_USES_UNEXPORTED_NAME means the test reads a name from require('./app.js') that app.js does "
+        "not export (listed in detail): app.js exports only its business functions and resetSharedState, so "
+        "observe state through the values those functions return and never through internal variables; do not "
+        "add exports. "
     ),
     "NODE_TEST_UNKNOWN_ASSERTION": (
         "The assert method on the reported line does not exist in node:assert/strict: replace notOk "
