@@ -416,7 +416,7 @@ def test_static_repair_is_validated_and_retried_once_with_the_diagnostic(tmp_pat
     )
 
 
-def test_repeated_static_repair_failure_stops_after_one_retry(tmp_path):
+def test_repeated_static_repair_failure_stops_after_two_retries(tmp_path):
     ctx = static_repair_context()
     broken = app_with("  document.title = name;\n  items.push(name);\n  return { ok: true };")
     generator, transport = sequence_generator(tmp_path, [repair_change("app.js", broken)])
@@ -425,8 +425,8 @@ def test_repeated_static_repair_failure_stops_after_one_retry(tmp_path):
     operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
         asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
-    assert len(transport.calls) == 2
-    assert len(store.requests) == 2
+    assert len(transport.calls) == 3
+    assert len(store.requests) == 3
     for generation_id in store.requests:
         assert outcome_events(store, generation_id) == [
             ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
@@ -465,7 +465,7 @@ def test_static_repair_rejections_reach_the_retry_prompt(tmp_path, path, content
     operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
         asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
-    assert len(transport.calls) == 2
+    assert len(transport.calls) == 3
     retry_request = list(store.requests.values())[1][0]
     feedback = json.loads(
         retry_request.system_instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]
@@ -500,7 +500,7 @@ def test_unchanged_repair_is_retried_with_the_previous_rationale(tmp_path):
     )
 
 
-def test_whitespace_only_repair_counts_as_unchanged_and_stops_after_one_retry(tmp_path):
+def test_whitespace_only_repair_counts_as_unchanged_and_stops_after_two_retries(tmp_path):
     ctx = static_repair_context()
     blank_line_removed = BASE_APP.replace("}\n\n", "}\n", 1)
     assert blank_line_removed != BASE_APP
@@ -512,7 +512,7 @@ def test_whitespace_only_repair_counts_as_unchanged_and_stops_after_one_retry(tm
     operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
     with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
         asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
-    assert len(transport.calls) == 2
+    assert len(transport.calls) == 3
     for generation_id in store.requests:
         assert outcome_events(store, generation_id) == [
             ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),

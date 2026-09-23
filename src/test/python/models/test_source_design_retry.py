@@ -80,7 +80,11 @@ def test_one_html_retry_preserves_native_bytes_and_exact_structural_feedback(
     else:
         result = execute(generator, ctx, store)
         assert result.output.files[0].content == HTML
-    assert len(transport.calls) == len(store.requests) == (3 if second_failure else 5)
+    assert (
+        len(transport.calls)
+        == len(store.requests)
+        == (4 if second_failure == "design" else 3 if second_failure else 5)
+    )
     parent, failed, retried, *_remaining = store.requests
     original = json.loads(store.requests[failed][0].input_payload_json)["context"]
     repeat = json.loads(store.requests[retried][0].input_payload_json)["context"]

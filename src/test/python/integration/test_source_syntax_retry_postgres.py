@@ -60,7 +60,7 @@ def test_syntax_retry_preserves_failed_child_and_publishes_only_complete_accepte
                         sa.text("SELECT id, snapshot_json FROM model_proposal_generations")
                     )
                 ).all()
-                assert len(requests) == (4 if exhausted else 5)
+                assert len(requests) == 5
                 retries = [
                     (
                         identifier,
@@ -72,8 +72,10 @@ def test_syntax_retry_preserves_failed_child_and_publishes_only_complete_accepte
                     if "syntax_retry"
                     in json.loads(json.loads(snapshot)["request"]["input_payload_json"])["context"]
                 ]
-                assert len(retries) == 1
-                retry_id, retry_ctx = retries[0]
+                assert len(retries) == (2 if exhausted else 1)
+                retry_id, retry_ctx = max(
+                    retries, key=lambda item: item[1]["syntax_retry"]["attempt"]
+                )
                 failed_id = retry_ctx["syntax_retry"]["previous_generation_id"]
                 events = (
                     await session.execute(
