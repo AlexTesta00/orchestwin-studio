@@ -195,11 +195,21 @@ def test_rejects_result_after_back_when_mockup_places_it_before():
 
 
 @pytest.mark.parametrize(
-    "extra", ['<p id="number">Other</p>', '<a id="back">Back</a><a id="back">Again</a>']
+    "extra,duplicate",
+    [
+        ('<p id="number">Other</p>', "number"),
+        ('<a id="back">Back</a><a id="back">Again</a>', "back"),
+    ],
 )
-def test_rejects_duplicate_html_ids_even_on_extra_controls(extra):
-    with pytest.raises(ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"):
+def test_rejects_duplicate_html_ids_even_on_extra_controls(extra, duplicate):
+    with pytest.raises(
+        ProposalGenerationError, match="SOURCE_DESIGN_STRUCTURE_MISMATCH"
+    ) as failure:
         validate_prototype_html(HTML + extra, PROTOTYPE)
+    assert failure.value.diagnostic == {
+        "reason": "HTML_IDS_MUST_BE_UNIQUE",
+        "duplicates": [duplicate],
+    }
 
 
 def test_accepts_unique_html_ids_on_extra_controls():
