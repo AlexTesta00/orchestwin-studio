@@ -20,6 +20,7 @@ import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
 import ProjectFinalePanel, { type FinaleRecapRow } from "@/components/ProjectFinalePanel.vue";
 import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
 import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
+import ProjectSyntheticEvaluation from "@/components/ProjectSyntheticEvaluation.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
@@ -616,6 +617,13 @@ onUnmounted(() => {
             v-show="hasWebSource"
             :project-id="projectId"
             :locale="locale === 'it' ? 'it' : 'en'"
+          />
+          <ProjectSyntheticEvaluation
+            v-if="web.currentExecution?.report.status === 'PASSED'"
+            :key="`${projectId}:${web.currentExecution.id}:evaluation`"
+            :project-id="projectId"
+            :execution-id="web.currentExecution.id"
+            :authorize="authorized"
           />
           <ProjectFinalePanel
             v-if="projectComplete"

@@ -19,6 +19,7 @@ export type AuthorizedFinalizationRequest = <T>(
 ) => Promise<T>;
 
 interface FinalizationStoreState {
+  evaluationRuns: SyntheticEvaluationRunPayload[];
   evaluationRun: SyntheticEvaluationRunPayload | null;
   findings: SyntheticFindingPayload[];
   aggregation: EvaluationAggregationPayload | null;
@@ -43,6 +44,7 @@ function sortedReviews(reviews: FinalReviewPayload[]): FinalReviewPayload[] {
 
 export const useFinalizationStore = defineStore("finalization", {
   state: (): FinalizationStoreState => ({
+    evaluationRuns: [],
     evaluationRun: null,
     findings: [],
     aggregation: null,
@@ -103,6 +105,47 @@ export const useFinalizationStore = defineStore("finalization", {
         this.fail(error);
       } finally {
         this.finish("evaluation");
+      }
+    },
+
+    async loadEvaluationRuns(
+      projectId: string,
+      authorize: AuthorizedFinalizationRequest,
+      api: FinalizationApi = finalizationApi,
+    ): Promise<void> {
+      this.begin("evaluation-runs");
+      try {
+        this.evaluationRuns = await authorize((token) => api.evaluationRuns(projectId, token));
+      } catch (error) {
+        this.fail(error);
+      } finally {
+        this.finish("evaluation-runs");
+      }
+      const latest = this.evaluationRuns[0];
+      if (latest !== undefined && this.evaluationRun?.id !== latest.id) {
+        await this.loadEvaluation(latest.id, authorize, api);
+      }
+    },
+
+    async createEvaluationRun(
+      projectId: string,
+      executionId: string,
+      authorize: AuthorizedFinalizationRequest,
+      api: FinalizationApi = finalizationApi,
+    ): Promise<void> {
+      this.begin("evaluation-create");
+      try {
+        const created = await authorize((token) =>
+          api.createEvaluationRun(projectId, { execution_id: executionId }, token),
+        );
+        this.evaluationRun = created.snapshot;
+        this.findings = created.findings;
+        this.aggregation = created.aggregation;
+        this.evaluationRuns = [created.snapshot, ...this.evaluationRuns];
+      } catch (error) {
+        this.fail(error);
+      } finally {
+        this.finish("evaluation-create");
       }
     },
 

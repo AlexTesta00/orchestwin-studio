@@ -52,6 +52,12 @@ const bundle = computed(() => store.exportBundle);
 const blockingChecks = computed(
   () => review.value?.checks.filter((check) => check.blocks_gate8) ?? [],
 );
+const evaluationRecorded = computed(
+  () =>
+    review.value?.checks.some(
+      (check) => check.kind === "SYNTHETIC_EVALUATION" && check.status === "SATISFIED",
+    ) ?? false,
+);
 const approvalEvent = computed(
   () => approval.value?.approval_event_id ?? approvalEventId.value ?? null,
 );
@@ -287,6 +293,9 @@ onMounted(load);
         class="mt-3 rounded-panel border border-fail-line bg-fail-bg px-4 py-3 text-sm font-semibold text-fail-dark"
       >
         {{ store.error }}
+      </p>
+      <p v-if="evaluationRecorded" class="mt-3 text-sm text-ink-2" data-testid="finale-evaluation">
+        {{ t("finale.export.evaluationRecorded") }}
       </p>
       <p v-if="stage === 'approved' && approvalEvent === null" class="mt-3 text-sm text-ink-3">
         {{ t("finale.export.eventMissing") }}

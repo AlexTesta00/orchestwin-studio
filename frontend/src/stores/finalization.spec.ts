@@ -101,19 +101,30 @@ function api(): FinalizationApi {
   const aggregation: EvaluationAggregationPayload = {
     evaluation_run_id: "evaluation-1",
     evaluation_run_hash: "b".repeat(64),
-    shared_finding_groups: [],
-    role_specific_finding_ids: ["UTF-001"],
+    shared_findings: [],
+    role_specific_findings: [],
     direct_conflicts: [],
     unresolved_trade_offs: [],
     evidence_gaps: [],
-    human_validation_questions: ["Can a target user complete the task?"],
+    human_validation_questions: [
+      {
+        question_id: "q-1",
+        related_finding_ids: [],
+        question: "Can a target user complete the task?",
+      },
+    ],
+    aggregation_policy: "EXACT_MATCH_PLUS_EXPLICIT_CONFLICT_DECLARATIONS",
+    independent_human_sample_count: 0,
     content_hash: "d".repeat(64),
     disclaimer: "Simulated feedback, not empirical evidence.",
+    is_empirical_evidence: false,
   };
   return {
     evaluationRun: vi.fn().mockResolvedValue(evaluation),
     findings: vi.fn().mockResolvedValue(findings),
     aggregation: vi.fn().mockResolvedValue(aggregation),
+    evaluationRuns: vi.fn().mockResolvedValue([]),
+    createEvaluationRun: vi.fn(),
     finalReviews: vi.fn().mockResolvedValue([review(2), review(1)]),
     submitFinalReview: vi.fn().mockResolvedValue({
       gate_id: "gate-1",
