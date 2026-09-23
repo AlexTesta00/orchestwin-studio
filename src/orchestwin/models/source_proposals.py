@@ -313,18 +313,29 @@ class _RepairRejection(Exception):
         self.error = error
 
 
+def _unchanged(item, base, sources):
+    if hashlib.sha256(item.content.encode("utf-8")).hexdigest() == base.get(item.normalized_path):
+        return True
+    source = sources.get(item.normalized_path)
+    return source is not None and "".join(item.content.split()) == "".join(source.split())
+
+
 async def _validate_static_repair(context, output):
     sources = {
         entry["normalized_path"]: entry["content"] for entry in context.get("source_files", ())
     }
     base = {entry["normalized_path"]: entry["sha256_digest"] for entry in context["base_files"]}
-    changed = [
-        item
-        for item in output.changes
-        if item.operation != "DELETE"
-        and hashlib.sha256(item.content.encode("utf-8")).hexdigest()
-        != base.get(item.normalized_path)
-    ]
+    replacements = [item for item in output.changes if item.operation != "DELETE"]
+    changed = [item for item in replacements if not _unchanged(item, base, sources)]
+    if replacements and not changed and len(replacements) == len(output.changes):
+        raise _RepairRejection(
+            replacements[0],
+            SourceSyntaxError(
+                reason="REPAIR_UNCHANGED",
+                parser=PARSER,
+                detail=", ".join(sorted(item.normalized_path for item in replacements)),
+            ),
+        )
     app = next(
         (item.content for item in changed if item.normalized_path == "app.js"),
         sources.get("app.js", ""),
@@ -347,7 +358,7 @@ async def _validate_static_repair(context, output):
             raise _RepairRejection(item, error) from error
 
 
-async def _repair_retry(rejection):
+async def _repair_retry(rejection, rationale):
     from orchestwin.models.source_file_generation import (
         _syntax_retry_feedback,
         _syntax_retry_instruction,
@@ -364,9 +375,13 @@ async def _repair_retry(rejection):
             previous_request_hash=scope.request.content_hash,
         )
         scope.retire(role="REJECTED_REPAIR_ATTEMPT", code=code)
-    feedback = _syntax_retry_feedback(rejection.item, rejection.error)
+    feedback = {
+        **_syntax_retry_feedback(rejection.item, rejection.error),
+        "previous_rationale": rationale,
+    }
     return retry, (
-        " Return the complete file: start from the base content in source_files and apply only the correction. "
+        " Return the complete file: start from the base content in source_files and apply the correction "
+        "described in previous_rationale of the feedback below, so that the recorded failure no longer occurs. "
         "The complete app.js keeps its layout: shared declarations, pure functions, resetSharedState, one document guard "
         "if (typeof document !== 'undefined') { document.addEventListener('DOMContentLoaded', function () { ... }); } "
         "holding every statement that touches the page, and the final module guard with module.exports; "
@@ -412,7 +427,7 @@ class ModelSourceProposalAdapter:
                     await _validate_static_repair(context, output)
                 except _RepairRejection as rejection:
                     if attempt == 0 and rejection.error.code == "SOURCE_JAVASCRIPT_SYNTAX_INVALID":
-                        retry, retry_instruction = await _repair_retry(rejection)
+                        retry, retry_instruction = await _repair_retry(rejection, output.rationale)
                         continue
                     raise rejection.error from rejection
             binding = build_source_binding(task, context, output)

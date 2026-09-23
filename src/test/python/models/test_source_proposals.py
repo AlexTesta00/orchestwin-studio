@@ -191,8 +191,10 @@ def test_repair_cannot_drop_all_tests_but_can_rename_a_test(
 )
 def test_invalid_source_output_is_rejected_without_fallback(tmp_path, scenario):
     task = (
-        "web-repair"
-        if scenario in {"unknown_operation", "unchanged", "missing_base", "delete_content"}
+        "jvm-repair"
+        if scenario == "unchanged"
+        else "web-repair"
+        if scenario in {"unknown_operation", "missing_base", "delete_content"}
         else "web-source"
     )
     payload, ctx = output(task), context(task)
@@ -470,6 +472,58 @@ def test_static_repair_rejections_reach_the_retry_prompt(tmp_path, path, content
     )
     assert feedback["diagnostic"]["reason"] == reason
     assert feedback["diagnostic"].get("detail") == detail
+
+
+def test_unchanged_repair_is_retried_with_the_previous_rationale(tmp_path):
+    ctx = static_repair_context()
+    fixed = app_with(
+        "  items.push(String(name).trim());\n  return { ok: true, count: items.length };"
+    )
+    result, store, transport = run_static_repair(
+        tmp_path, ctx, [repair_change("app.js", BASE_APP), repair_change("app.js", fixed)]
+    )
+    assert len(transport.calls) == 2
+    rejected, accepted = store.requests
+    assert outcome_events(store, rejected) == [
+        ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+        ("APPLICATION_RESULT", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+    ]
+    instruction = store.requests[accepted][0].system_instruction
+    feedback = json.loads(instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1])
+    assert feedback["diagnostic"]["reason"] == "REPAIR_UNCHANGED"
+    assert feedback["diagnostic"]["detail"] == "app.js"
+    assert feedback["previous_rationale"] == "Repair the recorded failure."
+    assert "apply the correction described in previous_rationale" in instruction
+    assert "REPAIR_UNCHANGED means the previous repair returned the base content" in instruction
+    assert result.source_binding["changes"][0]["content_sha256"] == (
+        hashlib.sha256(fixed.encode()).hexdigest()
+    )
+
+
+def test_whitespace_only_repair_counts_as_unchanged_and_stops_after_one_retry(tmp_path):
+    ctx = static_repair_context()
+    blank_line_removed = BASE_APP.replace("}\n\n", "}\n", 1)
+    assert blank_line_removed != BASE_APP
+    generator, transport = sequence_generator(
+        tmp_path, [repair_change("app.js", blank_line_removed)]
+    )
+    adapter = ModelSourceProposalAdapter(generator)
+    store = MemoryEvidence()
+    operation = Command(store, lambda: adapter.propose(task="web-repair", context=ctx))
+    with pytest.raises(ProposalGenerationError, match="SOURCE_JAVASCRIPT_SYNTAX_INVALID"):
+        asyncio.run(operation.run(owner_user_id=uuid4(), project_id=UUID(ctx["project_id"])))
+    assert len(transport.calls) == 2
+    for generation_id in store.requests:
+        assert outcome_events(store, generation_id) == [
+            ("ADAPTER_REJECTED", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+            ("APPLICATION_RESULT", "SOURCE_JAVASCRIPT_SYNTAX_INVALID"),
+        ]
+    retry_request = list(store.requests.values())[1][0]
+    feedback = json.loads(
+        retry_request.system_instruction.split("SYNTAX_RETRY_FEEDBACK_JSON=", 1)[1]
+    )
+    assert feedback["diagnostic"]["reason"] == "REPAIR_UNCHANGED"
+    assert feedback["previous_rationale"] == "Repair the recorded failure."
 
 
 def test_stateless_repairs_and_other_files_need_no_reset_registration(tmp_path):

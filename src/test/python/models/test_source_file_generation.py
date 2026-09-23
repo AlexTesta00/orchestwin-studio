@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -21,6 +22,7 @@ from orchestwin.models.source_file_generation import (
     _manifest_observation_instruction,
     _syntax_retry_feedback,
     _syntax_retry_instruction,
+    _validate_static_module,
 )
 from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.source_syntax import SourceSyntaxError
@@ -458,6 +460,42 @@ def test_core_call_retry_names_the_caller_and_the_helper_to_move():
         "WEB_STATIC",
     )
     assert "The private helper that references errorMessage belongs in browser_setup" in helper
+
+
+def test_static_module_feedback_lists_every_violation():
+    parts = SimpleNamespace(
+        shared_state=[],
+        private_helpers="",
+        functions=[
+            SimpleNamespace(
+                name="save",
+                parameters="value",
+                body=(
+                    "  localStorage.setItem('value', value);\n"
+                    "  errorBox.textContent = '';\n"
+                    "  return value;"
+                ),
+            )
+        ],
+        browser_setup=(
+            "    const errorBox = document.getElementById('error');\n"
+            "    save(errorBox.textContent);"
+        ),
+    )
+    item = SimpleNamespace(normalized_path="app.js", content=assemble_static_module(parts))
+    with pytest.raises(SourceSyntaxError) as raised:
+        _validate_static_module(item, parts)
+    diagnostic = raised.value.diagnostic
+    assert diagnostic["reason"] == "MODULE_FUNCTION_TOUCHES_DOM"
+    assert diagnostic["detail"] == "save uses localStorage"
+    assert [extra["reason"] for extra in diagnostic["additional"]] == [
+        "MODULE_FUNCTION_CALLS_BROWSER_HELPER"
+    ]
+    assert diagnostic["additional"][0]["detail"] == "save uses errorBox"
+    instruction = _syntax_retry_instruction({"diagnostic": diagnostic}, "WEB_STATIC")
+    assert "delete every storage read and write" in instruction
+    assert "In save delete every reference to errorBox" in instruction
+    assert "correct all of them in this single regeneration" in instruction
 
 
 def test_redeclared_identifier_retry_names_the_identifier_to_rename():
