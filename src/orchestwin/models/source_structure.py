@@ -233,8 +233,14 @@ def validate_reserved_names(parts):
         raise SourceSyntaxError(reason="RESERVED_MODULE_NAME", parser=PARSER, detail=RESET_FUNCTION)
 
 
+_DECLARATION_ONLY = re.compile(r"^(?:async\s+)?(?:function\b|class\b)")
+
+
 def validate_browser_setup(parts):
     browser_setup = _part(parts, "browser_setup")
+    statements = [text.strip() for _, text in _statements(_blank(browser_setup)) if text.strip()]
+    if statements and all(_DECLARATION_ONLY.match(text) for text in statements):
+        raise SourceSyntaxError(reason="BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS", parser=PARSER)
     match = _NESTED_READY.search(browser_setup)
     if match is None:
         return
@@ -311,6 +317,157 @@ def validate_core_calls(parts):
         )
 
 
+_JS_KEYWORDS = frozenset(
+    {
+        "async",
+        "await",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "export",
+        "finally",
+        "for",
+        "function",
+        "get",
+        "if",
+        "import",
+        "in",
+        "instanceof",
+        "let",
+        "new",
+        "of",
+        "return",
+        "set",
+        "static",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "try",
+        "typeof",
+        "var",
+        "void",
+        "while",
+        "with",
+        "yield",
+    }
+)
+_JS_CALLABLES = frozenset(
+    {
+        "AbortController",
+        "Array",
+        "ArrayBuffer",
+        "BigInt",
+        "Blob",
+        "Boolean",
+        "CustomEvent",
+        "DataView",
+        "Date",
+        "Error",
+        "EvalError",
+        "Event",
+        "Float64Array",
+        "FormData",
+        "Function",
+        "Headers",
+        "Int32Array",
+        "Intl",
+        "JSON",
+        "Map",
+        "Math",
+        "Number",
+        "Object",
+        "Promise",
+        "Proxy",
+        "RangeError",
+        "ReferenceError",
+        "Reflect",
+        "RegExp",
+        "Request",
+        "Response",
+        "Set",
+        "String",
+        "Symbol",
+        "SyntaxError",
+        "TextDecoder",
+        "TextEncoder",
+        "TypeError",
+        "URIError",
+        "URL",
+        "URLSearchParams",
+        "Uint8Array",
+        "WeakMap",
+        "WeakSet",
+        "clearInterval",
+        "clearTimeout",
+        "decodeURI",
+        "decodeURIComponent",
+        "encodeURI",
+        "encodeURIComponent",
+        "escape",
+        "eval",
+        "isFinite",
+        "isNaN",
+        "parseFloat",
+        "parseInt",
+        "queueMicrotask",
+        "require",
+        "setInterval",
+        "setTimeout",
+        "structuredClone",
+        "unescape",
+    }
+)
+_CLASS_NAME = re.compile(r"\bclass\s+([A-Za-z_$][\w$]*)")
+_NESTED_PARAMETERS = re.compile(
+    r"function\s*[A-Za-z_$]?[\w$]*\s*\(([^)]*)\)|\(([^()]*)\)\s*=>|([A-Za-z_$][\w$]*)\s*=>"
+)
+_DEFINITION = re.compile(r"\b([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{")
+
+
+def validate_defined_calls(parts):
+    browser_names = set(_DECLARED.findall(_blank(_part(parts, "browser_setup"))))
+    helpers = _blank(_part(parts, "private_helpers"))
+    module_names = (
+        {_part(declaration, "name") for declaration in _part(parts, "shared_state")}
+        | set(_DECLARED.findall(helpers))
+        | set(_CLASS_NAME.findall(helpers))
+        | {_part(function, "name") for function in _part(parts, "functions")}
+        | {RESET_FUNCTION}
+    )
+    offences = []
+    first_line = None
+    for name, body, parameters in _scopes(parts):
+        local = (
+            set(_DECLARED.findall(body))
+            | set(_CLASS_NAME.findall(body))
+            | set(_DEFINITION.findall(body))
+            | set(_PARAMETER.findall(parameters))
+        )
+        for match in _NESTED_PARAMETERS.finditer(body):
+            local.update(_PARAMETER.findall("".join(group or "" for group in match.groups())))
+        known = module_names | local | browser_names | _JS_KEYWORDS | _JS_CALLABLES
+        unknown = sorted(item for item in set(_CALL.findall(body)) if item not in known)
+        if unknown:
+            offences.append(name + " calls " + ", ".join(unknown))
+            if first_line is None:
+                first_line = _call_line(parts, name, unknown[0])
+    if offences:
+        raise SourceSyntaxError(
+            reason="MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION",
+            line=first_line,
+            parser=PARSER,
+            detail="; ".join(offences),
+        )
+
+
 def validate_shared_state_updates(shared_state, bodies):
     blanked_bodies = _blank(bodies)
     for declaration in shared_state:
@@ -354,7 +511,30 @@ NODE_ASSERTIONS = frozenset(
 )
 
 
-def validate_node_test_contract(content, *, stateful=False):
+_TEST_DESTRUCTURE = re.compile(
+    r"\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(\s*['\"]\./app\.js['\"]\s*\)"
+)
+_TEST_ALIAS = re.compile(
+    r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['\"]\./app\.js['\"]\s*\)"
+    r"(?!\s*\.)"
+)
+_TEST_MEMBER = re.compile(r"require\(\s*['\"]\./app\.js['\"]\s*\)\s*\.\s*([A-Za-z_$][\w$]*)")
+
+
+def _test_module_names(content, blanked):
+    names = set()
+    for match in _TEST_DESTRUCTURE.finditer(content):
+        for entry in match.group(1).split(","):
+            entry = entry.split("=", 1)[0].split(":", 1)[0].strip()
+            if entry and not entry.startswith("...") and _IDENTIFIER.fullmatch(entry):
+                names.add(entry)
+    names.update(_TEST_MEMBER.findall(content))
+    for alias in _TEST_ALIAS.findall(content):
+        names.update(re.findall(r"\b" + re.escape(alias) + r"\s*\.\s*([A-Za-z_$][\w$]*)", blanked))
+    return names
+
+
+def validate_node_test_contract(content, *, stateful=False, exports=None):
     blanked = _blank(content)
     if _TEST_FRAMEWORK.search(content) is None:
         raise SourceSyntaxError(reason="NODE_TEST_FRAMEWORK_MISSING", parser=PARSER)
@@ -371,6 +551,14 @@ def validate_node_test_contract(content, *, stateful=False):
         raise SourceSyntaxError(
             reason="NODE_TEST_MISSING_STATE_RESET", parser=PARSER, detail=RESET_FUNCTION
         )
+    if exports is not None:
+        unknown = sorted(_test_module_names(content, blanked) - set(exports))
+        if unknown:
+            raise SourceSyntaxError(
+                reason="NODE_TEST_USES_UNEXPORTED_NAME",
+                parser=PARSER,
+                detail=", ".join(unknown),
+            )
     for call in _TEST_ASSERTION.finditer(blanked):
         if call.group(1) not in NODE_ASSERTIONS:
             raise SourceSyntaxError(

@@ -3,6 +3,7 @@ import pytest
 from orchestwin.models.source_structure import (
     validate_browser_setup,
     validate_core_calls,
+    validate_defined_calls,
     validate_node_test_contract,
     validate_reserved_names,
     validate_shared_state_updates,
@@ -472,6 +473,91 @@ def test_property_access_and_object_keys_are_not_browser_uses(body):
         + "\nconst error = document.getElementById('e');\nconst screen = document.getElementById('s');"
     )
     validate_core_calls(_parts(body, browser_setup))
+
+
+def test_core_function_calling_an_undefined_function_is_rejected():
+    parts = _parts(
+        "  updateDisplay();\n  return format(amount);",
+        BROWSER,
+        "function format(value) {\n  return String(value);\n}",
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_defined_calls(parts)
+    assert failure.value.diagnostic["reason"] == "MODULE_FUNCTION_CALLS_UNDEFINED_FUNCTION"
+    assert failure.value.diagnostic["detail"] == "validateInput calls updateDisplay"
+    assert failure.value.diagnostic["line"] == 8
+
+
+@pytest.mark.parametrize(
+    "body,private_helpers",
+    [
+        ("  return format(amount);", "function format(value) {\n  return String(value);\n}"),
+        ("  return render(amount);", ""),
+        ("  return Number(parseFloat(amount)) + Math.round(amount);", ""),
+        ("  const clean = (value) => value.trim();\n  return clean(amount);", ""),
+        ("  function inner(value) { return value; }\n  return inner(amount);", ""),
+        (
+            "  return [amount].map(function (value) { return value; }).filter((v) => keep(v));",
+            "function keep(value) {\n  return Boolean(value);\n}",
+        ),
+        ("  return items.map((item, fn) => fn(item));", ""),
+        ("  if (amount) { return new Error('x'); }\n  return showErrorMessage(amount);", ""),
+        ("  return new Formatter(amount).run();", "class Formatter {\n  run() { return 1; }\n}"),
+        ("  return typeof (amount) === 'string' && items.includes(amount);", ""),
+    ],
+)
+def test_defined_helpers_parameters_and_builtins_are_not_undefined_calls(body, private_helpers):
+    validate_defined_calls(_parts(body, BROWSER, private_helpers))
+
+
+def test_browser_setup_that_only_declares_functions_is_rejected():
+    parts = _parts(
+        "  return true;",
+        "function browser_setup() {\n  const out = document.getElementById('o');\n"
+        "  out.textContent = 'x';\n}",
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_browser_setup(parts)
+    assert failure.value.diagnostic["reason"] == "BROWSER_SETUP_ONLY_DECLARES_FUNCTIONS"
+
+
+def test_browser_setup_declaring_and_calling_a_function_passes():
+    validate_browser_setup(
+        _parts("  return true;", "function wire() {\n  document.title = 'x';\n}\nwire();")
+    )
+
+
+def test_node_tests_reading_unexported_names_are_rejected():
+    content = (
+        "const test = require('node:test');\n"
+        "const assert = require('node:assert/strict');\n"
+        "const { addGuest, listGuests: list } = require('./app.js');\n"
+        "test('reads internals', () => {\n"
+        "  const guests = require('./app.js').guests;\n"
+        "  assert.equal(guests.length, list().length);\n"
+        "});\n"
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_node_test_contract(content, exports={"addGuest", "listGuests"})
+    assert failure.value.diagnostic["reason"] == "NODE_TEST_USES_UNEXPORTED_NAME"
+    assert failure.value.diagnostic["detail"] == "guests"
+    validate_node_test_contract(content, exports={"addGuest", "listGuests", "guests"})
+    validate_node_test_contract(content)
+
+
+def test_node_tests_using_a_module_alias_only_flag_members_outside_the_exports():
+    content = (
+        "const test = require('node:test');\n"
+        "const assert = require('node:assert/strict');\n"
+        "const app = require('./app.js');\n"
+        "test('alias', () => {\n"
+        "  assert.equal(app.listGuests().length, 0);\n"
+        "  assert.equal(app.total, 0);\n"
+        "});\n"
+    )
+    with pytest.raises(SourceSyntaxError) as failure:
+        validate_node_test_contract(content, exports={"addGuest", "listGuests"})
+    assert failure.value.diagnostic["detail"] == "total"
 
 
 def test_core_function_offences_are_listed_exhaustively_with_the_first_line():

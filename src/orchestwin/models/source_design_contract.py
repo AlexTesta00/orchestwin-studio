@@ -199,7 +199,8 @@ def validate_prototype_html(content, prototype):
         return False
 
     identifiers = [node.attrs["id"] for node in document.nodes if "id" in node.attrs]
-    require(len(identifiers) == len(set(identifiers)), "HTML_IDS_MUST_BE_UNIQUE")
+    duplicates = sorted({value for value in identifiers if identifiers.count(value) > 1})
+    require(not duplicates, "HTML_IDS_MUST_BE_UNIQUE", duplicates=duplicates)
     screens = {screen["id"]: screen for screen in prototype["screens"]}
     transitions = {edge["trigger_element_id"]: edge for edge in prototype.get("transitions", [])}
     for screen in screens.values():
