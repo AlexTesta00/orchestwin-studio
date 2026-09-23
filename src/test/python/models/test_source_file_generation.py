@@ -525,6 +525,15 @@ def test_new_static_reasons_carry_remedies():
         assert expected in instruction
 
 
+def test_shared_state_retry_names_the_statement_to_insert():
+    instruction = _syntax_retry_instruction(
+        {"diagnostic": {"reason": "SHARED_STATE_NEVER_UPDATED", "detail": "presents"}},
+        "WEB_STATIC",
+    )
+    assert "write presents.push(record) when presents is an array" in instruction
+    assert "browser_setup only calls it and never modifies presents itself" in instruction
+
+
 def test_second_syntax_retry_binds_to_the_rejected_second_attempt(tmp_path):
     ctx, payload, store = context(), complete_output(), MemoryEvidence()
 

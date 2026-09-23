@@ -1119,6 +1119,19 @@ _SYNTAX_REMEDIES = {
 _CORE_CALL_PAIR = re.compile(r"^(\w+) (calls|uses) (.+)$")
 
 
+def _state_update_moves(detail):
+    if not isinstance(detail, str) or not detail.strip():
+        return ""
+    name = detail.strip()
+    return (
+        f"Inside the exported function that registers a record, before its return statement, write "
+        f"{name}.push(record) when {name} is an array, {name} += 1 when it is a counter, "
+        f"{name}[key] = record when it is an object and {name}.set(key, record) when it is a Map; "
+        f"that function returns the stored record and the new count, and browser_setup only calls it "
+        f"and never modifies {name} itself. "
+    )
+
+
 def _core_call_moves(detail):
     if not isinstance(detail, str):
         return ""
@@ -1169,6 +1182,8 @@ def _syntax_retry_instruction(feedback, target):
     for item in (diagnostic, *additional):
         if item.get("reason") == "MODULE_FUNCTION_CALLS_BROWSER_HELPER":
             remedy += _core_call_moves(item.get("detail"))
+        if item.get("reason") == "SHARED_STATE_NEVER_UPDATED":
+            remedy += _state_update_moves(item.get("detail"))
     if additional:
         remedy += (
             "The diagnostic lists every further violation of the previous attempt under additional: "
