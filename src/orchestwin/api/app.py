@@ -31,6 +31,7 @@ from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.source_generation import create_source_generation_router
 from orchestwin.api.static_inspections import create_static_inspection_router
+from orchestwin.api.synthetic_evaluation import create_synthetic_evaluation_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
@@ -198,6 +199,7 @@ def create_app(
         create_team_router(),
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
         create_twin_chat_router(),
+        create_synthetic_evaluation_router(),
         create_requirements_router(),
         create_design_router(),
         create_design_mockup_router(),

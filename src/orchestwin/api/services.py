@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -239,6 +240,7 @@ class ApplicationRuntime:
     jvm_operation_store: SqlAlchemyJvmOperationStore | None = None
     workflow_run_api_service: WorkflowRunApiService | None = None
     finalization_api_service: FinalizationApiService | None = None
+    sandbox_evidence_root: Path | None = None
     training_api_service: TrainingApiService | None = None
 
     async def close(self) -> None:
@@ -366,6 +368,7 @@ def create_default_runtime(
             export_root=resolved_settings.final_export_storage_root,
             artifact_graph_query_service=artifact_graph_query_service,
         ),
+        sandbox_evidence_root=resolved_settings.sandbox_evidence_storage_root,
         brownfield_service=brownfield.brownfield,
         execution_query_service=brownfield.execution_queries,
         high_impact_service=brownfield.high_impact,

@@ -22,6 +22,7 @@ from orchestwin.api.finalization import (
     FinalizationApiStatus,
     SubmitFinalReviewCommand,
 )
+from orchestwin.api.synthetic_evaluation import evaluation_run_payload, synthetic_finding_payload
 from orchestwin.artifacts.architecture_persistence import SqlAlchemyArchitecturePackageRepository
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.artifacts.export_archive import (
@@ -41,6 +42,9 @@ from orchestwin.artifacts.export_persistence import (
     StoredExportBundle,
 )
 from orchestwin.artifacts.web_source_persistence import SqlAlchemyWebSourceRevisionRepository
+from orchestwin.evaluation.aggregation import aggregate_synthetic_evaluation
+from orchestwin.evaluation.persistence import SqlAlchemySyntheticEvaluationRepository
+from orchestwin.evaluation.run_restore import synthetic_evaluation_run_from_snapshot
 from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.persistence.briefs import SqlAlchemyProjectBriefRepository
@@ -135,6 +139,7 @@ class _ProjectState:
     architecture: Any
     source: Any
     attempt: Any
+    evaluation: Any = None
 
     @property
     def execution_passed(self) -> bool:
@@ -278,8 +283,14 @@ def _checks(state: _ProjectState) -> tuple[FinalReviewCheck, ...]:
         ),
         _check(
             FinalReviewCheckKind.SYNTHETIC_EVALUATION,
-            None,
-            "No synthetic evaluation run was executed for this project.",
+            None if state.evaluation is None else True,
+            "No synthetic evaluation run was executed for this project."
+            if state.evaluation is None
+            else (
+                f"The User Twins evaluated the executed prototype: {state.evaluation.finding_count} "
+                f"simulated findings from {state.evaluation.response_count} twins, recorded as hypotheses."
+            ),
+            () if state.evaluation is None else (f"evaluation-run:{state.evaluation.id}",),
             blocking=False,
         ),
         _check(
@@ -392,13 +403,38 @@ class SqlAlchemyFinalizationApiService:
         self._graphs = artifact_graph_query_service
 
     async def evaluation_run(self, *, owner_user_id: UUID, evaluation_run_id: UUID):
-        return None
+        async with self._sessions() as session:
+            stored = await SqlAlchemySyntheticEvaluationRepository(
+                session, owner_user_id=owner_user_id
+            ).get_owned(run_id=evaluation_run_id)
+        return None if stored is None else evaluation_run_payload(stored)
 
     async def evaluation_findings(self, *, owner_user_id: UUID, evaluation_run_id: UUID):
-        return None
+        async with self._sessions() as session:
+            repository = SqlAlchemySyntheticEvaluationRepository(
+                session, owner_user_id=owner_user_id
+            )
+            if await repository.get_owned(run_id=evaluation_run_id) is None:
+                return None
+            findings = await repository.list_findings(run_id=evaluation_run_id)
+        return tuple(synthetic_finding_payload(item) for item in findings)
 
     async def evaluation_aggregation(self, *, owner_user_id: UUID, evaluation_run_id: UUID):
-        return None
+        async with self._sessions() as session:
+            snapshot = await SqlAlchemySyntheticEvaluationRepository(
+                session, owner_user_id=owner_user_id
+            ).get_owned_snapshot(run_id=evaluation_run_id)
+        if snapshot is None:
+            return None
+        run = synthetic_evaluation_run_from_snapshot(snapshot)
+        return aggregate_synthetic_evaluation(run).to_snapshot()
+
+    async def workflow_run_for(self, *, owner_user_id: UUID, project_id: UUID):
+        async with self._sessions() as session, session.begin():
+            state = await self._state(session, owner_user_id=owner_user_id, project_id=project_id)
+            if state is None:
+                return None
+            return await self._run(session, state, owner_user_id=owner_user_id)
 
     async def final_reviews(self, *, owner_user_id: UUID, project_id: UUID):
         async with self._sessions() as session, session.begin():
@@ -793,6 +829,9 @@ class SqlAlchemyFinalizationApiService:
             attempt=await SqlAlchemyWebExecutionAttemptRepository(
                 session, owner_user_id=owner_user_id
             ).current(project_id=project_id),
+            evaluation=await SqlAlchemySyntheticEvaluationRepository(
+                session, owner_user_id=owner_user_id
+            ).latest_owned(project_id=project_id),
         )
 
     async def _run(self, session, state: _ProjectState, *, owner_user_id: UUID):
