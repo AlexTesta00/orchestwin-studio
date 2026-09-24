@@ -16,6 +16,7 @@ from orchestwin.api.auth import AuthApiSettings, create_auth_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_package import create_design_package_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.model_runtime import create_model_runtime_router
 from orchestwin.api.projects import create_project_router
@@ -79,9 +80,14 @@ def create_app(
 
     @application.exception_handler(ProposalGenerationError)
     async def proposal_failure(_request, error: ProposalGenerationError):
-        unavailable = error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}
+        if error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}:
+            status_code = 503
+        elif error.code == "CONTEXT_BUDGET_EXCEEDED":
+            status_code = 422
+        else:
+            status_code = 502
         return JSONResponse(
-            status_code=503 if unavailable else 502,
+            status_code=status_code,
             content={"detail": {"code": error.code, "stage": "MODEL_PROPOSAL"}},
         )
 
@@ -120,6 +126,7 @@ def create_app(
     application.state.design_query_service = resolved_runtime.design_query_service
     application.state.design_gate_service = resolved_runtime.design_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
+    application.state.design_package_export_service = resolved_runtime.design_package_export_service
     application.state.training_api_service = resolved_runtime.training_api_service
 
     application.add_middleware(
@@ -137,6 +144,10 @@ def create_app(
             "Authorization",
             "Content-Type",
         ],
+        expose_headers=[
+            "Content-Disposition",
+            "X-Content-SHA256",
+        ],
     )
 
     for router in (
@@ -151,6 +162,7 @@ def create_app(
         create_design_router(),
         create_design_mockup_router(),
         create_artifact_graph_router(),
+        create_design_package_router(),
         create_training_router(),
         create_proposal_evidence_router(),
         create_model_runtime_router(),
