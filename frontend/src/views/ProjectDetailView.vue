@@ -13,6 +13,7 @@ import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
+import ProjectDesignPackagePanel from "@/components/ProjectDesignPackagePanel.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
@@ -59,14 +60,10 @@ const { t, locale } = useI18n({
         loading: "Loading project…",
         loadError: "The project could not be loaded.",
         saveError: "The Project Brief version could not be saved.",
-        mode: "Mode",
         currentBrief: "Your idea",
         noBrief: "Describe what you would like to create to get started.",
         versionHistory: "Previous descriptions",
-        noVersions: "No Project Brief version is available.",
         version: "Version {number}",
-        createdAt: "Created {date}",
-        contentHash: "Content hash",
         allProjects: "All projects",
         principle: "AI proposes, you decide",
         provenance: "Provenance",
@@ -75,11 +72,7 @@ const { t, locale } = useI18n({
         unlockHint: "The next step unlocks after your approval.",
         editBrief: "Edit the description",
         describeIdea: "Describe your idea",
-        brownfieldSources:
-          "Review the imported sources and authorise their verification in the technical details.",
         tools: "Project tools and technical details",
-        webEvidence: "Web sources, authorisations and evidence",
-        traceability: "Artifact traceability",
       },
     },
     it: {
@@ -87,14 +80,10 @@ const { t, locale } = useI18n({
         loading: "Caricamento progetto…",
         loadError: "Non è stato possibile caricare il progetto.",
         saveError: "Non è stato possibile salvare la versione del Project Brief.",
-        mode: "Modalità",
         currentBrief: "La tua idea",
         noBrief: "Descrivi cosa vuoi realizzare per iniziare.",
         versionHistory: "Descrizioni precedenti",
-        noVersions: "Non è disponibile alcuna versione del Project Brief.",
         version: "Versione {number}",
-        createdAt: "Creata {date}",
-        contentHash: "Hash del contenuto",
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
         provenance: "Provenienza",
@@ -103,11 +92,7 @@ const { t, locale } = useI18n({
         unlockHint: "Il passo successivo si sblocca dopo la tua approvazione.",
         editBrief: "Modifica la descrizione",
         describeIdea: "Descrivi la tua idea",
-        brownfieldSources:
-          "Consulta i sorgenti importati e autorizza la verifica nei dettagli tecnici.",
         tools: "Strumenti e dettagli tecnici del progetto",
-        webEvidence: "Sorgenti, autorizzazioni ed evidenze Web",
-        traceability: "Tracciabilità degli artefatti",
       },
     },
   },
@@ -145,6 +130,12 @@ function approved(
   );
 }
 
+const designApproved = computed(
+  () =>
+    design.projectId === projectId.value &&
+    design.isReadyForArchitecture &&
+    approved(design.gate, design.current),
+);
 const completedStages = computed(() => [
   clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
   team.projectId === projectId.value &&
@@ -158,33 +149,20 @@ const completedStages = computed(() => [
   requirements.projectId === projectId.value &&
     requirements.isReadyForDesign &&
     approved(requirements.gate, requirements.current),
-  design.projectId === projectId.value &&
-    design.isReadyForArchitecture &&
-    approved(design.gate, design.current),
+  designApproved.value,
+  designApproved.value,
 ]);
 const currentStage = computed(() => {
   const incomplete = completedStages.value.findIndex((complete) => !complete);
-  return incomplete < 0 ? 4 : incomplete;
+  return incomplete < 0 ? 5 : incomplete;
 });
 const activeStage = computed(() =>
   Math.min(selectedStage.value ?? currentStage.value, currentStage.value),
 );
 const stageLabels = computed(() =>
   locale.value === "it"
-    ? [
-        "Brief",
-        "Squadra",
-        "User Twin",
-        "Requisiti",
-        "Design",
-      ]
-    : [
-        "Brief",
-        "Team",
-        "User Twins",
-        "Requirements",
-        "Design",
-      ],
+    ? ["Brief", "Squadra", "User Twin", "Requisiti", "Design", "Pacchetto"]
+    : ["Brief", "Team", "User Twins", "Requirements", "Design", "Package"],
 );
 const stageDescriptions = computed(() =>
   locale.value === "it"
@@ -194,6 +172,7 @@ const stageDescriptions = computed(() =>
         "Conosci i profili simulati delle persone che useranno il prodotto.",
         "Decidi cosa deve fare la tua applicazione.",
         "Esplora le schermate e scegli l’esperienza da realizzare.",
+        "Scarica il pacchetto di design e continua nel tuo ambiente di sviluppo.",
       ]
     : [
         "Describe what you want to create and who it is for.",
@@ -201,6 +180,7 @@ const stageDescriptions = computed(() =>
         "Meet the simulated profiles of the people who will use your product.",
         "Decide what your application needs to do.",
         "Explore the screens and choose the experience to build.",
+        "Download the design package and continue in your own development environment.",
       ],
 );
 const stepItems = computed<StepItem[]>(() =>
@@ -224,15 +204,21 @@ function selectStep(key: string): void {
   selectedStage.value = index === currentStage.value ? null : index;
 }
 
-const activeVersion = computed(
-  () =>
-    [
-      currentBrief.value?.version_number,
-      team.currentVersion?.version_number,
-      modeling.currentSnapshot?.version_number,
-      requirements.current?.version_number,
-      design.current?.version_number,
-    ][activeStage.value],
+const stageVersions = computed(() => [
+  currentBrief.value?.version_number,
+  team.currentVersion?.version_number,
+  modeling.currentSnapshot?.version_number,
+  requirements.current?.version_number,
+  design.current?.version_number,
+  design.current?.version_number,
+]);
+const activeVersion = computed(() => stageVersions.value[activeStage.value]);
+const stageSummaries = computed(() =>
+  stageLabels.value.slice(0, 5).map((label, index) => ({
+    label,
+    version: stageVersions.value[index] ?? null,
+    approved: completedStages.value[index] === true,
+  })),
 );
 
 watch(currentStage, (next, previous) => {
@@ -385,7 +371,7 @@ onUnmounted(() => {
 
       <div class="grid content-start gap-6">
         <header class="grid gap-3">
-          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="5" />
+          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="6" />
           <h1 class="m-0 text-[34px] leading-[1.2] font-semibold tracking-title">
             {{ stageLabels[activeStage] }}
           </h1>
@@ -407,7 +393,7 @@ onUnmounted(() => {
             {{ t("detail.backToCurrent") }}
           </UiButton>
         </div>
-        <p v-else-if="activeStage < 4" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
+        <p v-else-if="activeStage < 5" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
           {{ t("detail.unlockHint") }}
         </p>
 
@@ -498,6 +484,15 @@ onUnmounted(() => {
             :prerequisite-ready="requirements.isReadyForDesign"
             :key="`${projectId}:${requirementsContext}:design`"
             :project-id="projectId"
+            :locale="locale === 'it' ? 'it' : 'en'"
+          />
+        </div>
+        <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
+          <ProjectDesignPackagePanel
+            id="studio-package"
+            :project-id="projectId"
+            :stages="stageSummaries"
+            :authorize="authorized"
             :locale="locale === 'it' ? 'it' : 'en'"
           />
         </div>

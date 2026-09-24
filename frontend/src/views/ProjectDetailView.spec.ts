@@ -160,25 +160,35 @@ describe("progressive project workspace", () => {
     wrapper.unmount();
   });
 
-  it("opens the approved design after hydration and allows revisiting approved work", async () => {
+  it("opens the design package after hydration and allows revisiting approved work", async () => {
     const pinia = createPinia();
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
     hydrateStages(pinia);
     await flushPromises();
-    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(5);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(false);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
+    expect(wrapper.findComponent({ name: "ProjectDesignPackagePanel" }).props("stages")).toEqual([
+      { label: "Brief", version: 1, approved: true },
+      { label: "Team", version: 1, approved: true },
+      { label: "User Twins", version: 1, approved: true },
+      { label: "Requirements", version: 1, approved: true },
+      { label: "Design", version: 1, approved: true },
+    ]);
     await wrapper.get('[data-stage="0"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
     await wrapper.get('[data-stage="4"]').trigger("click");
     expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="technical-details"]').attributes("open")).toBeUndefined();
     wrapper.unmount();
     const reloaded = mountWorkspace(pinia);
     await flushPromises();
-    expect(reloaded.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+    expect(reloaded.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     reloaded.unmount();
   });
 
@@ -187,7 +197,7 @@ describe("progressive project workspace", () => {
     const stores = hydrateStages(pinia);
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(5);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
     stores.requirements.$patch({ current: { content_hash: "revised-hash" } });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(4);

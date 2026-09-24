@@ -68,7 +68,6 @@ const messages = {
     rejectDiff: "Discard changes",
     reason: "Decision reason",
     reasonRequired: "A reason is required to reject or request changes.",
-    prototype: "Visual preview",
     concerns: "Design concerns",
     openQuestions: "Open questions",
     gate: "Confirm the design",
@@ -82,7 +81,7 @@ const messages = {
     pause: "Pause",
     resume: "Resume",
     cancelGate: "Cancel approval",
-    ready: "The design is approved. Continue to the solution.",
+    ready: "The design is approved. Continue to the Package step.",
     notReady: "Design approval is still required.",
     methodology:
       "Gate 5 approves the exact Design Package ID, version, and content hash. Owner approval is governance, not empirical validation. Synthetic User Twin feedback remains a design hypothesis.",
@@ -95,27 +94,11 @@ const messages = {
     mockupTitle: "Design preview",
     mockupDraft: "Model-generated draft · not applied",
     mockupHelp:
-      "Explore the screens and controls. Example results illustrate the design; the generated application is tested in the Result step.",
+      "Explore the screens and controls. Example results illustrate the design; the application is built from the package with your own tools.",
     mockupRequired: "Generate and review a visual mockup before proposing this design.",
     alternativeDetails: "Choose or compare a design",
     audit: "Version and review details",
     approvedPrototype: "Current design prototype",
-    sourceMockup: "Preview chosen for app version {version}",
-    sourcePrototype: "Design used for app version {version}",
-    sourceLoading: "Loading the design used for this app…",
-    sourceUnavailable:
-      "The design linked to this app could not be loaded. The draft below may use a different design.",
-    sourceNoPrototype: "No visual preview is available for this app version.",
-    sourceOlderDesign:
-      "This app uses an earlier design version. New design changes are not applied to it automatically.",
-    ownerReference:
-      "You selected this preview for this app version. The previously approved design remains unchanged.",
-    visualNotAssessed:
-      "This is the selected design reference. Visual correspondence is not automatically verified.",
-    structureVerified:
-      "The app includes the preview's screens and controls. Open the app to compare their appearance and try it.",
-    compareResult: "Try the app",
-    separateDraft: "New design draft · not applied to this app",
   },
   it: {
     eyebrow: "L'aspetto della tua app",
@@ -137,7 +120,6 @@ const messages = {
     rejectDiff: "Scarta modifiche",
     reason: "Motivazione della decisione",
     reasonRequired: "Scrivi una motivazione per rifiutare o richiedere modifiche.",
-    prototype: "Anteprima visiva",
     concerns: "Criticità di design",
     openQuestions: "Domande aperte",
     gate: "Conferma l'aspetto",
@@ -151,7 +133,7 @@ const messages = {
     pause: "Pausa",
     resume: "Riprendi",
     cancelGate: "Annulla approvazione",
-    ready: "L'aspetto è approvato. Continua con la soluzione.",
+    ready: "Il design è approvato. Continua con il passo Pacchetto.",
     notReady: "È ancora necessaria l'approvazione del design.",
     methodology:
       "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico dei User Twin resta un'ipotesi progettuale.",
@@ -164,27 +146,11 @@ const messages = {
     mockupTitle: "Anteprima del design",
     mockupDraft: "Bozza generata dal modello · non applicata",
     mockupHelp:
-      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione generata si prova nel passaggio Risultato.",
+      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione si realizza dal pacchetto con i tuoi strumenti.",
     mockupRequired: "Genera e revisiona un mockup visivo prima di proporre questo design.",
     alternativeDetails: "Scegli o confronta un design",
     audit: "Dettagli di versione e revisione",
     approvedPrototype: "Prototipo del design corrente",
-    sourceMockup: "Anteprima scelta per l'app, versione {version}",
-    sourcePrototype: "Design usato per l'app, versione {version}",
-    sourceLoading: "Caricamento del design usato per questa app…",
-    sourceUnavailable:
-      "Non è stato possibile caricare il design collegato all'app. La bozza qui sotto potrebbe usare un design diverso.",
-    sourceNoPrototype: "Non è disponibile un'anteprima visiva per questa versione dell'app.",
-    sourceOlderDesign:
-      "Questa app usa una versione precedente del design. Le nuove modifiche al design non vengono applicate automaticamente.",
-    ownerReference:
-      "Hai scelto questa anteprima per questa versione dell'app. Il design approvato in precedenza resta invariato.",
-    visualNotAssessed:
-      "Il riferimento è registrato; la corrispondenza visiva non è verificata automaticamente.",
-    structureVerified:
-      "L'app include schermate e controlli dell'anteprima. Aprila per confrontare l'aspetto e provarla.",
-    compareResult: "Prova l'app",
-    separateDraft: "Nuova bozza di design · non applicata all'app",
   },
 } as const;
 
