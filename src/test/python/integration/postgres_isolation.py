@@ -15,7 +15,9 @@ from orchestwin.persistence.migrate import upgrade_database
 
 
 @contextmanager
-def isolated_postgres_settings(settings: DatabaseSettings) -> Iterator[DatabaseSettings]:
+def isolated_postgres_settings(
+    settings: DatabaseSettings, *, revision: str = "head"
+) -> Iterator[DatabaseSettings]:
     """Create, migrate and remove only the namespace owned by this invocation.
 
     Each test keeps real commits, multiple sessions and runtime restarts. No
@@ -38,7 +40,7 @@ def isolated_postgres_settings(settings: DatabaseSettings) -> Iterator[DatabaseS
         scoped = settings.model_copy(
             update={"url": SecretStr(scoped_url.render_as_string(hide_password=False))}
         )
-        upgrade_database(scoped)
+        upgrade_database(scoped, revision=revision)
         yield scoped
     finally:
         try:
