@@ -3,7 +3,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from uuid import uuid4
 
-import httpx
+import httpx2
 import pytest
 import sqlalchemy as sa
 
@@ -102,8 +102,8 @@ def test_twin_chat_records_audited_turns_in_an_append_only_conversation(database
                 proposal_evidence_store=SqlAlchemyProposalEvidenceStore(db.session_factory),
             )
             path = f"/projects/{project}/user-twins/{twin.twin_id}/conversation"
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=client_app(runtime, owner)), base_url=BASE_URL
+            async with httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=client_app(runtime, owner)), base_url=BASE_URL
             ) as client:
                 missing = await client.get(path)
                 assert missing.status_code == 404
@@ -138,8 +138,8 @@ def test_twin_chat_records_audited_turns_in_an_append_only_conversation(database
                 assert len(current.json()["snapshot"]["turns"]) == 2
                 unknown = await client.get(f"/projects/{project}/user-twins/{uuid4()}/conversation")
                 assert unknown.status_code == 404
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=client_app(runtime, uuid4())),
+            async with httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=client_app(runtime, uuid4())),
                 base_url=BASE_URL,
             ) as foreign:
                 assert (await foreign.get(path)).status_code == 404
