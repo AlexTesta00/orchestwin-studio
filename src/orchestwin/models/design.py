@@ -35,11 +35,12 @@ from orchestwin.projects.requirements_specifications import (
     RequirementsSpecificationVersion,
 )
 from orchestwin.twins.epistemics import ProfileObservation
+from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
 DESIGN_PROPOSAL_SCHEMA_VERSION: Final = 1
 MAX_DESIGN_PROVIDER_ID_LENGTH: Final = 128
-MIN_DESIGN_PROPOSAL_TWINS: Final = 1
-MAX_DESIGN_PROPOSAL_TWINS: Final = 4
+MIN_DESIGN_PROPOSAL_TWINS: Final = MIN_USER_TWINS
+MAX_DESIGN_PROPOSAL_TWINS: Final = MAX_USER_TWINS
 
 _AGENT_ORDER: Final = tuple(entry.agent_id for entry in all_agent_catalog_entries())
 
@@ -161,7 +162,10 @@ class DesignUserModelingInput:
         twin_count = len(self.user_twins)
 
         if not MIN_DESIGN_PROPOSAL_TWINS <= twin_count <= MAX_DESIGN_PROPOSAL_TWINS:
-            raise ValueError("design input requires between one and four User Twins")
+            raise ValueError(
+                "design input requires between "
+                f"{MIN_DESIGN_PROPOSAL_TWINS} and {MAX_DESIGN_PROPOSAL_TWINS} User Twins"
+            )
 
         references = tuple(user_twin.reference for user_twin in self.user_twins)
         expected = canonical_user_twin_references(

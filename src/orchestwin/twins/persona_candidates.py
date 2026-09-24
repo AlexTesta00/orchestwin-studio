@@ -299,7 +299,8 @@ class PersonaCandidateDerivationResult:
 
             if not (1 <= len(self.candidates) <= MAX_PROJECT_USER_TWINS):
                 raise ValueError(
-                    "successful candidate derivation requires between one and four candidates"
+                    "successful candidate derivation requires between "
+                    f"1 and {MAX_PROJECT_USER_TWINS} candidates"
                 )
         else:
             if self.issue is None or self.candidates:

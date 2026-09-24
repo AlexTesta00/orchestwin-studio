@@ -632,3 +632,13 @@ def test_requirements_drafts_reject_invented_evidence_links_and_approval(tmp_pat
     generator, _ = make_generator(tmp_path, output)
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
         asyncio.run(ModelRequirementsAdapter(generator).propose(request))
+
+
+def test_prompt_beyond_the_context_window_is_blocked_before_any_model_call(tmp_path):
+    generator, transport = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+    narrow = ProposalGenerator(
+        generator.configuration.model_copy(update={"context_window_tokens": 8448}), generator.port
+    )
+    with pytest.raises(ProposalGenerationError, match="CONTEXT_BUDGET_EXCEEDED"):
+        asyncio.run(ModelTeamProposalAdapter(narrow).propose(team_fixtures.build_request()))
+    assert transport.calls == []

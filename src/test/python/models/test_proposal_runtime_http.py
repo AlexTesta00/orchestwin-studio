@@ -94,7 +94,10 @@ def test_direct_http_does_not_follow_redirects_or_use_environment_proxy(monkeypa
     assert requests == [("/v1/chat/completions", "Bearer test-token")]
 
 
-@pytest.mark.parametrize("code,status", [("TIMEOUT", 503), ("INVALID_PROVIDER_OUTPUT", 502)])
+@pytest.mark.parametrize(
+    "code,status",
+    [("TIMEOUT", 503), ("INVALID_PROVIDER_OUTPUT", 502), ("CONTEXT_BUDGET_EXCEEDED", 422)],
+)
 def test_api_maps_model_failure_without_exposing_prompts(code, status):
     app = create_app(runtime=ApplicationRuntime())
 

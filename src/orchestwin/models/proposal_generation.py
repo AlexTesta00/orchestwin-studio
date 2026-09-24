@@ -14,6 +14,7 @@ import time
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Final
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -60,6 +61,14 @@ class ProposalGenerationError(RuntimeError):
         self.code, self.request, self.result = code, request, result
 
 
+PROMPT_CHARACTERS_PER_TOKEN: Final = 4
+
+
+def estimate_prompt_tokens(request) -> int:
+    characters = len(request.system_instruction) + len(request.input_payload_json)
+    return -(-characters // PROMPT_CHARACTERS_PER_TOKEN)
+
+
 class ProposalModelConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -70,6 +79,7 @@ class ProposalModelConfiguration(BaseModel):
     token_file: Path
     temperature: float = Field(default=0.6, ge=0, le=2, allow_inf_nan=False, strict=True)
     max_output_tokens: int = Field(default=8192, ge=128, le=16384, strict=True)
+    context_window_tokens: int = Field(default=16384, ge=1024, le=262144, strict=True)
     timeout_seconds: int = Field(default=180, ge=1, le=1200, strict=True)
 
     @model_validator(mode="after")
@@ -232,6 +242,8 @@ class ProposalGenerator:
             max_output_tokens=budget,
             timeout_seconds=self.configuration.timeout_seconds,
         )
+        if estimate_prompt_tokens(request) + budget > self.configuration.context_window_tokens:
+            raise ProposalGenerationError("CONTEXT_BUDGET_EXCEEDED", request=request)
         await begin_model_generation(request)
         result = await self.port.generate(request)
         await retain_provider_result(result)

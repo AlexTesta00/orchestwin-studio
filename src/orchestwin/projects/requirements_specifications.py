@@ -28,10 +28,11 @@ from orchestwin.projects.requirements_quality import (
     ProjectRisk,
     UsageScenario,
 )
+from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
 REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION: Final = 1
-MIN_REQUIREMENTS_USER_TWINS: Final = 1
-MAX_REQUIREMENTS_USER_TWINS: Final = 4
+MIN_REQUIREMENTS_USER_TWINS: Final = MIN_USER_TWINS
+MAX_REQUIREMENTS_USER_TWINS: Final = MAX_USER_TWINS
 
 
 class _ArtifactWithIdentity(Protocol):
@@ -164,7 +165,8 @@ class RequirementsSpecification:
 
         if not (MIN_REQUIREMENTS_USER_TWINS <= twin_count <= MAX_REQUIREMENTS_USER_TWINS):
             raise ValueError(
-                "a requirements specification requires between one and four User Twins"
+                "a requirements specification requires between "
+                f"{MIN_REQUIREMENTS_USER_TWINS} and {MAX_REQUIREMENTS_USER_TWINS} User Twins"
             )
 
         collection_rules = (
