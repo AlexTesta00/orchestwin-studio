@@ -120,7 +120,6 @@ def test_current_artifact_graph_exposes_exact_roots_and_stage_counts() -> None:
         current.requirements_reference.artifact_id
     )
     assert payload["design_reference"]["artifact_id"] == str(current.design_reference.artifact_id)
-    assert payload["architecture_reference"] is None
     assert payload["stage_counts"]["DESIGN"] > 0
     assert payload["content_hash"] == current.content_hash
     assert service.calls == [(OWNER_ID, PROJECT_ID)]

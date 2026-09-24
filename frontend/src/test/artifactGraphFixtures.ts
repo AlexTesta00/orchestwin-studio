@@ -7,11 +7,8 @@ import type {
 export const ARTIFACT_GRAPH_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const REQUIREMENTS_ID = "00000000-0000-4000-8000-000000000010";
 const DESIGN_ID = "00000000-0000-4000-8000-000000000020";
-const ARCHITECTURE_PACKAGE_ID = "00000000-0000-4000-8000-000000000030";
 const REQUIREMENT_ID = "00000000-0000-4000-8000-000000000040";
 const ALTERNATIVE_ID = "00000000-0000-4000-8000-000000000050";
-const ARCHITECTURE_ID = "00000000-0000-4000-8000-000000000060";
-const TEST_CASE_ID = "00000000-0000-4000-8000-000000000070";
 
 const nodes: ArtifactGraphNodePayload[] = [
   {
@@ -58,39 +55,6 @@ const nodes: ArtifactGraphNodePayload[] = [
     display_code: "DES-001",
     title: "Guided reservation workflow",
   },
-  {
-    reference: {
-      kind: "ARCHITECTURE_PACKAGE",
-      artifact_id: ARCHITECTURE_PACKAGE_ID,
-      version_number: 1,
-      content_hash: "c".repeat(64),
-    },
-    stage: "ARCHITECTURE",
-    display_code: "ARCH-v1",
-    title: "Architecture and Test Plan Package",
-  },
-  {
-    reference: {
-      kind: "SOFTWARE_ARCHITECTURE",
-      artifact_id: ARCHITECTURE_ID,
-      version_number: null,
-      content_hash: null,
-    },
-    stage: "ARCHITECTURE",
-    display_code: "ARC-001",
-    title: "Reservation platform architecture",
-  },
-  {
-    reference: {
-      kind: "TEST_CASE",
-      artifact_id: TEST_CASE_ID,
-      version_number: null,
-      content_hash: null,
-    },
-    stage: "TESTING",
-    display_code: "TST-001",
-    title: "Create a reservation end to end",
-  },
 ];
 
 const links: ArtifactGraphLinkPayload[] = [
@@ -114,26 +78,6 @@ const links: ArtifactGraphLinkPayload[] = [
     source: nodes[3]!.reference,
     target: nodes[1]!.reference,
   },
-  {
-    kind: "GROUNDED_IN",
-    source: nodes[4]!.reference,
-    target: nodes[2]!.reference,
-  },
-  {
-    kind: "CONTAINS",
-    source: nodes[4]!.reference,
-    target: nodes[5]!.reference,
-  },
-  {
-    kind: "REALIZES",
-    source: nodes[5]!.reference,
-    target: nodes[3]!.reference,
-  },
-  {
-    kind: "TESTS",
-    source: nodes[6]!.reference,
-    target: nodes[1]!.reference,
-  },
 ];
 
 export const ARTIFACT_GRAPH: CrossStageArtifactGraphPayload = {
@@ -151,20 +95,12 @@ export const ARTIFACT_GRAPH: CrossStageArtifactGraphPayload = {
     version_number: 2,
     content_hash: "b".repeat(64),
   },
-  architecture_reference: {
-    kind: "ARCHITECTURE_PACKAGE",
-    artifact_id: ARCHITECTURE_PACKAGE_ID,
-    version_number: 1,
-    content_hash: "c".repeat(64),
-  },
   nodes,
   links,
   stage_counts: {
     CONTEXT: 0,
     REQUIREMENTS: 2,
     DESIGN: 2,
-    ARCHITECTURE: 2,
-    TESTING: 1,
   },
   content_hash: "d".repeat(64),
 };

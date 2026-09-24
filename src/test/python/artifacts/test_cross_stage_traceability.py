@@ -42,7 +42,6 @@ def test_cross_stage_graph_preserves_exact_stage_roots_and_is_reproducible() -> 
     assert first.requirements_reference.artifact_id == REQUIREMENTS_VERSION_ID
     assert first.design_reference is not None
     assert first.design_reference.artifact_id == DESIGN_VERSION_ID
-    assert first.architecture_reference is None
     assert first.to_snapshot()["schema_version"] == 1
 
 
@@ -75,13 +74,11 @@ def test_cross_stage_graph_can_expose_requirements_before_later_stages_exist() -
     graph = build_cross_stage_artifact_graph(requirements_version())
 
     assert graph.design_reference is None
-    assert graph.architecture_reference is None
     assert any(
         node.reference.kind is ArtifactGraphNodeKind.REQUIREMENTS_SPECIFICATION
         for node in graph.nodes
     )
     assert not any(node.stage is ArtifactGraphStage.DESIGN for node in graph.nodes)
-    assert not any(node.stage is ArtifactGraphStage.ARCHITECTURE for node in graph.nodes)
 
 
 def test_cross_stage_graph_rejects_a_design_grounded_in_another_requirements_version() -> None:
