@@ -158,22 +158,20 @@ describe("useAuthStore", () => {
     expect(api.refreshCalls).toBe(1);
   });
 
-  it.each([
-    ArtifactGraphApiError,
-    DesignApiError,
-    RequirementsApiError,
-    UserModelingApiError,
-  ])("refreshes expired authentication for domain client %s", async (ErrorType) => {
-    const api = new FakeAuthenticationApi();
-    const store = useAuthStore();
-    await store.login(api, { email: USER.email, password: "test" });
-    const failure = new ErrorType("Expired", { status: 401, code: "EXPIRED", payload: null });
-    const operation = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce("success");
-    expect(await store.withAccessToken(api, operation)).toBe("success");
-    expect(operation.mock.calls).toEqual([["login-token"], ["refresh-token"]]);
-    expect(api.refreshCalls).toBe(1);
-    expect(failure.name).toBe(ErrorType.name);
-  });
+  it.each([ArtifactGraphApiError, DesignApiError, RequirementsApiError, UserModelingApiError])(
+    "refreshes expired authentication for domain client %s",
+    async (ErrorType) => {
+      const api = new FakeAuthenticationApi();
+      const store = useAuthStore();
+      await store.login(api, { email: USER.email, password: "test" });
+      const failure = new ErrorType("Expired", { status: 401, code: "EXPIRED", payload: null });
+      const operation = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce("success");
+      expect(await store.withAccessToken(api, operation)).toBe("success");
+      expect(operation.mock.calls).toEqual([["login-token"], ["refresh-token"]]);
+      expect(api.refreshCalls).toBe(1);
+      expect(failure.name).toBe(ErrorType.name);
+    },
+  );
 
   it.each([403, 409, 422, 502, 503])(
     "does not replay a failed operation with status %s",

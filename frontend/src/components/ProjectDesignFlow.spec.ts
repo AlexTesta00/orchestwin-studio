@@ -274,5 +274,4 @@ describe("ProjectDesignFlow", () => {
     expect((recommended.element as HTMLInputElement).checked).toBe(false);
     expect(BASE_DESIGN_PACKAGE.owner_selected_alternative_id).toBeNull();
   });
-
 });

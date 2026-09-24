@@ -55,7 +55,7 @@ describe("design primitives", () => {
     expect(hypothesis.text()).toBe("Proposta dell'AI, non validata");
     expect(hypothesis.get("span[aria-hidden]").classes()).toContain("bg-transparent");
     const proof = mount(UiClaimLabel, { props: { kind: "proof" }, ...plugins() });
-    expect(proof.text()).toBe("Observed in the sandbox");
+    expect(proof.text()).toBe("Verified evidence");
     expect(proof.get("span[aria-hidden]").classes()).toContain("bg-proof");
   });
 
