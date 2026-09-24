@@ -33,7 +33,7 @@ describe("Artifact Graph store", () => {
     expect(store.graph).toEqual(ARTIFACT_GRAPH);
     expect(store.nodeCount).toBe(ARTIFACT_GRAPH.nodes.length);
     expect(store.linkCount).toBe(ARTIFACT_GRAPH.links.length);
-    expect(store.isCompleteThroughArchitecture).toBe(true);
+    expect(store.isCompleteThroughDesign).toBe(true);
     expect(store.error).toBeNull();
   });
 

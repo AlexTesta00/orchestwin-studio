@@ -5,10 +5,9 @@ export type ArtifactKind =
   | "AGENT_TEAM"
   | "USER_MODELING"
   | "DESIGN_PACKAGE"
-  | "DECLARATIVE_PROTOTYPE"
-  | "ARCHITECTURE_PACKAGE";
+  | "DECLARATIVE_PROTOTYPE";
 
-export type ArtifactGraphStage = "CONTEXT" | "REQUIREMENTS" | "DESIGN" | "ARCHITECTURE" | "TESTING";
+export type ArtifactGraphStage = "CONTEXT" | "REQUIREMENTS" | "DESIGN";
 
 export type ArtifactGraphNodeKind =
   | "PROJECT_BRIEF"
@@ -28,19 +27,7 @@ export type ArtifactGraphNodeKind =
   | "SYNTHETIC_DESIGN_CRITIQUE"
   | "DESIGN_CONCERN"
   | "DECLARATIVE_PROTOTYPE"
-  | "PROTOTYPE_SCREEN"
-  | "ARCHITECTURE_PACKAGE"
-  | "SOFTWARE_ARCHITECTURE"
-  | "ARCHITECTURE_COMPONENT"
-  | "ARCHITECTURE_CONNECTION"
-  | "ARCHITECTURE_DECISION"
-  | "ARCHITECTURE_DATA_ENTITY"
-  | "ARCHITECTURE_API_OPERATION"
-  | "ARCHITECTURE_RISK"
-  | "TEST_PLAN"
-  | "TEST_ENVIRONMENT"
-  | "TEST_CASE"
-  | "QUALITY_GATE";
+  | "PROTOTYPE_SCREEN";
 
 export type ArtifactGraphLinkKind =
   | "CONTAINS"
@@ -53,12 +40,7 @@ export type ArtifactGraphLinkKind =
   | "GOVERNS"
   | "TRACES_TO"
   | "REPRESENTS"
-  | "CRITIQUES"
-  | "REALIZES"
-  | "CONNECTS"
-  | "OWNED_BY"
-  | "TESTS"
-  | "EXECUTES_IN";
+  | "CRITIQUES";
 
 export interface VersionedArtifactReferencePayload {
   kind: ArtifactKind;
@@ -92,7 +74,6 @@ export interface CrossStageArtifactGraphPayload {
   project_id: UUID;
   requirements_reference: VersionedArtifactReferencePayload;
   design_reference: VersionedArtifactReferencePayload | null;
-  architecture_reference: VersionedArtifactReferencePayload | null;
   nodes: ArtifactGraphNodePayload[];
   links: ArtifactGraphLinkPayload[];
   stage_counts: Record<ArtifactGraphStage, number>;

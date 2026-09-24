@@ -130,7 +130,6 @@ class CrossStageArtifactGraphPayload(ApiModel):
     project_id: UUID
     requirements_reference: VersionedArtifactReferencePayload
     design_reference: VersionedArtifactReferencePayload | None
-    architecture_reference: VersionedArtifactReferencePayload | None
     nodes: tuple[ArtifactGraphNodePayload, ...]
     links: tuple[ArtifactGraphLinkPayload, ...]
     stage_counts: dict[ArtifactGraphStage, int]
@@ -152,11 +151,6 @@ class CrossStageArtifactGraphPayload(ApiModel):
                 None
                 if graph.design_reference is None
                 else VersionedArtifactReferencePayload.from_domain(graph.design_reference)
-            ),
-            architecture_reference=(
-                None
-                if graph.architecture_reference is None
-                else VersionedArtifactReferencePayload.from_domain(graph.architecture_reference)
             ),
             nodes=tuple(ArtifactGraphNodePayload.from_domain(node) for node in graph.nodes),
             links=tuple(ArtifactGraphLinkPayload.from_domain(link) for link in graph.links),

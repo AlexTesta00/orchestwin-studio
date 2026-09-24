@@ -37,20 +37,14 @@ const store = useArtifactGraphStore();
 const localError = ref<string | null>(null);
 const stageFilter = ref<StageFilter>("ALL");
 
-const stages: ArtifactGraphStage[] = [
-  "CONTEXT",
-  "REQUIREMENTS",
-  "DESIGN",
-  "ARCHITECTURE",
-  "TESTING",
-];
+const stages: ArtifactGraphStage[] = ["CONTEXT", "REQUIREMENTS", "DESIGN"];
 
 const messages = {
   en: {
     eyebrow: "Artifact and provenance management",
     title: "Cross-stage artifact graph",
     intro:
-      "Inspect exact governed stage roots and trace relationships from user context and requirements through design, architecture, and planned tests.",
+      "Inspect exact governed stage roots and trace relationships from user context and requirements through the chosen design.",
     methodology:
       "The graph derives relationships from immutable artifacts. It preserves synthetic critique origin and traceability, but a graph link is not empirical evidence or proof that a requirement has passed execution.",
     loading: "Loading the current artifact graph…",
@@ -65,15 +59,12 @@ const messages = {
     stagesLabel: "Artifact graph stages",
     requirements: "Requirements",
     design: "Design",
-    architecture: "Architecture",
     notAvailable: "Not available",
     filter: "Relationship stage filter",
     allStages: "All stages",
     context: "Context",
     requirementsStage: "Requirements",
     designStage: "Design",
-    architectureStage: "Architecture",
-    testing: "Testing",
     nodeKind: "Artifact kind",
     version: "Exact version",
     outgoing: "Outgoing",
@@ -105,15 +96,12 @@ const messages = {
     stagesLabel: "Fasi del grafo degli artefatti",
     requirements: "Requisiti",
     design: "Design",
-    architecture: "Architettura",
     notAvailable: "Non disponibile",
     filter: "Filtro della fase per le relazioni",
     allStages: "Tutte le fasi",
     context: "Contesto",
     requirementsStage: "Requisiti",
     designStage: "Design",
-    architectureStage: "Architettura",
-    testing: "Testing",
     nodeKind: "Tipo di artefatto",
     version: "Versione esatta",
     outgoing: "In uscita",
@@ -177,8 +165,6 @@ function stageLabel(stage: ArtifactGraphStage): string {
     CONTEXT: copy.value.context,
     REQUIREMENTS: copy.value.requirementsStage,
     DESIGN: copy.value.designStage,
-    ARCHITECTURE: copy.value.architectureStage,
-    TESTING: copy.value.testing,
   };
 
   return labels[stage];
@@ -355,12 +341,6 @@ watch(
             <dt class="font-semibold text-ink">{{ copy.design }}</dt>
             <dd class="m-0 break-all text-ink-2">
               {{ exactReferenceLabel(graph.design_reference) }}
-            </dd>
-          </div>
-          <div>
-            <dt class="font-semibold text-ink">{{ copy.architecture }}</dt>
-            <dd class="m-0 break-all text-ink-2">
-              {{ exactReferenceLabel(graph.architecture_reference) }}
             </dd>
           </div>
         </dl>

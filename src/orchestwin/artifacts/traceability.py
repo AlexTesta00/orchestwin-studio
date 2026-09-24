@@ -23,8 +23,6 @@ class ArtifactGraphStage(StrEnum):
     CONTEXT = "CONTEXT"
     REQUIREMENTS = "REQUIREMENTS"
     DESIGN = "DESIGN"
-    ARCHITECTURE = "ARCHITECTURE"
-    TESTING = "TESTING"
 
 
 class ArtifactGraphNodeKind(StrEnum):
@@ -48,18 +46,6 @@ class ArtifactGraphNodeKind(StrEnum):
     DESIGN_CONCERN = "DESIGN_CONCERN"
     DECLARATIVE_PROTOTYPE = "DECLARATIVE_PROTOTYPE"
     PROTOTYPE_SCREEN = "PROTOTYPE_SCREEN"
-    ARCHITECTURE_PACKAGE = "ARCHITECTURE_PACKAGE"
-    SOFTWARE_ARCHITECTURE = "SOFTWARE_ARCHITECTURE"
-    ARCHITECTURE_COMPONENT = "ARCHITECTURE_COMPONENT"
-    ARCHITECTURE_CONNECTION = "ARCHITECTURE_CONNECTION"
-    ARCHITECTURE_DECISION = "ARCHITECTURE_DECISION"
-    ARCHITECTURE_DATA_ENTITY = "ARCHITECTURE_DATA_ENTITY"
-    ARCHITECTURE_API_OPERATION = "ARCHITECTURE_API_OPERATION"
-    ARCHITECTURE_RISK = "ARCHITECTURE_RISK"
-    TEST_PLAN = "TEST_PLAN"
-    TEST_ENVIRONMENT = "TEST_ENVIRONMENT"
-    TEST_CASE = "TEST_CASE"
-    QUALITY_GATE = "QUALITY_GATE"
 
 
 class ArtifactGraphLinkKind(StrEnum):
@@ -76,19 +62,12 @@ class ArtifactGraphLinkKind(StrEnum):
     TRACES_TO = "TRACES_TO"
     REPRESENTS = "REPRESENTS"
     CRITIQUES = "CRITIQUES"
-    REALIZES = "REALIZES"
-    CONNECTS = "CONNECTS"
-    OWNED_BY = "OWNED_BY"
-    TESTS = "TESTS"
-    EXECUTES_IN = "EXECUTES_IN"
 
 
 _STAGE_ORDER = {
     ArtifactGraphStage.CONTEXT: 0,
     ArtifactGraphStage.REQUIREMENTS: 1,
     ArtifactGraphStage.DESIGN: 2,
-    ArtifactGraphStage.ARCHITECTURE: 3,
-    ArtifactGraphStage.TESTING: 4,
 }
 
 
@@ -203,12 +182,11 @@ class ArtifactGraphLink:
 
 @dataclass(frozen=True, slots=True)
 class CrossStageArtifactGraph:
-    """Canonical graph from exact Requirements, Design, and Architecture versions."""
+    """Canonical graph from exact Requirements and Design versions."""
 
     project_id: UUID
     requirements_reference: VersionedArtifactReference
     design_reference: VersionedArtifactReference | None
-    architecture_reference: VersionedArtifactReference | None
     nodes: tuple[ArtifactGraphNode, ...]
     links: tuple[ArtifactGraphLink, ...]
 
@@ -222,14 +200,6 @@ class CrossStageArtifactGraph:
             and self.design_reference.kind is not ArtifactKind.DESIGN_PACKAGE
         ):
             raise ValueError("artifact graph Design reference must identify a Design Package")
-
-        if self.architecture_reference is not None:
-            if self.design_reference is None:
-                raise ValueError("artifact graph Architecture requires a Design reference")
-            if self.architecture_reference.kind is not ArtifactKind.ARCHITECTURE_PACKAGE:
-                raise ValueError(
-                    "artifact graph Architecture reference must identify an Architecture Package"
-                )
 
         if not self.nodes:
             raise ValueError("artifact graph requires nodes")
@@ -255,7 +225,6 @@ class CrossStageArtifactGraph:
         for exact, kind in (
             (self.requirements_reference, ArtifactGraphNodeKind.REQUIREMENTS_SPECIFICATION),
             (self.design_reference, ArtifactGraphNodeKind.DESIGN_PACKAGE),
-            (self.architecture_reference, ArtifactGraphNodeKind.ARCHITECTURE_PACKAGE),
         ):
             if exact is None:
                 continue
@@ -271,11 +240,6 @@ class CrossStageArtifactGraph:
             "requirements_reference": self.requirements_reference.to_snapshot(),
             "design_reference": (
                 None if self.design_reference is None else self.design_reference.to_snapshot()
-            ),
-            "architecture_reference": (
-                None
-                if self.architecture_reference is None
-                else self.architecture_reference.to_snapshot()
             ),
             "nodes": [node.to_snapshot() for node in self.nodes],
             "links": [link.to_snapshot() for link in self.links],
@@ -857,7 +821,6 @@ def build_cross_stage_artifact_graph(
         project_id=requirements.project_id,
         requirements_reference=requirements_exact,
         design_reference=design_exact,
-        architecture_reference=None,
         nodes=tuple(sorted(nodes, key=lambda node: node.sort_key)),
         links=tuple(sorted(set(links), key=lambda link: link.sort_key)),
     )

@@ -74,8 +74,8 @@ export const useArtifactGraphStore = defineStore("artifactGraph", {
       return state.graph?.links.length ?? 0;
     },
 
-    isCompleteThroughArchitecture(state): boolean {
-      return state.graph?.architecture_reference !== null && state.graph !== null;
+    isCompleteThroughDesign(state): boolean {
+      return state.graph !== null && state.graph.design_reference !== null;
     },
   },
 
