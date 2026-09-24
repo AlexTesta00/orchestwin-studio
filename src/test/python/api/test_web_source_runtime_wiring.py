@@ -49,7 +49,6 @@ def test_default_factory_wires_source_service_without_connecting_or_writing(monk
         assert runtime.user_modeling_services is not None
         assert runtime.workflow_run_api_service is not None
         assert runtime.web_execution_api_service is None
-        assert runtime.jvm_execution_api_service is None
         assert isinstance(runtime.finalization_api_service, SqlAlchemyFinalizationApiService)
     finally:
         asyncio.run(runtime.close())

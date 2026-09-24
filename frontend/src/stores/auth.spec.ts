@@ -7,7 +7,6 @@ import { ArtifactGraphApiError } from "@/api/artifacts";
 import { DesignApiError } from "@/api/design";
 import { ExecutionApiError } from "@/api/execution";
 import { FinalizationApiError } from "@/api/finalization";
-import { JvmExecutionApiError } from "@/api/jvmExecution";
 import { RequirementsApiError } from "@/api/requirements";
 import { UserModelingApiError } from "@/api/userModeling";
 import { WebExecutionApiError } from "@/api/webExecution";
@@ -169,7 +168,6 @@ describe("useAuthStore", () => {
     DesignApiError,
     ExecutionApiError,
     FinalizationApiError,
-    JvmExecutionApiError,
     RequirementsApiError,
     UserModelingApiError,
     WebExecutionApiError,

@@ -8,21 +8,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from orchestwin.api import jvm_execution as jvm_commands
-from orchestwin.api import jvm_repair_runtime as jvm_repair
 from orchestwin.api import web_execution as web_commands
 from orchestwin.api import web_repair_runtime as web_repair
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.artifacts.architecture_persistence import SqlAlchemyArchitecturePackageRepository
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
-from orchestwin.artifacts.jvm_source_persistence import SqlAlchemyJvmSourceRevisionRepository
-from orchestwin.artifacts.jvm_sources import JvmSourceProvenanceKind
 from orchestwin.artifacts.web_source_persistence import SqlAlchemyWebSourceRevisionRepository
 from orchestwin.artifacts.web_sources import WebSourceProvenanceKind
+from orchestwin.artifacts.workspace_files import read_regular_file
 from orchestwin.identity.domain import UserAccount
-from orchestwin.jvm_execution.policy import policy_for
-from orchestwin.jvm_execution.source_policy import pinned_build_files
-from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.repair_diagnostics import browser_final_state, failure_log_context
@@ -44,7 +38,7 @@ from orchestwin.web_execution.targets import (
 from orchestwin.workflow.gates import GateArtifactReference, HumanGateStatus, HumanGateType
 from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
 
-Platform = Literal["web", "jvm"]
+Platform = Literal["web"]
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
@@ -82,20 +76,7 @@ def _signature_digest(signature, platform):
 
 
 def _selection(platform, body):
-    if platform == "jvm":
-        _require(
-            body.target.value in {"JVM_JAVA", "JVM_KOTLIN", "JVM_SCALA"},
-            "SOURCE_TARGET_OUTSIDE_SCOPE",
-            422,
-        )
-        _require(
-            body.frontend_language is None
-            and body.backend_language is None
-            and body.layout is WebProjectLayout.SINGLE_ROOT,
-            "JVM_WEB_OPTIONS_FORBIDDEN",
-            422,
-        )
-        return policy_for(body.target).selection
+    _require(platform == "web", "SOURCE_TARGET_OUTSIDE_SCOPE", 422)
     _require(
         body.target.value in {"WEB_STATIC", "WEB_VUE", "WEB_NODE_EXPRESS", "WEB_VUE_NODE"},
         "SOURCE_TARGET_OUTSIDE_SCOPE",
@@ -247,20 +228,9 @@ class ModelSourceApplication:
         self.adapter = runtime.real_model_runtime.sources
         self._proposal_evidence_store = runtime.proposal_evidence_store
 
-    def _fixed_files(self, platform, target):
-        if platform == "web":
-            return {}
-        repo = self.runtime.jvm_source_api_service.repo
-        _require(repo is not None, "JVM_SOURCE_RECIPE_NOT_CONFIGURED", 503)
-        return pinned_build_files(target, repo_root=repo)
-
     async def source_context(self, *, owner_user_id, project_id, platform, body):
         selection = _selection(platform, body)
-        repository = (
-            SqlAlchemyWebSourceRevisionRepository
-            if platform == "web"
-            else SqlAlchemyJvmSourceRevisionRepository
-        )
+        repository = SqlAlchemyWebSourceRevisionRepository
         async with self.sessions() as session, session.begin():
             project = await session.scalar(
                 select(ProjectRecord).where(
@@ -323,7 +293,7 @@ class ModelSourceApplication:
                     }
                 ],
             }
-        fixed = self._fixed_files(platform, body.target)
+        fixed = {}
         context["fixed_files"] = [
             file_entry(path, content, "application/octet-stream")
             for path, content in sorted(fixed.items())
@@ -332,7 +302,7 @@ class ModelSourceApplication:
         return _bounded_context(compact_implementation_references(context))
 
     async def repair_context(self, *, owner_user_id, project_id, platform, execution_id, body):
-        module = web_repair if platform == "web" else jvm_repair
+        module = web_repair
         service = getattr(self.runtime, platform + "_repair_api_service")
         try:
             attempt = await service._attempt(owner_user_id=owner_user_id, execution_id=execution_id)
@@ -373,7 +343,7 @@ class ModelSourceApplication:
                 grounding = await _repair_grounding(
                     scope.session, owner_user_id=owner_user_id, project_id=project_id, base=base
                 )
-            fixed = self._fixed_files(platform, base.target_selection.target)
+            fixed = {}
             entries = [item.to_snapshot() for item in base.files]
             selected = [item for item in entries if item["normalized_path"] not in fixed]
             _require(
@@ -461,9 +431,9 @@ class ModelSourceApplication:
         )
         proposal = await self.adapter.propose_files(task=platform + "-source", context=context)
         output = proposal.output
-        commands = web_commands if platform == "web" else jvm_commands
-        prefix = "Web" if platform == "web" else "Jvm"
-        provenance = WebSourceProvenanceKind if platform == "web" else JvmSourceProvenanceKind
+        commands = web_commands
+        prefix = "Web"
+        provenance = WebSourceProvenanceKind
         kwargs = {
             "target": body.target,
             "rationale": output.rationale,
@@ -503,18 +473,12 @@ class ModelSourceApplication:
             body=body,
         )
         proposal = await self.adapter.propose(task=platform + "-repair", context=context)
-        commands = web_commands if platform == "web" else jvm_commands
-        prefix = "Web" if platform == "web" else "Jvm"
-        operation = (
-            web_repair.WebSourceChangeOperation
-            if platform == "web"
-            else jvm_repair.JvmSourceChangeOperation
-        )
+        commands = web_commands
+        prefix = "Web"
+        operation = web_repair.WebSourceChangeOperation
         kwargs = {
             "base_revision_content_hash": body.base_revision_content_hash,
-            "failure_signature_digest"
-            if platform == "web"
-            else "failure_signature": body.failure_signature_digest,
+            "failure_signature_digest": body.failure_signature_digest,
             "rationale": proposal.output.rationale,
             "changes": tuple(
                 getattr(commands, prefix + "RepairChangeCommand")(

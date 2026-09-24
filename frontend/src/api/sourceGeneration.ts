@@ -1,5 +1,4 @@
 import { ApiRequestError } from "./requestError";
-import type { JvmRepairProposalPayload, JvmSourceRevisionPayload } from "../types/jvmExecution";
 import type {
   WebImplementationLanguage,
   WebProjectLayout,
@@ -8,9 +7,9 @@ import type {
 } from "../types/webExecution";
 import type { ExecutionTarget } from "../types/execution";
 
-export type SourcePlatform = "web" | "jvm";
-export type GeneratedSource = WebSourceRevisionPayload | JvmSourceRevisionPayload;
-export type GeneratedRepair = WebRepairProposalPayload | JvmRepairProposalPayload;
+export type SourcePlatform = "web";
+export type GeneratedSource = WebSourceRevisionPayload;
+export type GeneratedRepair = WebRepairProposalPayload;
 
 export interface SourceGenerationInput {
   target: ExecutionTarget;

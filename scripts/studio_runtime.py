@@ -13,30 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 
-def configure_jvm(configuration: Path | None = None):
-    """Load trusted local runner settings without starting Docker or changing the live API."""
-    from orchestwin.api.governed_jvm_context import GovernedJvmSettings
-
-    selected = configuration
-    if selected is None or not selected.is_file():
-        if configuration is not None:
-            raise ValueError("JVM_RUNTIME_CONFIGURATION_NOT_FOUND")
-        # Source generation needs pinned recipes even while execution remains disabled.
-        os.environ.setdefault("ORCHESTWIN_GOVERNED_JVM_REPO_ROOT", str(ROOT))
-        return
-    values = json.loads(selected.read_text(encoding="utf-8"))
-    if not isinstance(values, dict) or set(values) - set(GovernedJvmSettings.model_fields):
-        raise ValueError("JVM_RUNTIME_CONFIGURATION_INVALID")
-    values.setdefault("repo_root", str(ROOT))
-    settings = GovernedJvmSettings(_env_file=None, **values)
-    for name, value in settings.model_dump(mode="json").items():
-        key = "ORCHESTWIN_GOVERNED_JVM_" + name.upper()
-        if value is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = str(value).lower() if isinstance(value, bool) else str(value)
-
-
 def configure_web(configuration: Path | None = None):
     """Load explicit Web runner settings; capability still requires validation evidence."""
     from orchestwin.api.governed_web_context import GovernedWebSettings
@@ -70,7 +46,6 @@ def configure_web(configuration: Path | None = None):
 
 def configure(
     models: Path | None = None,
-    jvm_configuration: Path | None = None,
     web_configuration: Path | None = None,
 ):
     values = dotenv_values(ROOT / "compose.env")
@@ -92,7 +67,6 @@ def configure(
         '["http://127.0.0.1:8080","http://127.0.0.1:5173"]'
     )
     if models is not None:
-        configure_jvm(jvm_configuration)
         configure_web(web_configuration)
         os.environ["ORCHESTWIN_MODEL_RUNTIME_MODE"] = "REAL_REQUIRED"
         os.environ["ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE"] = str(models.resolve())
@@ -103,16 +77,13 @@ def main():
     parser.add_argument("action", choices=("migrate", "api", "check"))
     parser.add_argument("--models", type=Path)
     parser.add_argument(
-        "--jvm-runtime", type=Path, help="Optional trusted local JVM runner settings"
-    )
-    parser.add_argument(
         "--web-runtime", type=Path, help="Optional trusted local Web runner settings"
     )
     args = parser.parse_args()
     os.chdir(ROOT)
     if args.action != "migrate" and args.models is None:
         parser.error("--models must select an explicit real model configuration")
-    configure(args.models, args.jvm_runtime, args.web_runtime)
+    configure(args.models, args.web_runtime)
     if args.action == "migrate":
         from orchestwin.persistence import load_database_settings
         from orchestwin.persistence.migrate import upgrade_database

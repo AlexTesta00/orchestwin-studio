@@ -42,7 +42,6 @@ def test_default_factory_constructs_workflow_service_without_opening_a_connectio
         assert runtime.workflow_run_api_service._session_factory is database.session_factory
         assert runtime.user_modeling_services is not None  # C53 is preserved.
         assert runtime.web_execution_api_service is None  # Not claimed by this commit.
-        assert runtime.jvm_execution_api_service is None
         assert isinstance(runtime.finalization_api_service, SqlAlchemyFinalizationApiService)
     finally:
         asyncio.run(runtime.close())

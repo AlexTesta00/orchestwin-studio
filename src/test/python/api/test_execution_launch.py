@@ -12,12 +12,11 @@ from fastapi import FastAPI
 
 from orchestwin.api import execution_launch as launch
 from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.jvm_execution import JvmApiCommandResult, JvmApiCommandStatus
 from orchestwin.api.web_execution import WebApiCommandResult, WebApiCommandStatus
 from orchestwin.sandbox.execution_profiles import ExecutionTarget
 
 
-def revision(target=ExecutionTarget.JVM_JAVA):
+def revision(target=ExecutionTarget.WEB_NODE_EXPRESS):
     return SimpleNamespace(
         id=uuid4(), content_hash="a" * 64, target_selection=SimpleNamespace(target=target)
     )
@@ -25,43 +24,55 @@ def revision(target=ExecutionTarget.JVM_JAVA):
 
 def backend():
     return SimpleNamespace(
-        config=SimpleNamespace(
-            enabled=True, gradle_image_id="sha256:" + "b" * 64, sbt_image_id="sha256:" + "c" * 64
-        )
+        config=SimpleNamespace(enabled=True, runner_manifest="fixture", repo_root="fixture"),
+        policy=SimpleNamespace(content_hash="d" * 64),
     )
 
 
-@pytest.mark.parametrize(
-    "target", [ExecutionTarget.JVM_JAVA, ExecutionTarget.JVM_KOTLIN, ExecutionTarget.JVM_SCALA]
-)
-def test_defaults_bind_configured_runner_and_require_later_owner_approval(target):
+def runner_identities(monkeypatch):
+    monkeypatch.setattr(
+        launch,
+        "load_phase_runner_identity",
+        lambda *args, kind, **kwargs: SimpleNamespace(
+            image_id="sha256:" + ("b" if kind in {"NODE", "PHP"} else "c") * 64
+        ),
+    )
+
+
+@pytest.mark.parametrize("target", [ExecutionTarget.WEB_STATIC, ExecutionTarget.WEB_NODE_EXPRESS])
+def test_defaults_bind_configured_runners_and_require_later_owner_approval(monkeypatch, target):
+    runner_identities(monkeypatch)
     source = revision(target)
-    command = launch.default_execution_command("jvm", backend(), source, None)
+    command = launch.default_execution_command("web", backend(), source, None)
     assert command.source_revision_id == source.id
-    assert command.runner_image_digest == ("c" if target is ExecutionTarget.JVM_SCALA else "b") * 64
+    assert command.execution_runner_image_digest == "b" * 64
+    assert command.browser_runner_image_digest == (
+        "c" * 64 if target is ExecutionTarget.WEB_STATIC else None
+    )
     assert command.authorization_id is None
     assert command.purpose.value == "OWNER_PROJECT"
     assert command.trigger.value == "INITIAL"
 
 
 @pytest.mark.parametrize("same_source,trigger", [(True, "MANUAL_RERUN"), (False, "REPAIR_RERUN")])
-def test_reruns_include_all_phases_for_a_fresh_workspace(same_source, trigger):
+def test_reruns_include_all_phases_for_a_fresh_workspace(monkeypatch, same_source, trigger):
+    runner_identities(monkeypatch)
     source = revision()
     previous = SimpleNamespace(
         source_revision=SimpleNamespace(
             content_hash=source.content_hash if same_source else "d" * 64
         )
     )
-    command = launch.default_execution_command("jvm", backend(), source, previous)
+    command = launch.default_execution_command("web", backend(), source, previous)
     assert command.trigger.value == trigger
-    assert command.rerun_phases == tuple(launch.JvmExecutionPhase)
+    assert command.rerun_phases == tuple(launch.WebExecutionPhase)
 
 
 def test_disabled_runtime_has_no_invented_defaults():
     configured = backend()
     configured.config.enabled = False
     with pytest.raises(ValueError, match="DISABLED"):
-        launch.default_execution_command("jvm", configured, revision(), None)
+        launch.default_execution_command("web", configured, revision(), None)
 
 
 @pytest.mark.parametrize("target", [ExecutionTarget.WEB_STATIC, ExecutionTarget.WEB_NODE_EXPRESS])
@@ -184,20 +195,21 @@ def test_route_revalidates_source_and_only_prepares(monkeypatch, case, status):
     async def sessions():
         yield object()
 
-    monkeypatch.setattr(launch, "SqlAlchemyJvmSourceRevisionRepository", Sources)
-    monkeypatch.setattr(launch, "SqlAlchemyJvmExecutionAttemptRepository", Attempts)
+    monkeypatch.setattr(launch, "SqlAlchemyWebSourceRevisionRepository", Sources)
+    monkeypatch.setattr(launch, "SqlAlchemyWebExecutionAttemptRepository", Attempts)
+    runner_identities(monkeypatch)
     service = SimpleNamespace(
         sessions=sessions,
         backend=backend(),
         prepare_execution=AsyncMock(
-            return_value=JvmApiCommandResult(
-                JvmApiCommandStatus.EXECUTION_PREPARED, {"id": str(uuid4())}, "Prepared only."
+            return_value=WebApiCommandResult(
+                WebApiCommandStatus.EXECUTION_PREPARED, {"id": str(uuid4())}, "Prepared only."
             )
         ),
         start_execution=AsyncMock(),
     )
     app = FastAPI()
-    app.state.jvm_execution_start_api_service = service
+    app.state.web_execution_start_api_service = service
     app.dependency_overrides[current_user_dependency] = lambda: SimpleNamespace(id=owner)
     app.include_router(launch.create_execution_launch_router())
 
@@ -214,7 +226,7 @@ def test_route_revalidates_source_and_only_prepares(monkeypatch, case, status):
             if case == "runner_override":
                 body["runner_image_digest"] = "e" * 64
             response = await client.post(
-                f"/projects/{project}/execution-launch/jvm/prepare", json=body
+                f"/projects/{project}/execution-launch/web/prepare", json=body
             )
             assert response.status_code == status, response.text
 

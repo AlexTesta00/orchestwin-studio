@@ -6,8 +6,6 @@ import type {
   ExecutionLaunchApi,
   ExecutionOperation,
 } from "@/api/executionLaunch";
-import type { JvmSourceRevisionPayload } from "@/types/jvmExecution";
-import { useJvmExecutionStore } from "@/stores/jvmExecution";
 import { useWebExecutionStore } from "@/stores/webExecution";
 import type { WebSourceRevisionPayload } from "@/types/webExecution";
 import ProjectExecutionLaunch from "./ProjectExecutionLaunch.vue";
@@ -32,7 +30,7 @@ function operation(): ExecutionOperation {
 function setup(existing: ExecutionOperation[] = []) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  const store = useJvmExecutionStore();
+  const store = useWebExecutionStore();
   store.$patch({
     activeProjectId: "project",
     sourceRevisions: [
@@ -40,8 +38,8 @@ function setup(existing: ExecutionOperation[] = []) {
         id: "source",
         version_number: 1,
         content_hash: "a".repeat(64),
-        target_selection: { target: "JVM_JAVA" },
-      } as JvmSourceRevisionPayload,
+        target_selection: { target: "WEB_NODE_EXPRESS" },
+      } as WebSourceRevisionPayload,
     ],
   });
   vi.spyOn(store, "loadProject").mockResolvedValue();
@@ -68,7 +66,7 @@ function setup(existing: ExecutionOperation[] = []) {
   const wrapper = mount(ProjectExecutionLaunch, {
     props: {
       projectId: "project",
-      platform: "jvm",
+      platform: "web",
       api,
       authorize: <T>(fn: (token: string) => Promise<T>) => fn("token"),
     },
@@ -93,7 +91,7 @@ describe("configured execution launch", () => {
     await flushPromises();
     expect(api.decide).toHaveBeenCalledWith(
       "project",
-      "jvm",
+      "web",
       expect.objectContaining({ content_hash: "b".repeat(64) }),
       "APPROVE",
       "token",
@@ -121,7 +119,7 @@ describe("configured execution launch", () => {
     expect(button("Start approved execution").attributes("disabled")).toBeDefined();
     await button("Cancel plan").trigger("click");
     await flushPromises();
-    expect(api.decide).toHaveBeenCalledWith("project", "jvm", expect.anything(), "CANCEL", "token");
+    expect(api.decide).toHaveBeenCalledWith("project", "web", expect.anything(), "CANCEL", "token");
   });
 
   it("allows exact repair approval without offering execution of a repair payload", async () => {
@@ -141,7 +139,7 @@ describe("configured execution launch", () => {
     await button("Apply approved repair").trigger("click");
     await flushPromises();
     expect(api.applyRepair).toHaveBeenCalledWith(
-      "jvm",
+      "web",
       expect.objectContaining({ id: "operation" }),
       "token",
     );

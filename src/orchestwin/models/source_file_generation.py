@@ -871,7 +871,7 @@ async def _generate_file(generator, *, task, context, planned, target, entrypoin
                     media_type=planned.media_type,
                     content=assemble_static_module(output) if parts_type else output.content,
                 )
-                _validate_files([item], task=task)
+                _validate_files([item])
                 _validate_file_language(item)
                 if target == "WEB_STATIC":
                     await asyncio.to_thread(validate_source_syntax, item)

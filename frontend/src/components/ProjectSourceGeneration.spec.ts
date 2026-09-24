@@ -4,7 +4,6 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { useArchitectureStore } from "@/stores/architecture";
 import { useWebExecutionStore } from "@/stores/webExecution";
-import { useJvmExecutionStore } from "@/stores/jvmExecution";
 import type {
   ArchitecturePackageVersionPayload,
   ArchitectureReadinessPayload,
@@ -33,7 +32,6 @@ function setup(approved = true) {
     repair: vi.fn(),
   };
   const webReload = vi.spyOn(useWebExecutionStore(), "loadProject").mockResolvedValue();
-  const jvmReload = vi.spyOn(useJvmExecutionStore(), "loadProject").mockResolvedValue();
   const wrapper = mount(ProjectSourceGeneration, {
     props: {
       projectId: "project",
@@ -50,7 +48,7 @@ function setup(approved = true) {
     },
     global: { plugins: [pinia, createAppI18n("en")] },
   });
-  return { wrapper, api, webReload, jvmReload };
+  return { wrapper, api, webReload };
 }
 
 describe("source generation", () => {
@@ -81,7 +79,7 @@ describe("source generation", () => {
   it.each(["WEB_STATIC", "WEB_VUE"] as const)(
     "generates %s with its approved architecture and refreshes source review",
     async (target) => {
-      const { wrapper, api, webReload, jvmReload } = setup();
+      const { wrapper, api, webReload } = setup();
       await flushPromises();
       await wrapper.get("select").setValue(target);
       await wrapper.get("form").trigger("submit");
@@ -98,7 +96,6 @@ describe("source generation", () => {
         "token",
       );
       expect(webReload).toHaveBeenCalledTimes(1);
-      expect(jvmReload).not.toHaveBeenCalled();
       expect(wrapper.text()).toContain("Generated revision 1");
     },
   );

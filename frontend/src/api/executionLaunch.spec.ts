@@ -3,69 +3,60 @@ import { createExecutionLaunchApi, type ExecutionOperation } from "./executionLa
 import { ApiError } from "./client";
 
 describe("execution launch transport", () => {
-  it.each(["web", "jvm"] as const)(
-    "starts %s with its actual API runner shape and exact approval",
-    async (platform) => {
-      const fetchImpl = vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ snapshot: { id: "attempt" } }), { status: 201 }),
-        );
-      const shared = {
+  it("starts web with its actual API runner shape and exact approval", async () => {
+    const platform = "web";
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ snapshot: { id: "attempt" } }), { status: 201 }),
+      );
+    const shared = {
+      source_revision_id: "source",
+      profile_id: "profile",
+      profile_version: "1",
+      policy_content_hash: "c".repeat(64),
+      purpose: "OWNER_PROJECT",
+      trigger: "INITIAL",
+      authorization_id: null,
+      rerun_phases: null,
+    };
+    const command = {
+      ...shared,
+      execution_runner_image_digest: "a".repeat(64),
+      browser_runner_image_digest: "b".repeat(64),
+      declared_routes: [],
+      browser_interactions: [],
+    };
+    const before = structuredClone(command);
+    await createExecutionLaunchApi(fetchImpl).start(
+      "project",
+      platform,
+      {
+        id: "approved-operation",
         source_revision_id: "source",
-        profile_id: "profile",
-        profile_version: "1",
-        policy_content_hash: "c".repeat(64),
-        purpose: "OWNER_PROJECT",
-        trigger: "INITIAL",
-        authorization_id: null,
-        rerun_phases: null,
-      };
-      const command =
-        platform === "web"
-          ? {
-              ...shared,
-              execution_runner_image_digest: "a".repeat(64),
-              browser_runner_image_digest: "b".repeat(64),
-              declared_routes: [],
-              browser_interactions: [],
-            }
-          : { ...shared, runner_image_digest: "a".repeat(64) };
-      const before = structuredClone(command);
-      await createExecutionLaunchApi(fetchImpl).start(
-        "project",
-        platform,
-        {
-          id: "approved-operation",
-          source_revision_id: "source",
-          kind: "EXECUTION",
-          content_hash: "d".repeat(64),
-          state: "APPROVED",
-          gate_current: true,
-          gate: { id: "gate", status: "APPROVED", event_sequence: 2 },
-          payload: { command },
-        },
-        "token",
-      );
-      const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
-      expect(fetchImpl.mock.calls[0]![0]).toBe(`/api/v1/projects/project/${platform}-executions`);
-      expect(body).toEqual(
-        platform === "web"
-          ? {
-              ...shared,
-              authorization_id: "approved-operation",
-              runners: {
-                execution_runner_image_digest: "a".repeat(64),
-                browser_runner_image_digest: "b".repeat(64),
-              },
-              declared_routes: [],
-              browser_interactions: [],
-            }
-          : { ...command, authorization_id: "approved-operation" },
-      );
-      expect(command).toEqual(before);
-    },
-  );
+        kind: "EXECUTION",
+        content_hash: "d".repeat(64),
+        state: "APPROVED",
+        gate_current: true,
+        gate: { id: "gate", status: "APPROVED", event_sequence: 2 },
+        payload: { command },
+      },
+      "token",
+    );
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
+    expect(fetchImpl.mock.calls[0]![0]).toBe(`/api/v1/projects/project/${platform}-executions`);
+    expect(body).toEqual({
+      ...shared,
+      authorization_id: "approved-operation",
+      runners: {
+        execution_runner_image_digest: "a".repeat(64),
+        browser_runner_image_digest: "b".repeat(64),
+      },
+      declared_routes: [],
+      browser_interactions: [],
+    });
+    expect(command).toEqual(before);
+  });
 
   it("does not send incomplete or repair operations to the execution endpoint", async () => {
     const fetchImpl = vi.fn();
@@ -91,12 +82,12 @@ describe("execution launch transport", () => {
       .mockResolvedValue(new Response(JSON.stringify({ snapshot: { id: "op" } }), { status: 201 }));
     await createExecutionLaunchApi(fetchImpl).prepare(
       "project/id",
-      "jvm",
+      "web",
       { id: "source", content_hash: "a".repeat(64) },
       "token",
     );
     expect(fetchImpl).toHaveBeenCalledWith(
-      "/api/v1/projects/project%2Fid/execution-launch/jvm/prepare",
+      "/api/v1/projects/project%2Fid/execution-launch/web/prepare",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -133,7 +124,7 @@ describe("execution launch transport", () => {
         new Response(JSON.stringify({ detail: { code: "EXPIRED" } }), { status: 401 }),
       );
     await expect(
-      createExecutionLaunchApi(fetchImpl).history("p", "jvm", "token"),
+      createExecutionLaunchApi(fetchImpl).history("p", "web", "token"),
     ).rejects.toBeInstanceOf(ApiError);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -143,7 +134,7 @@ describe("execution launch transport", () => {
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ snapshot: { id: "revision" } })));
     await createExecutionLaunchApi(fetchImpl).applyRepair(
-      "jvm",
+      "web",
       {
         id: "operation",
         kind: "REPAIR",
@@ -157,7 +148,7 @@ describe("execution launch transport", () => {
       "token",
     );
     expect(fetchImpl.mock.calls[0]![0]).toBe(
-      "/api/v1/jvm-executions/attempt/repair-proposals/operation/apply",
+      "/api/v1/web-executions/attempt/repair-proposals/operation/apply",
     );
     expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toEqual({
       base_revision_content_hash: "a".repeat(64),

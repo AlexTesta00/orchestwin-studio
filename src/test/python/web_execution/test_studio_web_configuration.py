@@ -42,7 +42,6 @@ def test_absent_optional_configuration_disables_web_and_clears_stale_settings(
         "ORCHESTWIN_GOVERNED_WEB_RUNNER_MANIFEST": str(tmp_path / "old.json"),
         "ORCHESTWIN_GOVERNED_WEB_WORKSPACES_ROOT": str(tmp_path / "old-work"),
         "ORCHESTWIN_GOVERNED_WEB_CONTROLLED_NETWORK": json.dumps(network()),
-        "ORCHESTWIN_GOVERNED_JVM_ENABLED": "true",
         "ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE": "existing-model.json",
     }
     monkeypatch.setattr(studio_runtime.os, "environ", environment)
@@ -55,7 +54,6 @@ def test_absent_optional_configuration_disables_web_and_clears_stale_settings(
     assert (
         settings.runner_manifest is settings.workspaces_root is settings.controlled_network is None
     )
-    assert environment["ORCHESTWIN_GOVERNED_JVM_ENABLED"] == "true"
     assert environment["ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE"] == "existing-model.json"
     assert "ORCHESTWIN_GOVERNED_WEB_CONTROLLED_NETWORK" not in environment
 
@@ -99,7 +97,7 @@ def test_explicit_null_network_removes_an_inherited_lease(tmp_path, monkeypatch)
 @pytest.mark.parametrize("payload", [{"unknown_setting": "value"}, [], {"enabled": True}])
 def test_invalid_configuration_cannot_partially_replace_environment(tmp_path, monkeypatch, payload):
     monkeypatch.setattr(studio_runtime, "ROOT", tmp_path)
-    original = {"ORCHESTWIN_GOVERNED_JVM_ENABLED": "true"}
+    original = {"ORCHESTWIN_GOVERNED_WEB_ENABLED": "true"}
     monkeypatch.setattr(studio_runtime.os, "environ", original.copy())
     path = tmp_path / "invalid.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -120,9 +118,7 @@ def test_missing_explicit_configuration_fails_without_disabling_the_running_sele
     assert studio_runtime.os.environ == original
 
 
-def test_native_launcher_loads_web_alongside_the_selected_real_models_and_jvm(
-    tmp_path, monkeypatch
-):
+def test_native_launcher_loads_web_alongside_the_selected_real_models(tmp_path, monkeypatch):
     monkeypatch.setattr(studio_runtime, "ROOT", tmp_path)
     monkeypatch.setattr(studio_runtime.os, "environ", {})
     monkeypatch.setattr(
@@ -133,14 +129,11 @@ def test_native_launcher_loads_web_alongside_the_selected_real_models_and_jvm(
             "ORCHESTWIN_AUTH_JWT_SECRET": "test-only-secret",
         },
     )
-    jvm_selections = []
-    monkeypatch.setattr(studio_runtime, "configure_jvm", jvm_selections.append)
-    models, jvm = tmp_path / "models.json", tmp_path / "jvm.json"
+    models = tmp_path / "models.json"
     web = write_configuration(tmp_path, controlled_network=None)
 
-    studio_runtime.configure(models, jvm, web)
+    studio_runtime.configure(models, web)
 
-    assert jvm_selections == [jvm]
     assert GovernedWebSettings(_env_file=None).enabled
     assert studio_runtime.os.environ["ORCHESTWIN_MODEL_RUNTIME_MODE"] == "REAL_REQUIRED"
     assert studio_runtime.os.environ["ORCHESTWIN_MODEL_RUNTIME_CONFIG_FILE"] == str(
