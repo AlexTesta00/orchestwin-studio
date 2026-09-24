@@ -9,10 +9,12 @@ import { createAppI18n } from "@/i18n";
 
 import { userModelingApi } from "../api/userModeling";
 
+import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
   HumanGatePayload,
+  PersonaProposalCommandPayload,
   PersonaVersionPayload,
   ProfileObservationPayload,
   UserModelingReadinessPayload,
@@ -702,5 +704,59 @@ describe("ProjectUserModelingFlow", () => {
     expect(button.text()).toBe(`Talk to ${twinVersion.profile.name}`);
     await button.trigger("click");
     expect(wrapper.emitted("open-chat")?.[0]?.[0]).toEqual(twinVersion);
+  });
+
+  it("proposes the user profiles by itself once the team is approved and no profile exists", async () => {
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    const store = useUserModelingStore();
+    const load = vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "en", autoLoad: true },
+    });
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(propose).toHaveBeenCalledTimes(1);
+    expect(propose).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+
+    await flushPromises();
+
+    expect(propose).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("does not propose by itself before the team approval or when profiles already exist", async () => {
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "TEAM_APPROVAL_REQUIRED" };
+    const store = useUserModelingStore();
+    vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "en", autoLoad: true },
+    });
+    await flushPromises();
+
+    expect(propose).not.toHaveBeenCalled();
+
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [pendingPersona];
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    await flushPromises();
+
+    expect(propose).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 });
