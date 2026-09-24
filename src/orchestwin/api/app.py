@@ -22,8 +22,6 @@ from orchestwin.api.execution import create_execution_router
 from orchestwin.api.execution_launch import create_execution_launch_router
 from orchestwin.api.finalization import create_finalization_router
 from orchestwin.api.health import create_health_router
-from orchestwin.api.jvm_execution import create_jvm_execution_router
-from orchestwin.api.jvm_operations import create_jvm_operations_router
 from orchestwin.api.model_runtime import create_model_runtime_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.proposal_evidence import create_proposal_evidence_router
@@ -157,16 +155,6 @@ def create_app(
     application.state.web_execution_read_api_service = (
         resolved_runtime.web_execution_read_api_service
     )
-    application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
-    application.state.jvm_execution_read_api_service = (
-        resolved_runtime.jvm_execution_read_api_service
-    )
-    application.state.jvm_execution_start_api_service = (
-        resolved_runtime.jvm_execution_start_api_service
-    )
-    application.state.jvm_source_api_service = resolved_runtime.jvm_source_api_service
-    application.state.jvm_repair_api_service = resolved_runtime.jvm_repair_api_service
-    application.state.jvm_operation_store = resolved_runtime.jvm_operation_store
     application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
     application.state.finalization_api_service = resolved_runtime.finalization_api_service
     application.state.training_api_service = resolved_runtime.training_api_service
@@ -211,8 +199,6 @@ def create_app(
         create_static_inspection_router(),
         create_web_execution_router(),
         create_web_operations_router(),
-        create_jvm_execution_router(),
-        create_jvm_operations_router(),
         create_workflow_run_router(),
         create_finalization_router(),
         create_training_router(),

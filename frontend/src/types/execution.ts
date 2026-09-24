@@ -20,9 +20,6 @@ export type ExecutionTarget =
   | "WEB_NODE_EXPRESS"
   | "WEB_PHP"
   | "WEB_VUE_NODE"
-  | "JVM_JAVA"
-  | "JVM_KOTLIN"
-  | "JVM_SCALA"
   | "ANDROID_JAVA"
   | "ANDROID_KOTLIN"
   | "CUSTOM_DECLARATIVE";

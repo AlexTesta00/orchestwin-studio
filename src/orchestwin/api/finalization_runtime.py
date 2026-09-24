@@ -42,10 +42,10 @@ from orchestwin.artifacts.export_persistence import (
     StoredExportBundle,
 )
 from orchestwin.artifacts.web_source_persistence import SqlAlchemyWebSourceRevisionRepository
+from orchestwin.artifacts.workspace_files import read_regular_file
 from orchestwin.evaluation.aggregation import aggregate_synthetic_evaluation
 from orchestwin.evaluation.persistence import SqlAlchemySyntheticEvaluationRepository
 from orchestwin.evaluation.run_restore import synthetic_evaluation_run_from_snapshot
-from orchestwin.jvm_execution.workspaces import read_regular_file
 from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.persistence.briefs import SqlAlchemyProjectBriefRepository
 from orchestwin.projects.persistence.models import ProjectRecord

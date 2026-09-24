@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
-from orchestwin.jvm_execution.workspaces import read_regular_file
+from orchestwin.artifacts.workspace_files import read_regular_file
 
 MAX_LOG_BYTES = 8 * 1024 * 1024
 EXCERPT_BYTES = 3072

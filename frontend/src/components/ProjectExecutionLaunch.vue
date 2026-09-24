@@ -17,7 +17,6 @@ import UiCard from "./UiCard.vue";
 import type { SourcePlatform } from "@/api/sourceGeneration";
 import { useAuthStore } from "@/stores/auth";
 import { useWebExecutionStore } from "@/stores/webExecution";
-import { useJvmExecutionStore } from "@/stores/jvmExecution";
 
 const props = withDefaults(
   defineProps<{
@@ -31,8 +30,7 @@ const props = withDefaults(
 );
 const auth = useAuthStore();
 const web = useWebExecutionStore();
-const jvm = useJvmExecutionStore();
-const store = computed(() => (props.platform === "web" ? web : jvm));
+const store = computed(() => web);
 const source = computed(() =>
   store.value.activeProjectId === props.projectId ? store.value.currentSourceRevision : null,
 );

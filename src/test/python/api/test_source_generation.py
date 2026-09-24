@@ -57,8 +57,6 @@ def test_missing_authentication_or_real_runtime_never_falls_back(authenticated, 
     [
         ("web", {"target": "JVM_JAVA"}),
         ("web", {"target": "WEB_STATIC", "backend_language": "JAVASCRIPT"}),
-        ("jvm", {"target": "WEB_STATIC"}),
-        ("jvm", {"target": "JVM_KOTLIN", "frontend_language": "STATIC_ASSETS"}),
     ],
 )
 def test_invalid_target_configuration_is_an_admission_error(platform, options):

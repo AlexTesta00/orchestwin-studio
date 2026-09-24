@@ -6,19 +6,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from orchestwin.jvm_execution.evidence import JvmEvidenceReference
 from orchestwin.models.repair_diagnostics import (
     EXCERPT_BYTES,
     browser_final_state,
     failure_log_context,
 )
 from orchestwin.models.source_proposals import file_entry
+from orchestwin.web_execution.reports import WebEvidenceReference
 
 
 def log(tmp_path, raw):
     entry = file_entry("stdout.log", raw, "text/plain")
     entry.pop("normalized_path")
-    reference = JvmEvidenceReference(**entry)
+    reference = WebEvidenceReference(**entry)
     path = tmp_path / reference.storage_key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)
@@ -79,7 +79,7 @@ def test_reference_budget_reports_omissions_without_inventing_content(tmp_path):
 def artifact(tmp_path, name, raw, media_type):
     entry = file_entry(name, raw, media_type)
     entry.pop("normalized_path")
-    reference = JvmEvidenceReference(**entry)
+    reference = WebEvidenceReference(**entry)
     path = tmp_path / reference.storage_key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)

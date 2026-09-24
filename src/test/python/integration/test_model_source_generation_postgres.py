@@ -14,9 +14,6 @@ import sqlalchemy as sa
 
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
-from orchestwin.api.jvm_execution import JvmRepairProposalApplyCommand
-from orchestwin.api.jvm_repair_runtime import SqlAlchemyJvmRepairApiService
-from orchestwin.api.jvm_source_runtime import SqlAlchemyJvmSourceApiService
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.api.web_execution import WebRepairProposalApplyCommand
 from orchestwin.api.web_repair_runtime import SqlAlchemyWebRepairApiService
@@ -24,15 +21,9 @@ from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
 from orchestwin.artifacts.architecture_packages import ArchitecturePackageVersion
 from orchestwin.artifacts.architecture_persistence import SqlAlchemyArchitecturePackageRepository
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
-from orchestwin.artifacts.jvm_source_persistence import SqlAlchemyJvmSourceRevisionRepository
 from orchestwin.artifacts.web_source_persistence import SqlAlchemyWebSourceRevisionRepository
 from orchestwin.config import ApplicationSettings
 from orchestwin.identity.persistence.models import UserRecord
-from orchestwin.jvm_execution.attempt_persistence import SqlAlchemyJvmExecutionAttemptRepository
-from orchestwin.jvm_execution.attempts import JvmExecutionAttempt, JvmExecutionAttemptTrigger
-from orchestwin.jvm_execution.operation_persistence import SqlAlchemyJvmOperationStore
-from orchestwin.jvm_execution.plans import JvmExecutionPhase
-from orchestwin.jvm_execution.targets import jvm_scope_for
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_evidence_persistence import (
     LINKS,
@@ -55,7 +46,6 @@ from src.test.python.integration.test_postgresql_workflow_progression import (
     _persist_pending_gate,
 )
 from src.test.python.integration.test_proposal_evidence_postgres import database, run
-from src.test.python.jvm_execution import attempt_support as jvm_fixture
 from src.test.python.models.test_fake_architecture import proposal_request, propose
 from src.test.python.models.test_proposal_evidence import audited_generator
 from src.test.python.models.test_source_file_generation import (
@@ -72,12 +62,7 @@ pytestmark = [
     ),
 ]
 ROOT = Path(__file__).resolve().parents[4]
-TARGETS = [
-    ExecutionTarget.WEB_STATIC,
-    ExecutionTarget.JVM_JAVA,
-    ExecutionTarget.JVM_KOTLIN,
-    ExecutionTarget.JVM_SCALA,
-]
+TARGETS = [ExecutionTarget.WEB_STATIC]
 
 
 def artifacts():
@@ -154,78 +139,44 @@ def application(database_runtime, directory, generator):
         web_source_api_service=SqlAlchemyWebSourceApiService(
             sessions, content_root=directory / "web"
         ),
-        jvm_source_api_service=SqlAlchemyJvmSourceApiService(
-            sessions, content_root=directory / "jvm", repo_root=ROOT
-        ),
         web_repair_api_service=SqlAlchemyWebRepairApiService(
             sessions,
             operation_store=SqlAlchemyWebOperationStore(sessions),
             content_root=directory / "web",
         ),
-        jvm_repair_api_service=SqlAlchemyJvmRepairApiService(
-            sessions,
-            operation_store=SqlAlchemyJvmOperationStore(sessions),
-            content_root=directory / "jvm",
-            repo_root=ROOT,
-        ),
     )
 
 
 def source_output(target):
-    path = {
-        ExecutionTarget.WEB_STATIC: "index.html",
-        ExecutionTarget.JVM_JAVA: "src/main/java/org/orchestwin/greeting/Main.java",
-        ExecutionTarget.JVM_KOTLIN: "src/main/kotlin/org/orchestwin/calculator/Main.kt",
-        ExecutionTarget.JVM_SCALA: "src/main/scala/org/orchestwin/greeting/Main.scala",
-    }[target]
-    content = {
-        ExecutionTarget.WEB_STATIC: (
+    assert target is ExecutionTarget.WEB_STATIC
+    entry = {
+        "normalized_path": "index.html",
+        "media_type": "text/html",
+        "content": (
             '<!doctype html><title>Fixture</title><section data-design-screen="SCR-001">'
             '<input name="guest_name" required aria-label="Guest name" data-design-element="ELM-001">'
             '<button data-design-element="ELM-002" data-design-target="SCR-002">Save reservation</button>'
             '</section><section data-design-screen="SCR-002"><p>Reservation saved</p></section>'
         ),
-        ExecutionTarget.JVM_JAVA: 'package org.orchestwin.greeting; public class Main { public static void main(String[] args) { System.out.println("Fixture"); } }',
-        ExecutionTarget.JVM_KOTLIN: 'package org.orchestwin.calculator\nfun main() { println("Fixture") }',
-        ExecutionTarget.JVM_SCALA: 'package org.orchestwin.greeting\nobject Main { def main(args: Array[String]): Unit = println("Fixture") }',
-    }[target]
-    test_path = (
-        "app.test.cjs"
-        if target is ExecutionTarget.WEB_STATIC
-        else path.replace("src/main/", "src/test/").replace("Main.", "MainTest.")
-    )
-    test_files = [
-        {
-            "normalized_path": test_path,
-            "media_type": "text/javascript"
-            if target is ExecutionTarget.WEB_STATIC
-            else "text/plain",
-            "content": (
-                "const test = require('node:test');\n"
-                "const assert = require('node:assert/strict');\n"
-                "test('value', () => { assert.equal(require('./app.js').value(), 'Fixture'); });\n"
-            )
-            if target is ExecutionTarget.WEB_STATIC
-            else "// Synthetic test source; this fixture checks persistence only.",
-        }
-    ]
-    if target is ExecutionTarget.WEB_STATIC:
-        test_files.insert(
-            0,
-            app_file(
-                functions=[{"name": "value", "parameters": "", "body": "  return 'Fixture';"}]
-            ),
-        )
-    entry = {
-        "normalized_path": path,
-        "content": content,
-        "media_type": "text/html" if target is ExecutionTarget.WEB_STATIC else "text/plain",
+    }
+    test_file = {
+        "normalized_path": "app.test.cjs",
+        "media_type": "text/javascript",
+        "content": (
+            "const test = require('node:test');\n"
+            "const assert = require('node:assert/strict');\n"
+            "test('value', () => { assert.equal(require('./app.js').value(), 'Fixture'); });\n"
+        ),
     }
     return {
         "rationale": "Implement the synthetic approved context.",
-        "files": [*test_files, entry]
-        if target is ExecutionTarget.WEB_STATIC
-        else [entry, *test_files],
+        "files": [
+            app_file(
+                functions=[{"name": "value", "parameters": "", "body": "  return 'Fixture';"}]
+            ),
+            test_file,
+            entry,
+        ],
     }
 
 
@@ -258,7 +209,7 @@ def test_generated_sources_use_governed_api_and_exact_atomic_link(database, tmp_
         try:
             owner, project = await seed(db, versions)
             runtime = application(db, tmp_path, generator)
-            platform = "web" if target is ExecutionTarget.WEB_STATIC else "jvm"
+            platform = "web"
             app = client_app(runtime, owner)
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://synthetic/api/v1"
@@ -445,68 +396,33 @@ def test_sql_rejects_file_request_with_wrong_manifest(database, tmp_path, monkey
 
 
 async def failed_attempt(db, owner, project, target):
-    """Persist explicitly synthetic failure reports, never production execution evidence."""
-    web = target is ExecutionTarget.WEB_STATIC
-    sources = (
-        SqlAlchemyWebSourceRevisionRepository if web else SqlAlchemyJvmSourceRevisionRepository
-    )
-    attempts = (
-        SqlAlchemyWebExecutionAttemptRepository if web else SqlAlchemyJvmExecutionAttemptRepository
-    )
+    assert target is ExecutionTarget.WEB_STATIC
     async with db.session_factory() as session, session.begin():
-        base = await sources(session, owner_user_id=owner).current(project_id=project)
-        if web:
-            template = web_fixture.execution(
-                SimpleNamespace(
-                    reference=replace(base.reference, project_id=web_fixture.PROJECT),
-                    content_hash=base.content_hash,
-                    source_tree_hash=base.source_tree_hash,
-                )
+        base = await SqlAlchemyWebSourceRevisionRepository(session, owner_user_id=owner).current(
+            project_id=project
+        )
+        template = web_fixture.execution(
+            SimpleNamespace(
+                reference=replace(base.reference, project_id=web_fixture.PROJECT),
+                content_hash=base.content_hash,
+                source_tree_hash=base.source_tree_hash,
             )
-            attempt = replace(
-                template,
-                id=uuid4(),
-                project_id=project,
-                created_by_user_id=owner,
-                source_revision=base.reference,
-            )
-        else:
-            bundle, report = jvm_fixture.execution_report(
-                target, failure_phase=JvmExecutionPhase.TEST
-            )
-            scope = jvm_scope_for(target)
-            attempt = JvmExecutionAttempt(
-                id=uuid4(),
-                project_id=project,
-                created_by_user_id=owner,
-                attempt_number=1,
-                previous_attempt_id=None,
-                source_revision=base.reference,
-                profile_id=scope.profile_id,
-                profile_version=scope.profile_version,
-                profile_validation_content_hash="d" * 64,
-                execution_plan_content_hash=bundle.content_hash,
-                runner_id="synthetic.fixture",
-                runner_version="1.0.0",
-                runner_image_digest="e" * 64,
-                policy_content_hash="f" * 64,
-                trigger=JvmExecutionAttemptTrigger.INITIAL,
-                executed_phases=tuple(JvmExecutionPhase),
-                report=report,
-                started_at=jvm_fixture.STARTED_AT,
-                completed_at=jvm_fixture.COMPLETED_AT,
-            )
+        )
+        attempt = replace(
+            template,
+            id=uuid4(),
+            project_id=project,
+            created_by_user_id=owner,
+            source_revision=base.reference,
+        )
         assert (
-            await attempts(session, owner_user_id=owner).append(attempt)
+            await SqlAlchemyWebExecutionAttemptRepository(session, owner_user_id=owner).append(
+                attempt
+            )
         ).status.value == "APPENDED"
-    signature = (
-        attempt.report.failure_signatures()[0].digest
-        if web
-        else attempt.report.failure_signatures[0].signature
-    )
     return attempt, {
         "base_revision_content_hash": base.content_hash,
-        "failure_signature_digest": signature,
+        "failure_signature_digest": attempt.report.failure_signatures()[0].digest,
     }
 
 
@@ -524,7 +440,7 @@ def test_generated_repairs_remain_pending_and_exact(
         try:
             owner, project = await seed(db, versions)
             runtime = application(db, tmp_path, generator)
-            platform = "web" if target is ExecutionTarget.WEB_STATIC else "jvm"
+            platform = "web"
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=client_app(runtime, owner)),
                 base_url="http://synthetic/api/v1",
@@ -623,11 +539,7 @@ def test_generated_repairs_remain_pending_and_exact(
                     snapshot = response.json()["snapshot"]
                     assert snapshot["state"] == "PENDING"
                     assert snapshot["gate"]["status"] == "PENDING_APPROVAL"
-                    apply_command = (
-                        WebRepairProposalApplyCommand
-                        if platform == "web"
-                        else JvmRepairProposalApplyCommand
-                    )
+                    apply_command = WebRepairProposalApplyCommand
                     denied = await service.apply_repair_proposal(
                         owner_user_id=owner,
                         execution_id=attempt.id,
@@ -657,11 +569,7 @@ def test_generated_repairs_remain_pending_and_exact(
                         == snapshot["payload"]["proposal"]["change_set"]["changes"]
                     )
                     assert accepted["execution_content_hash"] == attempt.content_hash
-                repository = (
-                    SqlAlchemyWebSourceRevisionRepository
-                    if platform == "web"
-                    else SqlAlchemyJvmSourceRevisionRepository
-                )
+                repository = SqlAlchemyWebSourceRevisionRepository
                 async with db.session_factory() as session:
                     history = await repository(session, owner_user_id=owner).history(
                         project_id=project

@@ -13,7 +13,7 @@ describe("source generation API", () => {
       );
     const api = createSourceGenerationApi({ fetchImpl });
     const source = {
-      target: "JVM_JAVA" as const,
+      target: "WEB_STATIC" as const,
       architecture_version_id: "arch",
       architecture_content_hash: "a".repeat(64),
     };
@@ -21,10 +21,10 @@ describe("source generation API", () => {
       base_revision_content_hash: "b".repeat(64),
       failure_signature_digest: "c".repeat(64),
     };
-    expect(await api.source("project/a", "jvm", source, "token")).toEqual({ id: "result" });
+    expect(await api.source("project/a", "web", source, "token")).toEqual({ id: "result" });
     await api.repair("project/a", "web", "execution/a", repair, "token");
     expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
-      "/api/v1/projects/project%2Fa/source-generations/jvm",
+      "/api/v1/projects/project%2Fa/source-generations/web",
       "/api/v1/projects/project%2Fa/repair-generations/web/execution%2Fa",
     ]);
     expect(fetchImpl.mock.calls[0]![1]).toMatchObject({
@@ -63,7 +63,7 @@ describe("source generation API", () => {
     await expect(
       createSourceGenerationApi({ fetchImpl }).repair(
         "p",
-        "jvm",
+        "web",
         "e",
         { base_revision_content_hash: "b", failure_signature_digest: "f" },
         " ",

@@ -14,7 +14,6 @@ import {
 } from "@/api/sourceGeneration";
 import { useAuthStore } from "@/stores/auth";
 import { useArchitectureStore, type AuthorizedRequest } from "@/stores/architecture";
-import { useJvmExecutionStore } from "@/stores/jvmExecution";
 import { useWebExecutionStore } from "@/stores/webExecution";
 import type { ExecutionProfilePayload, ExecutionTarget } from "@/types/execution";
 
@@ -31,7 +30,6 @@ const props = withDefaults(
 const auth = useAuthStore();
 const architecture = useArchitectureStore();
 const web = useWebExecutionStore();
-const jvm = useJvmExecutionStore();
 const profiles = ref<ExecutionProfilePayload[]>([]);
 const profilesLoading = ref(true);
 const target = ref<ExecutionTarget>("WEB_STATIC");
@@ -39,9 +37,9 @@ const frontendLanguage = ref<"JAVASCRIPT" | "TYPESCRIPT">("TYPESCRIPT");
 const backendLanguage = ref<"JAVASCRIPT" | "TYPESCRIPT">("TYPESCRIPT");
 const pending = ref(false);
 const error = ref<string | null>(null);
-const generatedVersions = ref<Partial<Record<"web" | "jvm", number>>>({});
+const generatedVersions = ref<Partial<Record<"web", number>>>({});
 let epoch = 0;
-const platform = computed(() => (target.value.startsWith("JVM_") ? "jvm" : "web"));
+const platform = computed(() => "web" as const);
 const currentRevision = computed(() => web.currentSourceRevision);
 const revisionEvidence = computed<EvidenceEntry[]>(() => {
   const revision = currentRevision.value;
@@ -69,7 +67,7 @@ function formatSize(bytes: number): string {
   return `${kilobytes} KB`;
 }
 const generatedVersion = computed(() => generatedVersions.value[platform.value] ?? null);
-const selectedStore = computed(() => (platform.value === "web" ? web : jvm));
+const selectedStore = computed(() => web);
 const targets: { value: ExecutionTarget; label: string }[] = [
   { value: "WEB_STATIC", label: "HTML / CSS / JavaScript" },
   { value: "WEB_VUE", label: "Vue" },
@@ -207,8 +205,7 @@ async function generate() {
     );
     if (currentEpoch !== epoch) return;
     generatedVersions.value[selectedPlatform] = revision.version_number;
-    const store = selectedPlatform === "web" ? web : jvm;
-    await store.loadProject(project, authorized);
+    await web.loadProject(project, authorized);
   } catch (failure) {
     if (currentEpoch === epoch)
       error.value =

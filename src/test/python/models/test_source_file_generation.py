@@ -15,7 +15,6 @@ from orchestwin.models.source_assembly import assemble_static_module
 from orchestwin.models.source_file_generation import (
     FILE_BUDGET,
     MANIFEST_BUDGET,
-    MANIFEST_CONTRACT,
     STATIC_RUNTIME_CONTRACT,
     SYNTAX_EXCERPT_CHARACTERS,
     _file_instruction,
@@ -709,74 +708,6 @@ def test_html_is_not_accepted_as_javascript_or_json(tmp_path, path):
     assert "ADAPTER_ACCEPTED" not in {kind for kind, _, _ in store.events[parent]}
 
 
-@pytest.mark.parametrize(
-    "target,recipe,path,package",
-    [
-        ("JVM_JAVA", 'mainClass = "org.example.Main"', "java/org/example/Main.java", "org.example"),
-        (
-            "JVM_KOTLIN",
-            'mainClass = "org.example.MainKt"',
-            "kotlin/org/example/Main.kt",
-            "org.example",
-        ),
-        (
-            "JVM_SCALA",
-            'mainClass := Some("org.example.Main")',
-            "scala/org/example/Main.scala",
-            "org.example",
-        ),
-    ],
-)
-def test_pinned_entrypoint_is_required_before_file_calls(tmp_path, target, recipe, path, package):
-    ctx = context("jvm-source", target)
-    ctx["build_recipes"] = {"synthetic-build": recipe}
-    payload = output("jvm-source", "src/main/" + path)
-    payload["files"].append(
-        {
-            "normalized_path": "src/test/" + path.replace("Main.", "MainTest."),
-            "media_type": "text/plain",
-            "content": "// Synthetic test source.",
-        }
-    )
-    store = MemoryEvidence()
-    generator, transport = source_sequence_generator(tmp_path, payload)
-    execute(generator, ctx, store)
-    parent_context = json.loads(transport.calls[0]["payload"]["messages"][1]["content"])["context"]
-    assert parent_context["entrypoint_contract"]["package"] == package
-    assert parent_context["entrypoint_contract"]["normalized_path"] == "src/main/" + path
-    assert (
-        parent_context["manifest_contract"]
-        == MANIFEST_CONTRACT
-        == ("SOURCE_MANIFEST_V16_APPROVED_DOM_FIRST")
-    )
-    # The actual audited manifest and both source requests must agree with the
-    # JVM console profile, while retaining the shared ban on self-certification.
-    for call in transport.calls:
-        prompt = call["payload"]["messages"][0]["content"]
-        assert "BROWSER:" not in prompt
-        assert "must come from real HTML, CSS" not in prompt
-        assert "independent browser observations" not in prompt
-        assert "isAccessible/isOffline-style functions returning true" in prompt
-        assert "actual core and CLI behavior" in prompt
-    assert (
-        "observable console input/output" in transport.calls[0]["payload"]["messages"][0]["content"]
-    )
-    child_call = transport.calls[1]["payload"]["messages"]
-    assert "src/main/" + path in child_call[0]["content"]
-    assert (
-        json.loads(child_call[1]["content"])["context"]["entrypoint_contract"]
-        == parent_context["entrypoint_contract"]
-    )
-
-    payload["files"][0]["normalized_path"] = "src/main/" + path.replace("Main.", "Other.")
-    rejected_directory = tmp_path / "rejected"
-    rejected_directory.mkdir()
-    generator, transport = source_sequence_generator(rejected_directory, payload)
-    with pytest.raises(ProposalGenerationError):
-        execute(generator, ctx, MemoryEvidence())
-    assert len(transport.calls) == 1
-
-
 @pytest.mark.parametrize("path", ["app.js", "app.test.cjs", "index.html"])
 def test_incomplete_static_manifest_is_rejected_before_file_calls(tmp_path, path):
     payload = complete_output()
@@ -808,28 +739,6 @@ def test_invalid_dependency_plan_is_rejected_before_any_file_call(tmp_path, fail
     generator, transport = source_sequence_generator(tmp_path, complete_output(), mutate=mutate)
     with pytest.raises(ProposalGenerationError):
         execute(generator, context(), MemoryEvidence())
-    assert len(transport.calls) == 1
-
-
-@pytest.mark.parametrize("failure", ["duplicate_entrypoint", "test_before_implementation"])
-def test_jvm_manifest_cannot_use_both_slots_for_main_or_reverse_them(tmp_path, failure):
-    ctx = context("jvm-source", "JVM_JAVA")
-    ctx["build_recipes"] = {"synthetic-build": 'mainClass = "org.example.Main"'}
-    payload = output("jvm-source", "src/main/java/org/example/Main.java")
-    payload["files"].append(
-        {
-            "normalized_path": "src/test/java/org/example/MainTest.java",
-            "media_type": "text/plain",
-            "content": "// Synthetic persistence test.",
-        }
-    )
-    if failure == "duplicate_entrypoint":
-        payload["files"][1]["normalized_path"] = payload["files"][0]["normalized_path"]
-    else:
-        payload["files"].reverse()
-    generator, transport = source_sequence_generator(tmp_path, payload)
-    with pytest.raises(ProposalGenerationError):
-        execute(generator, ctx, MemoryEvidence())
     assert len(transport.calls) == 1
 
 

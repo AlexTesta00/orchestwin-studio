@@ -38,7 +38,7 @@ describe("model repair proposal", () => {
     const wrapper = mount(GenerateRepairButton, {
       props: {
         projectId: "project",
-        platform: "jvm",
+        platform: "web",
         executionId: "old",
         baseRevisionHash: "base",
         failureSignature: "failure",

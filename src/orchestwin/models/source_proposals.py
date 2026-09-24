@@ -10,14 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from orchestwin.artifacts.jvm_source_plans import (
-    DEFAULT_JVM_SOURCE_PLAN_POLICY,
-    JVM_REPAIR_SOURCE_PLAN_POLICY,
-    JvmSourcePlanFile,
-    validate_jvm_source_plan,
-)
 from orchestwin.artifacts.web_source_plans import WebSourcePlanFile, validate_web_source_plan
-from orchestwin.jvm_execution.workspaces import portable_path
+from orchestwin.artifacts.workspace_files import portable_path
 from orchestwin.models.model_proposals import _model_boundary
 from orchestwin.models.proposal_evidence import current_proposal_evidence
 from orchestwin.models.proposal_generation import ProposalGenerationError, wire_value
@@ -113,11 +107,9 @@ def canonical_paths(entries):
     )
 
 
-def _validate_files(items, *, task="web-source"):
-    jvm = task.startswith("jvm")
-    file_type = JvmSourcePlanFile if jvm else WebSourcePlanFile
+def _validate_files(items):
     files = tuple(
-        file_type(
+        WebSourcePlanFile(
             portable_path(item.normalized_path), item.content or "", item.media_type or "text/plain"
         )
         for item in items
@@ -128,33 +120,14 @@ def _validate_files(items, *, task="web-source"):
     plan = SimpleNamespace(
         files=files, content_hash=snapshot_content_hash([item.to_snapshot() for item in files])
     )
-    report = (
-        validate_jvm_source_plan(
-            plan,
-            policy=JVM_REPAIR_SOURCE_PLAN_POLICY
-            if task.endswith("repair")
-            else DEFAULT_JVM_SOURCE_PLAN_POLICY,
-        )
-        if jvm
-        else validate_web_source_plan(plan)
-    )
-    if not report.is_accepted:
+    if not validate_web_source_plan(plan).is_accepted:
         raise ValueError("source path or media policy rejected")
 
 
 def _validate_entrypoints(context, files):
     paths = {item["normalized_path"] for item in files}
     target = context["target_selection"]["target"]
-    if target.startswith("JVM_"):
-        language, extension = {
-            "JVM_JAVA": ("java", ".java"),
-            "JVM_KOTLIN": ("kotlin", ".kt"),
-            "JVM_SCALA": ("scala", ".scala"),
-        }[target]
-        valid = any(
-            path.startswith(f"src/main/{language}/") and path.endswith(extension) for path in paths
-        )
-    elif target == "WEB_STATIC":
+    if target == "WEB_STATIC":
         valid = "index.html" in paths
     else:
         roots = ("frontend/", "backend/") if target == "WEB_VUE_NODE" else ("",)
@@ -167,15 +140,8 @@ def _validate_entrypoints(context, files):
 
 def _has_test_sources(target, entries):
     paths = [entry["normalized_path"] for entry in entries]
-    if target == "WEB_STATIC":
-        return any(path.endswith((".test.js", ".test.cjs", ".test.mjs")) for path in paths)
-    language = {
-        "JVM_JAVA": ("java", ".java"),
-        "JVM_KOTLIN": ("kotlin", ".kt"),
-        "JVM_SCALA": ("scala", ".scala"),
-    }.get(target)
-    return bool(language) and any(
-        path.startswith(f"src/test/{language[0]}/") and path.endswith(language[1]) for path in paths
+    return target == "WEB_STATIC" and any(
+        path.endswith((".test.js", ".test.cjs", ".test.mjs")) for path in paths
     )
 
 
@@ -185,30 +151,13 @@ def build_source_binding(task, context, output):
         raise ValueError("rationale required")
     repair = task.endswith("repair")
     items = output.changes if repair else output.files
-    _validate_files(items, task=task)
+    _validate_files(items)
     fixed = {entry["normalized_path"]: entry for entry in context["fixed_files"]}
     if any(item.normalized_path in fixed for item in items):
         raise ValueError("model cannot replace pinned build files")
-    if task.startswith("jvm"):
-        language = {"JVM_JAVA": "java", "JVM_KOTLIN": "kotlin", "JVM_SCALA": "scala"}[
-            context["target_selection"]["target"]
-        ]
-        if any(
-            not any(
-                item.normalized_path.startswith(f"src/{kind}/{folder}/")
-                for kind in ("main", "test")
-                for folder in (language, "resources")
-            )
-            for item in items
-        ):
-            raise ValueError("JVM source outside reviewed roots")
     if not repair:
         files = list(fixed.values()) + [
-            file_entry(
-                item.normalized_path,
-                item.content.encode("utf-8"),
-                "application/octet-stream" if task.startswith("jvm") else item.media_type,
-            )
+            file_entry(item.normalized_path, item.content.encode("utf-8"), item.media_type)
             for item in items
         ]
         _validate_entrypoints(context, files)
@@ -297,11 +246,7 @@ def _source_instruction(task, repair):
             else "Create a minimal complete implementation and useful tests for the approved requirements. "
         )
         + (
-            "Generate JVM source under src/main and tests under src/test for the selected language; "
-            "include real .java, .kt or .scala implementation files, using text/plain media_type. "
-            "Match the main class and dependencies in build_recipes."
-            if task.startswith("jvm")
-            else "Generate Web files in the selected Web layout. For WEB_STATIC put index.html at the project root, "
+            "Generate Web files in the selected Web layout. For WEB_STATIC put index.html at the project root, "
             "using text/html, with local CSS/JavaScript or inline assets. For npm profiles include package.json "
             "and a consistent package-lock.json in each required root; implement build, test and start/preview scripts."
         )
