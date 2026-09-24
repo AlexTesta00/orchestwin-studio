@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -25,42 +24,15 @@ from orchestwin.agents.team_gate import (
     ProjectWorkflowReadiness,
     TeamEditResult,
 )
-from orchestwin.api.architecture import (
-    ArchitectureGateService,
-    ArchitectureGenerationService,
-    ArchitectureQueryService,
-    ArchitectureRevisionService,
-)
 from orchestwin.api.artifacts import ArtifactGraphQueryService
-from orchestwin.api.brownfield import BrownfieldApiService
-from orchestwin.api.brownfield_runtime import build_brownfield_services
 from orchestwin.api.design import (
     DesignGateService,
     DesignGenerationService,
     DesignQueryService,
     DesignRevisionService,
 )
-from orchestwin.api.execution import (
-    ExecutionQueryApiService,
-    HighImpactApprovalApiService,
-)
-from orchestwin.api.finalization import FinalizationApiService
-from orchestwin.api.finalization_runtime import SqlAlchemyFinalizationApiService
-from orchestwin.api.governed_web_runtime import build_governed_web_services
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
-from orchestwin.api.static_inspection_runtime import build_static_inspection_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
-from orchestwin.api.web_execution import (
-    WebBrowserEvidenceApiService,
-    WebExecutionApiService,
-    WebExecutionReadApiService,
-    WebExecutionStartApiService,
-    WebRepairApiService,
-    WebSourceApiService,
-)
-from orchestwin.api.web_source_runtime import SqlAlchemyWebSourceApiService
-from orchestwin.api.workflow_run_runtime import SqlAlchemyWorkflowRunApiService
-from orchestwin.api.workflow_runs import WorkflowRunApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import (
     ApplicationSettings,
@@ -92,7 +64,6 @@ from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
 )
-from orchestwin.projects.architecture_runtime import build_architecture_services
 from orchestwin.projects.brief_gate import (
     LocalProjectBriefGateService,
     ProjectBriefGateService,
@@ -120,7 +91,6 @@ from orchestwin.projects.requirements_runtime import (
 )
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
 from orchestwin.twins.runtime import UserModelingServices, build_user_modeling_services
-from orchestwin.web_execution.static_inspections import StaticInspectionService
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -207,25 +177,7 @@ class ApplicationRuntime:
     design_revision_service: DesignRevisionService | None = None
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
-    architecture_generation_service: ArchitectureGenerationService | None = None
-    architecture_revision_service: ArchitectureRevisionService | None = None
-    architecture_query_service: ArchitectureQueryService | None = None
-    architecture_gate_service: ArchitectureGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
-    brownfield_service: BrownfieldApiService | None = None
-    execution_query_service: ExecutionQueryApiService | None = None
-    high_impact_service: HighImpactApprovalApiService | None = None
-    static_inspection_service: StaticInspectionService | None = None
-    web_source_api_service: WebSourceApiService | None = None
-    web_execution_read_api_service: WebExecutionReadApiService | None = None
-    web_execution_api_service: WebExecutionApiService | None = None
-    web_execution_start_api_service: WebExecutionStartApiService | None = None
-    web_browser_evidence_api_service: WebBrowserEvidenceApiService | None = None
-    web_repair_api_service: WebRepairApiService | None = None
-    web_operation_store: object | None = None
-    workflow_run_api_service: WorkflowRunApiService | None = None
-    finalization_api_service: FinalizationApiService | None = None
-    sandbox_evidence_root: Path | None = None
     training_api_service: TrainingApiService | None = None
 
     async def close(self) -> None:
@@ -308,15 +260,6 @@ def create_default_runtime(
         database_runtime.session_factory,
         **({"proposal_runtime": real_models.design} if real_models is not None else {}),
     )
-    architecture = build_architecture_services(
-        database_runtime.session_factory,
-        **({"proposal_runtime": real_models.architecture} if real_models is not None else {}),
-    )
-    brownfield = build_brownfield_services(
-        resolved_settings,
-        database_runtime.session_factory,
-    )
-    governed_web = build_governed_web_services(database_runtime.session_factory, resolved_settings)
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
     )
@@ -341,34 +284,7 @@ def create_default_runtime(
         design_revision_service=design.revisions,
         design_query_service=design.queries,
         design_gate_service=design.gate,
-        architecture_generation_service=architecture.generation,
-        architecture_revision_service=architecture.revisions,
-        architecture_query_service=architecture.queries,
-        architecture_gate_service=architecture.gate,
         artifact_graph_query_service=artifact_graph_query_service,
-        finalization_api_service=SqlAlchemyFinalizationApiService(
-            database_runtime.session_factory,
-            content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
-            export_root=resolved_settings.final_export_storage_root,
-            artifact_graph_query_service=artifact_graph_query_service,
-        ),
-        sandbox_evidence_root=resolved_settings.sandbox_evidence_storage_root,
-        brownfield_service=brownfield.brownfield,
-        execution_query_service=brownfield.execution_queries,
-        high_impact_service=brownfield.high_impact,
-        static_inspection_service=build_static_inspection_service(
-            database_runtime.session_factory, resolved_settings
-        ),
-        web_execution_read_api_service=governed_web.reads,
-        web_execution_start_api_service=governed_web.start,
-        web_browser_evidence_api_service=governed_web.reads,
-        web_repair_api_service=governed_web.repairs,
-        web_operation_store=governed_web.operations,
-        web_source_api_service=SqlAlchemyWebSourceApiService(
-            database_runtime.session_factory,
-            content_root=resolved_settings.brownfield_workspace_root / "web-source-objects",
-        ),
-        workflow_run_api_service=SqlAlchemyWorkflowRunApiService(database_runtime.session_factory),
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,
             adapter_registry=ContentAddressedAdapterRegistry(

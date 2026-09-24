@@ -36,7 +36,6 @@ from orchestwin.models.proposal_evidence import (
     retain_provider_result,
 )
 from orchestwin.models.proposal_tasks import TASKS
-from orchestwin.models.source_schema import share_manifest_field_schemas
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
@@ -197,8 +196,6 @@ class ProposalGenerator:
             raise ValueError("invalid proposal output budget")
         adapter = TypeAdapter(output_type)
         schema_payload = adapter.json_schema()
-        if task in {"web-source", "jvm-source"}:
-            share_manifest_field_schemas(schema_payload)
         _observation_value_schema(schema_payload)
         serialized_context = wire_value(context)
         constrain_profile_schema(schema_payload, serialized_context, task)

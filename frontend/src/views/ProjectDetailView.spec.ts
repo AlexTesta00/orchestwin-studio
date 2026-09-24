@@ -10,8 +10,6 @@ import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
-import { useArchitectureStore } from "@/stores/architecture";
-import { useWebExecutionStore } from "@/stores/webExecution";
 import ProjectDetailView from "./ProjectDetailView.vue";
 import { expectAccessible } from "@/test/axe";
 
@@ -94,8 +92,6 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
   const modeling = useUserModelingStore(pinia);
   const requirements = useRequirementsStore(pinia);
   const design = useDesignStore(pinia);
-  const architecture = useArchitectureStore(pinia);
-  const web = useWebExecutionStore(pinia);
   clarification.$patch({ projectId: "first", gate: gate("brief") });
   team.$patch({
     projectId: "first",
@@ -127,13 +123,7 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
     gate: gate("design"),
     readiness: { status: "READY_FOR_ARCHITECTURE_PLANNING" },
   });
-  architecture.$patch({
-    projectId: "first",
-    current: { id: "architecture", content_hash: "architecture-hash", version_number: 1 },
-    gate: gate("architecture"),
-    readiness: { status: "READY_FOR_IMPLEMENTATION" },
-  });
-  return { clarification, team, modeling, requirements, design, architecture, web };
+  return { clarification, team, modeling, requirements, design };
 }
 
 describe("progressive project workspace", () => {
@@ -161,8 +151,7 @@ describe("progressive project workspace", () => {
     expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(false);
-    expect(wrapper.findComponent({ name: "ProjectArchitectureFlow" }).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "ProjectWebSourceReview" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).exists()).toBe(true);
     useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
@@ -171,30 +160,25 @@ describe("progressive project workspace", () => {
     wrapper.unmount();
   });
 
-  it("opens a saved result after hydration and allows revisiting approved work", async () => {
+  it("opens the approved design after hydration and allows revisiting approved work", async () => {
     const pinia = createPinia();
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
-    const { web } = hydrateStages(pinia);
+    hydrateStages(pinia);
     await flushPromises();
-    expect(wrapper.get('[data-testid="stage-source"]').isVisible()).toBe(true);
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(7);
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(5);
     await wrapper.get('[data-stage="0"]').trigger("click");
-    web.$patch({
-      activeProjectId: "first",
-      sourceRevisions: [{ id: "source", version_number: 1 }],
-    });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(8);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
-    await wrapper.get('[data-stage="7"]').trigger("click");
-    expect(wrapper.get('[data-testid="stage-result"]').isVisible()).toBe(true);
+    await wrapper.get('[data-stage="4"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
     expect(wrapper.get('[data-testid="technical-details"]').attributes("open")).toBeUndefined();
     wrapper.unmount();
     const reloaded = mountWorkspace(pinia);
     await flushPromises();
-    expect(reloaded.get('[data-testid="stage-result"]').isVisible()).toBe(true);
+    expect(reloaded.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     reloaded.unmount();
   });
 
@@ -203,7 +187,7 @@ describe("progressive project workspace", () => {
     const stores = hydrateStages(pinia);
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(7);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(5);
     stores.requirements.$patch({ current: { content_hash: "revised-hash" } });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(4);

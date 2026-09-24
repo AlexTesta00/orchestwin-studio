@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { createAppI18n } from "@/i18n";
 import { expectAccessible } from "@/test/axe";
-import UiEvidenceDrawer from "./UiEvidenceDrawer.vue";
 import UiStepper from "./UiStepper.vue";
 
 function plugins(locale: "en" | "it" = "it") {
@@ -31,29 +30,9 @@ describe("stepper", () => {
   });
 });
 
-describe("evidence drawer", () => {
-  it("stays closed by default and exposes the entries when opened", async () => {
-    const wrapper = mount(UiEvidenceDrawer, {
-      props: { entries: [{ key: "sha256", value: "abc123" }] },
-      ...plugins(),
-    });
-    const toggle = wrapper.get("[data-testid='evidence-toggle']");
-    expect(toggle.attributes("aria-expanded")).toBe("false");
-    expect(wrapper.find("dl").exists()).toBe(false);
-    await toggle.trigger("click");
-    expect(toggle.attributes("aria-expanded")).toBe("true");
-    expect(toggle.text()).toBe("Nascondi i dettagli");
-    expect(wrapper.get("dd").text()).toBe("abc123");
-  });
-
+describe("primitive accessibility", () => {
   it("has no axe violations across the primitives", async () => {
-    const wrappers = [
-      mount(UiStepper, { props: { steps, active: "team" }, ...plugins() }),
-      mount(UiEvidenceDrawer, {
-        props: { entries: [{ key: "sha256", value: "abc" }] },
-        ...plugins(),
-      }),
-    ];
+    const wrappers = [mount(UiStepper, { props: { steps, active: "team" }, ...plugins() })];
     for (const wrapper of wrappers) {
       await expectAccessible(wrapper.element);
     }

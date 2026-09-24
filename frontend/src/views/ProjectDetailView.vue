@@ -9,25 +9,15 @@ import type {
   ProjectBriefVersionResponse,
   ProjectResponse,
 } from "@/api/contracts";
-import ProjectArchitectureFlow from "@/components/ProjectArchitectureFlow.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
-import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlow.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
-import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
-import ProjectFinalePanel, { type FinaleRecapRow } from "@/components/ProjectFinalePanel.vue";
-import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
-import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
-import ProjectSyntheticEvaluation from "@/components/ProjectSyntheticEvaluation.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
-import ProjectWebPreview from "@/components/ProjectWebPreview.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
-import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
-import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiCard from "@/components/UiCard.vue";
 import UiProgressBar from "@/components/UiProgressBar.vue";
@@ -40,8 +30,6 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
-import { useArchitectureStore } from "@/stores/architecture";
-import { useWebExecutionStore } from "@/stores/webExecution";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 
 const route = useRoute();
@@ -51,8 +39,6 @@ const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
 const design = useDesignStore();
 const clarification = useClarificationStore();
-const architecture = useArchitectureStore();
-const web = useWebExecutionStore();
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
@@ -63,9 +49,6 @@ const twinContext = computed(
 );
 const requirementsContext = computed(
   () => `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`,
-);
-const designContext = computed(
-  () => `${requirementsContext.value}:${design.current?.id}:${design.gate?.status}`,
 );
 
 const { t, locale } = useI18n({
@@ -162,9 +145,6 @@ function approved(
   );
 }
 
-const hasWebSource = computed(
-  () => web.activeProjectId === projectId.value && web.currentSourceRevision !== null,
-);
 const completedStages = computed(() => [
   clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
   team.projectId === projectId.value &&
@@ -181,14 +161,10 @@ const completedStages = computed(() => [
   design.projectId === projectId.value &&
     design.isReadyForArchitecture &&
     approved(design.gate, design.current),
-  architecture.projectId === projectId.value &&
-    architecture.isReadyForImplementation &&
-    approved(architecture.gate, architecture.current),
-  hasWebSource.value,
 ]);
 const currentStage = computed(() => {
   const incomplete = completedStages.value.findIndex((complete) => !complete);
-  return incomplete < 0 ? 7 : incomplete;
+  return incomplete < 0 ? 4 : incomplete;
 });
 const activeStage = computed(() =>
   Math.min(selectedStage.value ?? currentStage.value, currentStage.value),
@@ -201,9 +177,6 @@ const stageLabels = computed(() =>
         "User Twin",
         "Requisiti",
         "Design",
-        "Architettura",
-        "Sorgenti",
-        "Esecuzione",
       ]
     : [
         "Brief",
@@ -211,9 +184,6 @@ const stageLabels = computed(() =>
         "User Twins",
         "Requirements",
         "Design",
-        "Architecture",
-        "Sources",
-        "Execution",
       ],
 );
 const stageDescriptions = computed(() =>
@@ -224,9 +194,6 @@ const stageDescriptions = computed(() =>
         "Conosci i profili simulati delle persone che useranno il prodotto.",
         "Decidi cosa deve fare la tua applicazione.",
         "Esplora le schermate e scegli l’esperienza da realizzare.",
-        "Rivedi come verrà costruita la soluzione.",
-        "Trasforma le scelte approvate in una prima applicazione.",
-        "Prova la tua applicazione e confrontala con le scelte fatte.",
       ]
     : [
         "Describe what you want to create and who it is for.",
@@ -234,9 +201,6 @@ const stageDescriptions = computed(() =>
         "Meet the simulated profiles of the people who will use your product.",
         "Decide what your application needs to do.",
         "Explore the screens and choose the experience to build.",
-        "Review how your solution will be built.",
-        "Turn your approved choices into a first application.",
-        "Try your application and compare it with your choices.",
       ],
 );
 const stepItems = computed<StepItem[]>(() =>
@@ -252,41 +216,6 @@ const stepItems = computed<StepItem[]>(() =>
           : "pending",
   })),
 );
-const projectComplete = computed(
-  () => hasWebSource.value && web.currentExecution?.report.status === "PASSED",
-);
-const finalRecap = computed<FinaleRecapRow[]>(() => {
-  const gates = [
-    clarification.gate,
-    team.gate,
-    modeling.currentGate,
-    requirements.gate,
-    design.gate,
-    architecture.gate,
-  ];
-  return stageLabels.value.map((label, index) => {
-    const gate = gates[index] ?? null;
-    const outcome =
-      index === 6
-        ? hasWebSource.value
-          ? "generated"
-          : "pending"
-        : index === 7
-          ? projectComplete.value
-            ? "approved"
-            : "pending"
-          : completedStages.value[index]
-            ? "approved"
-            : "pending";
-    return {
-      key: `step-${index}`,
-      label,
-      outcome,
-      decisions: gate?.iteration ?? null,
-      max: gate?.max_iterations ?? null,
-    };
-  });
-});
 const provenanceOpen = ref(false);
 const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
@@ -303,8 +232,6 @@ const activeVersion = computed(
       modeling.currentSnapshot?.version_number,
       requirements.current?.version_number,
       design.current?.version_number,
-      architecture.current?.version_number,
-      web.currentSourceRevision?.version_number,
     ][activeStage.value],
 );
 
@@ -458,7 +385,7 @@ onUnmounted(() => {
 
       <div class="grid content-start gap-6">
         <header class="grid gap-3">
-          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="8" />
+          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="5" />
           <h1 class="m-0 text-[34px] leading-[1.2] font-semibold tracking-title">
             {{ stageLabels[activeStage] }}
           </h1>
@@ -480,7 +407,7 @@ onUnmounted(() => {
             {{ t("detail.backToCurrent") }}
           </UiButton>
         </div>
-        <p v-else-if="activeStage < 7" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
+        <p v-else-if="activeStage < 4" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
           {{ t("detail.unlockHint") }}
         </p>
 
@@ -530,18 +457,6 @@ onUnmounted(() => {
               </ol>
             </details>
           </UiCard>
-          <ProjectBrownfieldSourceFlow
-            v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-            :key="`${projectId}:brownfield-source`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <ProjectSandboxGovernanceFlow
-            v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-            :key="`${projectId}:sandbox-governance`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
           <ProjectClarificationFlow
             v-show="currentBrief !== null"
             :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
@@ -580,61 +495,12 @@ onUnmounted(() => {
         <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
           <ProjectDesignFlow
             id="studio-design"
-            @show-result="selectedStage = 7"
             :prerequisite-ready="requirements.isReadyForDesign"
             :key="`${projectId}:${requirementsContext}:design`"
             :project-id="projectId"
             :locale="locale === 'it' ? 'it' : 'en'"
           />
         </div>
-        <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-architecture">
-          <ProjectArchitectureFlow
-            id="studio-architecture"
-            :prerequisite-ready="design.isReadyForArchitecture"
-            :key="`${projectId}:${designContext}:architecture`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-        <div id="studio-stage-6" v-show="activeStage === 6" data-testid="stage-source">
-          <ProjectSourceGeneration
-            id="studio-source"
-            v-if="project.mode === 'GREENFIELD_GENERATION'"
-            :key="`${projectId}:source-generation`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <UiStateBlock v-else kind="empty" :text="t('detail.brownfieldSources')" />
-        </div>
-        <div
-          id="studio-stage-7"
-          v-show="activeStage === 7"
-          class="grid gap-4"
-          data-testid="stage-result"
-        >
-          <ProjectWebPreview
-            id="studio-preview"
-            v-show="hasWebSource"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <ProjectSyntheticEvaluation
-            v-if="web.currentExecution?.report.status === 'PASSED'"
-            :key="`${projectId}:${web.currentExecution.id}:evaluation`"
-            :project-id="projectId"
-            :execution-id="web.currentExecution.id"
-            :authorize="authorized"
-          />
-          <ProjectFinalePanel
-            v-if="projectComplete"
-            :key="`${projectId}:finale`"
-            :project-id="projectId"
-            :recap="finalRecap"
-            @open-provenance="provenanceOpen = true"
-            @open-sources="selectedStage = 6"
-          />
-        </div>
-
         <details
           class="rounded-panel border border-line bg-surface px-4 py-3"
           data-testid="technical-details"
@@ -644,28 +510,6 @@ onUnmounted(() => {
           </summary>
           <div class="mt-4 grid gap-4">
             <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
-            <details class="rounded-panel border border-line p-4">
-              <summary class="cursor-pointer text-sm font-semibold">
-                {{ t("detail.webEvidence") }}
-              </summary>
-              <div class="mt-4 grid gap-4">
-                <ProjectWebSourceReview
-                  :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
-                  :project-id="projectId"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-                <ProjectWebEvidenceReview
-                  :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
-                  :project-id="projectId"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-                <ProjectExecutionLaunch
-                  :project-id="projectId"
-                  platform="web"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-              </div>
-            </details>
           </div>
         </details>
       </div>

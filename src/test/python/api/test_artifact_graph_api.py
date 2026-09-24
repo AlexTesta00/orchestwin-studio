@@ -28,16 +28,16 @@ OWNER_ID = UUID("00000000-0000-4000-8000-000000000002")
 NOW = datetime(2026, 8, 21, 16, 0, tzinfo=UTC)
 
 
-def load_architecture_fixtures() -> ModuleType:
+def load_design_fixtures() -> ModuleType:
     """Load package-local fixtures without introducing production fixture imports."""
     package = ModuleType(FIXTURE_PACKAGE_NAME)
     package.__path__ = [str(FIXTURE_DIRECTORY)]
     sys.modules[FIXTURE_PACKAGE_NAME] = package
 
-    module_name = f"{FIXTURE_PACKAGE_NAME}.architecture_fixtures"
+    module_name = f"{FIXTURE_PACKAGE_NAME}.design_fixtures"
     spec = importlib.util.spec_from_file_location(
         module_name,
-        FIXTURE_DIRECTORY / "architecture_fixtures.py",
+        FIXTURE_DIRECTORY / "design_fixtures.py",
     )
 
     if spec is None or spec.loader is None:
@@ -50,9 +50,8 @@ def load_architecture_fixtures() -> ModuleType:
     return module
 
 
-FIXTURES = load_architecture_fixtures()
-DESIGN_FIXTURES = sys.modules[f"{FIXTURE_PACKAGE_NAME}.design_fixtures"]
-PROJECT_ID: UUID = FIXTURES.PROJECT_ID
+DESIGN_FIXTURES = load_design_fixtures()
+PROJECT_ID: UUID = DESIGN_FIXTURES.PROJECT_ID
 
 
 def graph() -> CrossStageArtifactGraph:
@@ -60,7 +59,6 @@ def graph() -> CrossStageArtifactGraph:
     return build_cross_stage_artifact_graph(
         DESIGN_FIXTURES.requirements_version(),
         DESIGN_FIXTURES.design_version(),
-        FIXTURES.architecture_version(),
     )
 
 
@@ -122,11 +120,8 @@ def test_current_artifact_graph_exposes_exact_roots_and_stage_counts() -> None:
         current.requirements_reference.artifact_id
     )
     assert payload["design_reference"]["artifact_id"] == str(current.design_reference.artifact_id)
-    assert payload["architecture_reference"]["artifact_id"] == str(
-        current.architecture_reference.artifact_id
-    )
+    assert payload["architecture_reference"] is None
     assert payload["stage_counts"]["DESIGN"] > 0
-    assert payload["stage_counts"]["TESTING"] > 0
     assert payload["content_hash"] == current.content_hash
     assert service.calls == [(OWNER_ID, PROJECT_ID)]
 

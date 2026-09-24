@@ -13,18 +13,8 @@ from orchestwin.artifacts.traceability import (
     build_cross_stage_artifact_graph,
 )
 
-from .architecture_fixtures import (
-    ARCHITECTURE_ID,
-    FRONTEND_COMPONENT_ID,
-    TEST_CASE_ID,
-    architecture_version,
-)
 from .design_fixtures import (
-    ALTERNATIVE_ONE_ID,
-    CRITERION_ID,
     DESIGN_VERSION_ID,
-    PROTOTYPE_ID,
-    REQUIREMENT_ID,
     REQUIREMENTS_VERSION_ID,
     design_version,
     requirements_version,
@@ -41,12 +31,10 @@ def test_cross_stage_graph_preserves_exact_stage_roots_and_is_reproducible() -> 
     first = build_cross_stage_artifact_graph(
         requirements_version(),
         design_version(),
-        architecture_version(),
     )
     second = build_cross_stage_artifact_graph(
         requirements_version(),
         design_version(),
-        architecture_version(),
     )
 
     assert first == second
@@ -54,64 +42,8 @@ def test_cross_stage_graph_preserves_exact_stage_roots_and_is_reproducible() -> 
     assert first.requirements_reference.artifact_id == REQUIREMENTS_VERSION_ID
     assert first.design_reference is not None
     assert first.design_reference.artifact_id == DESIGN_VERSION_ID
-    assert first.architecture_reference is not None
-    assert first.architecture_reference.artifact_id == architecture_version().id
+    assert first.architecture_reference is None
     assert first.to_snapshot()["schema_version"] == 1
-
-
-def test_cross_stage_graph_connects_requirements_design_architecture_and_tests() -> None:
-    """Expose traceable links from approved needs through implementation planning."""
-    graph = build_cross_stage_artifact_graph(
-        requirements_version(),
-        design_version(),
-        architecture_version(),
-    )
-    links = set(graph.links)
-
-    requirement = reference(ArtifactGraphNodeKind.REQUIREMENT, REQUIREMENT_ID)
-    criterion = reference(ArtifactGraphNodeKind.ACCEPTANCE_CRITERION, CRITERION_ID)
-    alternative = reference(ArtifactGraphNodeKind.DESIGN_ALTERNATIVE, ALTERNATIVE_ONE_ID)
-    prototype = reference(ArtifactGraphNodeKind.DECLARATIVE_PROTOTYPE, PROTOTYPE_ID)
-    architecture = reference(ArtifactGraphNodeKind.SOFTWARE_ARCHITECTURE, ARCHITECTURE_ID)
-    component = reference(ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT, FRONTEND_COMPONENT_ID)
-    test_case = reference(ArtifactGraphNodeKind.TEST_CASE, TEST_CASE_ID)
-
-    assert any(
-        link.kind is ArtifactGraphLinkKind.VERIFIED_BY
-        and link.source == requirement
-        and link.target == criterion
-        for link in links
-    )
-    assert any(
-        link.kind is ArtifactGraphLinkKind.TRACES_TO
-        and link.source == alternative
-        and link.target == requirement
-        for link in links
-    )
-    assert any(
-        link.kind is ArtifactGraphLinkKind.REPRESENTS
-        and link.source == prototype
-        and link.target == alternative
-        for link in links
-    )
-    assert any(
-        link.kind is ArtifactGraphLinkKind.REALIZES
-        and link.source == architecture
-        and link.target == alternative
-        for link in links
-    )
-    assert any(
-        link.kind is ArtifactGraphLinkKind.TRACES_TO
-        and link.source == component
-        and link.target == requirement
-        for link in links
-    )
-    assert any(
-        link.kind is ArtifactGraphLinkKind.TESTS
-        and link.source == test_case
-        and link.target == requirement
-        for link in links
-    )
 
 
 def test_cross_stage_graph_keeps_synthetic_critiques_explicitly_separate() -> None:
@@ -119,7 +51,6 @@ def test_cross_stage_graph_keeps_synthetic_critiques_explicitly_separate() -> No
     graph = build_cross_stage_artifact_graph(
         requirements_version(),
         design_version(),
-        architecture_version(),
     )
     critiques = [
         node
@@ -162,12 +93,3 @@ def test_cross_stage_graph_rejects_a_design_grounded_in_another_requirements_ver
 
     with pytest.raises(ValueError, match="exact Requirements version"):
         build_cross_stage_artifact_graph(other_requirements, design_version())
-
-
-def test_cross_stage_graph_rejects_architecture_without_its_exact_design() -> None:
-    """Require Design provenance before adding Architecture and Test Plan artifacts."""
-    with pytest.raises(ValueError, match="exact Design version"):
-        build_cross_stage_artifact_graph(
-            requirements_version(),
-            architecture=architecture_version(),
-        )

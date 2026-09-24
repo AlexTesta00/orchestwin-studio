@@ -41,7 +41,6 @@ def factory_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNa
     stage = SimpleNamespace(
         generation=object(), revisions=object(), queries=object(), gate=object()
     )
-    sandbox = SimpleNamespace(brownfield=object(), execution_queries=object(), high_impact=object())
 
     def build_database(settings):
         database_settings.append(settings)
@@ -55,8 +54,6 @@ def factory_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNa
     monkeypatch.setattr(services, "JwtAccessTokenService", build_tokens)
     monkeypatch.setattr(services, "build_requirements_services", lambda _factory: stage)
     monkeypatch.setattr(services, "build_design_services", lambda _factory: stage)
-    monkeypatch.setattr(services, "build_architecture_services", lambda _factory: stage)
-    monkeypatch.setattr(services, "build_brownfield_services", lambda _settings, _factory: sandbox)
     monkeypatch.setattr(services, "ContentAddressedAdapterRegistry", lambda _root: object())
     monkeypatch.setattr(services, "SqlAlchemyTrainingApiService", lambda **_kwargs: object())
     return SimpleNamespace(

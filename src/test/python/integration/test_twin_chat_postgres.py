@@ -7,17 +7,17 @@ import httpx
 import pytest
 import sqlalchemy as sa
 
+from orchestwin.api.app import create_app
+from orchestwin.api.auth import AuthApiSettings, current_user_dependency
 from orchestwin.api.services import ApplicationRuntime
+from orchestwin.config import ApplicationSettings
+from orchestwin.identity.persistence.models import UserRecord
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.persistence import create_database_runtime
+from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.twins.persistence.repositories import (
     SqlAlchemyPersonaVersionRepository,
     SqlAlchemyUserTwinVersionRepository,
-)
-from src.test.python.integration.test_model_source_generation_postgres import (
-    artifacts,
-    client_app,
-    seed,
 )
 from src.test.python.integration.test_proposal_evidence_postgres import database, run
 from src.test.python.models.test_proposal_evidence import audited_generator
@@ -52,14 +52,45 @@ async def seeded_twin(db, owner, project):
     return twin
 
 
+async def seed(database_runtime):
+    owner, project = uuid4(), uuid4()
+    async with database_runtime.session_factory() as session, session.begin():
+        session.add(
+            UserRecord(
+                id=owner,
+                email_normalized=f"{owner}@synthetic.invalid",
+                password_hash="NO_LOGIN_SYNTHETIC",
+            )
+        )
+        await session.flush()
+        session.add(
+            ProjectRecord(
+                id=project,
+                owner_user_id=owner,
+                display_name="Synthetic twin chat",
+                mode="GREENFIELD_GENERATION",
+            )
+        )
+    return owner, project
+
+
+def client_app(runtime, owner):
+    app = create_app(
+        ApplicationSettings(_env_file=None),
+        runtime=runtime,
+        auth_settings=AuthApiSettings(_env_file=None),
+    )
+    app.dependency_overrides[current_user_dependency] = lambda: SimpleNamespace(id=owner)
+    return app
+
+
 def test_twin_chat_records_audited_turns_in_an_append_only_conversation(database, tmp_path):
-    versions = artifacts()
     generator, transport = audited_generator(tmp_path, OUTPUT)
 
     async def scenario():
         db = create_database_runtime(database)
         try:
-            owner, project = await seed(db, versions)
+            owner, project = await seed(db)
             twin = await seeded_twin(db, owner, project)
             runtime = ApplicationRuntime(
                 database_runtime=db,

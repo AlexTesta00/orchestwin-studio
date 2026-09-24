@@ -6,7 +6,6 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +15,7 @@ from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.config import ApplicationSettings, ModelRuntimeMode, RuntimeEnvironment
 from orchestwin.models import real_runtime
-from orchestwin.models.proposal_tasks import SOURCE_TASKS, TASKS
+from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.real_runtime import RealModelRuntimeError, build_real_model_runtime
 from orchestwin.models.serialized_generation import SerializedGenerationPort
 from src.test.python.api.test_training_api import _user
@@ -49,26 +48,6 @@ def configuration(tmp_path, monkeypatch):
     return path, proposal, final
 
 
-@pytest.fixture
-def source_configuration(configuration):
-    manifest, proposal, _ = configuration
-    token = manifest.with_name("source.secret")
-    token.write_text("source-private-token-" + "s" * 40, encoding="ascii")
-    source = json.loads(proposal.read_text())
-    source.update(base_url="http://127.0.0.1:19453", model_name="test-coder", token_file=str(token))
-    source["identity"].update(
-        runtime_id="source-runtime",
-        base_model_repository="test/coder",
-        configuration_sha256="c" * 64,
-    )
-    path = manifest.with_name("source.json")
-    path.write_text(json.dumps(source))
-    settings = json.loads(manifest.read_text())
-    settings["source_proposal_config_file"] = str(path)
-    manifest.write_text(json.dumps(settings))
-    return path
-
-
 def test_real_factory_builds_all_twelve_tasks_and_keeps_evaluator_separate(configuration):
     runtime = build_real_model_runtime(configuration[0])
     assert type(runtime.team).__name__ == "ModelTeamProposalAdapter"
@@ -76,150 +55,16 @@ def test_real_factory_builds_all_twelve_tasks_and_keeps_evaluator_separate(confi
         (runtime.user_modeling, "ModelUserModelingAdapter"),
         (runtime.requirements, "ModelRequirementsAdapter"),
         (runtime.design, "ModelDesignAdapter"),
-        (runtime.architecture, "ModelArchitectureAdapter"),
     ):
         assert (
             member.mode.value == "MODEL_ADAPTER" and type(member.proposal_port).__name__ == expected
         )
         assert member.proposal_port.generator is runtime.team.generator
     assert runtime.proposal_configuration.temperature > 0
-    assert type(runtime.sources).__name__ == "ModelSourceProposalAdapter"
-    assert runtime.sources.generator is runtime.team.generator
-    assert len(TASKS) == 12
+    assert len(TASKS) == 7
     assert runtime.final_evaluator.session.identity["adapter_id"] == "s67-final-user-twin-evaluator"
     assert runtime.final_evaluator.generation_lock is runtime.team.generator.port._lock
     assert "proposal-secret-" not in repr(runtime)
-    assert runtime.source_proposal_configuration is None
-
-
-def test_dedicated_sources_keep_team_and_other_proposals_on_base(
-    configuration, source_configuration
-):
-    runtime = build_real_model_runtime(configuration[0])
-    source = runtime.sources.generator
-    team = runtime.team.generator
-    assert source is not team
-    assert source.configuration is runtime.source_proposal_configuration
-    assert source.configuration.identity.base_model_repository == "test/coder"
-    assert team.configuration.identity.base_model_repository == "test/base"
-    assert runtime.design.proposal_port.generator is team
-    assert runtime.architecture.proposal_port.generator is team
-    assert source.port._lock is team.port._lock is runtime.final_evaluator.generation_lock
-    assert "source-private-token-" not in repr(runtime)
-
-
-@pytest.mark.parametrize("adapted", [False, True])
-def test_source_only_configuration_accepts_sampled_pinned_base_or_proposer_adapter(
-    configuration, source_configuration, adapted
-):
-    value = json.loads(source_configuration.read_text())
-    if adapted:
-        value["identity"].update(adapter_id="source-proposer-candidate", adapter_sha256="e" * 64)
-        source_configuration.write_text(json.dumps(value))
-    runtime = build_real_model_runtime(configuration[0])
-    assert (runtime.sources.generator.configuration.identity.adapter_id is not None) is adapted
-    assert runtime.team.generator.configuration.identity.adapter_id is None
-
-
-@pytest.mark.parametrize(
-    "mutation",
-    [
-        "proposal_endpoint",
-        "evaluator_endpoint",
-        "identity",
-        "token",
-        "evaluator_token",
-        "zero",
-        "missing",
-        "relative",
-    ],
-)
-def test_invalid_dedicated_source_configuration_has_no_baseline_fallback(
-    configuration, source_configuration, mutation
-):
-    manifest, proposal, _ = configuration
-    value = json.loads(source_configuration.read_text())
-    baseline = json.loads(proposal.read_text())
-    evaluator = build_real_model_runtime(manifest).final_evaluator.session
-    if mutation == "proposal_endpoint":
-        value["base_url"] = baseline["base_url"]
-    elif mutation == "evaluator_endpoint":
-        value["base_url"] = evaluator.base_url
-    elif mutation == "identity":
-        value["identity"] = baseline["identity"]
-    elif mutation == "token":
-        value["token_file"] = baseline["token_file"]
-    elif mutation == "evaluator_token":
-        source_configuration.with_name("source.secret").write_text(evaluator.token)
-    elif mutation == "zero":
-        value["temperature"] = 0.0
-    elif mutation == "missing":
-        value["token_file"] = str(source_configuration.with_name("missing.secret"))
-    else:
-        settings = json.loads(manifest.read_text())
-        settings["source_proposal_config_file"] = "source.json"
-        manifest.write_text(json.dumps(settings))
-    source_configuration.write_text(json.dumps(value))
-    with pytest.raises(RealModelRuntimeError) as error:
-        build_real_model_runtime(manifest)
-    assert "source-private-token-" not in str(error.value)
-    assert "proposal-secret-" not in str(error.value)
-    assert evaluator.token not in str(error.value)
-
-
-def test_explicit_source_override_cannot_replace_manifest(
-    configuration, source_configuration, monkeypatch
-):
-    monkeypatch.setenv("ORCHESTWIN_SOURCE_PROPOSAL_MODEL_CONFIG_FILE", str(configuration[1]))
-    with pytest.raises(RealModelRuntimeError, match="CONFIGURATION_CONFLICT"):
-        build_real_model_runtime(configuration[0])
-    monkeypatch.setenv("ORCHESTWIN_SOURCE_PROPOSAL_MODEL_CONFIG_FILE", str(source_configuration))
-    assert build_real_model_runtime(configuration[0]).sources.generator is not None
-
-
-@pytest.mark.parametrize(
-    "changed", ["source_config", "source_token", "proposal_config", "proposal_token", "manifest"]
-)
-def test_file_swap_blocks_both_proposal_ports_before_any_http_call(
-    configuration, source_configuration, changed
-):
-    runtime = build_real_model_runtime(configuration[0])
-    changed_path = {
-        "source_config": source_configuration,
-        "source_token": runtime.source_proposal_configuration.token_file,
-        "proposal_config": configuration[1],
-        "proposal_token": runtime.proposal_configuration.token_file,
-        "manifest": configuration[0],
-    }[changed]
-    changed_path.write_bytes(changed_path.read_bytes() + b" ")
-    for generator in (runtime.sources.generator, runtime.team.generator):
-        sealed = generator.port._port
-        sealed._port = SimpleNamespace(generate=AsyncMock())
-        with pytest.raises(RealModelRuntimeError, match="CONFIGURATION_CHANGED"):
-            asyncio.run(generator.port.generate(object()))
-        sealed._port.generate.assert_not_called()
-    with pytest.raises(RealModelRuntimeError, match="CONFIGURATION_CHANGED"):
-        asyncio.run(runtime.check_readiness(None))
-
-
-def test_sources_and_team_route_independently_and_failure_does_not_fallback(
-    configuration, source_configuration
-):
-    runtime = build_real_model_runtime(configuration[0])
-    source_http = SimpleNamespace(generate=AsyncMock(side_effect=RuntimeError("source offline")))
-    team_http = SimpleNamespace(generate=AsyncMock(return_value="team-output"))
-    runtime.sources.generator.port._port._port = source_http
-    runtime.team.generator.port._port._port = team_http
-
-    async def run():
-        with pytest.raises(RuntimeError, match="source offline"):
-            await runtime.sources.generator.port.generate("source-request")
-        team_http.generate.assert_not_called()
-        assert await runtime.team.generator.port.generate("team-request") == "team-output"
-
-    asyncio.run(run())
-    source_http.generate.assert_awaited_once_with("source-request")
-    team_http.generate.assert_awaited_once_with("team-request")
 
 
 @pytest.mark.parametrize(
@@ -229,7 +74,6 @@ def test_sources_and_team_route_independently_and_failure_does_not_fallback(
         ("USER_MODELING_MODE", "FAKE_DETERMINISTIC"),
         ("REQUIREMENTS_MODE", "FAKE_DETERMINISTIC"),
         ("DESIGN_MODE", "FAKE_DETERMINISTIC"),
-        ("ARCHITECTURE_MODE", "FAKE_DETERMINISTIC"),
         ("FINAL_EVALUATOR_ENABLED", "false"),
         ("PROPOSAL_MODEL_CONFIG_FILE", "different.json"),
     ],
@@ -295,7 +139,7 @@ def test_application_composition_uses_exact_real_ports_with_evidence_store(
         assert (
             runtime.user_modeling_services.commands._proposals is models.user_modeling.proposal_port
         )
-        for stage in ("requirements", "design", "architecture"):
+        for stage in ("requirements", "design"):
             service = getattr(runtime, stage + "_generation_service")
             assert service._proposals is getattr(models, stage).proposal_port
             assert service._proposal_evidence_store is not None
@@ -335,85 +179,6 @@ def proposal_health(runtime):
         "training_executed": False,
         "fallback_policy": "FAIL_CLOSED_NO_FAKE_FALLBACK",
     }
-
-
-@pytest.mark.parametrize("change", [None, "identity", "all_tasks", "adapter", "http", "stopped"])
-def test_source_readiness_checks_its_own_authenticated_identity_and_tasks(
-    configuration, source_configuration, monkeypatch, change
-):
-    calls, payload = [], {}
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
-
-        def do_GET(self):
-            calls.append((self.path, self.headers.get("Authorization")))
-            body = json.dumps(payload).encode()
-            self.send_response(503 if change == "http" else 200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        config = json.loads(source_configuration.read_text())
-        config["base_url"] = f"http://127.0.0.1:{server.server_port}"
-        config["identity"].update(adapter_id="source-proposer", adapter_sha256="f" * 64)
-        source_configuration.write_text(json.dumps(config))
-        runtime = build_real_model_runtime(configuration[0])
-        payload.update(
-            proposal_health(
-                SimpleNamespace(proposal_configuration=runtime.source_proposal_configuration)
-            )
-        )
-        payload.update(
-            supported_tasks=sorted(SOURCE_TASKS),
-            adapter_loaded=True,
-            adapter_active=True,
-            adapter_name="proposer",
-            adapter_role="proposal",
-        )
-        if change == "identity":
-            payload["model_identity"] = runtime.proposal_configuration.identity.to_snapshot()
-        elif change == "all_tasks":
-            payload["supported_tasks"] = sorted(TASKS)
-        elif change == "adapter":
-            payload["adapter_name"] = "default"
-            payload["adapter_role"] = "evaluator"
-        elif change == "stopped":
-            server.shutdown()
-            server.server_close()
-
-        real_health = real_runtime._proposal_health
-
-        def checked_health(selected, token, tasks=TASKS):
-            if selected is runtime.proposal_configuration:
-                return proposal_health(runtime)
-            return real_health(selected, token, tasks)
-
-        async def schema(_):
-            return {"revision": "synthetic"}
-
-        monkeypatch.setattr(real_runtime, "_proposal_health", checked_health)
-        monkeypatch.setattr(real_runtime, "_check_schema", schema)
-        monkeypatch.setattr("orchestwin.evaluation.final_runtime.check_final_health", health)
-        report = asyncio.run(runtime.check_readiness(None))
-        assert report["ready"] is (change is None)
-        assert report["components"]["sources"]["ready"] is (change is None)
-        assert report["components"]["proposals"]["ready"] is True
-        assert report["source_proposal_tasks"] == sorted(SOURCE_TASKS)
-        assert report["generation_performed"] is False
-        assert "source-private-token-" not in json.dumps(report)
-        if change != "stopped":
-            assert calls == [("/health", "Bearer source-private-token-" + "s" * 40)]
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
 
 
 @pytest.mark.parametrize(

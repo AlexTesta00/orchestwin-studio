@@ -3,19 +3,6 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $repo
 $settings = Get-Content -LiteralPath $Configuration -Raw | ConvertFrom-Json
-$sourcePort = $null
-$sourceConfig = $settings.source_proposal_config_file
-if ($null -ne $settings.source_proposal_port) {
-    if ([string]$settings.source_proposal_port -notmatch '^[0-9]+$' -or [long]$settings.source_proposal_port -lt 1 -or [long]$settings.source_proposal_port -gt 65535) { throw 'The optional source proposal port must be between 1 and 65535.' }
-    $sourcePort = [int]$settings.source_proposal_port
-    if ($sourcePort -in @(8000, 8080, 8787, 8788)) { throw 'The source proposal endpoint requires its own port.' }
-    if (-not [string]::IsNullOrWhiteSpace($sourceConfig)) { throw 'Select a source adapter port or an external source configuration, not both.' }
-    if ([string]::IsNullOrWhiteSpace($settings.proposer_adapter)) { throw 'The source proposal port requires the verified proposer adapter.' }
-}
-if (-not [string]::IsNullOrWhiteSpace($sourceConfig)) {
-    if ($sourceConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $sourceConfig -PathType Leaf)) { throw 'The external source configuration must be an existing absolute file path.' }
-    if (@($settings.proposer_adapter, $settings.proposer_weights_sha256, $settings.proposer_config_sha256 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) { throw 'An external source configuration keeps the local proposal model unadapted.' }
-}
 $python = Join-Path $repo '.venv/Scripts/python.exe'
 $node = $settings.node
 if (-not (Test-Path -LiteralPath $node -PathType Leaf)) { throw 'Configure the Node executable in local-settings.json.' }
@@ -28,14 +15,12 @@ $remotePod = $settings.remote_pod
 if (-not [string]::IsNullOrWhiteSpace($remoteConfig)) {
     if ($remoteConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $remoteConfig -PathType Leaf)) { throw 'The remote proposal configuration must be an existing absolute file path.' }
     if ([string]::IsNullOrWhiteSpace($remotePod) -or $remotePod -notmatch '^[A-Za-z0-9_-]+$') { throw 'The remote proposal configuration requires the pod identifier.' }
-    if (-not [string]::IsNullOrWhiteSpace($sourceConfig)) { throw 'The remote proposer replaces the external source configuration.' }
     $remoteRuntime = Get-Content -LiteralPath $remoteConfig -Raw | ConvertFrom-Json
     if ($remoteRuntime.base_url -notmatch '^http://127\.0\.0\.1:([0-9]+)$') { throw 'The remote proposal configuration must target a loopback tunnel port.' }
     $tunnelPort = [int]$Matches[1]
     if ($tunnelPort -in @(8000, 8080, 8787, 8788)) { throw 'The tunnel port must not collide with Studio ports.' }
 }
 $ports = @(8000, 8080, 8787, 8788)
-if ($null -ne $sourcePort) { $ports += $sourcePort }
 if ($null -ne $tunnelPort) { $ports += $tunnelPort }
 foreach ($port in $ports) {
     if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
@@ -82,8 +67,6 @@ if (@($proposerFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).
     if (-not (Test-Path -LiteralPath $settings.proposer_adapter -PathType Container)) { throw 'The selected proposer adapter directory does not exist.' }
     $modelArgs += @('--proposer-adapter', (Quote-Argument (Convert-ToWslPath $settings.proposer_adapter)), '--proposer-weights-sha256', $settings.proposer_weights_sha256, '--proposer-config-sha256', $settings.proposer_config_sha256)
 }
-if ($null -ne $sourcePort) { $modelArgs += @('--source-proposal-port', $sourcePort) }
-if (-not [string]::IsNullOrWhiteSpace($sourceConfig)) { $modelArgs += @('--source-proposal-config-file', (Quote-Argument (Convert-ToWslPath $sourceConfig))) }
 try {
     $model = Start-StudioProcess 'wsl.exe' $modelArgs 'models' $repo
     $children += $model
@@ -110,7 +93,6 @@ try {
             proposal_config_file = $remoteConfig.Replace('\', '/')
             final_evaluator_config_file = $manifest.final_evaluator_config_file
         }
-        if (-not [string]::IsNullOrWhiteSpace($manifest.source_proposal_config_file)) { $remoteManifest['source_proposal_config_file'] = $manifest.source_proposal_config_file }
         $remoteManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
     }
     & $python scripts/studio_runtime.py check --models $models | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii

@@ -13,8 +13,12 @@ from orchestwin.persistence import create_database_runtime
 from orchestwin.projects.persistence.models import ProjectRecord
 from orchestwin.workflow.gates import HumanGateType
 from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
-from src.test.python.integration.test_postgresql_workflow_progression import _persist_pending_gate
-from src.test.python.integration.test_proposal_evidence_postgres import database, run, seed
+from src.test.python.integration.test_proposal_evidence_postgres import (
+    _persist_pending_gate,
+    database,
+    run,
+    seed,
+)
 
 __all__ = ["database"]
 pytestmark = [

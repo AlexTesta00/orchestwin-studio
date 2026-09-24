@@ -2,12 +2,10 @@
 
 import re
 
-from orchestwin.models.architecture_drafts import ArchitectureDraft, architecture_context
 from orchestwin.models.design_drafts import DesignDraft, design_context
 from orchestwin.models.planning_schema import constrain_planning_schema
 from orchestwin.models.requirements_drafts import RequirementsDraft, requirements_context
 
-from . import test_fake_architecture as architecture_fixtures
 from . import test_fake_design as design_fixtures
 from .test_fake_requirements import proposal_request
 
@@ -45,18 +43,3 @@ def test_design_can_reference_only_approved_requirement_codes():
         )
 
     assert pairs == {(alt, twin) for alt in ("DES-001", "DES-002") for twin in context["twins"]}
-
-
-def test_architecture_test_slots_preserve_approved_coverage_links():
-    context = architecture_context(architecture_fixtures.proposal_request())
-    schema = ArchitectureDraft.model_json_schema()
-    constrain_planning_schema(schema, context, "architecture")
-    slots = [
-        item["allOf"][1]["properties"] for item in schema["properties"]["test_cases"]["prefixItems"]
-    ]
-    for criterion, slot in zip(context["requirements"]["criteria"], slots, strict=False):
-        assert slot["acceptance_criterion_ids"]["const"] == [criterion["code"]]
-        assert slot["requirement_ids"]["const"] == criterion["requirement_ids"]
-    assert {code for slot in slots for code in slot["requirement_ids"]["const"]} == {
-        item["code"] for item in context["requirements"]["requirements"]
-    }
