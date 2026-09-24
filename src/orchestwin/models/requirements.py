@@ -35,11 +35,12 @@ from orchestwin.projects.requirements_specifications import (
 from orchestwin.twins.epistemics import (
     ProfileObservation,
 )
+from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
 REQUIREMENTS_PROPOSAL_SCHEMA_VERSION: Final = 1
 MAX_REQUIREMENTS_PROVIDER_ID_LENGTH: Final = 128
-MIN_REQUIREMENTS_PROPOSAL_TWINS: Final = 1
-MAX_REQUIREMENTS_PROPOSAL_TWINS: Final = 4
+MIN_REQUIREMENTS_PROPOSAL_TWINS: Final = MIN_USER_TWINS
+MAX_REQUIREMENTS_PROPOSAL_TWINS: Final = MAX_USER_TWINS
 
 _MAX_BRIEF_NAME_LENGTH: Final = 200
 _MAX_BRIEF_TEXT_LENGTH: Final = 4000
@@ -310,7 +311,8 @@ class RequirementsUserModelingInput:
 
         if not (MIN_REQUIREMENTS_PROPOSAL_TWINS <= twin_count <= MAX_REQUIREMENTS_PROPOSAL_TWINS):
             raise ValueError(
-                "requirements User Modeling input requires between one and four User Twins"
+                "requirements User Modeling input requires between "
+                f"{MIN_REQUIREMENTS_PROPOSAL_TWINS} and {MAX_REQUIREMENTS_PROPOSAL_TWINS} User Twins"
             )
 
         references = tuple(value.reference for value in self.user_twins)

@@ -631,7 +631,7 @@ def test_snapshot_requires_between_one_and_four_twins() -> None:
     """Enforce the project-specific User Twin cardinality."""
     with pytest.raises(
         ValueError,
-        match=("between one and four"),
+        match=("between 1 and 8"),
     ):
         create_user_modeling_snapshot(
             project_id=PROJECT_ID,
@@ -653,7 +653,7 @@ def test_snapshot_requires_between_one_and_four_twins() -> None:
 
     with pytest.raises(
         ValueError,
-        match=("between one and four"),
+        match=("between 1 and 8"),
     ):
         create_user_modeling_snapshot(
             project_id=PROJECT_ID,

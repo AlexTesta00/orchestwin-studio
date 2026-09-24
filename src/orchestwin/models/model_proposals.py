@@ -260,6 +260,7 @@ class ModelDesignAdapter:
         from orchestwin.models.design_drafts import DesignDraft, bind_design, design_context
 
         context, twins = design_context(request)
+        twin_keys = "/".join(twins)
         draft = await self.generator.generate(
             task="design",
             context=context,
@@ -268,7 +269,7 @@ class ModelDesignAdapter:
                 "Propose exactly two distinct design approaches in the requirements' language. "
                 "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
                 "DRK-001 for concerns; every code must be unique. References use supplied "
-                "requirement/story/criterion codes and T1/T2 twin keys. Include one synthetic "
+                f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
                 "critique for EVERY alternative/twin pair; cite exact observation_keys from "
                 "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
                 "Do not invent empirical evidence, owner selection, approval or a prototype."
