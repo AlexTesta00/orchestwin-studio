@@ -37,7 +37,7 @@ def test_fixed_fixture_names_are_isolated_and_audit_guards_remain_active(repetit
             assert connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
         # The exact operation that broke CI must remain prohibited, even here.
         with (
-            pytest.raises(DBAPIError, match="cannot be deleted or truncated"),
+            pytest.raises(DBAPIError, match=r"append-only|immutable"),
             engine.begin() as connection,
         ):
             connection.execute(sa.text("TRUNCATE TABLE users CASCADE"))
@@ -52,7 +52,7 @@ def test_failed_schema_setup_or_test_body_cleans_only_its_own_namespace(monkeypa
             connection.execute(sa.text("INSERT INTO retained_outer_fixture VALUES (42)"))
             before = set(connection.scalars(sa.text("SELECT oid FROM pg_namespace")))
 
-        def fail_migration(_settings):
+        def fail_migration(_settings, **_options):
             raise RuntimeError("deliberate migration failure")
 
         if failure_stage == "migration":
