@@ -12,11 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
-from orchestwin.models.architecture import (
-    ArchitectureProposalProviderKind,
-    ArchitectureProposalResult,
-    ArchitectureProposalStatus,
-)
 from orchestwin.models.design import (
     DesignProposalProviderKind,
     DesignProposalResult,
@@ -285,29 +280,6 @@ class ModelDesignAdapter:
         return DesignProposalResult(
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
-            provider_id=self.generator.provider_id,
-            provider_version=1,
-            package=output,
-        )
-
-
-class ModelArchitectureAdapter:
-    def __init__(self, generator: ProposalGenerator):
-        self.generator = generator
-
-    @_model_boundary
-    async def propose(self, request):
-        _require(
-            {AgentIdentifier.SOFTWARE_ARCHITECT, AgentIdentifier.QA_TEST_ENGINEER}
-            <= set(request.team.selected_agent_ids)
-            and request.design.ready_for_architecture
-        )
-        from orchestwin.models.architecture_generation import generate_architecture
-
-        output = await generate_architecture(self.generator, request)
-        return ArchitectureProposalResult(
-            status=ArchitectureProposalStatus.PROPOSED,
-            provider_kind=ArchitectureProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
             provider_version=1,
             package=output,

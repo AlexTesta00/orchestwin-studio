@@ -19,8 +19,6 @@ from orchestwin.agents.persistence.models import TeamProposalVersionRecord
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.agents.persistence.unit_of_work import SqlAlchemyTeamProposalUnitOfWorkFactory
 from orchestwin.agents.proposals import LocalTeamProposalApplicationService
-from orchestwin.artifacts.architecture_packages import ArchitecturePackageVersion
-from orchestwin.artifacts.architecture_persistence import SqlAlchemyArchitecturePackageRepository
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.identity.persistence.models import UserRecord
@@ -49,12 +47,17 @@ from orchestwin.twins.persistence.repositories import (
 )
 from orchestwin.twins.personas import PersonaProfileVersion
 from orchestwin.twins.user_twins import UserTwinProfileVersion
-from orchestwin.workflow.gates import HumanGateType
-from src.test.python.integration.postgres_isolation import isolated_postgres_settings
-from src.test.python.integration.test_postgresql_workflow_progression import (
-    _approve_gate,
-    _persist_pending_gate,
+from orchestwin.workflow.gates import (
+    GateArtifactReference,
+    HumanGateAction,
+    HumanGateStatus,
+    HumanGateTransitionStatus,
+    HumanGateType,
+    create_human_gate,
+    transition_human_gate,
 )
+from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
+from src.test.python.integration.postgres_isolation import isolated_postgres_settings
 from src.test.python.models.test_proposal_evidence import Command, audited_generator, stage_case
 
 pytestmark = [
@@ -143,6 +146,74 @@ async def seed(runtime, request, *, team=False):
     return owner, project
 
 
+async def _persist_pending_gate(
+    runtime,
+    *,
+    owner_id,
+    project_id,
+    gate_id,
+    gate_type,
+    artifact_id,
+    artifact_hash,
+    occurred_at,
+):
+    draft = create_human_gate(
+        gate_id=gate_id,
+        project_id=project_id,
+        owner_user_id=owner_id,
+        gate_type=gate_type,
+        artifact=GateArtifactReference(
+            project_id=project_id,
+            gate_type=gate_type,
+            artifact_id=artifact_id,
+            version=1,
+            content_hash=artifact_hash,
+        ),
+        created_at=occurred_at,
+    )
+    submitted = transition_human_gate(
+        draft,
+        action=HumanGateAction.SUBMIT,
+        actor_user_id=owner_id,
+        occurred_at=occurred_at,
+    )
+    assert submitted.status is HumanGateTransitionStatus.APPLIED
+    assert submitted.event is not None
+    async with runtime.session_factory.begin() as session:
+        persisted = await SqlAlchemyHumanGateRepository(session).add_with_event(
+            gate=submitted.gate,
+            event=submitted.event,
+        )
+    assert persisted.status is HumanGateStatus.PENDING_APPROVAL
+    return persisted
+
+
+async def _approve_gate(runtime, *, owner_id, project_id, gate_type, occurred_at):
+    async with runtime.session_factory.begin() as session:
+        repository = SqlAlchemyHumanGateRepository(session)
+        gate = await repository.get_latest_owned_for_update(
+            project_id=project_id,
+            owner_user_id=owner_id,
+            gate_type=gate_type,
+        )
+        assert gate is not None
+        approved = transition_human_gate(
+            gate,
+            action=HumanGateAction.APPROVE,
+            actor_user_id=owner_id,
+            occurred_at=occurred_at,
+        )
+        assert approved.status is HumanGateTransitionStatus.APPLIED
+        assert approved.event is not None
+        persisted = await repository.save_transition(
+            previous_gate=gate,
+            updated_gate=approved.gate,
+            event=approved.event,
+        )
+    assert persisted.status is HumanGateStatus.APPROVED
+    return approved.event
+
+
 def make_version(result, kind, owner, project):
     common = dict(
         id=uuid4(),
@@ -170,7 +241,6 @@ def make_version(result, kind, owner, project):
     cls = {
         "REQUIREMENTS": RequirementsSpecificationVersion,
         "DESIGN": DesignPackageVersion,
-        "ARCHITECTURE": ArchitecturePackageVersion,
     }[kind]
     return cls(
         **common, based_on_version_number=None, content_hash=value.content_hash, **{field: value}
@@ -194,7 +264,6 @@ async def publish(runtime, result, kind, owner, project):
                 "USER_TWIN": SqlAlchemyUserTwinVersionRepository,
                 "REQUIREMENTS": SqlAlchemyRequirementsSpecificationRepository,
                 "DESIGN": SqlAlchemyDesignPackageRepository,
-                "ARCHITECTURE": SqlAlchemyArchitecturePackageRepository,
             }[kind](session, owner_user_id=owner)
             assert (await repository.append(version)).value == "APPENDED"
         await bind_model_artifacts(
@@ -205,9 +274,7 @@ async def publish(runtime, result, kind, owner, project):
     return scope.request.request_id, version
 
 
-@pytest.mark.parametrize(
-    "stage", ["team", "personas", "user-twins", "requirements", "design", "architecture"]
-)
+@pytest.mark.parametrize("stage", ["team", "personas", "user-twins", "requirements", "design"])
 def test_each_generated_artifact_has_exact_durable_owner_scoped_link(database, tmp_path, stage):
     request, output, adapter, method, kind = stage_case(stage)
     generator, _ = audited_generator(tmp_path, output)

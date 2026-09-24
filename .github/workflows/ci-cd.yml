@@ -118,11 +118,6 @@ jobs:
       - name: Show current database revision
         run: orchestwin-migrate current
 
-      - name: Verify durable web execution Gate 7 operations
-        env:
-          ORCHESTWIN_WEB_OPERATION_TEST_DATABASE_URL: postgresql+psycopg://orchestwin:ci-postgres-password@127.0.0.1:5432/orchestwin
-        run: python -m pytest -q src/test/python/integration/test_web_operation_postgres.py
-
       - name: Run PostgreSQL integration tests with coverage
         if: runner.os == 'Linux'
         env:
@@ -147,59 +142,6 @@ jobs:
           name: backend-coverage
           disable_search: true
           fail_ci_if_error: true
-
-  web-execution:
-    name: Verify Web runners and fixture contracts
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-
-    env:
-      HUSKY: 0
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            requirements-dev.txt
-
-      - name: Install backend and test dependencies
-        run: python -m pip install --disable-pip-version-check --editable . --requirement requirements-dev.txt
-
-      - name: Validate pinned runner manifest
-        run: npm run verify:web-runners
-
-      - name: Verify complete Web profile fixture matrix
-        run: npm run test:web-fixtures
-
-      - name: Build controlled Web runner images
-        run: |
-          docker build --pull --file infra/web-runners/Dockerfile.node --tag orchestwin/web-node-runner:ci .
-          docker build --pull --file infra/web-runners/browser-locked/Dockerfile --tag orchestwin/web-browser-runner:ci .
-          docker build --pull --file infra/web-runners/Dockerfile.php --tag orchestwin/web-php-runner:ci .
-          docker build --network none --tag orchestwin/web-dependency-proxy:ci infra/web-runners/dependency-network
-
-      - name: Test restricted dependency proxy without external network
-        run: |
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 65532:65532 --memory 256m --pids-limit 64 --mount "type=bind,source=$PWD/infra/web-runners/dependency-network,target=/tests,readonly" orchestwin/web-node-runner:ci node --test /tests/proxy.test.mjs
-
-      - name: Smoke test non-root runner images without network
-        run: |
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-node-runner:ci node --version
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-browser-runner:ci node -e 'if (process.getuid() === 0 || require("playwright/package.json").version !== "1.62.1" || require("axe-core/package.json").version !== "4.13.0") process.exit(1)'
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 --memory 512m orchestwin/web-php-runner:ci php --version
-
-      - name: Record local runner image identities
-        run: |
-          docker image inspect --format '{{.Id}}' orchestwin/web-node-runner:ci
-          docker image inspect --format '{{.Id}}' orchestwin/web-browser-runner:ci
-          docker image inspect --format '{{.Id}}' orchestwin/web-php-runner:ci
 
   build:
     name: Build (${{ matrix.os }})
@@ -272,7 +214,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - test
-      - web-execution
       - build
     runs-on: ubuntu-latest
 

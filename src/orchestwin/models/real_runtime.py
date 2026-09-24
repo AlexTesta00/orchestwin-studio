@@ -26,10 +26,8 @@ from orchestwin.evaluation.final_runtime import (
     build_final_evaluator_runtime,
 )
 from orchestwin.evaluation.local_runtime import LocalEvaluatorRuntime, build_local_evaluator_runtime
-from orchestwin.models.architecture_runtime import ArchitectureRuntime, ArchitectureRuntimeMode
 from orchestwin.models.design_runtime import DesignRuntime, DesignRuntimeMode
 from orchestwin.models.model_proposals import (
-    ModelArchitectureAdapter,
     ModelDesignAdapter,
     ModelRequirementsAdapter,
     ModelTeamProposalAdapter,
@@ -39,12 +37,11 @@ from orchestwin.models.proposal_generation import (
     ProposalModelConfiguration,
     build_proposal_generator,
 )
-from orchestwin.models.proposal_tasks import SOURCE_TASKS, TASKS
+from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.models.requirements_runtime import RequirementsRuntime, RequirementsRuntimeMode
 from orchestwin.models.schema_decoding import POLICY as SCHEMA_DECODING_POLICY
 from orchestwin.models.schema_decoding import VERSION as SCHEMA_DECODER_VERSION
 from orchestwin.models.serialized_generation import SerializedGenerationPort
-from orchestwin.models.source_proposals import ModelSourceProposalAdapter
 from orchestwin.models.strict_evaluator_json import strict_json_object
 from orchestwin.models.user_modeling_runtime import UserModelingRuntime, UserModelingRuntimeMode
 
@@ -59,7 +56,6 @@ class RealModelConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
     schema_version: int = Field(default=1, ge=1, le=1, strict=True)
     proposal_config_file: Path
-    source_proposal_config_file: Path | None = None
     final_evaluator_ready_file: Path | None = None
     final_evaluator_config_file: Path | None = None
 
@@ -71,7 +67,6 @@ class RealModelConfiguration(BaseModel):
             path is not None and (not path.is_absolute() or ".." in path.parts)
             for path in (
                 self.proposal_config_file,
-                self.source_proposal_config_file,
                 self.final_evaluator_ready_file,
                 self.final_evaluator_config_file,
             )
@@ -88,14 +83,11 @@ class _Overrides(BaseSettings):
     user_modeling_mode: str | None = None
     requirements_mode: str | None = None
     design_mode: str | None = None
-    architecture_mode: str | None = None
     proposal_model_config_file: Path | None = None
-    source_proposal_model_config_file: Path | None = None
     team_proposal_model_config_file: Path | None = None
     user_modeling_model_config_file: Path | None = None
     requirements_model_config_file: Path | None = None
     design_model_config_file: Path | None = None
-    architecture_model_config_file: Path | None = None
     final_evaluator_enabled: bool | None = None
     final_evaluator_ready_file: Path | None = None
 
@@ -107,8 +99,6 @@ class _Overrides(BaseSettings):
                 valid = value is True
             elif field_name == "final_evaluator_ready_file":
                 valid = value == config.final_evaluator_ready_file
-            elif field_name == "source_proposal_model_config_file":
-                valid = value == config.source_proposal_config_file
             elif field_name.endswith("config_file"):
                 valid = value == config.proposal_config_file
             else:
@@ -241,12 +231,8 @@ class RealModelRuntime:
     user_modeling: UserModelingRuntime
     requirements: RequirementsRuntime
     design: DesignRuntime
-    architecture: ArchitectureRuntime
-    sources: ModelSourceProposalAdapter
     _files: tuple[tuple[Path, str], ...] = field(repr=False)
     _token: str = field(repr=False)
-    source_proposal_configuration: ProposalModelConfiguration | None = None
-    _source_token: str | None = field(default=None, repr=False)
 
     def _assert_unchanged(self):
         _assert_sealed_files(self._files)
@@ -260,16 +246,6 @@ class RealModelRuntime:
             _check_schema(session_factory),
         ]
         names = ["proposals", "evaluator", "database"]
-        if self.source_proposal_configuration is not None:
-            names.append("sources")
-            operations.append(
-                asyncio.to_thread(
-                    _proposal_health,
-                    self.source_proposal_configuration,
-                    self._source_token,
-                    SOURCE_TASKS,
-                )
-            )
         checks = await asyncio.gather(*operations, return_exceptions=True)
         components = {}
         for name, value in zip(names, checks, strict=True):
@@ -294,11 +270,6 @@ class RealModelRuntime:
             "semantic_quality_qualified": False,
             "formal_campaign_ready": False,
         }
-        if self.source_proposal_configuration is not None:
-            report.update(
-                source_proposal_tasks=sorted(SOURCE_TASKS),
-                source_proposal_temperature=self.source_proposal_configuration.temperature,
-            )
         return report
 
 
@@ -344,33 +315,11 @@ def build_real_model_runtime(path: Path | None):
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
         if _read(config.proposal_config_file) != proposal_raw:
             raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
-        source_generator = generator
-        source = None
-        source_token = None
         sealed_files = [
             (path, raw),
             (config.proposal_config_file, proposal_raw),
             (proposal.token_file, token_raw),
         ]
-        if config.source_proposal_config_file is not None:
-            source_raw = _read(config.source_proposal_config_file)
-            source_generator = build_proposal_generator(config.source_proposal_config_file)
-            source = source_generator.configuration
-            if source.temperature <= 0:
-                raise RealModelRuntimeError("SAMPLED_SOURCE_PROPOSAL_MODEL_REQUIRED")
-            source_token_raw = _read(source.token_file, 4096)
-            source_token = source_token_raw.decode("ascii")
-            if (
-                source_generator.port._bearer_token != source_token
-                or _read(config.source_proposal_config_file) != source_raw
-            ):
-                raise RealModelRuntimeError("REAL_MODEL_CONFIGURATION_CHANGED")
-            sealed_files.extend(
-                (
-                    (config.source_proposal_config_file, source_raw),
-                    (source.token_file, source_token_raw),
-                )
-            )
         final = (
             build_local_evaluator_runtime(config.final_evaluator_config_file)
             if config.final_evaluator_config_file
@@ -391,17 +340,6 @@ def build_real_model_runtime(path: Path | None):
             or proposal.base_url == evaluator_url
         ):
             raise RealModelRuntimeError("SEPARATE_PROPOSAL_AND_EVALUATOR_IDENTITIES_REQUIRED")
-        if source is not None:
-            evaluator_token = (
-                final.token if config.final_evaluator_config_file else final.session.token
-            )
-            if (
-                source.base_url in (proposal.base_url, evaluator_url)
-                or source.identity.to_snapshot()
-                in (proposal.identity.to_snapshot(), evaluator_identity)
-                or source_token in (token_raw.decode("ascii"), evaluator_token)
-            ):
-                raise RealModelRuntimeError("SEPARATE_SOURCE_PROPOSAL_RUNTIME_REQUIRED")
         generation_lock = asyncio.Lock()
         sealed_hashes = tuple(
             (p, hashlib.sha256(content).hexdigest()) for p, content in sealed_files
@@ -409,10 +347,6 @@ def build_real_model_runtime(path: Path | None):
         generator.port = SerializedGenerationPort(
             _ConfigurationSealedPort(generator.port, sealed_hashes), generation_lock
         )
-        if source is not None:
-            source_generator.port = SerializedGenerationPort(
-                _ConfigurationSealedPort(source_generator.port, sealed_hashes), generation_lock
-            )
         final = replace(final, generation_lock=generation_lock)
         return RealModelRuntime(
             proposal,
@@ -425,14 +359,8 @@ def build_real_model_runtime(path: Path | None):
                 RequirementsRuntimeMode.MODEL_ADAPTER, ModelRequirementsAdapter(generator)
             ),
             DesignRuntime(DesignRuntimeMode.MODEL_ADAPTER, ModelDesignAdapter(generator)),
-            ArchitectureRuntime(
-                ArchitectureRuntimeMode.MODEL_ADAPTER, ModelArchitectureAdapter(generator)
-            ),
-            ModelSourceProposalAdapter(source_generator),
             sealed_hashes,
             token_raw.decode("ascii"),
-            source,
-            source_token,
         )
     except RealModelRuntimeError:
         raise

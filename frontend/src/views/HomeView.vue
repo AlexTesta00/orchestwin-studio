@@ -8,16 +8,7 @@ import UiClaimLabel from "@/components/UiClaimLabel.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const twinKeys = ["brief", "critique", "proof"] as const;
-const stepKeys = [
-  "brief",
-  "team",
-  "twins",
-  "requirements",
-  "design",
-  "architecture",
-  "sources",
-  "execution",
-] as const;
+const stepKeys = ["brief", "team", "twins", "requirements", "design"] as const;
 const objectiveKeys = [
   "results",
   "minimal",

@@ -2,14 +2,10 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
-import { ArchitectureApiError } from "@/api/architecture";
 import { ArtifactGraphApiError } from "@/api/artifacts";
 import { DesignApiError } from "@/api/design";
-import { ExecutionApiError } from "@/api/execution";
-import { FinalizationApiError } from "@/api/finalization";
 import { RequirementsApiError } from "@/api/requirements";
 import { UserModelingApiError } from "@/api/userModeling";
-import { WebExecutionApiError } from "@/api/webExecution";
 import type {
   AuthenticationApi,
   AuthenticationInput,
@@ -163,14 +159,10 @@ describe("useAuthStore", () => {
   });
 
   it.each([
-    ArchitectureApiError,
     ArtifactGraphApiError,
     DesignApiError,
-    ExecutionApiError,
-    FinalizationApiError,
     RequirementsApiError,
     UserModelingApiError,
-    WebExecutionApiError,
   ])("refreshes expired authentication for domain client %s", async (ErrorType) => {
     const api = new FakeAuthenticationApi();
     const store = useAuthStore();
@@ -189,7 +181,7 @@ describe("useAuthStore", () => {
       const api = new FakeAuthenticationApi();
       const store = useAuthStore();
       await store.login(api, { email: USER.email, password: "test" });
-      const failure = new WebExecutionApiError("Rejected", {
+      const failure = new DesignApiError("Rejected", {
         status,
         code: "REJECTED",
         payload: null,

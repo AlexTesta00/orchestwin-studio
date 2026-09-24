@@ -10,7 +10,6 @@ from uuid import uuid4
 import pytest
 
 from orchestwin.models.model_proposals import (
-    ModelArchitectureAdapter,
     ModelDesignAdapter,
     ModelRequirementsAdapter,
     ModelTeamProposalAdapter,
@@ -87,7 +86,6 @@ def stage_case(stage):
     source, adapter, key = {
         "requirements": (fixtures.requirements_fixtures, ModelRequirementsAdapter, "specification"),
         "design": (fixtures.design_fixtures, ModelDesignAdapter, "package"),
-        "architecture": (fixtures.architecture_fixtures, ModelArchitectureAdapter, "package"),
     }[stage]
     request = source.proposal_request()
     result = asyncio.run(
@@ -114,9 +112,7 @@ def stage_case(stage):
     return request, proposal_draft(stage, value, request), adapter, "propose", stage.upper()
 
 
-@pytest.mark.parametrize(
-    "stage", ["team", "personas", "user-twins", "requirements", "design", "architecture"]
-)
+@pytest.mark.parametrize("stage", ["team", "personas", "user-twins", "requirements", "design"])
 def test_all_six_tasks_retain_exact_request_raw_response_and_adapter_result(tmp_path, stage):
     request, output, adapter, method, kind = stage_case(stage)
     generator, transport = audited_generator(tmp_path, output)

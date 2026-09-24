@@ -38,12 +38,6 @@ def test_default_runtime_composes_the_artifact_graph_query_service(
         queries=object(),
         gate=object(),
     )
-    architecture_marker = SimpleNamespace(
-        generation=object(),
-        revisions=object(),
-        queries=object(),
-        gate=object(),
-    )
     captured: list[object] = []
 
     def build_graph_query(session_factory: object) -> object:
@@ -72,11 +66,6 @@ def test_default_runtime_composes_the_artifact_graph_query_service(
         services_module,
         "build_design_services",
         lambda _session_factory: design_marker,
-    )
-    monkeypatch.setattr(
-        services_module,
-        "build_architecture_services",
-        lambda _session_factory: architecture_marker,
     )
     monkeypatch.setattr(
         services_module,

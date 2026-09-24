@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { apiClient } from "@/api/client";
 import { modelRuntimeReadiness, type ModelRuntimeReadiness } from "@/api/modelRuntime";
 import { useAuthStore } from "@/stores/auth";
-import type { AuthorizedRequest } from "@/stores/architecture";
+import type { AuthorizedRequest } from "@/stores/design";
 
 const props = withDefaults(
   defineProps<{

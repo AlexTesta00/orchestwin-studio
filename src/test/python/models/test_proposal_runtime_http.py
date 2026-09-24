@@ -26,7 +26,6 @@ from .test_model_proposals import make_generator
         ("user_modeling", "ModelUserModelingAdapter"),
         ("requirements", "ModelRequirementsAdapter"),
         ("design", "ModelDesignAdapter"),
-        ("architecture", "ModelArchitectureAdapter"),
     ],
 )
 def test_each_application_factory_resolves_explicit_model_config(tmp_path, stage, adapter):
