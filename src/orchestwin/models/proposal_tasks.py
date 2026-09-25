@@ -10,5 +10,6 @@ TASKS = frozenset(
         "user-twin-evaluation",
         "requirements",
         "design",
+        "brief-dialogue",
     }
 )

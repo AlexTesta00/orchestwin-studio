@@ -61,7 +61,7 @@ def test_real_factory_builds_all_twelve_tasks_and_keeps_evaluator_separate(confi
         )
         assert member.proposal_port.generator is runtime.team.generator
     assert runtime.proposal_configuration.temperature > 0
-    assert len(TASKS) == 7
+    assert len(TASKS) == 8
     assert runtime.final_evaluator.session.identity["adapter_id"] == "s67-final-user-twin-evaluator"
     assert runtime.final_evaluator.generation_lock is runtime.team.generator.port._lock
     assert "proposal-secret-" not in repr(runtime)

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from orchestwin import __version__
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
+from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_mockups import create_design_mockup_router
@@ -155,6 +156,7 @@ def create_app(
         create_auth_router(resolved_auth_settings),
         create_project_router(),
         create_clarification_router(),
+        create_brief_dialogue_router(),
         create_team_router(),
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
         create_twin_chat_router(),
