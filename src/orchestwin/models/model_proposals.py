@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
+from orchestwin.artifacts.visual_catalog import visual_catalog_summary
 from orchestwin.models.design import (
     DesignProposalProviderKind,
     DesignProposalResult,
@@ -67,6 +68,18 @@ from orchestwin.twins.user_twins import (
     ConfirmedPersonaReference,
     UserTwinLifecycleStatus,
     UserTwinProfile,
+)
+
+DESIGN_OUTPUT_TOKENS = 6144
+DESIGN_VISUAL_INSTRUCTION = (
+    "Each alternative also declares its visual language in 'visual', using only ids from this "
+    "catalog. "
+    + visual_catalog_summary()
+    + " Write approach_rationale first and ground it in the domain, the brief and the twins' "
+    "age, context of use, accessibility needs and vocabulary; the archetype follows the shape "
+    "of the task and its flows, the colours and typography follow the domain and the tone. "
+    "product_name is a short product name in the requirements' language. The two alternatives "
+    "must read as two different products, never two skins of the same layout."
 )
 
 
@@ -265,6 +278,9 @@ class ModelDesignAdapter:
             task="design",
             context=context,
             output_type=DesignDraft,
+            max_output_tokens=min(
+                DESIGN_OUTPUT_TOKENS, self.generator.configuration.max_output_tokens
+            ),
             instruction=(
                 "Propose exactly two distinct design approaches in the requirements' language. "
                 "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
@@ -272,7 +288,8 @@ class ModelDesignAdapter:
                 f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
                 "critique for EVERY alternative/twin pair; cite exact observation_keys from "
                 "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
-                "Do not invent empirical evidence, owner selection, approval or a prototype."
+                "Do not invent empirical evidence, owner selection, approval or a prototype. "
+                + DESIGN_VISUAL_INSTRUCTION
             ),
         )
         output = bind_design(
@@ -282,7 +299,7 @@ class ModelDesignAdapter:
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
-            provider_version=1,
+            provider_version=2,
             package=output,
         )
 

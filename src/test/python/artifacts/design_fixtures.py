@@ -30,6 +30,31 @@ from orchestwin.artifacts.prototypes import (
     create_prototype_screen,
     create_prototype_transition,
 )
+from orchestwin.artifacts.visual_catalog import (
+    BackgroundTreatment,
+    BorderWeight,
+    ButtonStyle,
+    ColorMode,
+    ColorScheme,
+    CornerStyle,
+    Density,
+    DesignTone,
+    Elevation,
+    Emphasis,
+    FontFamily,
+    HeaderStyle,
+    HeadingCase,
+    HeadingWeight,
+    HueFamily,
+    InputStyle,
+    LayoutArchetype,
+    NavigationPattern,
+    Saturation,
+    SurfaceTone,
+    TypeScale,
+    VisualChoices,
+)
+from orchestwin.artifacts.visual_language import create_visual_language
 from orchestwin.projects.requirements import (
     RequirementKind,
     RequirementPriority,
@@ -232,6 +257,41 @@ def design_alternative(
         security_considerations=("Guest data is minimized in summaries",),
         advantages=("Clear progression" if index == 1 else "Fast access to frequent actions",),
         trade_offs=("More navigation" if index == 1 else "Higher information density",),
+        visual_language=None if index == 1 else visual_language(),
+    )
+
+
+def visual_language():
+    """Create the deterministic visual language of the dashboard alternative."""
+    return create_visual_language(
+        choices=VisualChoices(
+            archetype=LayoutArchetype.DASHBOARD,
+            hue_family=HueFamily.EMERALD,
+            color_scheme=ColorScheme.MONOCHROME,
+            color_mode=ColorMode.LIGHT,
+            saturation=Saturation.BALANCED,
+            surface_tone=SurfaceTone.NEUTRAL,
+            heading_family=FontFamily.SLAB_SERIF,
+            body_family=FontFamily.HUMANIST_SANS,
+            type_scale=TypeScale.REGULAR,
+            heading_case=HeadingCase.SENTENCE,
+            heading_weight=HeadingWeight.SEMIBOLD,
+            corners=CornerStyle.SOFT,
+            density=Density.COMFORTABLE,
+            buttons=ButtonStyle.FILLED,
+            inputs=InputStyle.BOXED,
+            elevation=Elevation.SUBTLE,
+            borders=BorderWeight.HAIRLINE,
+            navigation=NavigationPattern.SIDE_RAIL,
+            header=HeaderStyle.COMPACT_BAR,
+            background=BackgroundTreatment.PLAIN,
+            emphasis=Emphasis.BALANCED,
+            tone=DesignTone.CALM,
+        ),
+        product_name="Reservation desk",
+        rationale=(
+            "A calm emerald dashboard keeps availability visible for experienced receptionists."
+        ),
     )
 
 

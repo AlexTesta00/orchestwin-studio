@@ -92,6 +92,13 @@ def proposal_draft(stage, value, request):
             }.items():
                 if old in item:
                     item[new] = item.pop(old)
+        for item in result["alternatives"]:
+            language = item.pop("visual_language")
+            item["visual"] = {
+                **language["choices"],
+                "approach_rationale": language["rationale"],
+                "product_name": language["product_name"],
+            }
         for item in result["critiques"]:
             item["alternative"] = item.pop("design_alternative_id")
             item["twin"] = item.pop("user_twin_reference")

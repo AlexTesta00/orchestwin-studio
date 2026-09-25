@@ -215,7 +215,7 @@ class ProposalGenerator:
             "personas": 4,
             "user-twins": 4,
             "requirements": 3,
-            "design": 5,
+            "design": 6,
             "architecture": 7,
         }.get(task, 1)
         if task == "design" and serialized_context.get("purpose") == "DESIGN_MOCKUP":
