@@ -69,6 +69,7 @@ export type DesignGenerationIssue =
   | "PROJECT_NOT_FOUND"
   | "REQUIREMENTS_APPROVAL_REQUIRED"
   | "DESIGN_PACKAGE_ALREADY_EXISTS"
+  | "DESIGN_PACKAGE_NOT_FOUND"
   | "PROPOSAL_REJECTED"
   | "INVALID_PROPOSAL"
   | "CONTEXT_CHANGED"
@@ -190,6 +191,12 @@ export interface VisualChoicesPayload {
   tone: string;
 }
 
+export interface TwinFitPayload {
+  twin_id: UUID;
+  name: string;
+  statement: string;
+}
+
 export interface VisualLanguagePayload {
   catalog_version: number;
   catalog_content_hash: string;
@@ -198,6 +205,7 @@ export interface VisualLanguagePayload {
   rationale: string;
   palette: Record<string, string>;
   tokens: Record<string, string>;
+  twin_fit: TwinFitPayload[];
 }
 
 export interface DesignAlternativePayload {

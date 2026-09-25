@@ -47,7 +47,7 @@ from orchestwin.artifacts.visual_catalog import (
     TypeScale,
     VisualChoices,
 )
-from orchestwin.artifacts.visual_language import create_visual_language
+from orchestwin.artifacts.visual_language import create_twin_fit, create_visual_language
 from orchestwin.models.design import (
     DesignProposalIssueCode,
     DesignProposalProviderKind,
@@ -485,6 +485,17 @@ def _build_alternative(
             choices=template.visual,
             product_name=template.product_name,
             rationale=template.visual_rationale,
+            twin_fit=tuple(
+                create_twin_fit(
+                    reference=reference,
+                    statement=(
+                        f"{template.product_name} keeps the "
+                        f"{template.approach.value.casefold().replace('_', ' ')} direction "
+                        f"legible and predictable for {reference.name}."
+                    ),
+                )
+                for reference in twin_references
+            ),
         ),
     )
 

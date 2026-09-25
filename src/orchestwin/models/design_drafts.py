@@ -38,7 +38,12 @@ from orchestwin.artifacts.visual_catalog import (
     VisualChoices,
     require_distinct_visual_choices,
 )
-from orchestwin.artifacts.visual_language import MAX_PRODUCT_NAME_LENGTH, create_visual_language
+from orchestwin.artifacts.visual_language import (
+    MAX_PRODUCT_NAME_LENGTH,
+    MAX_TWIN_FIT_LENGTH,
+    create_twin_fit,
+    create_visual_language,
+)
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import Draft, Links, Text, Title
 from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
@@ -50,6 +55,12 @@ class WorkflowDraft(Draft):
     steps: Annotated[tuple[Text, ...], Field(min_length=1)]
     requirements: Links
     stories: Links
+
+
+class TwinFitDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    twin: str
+    statement: Annotated[str, Field(min_length=1, max_length=MAX_TWIN_FIT_LENGTH)]
 
 
 class VisualLanguageDraft(BaseModel):
@@ -77,6 +88,7 @@ class VisualLanguageDraft(BaseModel):
     saturation: Saturation
     surface_tone: SurfaceTone
     tone: DesignTone
+    twin_fit: Annotated[tuple[TwinFitDraft, ...], Field(min_length=1)]
     type_scale: TypeScale
 
     def choices(self) -> VisualChoices:
@@ -202,6 +214,16 @@ def design_context(request):
     }, twins
 
 
+def _twin_fit(alternative, twins):
+    keys = [item.twin for item in alternative.visual.twin_fit]
+    if sorted(keys) != sorted(twins):
+        raise ValueError("visual twin fit must cover every twin exactly once")
+    return tuple(
+        create_twin_fit(reference=twins[item.twin].reference, statement=item.statement)
+        for item in alternative.visual.twin_fit
+    )
+
+
 def _require_archetype_fit(alternative, choices):
     spec = ARCHETYPES[choices.archetype]
     if max(len(w.steps) for w in alternative.workflows) < spec.minimum_workflow_steps:
@@ -228,6 +250,7 @@ def bind_design(draft, request, twins, model_reference):
             choices=x.visual.choices(),
             product_name=x.visual.product_name,
             rationale=x.visual.approach_rationale,
+            twin_fit=_twin_fit(x, twins),
         )
         for x in draft.alternatives
     }

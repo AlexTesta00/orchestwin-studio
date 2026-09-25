@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
+from uuid import UUID
 
 from orchestwin.artifacts.visual_catalog import (
     PALETTE_ROLES,
@@ -14,6 +15,7 @@ from orchestwin.artifacts.visual_catalog import (
 )
 from orchestwin.artifacts.visual_color import is_hex_colour
 from orchestwin.projects.requirements_primitives import (
+    UserTwinVersionReference,
     canonical_json,
     normalize_required_text,
     snapshot_content_hash,
@@ -23,7 +25,26 @@ from orchestwin.projects.requirements_primitives import (
 
 MAX_PRODUCT_NAME_LENGTH: Final = 80
 MAX_VISUAL_RATIONALE_LENGTH: Final = 2000
+MAX_TWIN_FIT_LENGTH: Final = 1000
 _TOKEN_PREFIX: Final = "--vl-"
+
+
+@dataclass(frozen=True, slots=True)
+class TwinFit:
+    twin_id: UUID
+    name: str
+    statement: str
+
+    def __post_init__(self) -> None:
+        for value, label in ((self.name, "twin fit name"), (self.statement, "twin fit statement")):
+            if (
+                normalize_required_text(value, label=label, maximum_length=MAX_TWIN_FIT_LENGTH)
+                != value
+            ):
+                raise ValueError(f"{label} must be normalized")
+
+    def to_snapshot(self) -> dict[str, str]:
+        return {"twin_id": str(self.twin_id), "name": self.name, "statement": self.statement}
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,9 +56,13 @@ class VisualLanguage:
     tokens: tuple[tuple[str, str], ...]
     catalog_version: int
     catalog_content_hash: str
+    twin_fit: tuple[TwinFit, ...] = ()
 
     def __post_init__(self) -> None:
         validate_positive_integer(self.catalog_version, label="visual catalog version")
+        identifiers = [item.twin_id for item in self.twin_fit]
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("visual twin fit must name every twin at most once")
         validate_sha256(self.catalog_content_hash, label="visual catalog content hash")
         for value, label, maximum_length in (
             (self.product_name, "visual product name", MAX_PRODUCT_NAME_LENGTH),
@@ -45,21 +70,25 @@ class VisualLanguage:
         ):
             if normalize_required_text(value, label=label, maximum_length=maximum_length) != value:
                 raise ValueError(f"{label} must be normalized")
-        if tuple(role for role, _ in self.palette) != PALETTE_ROLES:
-            raise ValueError("visual palette must define every role in catalog order")
-        if not all(is_hex_colour(value) for _, value in self.palette):
+        roles = dict(self.palette)
+        if len(roles) != len(self.palette) or set(roles) != set(PALETTE_ROLES):
+            raise ValueError("visual palette must define every role exactly once")
+        if not all(is_hex_colour(value) for value in roles.values()):
             raise ValueError("visual palette colours must be lowercase hex values")
-        if not self.tokens or not all(
+        names = dict(self.tokens)
+        if len(names) != len(self.tokens):
+            raise ValueError("visual tokens must be unique")
+        if not names or not all(
             isinstance(name, str)
             and name.startswith(_TOKEN_PREFIX)
             and isinstance(value, str)
             and value.strip() == value
             and value
-            for name, value in self.tokens
+            for name, value in names.items()
         ):
             raise ValueError("visual tokens must be named CSS custom properties")
-        if len({name for name, _ in self.tokens}) != len(self.tokens):
-            raise ValueError("visual tokens must be unique")
+        object.__setattr__(self, "palette", tuple((role, roles[role]) for role in PALETTE_ROLES))
+        object.__setattr__(self, "tokens", tuple(sorted(names.items())))
 
     @property
     def palette_roles(self) -> dict[str, str]:
@@ -78,6 +107,7 @@ class VisualLanguage:
             "rationale": self.rationale,
             "palette": dict(self.palette),
             "tokens": dict(self.tokens),
+            "twin_fit": [item.to_snapshot() for item in self.twin_fit],
         }
 
     def canonical_json(self) -> str:
@@ -88,11 +118,22 @@ class VisualLanguage:
         return snapshot_content_hash(self.to_snapshot())
 
 
+def create_twin_fit(*, reference: UserTwinVersionReference, statement: str) -> TwinFit:
+    return TwinFit(
+        twin_id=reference.twin_id,
+        name=reference.name,
+        statement=normalize_required_text(
+            statement, label="twin fit statement", maximum_length=MAX_TWIN_FIT_LENGTH
+        ),
+    )
+
+
 def create_visual_language(
     *,
     choices: VisualChoices,
     product_name: str,
     rationale: str,
+    twin_fit: tuple[TwinFit, ...] = (),
 ) -> VisualLanguage:
     palette = resolve_palette(
         choices.hue_family,
@@ -117,6 +158,7 @@ def create_visual_language(
         tokens=tuple(resolve_visual_tokens(choices).items()),
         catalog_version=VISUAL_CATALOG_VERSION,
         catalog_content_hash=VISUAL_CATALOG_CONTENT_HASH,
+        twin_fit=tuple(twin_fit),
     )
 
 
@@ -131,6 +173,25 @@ def _string_mapping(value: object, *, label: str) -> tuple[tuple[str, str], ...]
     return tuple(items)
 
 
+def _twin_fit(value: object) -> tuple[TwinFit, ...]:
+    if not isinstance(value, list):
+        raise ValueError("visual twin fit must be a list")
+    items = []
+    for entry in value:
+        if not isinstance(entry, Mapping) or set(entry) != {"twin_id", "name", "statement"}:
+            raise ValueError("visual twin fit entries need twin_id, name and statement")
+        if not all(isinstance(entry[key], str) for key in ("twin_id", "name", "statement")):
+            raise ValueError("visual twin fit entries must be strings")
+        try:
+            twin_id = UUID(str(entry["twin_id"]))
+        except ValueError as error:
+            raise ValueError("visual twin fit twin_id must be a UUID") from error
+        items.append(
+            TwinFit(twin_id=twin_id, name=str(entry["name"]), statement=str(entry["statement"]))
+        )
+    return tuple(items)
+
+
 def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLanguage:
     if not isinstance(payload, Mapping):
         raise ValueError("visual language snapshot must be a mapping")
@@ -142,6 +203,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
         "rationale",
         "palette",
         "tokens",
+        "twin_fit",
     ):
         if key not in payload:
             raise ValueError(f"visual language snapshot requires {key}")
@@ -162,6 +224,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
         tokens=_string_mapping(payload["tokens"], label="visual tokens"),
         catalog_version=catalog_version,
         catalog_content_hash=str(payload["catalog_content_hash"]),
+        twin_fit=_twin_fit(payload["twin_fit"]),
     )
     if language.to_snapshot() != dict(payload):
         raise ValueError("visual language snapshot is not canonical")
@@ -170,8 +233,11 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
 
 __all__ = [
     "MAX_PRODUCT_NAME_LENGTH",
+    "MAX_TWIN_FIT_LENGTH",
     "MAX_VISUAL_RATIONALE_LENGTH",
+    "TwinFit",
     "VisualLanguage",
+    "create_twin_fit",
     "create_visual_language",
     "visual_language_from_snapshot",
 ]
