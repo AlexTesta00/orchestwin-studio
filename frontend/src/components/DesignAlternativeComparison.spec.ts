@@ -24,6 +24,8 @@ describe("DesignAlternativeComparison", () => {
     expect(wrapper.text()).toContain("simulated feedback and design hypotheses");
     expect(wrapper.text()).toContain("MODEL_INFERRED");
     expect(wrapper.text()).toContain("REQUIRED");
+    expect(wrapper.findAll('[data-testid="design-style-tile"]')).toHaveLength(1);
+    expect(wrapper.get('[data-testid="style-product-name"]').text()).toBe("Reservation desk");
   });
 
   it("emits the exact alternative selected by the owner", async () => {

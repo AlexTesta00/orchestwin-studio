@@ -9,7 +9,10 @@ import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import { apiClient } from "@/api/client";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
+import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
 import { designApi, type DesignApi } from "../api/design";
+import { designLoopApi, type DesignLoopApi } from "../api/designLoop";
+import { useDesignLoopStore } from "../stores/designLoop";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
 import type {
@@ -29,6 +32,7 @@ const props = withDefaults(
     prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: DesignApi;
+    loopApi?: DesignLoopApi;
   }>(),
   {
     locale: "en",
@@ -39,6 +43,7 @@ const props = withDefaults(
 
 const auth = useAuthStore();
 const store = useDesignStore();
+const loopStore = useDesignLoopStore();
 const localError = ref<string | null>(null);
 const selectedAlternativeId = ref<string | null>(null);
 const gateReason = ref("");
@@ -91,6 +96,10 @@ const messages = {
     chooseAlternative: "Choose one design alternative before creating the revision.",
     pendingDiff: "Review the pending changes before proposing more.",
     createMockup: "Create visual preview",
+    regenerate: "Regenerate the design alternatives",
+    regenerateHelp:
+      "After bringing insights into the brief, the requirements or the design, generate a new version and evaluate it again.",
+    regenerationRejected: "The design could not be regenerated.",
     mockupTitle: "Design preview",
     mockupDraft: "Model-generated draft · not applied",
     mockupHelp:
@@ -143,6 +152,10 @@ const messages = {
     chooseAlternative: "Seleziona un'alternativa di design prima di creare la revisione.",
     pendingDiff: "Valuta le modifiche in attesa prima di proporne altre.",
     createMockup: "Crea anteprima visiva",
+    regenerate: "Rigenera le alternative di design",
+    regenerateHelp:
+      "Dopo aver portato gli spunti nel brief, nei requisiti o nel design, genera una nuova versione e valutala di nuovo.",
+    regenerationRejected: "Non è stato possibile rigenerare il design.",
     mockupTitle: "Anteprima del design",
     mockupDraft: "Bozza generata dal modello · non applicata",
     mockupHelp:
@@ -207,6 +220,42 @@ const canProposeSelection = computed(() => {
     mockup.value.package.owner_selected_alternative_id === selectedAlternativeId.value
   );
 });
+
+const selectedVisual = computed(
+  () =>
+    current.value?.package.alternatives.find(
+      (alternative) => alternative.id === selectedAlternativeId.value,
+    )?.visual_language ?? null,
+);
+
+const twinNames = computed(() =>
+  Object.fromEntries(
+    (current.value?.package.grounding.user_twin_references ?? []).map((reference) => [
+      reference.twin_id,
+      reference.name,
+    ]),
+  ),
+);
+
+async function regenerate(): Promise<void> {
+  if (store.isBusy || mockupBusy.value || loopStore.isBusy) return;
+  const done = await run(async () => {
+    const result = await loopStore.regenerate(
+      props.projectId,
+      authorizedRequest,
+      props.loopApi ?? designLoopApi,
+    );
+    if (result.status !== "CREATED") {
+      throw new Error(result.issue ?? copy.value.regenerationRejected);
+    }
+    await store.load(props.projectId, authorizedRequest, api.value);
+  });
+  if (done) {
+    mockupEpoch++;
+    mockup.value = null;
+    selectedAlternativeId.value = null;
+  }
+}
 
 async function generateMockup(): Promise<void> {
   if (current.value === null || selectedAlternativeId.value === null || mockupBusy.value) return;
@@ -468,6 +517,8 @@ watch(
           :selected-alternative-id="selectedAlternativeId"
           :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
           :locale="locale"
+          :project-id="projectId"
+          :authorize="authorizedRequest"
           @select="selectedAlternativeId = $event"
         />
       </details>
@@ -490,6 +541,7 @@ watch(
           <DeclarativePrototypePreview
             :key="mockup.generation_id"
             :prototype="mockup.package.prototype"
+            :visual="selectedVisual"
             :locale="locale"
           />
           <details class="text-xs text-ink-3">
@@ -501,7 +553,11 @@ watch(
           v-else-if="current.package.prototype?.design_alternative_id === selectedAlternativeId"
         >
           <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
-          <DeclarativePrototypePreview :prototype="current.package.prototype" :locale="locale" />
+          <DeclarativePrototypePreview
+            :prototype="current.package.prototype"
+            :visual="selectedVisual"
+            :locale="locale"
+          />
         </template>
         <p v-else class="m-0 text-sm text-ink-2">
           {{ copy.mockupRequired }}
@@ -522,6 +578,34 @@ watch(
           {{ copy.proposeSelection }}
         </button>
       </section>
+
+      <section
+        v-if="current.package.prototype && pendingDiff === null"
+        class="flex flex-wrap items-center gap-3"
+        data-design-regenerate
+      >
+        <button
+          type="button"
+          class="rounded-control border border-line bg-white px-4 py-2 text-sm font-semibold text-ink-2 hover:bg-surface-3 disabled:opacity-60"
+          :disabled="store.isBusy || mockupBusy || loopStore.isBusy"
+          data-testid="design-regenerate"
+          @click="regenerate"
+        >
+          {{ copy.regenerate }}
+        </button>
+        <p class="m-0 text-sm text-ink-3">{{ copy.regenerateHelp }}</p>
+      </section>
+
+      <ProjectDesignEvaluationPanel
+        v-if="current.package.prototype"
+        :project-id="projectId"
+        :design-version-id="current.id"
+        :design-content-hash="current.content_hash"
+        :twin-names="twinNames"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        :api="props.loopApi"
+      />
 
       <section v-if="pendingDiff !== null" class="grid gap-4" aria-labelledby="design-diffs-title">
         <h3 id="design-diffs-title" class="text-xl font-semibold text-ink">

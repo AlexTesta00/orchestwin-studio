@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
-import { SELECTED_DESIGN_PACKAGE } from "../test/designFixtures";
+import { BASE_DESIGN_PACKAGE, SELECTED_DESIGN_PACKAGE } from "../test/designFixtures";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
 
 describe("DeclarativePrototypePreview", () => {
@@ -60,6 +60,26 @@ describe("DeclarativePrototypePreview", () => {
     expect(wrapper.get("article").classes()).toContain("max-w-sm");
     expect(wrapper.get('[data-viewport="MOBILE"]').attributes("aria-pressed")).toBe("true");
     expect(wrapper.get('[data-viewport="MOBILE"]').text()).toBe("Telefono");
+  });
+
+  it("applies the visual language tokens and the archetype shell", async () => {
+    const prototype = SELECTED_DESIGN_PACKAGE.prototype!;
+    const visual = BASE_DESIGN_PACKAGE.alternatives[1]!.visual_language!;
+    const wrapper = mount(DeclarativePrototypePreview, {
+      props: { prototype, visual, locale: "it" },
+    });
+    const article = wrapper.get("article");
+    expect(article.attributes("style")).toContain("--vl-color-primary");
+    expect(article.attributes("data-archetype")).toBe("DASHBOARD");
+    expect(article.classes()).toContain("vl-shell-DASHBOARD");
+    expect(wrapper.get('[data-testid="mockup-product-name"]').text()).toBe("Reservation desk");
+    expect(wrapper.find(".vl-rail").exists()).toBe(true);
+    expect(wrapper.find(".vl-tabs").exists()).toBe(false);
+    await wrapper.get('[data-viewport="MOBILE"]').trigger("click");
+    expect(wrapper.find(".vl-rail").exists()).toBe(false);
+    expect(wrapper.find(".vl-tabs").exists()).toBe(true);
+    await wrapper.get(".vl-tabs button:nth-child(2)").trigger("click");
+    expect(article.attributes("data-screen-id")).toBe(prototype.screens[1]!.id);
   });
 
   it("renders trusted data and follows declared transitions", async () => {
