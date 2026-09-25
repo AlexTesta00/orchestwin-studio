@@ -614,15 +614,6 @@ SCRIPT_TONES: Final = frozenset(
         DesignTone.RUSTIC,
     }
 )
-DISPLAY_TONES: Final = frozenset(
-    {
-        DesignTone.ENERGETIC,
-        DesignTone.PLAYFUL,
-        DesignTone.FUTURISTIC,
-        DesignTone.EDITORIAL,
-        DesignTone.CIVIC,
-    }
-)
 MONOSPACE_BODY_TONES: Final = frozenset(
     {DesignTone.TECHNICAL, DesignTone.FUTURISTIC, DesignTone.CLINICAL}
 )
@@ -788,8 +779,6 @@ def validate_visual_choices(choices: VisualChoices) -> None:
             raise ValueError("script headings require a playful, artisanal or warm tone")
         if choices.heading_case is not HeadingCase.SENTENCE:
             raise ValueError("script headings keep sentence case")
-    if choices.heading_family is FontFamily.DISPLAY_HEAVY and choices.tone not in DISPLAY_TONES:
-        raise ValueError("heavy display headings require an energetic, playful or civic tone")
     if mode.high_contrast:
         if choices.buttons not in HIGH_CONTRAST_BUTTONS:
             raise ValueError("high contrast modes require filled or outlined buttons")
@@ -1056,8 +1045,7 @@ def visual_catalog_summary() -> str:
         + ". Body families must be readable: never SCRIPT, DISPLAY_HEAVY or MODERN_SERIF; "
         "MONOSPACE bodies only with TECHNICAL, FUTURISTIC or CLINICAL tones. SCRIPT headings "
         "only with PLAYFUL, ARTISANAL, LUXURIOUS, WARM or RUSTIC tones and SENTENCE case; "
-        "DISPLAY_HEAVY headings only with ENERGETIC, PLAYFUL, FUTURISTIC, EDITORIAL or CIVIC "
-        "tones. Shape and structure: corners, density, buttons, inputs, elevation, borders, "
+        "Shape and structure: corners, density, buttons, inputs, elevation, borders, "
         "header, background, emphasis and tone follow the schema enums; navigation must be one "
         "listed for the chosen archetype. "
         "HIGH_CONTRAST modes require FILLED or OUTLINED buttons, visible borders and no SCRIPT. "
@@ -1124,6 +1112,31 @@ def visual_catalog_content_hash() -> str:
 
 VISUAL_CATALOG_CONTENT_HASH: Final = visual_catalog_content_hash()
 
+NEUTRAL_VISUAL_CHOICES: Final = VisualChoices(
+    archetype=LayoutArchetype.SINGLE_CARD,
+    hue_family=HueFamily.SLATE,
+    color_scheme=ColorScheme.NEUTRAL_ACCENT,
+    color_mode=ColorMode.LIGHT,
+    saturation=Saturation.MUTED,
+    surface_tone=SurfaceTone.NEUTRAL,
+    heading_family=FontFamily.SYSTEM_UI,
+    body_family=FontFamily.SYSTEM_UI,
+    type_scale=TypeScale.REGULAR,
+    heading_case=HeadingCase.SENTENCE,
+    heading_weight=HeadingWeight.SEMIBOLD,
+    corners=CornerStyle.SOFT,
+    density=Density.COMFORTABLE,
+    buttons=ButtonStyle.FILLED,
+    inputs=InputStyle.BOXED,
+    elevation=Elevation.SUBTLE,
+    borders=BorderWeight.HAIRLINE,
+    navigation=NavigationPattern.NONE,
+    header=HeaderStyle.COMPACT_BAR,
+    background=BackgroundTreatment.PLAIN,
+    emphasis=Emphasis.BALANCED,
+    tone=DesignTone.ESSENTIAL,
+)
+
 
 __all__ = [
     "ARCHETYPES",
@@ -1133,6 +1146,7 @@ __all__ = [
     "HUES",
     "HUE_FAMILY_SEPARATION_DEGREES",
     "MODES",
+    "NEUTRAL_VISUAL_CHOICES",
     "PALETTE_ROLES",
     "VISUAL_CATALOG_CONTENT_HASH",
     "VISUAL_CATALOG_VERSION",

@@ -15,6 +15,7 @@ from orchestwin.artifacts.prototypes import (
     create_prototype_screen,
     create_prototype_transition,
 )
+from orchestwin.artifacts.visual_catalog import ARCHETYPES
 from orchestwin.models.design_drafts import requirement_code_map
 from orchestwin.models.requirements_drafts import Text, Title
 
@@ -90,6 +91,11 @@ def bind_mockup(draft, alternative, requirements):
     codes = [screen.code for screen in draft.screens]
     if len(codes) != len(set(codes)) or codes != sorted(codes):
         raise ValueError("mockup screen codes must be unique and ordered")
+    visual = alternative.visual_language
+    if visual is not None:
+        spec = ARCHETYPES[visual.choices.archetype]
+        if not spec.minimum_screens <= len(draft.screens) <= spec.maximum_screens:
+            raise ValueError("mockup screen count does not fit the archetype")
     refs = requirement_code_map(requirements.specification)
     allowed = {item.code for item in requirements.specification.requirements}
     screen_ids = {code: uuid4() for code in codes}
