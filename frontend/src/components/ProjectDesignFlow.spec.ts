@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { DesignApi } from "../api/design";
+import type { DesignLoopApi } from "../api/designLoop";
 import {
   BASE_DESIGN_PACKAGE,
   DESIGN_ALTERNATIVE_ID,
@@ -26,6 +27,18 @@ import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 import type { DesignMockupRequest, DesignMockupPayload } from "../types/design";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("access-token");
+const loopApi: DesignLoopApi = {
+  evaluate: async () => {
+    throw new Error("not evaluated in this spec");
+  },
+  runs: async () => [],
+  comparison: async () => null,
+  regenerate: async () => ({ status: "REJECTED", issue: "DESIGN_PACKAGE_NOT_FOUND" }) as never,
+  applyInsight: async () => {
+    throw new Error("not applied in this spec");
+  },
+  applications: async () => [],
+};
 
 class FakeDesignApi implements DesignApi {
   savedMockup: DesignMockupPayload | null = null;
@@ -200,7 +213,7 @@ describe("ProjectDesignFlow", () => {
       },
     };
     const wrapper = mount(ProjectDesignFlow, {
-      props: { projectId: DESIGN_PROJECT_ID, authorize, api },
+      props: { projectId: DESIGN_PROJECT_ID, authorize, api, loopApi },
     });
     await flushPromises();
     expect(wrapper.get("[data-design-mockup]").text()).toContain("Persisted visual mockup");
@@ -216,6 +229,7 @@ describe("ProjectDesignFlow", () => {
         projectId: DESIGN_PROJECT_ID,
         authorize,
         api,
+        loopApi,
       },
     });
 
@@ -264,6 +278,7 @@ describe("ProjectDesignFlow", () => {
         projectId: DESIGN_PROJECT_ID,
         authorize,
         api,
+        loopApi,
       },
     });
 
