@@ -24,15 +24,20 @@ from orchestwin.evaluation.evaluator import (
     canonical_profile_snapshot,
 )
 from orchestwin.evaluation.model_evaluator import (
+    _MAX_FINDINGS,
+    _MAX_GAP_LENGTH,
+    _MAX_SUMMARY_LENGTH,
     USER_TWIN_MODEL_EVALUATION_TASK_ID,
     ModelGatewayEvaluationError,
     ModelGatewayEvaluationErrorCode,
     ModelGatewayUserTwinEvaluator,
+    _output_schema_payload,
 )
 from orchestwin.evaluation.validation import (
     EvaluationEvidenceKind,
     EvaluationEvidenceReference,
 )
+from orchestwin.models.strict_evaluator_json import check_evaluator_schema
 from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationFailureCode,
@@ -302,3 +307,34 @@ def test_configuration_and_returned_identity_cannot_drift() -> None:
     with pytest.raises(ModelGatewayEvaluationError) as identity_error:
         asyncio.run(_evaluator(port, identity).evaluate(_request()))
     assert identity_error.value.code is ModelGatewayEvaluationErrorCode.IDENTITY_MISMATCH
+
+
+def test_output_schema_bounds_every_generated_string_and_array() -> None:
+    schema = _output_schema_payload(require_finding_id_pattern=True)
+    check_evaluator_schema(schema)
+    unbounded: list[str] = []
+
+    def walk(node: dict[str, object], path: str) -> None:
+        kind = node.get("type")
+        free_text = kind == "string" and "enum" not in node and "format" not in node
+        if free_text and "maxLength" not in node and "pattern" not in node:
+            unbounded.append(path)
+        if kind == "array":
+            if "maxItems" not in node:
+                unbounded.append(path)
+            walk(node["items"], path + "[]")
+        if kind == "object":
+            for name, child in node["properties"].items():
+                walk(child, f"{path}.{name}")
+
+    walk(schema, "$")
+    assert unbounded == []
+    finding = schema["properties"]["findings"]["items"]["properties"]
+    assert schema["properties"]["findings"]["maxItems"] <= _MAX_FINDINGS
+    assert schema["properties"]["overall_summary"]["maxLength"] <= _MAX_SUMMARY_LENGTH
+    assert schema["properties"]["evidence_gaps"]["items"]["maxLength"] <= _MAX_GAP_LENGTH
+    assert finding["location"]["maxLength"] <= 500
+    assert finding["summary"]["maxLength"] <= 1_000
+    assert finding["rationale"]["maxLength"] <= 4_000
+    assert finding["recommended_action"]["maxLength"] <= 2_000
+    assert finding["evidence_refs"]["items"]["maxLength"] <= 512
