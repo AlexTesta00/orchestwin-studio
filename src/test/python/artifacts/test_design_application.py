@@ -502,3 +502,43 @@ def test_generation_reports_append_conflicts_without_committing() -> None:
     assert result.persistence_status is DesignVersionAppendStatus.VERSION_CONFLICT
     assert repository.appended
     assert sum(unit.commits for unit in factory.units) == 0
+
+
+def test_regeneration_appends_a_new_version_after_an_existing_design() -> None:
+    existing = generated_version()
+    proposals = CountingProposalPort()
+    repository = InMemoryPackageRepository(current=existing)
+    application, factory = service(
+        governance=StaticGovernance(governed_context()),
+        proposals=proposals,
+        repository=repository,
+    )
+
+    result = asyncio.run(application.regenerate(owner_user_id=OWNER_ID, project_id=PROJECT_ID))
+
+    assert result.status is DesignGenerationStatus.CREATED
+    assert result.version is not None
+    assert result.version.version_number == 2
+    assert result.version.based_on_version_number == 1
+    assert result.version.package.owner_selected_alternative_id is None
+    assert proposals.calls == 1
+    assert repository.appended[-1] is result.version
+    assert factory.units[-1].commits == 1
+
+
+def test_regeneration_requires_an_existing_design_and_approved_requirements() -> None:
+    proposals = CountingProposalPort()
+    application, _ = service(
+        governance=StaticGovernance(governed_context()),
+        proposals=proposals,
+    )
+
+    result = asyncio.run(application.regenerate(owner_user_id=OWNER_ID, project_id=PROJECT_ID))
+
+    assert result.status is DesignGenerationStatus.REJECTED
+    assert result.issue is DesignGenerationIssueCode.DESIGN_PACKAGE_NOT_FOUND
+    assert proposals.calls == 0
+
+    rejected, _ = service(governance=StaticGovernance(None), proposals=proposals)
+    blocked = asyncio.run(rejected.regenerate(owner_user_id=OWNER_ID, project_id=PROJECT_ID))
+    assert blocked.issue is DesignGenerationIssueCode.PROJECT_NOT_FOUND
