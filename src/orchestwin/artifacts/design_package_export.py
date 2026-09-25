@@ -13,6 +13,7 @@ from orchestwin.agents.proposals import TeamProposalVersion
 from orchestwin.agents.team_gate import agent_team_gate_is_currently_approved
 from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
 from orchestwin.artifacts.design_packages import DesignPackageVersion
+from orchestwin.artifacts.mockup_html import MOCKUP_HTML_FILE, mockup_html
 from orchestwin.projects.brief_gate import project_brief_gate_is_currently_approved
 from orchestwin.projects.briefs import ProjectBriefVersion
 from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
@@ -480,6 +481,8 @@ def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
         "",
         f"Rationale: {visual['rationale']}",
         "",
+        *_bullets(f"{item['name']}: {item['statement']}" for item in visual["twin_fit"]),
+        "",
         *_table(("Role", "Colour"), visual["palette"].items()),
     ]
 
@@ -621,6 +624,7 @@ def design_package_files(sources: DesignPackageSources) -> dict[str, str]:
         "design/design.md": design_markdown(sources.design, gates["design"], codes),
         "design/critiques.md": critiques_markdown(sources.design),
         "design/mockups.md": mockups_markdown(sources.design),
+        MOCKUP_HTML_FILE: mockup_html(sources.design),
         "design/design.json": _json(documents["design"]),
     }
     digests = {

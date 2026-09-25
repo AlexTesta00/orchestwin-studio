@@ -243,7 +243,6 @@ def test_visual_choices_normalize_strings_and_round_trip_through_snapshots():
             },
             "sentence case",
         ),
-        ({"heading_family": FontFamily.DISPLAY_HEAVY}, "heavy display headings require"),
         (
             {"color_mode": ColorMode.HIGH_CONTRAST_LIGHT, "buttons": ButtonStyle.GHOST},
             "filled or outlined buttons",
@@ -271,6 +270,7 @@ def test_coherent_special_cases_are_accepted():
     assert choices(body_family=FontFamily.MONOSPACE, tone=DesignTone.TECHNICAL)
     assert choices(heading_family=FontFamily.SCRIPT, tone=DesignTone.ARTISANAL)
     assert choices(heading_family=FontFamily.DISPLAY_HEAVY, tone=DesignTone.ENERGETIC)
+    assert choices(heading_family=FontFamily.DISPLAY_HEAVY, tone=DesignTone.TECHNICAL)
     assert choices(
         color_mode=ColorMode.HIGH_CONTRAST_LIGHT,
         buttons=ButtonStyle.OUTLINED,

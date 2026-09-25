@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.artifacts.design_packages import DesignExplorationPackage
+from orchestwin.artifacts.visual_catalog import ARCHETYPES
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design_drafts import requirements_view
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
@@ -20,6 +21,53 @@ from orchestwin.models.proposal_evidence import (
     retain_adapter_result,
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError, wire_value
+
+MOCKUP_RULES = (
+    "Act as the UX/UI designer. Produce an actual visual mockup of the selected design in the "
+    "requirements' language with real interface copy, never a narrative about a screen. Each "
+    "screen depicts one moment. Never combine a successful result and an error message on one "
+    "screen: SUCCESS screens contain only success content. Validation requirements remain "
+    "binding for implementation but error examples are omitted unless a separate reachable "
+    "ERROR screen is needed. This is a click-through mockup, not executing business logic; "
+    "begin example results with 'Esempio:' in Italian or 'Example:' in English, for example "
+    "'Esempio: 5 + 3 = 8'. Screen codes SCR-001, SCR-002 and so on in order; every screen must "
+    "be reachable from SCR-001 and the entry screen has no return action to itself. BUTTON and "
+    "LINK must have target_screen pointing to an existing screen; all other elements set "
+    "target_screen null. TEXT_INPUT and SELECT need a nonempty field_name (for example "
+    "'operation' for an operation SELECT), all others null. Only fields may be required. Only "
+    "SELECT has nonempty options. LIST holds one item per element. Every element cites supplied "
+    "requirement codes. No HTML, JavaScript, approval or empirical claims. "
+)
+DEFAULT_MOCKUP_RECIPE = (
+    "Prefer two concise screens with up to eight elements each: SCR-001 is DEFAULT with the "
+    "task inputs and a forward action to SCR-002; SCR-002 is SUCCESS with one illustrative "
+    "result and a return action to SCR-001. For a calculator show operand fields, operation "
+    "choice, calculate action, and an illustrative result."
+)
+
+
+def _mockup_instruction(alternative):
+    visual = alternative.visual_language
+    if visual is None:
+        return MOCKUP_RULES + DEFAULT_MOCKUP_RECIPE
+    spec = ARCHETYPES[visual.choices.archetype]
+    return (
+        MOCKUP_RULES
+        + f"The design follows the {spec.label} archetype ({spec.description}); the product is "
+        f"called '{visual.product_name}' and its tone is {visual.choices.tone.value}. Use "
+        f"between {spec.minimum_screens} and {spec.maximum_screens} screens with up to ten "
+        f"elements each. Recipe: {spec.recipe}"
+    )
+
+
+def _alternative_view(alternative):
+    view = wire_value(alternative)
+    visual = view.get("visual_language")
+    if visual is not None:
+        view["visual_language"] = {
+            key: visual[key] for key in ("choices", "product_name", "rationale")
+        }
+    return view
 
 
 class MockupRequest(BaseModel):
@@ -91,34 +139,10 @@ class ModelMockupApplication:
                 "purpose": "DESIGN_MOCKUP",
                 "design_version_id": str(current.id),
                 "design_content_hash": current.content_hash,
-                "alternative": wire_value(alternative),
+                "alternative": _alternative_view(alternative),
                 "requirements": requirements_view(requirements),
             },
-            instruction=(
-                "Act as the UX/UI designer. Produce an actual visual mockup of the selected design "
-                "in the requirements' language. Prefer two concise screens with up to eight elements "
-                "each: the main task with labeled fields/selects/actions and one representative SUCCESS "
-                "state with a return action. Never combine a successful result and an error message "
-                "on one screen. SUCCESS screens must contain only success content, no error examples. "
-                "Each screen depicts one moment. In the two-screen flow, SCR-001 is DEFAULT with "
-                "the task inputs and a forward action to SCR-002; SCR-002 is SUCCESS with one "
-                "illustrative result and a return action to SCR-001. Do not add a return action "
-                "to the entry screen itself. Do not turn every requirement into visible copy: "
-                "validation requirements remain binding for implementation but error examples "
-                "must be omitted from this success flow. If an additional error scenario is "
-                "needed, put it in a separate reachable screen whose state is ERROR. "
-                "Use real interface copy, never a narrative about "
-                "a screen. For a calculator show operand fields, operation choice, calculate action, "
-                "and an illustrative result. This is a click-through mockup, not executing business "
-                "logic; begin example results with 'Esempio:' in Italian or 'Example:' in English. "
-                "For example 'Esempio: 5 + 3 = 8'. Screen codes SCR-001, SCR-002 in order. "
-                "BUTTON/LINK must have target_screen pointing to an existing screen; all other "
-                "elements must set target_screen null. Fields TEXT_INPUT/SELECT need a nonempty "
-                "field_name (including the operation SELECT, for example 'operation'), "
-                "all others null. Only fields may be required. Only SELECT has nonempty options. "
-                "Every element cites supplied requirement codes. Every screen must be reachable "
-                "from SCR-001. No HTML, JavaScript, approval or empirical claims."
-            ),
+            instruction=_mockup_instruction(alternative),
         )
         try:
             prototype = bind_mockup(draft, alternative, requirements)

@@ -51,6 +51,7 @@ EXPECTED_ENTRIES = (
     "design/critiques.md",
     "design/design.json",
     "design/design.md",
+    "design/mockup.html",
     "design/mockups.md",
     DESIGN_PACKAGE_MANIFEST,
     "requirements/requirements.json",
@@ -170,6 +171,8 @@ def test_package_holds_every_approved_stage_as_markdown_and_exact_json() -> None
     assert "#### Visual language" in files["design/design.md"]
     assert "Product name: Reservation desk." in files["design/design.md"]
     assert "| primary |" in files["design/design.md"]
+    assert files["design/mockup.html"].startswith("<!doctype html>")
+    assert "<script" not in files["design/mockup.html"]
     assert "CRQ-001" in files["design/critiques.md"]
     assert "SCR-001" in files["design/mockups.md"]
     assert package.design.content_hash in files[DESIGN_PACKAGE_INDEX]
