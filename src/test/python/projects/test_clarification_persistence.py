@@ -19,31 +19,20 @@ from orchestwin.persistence.migrate import (
 from orchestwin.projects.briefs import (
     BriefField,
 )
-from orchestwin.projects.clarification import (
-    CLARIFICATION_CATALOG_VERSION,
-    clarification_question_for,
-)
 from orchestwin.projects.clarification_state import (
     BriefAssumptionSource,
     create_brief_assumption,
-    create_clarification_round,
 )
 from orchestwin.projects.persistence.clarification import (
     SqlAlchemyBriefAssumptionRepository,
-    SqlAlchemyClarificationRoundRepository,
     owned_assumption_statement,
-    owned_round_statement,
-    question_spec_from_snapshot,
-    question_spec_to_snapshot,
 )
 from orchestwin.projects.persistence.models import (
     BriefAssumptionRecord,
-    ClarificationRoundRecord,
 )
 
 OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000000010")
-ROUND_ID = UUID("00000000-0000-4000-8000-000000000030")
 ASSUMPTION_ID = UUID("00000000-0000-4000-8000-000000000040")
 NOW = datetime(
     2026,
@@ -72,22 +61,6 @@ def compile_statement(
     )
 
 
-def test_round_query_is_project_and_owner_scoped() -> None:
-    """Prevent identifier-only clarification-round lookup."""
-    sql = compile_statement(
-        owned_round_statement(
-            project_id=PROJECT_ID,
-            owner_user_id=OWNER_ID,
-            round_id=ROUND_ID,
-        )
-    )
-
-    assert "clarification_rounds.id =" in sql
-    assert "projects.id =" in sql
-    assert "projects.owner_user_id =" in sql
-    assert "projects.archived_at IS NULL" in sql
-
-
 def test_assumption_query_is_project_and_owner_scoped() -> None:
     """Prevent cross-owner assumption lookup."""
     sql = compile_statement(
@@ -102,47 +75,6 @@ def test_assumption_query_is_project_and_owner_scoped() -> None:
     assert "projects.id =" in sql
     assert "projects.owner_user_id =" in sql
     assert "projects.archived_at IS NULL" in sql
-
-
-def test_question_snapshot_round_trips() -> None:
-    """Preserve the exact question metadata presented to the owner."""
-    question = clarification_question_for(BriefField.PROBLEM)
-
-    snapshot = question_spec_to_snapshot(question)
-    reconstructed = question_spec_from_snapshot(snapshot)
-
-    assert reconstructed == question
-
-
-def test_round_repository_adds_jsonb_snapshot() -> None:
-    """Map an immutable round into one SQLAlchemy record."""
-    round_state = create_clarification_round(
-        round_id=ROUND_ID,
-        project_id=PROJECT_ID,
-        source_brief_version_number=1,
-        round_number=1,
-        catalog_version=(CLARIFICATION_CATALOG_VERSION),
-        questions=[clarification_question_for(BriefField.PROBLEM)],
-        created_by_user_id=OWNER_ID,
-        created_at=NOW,
-    )
-    session = Mock(spec=AsyncSession)
-    session.flush = AsyncMock()
-    repository = SqlAlchemyClarificationRoundRepository(session)
-
-    persisted = asyncio.run(repository.add(round_state))
-
-    session.add.assert_called_once()
-    session.flush.assert_awaited_once()
-
-    record = session.add.call_args.args[0]
-
-    assert isinstance(
-        record,
-        ClarificationRoundRecord,
-    )
-    assert record.questions == [question_spec_to_snapshot(round_state.questions[0])]
-    assert persisted == round_state
 
 
 def test_assumption_repository_adds_separate_record() -> None:

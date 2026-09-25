@@ -2,14 +2,14 @@ const messages = {
   ui: {
     claim: {
       hypothesis: "AI proposal, not validated",
-      proof: "Observed in the sandbox",
+      proof: "Verified evidence",
     },
     status: {
       approved: "Approved",
       rejected: "Rejected",
       pending: "Waiting",
       blocked: "Attention",
-      observed: "Observed in the sandbox",
+      observed: "Verified",
       failed: "Not passed",
       passed: "Passed",
     },
@@ -59,7 +59,7 @@ const messages = {
   auth: {
     points: {
       one: "Describe the idea in a brief: the agents think, you decide at every step.",
-      two: "Every proposal stays labelled as a hypothesis until the sandbox observes it.",
+      two: "Every proposal stays labelled as a hypothesis until you approve it.",
       three: "Evidence, decisions and provenance remain yours, exportable at any time.",
     },
     email: "Email address",
@@ -101,7 +101,7 @@ const messages = {
   home: {
     eyebrow: "Thesis · Agentic User-Centred Design",
     title: "An idea becomes an application. You decide at every step.",
-    lead: "OrchesTwin Studio orchestrates a team of AI agents across eight governed steps: it proposes the team, builds synthetic users from your brief, writes the requirements, explores the design, generates the code and actually runs it in a sandbox. Every step closes with your approval.",
+    lead: "OrchesTwin Studio orchestrates a team of AI agents across six governed steps: it proposes the team, builds synthetic users from your brief, writes the requirements, explores the design and hands you a design package to build with your own tools. Every step closes with your approval.",
     enter: "Enter the Studio",
     twinsLink: "How twins work",
     rules: {
@@ -113,7 +113,7 @@ const messages = {
       two: {
         label: "Rule two",
         title: "A hypothesis stays a hypothesis until it is verified",
-        text: "The twins' opinions, the requirements and the critiques are proposals, never proof. Proof is only what the sandbox observed: passed tests, checks in the browser, accessibility audits.",
+        text: "The twins' opinions, the requirements and the critiques are proposals, never proof. They become decisions only when you approve them, and they are verified on the application you build from the package.",
       },
     },
     twins: {
@@ -124,7 +124,7 @@ const messages = {
         brief: {
           label: "One",
           title: "They are born from the brief",
-          text: "From the text you wrote, the Studio derives two to four twins. Each one carries its degree of certainty: assumed, or inferred from the brief.",
+          text: "From the text you wrote, the Studio derives up to eight twins. Each one carries its degree of certainty: assumed, or inferred from the brief.",
           alt: "A brief sheet turning into three sketched human figures, connected by thin lines",
         },
         critique: {
@@ -136,18 +136,18 @@ const messages = {
         proof: {
           label: "Three",
           title: "They never become proof",
-          text: "What a twin says remains a hypothesis. Verification comes from the sandbox, which runs the application and reports what it actually observed.",
+          text: "What a twin says remains a hypothesis. Verification comes from the application you build outside the Studio, checked against the approved requirements.",
           alt: "A split composition: on the left a sketched figure floating, on the right the same shape solid, resting on a grid with measurement marks",
         },
       },
     },
     steps: {
       eyebrow: "The path",
-      title: "Eight steps, eight decisions of yours",
+      title: "Six steps, six decisions of yours",
       items: {
         brief: {
           title: "Brief",
-          text: "Describe the problem and answer a few clarifying questions.",
+          text: "Describe your idea in two lines: the Studio asks the right questions and composes the brief.",
         },
         team: {
           title: "Team",
@@ -155,7 +155,7 @@ const messages = {
         },
         twins: {
           title: "User Twin",
-          text: "Two to four synthetic users: goals, context, accessibility.",
+          text: "Up to eight synthetic users: goals, context, accessibility.",
         },
         requirements: {
           title: "Requirements",
@@ -165,17 +165,9 @@ const messages = {
           title: "Design",
           text: "Alternatives with the twins' critiques, then a clickable model.",
         },
-        architecture: {
-          title: "Architecture",
-          text: "What the application is made of and how the parts connect.",
-        },
-        sources: {
-          title: "Sources",
-          text: "The generated files, explained in plain words, with the static checks.",
-        },
-        execution: {
-          title: "Execution",
-          text: "The sandbox runs, the browser verifies, the AI proposes the repair.",
+        package: {
+          title: "Package",
+          text: "Brief, twins, requirements and the chosen design in one folder, ready for your own tools.",
         },
       },
     },
@@ -197,7 +189,7 @@ const messages = {
         },
         stepwise: {
           title: "Step by step",
-          text: "A visible sequence of eight steps with their status. You act on the current step and reread the previous ones.",
+          text: "A visible sequence of six steps with their status. You act on the current step and reread the previous ones.",
         },
         plain: {
           title: "No jargon",
@@ -226,64 +218,12 @@ const messages = {
       },
     },
     closing: {
-      title: "Try the full path, from the brief to the observed proof",
-      text: "Eight steps, one human gate for each, a sandbox that tells how it really went.",
+      title: "Try the full path, from the brief to the design package",
+      text: "Six steps, one human gate for each, a package ready for your development tools.",
     },
     footer: {
       thesis: "OrchesTwin Studio · thesis in Agentic User-Centred Design",
       stack: "Vue 3 · TypeScript · Pinia · Tailwind",
-    },
-  },
-  finale: {
-    title: "Project complete",
-    body: "Eight approved steps and one passing execution with observed evidence. You can export everything or review where each thing came from.",
-    recap: {
-      step: "Step",
-      outcome: "Outcome",
-      decisions: "Decisions",
-      approved: "Approved",
-      generated: "Generated",
-      pending: "Pending",
-      count: "{n} of {max}",
-    },
-    export: {
-      title: "Export",
-      evaluationRecorded:
-        "The User Twins evaluated the executed prototype: their findings are recorded as hypotheses in step 8.",
-      eventMissing:
-        "The export uses the approval given in this session: if you reloaded the page, refresh the review and approve again.",
-    },
-    status: {
-      loading: "Loading the final review…",
-      missing: "The final review is not available yet.",
-      blocked: "Some final checks are not satisfied:",
-      review: "The final review is ready: send your decision.",
-      decision: "Approve to close the project, or request a revision.",
-      approved:
-        "Project approved: you can create the full package, a zip archive with sources, hashes and provenance.",
-      exported: "The package is ready to download.",
-      decided: "The final decision is {status}.",
-    },
-    actions: {
-      reload: "Refresh",
-      submit: "Send the final review",
-      approve: "Approve and close the project",
-      revise: "Request a revision",
-      sendRevision: "Send the request",
-      export: "Export the full package",
-      download: "Download the archive",
-      sources: "Open the sources",
-      provenance: "Open provenance",
-    },
-    reason: {
-      label: "Why do you request a revision?",
-      missing: "Write a reason before sending.",
-    },
-    evidence: {
-      archive: "archive hash",
-      size: "size",
-      manifest: "manifest hash",
-      created: "created",
     },
   },
   twinChat: {
@@ -309,45 +249,6 @@ const messages = {
       PREFERENCE: "Preference",
       RISK: "Risk",
       OPEN_QUESTION: "Open question",
-    },
-  },
-  evaluation: {
-    title: "User Twin evaluation",
-    body: "The twins try the executed prototype from the evidence recorded in the sandbox (screens, DOM, accessibility) and report what would help or stop them. These are hypotheses to verify with real people, not results.",
-    ask: "Ask the twins to try it",
-    askAgain: "Ask the twins again",
-    busy: "The twins are trying the prototype…",
-    empty: "No evaluation yet.",
-    meta: "{twins} twins, {findings} findings, {when}",
-    unknownTwin: "User Twin",
-    findingCount: "{n} findings",
-    confidence: "confidence {value}",
-    why: "Why they say it",
-    action: "What to do:",
-    severity: {
-      critical: "Critical",
-      major: "Major",
-      moderate: "Moderate",
-      minor: "Minor",
-      observation: "Observation",
-    },
-    criterion: {
-      usefulness: "Usefulness",
-      comprehensibility: "Comprehensibility",
-      actionability: "Actionability",
-      cognitive_load: "Cognitive load",
-      trust: "Trust",
-      accessibility: "Accessibility",
-      task_alignment: "Task alignment",
-    },
-    aggregation: {
-      title: "What they share and where they disagree",
-      body: "Automatic comparison across twins: shared findings, conflicts for you to decide, gaps and questions for validation with real users.",
-      shared: "Shared findings ({n})",
-      conflicts: "Conflicts between twins ({n})",
-      gaps: "Reported gaps",
-      questions: "Questions for real users",
-      none: "None",
     },
   },
   projects: {
@@ -388,6 +289,51 @@ const messages = {
       invalid_authentication: "Please log in again.",
       unexpected_api_error: "The server returned an unexpected response.",
       unexpected_error: "An unexpected error occurred.",
+    },
+  },
+  briefDialogue: {
+    title: "Tell us about your idea",
+    intro:
+      "Describe in two lines what you would like to create. The Studio asks one question at a time and then composes the brief, which you can correct in the form.",
+    statementLabel: "Your idea",
+    statementPlaceholder:
+      "For example: a web page to manage the guest list of a workshop. Volunteers use it at the entrance.",
+    statementRequired: "Write at least one sentence about your idea.",
+    start: "Start the dialogue",
+    restart: "Reopen the dialogue",
+    preferForm: "Would you rather fill in the form?",
+    openForm: "Switch to the form",
+    goToForm: "Review the brief",
+    progress: "Question {asked} of {limit}",
+    essentialsLeft: "{count} essential details still to ask",
+    essentialsDone: "Essential details collected",
+    followUp: "Follow-up",
+    unknownAnswer: "I don’t know yet",
+    answerLabel: "Your answer",
+    answerPlaceholderText: "Answer in your own words",
+    answerPlaceholderList: "One item per line",
+    answerRequired: "Write an answer or choose “I don’t know”.",
+    send: "Send",
+    unknown: "I don’t know",
+    waiting: "The Studio is preparing the next question…",
+    composing: "The Studio is composing the brief from your answers…",
+    readyToCompose: "The questions are over: the brief is ready to be composed.",
+    retryCompose: "Compose the brief",
+    composeNow: "Compose the brief now",
+    interrupted: "The next question did not arrive. Your answers are saved.",
+    continueQuestion: "Ask the next question",
+    close: "Close the dialogue",
+    synthesized:
+      "The brief is ready: review the fields in the form and approve it if it convinces you.",
+    modelUnavailable: "The guided dialogue is not available right now: you can fill in the form.",
+    errors: {
+      BRIEF_DIALOGUE_CHANGED: "The dialogue changed in the meantime: its state was reloaded.",
+      BRIEF_ANSWER_INVALID: "The answer is not valid for this question.",
+      BRIEF_DIALOGUE_ACTIVE: "A dialogue is already open for this project.",
+      BRIEF_SYNTHESIS_UNCHANGED: "The brief did not change: you can edit it in the form.",
+      PROVIDER_UNAVAILABLE: "The model is not responding: try again shortly.",
+      TIMEOUT: "The model took too long: try again.",
+      default: "The action failed: {code}",
     },
   },
   brief: {

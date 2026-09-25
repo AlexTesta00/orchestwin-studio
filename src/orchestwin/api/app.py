@@ -11,36 +11,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
-from orchestwin.api.architecture import create_architecture_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, create_auth_router
-from orchestwin.api.brownfield import create_brownfield_router
+from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_mockups import create_design_mockup_router
-from orchestwin.api.execution import create_execution_router
-from orchestwin.api.execution_launch import create_execution_launch_router
-from orchestwin.api.finalization import create_finalization_router
+from orchestwin.api.design_package import create_design_package_router
 from orchestwin.api.health import create_health_router
-from orchestwin.api.jvm_execution import create_jvm_execution_router
-from orchestwin.api.jvm_operations import create_jvm_operations_router
 from orchestwin.api.model_runtime import create_model_runtime_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.proposal_evidence import create_proposal_evidence_router
 from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
-from orchestwin.api.source_generation import create_source_generation_router
-from orchestwin.api.static_inspections import create_static_inspection_router
-from orchestwin.api.synthetic_evaluation import create_synthetic_evaluation_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
-from orchestwin.api.web_execution import create_web_execution_router
-from orchestwin.api.web_operations import create_web_operations_router
-from orchestwin.api.web_preview import create_web_preview_router
-from orchestwin.api.workflow_runs import create_workflow_run_router
 from orchestwin.config import ApplicationSettings, load_settings
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -93,9 +81,14 @@ def create_app(
 
     @application.exception_handler(ProposalGenerationError)
     async def proposal_failure(_request, error: ProposalGenerationError):
-        unavailable = error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}
+        if error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}:
+            status_code = 503
+        elif error.code == "CONTEXT_BUDGET_EXCEEDED":
+            status_code = 422
+        else:
+            status_code = 502
         return JSONResponse(
-            status_code=503 if unavailable else 502,
+            status_code=status_code,
             content={"detail": {"code": error.code, "stage": "MODEL_PROPOSAL"}},
         )
 
@@ -133,46 +126,9 @@ def create_app(
     application.state.design_revision_service = resolved_runtime.design_revision_service
     application.state.design_query_service = resolved_runtime.design_query_service
     application.state.design_gate_service = resolved_runtime.design_gate_service
-    application.state.architecture_generation_service = (
-        resolved_runtime.architecture_generation_service
-    )
-    application.state.architecture_revision_service = resolved_runtime.architecture_revision_service
-    application.state.architecture_query_service = resolved_runtime.architecture_query_service
-    application.state.architecture_gate_service = resolved_runtime.architecture_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
-    application.state.brownfield_service = resolved_runtime.brownfield_service
-    application.state.execution_query_service = resolved_runtime.execution_query_service
-    application.state.high_impact_service = resolved_runtime.high_impact_service
-    application.state.static_inspection_service = resolved_runtime.static_inspection_service
-    application.state.web_source_api_service = resolved_runtime.web_source_api_service
-    application.state.web_execution_api_service = resolved_runtime.web_execution_api_service
-    application.state.web_execution_start_api_service = (
-        resolved_runtime.web_execution_start_api_service
-    )
-    application.state.web_browser_evidence_api_service = (
-        resolved_runtime.web_browser_evidence_api_service
-    )
-    application.state.web_repair_api_service = resolved_runtime.web_repair_api_service
-    application.state.web_operation_store = resolved_runtime.web_operation_store
-    application.state.web_execution_read_api_service = (
-        resolved_runtime.web_execution_read_api_service
-    )
-    application.state.jvm_execution_api_service = resolved_runtime.jvm_execution_api_service
-    application.state.jvm_execution_read_api_service = (
-        resolved_runtime.jvm_execution_read_api_service
-    )
-    application.state.jvm_execution_start_api_service = (
-        resolved_runtime.jvm_execution_start_api_service
-    )
-    application.state.jvm_source_api_service = resolved_runtime.jvm_source_api_service
-    application.state.jvm_repair_api_service = resolved_runtime.jvm_repair_api_service
-    application.state.jvm_operation_store = resolved_runtime.jvm_operation_store
-    application.state.workflow_run_api_service = resolved_runtime.workflow_run_api_service
-    application.state.finalization_api_service = resolved_runtime.finalization_api_service
+    application.state.design_package_export_service = resolved_runtime.design_package_export_service
     application.state.training_api_service = resolved_runtime.training_api_service
-    application.state.source_archive_maximum_upload_bytes = (
-        resolved_settings.source_archive_maximum_upload_bytes
-    )
 
     application.add_middleware(
         CORSMiddleware,
@@ -189,6 +145,10 @@ def create_app(
             "Authorization",
             "Content-Type",
         ],
+        expose_headers=[
+            "Content-Disposition",
+            "X-Content-SHA256",
+        ],
     )
 
     for router in (
@@ -196,30 +156,18 @@ def create_app(
         create_auth_router(resolved_auth_settings),
         create_project_router(),
         create_clarification_router(),
+        create_brief_dialogue_router(),
         create_team_router(),
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
         create_twin_chat_router(),
-        create_synthetic_evaluation_router(),
         create_requirements_router(),
         create_design_router(),
         create_design_mockup_router(),
-        create_architecture_router(),
         create_artifact_graph_router(),
-        create_brownfield_router(),
-        create_execution_router(),
-        create_execution_launch_router(),
-        create_static_inspection_router(),
-        create_web_execution_router(),
-        create_web_operations_router(),
-        create_jvm_execution_router(),
-        create_jvm_operations_router(),
-        create_workflow_run_router(),
-        create_finalization_router(),
+        create_design_package_router(),
         create_training_router(),
         create_proposal_evidence_router(),
         create_model_runtime_router(),
-        create_source_generation_router(),
-        create_web_preview_router(),
     ):
         application.include_router(
             router,

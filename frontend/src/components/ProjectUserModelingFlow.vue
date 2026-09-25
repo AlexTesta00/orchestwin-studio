@@ -9,6 +9,7 @@ import UiButton from "./UiButton.vue";
 import UiCard from "./UiCard.vue";
 import UiClaimLabel from "./UiClaimLabel.vue";
 
+import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
@@ -41,6 +42,12 @@ const props = withDefaults(
 );
 
 const store = useUserModelingStore();
+
+const team = useTeamStore();
+
+const loadedProjectId = ref<string | null>(null);
+
+const autoProposalAttempted = ref(false);
 
 const emit = defineEmits<{ "open-chat": [twin: UserTwinVersionPayload] }>();
 
@@ -684,12 +691,49 @@ async function loadProject(): Promise<void> {
     return;
   }
 
-  await runAction((token) => store.load(props.projectId, token));
+  const projectId = props.projectId;
+
+  if (await runAction((token) => store.load(projectId, token))) {
+    loadedProjectId.value = projectId;
+  }
 }
 
 async function proposePersonas(): Promise<void> {
   await runAction((token) => store.proposePersonas(props.projectId, token));
 }
+
+const teamApproved = computed(
+  () => team.projectId === props.projectId && team.readiness?.status === "READY_FOR_MAIN_WORKFLOW",
+);
+
+const shouldProposeAutomatically = computed(
+  () =>
+    props.autoLoad &&
+    teamApproved.value &&
+    loadedProjectId.value === props.projectId &&
+    personas.value.length === 0 &&
+    store.currentSnapshot === null &&
+    !store.isBusy &&
+    localError.value === null,
+);
+
+watch(
+  shouldProposeAutomatically,
+
+  (ready) => {
+    if (!ready || autoProposalAttempted.value) {
+      return;
+    }
+
+    autoProposalAttempted.value = true;
+
+    void proposePersonas();
+  },
+
+  {
+    immediate: true,
+  },
+);
 
 async function decidePersona(
   persona: PersonaVersionPayload,
@@ -907,6 +951,10 @@ watch(
   () => [props.projectId, props.accessToken, props.autoLoad] as const,
 
   ([projectId, accessToken, autoLoad]) => {
+    loadedProjectId.value = null;
+
+    autoProposalAttempted.value = false;
+
     if (!autoLoad || projectId.trim().length === 0 || accessToken.trim().length === 0) {
       return;
     }

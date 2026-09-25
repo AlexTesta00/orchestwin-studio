@@ -8,16 +8,7 @@ import UiClaimLabel from "@/components/UiClaimLabel.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const twinKeys = ["brief", "critique", "proof"] as const;
-const stepKeys = [
-  "brief",
-  "team",
-  "twins",
-  "requirements",
-  "design",
-  "architecture",
-  "sources",
-  "execution",
-] as const;
+const stepKeys = ["brief", "team", "twins", "requirements", "design", "package"] as const;
 const objectiveKeys = [
   "results",
   "minimal",
@@ -172,7 +163,7 @@ function revealTwins(): void {
         </h2>
       </div>
       <ol
-        class="m-0 grid list-none gap-px overflow-hidden rounded-card border border-line bg-line p-0 sm:grid-cols-2 lg:grid-cols-4"
+        class="m-0 grid list-none gap-px overflow-hidden rounded-card border border-line bg-line p-0 sm:grid-cols-2 lg:grid-cols-3"
       >
         <li
           v-for="(key, index) in stepKeys"

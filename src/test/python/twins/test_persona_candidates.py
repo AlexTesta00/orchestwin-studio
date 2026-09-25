@@ -321,13 +321,17 @@ def test_missing_target_users_do_not_create_default_personas() -> None:
     assert result.candidates == ()
 
 
-def test_four_target_users_are_supported_without_silent_reordering() -> None:
+def test_eight_target_users_are_supported_without_silent_reordering() -> None:
     """Support the maximum User Twin cardinality."""
     target_users = [
         "Receptionist",
         "Hotel manager",
         "Operations manager",
         "Property owner",
+        "Housekeeping supervisor",
+        "Night auditor",
+        "Concierge",
+        "Revenue manager",
     ]
 
     assert len(target_users) == MAX_PROJECT_USER_TWINS
@@ -343,16 +347,10 @@ def test_four_target_users_are_supported_without_silent_reordering() -> None:
     assert [candidate.target_user for candidate in result.candidates] == target_users
 
 
-def test_more_than_four_target_users_are_not_silently_truncated() -> None:
+def test_more_target_users_than_the_limit_are_not_silently_truncated() -> None:
     """Require explicit owner prioritization beyond the supported limit."""
     version = brief_version(
-        target_users=[
-            "User 1",
-            "User 2",
-            "User 3",
-            "User 4",
-            "User 5",
-        ]
+        target_users=[f"User {index}" for index in range(1, MAX_PROJECT_USER_TWINS + 2)]
     )
 
     result = derive_project_persona_candidates(

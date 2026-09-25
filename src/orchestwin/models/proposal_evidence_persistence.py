@@ -270,34 +270,6 @@ class SqlAlchemyProposalEvidenceStore:
             if row is None:
                 return None
             request = _verify(row)
-            context = json.loads(request["request"]["input_payload_json"])["context"]
-            children = (
-                (
-                    await session.execute(
-                        _owned_generation(owner_user_id, project_id).where(
-                            sa.func.model_source_context(GENERATIONS.c.snapshot_json)
-                            .op("->")("source_step")
-                            .op("->>")("parent_generation_id")
-                            == str(generation_id)
-                        )
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            source_children = []
-            for child in children:
-                child_context = json.loads(_verify(child)["request"]["input_payload_json"])[
-                    "context"
-                ]
-                source_children.append(
-                    {
-                        "generation_id": str(child["id"]),
-                        "request_content_hash": child["request_content_hash"],
-                        "source_step": child_context["source_step"],
-                    }
-                )
-            source_children.sort(key=lambda item: item["source_step"]["ordinal"])
             events = (
                 (
                     await session.execute(
@@ -356,8 +328,6 @@ class SqlAlchemyProposalEvidenceStore:
                 "observations": observations,
                 "artifact_links": artifact_links,
                 "publication_state": state,
-                "source_parent": context.get("source_step"),
-                "source_children": source_children,
             }
 
 

@@ -2,15 +2,10 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
-import { ArchitectureApiError } from "@/api/architecture";
 import { ArtifactGraphApiError } from "@/api/artifacts";
 import { DesignApiError } from "@/api/design";
-import { ExecutionApiError } from "@/api/execution";
-import { FinalizationApiError } from "@/api/finalization";
-import { JvmExecutionApiError } from "@/api/jvmExecution";
 import { RequirementsApiError } from "@/api/requirements";
 import { UserModelingApiError } from "@/api/userModeling";
-import { WebExecutionApiError } from "@/api/webExecution";
 import type {
   AuthenticationApi,
   AuthenticationInput,
@@ -163,27 +158,20 @@ describe("useAuthStore", () => {
     expect(api.refreshCalls).toBe(1);
   });
 
-  it.each([
-    ArchitectureApiError,
-    ArtifactGraphApiError,
-    DesignApiError,
-    ExecutionApiError,
-    FinalizationApiError,
-    JvmExecutionApiError,
-    RequirementsApiError,
-    UserModelingApiError,
-    WebExecutionApiError,
-  ])("refreshes expired authentication for domain client %s", async (ErrorType) => {
-    const api = new FakeAuthenticationApi();
-    const store = useAuthStore();
-    await store.login(api, { email: USER.email, password: "test" });
-    const failure = new ErrorType("Expired", { status: 401, code: "EXPIRED", payload: null });
-    const operation = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce("success");
-    expect(await store.withAccessToken(api, operation)).toBe("success");
-    expect(operation.mock.calls).toEqual([["login-token"], ["refresh-token"]]);
-    expect(api.refreshCalls).toBe(1);
-    expect(failure.name).toBe(ErrorType.name);
-  });
+  it.each([ArtifactGraphApiError, DesignApiError, RequirementsApiError, UserModelingApiError])(
+    "refreshes expired authentication for domain client %s",
+    async (ErrorType) => {
+      const api = new FakeAuthenticationApi();
+      const store = useAuthStore();
+      await store.login(api, { email: USER.email, password: "test" });
+      const failure = new ErrorType("Expired", { status: 401, code: "EXPIRED", payload: null });
+      const operation = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce("success");
+      expect(await store.withAccessToken(api, operation)).toBe("success");
+      expect(operation.mock.calls).toEqual([["login-token"], ["refresh-token"]]);
+      expect(api.refreshCalls).toBe(1);
+      expect(failure.name).toBe(ErrorType.name);
+    },
+  );
 
   it.each([403, 409, 422, 502, 503])(
     "does not replay a failed operation with status %s",
@@ -191,7 +179,7 @@ describe("useAuthStore", () => {
       const api = new FakeAuthenticationApi();
       const store = useAuthStore();
       await store.login(api, { email: USER.email, password: "test" });
-      const failure = new WebExecutionApiError("Rejected", {
+      const failure = new DesignApiError("Rejected", {
         status,
         code: "REJECTED",
         payload: null,

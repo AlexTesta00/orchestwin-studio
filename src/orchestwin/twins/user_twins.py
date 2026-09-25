@@ -15,6 +15,7 @@ from orchestwin.twins.epistemics import (
     ObservationValueKind,
     ProfileObservation,
 )
+from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 from orchestwin.twins.personas import (
     PersonaConfirmationStatus,
     PersonaKind,
@@ -25,8 +26,8 @@ from orchestwin.twins.personas import (
 USER_TWIN_PROFILE_SCHEMA_VERSION: Final = 1
 USER_MODELING_SNAPSHOT_SCHEMA_VERSION: Final = 1
 
-MIN_PROJECT_USER_TWINS: Final = 1
-MAX_PROJECT_USER_TWINS: Final = 4
+MIN_PROJECT_USER_TWINS: Final = MIN_USER_TWINS
+MAX_PROJECT_USER_TWINS: Final = MAX_USER_TWINS
 
 _MAX_USER_TWIN_NAME_LENGTH: Final = 200
 _SHA256_HEX_LENGTH: Final = 64
@@ -556,7 +557,10 @@ class UserModelingSnapshot:
         twin_count = len(self.twin_versions)
 
         if not (MIN_PROJECT_USER_TWINS <= twin_count <= MAX_PROJECT_USER_TWINS):
-            raise ValueError("a User Modeling snapshot requires between one and four User Twins")
+            raise ValueError(
+                "a User Modeling snapshot requires between "
+                f"{MIN_PROJECT_USER_TWINS} and {MAX_PROJECT_USER_TWINS} User Twins"
+            )
 
         if len(self.persona_versions) != twin_count:
             raise ValueError(

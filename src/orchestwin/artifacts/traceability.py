@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
 
-from orchestwin.artifacts.architecture_packages import ArchitecturePackageVersion
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
 from orchestwin.projects.requirements_primitives import (
@@ -24,8 +23,6 @@ class ArtifactGraphStage(StrEnum):
     CONTEXT = "CONTEXT"
     REQUIREMENTS = "REQUIREMENTS"
     DESIGN = "DESIGN"
-    ARCHITECTURE = "ARCHITECTURE"
-    TESTING = "TESTING"
 
 
 class ArtifactGraphNodeKind(StrEnum):
@@ -49,18 +46,6 @@ class ArtifactGraphNodeKind(StrEnum):
     DESIGN_CONCERN = "DESIGN_CONCERN"
     DECLARATIVE_PROTOTYPE = "DECLARATIVE_PROTOTYPE"
     PROTOTYPE_SCREEN = "PROTOTYPE_SCREEN"
-    ARCHITECTURE_PACKAGE = "ARCHITECTURE_PACKAGE"
-    SOFTWARE_ARCHITECTURE = "SOFTWARE_ARCHITECTURE"
-    ARCHITECTURE_COMPONENT = "ARCHITECTURE_COMPONENT"
-    ARCHITECTURE_CONNECTION = "ARCHITECTURE_CONNECTION"
-    ARCHITECTURE_DECISION = "ARCHITECTURE_DECISION"
-    ARCHITECTURE_DATA_ENTITY = "ARCHITECTURE_DATA_ENTITY"
-    ARCHITECTURE_API_OPERATION = "ARCHITECTURE_API_OPERATION"
-    ARCHITECTURE_RISK = "ARCHITECTURE_RISK"
-    TEST_PLAN = "TEST_PLAN"
-    TEST_ENVIRONMENT = "TEST_ENVIRONMENT"
-    TEST_CASE = "TEST_CASE"
-    QUALITY_GATE = "QUALITY_GATE"
 
 
 class ArtifactGraphLinkKind(StrEnum):
@@ -77,19 +62,12 @@ class ArtifactGraphLinkKind(StrEnum):
     TRACES_TO = "TRACES_TO"
     REPRESENTS = "REPRESENTS"
     CRITIQUES = "CRITIQUES"
-    REALIZES = "REALIZES"
-    CONNECTS = "CONNECTS"
-    OWNED_BY = "OWNED_BY"
-    TESTS = "TESTS"
-    EXECUTES_IN = "EXECUTES_IN"
 
 
 _STAGE_ORDER = {
     ArtifactGraphStage.CONTEXT: 0,
     ArtifactGraphStage.REQUIREMENTS: 1,
     ArtifactGraphStage.DESIGN: 2,
-    ArtifactGraphStage.ARCHITECTURE: 3,
-    ArtifactGraphStage.TESTING: 4,
 }
 
 
@@ -204,12 +182,11 @@ class ArtifactGraphLink:
 
 @dataclass(frozen=True, slots=True)
 class CrossStageArtifactGraph:
-    """Canonical graph from exact Requirements, Design, and Architecture versions."""
+    """Canonical graph from exact Requirements and Design versions."""
 
     project_id: UUID
     requirements_reference: VersionedArtifactReference
     design_reference: VersionedArtifactReference | None
-    architecture_reference: VersionedArtifactReference | None
     nodes: tuple[ArtifactGraphNode, ...]
     links: tuple[ArtifactGraphLink, ...]
 
@@ -223,14 +200,6 @@ class CrossStageArtifactGraph:
             and self.design_reference.kind is not ArtifactKind.DESIGN_PACKAGE
         ):
             raise ValueError("artifact graph Design reference must identify a Design Package")
-
-        if self.architecture_reference is not None:
-            if self.design_reference is None:
-                raise ValueError("artifact graph Architecture requires a Design reference")
-            if self.architecture_reference.kind is not ArtifactKind.ARCHITECTURE_PACKAGE:
-                raise ValueError(
-                    "artifact graph Architecture reference must identify an Architecture Package"
-                )
 
         if not self.nodes:
             raise ValueError("artifact graph requires nodes")
@@ -256,7 +225,6 @@ class CrossStageArtifactGraph:
         for exact, kind in (
             (self.requirements_reference, ArtifactGraphNodeKind.REQUIREMENTS_SPECIFICATION),
             (self.design_reference, ArtifactGraphNodeKind.DESIGN_PACKAGE),
-            (self.architecture_reference, ArtifactGraphNodeKind.ARCHITECTURE_PACKAGE),
         ):
             if exact is None:
                 continue
@@ -272,11 +240,6 @@ class CrossStageArtifactGraph:
             "requirements_reference": self.requirements_reference.to_snapshot(),
             "design_reference": (
                 None if self.design_reference is None else self.design_reference.to_snapshot()
-            ),
-            "architecture_reference": (
-                None
-                if self.architecture_reference is None
-                else self.architecture_reference.to_snapshot()
             ),
             "nodes": [node.to_snapshot() for node in self.nodes],
             "links": [link.to_snapshot() for link in self.links],
@@ -823,369 +786,19 @@ def _add_design_stage(
     return root
 
 
-def _add_architecture_stage(
-    version: ArchitecturePackageVersion,
-    *,
-    design_root: ArtifactGraphReference,
-    requirements_root: ArtifactGraphReference,
-    team_root: ArtifactGraphReference,
-    user_modeling_root: ArtifactGraphReference,
-    nodes: list[ArtifactGraphNode],
-    links: list[ArtifactGraphLink],
-) -> ArtifactGraphReference:
-    """Add one exact Architecture Package, architecture model, and test plan."""
-    package = version.package
-    exact = version.reference
-    root = _versioned_reference(ArtifactGraphNodeKind.ARCHITECTURE_PACKAGE, exact)
-    nodes.append(
-        _node(
-            reference=root,
-            stage=ArtifactGraphStage.ARCHITECTURE,
-            display_code=f"ARCH-v{version.version_number}",
-            title="Architecture and Test Plan Package",
-        )
-    )
-    links.extend(
-        _link(ArtifactGraphLinkKind.GROUNDED_IN, root, target)
-        for target in (design_root, requirements_root, team_root, user_modeling_root)
-    )
-
-    architecture = package.architecture
-    architecture_reference = _plain_reference(
-        ArtifactGraphNodeKind.SOFTWARE_ARCHITECTURE,
-        architecture.id,
-    )
-    nodes.append(
-        _node(
-            reference=architecture_reference,
-            stage=ArtifactGraphStage.ARCHITECTURE,
-            display_code=architecture.code,
-            title=architecture.title,
-        )
-    )
-    links.extend(
-        (
-            _link(ArtifactGraphLinkKind.CONTAINS, root, architecture_reference),
-            _link(
-                ArtifactGraphLinkKind.REALIZES,
-                architecture_reference,
-                _plain_reference(
-                    ArtifactGraphNodeKind.DESIGN_ALTERNATIVE,
-                    architecture.selected_design_alternative_id,
-                ),
-            ),
-            _link(
-                ArtifactGraphLinkKind.REALIZES,
-                architecture_reference,
-                _plain_reference(
-                    ArtifactGraphNodeKind.DECLARATIVE_PROTOTYPE,
-                    architecture.prototype_id,
-                ),
-            ),
-        )
-    )
-    _add_trace_links(
-        links,
-        architecture_reference,
-        requirement_ids=architecture.requirement_ids,
-        acceptance_criterion_ids=architecture.acceptance_criterion_ids,
-    )
-
-    for component in architecture.components:
-        reference = _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT, component.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=component.code,
-                title=component.name,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference))
-        _add_trace_links(links, reference, requirement_ids=component.requirement_ids)
-
-    for connection in architecture.connections:
-        reference = _plain_reference(
-            ArtifactGraphNodeKind.ARCHITECTURE_CONNECTION,
-            connection.id,
-        )
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=connection.code,
-                title=connection.description,
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference),
-                _link(
-                    ArtifactGraphLinkKind.CONNECTS,
-                    reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT,
-                        connection.source_component_id,
-                    ),
-                ),
-                _link(
-                    ArtifactGraphLinkKind.CONNECTS,
-                    reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT,
-                        connection.target_component_id,
-                    ),
-                ),
-            )
-        )
-        _add_trace_links(links, reference, requirement_ids=connection.requirement_ids)
-
-    for decision in architecture.decisions:
-        reference = _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_DECISION, decision.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=decision.code,
-                title=decision.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference))
-        _add_trace_links(links, reference, requirement_ids=decision.requirement_ids)
-
-    for entity in architecture.data_entities:
-        reference = _plain_reference(
-            ArtifactGraphNodeKind.ARCHITECTURE_DATA_ENTITY,
-            entity.id,
-        )
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=entity.code,
-                title=entity.name,
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference),
-                _link(
-                    ArtifactGraphLinkKind.OWNED_BY,
-                    reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT,
-                        entity.owning_component_id,
-                    ),
-                ),
-            )
-        )
-        _add_trace_links(links, reference, requirement_ids=entity.requirement_ids)
-
-    for operation in architecture.api_operations:
-        reference = _plain_reference(
-            ArtifactGraphNodeKind.ARCHITECTURE_API_OPERATION,
-            operation.id,
-        )
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=operation.code,
-                title=f"{operation.method.value} {operation.path} — {operation.summary}",
-            )
-        )
-        links.extend(
-            (
-                _link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference),
-                _link(
-                    ArtifactGraphLinkKind.OWNED_BY,
-                    reference,
-                    _plain_reference(
-                        ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT,
-                        operation.owning_component_id,
-                    ),
-                ),
-            )
-        )
-        _add_trace_links(
-            links,
-            reference,
-            requirement_ids=operation.requirement_ids,
-            acceptance_criterion_ids=operation.acceptance_criterion_ids,
-        )
-
-    for risk in architecture.risks:
-        reference = _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_RISK, risk.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.ARCHITECTURE,
-                display_code=risk.code,
-                title=risk.summary,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, architecture_reference, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.AFFECTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT, value),
-            )
-            for value in risk.component_ids
-        )
-        _add_trace_links(links, reference, requirement_ids=risk.requirement_ids)
-
-    test_plan = package.test_plan
-    test_plan_reference = _plain_reference(ArtifactGraphNodeKind.TEST_PLAN, test_plan.id)
-    nodes.append(
-        _node(
-            reference=test_plan_reference,
-            stage=ArtifactGraphStage.TESTING,
-            display_code=test_plan.code,
-            title=test_plan.title,
-        )
-    )
-    links.extend(
-        (
-            _link(ArtifactGraphLinkKind.CONTAINS, root, test_plan_reference),
-            _link(ArtifactGraphLinkKind.TESTS, test_plan_reference, architecture_reference),
-            _link(
-                ArtifactGraphLinkKind.TESTS,
-                test_plan_reference,
-                _plain_reference(
-                    ArtifactGraphNodeKind.DESIGN_ALTERNATIVE,
-                    test_plan.selected_design_alternative_id,
-                ),
-            ),
-        )
-    )
-    _add_trace_links(
-        links,
-        test_plan_reference,
-        requirement_ids=test_plan.requirement_ids,
-        acceptance_criterion_ids=test_plan.acceptance_criterion_ids,
-    )
-    links.extend(
-        _link(
-            ArtifactGraphLinkKind.TESTS,
-            test_plan_reference,
-            _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT, value),
-        )
-        for value in test_plan.architecture_component_ids
-    )
-
-    for environment in test_plan.environments:
-        reference = _plain_reference(ArtifactGraphNodeKind.TEST_ENVIRONMENT, environment.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.TESTING,
-                display_code=environment.code,
-                title=environment.name,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, test_plan_reference, reference))
-
-    for test_case in test_plan.test_cases:
-        reference = _plain_reference(ArtifactGraphNodeKind.TEST_CASE, test_case.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.TESTING,
-                display_code=test_case.code,
-                title=test_case.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, test_plan_reference, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.TESTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.REQUIREMENT, value),
-            )
-            for value in test_case.requirement_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.TESTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.ACCEPTANCE_CRITERION, value),
-            )
-            for value in test_case.acceptance_criterion_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.TESTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.ARCHITECTURE_COMPONENT, value),
-            )
-            for value in test_case.architecture_component_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.TESTS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.DESIGN_ALTERNATIVE, value),
-            )
-            for value in test_case.design_alternative_ids
-        )
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.EXECUTES_IN,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.TEST_ENVIRONMENT, value),
-            )
-            for value in test_case.environment_ids
-        )
-
-    for quality_gate in test_plan.quality_gates:
-        reference = _plain_reference(ArtifactGraphNodeKind.QUALITY_GATE, quality_gate.id)
-        nodes.append(
-            _node(
-                reference=reference,
-                stage=ArtifactGraphStage.TESTING,
-                display_code=quality_gate.code,
-                title=quality_gate.title,
-            )
-        )
-        links.append(_link(ArtifactGraphLinkKind.CONTAINS, test_plan_reference, reference))
-        links.extend(
-            _link(
-                ArtifactGraphLinkKind.GOVERNS,
-                reference,
-                _plain_reference(ArtifactGraphNodeKind.TEST_CASE, value),
-            )
-            for value in quality_gate.required_test_case_ids
-        )
-
-    return root
-
-
 def build_cross_stage_artifact_graph(
     requirements: RequirementsSpecificationVersion,
     design: DesignPackageVersion | None = None,
-    architecture: ArchitecturePackageVersion | None = None,
 ) -> CrossStageArtifactGraph:
     """Derive a deterministic graph without persisting duplicate relationship state."""
     requirements_exact = _exact_requirements_reference(requirements)
     design_exact = None if design is None else _exact_design_reference(design)
-    architecture_exact = None if architecture is None else architecture.reference
 
     if design is not None:
         if design.project_id != requirements.project_id:
             raise ValueError("Design and Requirements versions must belong to the same project")
         if design.package.grounding.requirements_reference != requirements_exact:
             raise ValueError("Design Package must reference the exact Requirements version")
-
-    if architecture is not None:
-        if design is None:
-            raise ValueError("Architecture traceability requires the exact Design version")
-        if architecture.project_id != requirements.project_id:
-            raise ValueError("Architecture and Requirements must belong to the same project")
-        if architecture.package.grounding.design_package_reference != design_exact:
-            raise ValueError("Architecture Package must reference the exact Design version")
-        if architecture.package.grounding.requirements_reference != requirements_exact:
-            raise ValueError("Architecture Package must reference the exact Requirements version")
 
     nodes: list[ArtifactGraphNode] = []
     links: list[ArtifactGraphLink] = []
@@ -1194,24 +807,9 @@ def build_cross_stage_artifact_graph(
         nodes,
         links,
     )
-    design_root: ArtifactGraphReference | None = None
-
     if design is not None:
-        design_root = _add_design_stage(
+        _add_design_stage(
             design,
-            requirements_root=requirements_root,
-            team_root=team_root,
-            user_modeling_root=user_modeling_root,
-            nodes=nodes,
-            links=links,
-        )
-
-    if architecture is not None:
-        if design_root is None:
-            raise ValueError("Architecture traceability requires a Design graph root")
-        _add_architecture_stage(
-            architecture,
-            design_root=design_root,
             requirements_root=requirements_root,
             team_root=team_root,
             user_modeling_root=user_modeling_root,
@@ -1223,7 +821,6 @@ def build_cross_stage_artifact_graph(
         project_id=requirements.project_id,
         requirements_reference=requirements_exact,
         design_reference=design_exact,
-        architecture_reference=architecture_exact,
         nodes=tuple(sorted(nodes, key=lambda node: node.sort_key)),
         links=tuple(sorted(set(links), key=lambda link: link.sort_key)),
     )

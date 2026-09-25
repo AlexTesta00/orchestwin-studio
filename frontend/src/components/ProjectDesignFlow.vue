@@ -12,12 +12,6 @@ import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
 import { designApi, type DesignApi } from "../api/design";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
-import { useWebExecutionStore } from "../stores/webExecution";
-import {
-  sourceDesignApi,
-  type SourceDesignApi,
-  type SourceDesignReferencePayload,
-} from "../api/webDesignReference";
 import type {
   DesignGateDecisionAction,
   DesignMockupPayload,
@@ -35,7 +29,6 @@ const props = withDefaults(
     prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: DesignApi;
-    sourceApi?: SourceDesignApi;
   }>(),
   {
     locale: "en",
@@ -44,11 +37,8 @@ const props = withDefaults(
   },
 );
 
-const emit = defineEmits<{ "show-result": [] }>();
-
 const auth = useAuthStore();
 const store = useDesignStore();
-const web = useWebExecutionStore();
 const localError = ref<string | null>(null);
 const selectedAlternativeId = ref<string | null>(null);
 const gateReason = ref("");
@@ -56,10 +46,6 @@ const diffReasons = reactive<Record<string, string>>({});
 const mockup = ref<DesignMockupPayload | null>(null);
 const mockupBusy = ref(false);
 let mockupEpoch = 0;
-const sourceDesign = ref<SourceDesignReferencePayload | null>(null);
-const sourceDesignBusy = ref(false);
-const sourceDesignFailed = ref(false);
-let sourceDesignEpoch = 0;
 
 const messages = {
   en: {
@@ -82,7 +68,6 @@ const messages = {
     rejectDiff: "Discard changes",
     reason: "Decision reason",
     reasonRequired: "A reason is required to reject or request changes.",
-    prototype: "Visual preview",
     concerns: "Design concerns",
     openQuestions: "Open questions",
     gate: "Confirm the design",
@@ -96,7 +81,7 @@ const messages = {
     pause: "Pause",
     resume: "Resume",
     cancelGate: "Cancel approval",
-    ready: "The design is approved. Continue to the solution.",
+    ready: "The design is approved. Continue to the Package step.",
     notReady: "Design approval is still required.",
     methodology:
       "Gate 5 approves the exact Design Package ID, version, and content hash. Owner approval is governance, not empirical validation. Synthetic User Twin feedback remains a design hypothesis.",
@@ -109,27 +94,11 @@ const messages = {
     mockupTitle: "Design preview",
     mockupDraft: "Model-generated draft · not applied",
     mockupHelp:
-      "Explore the screens and controls. Example results illustrate the design; the generated application is tested in the Result step.",
+      "Explore the screens and controls. Example results illustrate the design; the application is built from the package with your own tools.",
     mockupRequired: "Generate and review a visual mockup before proposing this design.",
     alternativeDetails: "Choose or compare a design",
     audit: "Version and review details",
     approvedPrototype: "Current design prototype",
-    sourceMockup: "Preview chosen for app version {version}",
-    sourcePrototype: "Design used for app version {version}",
-    sourceLoading: "Loading the design used for this app…",
-    sourceUnavailable:
-      "The design linked to this app could not be loaded. The draft below may use a different design.",
-    sourceNoPrototype: "No visual preview is available for this app version.",
-    sourceOlderDesign:
-      "This app uses an earlier design version. New design changes are not applied to it automatically.",
-    ownerReference:
-      "You selected this preview for this app version. The previously approved design remains unchanged.",
-    visualNotAssessed:
-      "This is the selected design reference. Visual correspondence is not automatically verified.",
-    structureVerified:
-      "The app includes the preview's screens and controls. Open the app to compare their appearance and try it.",
-    compareResult: "Try the app",
-    separateDraft: "New design draft · not applied to this app",
   },
   it: {
     eyebrow: "L'aspetto della tua app",
@@ -151,7 +120,6 @@ const messages = {
     rejectDiff: "Scarta modifiche",
     reason: "Motivazione della decisione",
     reasonRequired: "Scrivi una motivazione per rifiutare o richiedere modifiche.",
-    prototype: "Anteprima visiva",
     concerns: "Criticità di design",
     openQuestions: "Domande aperte",
     gate: "Conferma l'aspetto",
@@ -165,7 +133,7 @@ const messages = {
     pause: "Pausa",
     resume: "Riprendi",
     cancelGate: "Annulla approvazione",
-    ready: "L'aspetto è approvato. Continua con la soluzione.",
+    ready: "Il design è approvato. Continua con il passo Pacchetto.",
     notReady: "È ancora necessaria l'approvazione del design.",
     methodology:
       "Il Gate 5 approva ID, versione e hash esatti del Design Package. L'approvazione del proprietario è governance, non validazione empirica. Il feedback sintetico dei User Twin resta un'ipotesi progettuale.",
@@ -178,27 +146,11 @@ const messages = {
     mockupTitle: "Anteprima del design",
     mockupDraft: "Bozza generata dal modello · non applicata",
     mockupHelp:
-      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione generata si prova nel passaggio Risultato.",
+      "Esplora schermate e controlli. I risultati di esempio illustrano il design; l'applicazione si realizza dal pacchetto con i tuoi strumenti.",
     mockupRequired: "Genera e revisiona un mockup visivo prima di proporre questo design.",
     alternativeDetails: "Scegli o confronta un design",
     audit: "Dettagli di versione e revisione",
     approvedPrototype: "Prototipo del design corrente",
-    sourceMockup: "Anteprima scelta per l'app, versione {version}",
-    sourcePrototype: "Design usato per l'app, versione {version}",
-    sourceLoading: "Caricamento del design usato per questa app…",
-    sourceUnavailable:
-      "Non è stato possibile caricare il design collegato all'app. La bozza qui sotto potrebbe usare un design diverso.",
-    sourceNoPrototype: "Non è disponibile un'anteprima visiva per questa versione dell'app.",
-    sourceOlderDesign:
-      "Questa app usa una versione precedente del design. Le nuove modifiche al design non vengono applicate automaticamente.",
-    ownerReference:
-      "Hai scelto questa anteprima per questa versione dell'app. Il design approvato in precedenza resta invariato.",
-    visualNotAssessed:
-      "Il riferimento è registrato; la corrispondenza visiva non è verificata automaticamente.",
-    structureVerified:
-      "L'app include schermate e controlli dell'anteprima. Aprila per confrontare l'aspetto e provarla.",
-    compareResult: "Prova l'app",
-    separateDraft: "Nuova bozza di design · non applicata all'app",
   },
 } as const;
 
@@ -208,17 +160,6 @@ const current = computed(() => store.current);
 const packageValue = computed(() => store.current?.package ?? null);
 const diffs = computed(() => store.diffHistory);
 const pendingDiff = computed(() => store.pendingDiffs[0] ?? null);
-const sourceRevision = computed(() =>
-  web.activeProjectId === props.projectId ? web.currentSourceRevision : null,
-);
-const sourcePrototype = computed(
-  () => sourceDesign.value?.owner_mockup?.prototype ?? sourceDesign.value?.prototype ?? null,
-);
-const hasSeparateDraft = computed(
-  () =>
-    mockup.value !== null &&
-    mockup.value.generation_id !== sourceDesign.value?.owner_mockup?.generation_id,
-);
 const gateTargetsCurrent = computed(() => {
   if (store.gate === null || store.current === null) {
     return false;
@@ -408,36 +349,7 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-watch(
-  () => [props.projectId, sourceRevision.value?.id, current.value?.content_hash] as const,
-  async ([projectId, revisionId]) => {
-    const epoch = ++sourceDesignEpoch;
-    sourceDesign.value = null;
-    sourceDesignFailed.value = false;
-    sourceDesignBusy.value = revisionId !== undefined;
-    if (revisionId === undefined) return;
-    try {
-      const result = await authorizedRequest((token) =>
-        (props.sourceApi ?? sourceDesignApi).reference(projectId, revisionId, token),
-      );
-      if (epoch !== sourceDesignEpoch) return;
-      if (
-        result.source.revision_id !== revisionId ||
-        result.source.content_hash !== sourceRevision.value?.content_hash
-      )
-        throw new Error("SOURCE_DESIGN_REFERENCE_CHANGED");
-      sourceDesign.value = result;
-    } catch {
-      if (epoch === sourceDesignEpoch) sourceDesignFailed.value = true;
-    } finally {
-      if (epoch === sourceDesignEpoch) sourceDesignBusy.value = false;
-    }
-  },
-  { immediate: true },
-);
-
 onUnmounted(() => {
-  sourceDesignEpoch++;
   mockupEpoch++;
 });
 
@@ -560,59 +472,6 @@ watch(
         />
       </details>
 
-      <section v-if="sourceRevision" class="grid gap-3" data-source-design>
-        <h3 class="text-lg font-bold text-ink">
-          {{
-            (sourceDesign?.owner_mockup ? copy.sourceMockup : copy.sourcePrototype).replace(
-              "{version}",
-              String(sourceRevision.version_number),
-            )
-          }}
-        </h3>
-        <p v-if="sourceDesignBusy" role="status" class="m-0 text-sm text-ink-2">
-          {{ copy.sourceLoading }}
-        </p>
-        <p
-          v-else-if="sourceDesignFailed"
-          role="alert"
-          class="m-0 rounded-control bg-surface-2 p-3 text-sm text-warn"
-        >
-          {{ copy.sourceUnavailable }}
-        </p>
-        <template v-else-if="sourceDesign">
-          <p v-if="sourceDesign.owner_mockup" class="m-0 text-sm text-ink-2">
-            {{ copy.ownerReference }}
-          </p>
-          <p
-            v-if="sourceDesign.design_status === 'STALE'"
-            class="m-0 rounded-control bg-surface-2 p-3 text-sm text-warn"
-          >
-            {{ copy.sourceOlderDesign }}
-          </p>
-          <DeclarativePrototypePreview
-            v-if="sourcePrototype"
-            :key="sourceDesign.owner_mockup?.generation_id ?? sourceDesign.design.content_hash"
-            :prototype="sourcePrototype"
-            :locale="locale"
-          />
-          <p v-else class="m-0 text-sm text-ink-2">{{ copy.sourceNoPrototype }}</p>
-          <p class="m-0 text-xs text-ink-3">
-            {{
-              sourceDesign.structure_contract === "VERIFIED"
-                ? copy.structureVerified
-                : copy.visualNotAssessed
-            }}
-          </p>
-          <button
-            type="button"
-            class="justify-self-start rounded-control border border-field px-4 py-2 text-sm font-semibold text-ink-2"
-            @click="emit('show-result')"
-          >
-            {{ copy.compareResult }}
-          </button>
-        </template>
-      </section>
-
       <section v-if="selectedAlternativeId !== null" class="grid gap-3" data-design-mockup>
         <header class="flex flex-wrap items-center justify-between gap-3">
           <h3 class="text-lg font-bold text-ink">{{ copy.mockupTitle }}</h3>
@@ -625,26 +484,7 @@ watch(
             {{ copy.createMockup }}
           </button>
         </header>
-        <details
-          v-if="sourceRevision && hasSeparateDraft && mockup?.package.prototype"
-          class="rounded-panel border border-line p-3"
-          data-unapplied-mockup
-        >
-          <summary class="cursor-pointer text-sm font-semibold text-ink-2">
-            {{ copy.separateDraft }}
-          </summary>
-          <p class="my-3 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
-          <DeclarativePrototypePreview
-            :key="mockup.generation_id"
-            :prototype="mockup.package.prototype"
-            :locale="locale"
-          />
-          <details class="mt-3 text-xs text-ink-3">
-            <summary class="cursor-pointer">{{ copy.audit }}</summary>
-            <p class="break-all">{{ mockup.generation_id }}</p>
-          </details>
-        </details>
-        <template v-else-if="!sourceRevision && mockup?.package.prototype">
+        <template v-if="mockup?.package.prototype">
           <p class="m-0 text-xs font-semibold text-action">{{ copy.mockupDraft }}</p>
           <p class="m-0 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
           <DeclarativePrototypePreview
@@ -658,21 +498,18 @@ watch(
           </details>
         </template>
         <template
-          v-else-if="
-            !sourceRevision &&
-            current.package.prototype?.design_alternative_id === selectedAlternativeId
-          "
+          v-else-if="current.package.prototype?.design_alternative_id === selectedAlternativeId"
         >
           <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
           <DeclarativePrototypePreview :prototype="current.package.prototype" :locale="locale" />
         </template>
-        <p v-else-if="!sourceRevision" class="m-0 text-sm text-ink-2">
+        <p v-else class="m-0 text-sm text-ink-2">
           {{ copy.mockupRequired }}
         </p>
       </section>
 
       <section
-        v-if="mockup !== null && (!sourceRevision || hasSeparateDraft)"
+        v-if="mockup !== null"
         class="grid gap-3 rounded-panel border border-action-soft-line bg-action-soft p-4"
       >
         <p class="m-0 text-sm text-action">{{ copy.selectionHelp }}</p>

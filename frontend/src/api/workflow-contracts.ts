@@ -20,87 +20,6 @@ export const BRIEF_FIELDS = [
 
 export type BriefField = (typeof BRIEF_FIELDS)[number];
 
-export type ClarificationAnswerType = "text" | "item_list";
-
-export type ClarificationAnswerKind = "text" | "item_list" | "unknown";
-
-export type ClarificationRoundStatus = "OPEN" | "ANSWERED";
-
-export interface ClarificationQuestionResponse {
-  readonly question_id: string;
-  readonly catalog_version: number;
-  readonly field: BriefField;
-  readonly answer_type: ClarificationAnswerType;
-  readonly priority: number;
-  readonly prompt_key: string;
-  readonly hint_key: string;
-  readonly unknown_allowed: boolean;
-}
-
-export interface ClarificationRoundResponse {
-  readonly id: string;
-  readonly project_id: string;
-  readonly source_brief_version_number: number;
-  readonly round_number: number;
-  readonly catalog_version: number;
-  readonly questions: readonly ClarificationQuestionResponse[];
-  readonly status: ClarificationRoundStatus;
-  readonly created_by_user_id: string;
-  readonly created_at: string;
-  readonly answered_at: string | null;
-  readonly resulting_brief_version_number: number | null;
-}
-
-export type ClarificationRoundStartStatus =
-  "STARTED" | "OPEN_ROUND_EXISTS" | "BRIEF_NOT_FOUND" | "BRIEF_COMPLETE" | "LIMIT_REACHED";
-
-export interface ClarificationRoundStartResponse {
-  readonly status: ClarificationRoundStartStatus;
-  readonly round: ClarificationRoundResponse | null;
-}
-
-export interface ClarificationAnswerInput {
-  readonly question_id: string;
-  readonly kind: ClarificationAnswerKind;
-  readonly text_value?: string | null;
-  readonly item_values?: readonly string[] | null;
-}
-
-export type ClarificationAnswerIssueCode =
-  | "unknown_question"
-  | "duplicate_field"
-  | "field_not_missing"
-  | "answer_type_mismatch"
-  | "unknown_not_allowed"
-  | "empty_value";
-
-export interface ClarificationAnswerIssueResponse {
-  readonly code: ClarificationAnswerIssueCode;
-  readonly question_id: string;
-  readonly field: BriefField | null;
-}
-
-export type ClarificationNextStep =
-  "CLARIFICATION_REQUIRED" | "BRIEF_READY_FOR_APPROVAL" | "PAUSED_NEEDS_HUMAN";
-
-export type ClarificationRoundAnswerStatus =
-  | "APPLIED"
-  | "ROUND_NOT_FOUND"
-  | "ROUND_NOT_OPEN"
-  | "ROUND_STALE"
-  | "NO_ANSWERS"
-  | "INVALID_ANSWERS"
-  | "VERSION_UNCHANGED";
-
-export interface ClarificationRoundAnswerResponse {
-  readonly status: ClarificationRoundAnswerStatus;
-  readonly round: ClarificationRoundResponse | null;
-  readonly brief_version: ProjectBriefVersionResponse | null;
-  readonly next_step: ClarificationNextStep | null;
-  readonly issues: readonly ClarificationAnswerIssueResponse[];
-  readonly invalid_question_ids: readonly string[];
-}
-
 export type BriefAssumptionSource = "OWNER_PROVIDED" | "MODEL_PROPOSED" | "DETERMINISTIC_RULE";
 
 export type BriefAssumptionStatus = "PROPOSED" | "ACCEPTED" | "REJECTED";
@@ -251,28 +170,6 @@ export interface ProjectBriefGateDecisionResponse {
 }
 
 export interface ProjectWorkflowApi {
-  startProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ClarificationRoundStartResponse>;
-
-  listProjectClarificationRounds(
-    accessToken: string,
-    projectId: string,
-  ): Promise<readonly ClarificationRoundResponse[]>;
-
-  getCurrentProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ClarificationRoundResponse>;
-
-  answerProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-    roundId: string,
-    answers: readonly ClarificationAnswerInput[],
-  ): Promise<ClarificationRoundAnswerResponse>;
-
   listProjectBriefAssumptions(
     accessToken: string,
     projectId: string,

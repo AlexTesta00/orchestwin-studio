@@ -7,8 +7,8 @@ describe("ApiClient workflow responses", () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
-          status: "BRIEF_COMPLETE",
-          round: null,
+          status: "FIELD_ALREADY_PROVIDED",
+          assumption: null,
         }),
         {
           status: 409,
@@ -21,19 +21,26 @@ describe("ApiClient workflow responses", () => {
 
     const client = new ApiClient("/api/v1", fetchImplementation);
 
-    const result = await client.startProjectClarificationRound("access-token", "project-id");
+    const result = await client.createProjectBriefAssumption("access-token", "project-id", {
+      field: "budget",
+      statement: "Approximately EUR 5,000.",
+    });
 
     expect(result).toEqual({
-      status: "BRIEF_COMPLETE",
-      round: null,
+      status: "FIELD_ALREADY_PROVIDED",
+      assumption: null,
     });
 
     expect(fetchImplementation).toHaveBeenCalledOnce();
 
     const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
 
-    expect(requestUrl).toBe("/api/v1/projects/project-id/clarification-rounds");
+    expect(requestUrl).toBe("/api/v1/projects/project-id/brief-assumptions");
     expect(request?.method).toBe("POST");
+    expect(JSON.parse(String(request?.body))).toEqual({
+      field: "budget",
+      statement: "Approximately EUR 5,000.",
+    });
 
     const headers = new Headers(request?.headers);
 

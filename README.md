@@ -21,7 +21,7 @@ Gli otto passi: Brief → Squadra → User Twin → Requisiti → Design → Arc
 
 - **Backend** Python (FastAPI, SQLAlchemy, Alembic) su PostgreSQL 18: cancelli umani, artefatti immutabili, evidenze di esecuzione e ricevute di ogni chiamata ai modelli.
 - **Frontend** Vue 3, TypeScript, Pinia, Tailwind, con interfaccia in italiano e inglese.
-- **Sandbox** Docker per l'esecuzione dei sorgenti generati: test Node, browser Chromium con Playwright e audit axe-core.
+- **Pacchetto di design** zip deterministico con brief, squadra, twin, requisiti e design approvati, in Markdown e JSON, da portare nel proprio ambiente di sviluppo.
 - **Modelli** un valutatore locale (Qwen3-4B con adapter LoRA, in WSL2) e un proposer remoto (Qwen3-Coder-30B servito con vLLM su RunPod), entrambi con decodifica strutturata.
 
 ## Requisiti
@@ -112,10 +112,9 @@ I test di integrazione su PostgreSQL si eseguono con `npm run test:integration:p
 
 | Cartella | Contenuto |
 |---|---|
-| `src/orchestwin` | backend: dominio, persistenza, API, esecuzione web, modelli |
+| `src/orchestwin` | backend: dominio, persistenza, API, modelli, pacchetto di design |
 | `src/test` | test Python, fixture e test di integrazione |
 | `frontend` | applicazione Vue dello Studio |
-| `infra/web-runners` | immagini e harness della sandbox di esecuzione |
 | `environments/training` | ambiente WSL2 per addestramento e serving dei modelli locali |
 | `scripts` | launcher dello Studio, controllo del pod remoto, verifiche |
 | `docs/brand` | marchio |

@@ -12,7 +12,6 @@ import pytest
 
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.models.model_proposals import (
-    ModelArchitectureAdapter,
     ModelDesignAdapter,
     ModelRequirementsAdapter,
     ModelTeamProposalAdapter,
@@ -42,7 +41,6 @@ from orchestwin.twins.epistemics import (
     HumanValidationRequirement,
 )
 
-from . import test_fake_architecture as architecture_fixtures
 from . import test_fake_design as design_fixtures
 from . import test_fake_requirements as requirements_fixtures
 from . import test_fake_team_proposal_adapter as team_fixtures
@@ -62,24 +60,6 @@ class CompletionTransport:
         if self.drift:
             identity["runtime_id"] = "different-runtime"
         output = self.output
-        context = json.loads(kwargs["payload"]["messages"][1]["content"])["context"]
-        if context.get("architecture_phase") in {"STRUCTURE", "DETAILS"}:
-            from orchestwin.models.architecture_drafts import (
-                ArchitectureDetailsDraft,
-                ArchitectureDraft,
-                ArchitectureStructureDraft,
-            )
-
-            selected = (
-                ArchitectureStructureDraft
-                if context["architecture_phase"] == "STRUCTURE"
-                else ArchitectureDetailsDraft
-            )
-            output = {
-                key: value
-                for key, value in output.items()
-                if key in selected.model_fields or key not in ArchitectureDraft.model_fields
-            }
         payload = {
             "id": "synthetic-completion",
             "model_identity": identity,
@@ -189,12 +169,11 @@ def test_team_ignores_redundant_mandatory_suggestions(tmp_path):
     assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
 
 
-@pytest.mark.parametrize("stage", ["requirements", "design", "architecture"])
+@pytest.mark.parametrize("stage", ["requirements", "design"])
 def test_stage_deserializes_real_contract_and_binds_context(tmp_path, stage):
     fixtures, adapter_type, output_key = {
         "requirements": (requirements_fixtures, ModelRequirementsAdapter, "specification"),
         "design": (design_fixtures, ModelDesignAdapter, "package"),
-        "architecture": (architecture_fixtures, ModelArchitectureAdapter, "package"),
     }[stage]
     request = fixtures.proposal_request()
     fake_type = getattr(fixtures, f"FakeDeterministic{stage.title()}Adapter")
@@ -240,33 +219,11 @@ def test_stage_deserializes_real_contract_and_binds_context(tmp_path, stage):
             any(ref.source_id == generator.provider_id for ref in x.provenance.references)
             for x in actual.critiques
         )
-    else:
-        assert actual.grounding == expected.grounding
-        assert actual.architecture.summary == expected.architecture.summary
-        assert [x.objective for x in actual.test_plan.test_cases] == [
-            x.objective for x in expected.test_plan.test_cases
-        ]
     assert result.provider_kind.value == "MODEL_ADAPTER"
-    assert len(transport.calls) == (2 if stage == "architecture" else 1)
+    assert len(transport.calls) == 1
     output["project_id"] = str(uuid4())
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
         asyncio.run(adapter_type(generator).propose(request))
-
-
-def test_architecture_self_connection_is_rejected_without_silent_repair(tmp_path):
-    from .draft_fixtures import proposal_draft
-
-    request = architecture_fixtures.proposal_request()
-    package = asyncio.run(
-        architecture_fixtures.FakeDeterministicArchitectureAdapter().propose(request)
-    ).package
-    output = proposal_draft("architecture", package, request)
-    connection = output["connections"][0]
-    connection["target_component_id"] = connection["source_component_id"]
-    generator, transport = make_generator(tmp_path, output)
-    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
-        asyncio.run(ModelArchitectureAdapter(generator).propose(request))
-    assert len(transport.calls) == 2
 
 
 def test_nested_extra_fields_are_rejected(tmp_path):
@@ -579,9 +536,7 @@ def test_compact_twin_drafts_cannot_bypass_profile_governance(tmp_path, change):
         asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
 
 
-@pytest.mark.parametrize(
-    "stage", ["team", "user_modeling", "requirements", "design", "architecture"]
-)
+@pytest.mark.parametrize("stage", ["team", "user_modeling", "requirements", "design"])
 def test_model_runtime_requires_explicit_configuration(monkeypatch, stage):
     import importlib
 
@@ -635,14 +590,13 @@ def test_model_configuration_rejects_unbound_endpoints(tmp_path, url):
         ProposalModelConfiguration(**values)
 
 
-@pytest.mark.parametrize("stage", ["requirements", "design", "architecture"])
+@pytest.mark.parametrize("stage", ["requirements", "design"])
 def test_compact_planning_requests_remain_bound_to_project_and_exact_context(tmp_path, stage):
     from .draft_fixtures import proposal_draft
 
     source, adapter_type, key = {
         "requirements": (requirements_fixtures, ModelRequirementsAdapter, "specification"),
         "design": (design_fixtures, ModelDesignAdapter, "package"),
-        "architecture": (architecture_fixtures, ModelArchitectureAdapter, "package"),
     }[stage]
     request = source.proposal_request()
     expected = getattr(
@@ -678,3 +632,13 @@ def test_requirements_drafts_reject_invented_evidence_links_and_approval(tmp_pat
     generator, _ = make_generator(tmp_path, output)
     with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
         asyncio.run(ModelRequirementsAdapter(generator).propose(request))
+
+
+def test_prompt_beyond_the_context_window_is_blocked_before_any_model_call(tmp_path):
+    generator, transport = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+    narrow = ProposalGenerator(
+        generator.configuration.model_copy(update={"context_window_tokens": 8448}), generator.port
+    )
+    with pytest.raises(ProposalGenerationError, match="CONTEXT_BUDGET_EXCEEDED"):
+        asyncio.run(ModelTeamProposalAdapter(narrow).propose(team_fixtures.build_request()))
+    assert transport.calls == []

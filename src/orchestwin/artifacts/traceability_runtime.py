@@ -6,9 +6,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestwin.artifacts.architecture_persistence import (
-    SqlAlchemyArchitecturePackageRepository,
-)
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.artifacts.traceability import (
     CrossStageArtifactGraph,
@@ -44,26 +41,13 @@ class SqlAlchemyArtifactGraphQueryService:
                 session,
                 owner_user_id=owner_user_id,
             )
-            architecture_repository = SqlAlchemyArchitecturePackageRepository(
-                session,
-                owner_user_id=owner_user_id,
-            )
             requirements = await requirements_repository.current(project_id=project_id)
 
             if requirements is None:
                 return None
 
             design = await design_repository.current(project_id=project_id)
-            architecture = await architecture_repository.current(project_id=project_id)
-
-            if design is None:
-                architecture = None
-
-            return build_cross_stage_artifact_graph(
-                requirements,
-                design,
-                architecture,
-            )
+            return build_cross_stage_artifact_graph(requirements, design)
 
 
 __all__ = ["SqlAlchemyArtifactGraphQueryService"]

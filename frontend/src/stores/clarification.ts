@@ -7,10 +7,6 @@ import type {
   BriefAssumptionCreationResponse,
   BriefAssumptionDecisionResponse,
   BriefAssumptionResponse,
-  ClarificationAnswerInput,
-  ClarificationRoundAnswerResponse,
-  ClarificationRoundResponse,
-  ClarificationRoundStartResponse,
   HumanGateEventResponse,
   HumanGateResponse,
   ProjectBriefGateDecisionAction,
@@ -45,14 +41,10 @@ async function optionalResource<T>(operation: () => Promise<T>): Promise<T | nul
 
 export const useClarificationStore = defineStore("clarification", () => {
   const projectId = ref<string | null>(null);
-  const currentRound = ref<ClarificationRoundResponse | null>(null);
-  const roundHistory = ref<readonly ClarificationRoundResponse[]>([]);
   const assumptions = ref<readonly BriefAssumptionResponse[]>([]);
   const gate = ref<HumanGateResponse | null>(null);
   const gateEvents = ref<readonly HumanGateEventResponse[]>([]);
 
-  const lastRoundStart = ref<ClarificationRoundStartResponse | null>(null);
-  const lastRoundAnswer = ref<ClarificationRoundAnswerResponse | null>(null);
   const lastAssumptionCreation = ref<BriefAssumptionCreationResponse | null>(null);
   const lastAssumptionDecision = ref<BriefAssumptionDecisionResponse | null>(null);
   const lastGateSubmission = ref<ProjectBriefGateSubmissionResponse | null>(null);
@@ -63,14 +55,10 @@ export const useClarificationStore = defineStore("clarification", () => {
 
   function reset(): void {
     projectId.value = null;
-    currentRound.value = null;
-    roundHistory.value = [];
     assumptions.value = [];
     gate.value = null;
     gateEvents.value = [];
 
-    lastRoundStart.value = null;
-    lastRoundAnswer.value = null;
     lastAssumptionCreation.value = null;
     lastAssumptionDecision.value = null;
     lastGateSubmission.value = null;
@@ -85,22 +73,14 @@ export const useClarificationStore = defineStore("clarification", () => {
     api: ProjectWorkflowApi,
     authorize: AuthorizedRequest,
   ): Promise<void> {
-    const [historyResult, assumptionsResult, roundResult, gateResult] = await Promise.all([
-      authorize((accessToken) => api.listProjectClarificationRounds(accessToken, targetProjectId)),
+    const [assumptionsResult, gateResult] = await Promise.all([
       authorize((accessToken) => api.listProjectBriefAssumptions(accessToken, targetProjectId)),
-      optionalResource(() =>
-        authorize((accessToken) =>
-          api.getCurrentProjectClarificationRound(accessToken, targetProjectId),
-        ),
-      ),
       optionalResource(() =>
         authorize((accessToken) => api.getCurrentProjectBriefGate(accessToken, targetProjectId)),
       ),
     ]);
 
-    roundHistory.value = historyResult;
     assumptions.value = assumptionsResult;
-    currentRound.value = roundResult;
     gate.value = gateResult;
 
     gateEvents.value =
@@ -143,51 +123,6 @@ export const useClarificationStore = defineStore("clarification", () => {
     });
 
     return result ?? false;
-  }
-
-  async function startRound(
-    targetProjectId: string,
-    api: ProjectWorkflowApi,
-    authorize: AuthorizedRequest,
-  ): Promise<ClarificationRoundStartResponse | null> {
-    return perform(async () => {
-      const result = await authorize((accessToken) =>
-        api.startProjectClarificationRound(accessToken, targetProjectId),
-      );
-
-      lastRoundStart.value = result;
-
-      await refreshState(targetProjectId, api, authorize);
-
-      return result;
-    });
-  }
-
-  async function answerRound(
-    targetProjectId: string,
-    answers: readonly ClarificationAnswerInput[],
-    api: ProjectWorkflowApi,
-    authorize: AuthorizedRequest,
-  ): Promise<ClarificationRoundAnswerResponse | null> {
-    const round = currentRound.value;
-
-    if (round === null) {
-      errorDetail.value = "clarification_round_not_found";
-
-      return null;
-    }
-
-    return perform(async () => {
-      const result = await authorize((accessToken) =>
-        api.answerProjectClarificationRound(accessToken, targetProjectId, round.id, answers),
-      );
-
-      lastRoundAnswer.value = result;
-
-      await refreshState(targetProjectId, api, authorize);
-
-      return result;
-    });
   }
 
   async function createAssumption(
@@ -289,14 +224,10 @@ export const useClarificationStore = defineStore("clarification", () => {
 
   return {
     projectId,
-    currentRound,
-    roundHistory,
     assumptions,
     gate,
     gateEvents,
 
-    lastRoundStart,
-    lastRoundAnswer,
     lastAssumptionCreation,
     lastAssumptionDecision,
     lastGateSubmission,
@@ -307,8 +238,6 @@ export const useClarificationStore = defineStore("clarification", () => {
 
     reset,
     load,
-    startRound,
-    answerRound,
     createAssumption,
     acceptAssumption,
     rejectAssumption,

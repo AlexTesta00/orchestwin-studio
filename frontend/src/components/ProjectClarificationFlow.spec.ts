@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ApiError } from "@/api/client";
 import type {
-  ClarificationAnswerInput,
-  ClarificationRoundResponse,
+  BriefAssumptionResponse,
   HumanGateResponse,
   ProjectWorkflowApi,
 } from "@/api/workflow-contracts";
@@ -19,29 +18,19 @@ enableAutoUnmount(afterEach);
 
 const PROJECT_ID = "project-id";
 
-const ROUND: ClarificationRoundResponse = {
-  id: "round-id",
+const ASSUMPTION: BriefAssumptionResponse = {
+  id: "assumption-id",
   project_id: PROJECT_ID,
-  source_brief_version_number: 1,
-  round_number: 1,
-  catalog_version: 1,
-  questions: [
-    {
-      question_id: "project-brief.description.v1",
-      catalog_version: 1,
-      field: "description",
-      answer_type: "text",
-      priority: 2,
-      prompt_key: "clarification.questions.description.prompt",
-      hint_key: "clarification.questions.description.hint",
-      unknown_allowed: true,
-    },
-  ],
-  status: "OPEN",
+  brief_version_number: 2,
+  field: "domain",
+  statement: "Eventi di comunità.",
+  source: "MODEL_PROPOSED",
+  status: "PROPOSED",
   created_by_user_id: "owner-id",
-  created_at: "2026-08-12T12:00:00Z",
-  answered_at: null,
-  resulting_brief_version_number: null,
+  created_at: "2026-09-25T10:00:00Z",
+  decided_by_user_id: null,
+  decided_at: null,
+  decision_reason: null,
 };
 
 describe("ProjectClarificationFlow", () => {
@@ -49,51 +38,13 @@ describe("ProjectClarificationFlow", () => {
     setActivePinia(createPinia());
   });
 
-  it("submits a typed clarification answer", async () => {
-    let currentRoundAvailable = true;
-    let submittedAnswers: readonly ClarificationAnswerInput[] = [];
+  it("shows the proposed assumptions and only the approval actions that apply", async () => {
+    let assumptions: readonly BriefAssumptionResponse[] = [ASSUMPTION];
+    let acceptedId: string | null = null;
 
     const api: ProjectWorkflowApi = {
-      async startProjectClarificationRound() {
-        return {
-          status: "OPEN_ROUND_EXISTS",
-          round: ROUND,
-        };
-      },
-
-      async listProjectClarificationRounds() {
-        return [ROUND];
-      },
-
-      async getCurrentProjectClarificationRound() {
-        if (!currentRoundAvailable) {
-          throw new ApiError(404, "clarification_round_not_found");
-        }
-
-        return ROUND;
-      },
-
-      async answerProjectClarificationRound(_accessToken, _projectId, _roundId, answers) {
-        submittedAnswers = answers;
-        currentRoundAvailable = false;
-
-        return {
-          status: "APPLIED",
-          round: {
-            ...ROUND,
-            status: "ANSWERED",
-            answered_at: "2026-08-12T12:05:00Z",
-            resulting_brief_version_number: 2,
-          },
-          brief_version: null,
-          next_step: "CLARIFICATION_REQUIRED",
-          issues: [],
-          invalid_question_ids: [],
-        };
-      },
-
       async listProjectBriefAssumptions() {
-        return [];
+        return assumptions;
       },
 
       async createProjectBriefAssumption() {
@@ -103,10 +54,13 @@ describe("ProjectClarificationFlow", () => {
         };
       },
 
-      async acceptProjectBriefAssumption() {
+      async acceptProjectBriefAssumption(_accessToken, _projectId, assumptionId) {
+        acceptedId = assumptionId;
+        assumptions = [{ ...ASSUMPTION, status: "ACCEPTED", decided_by_user_id: "owner-id" }];
+
         return {
-          status: "ASSUMPTION_NOT_FOUND",
-          assumption: null,
+          status: "ACCEPTED",
+          assumption: assumptions[0] ?? null,
           brief_version: null,
         };
       },
@@ -164,25 +118,20 @@ describe("ProjectClarificationFlow", () => {
 
     await flushPromises();
 
-    await wrapper
-      .get('[data-testid="question-description-text"]')
-      .setValue("A clarified description.");
-
-    await wrapper.get('[data-testid="clarification-answer-form"]').trigger("submit");
-
+    expect(wrapper.find('[data-testid="clarification-answer-form"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("See the remaining questions");
+    const assumptionsSection = wrapper.get('[aria-labelledby="assumptions-title"]');
+    expect(assumptionsSection.attributes("open")).toBeDefined();
+    expect(assumptionsSection.text()).toContain("Eventi di comunità.");
+    await assumptionsSection.get("button.bg-ok").trigger("click");
     await flushPromises();
+    expect(acceptedId).toBe("assumption-id");
+    expect(assumptionsSection.text()).toContain("Accepted");
 
-    expect(submittedAnswers).toEqual([
-      {
-        question_id: "project-brief.description.v1",
-        kind: "text",
-        text_value: "A clarified description.",
-      },
-    ]);
+    await wrapper.get('[aria-labelledby="brief-gate-title"] button').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Approval is blocked by these missing fields:");
 
-    expect(wrapper.text()).toContain("Another clarification round is required");
-
-    // An approved idea is complete, but editing it must allow a fresh approval.
     const store = useClarificationStore();
     store.gate = {
       id: "gate-id",
@@ -200,10 +149,11 @@ describe("ProjectClarificationFlow", () => {
       iteration: 1,
       max_iterations: 5,
       event_sequence: 1,
-      created_at: ROUND.created_at,
-      updated_at: ROUND.created_at,
+      created_at: "2026-09-25T10:00:00Z",
+      updated_at: "2026-09-25T10:00:00Z",
       resume_status: null,
     } satisfies HumanGateResponse;
+    store.lastGateSubmission = null;
     await wrapper.setProps({
       currentBrief: { id: "brief-1", version_number: 1, content_hash: "hash-1" },
     });

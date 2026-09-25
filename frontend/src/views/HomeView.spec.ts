@@ -42,14 +42,14 @@ async function mountHome(authenticated = false) {
 }
 
 describe("home page", () => {
-  it("presents the eight-step path with a single h1 and animated twins", async () => {
+  it("presents the six-step path with a single h1 and animated twins", async () => {
     const wrapper = await mountHome();
 
     expect(wrapper.findAll("h1")).toHaveLength(1);
     expect(wrapper.get("h1").text()).toBe(
       "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
     );
-    expect(wrapper.findAll("[data-testid='home-step']")).toHaveLength(8);
+    expect(wrapper.findAll("[data-testid='home-step']")).toHaveLength(6);
     expect(wrapper.findAll("[data-testid='home-twin']")).toHaveLength(3);
     expect(wrapper.findAll("video")).toHaveLength(3);
     expect(wrapper.get("[data-testid='home-enter']").attributes("href")).toBe("/register");

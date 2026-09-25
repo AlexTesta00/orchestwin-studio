@@ -9,25 +9,17 @@ import type {
   ProjectBriefVersionResponse,
   ProjectResponse,
 } from "@/api/contracts";
-import ProjectArchitectureFlow from "@/components/ProjectArchitectureFlow.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
+import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
-import ProjectBrownfieldSourceFlow from "@/components/ProjectBrownfieldSourceFlow.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
+import ProjectDesignPackagePanel from "@/components/ProjectDesignPackagePanel.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
-import ProjectExecutionLaunch from "@/components/ProjectExecutionLaunch.vue";
-import ProjectFinalePanel, { type FinaleRecapRow } from "@/components/ProjectFinalePanel.vue";
-import ProjectSandboxGovernanceFlow from "@/components/ProjectSandboxGovernanceFlow.vue";
-import ProjectSourceGeneration from "@/components/ProjectSourceGeneration.vue";
-import ProjectSyntheticEvaluation from "@/components/ProjectSyntheticEvaluation.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
-import ProjectWebPreview from "@/components/ProjectWebPreview.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
-import ProjectWebEvidenceReview from "@/components/ProjectWebEvidenceReview.vue";
-import ProjectWebSourceReview from "@/components/ProjectWebSourceReview.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiCard from "@/components/UiCard.vue";
 import UiProgressBar from "@/components/UiProgressBar.vue";
@@ -40,8 +32,6 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
-import { useArchitectureStore } from "@/stores/architecture";
-import { useWebExecutionStore } from "@/stores/webExecution";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 
 const route = useRoute();
@@ -51,8 +41,6 @@ const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
 const design = useDesignStore();
 const clarification = useClarificationStore();
-const architecture = useArchitectureStore();
-const web = useWebExecutionStore();
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
@@ -64,9 +52,6 @@ const twinContext = computed(
 const requirementsContext = computed(
   () => `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`,
 );
-const designContext = computed(
-  () => `${requirementsContext.value}:${design.current?.id}:${design.gate?.status}`,
-);
 
 const { t, locale } = useI18n({
   useScope: "local",
@@ -76,14 +61,10 @@ const { t, locale } = useI18n({
         loading: "Loading project…",
         loadError: "The project could not be loaded.",
         saveError: "The Project Brief version could not be saved.",
-        mode: "Mode",
         currentBrief: "Your idea",
         noBrief: "Describe what you would like to create to get started.",
         versionHistory: "Previous descriptions",
-        noVersions: "No Project Brief version is available.",
         version: "Version {number}",
-        createdAt: "Created {date}",
-        contentHash: "Content hash",
         allProjects: "All projects",
         principle: "AI proposes, you decide",
         provenance: "Provenance",
@@ -92,11 +73,8 @@ const { t, locale } = useI18n({
         unlockHint: "The next step unlocks after your approval.",
         editBrief: "Edit the description",
         describeIdea: "Describe your idea",
-        brownfieldSources:
-          "Review the imported sources and authorise their verification in the technical details.",
+        openDialogue: "Back to the dialogue",
         tools: "Project tools and technical details",
-        webEvidence: "Web sources, authorisations and evidence",
-        traceability: "Artifact traceability",
       },
     },
     it: {
@@ -104,14 +82,10 @@ const { t, locale } = useI18n({
         loading: "Caricamento progetto…",
         loadError: "Non è stato possibile caricare il progetto.",
         saveError: "Non è stato possibile salvare la versione del Project Brief.",
-        mode: "Modalità",
         currentBrief: "La tua idea",
         noBrief: "Descrivi cosa vuoi realizzare per iniziare.",
         versionHistory: "Descrizioni precedenti",
-        noVersions: "Non è disponibile alcuna versione del Project Brief.",
         version: "Versione {number}",
-        createdAt: "Creata {date}",
-        contentHash: "Hash del contenuto",
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
         provenance: "Provenienza",
@@ -120,11 +94,8 @@ const { t, locale } = useI18n({
         unlockHint: "Il passo successivo si sblocca dopo la tua approvazione.",
         editBrief: "Modifica la descrizione",
         describeIdea: "Descrivi la tua idea",
-        brownfieldSources:
-          "Consulta i sorgenti importati e autorizza la verifica nei dettagli tecnici.",
+        openDialogue: "Torna al dialogo",
         tools: "Strumenti e dettagli tecnici del progetto",
-        webEvidence: "Sorgenti, autorizzazioni ed evidenze Web",
-        traceability: "Tracciabilità degli artefatti",
       },
     },
   },
@@ -138,7 +109,20 @@ const loading = ref(true);
 const saving = ref(false);
 const errorDetail = ref<string | null>(null);
 const selectedStage = ref<number | null>(null);
+const briefMode = ref<"dialogue" | "form" | null>(null);
+const briefView = computed(
+  () => briefMode.value ?? (currentBrief.value === null ? "dialogue" : "form"),
+);
 let projectEpoch = 0;
+
+function onDialogueActive(active: boolean): void {
+  if (active && briefMode.value === null) briefMode.value = "dialogue";
+}
+
+async function onDialogueSynthesized(): Promise<void> {
+  await loadProject();
+  briefMode.value = "form";
+}
 
 const projectId = computed(() => {
   const value = route.params.projectId ?? route.params.id;
@@ -162,8 +146,11 @@ function approved(
   );
 }
 
-const hasWebSource = computed(
-  () => web.activeProjectId === projectId.value && web.currentSourceRevision !== null,
+const designApproved = computed(
+  () =>
+    design.projectId === projectId.value &&
+    design.isReadyForArchitecture &&
+    approved(design.gate, design.current),
 );
 const completedStages = computed(() => [
   clarification.projectId === projectId.value && approved(clarification.gate, currentBrief.value),
@@ -178,43 +165,20 @@ const completedStages = computed(() => [
   requirements.projectId === projectId.value &&
     requirements.isReadyForDesign &&
     approved(requirements.gate, requirements.current),
-  design.projectId === projectId.value &&
-    design.isReadyForArchitecture &&
-    approved(design.gate, design.current),
-  architecture.projectId === projectId.value &&
-    architecture.isReadyForImplementation &&
-    approved(architecture.gate, architecture.current),
-  hasWebSource.value,
+  designApproved.value,
+  designApproved.value,
 ]);
 const currentStage = computed(() => {
   const incomplete = completedStages.value.findIndex((complete) => !complete);
-  return incomplete < 0 ? 7 : incomplete;
+  return incomplete < 0 ? 5 : incomplete;
 });
 const activeStage = computed(() =>
   Math.min(selectedStage.value ?? currentStage.value, currentStage.value),
 );
 const stageLabels = computed(() =>
   locale.value === "it"
-    ? [
-        "Brief",
-        "Squadra",
-        "User Twin",
-        "Requisiti",
-        "Design",
-        "Architettura",
-        "Sorgenti",
-        "Esecuzione",
-      ]
-    : [
-        "Brief",
-        "Team",
-        "User Twins",
-        "Requirements",
-        "Design",
-        "Architecture",
-        "Sources",
-        "Execution",
-      ],
+    ? ["Brief", "Squadra", "User Twin", "Requisiti", "Design", "Pacchetto"]
+    : ["Brief", "Team", "User Twins", "Requirements", "Design", "Package"],
 );
 const stageDescriptions = computed(() =>
   locale.value === "it"
@@ -224,9 +188,7 @@ const stageDescriptions = computed(() =>
         "Conosci i profili simulati delle persone che useranno il prodotto.",
         "Decidi cosa deve fare la tua applicazione.",
         "Esplora le schermate e scegli l’esperienza da realizzare.",
-        "Rivedi come verrà costruita la soluzione.",
-        "Trasforma le scelte approvate in una prima applicazione.",
-        "Prova la tua applicazione e confrontala con le scelte fatte.",
+        "Scarica il pacchetto di design e continua nel tuo ambiente di sviluppo.",
       ]
     : [
         "Describe what you want to create and who it is for.",
@@ -234,9 +196,7 @@ const stageDescriptions = computed(() =>
         "Meet the simulated profiles of the people who will use your product.",
         "Decide what your application needs to do.",
         "Explore the screens and choose the experience to build.",
-        "Review how your solution will be built.",
-        "Turn your approved choices into a first application.",
-        "Try your application and compare it with your choices.",
+        "Download the design package and continue in your own development environment.",
       ],
 );
 const stepItems = computed<StepItem[]>(() =>
@@ -252,41 +212,6 @@ const stepItems = computed<StepItem[]>(() =>
           : "pending",
   })),
 );
-const projectComplete = computed(
-  () => hasWebSource.value && web.currentExecution?.report.status === "PASSED",
-);
-const finalRecap = computed<FinaleRecapRow[]>(() => {
-  const gates = [
-    clarification.gate,
-    team.gate,
-    modeling.currentGate,
-    requirements.gate,
-    design.gate,
-    architecture.gate,
-  ];
-  return stageLabels.value.map((label, index) => {
-    const gate = gates[index] ?? null;
-    const outcome =
-      index === 6
-        ? hasWebSource.value
-          ? "generated"
-          : "pending"
-        : index === 7
-          ? projectComplete.value
-            ? "approved"
-            : "pending"
-          : completedStages.value[index]
-            ? "approved"
-            : "pending";
-    return {
-      key: `step-${index}`,
-      label,
-      outcome,
-      decisions: gate?.iteration ?? null,
-      max: gate?.max_iterations ?? null,
-    };
-  });
-});
 const provenanceOpen = ref(false);
 const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
@@ -295,17 +220,21 @@ function selectStep(key: string): void {
   selectedStage.value = index === currentStage.value ? null : index;
 }
 
-const activeVersion = computed(
-  () =>
-    [
-      currentBrief.value?.version_number,
-      team.currentVersion?.version_number,
-      modeling.currentSnapshot?.version_number,
-      requirements.current?.version_number,
-      design.current?.version_number,
-      architecture.current?.version_number,
-      web.currentSourceRevision?.version_number,
-    ][activeStage.value],
+const stageVersions = computed(() => [
+  currentBrief.value?.version_number,
+  team.currentVersion?.version_number,
+  modeling.currentSnapshot?.version_number,
+  requirements.current?.version_number,
+  design.current?.version_number,
+  design.current?.version_number,
+]);
+const activeVersion = computed(() => stageVersions.value[activeStage.value]);
+const stageSummaries = computed(() =>
+  stageLabels.value.slice(0, 5).map((label, index) => ({
+    label,
+    version: stageVersions.value[index] ?? null,
+    approved: completedStages.value[index] === true,
+  })),
 );
 
 watch(currentStage, (next, previous) => {
@@ -319,10 +248,7 @@ watch(currentStage, (next, previous) => {
 });
 
 watch(
-  () => [
-    clarification.lastRoundAnswer?.brief_version,
-    clarification.lastAssumptionDecision?.brief_version,
-  ],
+  () => [clarification.lastAssumptionDecision?.brief_version],
   (versions) => {
     for (const version of versions) {
       if (
@@ -362,6 +288,7 @@ async function loadProject(): Promise<void> {
   const id = projectId.value;
   const epoch = ++projectEpoch;
   selectedStage.value = null;
+  briefMode.value = null;
   project.value = null;
   currentBrief.value = null;
   briefHistory.value = [];
@@ -458,7 +385,7 @@ onUnmounted(() => {
 
       <div class="grid content-start gap-6">
         <header class="grid gap-3">
-          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="8" />
+          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="6" />
           <h1 class="m-0 text-[34px] leading-[1.2] font-semibold tracking-title">
             {{ stageLabels[activeStage] }}
           </h1>
@@ -480,7 +407,7 @@ onUnmounted(() => {
             {{ t("detail.backToCurrent") }}
           </UiButton>
         </div>
-        <p v-else-if="activeStage < 7" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
+        <p v-else-if="activeStage < 5" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
           {{ t("detail.unlockHint") }}
         </p>
 
@@ -490,64 +417,74 @@ onUnmounted(() => {
           class="grid gap-5"
           data-testid="stage-brief"
         >
-          <UiCard>
-            <h2 id="current-brief-title" class="m-0 text-2xl font-semibold tracking-card">
-              {{ t("detail.currentBrief") }}
-            </h2>
-            <p v-if="currentBrief" class="mt-3 mb-0 text-[15px] leading-6 text-ink-2">
-              {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
-            </p>
-            <p v-else class="mt-3 mb-0 text-[15px] text-ink-2">{{ t("detail.noBrief") }}</p>
-            <details class="mt-4" :open="currentBrief === null">
-              <summary class="cursor-pointer text-sm font-semibold text-action">
-                {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
-              </summary>
-              <div class="mt-4">
-                <ProjectBriefEditor
-                  :key="currentBrief?.version_number ?? 0"
-                  :initial="currentBrief?.brief ?? null"
-                  :busy="saving"
-                  @submit="saveBrief"
-                />
-              </div>
-            </details>
-            <details v-if="briefHistory.length" class="mt-4 border-t border-line-soft pt-3">
-              <summary class="cursor-pointer font-mono text-xs text-ink-3">
-                {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
-              </summary>
-              <ol class="mt-3 grid gap-2">
-                <li
-                  v-for="version in briefHistory"
-                  :key="version.id"
-                  class="grid gap-1 rounded-panel bg-surface-2 p-3 text-xs text-ink-3"
-                >
-                  <strong class="text-ink-2"
-                    >{{ t("detail.version", { number: version.version_number }) }} ·
-                    {{ formatDate(version.created_at) }}</strong
-                  >
-                  <code class="font-mono break-all">{{ version.content_hash }}</code>
-                </li>
-              </ol>
-            </details>
-          </UiCard>
-          <ProjectBrownfieldSourceFlow
-            v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-            :key="`${projectId}:brownfield-source`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <ProjectSandboxGovernanceFlow
-            v-if="project.mode === 'BROWNFIELD_ASSESSMENT'"
-            :key="`${projectId}:sandbox-governance`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <ProjectClarificationFlow
-            v-show="currentBrief !== null"
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
+          <ProjectBriefDialogue
+            v-show="briefView === 'dialogue'"
+            :key="`${projectId}:brief-dialogue`"
             :project-id="projectId"
             :current-brief="currentBrief"
+            :authorize="authorized"
+            @active="onDialogueActive"
+            @synthesized="onDialogueSynthesized"
+            @open-form="briefMode = 'form'"
+            @unavailable="briefMode = 'form'"
           />
+          <template v-if="briefView === 'form'">
+            <UiCard>
+              <h2 id="current-brief-title" class="m-0 text-2xl font-semibold tracking-card">
+                {{ t("detail.currentBrief") }}
+              </h2>
+              <p v-if="currentBrief" class="mt-3 mb-0 text-[15px] leading-6 text-ink-2">
+                {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
+              </p>
+              <p v-else class="mt-3 mb-0 text-[15px] text-ink-2">{{ t("detail.noBrief") }}</p>
+              <details class="mt-4" :open="currentBrief === null">
+                <summary class="cursor-pointer text-sm font-semibold text-action">
+                  {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
+                </summary>
+                <div class="mt-4">
+                  <ProjectBriefEditor
+                    :key="currentBrief?.version_number ?? 0"
+                    :initial="currentBrief?.brief ?? null"
+                    :busy="saving"
+                    @submit="saveBrief"
+                  />
+                </div>
+              </details>
+              <details v-if="briefHistory.length" class="mt-4 border-t border-line-soft pt-3">
+                <summary class="cursor-pointer font-mono text-xs text-ink-3">
+                  {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
+                </summary>
+                <ol class="mt-3 grid gap-2">
+                  <li
+                    v-for="version in briefHistory"
+                    :key="version.id"
+                    class="grid gap-1 rounded-panel bg-surface-2 p-3 text-xs text-ink-3"
+                  >
+                    <strong class="text-ink-2"
+                      >{{ t("detail.version", { number: version.version_number }) }} ·
+                      {{ formatDate(version.created_at) }}</strong
+                    >
+                    <code class="font-mono break-all">{{ version.content_hash }}</code>
+                  </li>
+                </ol>
+              </details>
+              <div v-if="!completedStages[0]" class="mt-4">
+                <UiButton
+                  variant="secondary"
+                  data-testid="brief-open-dialogue"
+                  @click="briefMode = 'dialogue'"
+                >
+                  {{ t("detail.openDialogue") }}
+                </UiButton>
+              </div>
+            </UiCard>
+            <ProjectClarificationFlow
+              v-if="currentBrief !== null"
+              :key="`${projectId}:${currentBrief.version_number}:clarification`"
+              :project-id="projectId"
+              :current-brief="currentBrief"
+            />
+          </template>
         </div>
         <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
           <ProjectTeamSelectionFlow
@@ -580,61 +517,21 @@ onUnmounted(() => {
         <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
           <ProjectDesignFlow
             id="studio-design"
-            @show-result="selectedStage = 7"
             :prerequisite-ready="requirements.isReadyForDesign"
             :key="`${projectId}:${requirementsContext}:design`"
             :project-id="projectId"
             :locale="locale === 'it' ? 'it' : 'en'"
           />
         </div>
-        <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-architecture">
-          <ProjectArchitectureFlow
-            id="studio-architecture"
-            :prerequisite-ready="design.isReadyForArchitecture"
-            :key="`${projectId}:${designContext}:architecture`"
+        <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
+          <ProjectDesignPackagePanel
+            id="studio-package"
             :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-        <div id="studio-stage-6" v-show="activeStage === 6" data-testid="stage-source">
-          <ProjectSourceGeneration
-            id="studio-source"
-            v-if="project.mode === 'GREENFIELD_GENERATION'"
-            :key="`${projectId}:source-generation`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <UiStateBlock v-else kind="empty" :text="t('detail.brownfieldSources')" />
-        </div>
-        <div
-          id="studio-stage-7"
-          v-show="activeStage === 7"
-          class="grid gap-4"
-          data-testid="stage-result"
-        >
-          <ProjectWebPreview
-            id="studio-preview"
-            v-show="hasWebSource"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-          <ProjectSyntheticEvaluation
-            v-if="web.currentExecution?.report.status === 'PASSED'"
-            :key="`${projectId}:${web.currentExecution.id}:evaluation`"
-            :project-id="projectId"
-            :execution-id="web.currentExecution.id"
+            :stages="stageSummaries"
             :authorize="authorized"
-          />
-          <ProjectFinalePanel
-            v-if="projectComplete"
-            :key="`${projectId}:finale`"
-            :project-id="projectId"
-            :recap="finalRecap"
-            @open-provenance="provenanceOpen = true"
-            @open-sources="selectedStage = 6"
+            :locale="locale === 'it' ? 'it' : 'en'"
           />
         </div>
-
         <details
           class="rounded-panel border border-line bg-surface px-4 py-3"
           data-testid="technical-details"
@@ -644,28 +541,6 @@ onUnmounted(() => {
           </summary>
           <div class="mt-4 grid gap-4">
             <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
-            <details class="rounded-panel border border-line p-4">
-              <summary class="cursor-pointer text-sm font-semibold">
-                {{ t("detail.webEvidence") }}
-              </summary>
-              <div class="mt-4 grid gap-4">
-                <ProjectWebSourceReview
-                  :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-source`"
-                  :project-id="projectId"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-                <ProjectWebEvidenceReview
-                  :key="`${projectId}:${currentBrief?.version_number ?? 0}:web-evidence`"
-                  :project-id="projectId"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-                <ProjectExecutionLaunch
-                  :project-id="projectId"
-                  platform="web"
-                  :locale="locale === 'it' ? 'it' : 'en'"
-                />
-              </div>
-            </details>
           </div>
         </details>
       </div>

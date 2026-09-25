@@ -10,8 +10,6 @@ import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
-import { useArchitectureStore } from "@/stores/architecture";
-import { useWebExecutionStore } from "@/stores/webExecution";
 import ProjectDetailView from "./ProjectDetailView.vue";
 import { expectAccessible } from "@/test/axe";
 
@@ -94,8 +92,6 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
   const modeling = useUserModelingStore(pinia);
   const requirements = useRequirementsStore(pinia);
   const design = useDesignStore(pinia);
-  const architecture = useArchitectureStore(pinia);
-  const web = useWebExecutionStore(pinia);
   clarification.$patch({ projectId: "first", gate: gate("brief") });
   team.$patch({
     projectId: "first",
@@ -127,13 +123,7 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
     gate: gate("design"),
     readiness: { status: "READY_FOR_ARCHITECTURE_PLANNING" },
   });
-  architecture.$patch({
-    projectId: "first",
-    current: { id: "architecture", content_hash: "architecture-hash", version_number: 1 },
-    gate: gate("architecture"),
-    readiness: { status: "READY_FOR_IMPLEMENTATION" },
-  });
-  return { clarification, team, modeling, requirements, design, architecture, web };
+  return { clarification, team, modeling, requirements, design };
 }
 
 describe("progressive project workspace", () => {
@@ -161,8 +151,7 @@ describe("progressive project workspace", () => {
     expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(false);
-    expect(wrapper.findComponent({ name: "ProjectArchitectureFlow" }).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "ProjectWebSourceReview" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).exists()).toBe(true);
     useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
@@ -171,30 +160,35 @@ describe("progressive project workspace", () => {
     wrapper.unmount();
   });
 
-  it("opens a saved result after hydration and allows revisiting approved work", async () => {
+  it("opens the design package after hydration and allows revisiting approved work", async () => {
     const pinia = createPinia();
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
-    const { web } = hydrateStages(pinia);
+    hydrateStages(pinia);
     await flushPromises();
-    expect(wrapper.get('[data-testid="stage-source"]').isVisible()).toBe(true);
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(7);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(false);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
+    expect(wrapper.findComponent({ name: "ProjectDesignPackagePanel" }).props("stages")).toEqual([
+      { label: "Brief", version: 1, approved: true },
+      { label: "Team", version: 1, approved: true },
+      { label: "User Twins", version: 1, approved: true },
+      { label: "Requirements", version: 1, approved: true },
+      { label: "Design", version: 1, approved: true },
+    ]);
     await wrapper.get('[data-stage="0"]').trigger("click");
-    web.$patch({
-      activeProjectId: "first",
-      sourceRevisions: [{ id: "source", version_number: 1 }],
-    });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(8);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
-    await wrapper.get('[data-stage="7"]').trigger("click");
-    expect(wrapper.get('[data-testid="stage-result"]').isVisible()).toBe(true);
+    await wrapper.get('[data-stage="4"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="technical-details"]').attributes("open")).toBeUndefined();
     wrapper.unmount();
     const reloaded = mountWorkspace(pinia);
     await flushPromises();
-    expect(reloaded.get('[data-testid="stage-result"]').isVisible()).toBe(true);
+    expect(reloaded.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     reloaded.unmount();
   });
 
@@ -203,7 +197,7 @@ describe("progressive project workspace", () => {
     const stores = hydrateStages(pinia);
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(7);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
     stores.requirements.$patch({ current: { content_hash: "revised-hash" } });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(4);
@@ -215,13 +209,13 @@ describe("progressive project workspace", () => {
     wrapper.unmount();
   });
 
-  it("follows brief versions created by clarification instead of retaining an obsolete approval", async () => {
+  it("follows brief versions created by accepted assumptions instead of retaining an obsolete approval", async () => {
     const pinia = createPinia();
     const { clarification } = hydrateStages(pinia);
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
     clarification.$patch({
-      lastRoundAnswer: {
+      lastAssumptionDecision: {
         brief_version: {
           ...BRIEF,
           id: "clarified-brief",
@@ -238,6 +232,49 @@ describe("progressive project workspace", () => {
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("opens the dialogue for a project without a brief and switches to the form on request", async () => {
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([]);
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    const dialogue = wrapper.findComponent({ name: "ProjectBriefDialogue" });
+    expect(dialogue.exists()).toBe(true);
+    expect(dialogue.isVisible()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(false);
+    dialogue.vm.$emit("open-form");
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectBriefDialogue" }).isVisible()).toBe(false);
+    await wrapper.get('[data-testid="brief-open-dialogue"]').trigger("click");
+    expect(wrapper.findComponent({ name: "ProjectBriefDialogue" }).isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("returns to the form with the synthesized brief when the dialogue completes", async () => {
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(true);
+    const dialogue = wrapper.findComponent({ name: "ProjectBriefDialogue" });
+    dialogue.vm.$emit("active", true);
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(false);
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([
+      BRIEF,
+      { ...BRIEF, id: "synthesized", version_number: 2, content_hash: "synthesized-hash" },
+    ]);
+    dialogue.vm.$emit("synthesized", { ...BRIEF, id: "synthesized", version_number: 2 });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).props("initial")).toEqual(
+      BRIEF.brief,
+    );
+    expect(
+      wrapper.findComponent({ name: "ProjectClarificationFlow" }).props("currentBrief"),
+    ).toMatchObject({
+      id: "synthesized",
+      version_number: 2,
+    });
     wrapper.unmount();
   });
 

@@ -2,14 +2,14 @@ const messages = {
   ui: {
     claim: {
       hypothesis: "Proposta dell'AI, non validata",
-      proof: "Osservato nella sandbox",
+      proof: "Evidenza verificata",
     },
     status: {
       approved: "Approvato",
       rejected: "Rifiutato",
       pending: "In attesa",
       blocked: "Attenzione",
-      observed: "Osservato nella sandbox",
+      observed: "Verificato",
       failed: "Non superato",
       passed: "Superato",
     },
@@ -59,7 +59,7 @@ const messages = {
   auth: {
     points: {
       one: "Descrivi l'idea in un brief: pensano gli agenti, decidi tu a ogni passo.",
-      two: "Ogni proposta è etichettata come ipotesi finché la sandbox non la osserva.",
+      two: "Ogni proposta è etichettata come ipotesi finché non la approvi tu.",
       three: "Prove, decisioni e provenienza restano tue, esportabili in ogni momento.",
     },
     email: "Indirizzo email",
@@ -101,7 +101,7 @@ const messages = {
   home: {
     eyebrow: "Tesi · Agentic User-Centred Design",
     title: "Un'idea diventa un'applicazione. Tu decidi a ogni passo.",
-    lead: "OrchesTwin Studio orchestra una squadra di agenti AI lungo otto passi governati: propone la squadra, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design, genera il codice e lo esegue davvero in una sandbox. Ogni passo si chiude con la tua approvazione.",
+    lead: "OrchesTwin Studio orchestra una squadra di agenti AI lungo sei passi governati: propone la squadra, costruisce utenti sintetici a partire dal tuo brief, scrive i requisiti, esplora il design e ti consegna un pacchetto di design da realizzare con i tuoi strumenti. Ogni passo si chiude con la tua approvazione.",
     enter: "Entra nello Studio",
     twinsLink: "Come funzionano i twin",
     rules: {
@@ -113,7 +113,7 @@ const messages = {
       two: {
         label: "Regola due",
         title: "Un'ipotesi resta tale finché non è verificata",
-        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. La prova è solo ciò che la sandbox ha osservato: test superati, controlli nel browser, audit di accessibilità.",
+        text: "Le opinioni dei twin, i requisiti e le critiche sono proposte, mai prove. Diventano decisioni solo quando le approvi e si verificano sull'applicazione che realizzi dal pacchetto.",
       },
     },
     twins: {
@@ -124,7 +124,7 @@ const messages = {
         brief: {
           label: "Uno",
           title: "Nascono dal brief",
-          text: "Dal testo che hai scritto lo Studio ricava da due a quattro twin. Ognuno porta con sé il grado di certezza: ipotizzato, oppure dedotto dal brief.",
+          text: "Dal testo che hai scritto lo Studio ricava fino a otto twin. Ognuno porta con sé il grado di certezza: ipotizzato, oppure dedotto dal brief.",
           alt: "Un foglio di brief che si trasforma in tre figure umane tratteggiate, collegate da linee sottili",
         },
         critique: {
@@ -136,18 +136,18 @@ const messages = {
         proof: {
           label: "Tre",
           title: "Non diventano mai prove",
-          text: "Quello che dice un twin resta un'ipotesi. La verifica arriva dalla sandbox, che esegue l'applicazione e riporta ciò che ha osservato davvero.",
+          text: "Quello che dice un twin resta un'ipotesi. La verifica arriva dall'applicazione che realizzi fuori dallo Studio, confrontata con i requisiti approvati.",
           alt: "Composizione divisa: a sinistra una figura tratteggiata sospesa, a destra la stessa forma solida appoggiata su una griglia con tacche di misura",
         },
       },
     },
     steps: {
       eyebrow: "Il percorso",
-      title: "Otto passi, otto decisioni tue",
+      title: "Sei passi, sei decisioni tue",
       items: {
         brief: {
           title: "Brief",
-          text: "Descrivi il problema e rispondi a poche domande di chiarimento.",
+          text: "Descrivi la tua idea in due righe: lo Studio ti fa le domande giuste e compone il brief.",
         },
         team: {
           title: "Squadra",
@@ -155,7 +155,7 @@ const messages = {
         },
         twins: {
           title: "User Twin",
-          text: "Da due a quattro utenti sintetici: obiettivi, contesto, accessibilità.",
+          text: "Fino a otto utenti sintetici: obiettivi, contesto, accessibilità.",
         },
         requirements: {
           title: "Requisiti",
@@ -165,17 +165,9 @@ const messages = {
           title: "Design",
           text: "Alternative con le critiche dei twin, poi un modello cliccabile.",
         },
-        architecture: {
-          title: "Architettura",
-          text: "Di cosa è fatta l'applicazione e come si collegano le parti.",
-        },
-        sources: {
-          title: "Sorgenti",
-          text: "I file generati, spiegati in parole semplici, con i controlli statici.",
-        },
-        execution: {
-          title: "Esecuzione",
-          text: "La sandbox esegue, il browser verifica, l'AI propone la riparazione.",
+        package: {
+          title: "Pacchetto",
+          text: "Brief, twin, requisiti e design scelto in una cartella, pronta per i tuoi strumenti.",
         },
       },
     },
@@ -197,7 +189,7 @@ const messages = {
         },
         stepwise: {
           title: "A passi",
-          text: "Una sequenza visibile di otto passi con il loro stato. Si agisce sul passo corrente, i precedenti si rileggono.",
+          text: "Una sequenza visibile di sei passi con il loro stato. Si agisce sul passo corrente, i precedenti si rileggono.",
         },
         plain: {
           title: "Senza gergo",
@@ -226,64 +218,12 @@ const messages = {
       },
     },
     closing: {
-      title: "Prova il percorso completo, dal brief alla prova osservata",
-      text: "Otto passi, un cancello umano per ciascuno, una sandbox che dice come è andata davvero.",
+      title: "Prova il percorso completo, dal brief al pacchetto di design",
+      text: "Sei passi, un cancello umano per ciascuno, un pacchetto pronto per i tuoi strumenti di sviluppo.",
     },
     footer: {
       thesis: "OrchesTwin Studio · tesi in Agentic User-Centred Design",
       stack: "Vue 3 · TypeScript · Pinia · Tailwind",
-    },
-  },
-  finale: {
-    title: "Progetto completato",
-    body: "Otto passi approvati, un'esecuzione superata con prove osservate. Puoi esportare tutto o rivedere da dove viene ogni cosa.",
-    recap: {
-      step: "Passo",
-      outcome: "Esito",
-      decisions: "Decisioni",
-      approved: "Approvato",
-      generated: "Generato",
-      pending: "In attesa",
-      count: "{n} di {max}",
-    },
-    export: {
-      title: "Esporta",
-      evaluationRecorded:
-        "Gli User Twin hanno valutato il prototipo eseguito: i loro spunti sono registrati come ipotesi nel passo 8.",
-      eventMissing:
-        "L'esportazione usa l'approvazione data in questa sessione: se hai ricaricato la pagina, aggiorna la revisione e approva di nuovo.",
-    },
-    status: {
-      loading: "Sto caricando la revisione finale…",
-      missing: "La revisione finale non è ancora disponibile.",
-      blocked: "Alcuni controlli finali non sono superati:",
-      review: "La revisione finale è pronta: invia la tua decisione.",
-      decision: "Approva per chiudere il progetto, oppure chiedi una revisione.",
-      approved:
-        "Progetto approvato: puoi creare il pacchetto completo, un archivio zip con sorgenti, hash e provenienza.",
-      exported: "Il pacchetto è pronto da scaricare.",
-      decided: "La decisione finale è {status}.",
-    },
-    actions: {
-      reload: "Aggiorna",
-      submit: "Invia la revisione finale",
-      approve: "Approva e chiudi il progetto",
-      revise: "Chiedi una revisione",
-      sendRevision: "Invia la richiesta",
-      export: "Esporta il pacchetto completo",
-      download: "Scarica l'archivio",
-      sources: "Apri i sorgenti",
-      provenance: "Apri la provenienza",
-    },
-    reason: {
-      label: "Perché chiedi una revisione?",
-      missing: "Scrivi un motivo prima di inviare.",
-    },
-    evidence: {
-      archive: "hash archivio",
-      size: "dimensione",
-      manifest: "hash manifesto",
-      created: "creato",
     },
   },
   twinChat: {
@@ -309,45 +249,6 @@ const messages = {
       PREFERENCE: "Preferenza",
       RISK: "Rischio",
       OPEN_QUESTION: "Domanda aperta",
-    },
-  },
-  evaluation: {
-    title: "Valutazione degli User Twin",
-    body: "I twin provano il prototipo eseguito dalle prove registrate nella sandbox (schermate, DOM, accessibilità) e segnalano cosa li aiuterebbe o li fermerebbe. Sono ipotesi da verificare con persone reali, non risultati.",
-    ask: "Chiedi ai twin di provarlo",
-    askAgain: "Chiedi di nuovo ai twin",
-    busy: "I twin stanno provando il prototipo…",
-    empty: "Nessuna valutazione ancora.",
-    meta: "{twins} twin, {findings} spunti, {when}",
-    unknownTwin: "User Twin",
-    findingCount: "{n} spunti",
-    confidence: "confidenza {value}",
-    why: "Perché lo dice",
-    action: "Cosa fare:",
-    severity: {
-      critical: "Critico",
-      major: "Importante",
-      moderate: "Moderato",
-      minor: "Minore",
-      observation: "Osservazione",
-    },
-    criterion: {
-      usefulness: "Utilità",
-      comprehensibility: "Comprensibilità",
-      actionability: "Azionabilità",
-      cognitive_load: "Carico cognitivo",
-      trust: "Fiducia",
-      accessibility: "Accessibilità",
-      task_alignment: "Aderenza ai compiti",
-    },
-    aggregation: {
-      title: "Cosa hanno in comune e dove non sono d'accordo",
-      body: "Confronto automatico fra i twin: spunti condivisi, conflitti da decidere tu, lacune e domande per la validazione con utenti reali.",
-      shared: "Spunti condivisi ({n})",
-      conflicts: "Conflitti fra twin ({n})",
-      gaps: "Lacune segnalate",
-      questions: "Domande per gli utenti reali",
-      none: "Nessuno",
     },
   },
   projects: {
@@ -388,6 +289,51 @@ const messages = {
       invalid_authentication: "Accedi nuovamente.",
       unexpected_api_error: "Il server ha restituito una risposta inattesa.",
       unexpected_error: "Si è verificato un errore inatteso.",
+    },
+  },
+  briefDialogue: {
+    title: "Racconta la tua idea",
+    intro:
+      "Descrivi in due righe cosa vuoi realizzare. Lo Studio ti farà una domanda alla volta e alla fine comporrà il brief, che potrai correggere nel modulo.",
+    statementLabel: "La tua idea",
+    statementPlaceholder:
+      "Per esempio: una pagina web per gestire la lista degli ospiti di un workshop. La usano i volontari all'ingresso.",
+    statementRequired: "Scrivi almeno una frase sulla tua idea.",
+    start: "Inizia il dialogo",
+    restart: "Riapri il dialogo",
+    preferForm: "Preferisci compilare il modulo?",
+    openForm: "Passa al modulo",
+    goToForm: "Controlla il brief",
+    progress: "Domanda {asked} di {limit}",
+    essentialsLeft: "{count} informazioni essenziali ancora da chiedere",
+    essentialsDone: "Informazioni essenziali raccolte",
+    followUp: "Approfondimento",
+    unknownAnswer: "Non lo so ancora",
+    answerLabel: "La tua risposta",
+    answerPlaceholderText: "Rispondi con parole tue",
+    answerPlaceholderList: "Un elemento per riga",
+    answerRequired: "Scrivi una risposta oppure scegli «Non lo so».",
+    send: "Invia",
+    unknown: "Non lo so",
+    waiting: "Lo Studio sta preparando la prossima domanda…",
+    composing: "Lo Studio sta componendo il brief con le tue risposte…",
+    readyToCompose: "Le domande sono finite: il brief è pronto per essere composto.",
+    retryCompose: "Componi il brief",
+    composeNow: "Componi il brief adesso",
+    interrupted: "La domanda successiva non è arrivata. Le tue risposte sono salvate.",
+    continueQuestion: "Chiedi la prossima domanda",
+    close: "Chiudi il dialogo",
+    synthesized: "Il brief è pronto: controlla i campi nel modulo e, se ti convince, approvalo.",
+    modelUnavailable:
+      "Il dialogo guidato non è disponibile in questo momento: puoi compilare il modulo.",
+    errors: {
+      BRIEF_DIALOGUE_CHANGED: "Il dialogo è cambiato nel frattempo: lo stato è stato ricaricato.",
+      BRIEF_ANSWER_INVALID: "La risposta non è valida per questa domanda.",
+      BRIEF_DIALOGUE_ACTIVE: "C'è già un dialogo aperto per questo progetto.",
+      BRIEF_SYNTHESIS_UNCHANGED: "Il brief non è cambiato: puoi modificarlo nel modulo.",
+      PROVIDER_UNAVAILABLE: "Il modello non risponde: riprova tra poco.",
+      TIMEOUT: "Il modello ha impiegato troppo tempo: riprova.",
+      default: "Operazione non riuscita: {code}",
     },
   },
   brief: {

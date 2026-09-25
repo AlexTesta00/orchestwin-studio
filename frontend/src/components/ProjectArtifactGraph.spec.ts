@@ -59,10 +59,10 @@ describe("ProjectArtifactGraph", () => {
 
     expect(wrapper.text()).toContain("Cross-stage artifact graph");
     expect(wrapper.text()).toContain("REQ-001");
-    expect(wrapper.text()).toContain("TST-001");
+    expect(wrapper.text()).toContain("DES-001");
     expect(wrapper.text()).toContain("not empirical evidence");
     expect(wrapper.text()).toContain(ARTIFACT_GRAPH.requirements_reference.content_hash);
-    expect(wrapper.text()).toContain(ARTIFACT_GRAPH.architecture_reference?.content_hash);
+    expect(wrapper.text()).toContain(ARTIFACT_GRAPH.design_reference?.content_hash);
   });
 
   it("filters the accessible relationship table by connected stage", async () => {
@@ -71,13 +71,13 @@ describe("ProjectArtifactGraph", () => {
     await flushPromises();
 
     const relationshipRowsBefore = wrapper.findAll("tbody tr");
-    await wrapper.get("select").setValue("TESTING");
+    await wrapper.get("select").setValue("DESIGN");
     const relationshipRowsAfter = wrapper.findAll("tbody tr");
 
     expect(relationshipRowsBefore.length).toBe(ARTIFACT_GRAPH.links.length);
-    expect(relationshipRowsAfter).toHaveLength(1);
-    expect(relationshipRowsAfter[0]?.text()).toContain("TESTS");
-    expect(relationshipRowsAfter[0]?.text()).toContain("TST-001");
+    expect(relationshipRowsAfter).toHaveLength(3);
+    expect(relationshipRowsAfter[0]?.text()).toContain("GROUNDED_IN");
+    expect(relationshipRowsAfter[0]?.text()).toContain("DESIGN-v2");
   });
 
   it("downloads the server-generated JSON export through an injected saver", async () => {
