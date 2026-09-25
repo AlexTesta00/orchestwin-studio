@@ -209,13 +209,13 @@ describe("progressive project workspace", () => {
     wrapper.unmount();
   });
 
-  it("follows brief versions created by clarification instead of retaining an obsolete approval", async () => {
+  it("follows brief versions created by accepted assumptions instead of retaining an obsolete approval", async () => {
     const pinia = createPinia();
     const { clarification } = hydrateStages(pinia);
     const wrapper = mountWorkspace(pinia);
     await flushPromises();
     clarification.$patch({
-      lastRoundAnswer: {
+      lastAssumptionDecision: {
         brief_version: {
           ...BRIEF,
           id: "clarified-brief",
@@ -232,6 +232,49 @@ describe("progressive project workspace", () => {
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it("opens the dialogue for a project without a brief and switches to the form on request", async () => {
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([]);
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    const dialogue = wrapper.findComponent({ name: "ProjectBriefDialogue" });
+    expect(dialogue.exists()).toBe(true);
+    expect(dialogue.isVisible()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(false);
+    dialogue.vm.$emit("open-form");
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "ProjectBriefDialogue" }).isVisible()).toBe(false);
+    await wrapper.get('[data-testid="brief-open-dialogue"]').trigger("click");
+    expect(wrapper.findComponent({ name: "ProjectBriefDialogue" }).isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("returns to the form with the synthesized brief when the dialogue completes", async () => {
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(true);
+    const dialogue = wrapper.findComponent({ name: "ProjectBriefDialogue" });
+    dialogue.vm.$emit("active", true);
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).exists()).toBe(false);
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([
+      BRIEF,
+      { ...BRIEF, id: "synthesized", version_number: 2, content_hash: "synthesized-hash" },
+    ]);
+    dialogue.vm.$emit("synthesized", { ...BRIEF, id: "synthesized", version_number: 2 });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "ProjectBriefEditor" }).props("initial")).toEqual(
+      BRIEF.brief,
+    );
+    expect(
+      wrapper.findComponent({ name: "ProjectClarificationFlow" }).props("currentBrief"),
+    ).toMatchObject({
+      id: "synthesized",
+      version_number: 2,
+    });
     wrapper.unmount();
   });
 

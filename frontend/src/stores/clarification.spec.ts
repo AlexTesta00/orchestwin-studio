@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ApiError } from "@/api/client";
 import type {
   BriefAssumptionResponse,
-  ClarificationRoundResponse,
   HumanGateResponse,
   ProjectWorkflowApi,
 } from "@/api/workflow-contracts";
@@ -12,33 +11,7 @@ import type {
 import { type AuthorizedRequest, useClarificationStore } from "./clarification";
 
 const PROJECT_ID = "project-id";
-const ROUND_ID = "round-id";
 const GATE_ID = "gate-id";
-
-const ROUND: ClarificationRoundResponse = {
-  id: ROUND_ID,
-  project_id: PROJECT_ID,
-  source_brief_version_number: 1,
-  round_number: 1,
-  catalog_version: 1,
-  questions: [
-    {
-      question_id: "project-brief.description.v1",
-      catalog_version: 1,
-      field: "description",
-      answer_type: "text",
-      priority: 2,
-      prompt_key: "clarification.questions.description.prompt",
-      hint_key: "clarification.questions.description.hint",
-      unknown_allowed: true,
-    },
-  ],
-  status: "OPEN",
-  created_by_user_id: "owner-id",
-  created_at: "2026-08-12T12:00:00Z",
-  answered_at: null,
-  resulting_brief_version_number: null,
-};
 
 const ASSUMPTION: BriefAssumptionResponse = {
   id: "assumption-id",
@@ -81,40 +54,11 @@ const authorize: AuthorizedRequest = <T>(
 ): Promise<T> => operation("access-token");
 
 function buildApi(): ProjectWorkflowApi {
+  let assumptions: readonly BriefAssumptionResponse[] = [ASSUMPTION];
+
   return {
-    async startProjectClarificationRound() {
-      return {
-        status: "OPEN_ROUND_EXISTS",
-        round: ROUND,
-      };
-    },
-
-    async listProjectClarificationRounds() {
-      return [ROUND];
-    },
-
-    async getCurrentProjectClarificationRound() {
-      return ROUND;
-    },
-
-    async answerProjectClarificationRound() {
-      return {
-        status: "APPLIED",
-        round: {
-          ...ROUND,
-          status: "ANSWERED",
-          answered_at: "2026-08-12T12:05:00Z",
-          resulting_brief_version_number: 2,
-        },
-        brief_version: null,
-        next_step: "CLARIFICATION_REQUIRED",
-        issues: [],
-        invalid_question_ids: [],
-      };
-    },
-
     async listProjectBriefAssumptions() {
-      return [ASSUMPTION];
+      return assumptions;
     },
 
     async createProjectBriefAssumption() {
@@ -125,12 +69,11 @@ function buildApi(): ProjectWorkflowApi {
     },
 
     async acceptProjectBriefAssumption() {
+      assumptions = [{ ...ASSUMPTION, status: "ACCEPTED" }];
+
       return {
         status: "ACCEPTED",
-        assumption: {
-          ...ASSUMPTION,
-          status: "ACCEPTED",
-        },
+        assumption: assumptions[0] ?? null,
         brief_version: null,
       };
     },
@@ -198,49 +141,33 @@ describe("useClarificationStore", () => {
     setActivePinia(createPinia());
   });
 
-  it("loads rounds, assumptions, gate, and audit events", async () => {
+  it("loads assumptions, gate, and audit events", async () => {
     const store = useClarificationStore();
 
     const loaded = await store.load(PROJECT_ID, buildApi(), authorize);
 
     expect(loaded).toBe(true);
-    expect(store.currentRound).toEqual(ROUND);
-    expect(store.roundHistory).toEqual([ROUND]);
     expect(store.assumptions).toEqual([ASSUMPTION]);
     expect(store.gate).toEqual(GATE);
     expect(store.gateEvents).toHaveLength(1);
     expect(store.errorDetail).toBeNull();
   });
 
-  it("records an applied answer result", async () => {
+  it("records an accepted assumption and refreshes the list", async () => {
     const store = useClarificationStore();
     const api = buildApi();
 
     await store.load(PROJECT_ID, api, authorize);
 
-    const result = await store.answerRound(
-      PROJECT_ID,
-      [
-        {
-          question_id: "project-brief.description.v1",
-          kind: "text",
-          text_value: "A clarified description.",
-        },
-      ],
-      api,
-      authorize,
-    );
+    const result = await store.acceptAssumption(PROJECT_ID, ASSUMPTION.id, null, api, authorize);
 
-    expect(result?.status).toBe("APPLIED");
-    expect(store.lastRoundAnswer?.next_step).toBe("CLARIFICATION_REQUIRED");
+    expect(result?.status).toBe("ACCEPTED");
+    expect(store.lastAssumptionDecision?.assumption?.status).toBe("ACCEPTED");
+    expect(store.assumptions[0]?.status).toBe("ACCEPTED");
   });
 
-  it("treats missing current resources as an empty workflow state", async () => {
+  it("treats a missing gate as an empty workflow state", async () => {
     const api = buildApi();
-
-    api.getCurrentProjectClarificationRound = async () => {
-      throw new ApiError(404, "clarification_round_not_found");
-    };
 
     api.getCurrentProjectBriefGate = async () => {
       throw new ApiError(404, "project_brief_gate_not_found");
@@ -251,7 +178,6 @@ describe("useClarificationStore", () => {
     const loaded = await store.load(PROJECT_ID, api, authorize);
 
     expect(loaded).toBe(true);
-    expect(store.currentRound).toBeNull();
     expect(store.gate).toBeNull();
     expect(store.gateEvents).toEqual([]);
   });

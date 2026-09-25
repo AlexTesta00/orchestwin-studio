@@ -10,6 +10,7 @@ import type {
   ProjectResponse,
 } from "@/api/contracts";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
+import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
 import ProjectClarificationFlow from "@/components/ProjectClarificationFlow.vue";
 import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
@@ -72,6 +73,7 @@ const { t, locale } = useI18n({
         unlockHint: "The next step unlocks after your approval.",
         editBrief: "Edit the description",
         describeIdea: "Describe your idea",
+        openDialogue: "Back to the dialogue",
         tools: "Project tools and technical details",
       },
     },
@@ -92,6 +94,7 @@ const { t, locale } = useI18n({
         unlockHint: "Il passo successivo si sblocca dopo la tua approvazione.",
         editBrief: "Modifica la descrizione",
         describeIdea: "Descrivi la tua idea",
+        openDialogue: "Torna al dialogo",
         tools: "Strumenti e dettagli tecnici del progetto",
       },
     },
@@ -106,7 +109,20 @@ const loading = ref(true);
 const saving = ref(false);
 const errorDetail = ref<string | null>(null);
 const selectedStage = ref<number | null>(null);
+const briefMode = ref<"dialogue" | "form" | null>(null);
+const briefView = computed(
+  () => briefMode.value ?? (currentBrief.value === null ? "dialogue" : "form"),
+);
 let projectEpoch = 0;
+
+function onDialogueActive(active: boolean): void {
+  if (active && briefMode.value === null) briefMode.value = "dialogue";
+}
+
+async function onDialogueSynthesized(): Promise<void> {
+  await loadProject();
+  briefMode.value = "form";
+}
 
 const projectId = computed(() => {
   const value = route.params.projectId ?? route.params.id;
@@ -232,10 +248,7 @@ watch(currentStage, (next, previous) => {
 });
 
 watch(
-  () => [
-    clarification.lastRoundAnswer?.brief_version,
-    clarification.lastAssumptionDecision?.brief_version,
-  ],
+  () => [clarification.lastAssumptionDecision?.brief_version],
   (versions) => {
     for (const version of versions) {
       if (
@@ -275,6 +288,7 @@ async function loadProject(): Promise<void> {
   const id = projectId.value;
   const epoch = ++projectEpoch;
   selectedStage.value = null;
+  briefMode.value = null;
   project.value = null;
   currentBrief.value = null;
   briefHistory.value = [];
@@ -403,52 +417,74 @@ onUnmounted(() => {
           class="grid gap-5"
           data-testid="stage-brief"
         >
-          <UiCard>
-            <h2 id="current-brief-title" class="m-0 text-2xl font-semibold tracking-card">
-              {{ t("detail.currentBrief") }}
-            </h2>
-            <p v-if="currentBrief" class="mt-3 mb-0 text-[15px] leading-6 text-ink-2">
-              {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
-            </p>
-            <p v-else class="mt-3 mb-0 text-[15px] text-ink-2">{{ t("detail.noBrief") }}</p>
-            <details class="mt-4" :open="currentBrief === null">
-              <summary class="cursor-pointer text-sm font-semibold text-action">
-                {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
-              </summary>
-              <div class="mt-4">
-                <ProjectBriefEditor
-                  :key="currentBrief?.version_number ?? 0"
-                  :initial="currentBrief?.brief ?? null"
-                  :busy="saving"
-                  @submit="saveBrief"
-                />
-              </div>
-            </details>
-            <details v-if="briefHistory.length" class="mt-4 border-t border-line-soft pt-3">
-              <summary class="cursor-pointer font-mono text-xs text-ink-3">
-                {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
-              </summary>
-              <ol class="mt-3 grid gap-2">
-                <li
-                  v-for="version in briefHistory"
-                  :key="version.id"
-                  class="grid gap-1 rounded-panel bg-surface-2 p-3 text-xs text-ink-3"
-                >
-                  <strong class="text-ink-2"
-                    >{{ t("detail.version", { number: version.version_number }) }} ·
-                    {{ formatDate(version.created_at) }}</strong
-                  >
-                  <code class="font-mono break-all">{{ version.content_hash }}</code>
-                </li>
-              </ol>
-            </details>
-          </UiCard>
-          <ProjectClarificationFlow
-            v-show="currentBrief !== null"
-            :key="`${projectId}:${currentBrief?.version_number ?? 0}:clarification`"
+          <ProjectBriefDialogue
+            v-show="briefView === 'dialogue'"
+            :key="`${projectId}:brief-dialogue`"
             :project-id="projectId"
             :current-brief="currentBrief"
+            :authorize="authorized"
+            @active="onDialogueActive"
+            @synthesized="onDialogueSynthesized"
+            @open-form="briefMode = 'form'"
+            @unavailable="briefMode = 'form'"
           />
+          <template v-if="briefView === 'form'">
+            <UiCard>
+              <h2 id="current-brief-title" class="m-0 text-2xl font-semibold tracking-card">
+                {{ t("detail.currentBrief") }}
+              </h2>
+              <p v-if="currentBrief" class="mt-3 mb-0 text-[15px] leading-6 text-ink-2">
+                {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
+              </p>
+              <p v-else class="mt-3 mb-0 text-[15px] text-ink-2">{{ t("detail.noBrief") }}</p>
+              <details class="mt-4" :open="currentBrief === null">
+                <summary class="cursor-pointer text-sm font-semibold text-action">
+                  {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
+                </summary>
+                <div class="mt-4">
+                  <ProjectBriefEditor
+                    :key="currentBrief?.version_number ?? 0"
+                    :initial="currentBrief?.brief ?? null"
+                    :busy="saving"
+                    @submit="saveBrief"
+                  />
+                </div>
+              </details>
+              <details v-if="briefHistory.length" class="mt-4 border-t border-line-soft pt-3">
+                <summary class="cursor-pointer font-mono text-xs text-ink-3">
+                  {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
+                </summary>
+                <ol class="mt-3 grid gap-2">
+                  <li
+                    v-for="version in briefHistory"
+                    :key="version.id"
+                    class="grid gap-1 rounded-panel bg-surface-2 p-3 text-xs text-ink-3"
+                  >
+                    <strong class="text-ink-2"
+                      >{{ t("detail.version", { number: version.version_number }) }} ·
+                      {{ formatDate(version.created_at) }}</strong
+                    >
+                    <code class="font-mono break-all">{{ version.content_hash }}</code>
+                  </li>
+                </ol>
+              </details>
+              <div v-if="!completedStages[0]" class="mt-4">
+                <UiButton
+                  variant="secondary"
+                  data-testid="brief-open-dialogue"
+                  @click="briefMode = 'dialogue'"
+                >
+                  {{ t("detail.openDialogue") }}
+                </UiButton>
+              </div>
+            </UiCard>
+            <ProjectClarificationFlow
+              v-if="currentBrief !== null"
+              :key="`${projectId}:${currentBrief.version_number}:clarification`"
+              :project-id="projectId"
+              :current-brief="currentBrief"
+            />
+          </template>
         </div>
         <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
           <ProjectTeamSelectionFlow
