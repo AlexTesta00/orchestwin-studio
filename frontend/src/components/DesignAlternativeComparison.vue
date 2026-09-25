@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 
+import DesignStyleTile from "./DesignStyleTile.vue";
+import InsightApplyMenu from "./InsightApplyMenu.vue";
+import type { AuthorizedDesignLoopRequest } from "../stores/designLoop";
 import type { DesignAlternativePayload, SyntheticDesignCritiquePayload } from "../types/design";
 
 type Locale = "en" | "it";
@@ -13,12 +16,16 @@ const props = withDefaults(
     selectedAlternativeId?: string | null;
     disabled?: boolean;
     locale?: Locale;
+    projectId?: string | null;
+    authorize?: AuthorizedDesignLoopRequest | undefined;
   }>(),
   {
     recommendedAlternativeId: null,
     selectedAlternativeId: null,
     disabled: false,
     locale: "en",
+    projectId: null,
+    authorize: undefined,
   },
 );
 
@@ -148,6 +155,12 @@ function choose(alternativeId: string): void {
               </span>
             </span>
           </label>
+          <DesignStyleTile
+            v-if="alternative.visual_language"
+            :visual="alternative.visual_language"
+            :locale="locale"
+            compact
+          />
         </header>
 
         <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-2">
@@ -273,7 +286,22 @@ function choose(alternativeId: string): void {
                 <section v-if="critique.concerns.length > 0">
                   <h5 class="m-0 text-sm font-semibold">{{ copy.concerns }}</h5>
                   <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
-                    <li v-for="item in critique.concerns" :key="item">{{ item }}</li>
+                    <li v-for="(item, index) in critique.concerns" :key="item">
+                      {{ item }}
+                      <InsightApplyMenu
+                        v-if="projectId"
+                        :project-id="projectId"
+                        :source="{
+                          kind: 'DESIGN_CRITIQUE',
+                          id: critique.code + ':' + index,
+                          twinId: critique.user_twin_reference.twin_id,
+                          text: item,
+                          mitigation: critique.suggested_changes[0] ?? null,
+                        }"
+                        :locale="locale"
+                        :authorize="authorize"
+                      />
+                    </li>
                   </ul>
                 </section>
 
