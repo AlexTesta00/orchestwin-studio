@@ -8,8 +8,6 @@ import {
   BRIEF_FIELDS,
   type BriefAssumptionResponse,
   type BriefField,
-  type ClarificationAnswerInput,
-  type ClarificationQuestionResponse,
   type ProjectBriefGateDecisionAction,
   type ProjectWorkflowApi,
 } from "@/api/workflow-contracts";
@@ -17,12 +15,6 @@ import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedRequest, useClarificationStore } from "@/stores/clarification";
 import TwinIdentity from "./TwinIdentity.vue";
 import UiButton from "./UiButton.vue";
-
-interface AnswerDraft {
-  text: string;
-  items: string;
-  unknown: boolean;
-}
 
 const props = defineProps<{
   projectId: string;
@@ -53,22 +45,9 @@ const { t, locale } = useI18n({
   messages: {
     en: {
       flow: {
-        title: "Complete your idea",
-        intro:
-          "Answer the remaining questions, review any assumptions, and confirm your project idea.",
+        title: "Confirm your idea",
+        intro: "Review the suggested details, then prepare your project idea for approval.",
         loading: "Updating your project…",
-        refresh: "Refresh",
-        startRound: "See the remaining questions",
-        noOpenRound: "There are no questions waiting for an answer.",
-        roundTitle: "Questions · round {number}",
-        markUnknown: "I do not know yet",
-        textPlaceholder: "Enter a focused answer",
-        listPlaceholder: "Enter one item per line",
-        submitAnswers: "Save answers",
-        answerRequired: "Provide at least one answer or mark one field as unknown.",
-        nextStep: "Next step: {step}",
-        historyTitle: "Previous answers",
-        noHistory: "No clarification round has been created.",
         assumptionsTitle: "Ideas to confirm",
         assumptionsIntro:
           "These are suggestions to fill gaps in your idea. They are only used if you accept them.",
@@ -83,7 +62,7 @@ const { t, locale } = useI18n({
         rejectIdea: "Reject idea",
         audit: "Version details",
         rejectionReasonRequired: "A rejection rationale is required.",
-        gateTitle: "Conferma la tua idea di progetto",
+        gateTitle: "Confirm your project idea",
         noGate: "When your idea is complete, prepare it for your approval.",
         submitGate: "Prepare for approval",
         moreActions: "Other actions",
@@ -118,8 +97,6 @@ const { t, locale } = useI18n({
           definition_of_done: "When the project is complete",
         },
         statuses: {
-          OPEN: "Open",
-          ANSWERED: "Answered",
           PROPOSED: "Proposed",
           ACCEPTED: "Accepted",
           REJECTED: "Rejected",
@@ -131,17 +108,8 @@ const { t, locale } = useI18n({
           CANCELLED: "Cancelled",
           STALE: "Stale",
           PAUSED_NEEDS_HUMAN: "Paused — human intervention required",
-          STARTED: "Round started",
-          OPEN_ROUND_EXISTS: "An open round already exists",
           BRIEF_NOT_FOUND: "Project Brief not found",
-          BRIEF_COMPLETE: "The Project Brief has no missing fields",
-          LIMIT_REACHED: "Clarification limit reached",
           APPLIED: "Applied",
-          ROUND_NOT_FOUND: "Round not found",
-          ROUND_NOT_OPEN: "Round is not open",
-          ROUND_STALE: "Round is stale",
-          NO_ANSWERS: "No answers supplied",
-          INVALID_ANSWERS: "Invalid answers",
           VERSION_UNCHANGED: "No new version was required",
           CREATED: "Created",
           FIELD_ALREADY_PROVIDED: "The field already contains owner-provided information",
@@ -158,102 +126,20 @@ const { t, locale } = useI18n({
           TRANSITION_REJECTED: "Transition rejected",
           ARTIFACT_STALE: "Artifact is stale",
         },
-        nextSteps: {
-          CLARIFICATION_REQUIRED: "Another clarification round is required",
-          BRIEF_READY_FOR_APPROVAL: "Your idea is complete and ready for approval",
-          PAUSED_NEEDS_HUMAN: "Automatic clarification stopped; human intervention is required",
-        },
         errors: {
           unexpected_error: "An unexpected error occurred.",
           unexpected_api_error: "The service returned an unexpected response. Please try again.",
-          clarification_round_not_found: "No open clarification round was found.",
           clarification_service_unavailable: "The clarification service is unavailable.",
           brief_gate_service_unavailable: "The Project Brief gate service is unavailable.",
-        },
-      },
-      clarification: {
-        questions: {
-          name: {
-            prompt: "What is the project name?",
-            hint: "Provide a short and recognizable project name.",
-          },
-          description: {
-            prompt: "How would you describe the requested system?",
-            hint: "Summarize its purpose and main behavior.",
-          },
-          problem: {
-            prompt: "Which problem should the project solve?",
-            hint: "Describe the current difficulty or unmet need.",
-          },
-          goals: {
-            prompt: "What outcomes should the project achieve?",
-            hint: "Enter one measurable or observable goal per line.",
-          },
-          target_users: {
-            prompt: "Who are the intended users?",
-            hint: "Enter one user group or role per line.",
-          },
-          domain: {
-            prompt: "Which domain does the project belong to?",
-            hint: "Describe the business, educational, technical, or social context.",
-          },
-          technical_constraints: {
-            prompt: "Which technical constraints must be respected?",
-            hint: "Enter one stack, platform, integration, or deployment constraint per line.",
-          },
-          temporal_constraints: {
-            prompt: "Are there deadlines or timing constraints?",
-            hint: "Describe important dates, milestones, or operating-time requirements.",
-          },
-          budget: {
-            prompt: "What budget constraints apply?",
-            hint: "Provide the available budget or mark it as unknown.",
-          },
-          functional_requirements: {
-            prompt: "Which functions must the system provide?",
-            hint: "Enter one required capability per line.",
-          },
-          non_functional_requirements: {
-            prompt: "Which quality requirements must be satisfied?",
-            hint: "Enter one performance, security, accessibility, or reliability requirement per line.",
-          },
-          risks: {
-            prompt: "Which risks are already known?",
-            hint: "Enter one project, technical, legal, or usability risk per line.",
-          },
-          stakeholders: {
-            prompt: "Who are the relevant stakeholders?",
-            hint: "Enter one stakeholder or stakeholder group per line.",
-          },
-          available_artifacts: {
-            prompt: "Which existing artifacts are available?",
-            hint: "Enter one document, design, repository, dataset, or prototype per line.",
-          },
-          definition_of_done: {
-            prompt: "How will the owner determine that the project is complete?",
-            hint: "Enter one completion criterion per line.",
-          },
         },
       },
     },
     it: {
       flow: {
-        title: "Completa la tua idea",
+        title: "Conferma la tua idea",
         intro:
-          "Rispondi alle domande rimaste, controlla le ipotesi e conferma la tua idea di progetto.",
+          "Controlla le proposte per i dettagli mancanti, poi prepara la tua idea per l’approvazione.",
         loading: "Aggiornamento del progetto…",
-        refresh: "Aggiorna",
-        startRound: "Vedi le domande rimaste",
-        noOpenRound: "Non ci sono domande in attesa di una risposta.",
-        roundTitle: "Domande · sessione {number}",
-        markUnknown: "Non lo so ancora",
-        textPlaceholder: "Inserisci una risposta mirata",
-        listPlaceholder: "Inserisci un elemento per riga",
-        submitAnswers: "Salva risposte",
-        answerRequired: "Fornisci almeno una risposta oppure marca un campo come sconosciuto.",
-        nextStep: "Passo successivo: {step}",
-        historyTitle: "Risposte precedenti",
-        noHistory: "Non è stato ancora creato alcun round di chiarificazione.",
         assumptionsTitle: "Idee da confermare",
         assumptionsIntro:
           "Sono proposte per completare i dettagli mancanti della tua idea. Verranno usate solo se le accetti.",
@@ -303,8 +189,6 @@ const { t, locale } = useI18n({
           definition_of_done: "Criteri di completamento",
         },
         statuses: {
-          OPEN: "Aperto",
-          ANSWERED: "Risposto",
           PROPOSED: "Proposta",
           ACCEPTED: "Accettata",
           REJECTED: "Rifiutata",
@@ -316,17 +200,8 @@ const { t, locale } = useI18n({
           CANCELLED: "Annullato",
           STALE: "Obsoleto",
           PAUSED_NEEDS_HUMAN: "In pausa — intervento umano richiesto",
-          STARTED: "Round avviato",
-          OPEN_ROUND_EXISTS: "Esiste già un round aperto",
           BRIEF_NOT_FOUND: "Project Brief non trovato",
-          BRIEF_COMPLETE: "Il Project Brief non contiene campi mancanti",
-          LIMIT_REACHED: "Limite di chiarificazione raggiunto",
           APPLIED: "Applicato",
-          ROUND_NOT_FOUND: "Round non trovato",
-          ROUND_NOT_OPEN: "Il round non è aperto",
-          ROUND_STALE: "Il round è obsoleto",
-          NO_ANSWERS: "Nessuna risposta fornita",
-          INVALID_ANSWERS: "Risposte non valide",
           VERSION_UNCHANGED: "Non è stata necessaria una nuova versione",
           CREATED: "Creata",
           FIELD_ALREADY_PROVIDED: "Il campo contiene già informazioni fornite dall'owner",
@@ -343,83 +218,12 @@ const { t, locale } = useI18n({
           TRANSITION_REJECTED: "Transizione rifiutata",
           ARTIFACT_STALE: "Artefatto obsoleto",
         },
-        nextSteps: {
-          CLARIFICATION_REQUIRED: "È necessario un altro round di chiarificazione",
-          BRIEF_READY_FOR_APPROVAL: "La tua idea è completa e pronta per l’approvazione",
-          PAUSED_NEEDS_HUMAN:
-            "La chiarificazione automatica è terminata; è richiesto un intervento umano",
-        },
         errors: {
           unexpected_error: "Si è verificato un errore inatteso.",
           unexpected_api_error: "Il servizio ha restituito una risposta inattesa. Riprova.",
-          clarification_round_not_found: "Non è stato trovato un round di chiarificazione aperto.",
           clarification_service_unavailable: "Il servizio di chiarificazione non è disponibile.",
           brief_gate_service_unavailable:
             "Il servizio di approvazione non è disponibile. Riprova tra poco.",
-        },
-      },
-      clarification: {
-        questions: {
-          name: {
-            prompt: "Qual è il nome del progetto?",
-            hint: "Fornisci un nome breve e riconoscibile.",
-          },
-          description: {
-            prompt: "Come descriveresti il sistema richiesto?",
-            hint: "Riassumi il suo scopo e il comportamento principale.",
-          },
-          problem: {
-            prompt: "Quale problema deve risolvere il progetto?",
-            hint: "Descrivi la difficoltà attuale o il bisogno non soddisfatto.",
-          },
-          goals: {
-            prompt: "Quali risultati deve raggiungere il progetto?",
-            hint: "Inserisci un obiettivo misurabile o osservabile per riga.",
-          },
-          target_users: {
-            prompt: "Chi sono gli utenti previsti?",
-            hint: "Inserisci un gruppo o ruolo utente per riga.",
-          },
-          domain: {
-            prompt: "A quale dominio appartiene il progetto?",
-            hint: "Descrivi il contesto aziendale, educativo, tecnico o sociale.",
-          },
-          technical_constraints: {
-            prompt: "Quali vincoli tecnici devono essere rispettati?",
-            hint: "Inserisci uno stack, piattaforma, integrazione o vincolo di distribuzione per riga.",
-          },
-          temporal_constraints: {
-            prompt: "Sono presenti scadenze o vincoli temporali?",
-            hint: "Descrivi date, milestone o requisiti temporali rilevanti.",
-          },
-          budget: {
-            prompt: "Quali vincoli di budget si applicano?",
-            hint: "Indica il budget disponibile oppure marcalo come sconosciuto.",
-          },
-          functional_requirements: {
-            prompt: "Quali funzioni deve fornire il sistema?",
-            hint: "Inserisci una funzionalità richiesta per riga.",
-          },
-          non_functional_requirements: {
-            prompt: "Quali requisiti di qualità devono essere soddisfatti?",
-            hint: "Inserisci un requisito di prestazioni, sicurezza, accessibilità o affidabilità per riga.",
-          },
-          risks: {
-            prompt: "Quali rischi sono già noti?",
-            hint: "Inserisci un rischio progettuale, tecnico, legale o di usabilità per riga.",
-          },
-          stakeholders: {
-            prompt: "Chi sono gli stakeholder rilevanti?",
-            hint: "Inserisci uno stakeholder o gruppo di stakeholder per riga.",
-          },
-          available_artifacts: {
-            prompt: "Quali artefatti esistenti sono disponibili?",
-            hint: "Inserisci un documento, design, repository, dataset o prototipo per riga.",
-          },
-          definition_of_done: {
-            prompt: "Come verrà stabilito che il progetto è completo?",
-            hint: "Inserisci un criterio di completamento per riga.",
-          },
         },
       },
     },
@@ -428,7 +232,6 @@ const { t, locale } = useI18n({
 
 const resolvedApi = computed(() => props.api ?? apiClient);
 
-const answerDrafts = ref<Record<string, AnswerDraft>>({});
 const assumptionField = ref<BriefField>("description");
 const assumptionStatement = ref("");
 const assumptionReasons = ref<Record<string, string>>({});
@@ -450,26 +253,6 @@ async function load(): Promise<void> {
 }
 
 watch(
-  () => store.currentRound,
-  (round) => {
-    const drafts: Record<string, AnswerDraft> = {};
-
-    for (const question of round?.questions ?? []) {
-      drafts[question.question_id] = {
-        text: "",
-        items: "",
-        unknown: false,
-      };
-    }
-
-    answerDrafts.value = drafts;
-  },
-  {
-    immediate: true,
-  },
-);
-
-watch(
   () => props.projectId,
   async () => {
     await load();
@@ -478,44 +261,14 @@ watch(
 
 onMounted(load);
 
-function draftFor(questionId: string): AnswerDraft {
-  const existing = answerDrafts.value[questionId];
-
-  if (existing !== undefined) {
-    return existing;
-  }
-
-  const created: AnswerDraft = {
-    text: "",
-    items: "",
-    unknown: false,
-  };
-
-  answerDrafts.value[questionId] = created;
-
-  return created;
-}
-
 function translatedOrFallback(key: string, fallback: string): string {
   const translated = t(key);
 
   return translated === key ? fallback : translated;
 }
 
-function questionPrompt(question: ClarificationQuestionResponse): string {
-  return translatedOrFallback(question.prompt_key, t(`flow.fields.${question.field}`));
-}
-
-function questionHint(question: ClarificationQuestionResponse): string {
-  return translatedOrFallback(question.hint_key, t(`flow.fields.${question.field}`));
-}
-
 function statusText(statusValue: string): string {
   return translatedOrFallback(`flow.statuses.${statusValue}`, statusValue);
-}
-
-function nextStepText(nextStep: string): string {
-  return translatedOrFallback(`flow.nextSteps.${nextStep}`, nextStep);
 }
 
 function errorText(detail: string): string {
@@ -531,78 +284,6 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-async function startRound(): Promise<void> {
-  localError.value = null;
-
-  await store.startRound(props.projectId, resolvedApi.value, executeAuthorized);
-}
-
-function answerPayload(): readonly ClarificationAnswerInput[] {
-  const round = store.currentRound;
-
-  if (round === null) {
-    return [];
-  }
-
-  const answers: ClarificationAnswerInput[] = [];
-
-  for (const question of round.questions) {
-    const draft = draftFor(question.question_id);
-
-    if (draft.unknown) {
-      answers.push({
-        question_id: question.question_id,
-        kind: "unknown",
-      });
-
-      continue;
-    }
-
-    if (question.answer_type === "text") {
-      const value = draft.text.trim();
-
-      if (value) {
-        answers.push({
-          question_id: question.question_id,
-          kind: "text",
-          text_value: value,
-        });
-      }
-
-      continue;
-    }
-
-    const items = draft.items
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    if (items.length > 0) {
-      answers.push({
-        question_id: question.question_id,
-        kind: "item_list",
-        item_values: items,
-      });
-    }
-  }
-
-  return answers;
-}
-
-async function submitAnswers(): Promise<void> {
-  localError.value = null;
-
-  const answers = answerPayload();
-
-  if (answers.length === 0) {
-    localError.value = t("flow.answerRequired");
-
-    return;
-  }
-
-  await store.answerRound(props.projectId, answers, resolvedApi.value, executeAuthorized);
 }
 
 async function createAssumption(): Promise<void> {
@@ -717,12 +398,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
 
     <div
       :class="
-        store.busy ||
-        localError !== null ||
-        store.errorDetail !== null ||
-        store.lastRoundAnswer?.next_step
-          ? 'min-h-6'
-          : 'sr-only'
+        store.busy || localError !== null || store.errorDetail !== null ? 'min-h-6' : 'sr-only'
       "
       aria-live="polite"
       aria-atomic="true"
@@ -742,180 +418,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
           })
         }}
       </p>
-
-      <p
-        v-else-if="store.lastRoundAnswer?.next_step"
-        class="m-0 rounded-panel border border-ok-line bg-ok-bg p-4 text-sm font-semibold text-ok-dark"
-      >
-        {{
-          t("flow.nextStep", {
-            step: nextStepText(store.lastRoundAnswer.next_step),
-          })
-        }}
-      </p>
     </div>
-
-    <div class="flex flex-wrap gap-3">
-      <button
-        type="button"
-        class="min-h-11 rounded-panel border border-field bg-white px-4 py-2 font-bold text-ink hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
-        @click="load"
-      >
-        {{ t("flow.refresh") }}
-      </button>
-
-      <button
-        v-if="store.currentRound === null"
-        type="button"
-        class="min-h-11 rounded-panel bg-action px-4 py-2 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-        :disabled="store.busy"
-        @click="startRound"
-      >
-        {{ t("flow.startRound") }}
-      </button>
-    </div>
-
-    <section
-      class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
-      aria-labelledby="current-round-title"
-    >
-      <template v-if="store.currentRound !== null">
-        <header class="grid gap-1">
-          <h3 id="current-round-title" class="text-xl font-semibold text-ink">
-            {{
-              t("flow.roundTitle", {
-                number: store.currentRound.round_number,
-              })
-            }}
-          </h3>
-
-          <p class="m-0 text-sm text-ink-2">
-            {{
-              t("flow.versionLabel", {
-                version: store.currentRound.source_brief_version_number,
-              })
-            }}
-            ·
-            {{
-              t("flow.statusLabel", {
-                status: statusText(store.currentRound.status),
-              })
-            }}
-          </p>
-        </header>
-
-        <form
-          class="grid gap-5"
-          data-testid="clarification-answer-form"
-          @submit.prevent="submitAnswers"
-        >
-          <fieldset
-            v-for="question in store.currentRound.questions"
-            :key="question.question_id"
-            class="grid gap-3 rounded-panel border border-line p-4"
-          >
-            <legend class="px-1 font-semibold text-ink">
-              {{ questionPrompt(question) }}
-            </legend>
-
-            <p class="m-0 text-sm text-ink-2">
-              {{ questionHint(question) }}
-            </p>
-
-            <textarea
-              v-if="question.answer_type === 'text'"
-              v-model="draftFor(question.question_id).text"
-              :data-testid="`question-${question.field}-text`"
-              class="min-h-28 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:bg-surface-3"
-              :placeholder="t('flow.textPlaceholder')"
-              :disabled="draftFor(question.question_id).unknown"
-            ></textarea>
-
-            <textarea
-              v-else
-              v-model="draftFor(question.question_id).items"
-              :data-testid="`question-${question.field}-items`"
-              class="min-h-32 rounded-panel border border-field px-3 py-2 focus-visible:ring-2 focus-visible:ring-action focus-visible:outline-none disabled:bg-surface-3"
-              :placeholder="t('flow.listPlaceholder')"
-              :disabled="draftFor(question.question_id).unknown"
-            ></textarea>
-
-            <label
-              v-if="question.unknown_allowed"
-              class="flex min-h-11 items-center gap-3 rounded-control p-2 text-sm font-semibold text-ink-2"
-            >
-              <input
-                v-model="draftFor(question.question_id).unknown"
-                type="checkbox"
-                :data-testid="`question-${question.field}-unknown`"
-              />
-
-              {{ t("flow.markUnknown") }}
-            </label>
-          </fieldset>
-
-          <button
-            type="submit"
-            class="min-h-12 rounded-panel bg-action px-5 py-3 font-bold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
-            :disabled="store.busy"
-          >
-            {{ t("flow.submitAnswers") }}
-          </button>
-        </form>
-      </template>
-
-      <p v-else id="current-round-title" class="m-0 text-ink-2">
-        {{ t("flow.noOpenRound") }}
-      </p>
-    </section>
-
-    <details
-      v-if="store.roundHistory.length > 0"
-      class="rounded-panel border border-line bg-white p-4"
-      aria-labelledby="clarification-history-title"
-    >
-      <summary id="clarification-history-title" class="cursor-pointer font-semibold text-ink-2">
-        {{ t("flow.historyTitle") }}
-      </summary>
-
-      <ol v-if="store.roundHistory.length > 0" class="grid gap-3">
-        <li
-          v-for="round in store.roundHistory"
-          :key="round.id"
-          class="rounded-panel border border-line p-4"
-        >
-          <p class="m-0 font-bold text-ink">
-            {{
-              t("flow.roundTitle", {
-                number: round.round_number,
-              })
-            }}
-          </p>
-
-          <p class="m-0 mt-1 text-sm text-ink-2">
-            {{ statusText(round.status) }}
-            ·
-            {{ formatDate(round.created_at) }}
-          </p>
-
-          <p
-            v-if="round.resulting_brief_version_number !== null"
-            class="m-0 mt-1 text-sm text-ink-2"
-          >
-            {{
-              t("flow.versionLabel", {
-                version: round.resulting_brief_version_number,
-              })
-            }}
-          </p>
-        </li>
-      </ol>
-
-      <p v-else class="m-0 text-ink-2">
-        {{ t("flow.noHistory") }}
-      </p>
-    </details>
 
     <details
       :open="store.assumptions.some((assumption) => assumption.status === 'PROPOSED')"

@@ -26,10 +26,6 @@ import type {
   BriefAssumptionCreationResponse,
   BriefAssumptionDecisionResponse,
   BriefAssumptionResponse,
-  ClarificationAnswerInput,
-  ClarificationRoundAnswerResponse,
-  ClarificationRoundResponse,
-  ClarificationRoundStartResponse,
   HumanGateEventResponse,
   HumanGateResponse,
   ProjectBriefGateDecisionAction,
@@ -237,63 +233,6 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
       {
         headers: this.authorization(accessToken),
       },
-    );
-  }
-
-  public startProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ClarificationRoundStartResponse> {
-    return this.request<ClarificationRoundStartResponse>(
-      `/projects/${projectId}/clarification-rounds`,
-      {
-        method: "POST",
-        headers: this.authorization(accessToken),
-      },
-      [409],
-    );
-  }
-
-  public listProjectClarificationRounds(
-    accessToken: string,
-    projectId: string,
-  ): Promise<readonly ClarificationRoundResponse[]> {
-    return this.request<readonly ClarificationRoundResponse[]>(
-      `/projects/${projectId}/clarification-rounds`,
-      {
-        headers: this.authorization(accessToken),
-      },
-    );
-  }
-
-  public getCurrentProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-  ): Promise<ClarificationRoundResponse> {
-    return this.request<ClarificationRoundResponse>(
-      `/projects/${projectId}/clarification-rounds/current`,
-      {
-        headers: this.authorization(accessToken),
-      },
-    );
-  }
-
-  public answerProjectClarificationRound(
-    accessToken: string,
-    projectId: string,
-    roundId: string,
-    answers: readonly ClarificationAnswerInput[],
-  ): Promise<ClarificationRoundAnswerResponse> {
-    return this.request<ClarificationRoundAnswerResponse>(
-      `/projects/${projectId}/clarification-rounds/${roundId}/answers`,
-      {
-        method: "POST",
-        headers: this.authorization(accessToken),
-        body: JSON.stringify({
-          answers,
-        }),
-      },
-      [409, 422],
     );
   }
 
