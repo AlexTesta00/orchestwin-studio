@@ -11,6 +11,34 @@ from orchestwin.artifacts.design_packages import (
     create_design_exploration_package,
     create_design_grounding,
 )
+from orchestwin.artifacts.visual_catalog import (
+    ARCHETYPES,
+    VISUAL_DIMENSION_NAMES,
+    BackgroundTreatment,
+    BorderWeight,
+    ButtonStyle,
+    ColorMode,
+    ColorScheme,
+    CornerStyle,
+    Density,
+    DesignTone,
+    Elevation,
+    Emphasis,
+    FontFamily,
+    HeaderStyle,
+    HeadingCase,
+    HeadingWeight,
+    HueFamily,
+    InputStyle,
+    LayoutArchetype,
+    NavigationPattern,
+    Saturation,
+    SurfaceTone,
+    TypeScale,
+    VisualChoices,
+    require_distinct_visual_choices,
+)
+from orchestwin.artifacts.visual_language import MAX_PRODUCT_NAME_LENGTH, create_visual_language
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import Draft, Links, Text, Title
 from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
@@ -22,6 +50,37 @@ class WorkflowDraft(Draft):
     steps: Annotated[tuple[Text, ...], Field(min_length=1)]
     requirements: Links
     stories: Links
+
+
+class VisualLanguageDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    approach_rationale: Text
+    archetype: LayoutArchetype
+    background: BackgroundTreatment
+    body_family: FontFamily
+    borders: BorderWeight
+    buttons: ButtonStyle
+    color_mode: ColorMode
+    color_scheme: ColorScheme
+    corners: CornerStyle
+    density: Density
+    elevation: Elevation
+    emphasis: Emphasis
+    header: HeaderStyle
+    heading_case: HeadingCase
+    heading_family: FontFamily
+    heading_weight: HeadingWeight
+    hue_family: HueFamily
+    inputs: InputStyle
+    navigation: NavigationPattern
+    product_name: Annotated[str, Field(min_length=1, max_length=MAX_PRODUCT_NAME_LENGTH)]
+    saturation: Saturation
+    surface_tone: SurfaceTone
+    tone: DesignTone
+    type_scale: TypeScale
+
+    def choices(self) -> VisualChoices:
+        return VisualChoices(**{name: getattr(self, name) for name in VISUAL_DIMENSION_NAMES})
 
 
 class AlternativeDraft(Draft):
@@ -42,6 +101,7 @@ class AlternativeDraft(Draft):
     trade_offs: Annotated[tuple[Text, ...], Field(min_length=1)]
     assumptions: tuple[Text, ...]
     open_questions: tuple[Text, ...]
+    visual: VisualLanguageDraft
 
 
 class CritiqueDraft(Draft):
@@ -142,6 +202,20 @@ def design_context(request):
     }, twins
 
 
+def _require_archetype_fit(alternative, choices):
+    spec = ARCHETYPES[choices.archetype]
+    if max(len(w.steps) for w in alternative.workflows) < spec.minimum_workflow_steps:
+        raise ValueError(
+            f"{choices.archetype.value} requires a workflow with at least "
+            f"{spec.minimum_workflow_steps} steps"
+        )
+    if len(alternative.information_architecture) < spec.minimum_information_areas:
+        raise ValueError(
+            f"{choices.archetype.value} requires at least {spec.minimum_information_areas} "
+            "information architecture areas"
+        )
+
+
 def bind_design(draft, request, twins, model_reference):
     ids = requirement_code_map(request.requirements.version.specification)
     records = [*draft.alternatives, *draft.critiques, *draft.concerns]
@@ -149,6 +223,17 @@ def bind_design(draft, request, twins, model_reference):
     if len(set(codes)) != len(codes) or set(codes) & ids.keys():
         raise ValueError("duplicate design codes")
     ids.update({code: uuid4() for code in codes})
+    languages = {
+        x.code: create_visual_language(
+            choices=x.visual.choices(),
+            product_name=x.visual.product_name,
+            rationale=x.visual.approach_rationale,
+        )
+        for x in draft.alternatives
+    }
+    require_distinct_visual_choices([languages[x.code].choices for x in draft.alternatives])
+    for x in draft.alternatives:
+        _require_archetype_fit(x, languages[x.code].choices)
 
     def links(values):
         return tuple(ids[value] for value in values)
@@ -159,6 +244,7 @@ def bind_design(draft, request, twins, model_reference):
                 alternative_id=ids[x.code],
                 code=x.code,
                 approach=x.approach,
+                visual_language=languages[x.code],
                 title=x.title,
                 summary=x.summary,
                 rationale=x.rationale,

@@ -23,6 +23,31 @@ from orchestwin.artifacts.design_packages import (
     create_design_exploration_package,
     create_design_grounding,
 )
+from orchestwin.artifacts.visual_catalog import (
+    BackgroundTreatment,
+    BorderWeight,
+    ButtonStyle,
+    ColorMode,
+    ColorScheme,
+    CornerStyle,
+    Density,
+    DesignTone,
+    Elevation,
+    Emphasis,
+    FontFamily,
+    HeaderStyle,
+    HeadingCase,
+    HeadingWeight,
+    HueFamily,
+    InputStyle,
+    LayoutArchetype,
+    NavigationPattern,
+    Saturation,
+    SurfaceTone,
+    TypeScale,
+    VisualChoices,
+)
+from orchestwin.artifacts.visual_language import create_visual_language
 from orchestwin.models.design import (
     DesignProposalIssueCode,
     DesignProposalProviderKind,
@@ -56,6 +81,9 @@ class _AlternativeTemplate:
     """Static content that keeps deterministic alternatives meaningfully distinct."""
 
     approach: DesignApproach
+    visual: VisualChoices
+    product_name: str
+    visual_rationale: str
     title_prefix: str
     summary: str
     rationale: str
@@ -72,6 +100,34 @@ class _AlternativeTemplate:
 _ALTERNATIVE_TEMPLATES: Final[tuple[_AlternativeTemplate, ...]] = (
     _AlternativeTemplate(
         approach=DesignApproach.GUIDED_WORKFLOW,
+        visual=VisualChoices(
+            archetype=LayoutArchetype.GUIDED_STEPS,
+            hue_family=HueFamily.COBALT,
+            color_scheme=ColorScheme.NEUTRAL_ACCENT,
+            color_mode=ColorMode.LIGHT,
+            saturation=Saturation.BALANCED,
+            surface_tone=SurfaceTone.TINTED,
+            heading_family=FontFamily.HUMANIST_SANS,
+            body_family=FontFamily.SYSTEM_UI,
+            type_scale=TypeScale.REGULAR,
+            heading_case=HeadingCase.SENTENCE,
+            heading_weight=HeadingWeight.SEMIBOLD,
+            corners=CornerStyle.SOFT,
+            density=Density.COMFORTABLE,
+            buttons=ButtonStyle.FILLED,
+            inputs=InputStyle.BOXED,
+            elevation=Elevation.SUBTLE,
+            borders=BorderWeight.HAIRLINE,
+            navigation=NavigationPattern.TOP_BAR,
+            header=HeaderStyle.COMPACT_BAR,
+            background=BackgroundTreatment.PLAIN,
+            emphasis=Emphasis.BALANCED,
+            tone=DesignTone.INSTITUTIONAL,
+        ),
+        product_name="Guided workspace",
+        visual_rationale=(
+            "A calm cobalt palette with humanist type keeps each guided step legible for occasional users."
+        ),
         title_prefix="Guided workflow",
         summary=(
             "Lead the user through an explicit sequence with progressive disclosure, "
@@ -113,6 +169,34 @@ _ALTERNATIVE_TEMPLATES: Final[tuple[_AlternativeTemplate, ...]] = (
     ),
     _AlternativeTemplate(
         approach=DesignApproach.DASHBOARD_FIRST,
+        visual=VisualChoices(
+            archetype=LayoutArchetype.DASHBOARD,
+            hue_family=HueFamily.TEAL,
+            color_scheme=ColorScheme.ANALOGOUS,
+            color_mode=ColorMode.DARK,
+            saturation=Saturation.VIVID,
+            surface_tone=SurfaceTone.COOL,
+            heading_family=FontFamily.GEOMETRIC_SANS,
+            body_family=FontFamily.GROTESQUE_SANS,
+            type_scale=TypeScale.COMPACT,
+            heading_case=HeadingCase.UPPERCASE,
+            heading_weight=HeadingWeight.BLACK,
+            corners=CornerStyle.SHARP,
+            density=Density.COMPACT,
+            buttons=ButtonStyle.OUTLINED,
+            inputs=InputStyle.FILLED,
+            elevation=Elevation.RAISED,
+            borders=BorderWeight.BOLD,
+            navigation=NavigationPattern.SIDE_RAIL,
+            header=HeaderStyle.MINIMAL,
+            background=BackgroundTreatment.GRID,
+            emphasis=Emphasis.BOLD,
+            tone=DesignTone.TECHNICAL,
+        ),
+        product_name="Operations desk",
+        visual_rationale=(
+            "A dark teal control room with compact geometric type keeps many statuses visible at once."
+        ),
         title_prefix="Operations dashboard",
         summary=(
             "Expose status, priorities, and contextual actions in one overview before the user "
@@ -158,6 +242,34 @@ _ALTERNATIVE_TEMPLATES: Final[tuple[_AlternativeTemplate, ...]] = (
     ),
     _AlternativeTemplate(
         approach=DesignApproach.TASK_FOCUSED,
+        visual=VisualChoices(
+            archetype=LayoutArchetype.SINGLE_CARD,
+            hue_family=HueFamily.TERRACOTTA,
+            color_scheme=ColorScheme.COMPLEMENTARY,
+            color_mode=ColorMode.LIGHT,
+            saturation=Saturation.MUTED,
+            surface_tone=SurfaceTone.WARM,
+            heading_family=FontFamily.OLD_STYLE_SERIF,
+            body_family=FontFamily.SOFT_SANS,
+            type_scale=TypeScale.DISPLAY,
+            heading_case=HeadingCase.SMALL_CAPS,
+            heading_weight=HeadingWeight.REGULAR,
+            corners=CornerStyle.ROUND,
+            density=Density.SPACIOUS,
+            buttons=ButtonStyle.SOFT,
+            inputs=InputStyle.UNDERLINED,
+            elevation=Elevation.FLAT,
+            borders=BorderWeight.NONE,
+            navigation=NavigationPattern.NONE,
+            header=HeaderStyle.HERO_BAND,
+            background=BackgroundTreatment.GRADIENT,
+            emphasis=Emphasis.RESTRAINED,
+            tone=DesignTone.WARM,
+        ),
+        product_name="Focused workspace",
+        visual_rationale=(
+            "A warm terracotta card with generous spacing and an old-style serif puts one task at the centre."
+        ),
         title_prefix="Focused task workspace",
         summary=(
             "Center the interface on one primary task with inline guidance, validation, and a "
@@ -369,6 +481,11 @@ def _build_alternative(
         advantages=template.advantages,
         trade_offs=template.trade_offs,
         open_questions=(template.open_question,),
+        visual_language=create_visual_language(
+            choices=template.visual,
+            product_name=template.product_name,
+            rationale=template.visual_rationale,
+        ),
     )
 
 

@@ -495,3 +495,19 @@ def test_fake_design_proposal_maps_invalid_domain_output_to_typed_issue(
     assert result.status is DesignProposalStatus.REJECTED
     assert result.issue is DesignProposalIssueCode.INVALID_PROVIDER_OUTPUT
     assert result.package is None
+
+
+def test_fake_design_alternatives_carry_distinct_visual_languages() -> None:
+    result = asyncio.run(FakeDeterministicDesignAdapter().propose(proposal_request()))
+    languages = [alternative.visual_language for alternative in result.package.alternatives]
+    assert all(language is not None for language in languages)
+    archetypes = {language.choices.archetype for language in languages}
+    families = {language.choices.hue_family for language in languages}
+    assert len(archetypes) == len(languages)
+    assert len(families) == len(languages)
+    assert {language.product_name for language in languages} == {
+        "Guided workspace",
+        "Operations desk",
+        "Focused workspace",
+    }
+    assert all(language.palette_roles["primary"].startswith("#") for language in languages)

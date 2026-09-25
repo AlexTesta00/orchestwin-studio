@@ -449,6 +449,7 @@ def design_markdown(
             "open_questions",
         ):
             lines.extend(["", f"#### {_title(key)}", "", *_bullets(item[key])])
+        lines.extend(_visual_language_lines(item.get("visual_language")))
         lines.append("")
     lines.extend(["## Concerns", ""])
     for concern in package["concerns"]:
@@ -461,6 +462,26 @@ def design_markdown(
         lines.append(f"- {_UNSET}")
     lines.extend(["", "## Open questions", "", *_bullets(package["open_questions"]), ""])
     return "\n".join(lines)
+
+
+def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
+    if visual is None:
+        return []
+    choices = visual["choices"]
+    described = ", ".join(
+        f"{name.replace('_', ' ')} {_title(value)}" for name, value in choices.items()
+    )
+    return [
+        "",
+        "#### Visual language",
+        "",
+        f"Product name: {visual['product_name']}. Catalog version {visual['catalog_version']} "
+        f"({visual['catalog_content_hash']}). {described}.",
+        "",
+        f"Rationale: {visual['rationale']}",
+        "",
+        *_table(("Role", "Colour"), visual["palette"].items()),
+    ]
 
 
 def critiques_markdown(version: DesignPackageVersion) -> str:
