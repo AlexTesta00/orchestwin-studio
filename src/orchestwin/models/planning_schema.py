@@ -57,6 +57,10 @@ def constrain_planning_schema(schema, context, task):
             return
         schema["properties"]["recommendation"].update(reference("DES"))
 
+        if "TwinFitDraft" in definitions:
+            definitions["VisualLanguageDraft"]["properties"]["twin_fit"] = _fixed_array(
+                definitions, "TwinFitDraft", [{"twin": {"const": key}} for key in context["twins"]]
+            )
         schema["properties"]["alternatives"] = _fixed_array(
             definitions, "AlternativeDraft", [{"code": {"const": code}} for code in known["DES"]]
         )

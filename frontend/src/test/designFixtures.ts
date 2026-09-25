@@ -147,6 +147,13 @@ export const BASE_DESIGN_PACKAGE: DesignPackagePayload = {
         product_name: "Reservation desk",
         rationale:
           "A calm emerald dashboard keeps availability visible for experienced receptionists.",
+        twin_fit: [
+          {
+            twin_id: TWIN_ID,
+            name: "Receptionist Twin",
+            statement: "Large tiles and a calm palette suit a receptionist scanning the desk.",
+          },
+        ],
         palette: {
           background: "#fafafa",
           surface: "#fefefe",

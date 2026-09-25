@@ -57,7 +57,7 @@ def test_visual_language_normalizes_text_and_rejects_bad_values():
         )
     with pytest.raises(ValueError, match="must be normalized"):
         replace(language, product_name=" Reservation desk")
-    with pytest.raises(ValueError, match="every role"):
+    with pytest.raises(ValueError, match="every role exactly once"):
         replace(language, palette=language.palette[:-1])
     with pytest.raises(ValueError, match="lowercase hex"):
         replace(language, palette=(("background", "#FFFFFF"), *language.palette[1:]))
@@ -80,7 +80,9 @@ def test_visual_language_snapshot_round_trips_and_rejects_non_canonical_payloads
         "rationale",
         "palette",
         "tokens",
+        "twin_fit",
     }
+    assert snapshot["twin_fit"][0]["name"] == "Hotel Receptionist Twin"
     restored = visual_language_from_snapshot(snapshot)
     assert restored == language
     assert isinstance(restored, VisualLanguage)
@@ -100,6 +102,24 @@ def test_visual_language_snapshot_round_trips_and_rejects_non_canonical_payloads
         visual_language_from_snapshot({**snapshot, "palette": {"background": 1}})
     with pytest.raises(ValueError, match="must be a mapping"):
         visual_language_from_snapshot({**snapshot, "choices": []})
+
+
+def test_visual_language_tolerates_reordered_keys_as_postgres_jsonb_returns_them():
+    language = design_fixtures.visual_language()
+    snapshot = language.to_snapshot()
+    shuffled = {
+        **snapshot,
+        "palette": dict(
+            sorted(snapshot["palette"].items(), key=lambda item: (len(item[0]), item[0]))
+        ),
+        "tokens": dict(
+            sorted(snapshot["tokens"].items(), key=lambda item: (len(item[0]), item[0]))
+        ),
+    }
+    restored = visual_language_from_snapshot(shuffled)
+    assert restored == language
+    assert tuple(role for role, _ in restored.palette) == PALETTE_ROLES
+    assert restored.content_hash == language.content_hash
 
 
 def test_alternatives_carry_the_visual_language_only_when_present():

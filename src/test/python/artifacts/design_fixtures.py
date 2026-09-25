@@ -54,7 +54,7 @@ from orchestwin.artifacts.visual_catalog import (
     TypeScale,
     VisualChoices,
 )
-from orchestwin.artifacts.visual_language import create_visual_language
+from orchestwin.artifacts.visual_language import create_twin_fit, create_visual_language
 from orchestwin.projects.requirements import (
     RequirementKind,
     RequirementPriority,
@@ -291,6 +291,12 @@ def visual_language():
         product_name="Reservation desk",
         rationale=(
             "A calm emerald dashboard keeps availability visible for experienced receptionists."
+        ),
+        twin_fit=(
+            create_twin_fit(
+                reference=twin_reference(),
+                statement="Large tiles and a calm palette suit a receptionist scanning the desk.",
+            ),
         ),
     )
 

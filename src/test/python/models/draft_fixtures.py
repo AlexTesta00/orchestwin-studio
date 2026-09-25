@@ -92,12 +92,22 @@ def proposal_draft(stage, value, request):
             }.items():
                 if old in item:
                     item[new] = item.pop(old)
+        keys = {
+            str(twin.reference.twin_id): f"T{index}"
+            for index, twin in enumerate(request.user_modeling.user_twins, 1)
+        }
+        raw_alternatives = {entry["code"]: entry for entry in raw["alternatives"]}
         for item in result["alternatives"]:
-            language = item.pop("visual_language")
+            item.pop("visual_language")
+            language = raw_alternatives[item["code"]]["visual_language"]
             item["visual"] = {
                 **language["choices"],
                 "approach_rationale": language["rationale"],
                 "product_name": language["product_name"],
+                "twin_fit": [
+                    {"twin": keys[fit["twin_id"]], "statement": fit["statement"]}
+                    for fit in language["twin_fit"]
+                ],
             }
         for item in result["critiques"]:
             item["alternative"] = item.pop("design_alternative_id")

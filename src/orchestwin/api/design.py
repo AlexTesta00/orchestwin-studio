@@ -175,6 +175,12 @@ class VisualChoicesPayload(ApiModel):
     tone: DesignTone
 
 
+class TwinFitPayload(ApiModel):
+    twin_id: UUID
+    name: str
+    statement: str
+
+
 class VisualLanguagePayload(ApiModel):
     catalog_version: int
     catalog_content_hash: str
@@ -183,6 +189,7 @@ class VisualLanguagePayload(ApiModel):
     rationale: str
     palette: dict[str, str]
     tokens: dict[str, str]
+    twin_fit: tuple[TwinFitPayload, ...]
 
 
 class DesignAlternativePayload(ApiModel):

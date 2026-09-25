@@ -53,6 +53,10 @@ def visual(**overrides) -> VisualLanguageDraft:
         "saturation": "BALANCED",
         "surface_tone": "TINTED",
         "tone": "INSTITUTIONAL",
+        "twin_fit": (
+            {"twin": "T1", "statement": "Large controls and a calm palette suit the receptionist."},
+            {"twin": "T2", "statement": "Compact tiles let the manager scan the day at a glance."},
+        ),
         "type_scale": "REGULAR",
     }
     values.update(overrides)
@@ -216,6 +220,28 @@ def test_bind_design_rejects_navigation_and_flow_mismatches():
             request,
             draft(context, second=alternative("DES-002", second_visual(), areas=("Overview",))),
         )
+
+
+def test_bind_design_requires_one_twin_fit_per_twin():
+    request = proposal_request()
+    context, _ = design_context(request)
+    partial = visual(twin_fit=({"twin": "T1", "statement": "Only one twin covered."},))
+    with pytest.raises(ValueError, match="cover every twin exactly once"):
+        bind(request, draft(context, first=alternative("DES-001", partial)))
+    doubled = visual(
+        twin_fit=(
+            {"twin": "T1", "statement": "First."},
+            {"twin": "T1", "statement": "Again."},
+        )
+    )
+    with pytest.raises(ValueError, match="cover every twin exactly once"):
+        bind(request, draft(context, first=alternative("DES-001", doubled)))
+    package = bind(request, draft(context))
+    fits = package.alternatives[0].visual_language.twin_fit
+    assert [item.name for item in fits] == [
+        twin.reference.name for twin in request.user_modeling.user_twins
+    ]
+    assert fits[0].statement.startswith("Large controls")
 
 
 def test_alternative_schema_exposes_the_visual_language_through_catalog_enums():

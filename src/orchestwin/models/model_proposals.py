@@ -78,8 +78,15 @@ DESIGN_VISUAL_INSTRUCTION = (
     + " Write approach_rationale first and ground it in the domain, the brief and the twins' "
     "age, context of use, accessibility needs and vocabulary; the archetype follows the shape "
     "of the task and its flows, the colours and typography follow the domain and the tone. "
-    "product_name is a short product name in the requirements' language. The two alternatives "
-    "must read as two different products, never two skins of the same layout."
+    "product_name is a short product name in the requirements' language. twin_fit holds one "
+    "entry per twin key, one sentence each on how the archetype, colours, typography, density "
+    "and controls serve that twin's age, context of use, accessibility needs and vocabulary; "
+    "with declared visual or motor impairments choose a HIGH_CONTRAST mode, COMFORTABLE or "
+    "SPACIOUS density and FILLED or OUTLINED buttons. Critiques judge the visual language too "
+    "(archetype, palette and mode, typography, density, controls) from the twin's perspective, "
+    "and accessibility_observations must address it whenever the twin has accessibility "
+    "needs. The two alternatives must read as two different products, never two skins of the "
+    "same layout."
 )
 
 
@@ -274,6 +281,16 @@ class ModelDesignAdapter:
 
         context, twins = design_context(request)
         twin_keys = "/".join(twins)
+        instruction = (
+            "Propose exactly two distinct design approaches in the requirements' language. "
+            "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
+            "DRK-001 for concerns; every code must be unique. References use supplied "
+            f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
+            "critique for EVERY alternative/twin pair; cite exact observation_keys from "
+            "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
+            "Do not invent empirical evidence, owner selection, approval or a prototype. "
+            + DESIGN_VISUAL_INSTRUCTION
+        )
         draft = await self.generator.generate(
             task="design",
             context=context,
@@ -281,16 +298,7 @@ class ModelDesignAdapter:
             max_output_tokens=min(
                 DESIGN_OUTPUT_TOKENS, self.generator.configuration.max_output_tokens
             ),
-            instruction=(
-                "Propose exactly two distinct design approaches in the requirements' language. "
-                "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
-                "DRK-001 for concerns; every code must be unique. References use supplied "
-                f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
-                "critique for EVERY alternative/twin pair; cite exact observation_keys from "
-                "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
-                "Do not invent empirical evidence, owner selection, approval or a prototype. "
-                + DESIGN_VISUAL_INSTRUCTION
-            ),
+            instruction=instruction,
         )
         output = bind_design(
             draft, request, twins, lambda code: _model_reference(self.generator, code)
