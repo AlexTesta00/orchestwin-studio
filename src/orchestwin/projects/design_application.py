@@ -53,6 +53,7 @@ class DesignGenerationIssueCode(StrEnum):
     PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
     REQUIREMENTS_APPROVAL_REQUIRED = "REQUIREMENTS_APPROVAL_REQUIRED"
     DESIGN_PACKAGE_ALREADY_EXISTS = "DESIGN_PACKAGE_ALREADY_EXISTS"
+    DESIGN_PACKAGE_NOT_FOUND = "DESIGN_PACKAGE_NOT_FOUND"
     PROPOSAL_REJECTED = "PROPOSAL_REJECTED"
     INVALID_PROPOSAL = "INVALID_PROPOSAL"
     CONTEXT_CHANGED = "CONTEXT_CHANGED"
@@ -334,6 +335,75 @@ class LocalDesignGenerationService:
             status=DesignGenerationStatus.CREATED,
             version=version,
         )
+
+    @evidence_application
+    async def regenerate(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+    ) -> DesignGenerationResult:
+        context = await self._governance.load_current(
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+        )
+        issue = _governance_issue(context)
+        if issue is not None:
+            return DesignGenerationResult(status=DesignGenerationStatus.REJECTED, issue=issue)
+        if context is None:
+            raise RuntimeError("ready design context cannot be None")
+        current = await self._current_version(owner_user_id=owner_user_id, project_id=project_id)
+        if current is None:
+            return DesignGenerationResult(
+                status=DesignGenerationStatus.REJECTED,
+                issue=DesignGenerationIssueCode.DESIGN_PACKAGE_NOT_FOUND,
+            )
+        proposal = await self._proposals.propose(context.to_proposal_request())
+        if proposal.status is not DesignProposalStatus.PROPOSED:
+            return DesignGenerationResult(
+                status=DesignGenerationStatus.REJECTED,
+                issue=DesignGenerationIssueCode.PROPOSAL_REJECTED,
+                proposal_issue=proposal.issue,
+            )
+        if proposal.package is None or not _proposal_matches_context(proposal.package, context):
+            return DesignGenerationResult(
+                status=DesignGenerationStatus.REJECTED,
+                issue=DesignGenerationIssueCode.INVALID_PROPOSAL,
+            )
+        if not await self._context_is_unchanged(
+            owner_user_id=owner_user_id, project_id=project_id, previous=context
+        ):
+            return DesignGenerationResult(
+                status=DesignGenerationStatus.REJECTED,
+                issue=DesignGenerationIssueCode.CONTEXT_CHANGED,
+            )
+        async with self._uow_factory(owner_user_id=owner_user_id) as unit:
+            latest = await unit.packages.current(project_id=project_id)
+            if latest is None or latest.id != current.id:
+                return DesignGenerationResult(
+                    status=DesignGenerationStatus.REJECTED,
+                    issue=DesignGenerationIssueCode.CONTEXT_CHANGED,
+                )
+            version = DesignPackageVersion(
+                id=self._uuid_factory(),
+                project_id=project_id,
+                version_number=current.version_number + 1,
+                based_on_version_number=current.version_number,
+                package=proposal.package,
+                content_hash=proposal.package.content_hash,
+                created_by_user_id=owner_user_id,
+                created_at=_aware(self._clock()),
+            )
+            append_status = await unit.packages.append(version)
+            if append_status is not DesignVersionAppendStatus.APPENDED:
+                return DesignGenerationResult(
+                    status=DesignGenerationStatus.REJECTED,
+                    issue=DesignGenerationIssueCode.PERSISTENCE_REJECTED,
+                    persistence_status=append_status,
+                )
+            await bind_model_artifacts(unit, "DESIGN", (version,))
+            await unit.commit()
+        return DesignGenerationResult(status=DesignGenerationStatus.CREATED, version=version)
 
     async def _current_version(
         self,
