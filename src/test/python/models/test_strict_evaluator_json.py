@@ -127,3 +127,28 @@ def test_invalid_pattern_schema_fails_closed(schema):
 def test_confidence_type_and_range(value):
     with pytest.raises(ValueError):
         validate_evaluator_value(value, {"type": "number", "minimum": 0, "maximum": 1})
+
+
+def test_string_length_bound_is_validated_without_repair():
+    schema = copy.deepcopy(SCHEMA)
+    schema["properties"]["overall_summary"]["maxLength"] = 12
+    check_evaluator_schema(schema)
+    validate_evaluator_value(GOOD, schema)
+    with pytest.raises(ValueError, match="OUTPUT_SCHEMA_STRING_TOO_LONG"):
+        validate_evaluator_value({**GOOD, "overall_summary": "Unavailable now."}, schema)
+
+
+@pytest.mark.parametrize(
+    "target, length",
+    [
+        ("overall_summary", 0),
+        ("overall_summary", "12"),
+        ("abstained", 12),
+        ("evidence_gaps", 12),
+    ],
+)
+def test_invalid_length_bound_fails_closed(target, length):
+    schema = copy.deepcopy(SCHEMA)
+    schema["properties"][target]["maxLength"] = length
+    with pytest.raises(ValueError, match="EVALUATOR_SCHEMA_LENGTH_INVALID"):
+        check_evaluator_schema(schema)

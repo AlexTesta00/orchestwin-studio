@@ -21,6 +21,7 @@ KEYWORDS = frozenset(
         "additionalProperties",
         "items",
         "maxItems",
+        "maxLength",
         "enum",
         "minimum",
         "maximum",
@@ -78,6 +79,12 @@ def check_evaluator_schema(schema: dict[str, Any], *, _depth: int = 0) -> None:
         "EVALUATOR_SCHEMA_TYPE_UNSUPPORTED",
     )
     require(schema.get("format") in (None, "uuid"), "EVALUATOR_SCHEMA_FORMAT_UNSUPPORTED")
+    if "maxLength" in schema:
+        length = schema["maxLength"]
+        require(
+            kind == "string" and type(length) is int and length >= 1,
+            "EVALUATOR_SCHEMA_LENGTH_INVALID",
+        )
     if "pattern" in schema:
         pattern = schema["pattern"]
         require(
@@ -137,6 +144,9 @@ def validate_evaluator_value(value: Any, schema: dict[str, Any]) -> None:
             validate_evaluator_value(item, schema["items"])
     elif kind == "string":
         require(isinstance(value, str), "OUTPUT_SCHEMA_STRING_INVALID")
+        require(
+            len(value) <= schema.get("maxLength", MAX_JSON_BYTES), "OUTPUT_SCHEMA_STRING_TOO_LONG"
+        )
         if schema.get("format") == "uuid":
             require(str(UUID(value)) == value.casefold(), "OUTPUT_SCHEMA_UUID_INVALID")
         pattern = schema.get("pattern")

@@ -52,6 +52,16 @@ FINDING_ID_PATTERN: Final = r"^UTF-[0-9]{3,6}$"
 _MAX_SUMMARY_LENGTH: Final = 4_000
 _MAX_GAP_LENGTH: Final = 1_000
 _MAX_FINDINGS: Final = 100
+_GENERATED_FINDINGS: Final = 20
+_GENERATED_LOCATION_LENGTH: Final = 500
+_GENERATED_SUMMARY_LENGTH: Final = 600
+_GENERATED_RATIONALE_LENGTH: Final = 1_500
+_GENERATED_RECOMMENDATION_LENGTH: Final = 800
+_GENERATED_REFERENCE_LENGTH: Final = 512
+_GENERATED_REFERENCES: Final = 8
+_GENERATED_OVERALL_SUMMARY_LENGTH: Final = 1_500
+_GENERATED_GAP_LENGTH: Final = 600
+_GENERATED_GAPS: Final = 10
 
 
 class ModelGatewayEvaluationErrorCode(StrEnum):
@@ -440,15 +450,22 @@ def _output_schema_payload(*, require_finding_id_pattern: bool = False) -> dict[
             "finding_id": finding_id_schema,
             "artifact_id": {"type": "string", "format": "uuid"},
             "artifact_version": {"type": "integer", "minimum": 1},
-            "location": {"type": "string"},
-            "summary": {"type": "string"},
-            "rationale": {"type": "string"},
+            "location": {"type": "string", "maxLength": _GENERATED_LOCATION_LENGTH},
+            "summary": {"type": "string", "maxLength": _GENERATED_SUMMARY_LENGTH},
+            "rationale": {"type": "string", "maxLength": _GENERATED_RATIONALE_LENGTH},
             "criterion": {"enum": [item.value for item in SyntheticFindingCriterion]},
             "severity": {"enum": [item.value for item in SyntheticFindingSeverity]},
             "epistemic_status": {"enum": [item.value for item in SyntheticFindingEpistemicStatus]},
-            "evidence_refs": {"type": "array", "items": {"type": "string"}},
+            "evidence_refs": {
+                "type": "array",
+                "maxItems": _GENERATED_REFERENCES,
+                "items": {"type": "string", "maxLength": _GENERATED_REFERENCE_LENGTH},
+            },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-            "recommended_action": {"type": "string"},
+            "recommended_action": {
+                "type": "string",
+                "maxLength": _GENERATED_RECOMMENDATION_LENGTH,
+            },
             "requires_human_validation": {"type": "boolean"},
         },
     }
@@ -457,13 +474,20 @@ def _output_schema_payload(*, require_finding_id_pattern: bool = False) -> dict[
         "additionalProperties": False,
         "required": ["overall_summary", "findings", "evidence_gaps", "abstained"],
         "properties": {
-            "overall_summary": {"type": "string"},
+            "overall_summary": {
+                "type": "string",
+                "maxLength": _GENERATED_OVERALL_SUMMARY_LENGTH,
+            },
             "findings": {
                 "type": "array",
-                "maxItems": _MAX_FINDINGS,
+                "maxItems": _GENERATED_FINDINGS,
                 "items": finding,
             },
-            "evidence_gaps": {"type": "array", "items": {"type": "string"}},
+            "evidence_gaps": {
+                "type": "array",
+                "maxItems": _GENERATED_GAPS,
+                "items": {"type": "string", "maxLength": _GENERATED_GAP_LENGTH},
+            },
             "abstained": {"type": "boolean"},
         },
     }
