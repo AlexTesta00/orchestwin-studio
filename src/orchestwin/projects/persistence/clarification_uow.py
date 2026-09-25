@@ -17,7 +17,6 @@ from orchestwin.projects.persistence.briefs import (
 )
 from orchestwin.projects.persistence.clarification import (
     SqlAlchemyBriefAssumptionRepository,
-    SqlAlchemyClarificationRoundRepository,
 )
 
 
@@ -32,7 +31,6 @@ class SqlAlchemyProjectClarificationUnitOfWork:
         self._session: AsyncSession | None = None
         self._current_briefs: SqlAlchemyCurrentProjectBriefRepository | None = None
         self._briefs: SqlAlchemyProjectBriefRepository | None = None
-        self._rounds: SqlAlchemyClarificationRoundRepository | None = None
         self._assumptions: SqlAlchemyBriefAssumptionRepository | None = None
 
     @property
@@ -56,16 +54,6 @@ class SqlAlchemyProjectClarificationUnitOfWork:
         return self._briefs
 
     @property
-    def rounds(
-        self,
-    ) -> SqlAlchemyClarificationRoundRepository:
-        """Return the clarification-round repository after entry."""
-        if self._rounds is None:
-            raise RuntimeError("Project clarification unit of work is not open")
-
-        return self._rounds
-
-    @property
     def assumptions(
         self,
     ) -> SqlAlchemyBriefAssumptionRepository:
@@ -84,7 +72,6 @@ class SqlAlchemyProjectClarificationUnitOfWork:
 
         self._current_briefs = SqlAlchemyCurrentProjectBriefRepository(self._session)
         self._briefs = SqlAlchemyProjectBriefRepository(self._session)
-        self._rounds = SqlAlchemyClarificationRoundRepository(self._session)
         self._assumptions = SqlAlchemyBriefAssumptionRepository(self._session)
 
         return self
@@ -109,7 +96,6 @@ class SqlAlchemyProjectClarificationUnitOfWork:
             self._session = None
             self._current_briefs = None
             self._briefs = None
-            self._rounds = None
             self._assumptions = None
 
 

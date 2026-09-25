@@ -48,16 +48,6 @@ from orchestwin.projects.briefs import (
     ProjectBriefVersion,
     create_project_brief,
 )
-from orchestwin.projects.clarification import (
-    ClarificationAnswer,
-    ClarificationApplicationStatus,
-    ClarificationQuestionSpec,
-    apply_clarification_answers,
-    focused_clarification_questions,
-)
-from orchestwin.projects.clarification_state import (
-    MAX_CLARIFICATION_ROUNDS,
-)
 from orchestwin.projects.domain import (
     ProjectMode,
 )
@@ -104,7 +94,7 @@ BASE_TIME = datetime(
 class ReadyProjectScenario:
     """Artifacts produced by the complete governed setup journey."""
 
-    clarification_round_count: int
+    brief_revision_count: int
     brief_version: ProjectBriefVersion
     brief_gate: HumanGate
     context: TeamSelectionContext
@@ -156,83 +146,34 @@ def initial_brief_version() -> ProjectBriefVersion:
     )
 
 
-def answer_for_question(
-    question: ClarificationQuestionSpec,
-) -> ClarificationAnswer:
-    """Return one deterministic answer for a focused question."""
-    text_answers = {
-        BriefField.PROBLEM: (
-            "Hotel staff currently coordinate bookings through disconnected spreadsheets."
-        ),
-        BriefField.DOMAIN: ("Hospitality and hotel operations."),
-    }
-    text_value = text_answers.get(question.field)
-
-    if text_value is not None:
-        return ClarificationAnswer.text(
-            question_id=(question.question_id),
-            value=text_value,
-        )
-
-    if not question.unknown_allowed:
-        raise AssertionError(
-            f"the acceptance fixture requires UNKNOWN support for {question.field.value}"
-        )
-
-    return ClarificationAnswer.unknown(question_id=(question.question_id))
-
-
-def clarify_brief(
+def complete_brief(
     source: ProjectBriefVersion,
 ) -> tuple[
     ProjectBriefVersion,
     int,
 ]:
-    """Resolve every missing field within the configured round limit."""
-    current = source
-    round_count = 0
+    """Resolve every missing field with one owner revision."""
+    brief = source.brief
+    completed = replace(
+        brief,
+        problem="Hotel staff currently coordinate bookings through disconnected spreadsheets.",
+        domain="Hospitality and hotel operations.",
+        unknown_fields=frozenset(brief.missing_fields - {BriefField.PROBLEM, BriefField.DOMAIN}),
+    )
+    version_number = source.version_number + 1
 
-    while current.brief.missing_fields:
-        if round_count >= MAX_CLARIFICATION_ROUNDS:
-            break
-
-        questions = focused_clarification_questions(
-            current.brief,
-            maximum_questions=5,
-        )
-
-        if not questions:
-            raise AssertionError("missing fields must produce clarification questions")
-
-        answers = tuple(answer_for_question(question) for question in questions)
-        application = apply_clarification_answers(
-            current.brief,
-            answers,
-        )
-
-        if (
-            application.status is not ClarificationApplicationStatus.APPLIED
-            or application.updated_brief is None
-        ):
-            raise AssertionError("valid clarification answers must update the Project Brief")
-
-        round_count += 1
-        updated_brief = application.updated_brief
-        version_number = current.version_number + 1
-        current = ProjectBriefVersion(
+    return (
+        ProjectBriefVersion(
             id=brief_version_id(version_number),
             project_id=PROJECT_ID,
             version_number=version_number,
-            schema_version=(updated_brief.SCHEMA_VERSION),
-            brief=updated_brief,
-            content_hash=(updated_brief.content_hash),
+            schema_version=(completed.SCHEMA_VERSION),
+            brief=completed,
+            content_hash=(completed.content_hash),
             created_by_user_id=OWNER_ID,
-            created_at=(BASE_TIME + timedelta(minutes=round_count)),
-        )
-
-    return (
-        current,
-        round_count,
+            created_at=(BASE_TIME + timedelta(minutes=1)),
+        ),
+        1,
     )
 
 
@@ -355,7 +296,7 @@ def generated_team_proposal(
 
 def build_ready_project() -> ReadyProjectScenario:
     """Run the complete Sprint 03 governed setup journey."""
-    brief_version, round_count = clarify_brief(initial_brief_version())
+    brief_version, revision_count = complete_brief(initial_brief_version())
 
     if brief_version.brief.missing_fields:
         raise AssertionError("clarification must resolve every missing field")
@@ -424,7 +365,7 @@ def build_ready_project() -> ReadyProjectScenario:
     )
 
     return ReadyProjectScenario(
-        clarification_round_count=(round_count),
+        brief_revision_count=(revision_count),
         brief_version=brief_version,
         brief_gate=brief_gate,
         context=context,
@@ -498,7 +439,7 @@ def test_governed_project_setup_reaches_readiness_after_two_approvals() -> None:
     """Complete clarification, team selection, and both human gates."""
     scenario = build_ready_project()
 
-    assert scenario.clarification_round_count == MAX_CLARIFICATION_ROUNDS
+    assert scenario.brief_revision_count == 1
     assert scenario.brief_version.brief.missing_fields == frozenset()
     assert BriefField.TEMPORAL_CONSTRAINTS in scenario.brief_version.brief.unknown_fields
     assert BriefField.BUDGET in scenario.brief_version.brief.unknown_fields

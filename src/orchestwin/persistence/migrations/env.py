@@ -27,7 +27,6 @@ from orchestwin.persistence.orm import (
 )
 from orchestwin.projects.persistence.models import (
     BriefAssumptionRecord,
-    ClarificationRoundRecord,
     ProjectBriefVersionRecord,
     ProjectRecord,
 )
@@ -60,7 +59,6 @@ _IMPORTED_MODELS = (
     AuthSessionRecord,
     ProjectRecord,
     ProjectBriefVersionRecord,
-    ClarificationRoundRecord,
     BriefAssumptionRecord,
     HumanGateRecord,
     HumanGateEventRecord,

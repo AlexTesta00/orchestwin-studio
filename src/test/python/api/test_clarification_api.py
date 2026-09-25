@@ -34,28 +34,16 @@ from orchestwin.projects.briefs import (
     ProjectBriefVersion,
     create_project_brief,
 )
-from orchestwin.projects.clarification import (
-    CLARIFICATION_CATALOG_VERSION,
-    ClarificationAnswer,
-    clarification_question_for,
-)
 from orchestwin.projects.clarification_application import (
     BriefAssumptionCreationResult,
     BriefAssumptionCreationStatus,
     BriefAssumptionDecisionResult,
     BriefAssumptionDecisionStatus,
-    ClarificationNextStep,
-    ClarificationRoundAnswerResult,
-    ClarificationRoundAnswerStatus,
-    ClarificationRoundStartResult,
-    ClarificationRoundStartStatus,
 )
 from orchestwin.projects.clarification_state import (
     BriefAssumptionSource,
     accept_brief_assumption,
-    complete_clarification_round,
     create_brief_assumption,
-    create_clarification_round,
 )
 from orchestwin.workflow.gates import (
     HumanGateAction,
@@ -67,7 +55,6 @@ from orchestwin.workflow.gates import (
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000001")
 PROJECT_ID = UUID("00000000-0000-4000-8000-000000000010")
-ROUND_ID = UUID("00000000-0000-4000-8000-000000000020")
 ASSUMPTION_ID = UUID("00000000-0000-4000-8000-000000000030")
 GATE_ID = UUID("00000000-0000-4000-8000-000000000040")
 NOW = datetime(
@@ -156,16 +143,6 @@ class FakeClarificationService:
         source_version, clarified_version = build_versions()
         self.source_version = source_version
         self.clarified_version = clarified_version
-        self.round = create_clarification_round(
-            round_id=ROUND_ID,
-            project_id=PROJECT_ID,
-            source_brief_version_number=1,
-            round_number=1,
-            catalog_version=(CLARIFICATION_CATALOG_VERSION),
-            questions=[clarification_question_for(BriefField.DESCRIPTION)],
-            created_by_user_id=USER_ID,
-            created_at=NOW,
-        )
         self.assumption = create_brief_assumption(
             assumption_id=ASSUMPTION_ID,
             project_id=PROJECT_ID,
@@ -176,79 +153,6 @@ class FakeClarificationService:
             created_by_user_id=USER_ID,
             created_at=NOW,
         )
-
-    async def start_round(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ) -> ClarificationRoundStartResult:
-        """Return one deterministic started round."""
-        del project_id
-        del owner_user_id
-
-        return ClarificationRoundStartResult(
-            status=(ClarificationRoundStartStatus.STARTED),
-            round_state=self.round,
-        )
-
-    async def answer_round(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-        round_id: UUID,
-        answers: tuple[
-            ClarificationAnswer,
-            ...,
-        ],
-    ) -> ClarificationRoundAnswerResult:
-        """Return one deterministic clarified brief."""
-        del project_id
-        del owner_user_id
-        del answers
-
-        completed = complete_clarification_round(
-            self.round,
-            resulting_brief_version_number=2,
-            answered_at=(NOW + timedelta(minutes=1)),
-        )
-
-        if round_id != self.round.id:
-            return ClarificationRoundAnswerResult(
-                status=(ClarificationRoundAnswerStatus.ROUND_NOT_FOUND)
-            )
-
-        return ClarificationRoundAnswerResult(
-            status=(ClarificationRoundAnswerStatus.APPLIED),
-            round_state=completed,
-            version=self.clarified_version,
-            next_step=(ClarificationNextStep.BRIEF_READY_FOR_APPROVAL),
-        )
-
-    async def current_round(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ):
-        """Return the deterministic open round."""
-        del project_id
-        del owner_user_id
-
-        return self.round
-
-    async def round_history(
-        self,
-        *,
-        project_id: UUID,
-        owner_user_id: UUID,
-    ):
-        """Return one round of history."""
-        del project_id
-        del owner_user_id
-
-        return (self.round,)
 
     async def create_assumption(
         self,
@@ -471,38 +375,12 @@ def authorization_header() -> dict[str, str]:
 def test_clarification_routes_require_authentication() -> None:
     """Reject anonymous clarification access."""
     with build_client() as client:
-        response = client.post(f"/api/v1/projects/{PROJECT_ID}/clarification-rounds")
+        response = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions",
+            json={"field": "budget", "statement": "Approximately EUR 5,000."},
+        )
 
     assert response.status_code == 401
-
-
-def test_start_and_answer_clarification_round() -> None:
-    """Expose a focused question and resulting brief version."""
-    with build_client() as client:
-        started = client.post(
-            (f"/api/v1/projects/{PROJECT_ID}/clarification-rounds"),
-            headers=authorization_header(),
-        )
-        answered = client.post(
-            (f"/api/v1/projects/{PROJECT_ID}/clarification-rounds/{ROUND_ID}/answers"),
-            headers=authorization_header(),
-            json={
-                "answers": [
-                    {
-                        "question_id": ("project-brief.description.v1"),
-                        "kind": "text",
-                        "text_value": ("Clarified description"),
-                    }
-                ]
-            },
-        )
-
-    assert started.status_code == 201
-    assert started.json()["round"]["questions"][0]["field"] == "description"
-
-    assert answered.status_code == 201
-    assert answered.json()["brief_version"]["version_number"] == 2
-    assert answered.json()["next_step"] == "BRIEF_READY_FOR_APPROVAL"
 
 
 def test_assumption_creation_and_acceptance_are_explicit() -> None:
