@@ -38,6 +38,7 @@ from orchestwin.artifacts.prototypes import (
     create_prototype_transition,
 )
 from orchestwin.artifacts.references import ArtifactKind, VersionedArtifactReference
+from orchestwin.artifacts.visual_language import visual_language_from_snapshot
 from orchestwin.projects.requirements_primitives import UserTwinVersionReference
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
@@ -291,12 +292,7 @@ def _alternative_from_snapshot(payload: Mapping[str, object]):
             _required(payload, "code"),
             label="Design Alternative code",
         ),
-        approach=DesignApproach(
-            _string(
-                _required(payload, "approach"),
-                label="Design Alternative approach",
-            )
-        ),
+        approach=_approach(payload.get("approach")),
         title=_string(
             _required(payload, "title"),
             label="Design Alternative title",
@@ -363,6 +359,21 @@ def _alternative_from_snapshot(payload: Mapping[str, object]):
             _required(payload, "open_questions"),
             label="Design Alternative open questions",
         ),
+        visual_language=_visual_language(payload.get("visual_language")),
+    )
+
+
+def _approach(value: object) -> DesignApproach | None:
+    if value is None:
+        return None
+    return DesignApproach(_string(value, label="Design Alternative approach"))
+
+
+def _visual_language(payload: object):
+    if payload is None:
+        return None
+    return visual_language_from_snapshot(
+        _mapping(payload, label="Design Alternative visual language")
     )
 
 

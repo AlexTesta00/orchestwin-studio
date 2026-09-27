@@ -1,5 +1,7 @@
 """Constrain planning references to evidence keys and typed artifact codes."""
 
+from orchestwin.artifacts.visual_exploration import exploration_bindings
+
 
 def constrain_planning_schema(schema, context, task):
     if task not in {"requirements", "design", "architecture"}:
@@ -48,7 +50,7 @@ def constrain_planning_schema(schema, context, task):
             target = field.get("items", field)
             if name in prefixes:
                 target.update(reference(prefixes[name]))
-            elif name in {"twin", "twins"}:
+            elif name in {"twin", "twins", "as_twin"}:
                 target.update(type="string", enum=list(context["twins"]))
             elif name == "sources":
                 target.update(type="string", enum=list(context["evidence"]))
@@ -57,8 +59,18 @@ def constrain_planning_schema(schema, context, task):
             return
         schema["properties"]["recommendation"].update(reference("DES"))
 
+        if "TwinFitDraft" in definitions:
+            definitions["VisualLanguageDraft"]["properties"]["twin_fit"] = _fixed_array(
+                definitions, "TwinFitDraft", [{"twin": {"const": key}} for key in context["twins"]]
+            )
+        exploration = context.get("visual_exploration") or {}
         schema["properties"]["alternatives"] = _fixed_array(
-            definitions, "AlternativeDraft", [{"code": {"const": code}} for code in known["DES"]]
+            definitions,
+            "AlternativeDraft",
+            [
+                {"code": {"const": code}, **exploration_bindings(exploration, code)}
+                for code in known["DES"]
+            ],
         )
         # Coverage is a governance obligation, not something the model can omit.
         pairs = [
@@ -73,7 +85,7 @@ def constrain_planning_schema(schema, context, task):
                 {
                     "code": {"const": f"CRQ-{index:03d}"},
                     "alternative": {"const": alternative},
-                    "twin": {"const": key},
+                    "as_twin": {"const": key},
                     "observation_keys": {"items": {"enum": list(twin["observations"])}},
                 }
                 for index, (alternative, key, twin) in enumerate(pairs, 1)

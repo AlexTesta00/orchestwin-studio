@@ -69,6 +69,7 @@ export type DesignGenerationIssue =
   | "PROJECT_NOT_FOUND"
   | "REQUIREMENTS_APPROVAL_REQUIRED"
   | "DESIGN_PACKAGE_ALREADY_EXISTS"
+  | "DESIGN_PACKAGE_NOT_FOUND"
   | "PROPOSAL_REJECTED"
   | "INVALID_PROPOSAL"
   | "CONTEXT_CHANGED"
@@ -144,10 +145,73 @@ export interface DesignWorkflowPayload {
   user_story_ids: UUID[];
 }
 
+export type LayoutArchetype =
+  | "GUIDED_STEPS"
+  | "SINGLE_CARD"
+  | "LIST_DETAIL"
+  | "DASHBOARD"
+  | "SPLIT_SCREEN"
+  | "CONVERSATIONAL"
+  | "TABLE_FIRST"
+  | "CARD_GALLERY"
+  | "FEED_TIMELINE"
+  | "KANBAN_BOARD"
+  | "SEARCH_FIRST"
+  | "FOCUS_MODE";
+export type ColorMode = "LIGHT" | "DARK" | "HIGH_CONTRAST_LIGHT" | "HIGH_CONTRAST_DARK";
+export type ButtonStyle = "FILLED" | "OUTLINED" | "SOFT" | "GHOST";
+export type InputStyle = "BOXED" | "UNDERLINED" | "FILLED";
+export type NavigationPattern = "NONE" | "TOP_BAR" | "SIDE_RAIL" | "TABS";
+export type HeaderStyle = "MINIMAL" | "COMPACT_BAR" | "HERO_BAND" | "CENTERED_TITLE";
+export type BackgroundTreatment = "PLAIN" | "TINTED" | "GRADIENT" | "DOTS" | "GRID" | "STRIPES";
+export type Emphasis = "RESTRAINED" | "BALANCED" | "BOLD";
+
+export interface VisualChoicesPayload {
+  archetype: LayoutArchetype;
+  hue_family: string;
+  color_scheme: string;
+  color_mode: ColorMode;
+  saturation: string;
+  surface_tone: string;
+  heading_family: string;
+  body_family: string;
+  type_scale: string;
+  heading_case: string;
+  heading_weight: string;
+  corners: string;
+  density: string;
+  buttons: ButtonStyle;
+  inputs: InputStyle;
+  elevation: string;
+  borders: string;
+  navigation: NavigationPattern;
+  header: HeaderStyle;
+  background: BackgroundTreatment;
+  emphasis: Emphasis;
+  tone: string;
+}
+
+export interface TwinFitPayload {
+  twin_id: UUID;
+  name: string;
+  statement: string;
+}
+
+export interface VisualLanguagePayload {
+  catalog_version: number;
+  catalog_content_hash: string;
+  choices: VisualChoicesPayload;
+  product_name: string;
+  rationale: string;
+  palette: Record<string, string>;
+  tokens: Record<string, string>;
+  twin_fit: TwinFitPayload[];
+}
+
 export interface DesignAlternativePayload {
   id: UUID;
   code: string;
-  approach: DesignApproach;
+  approach?: DesignApproach | null;
   title: string;
   summary: string;
   rationale: string;
@@ -163,6 +227,7 @@ export interface DesignAlternativePayload {
   trade_offs: string[];
   assumptions: string[];
   open_questions: string[];
+  visual_language: VisualLanguagePayload | null;
 }
 
 export interface EvidenceReferencePayload {

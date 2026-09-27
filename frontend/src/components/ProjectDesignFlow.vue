@@ -9,15 +9,23 @@ import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import { apiClient } from "@/api/client";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
+import DesignLoopNextStep from "./DesignLoopNextStep.vue";
+import ProjectDesignDiscussionPanel from "./ProjectDesignDiscussionPanel.vue";
+import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
 import { designApi, type DesignApi } from "../api/design";
+import { designLoopApi, DesignLoopApiError, type DesignLoopApi } from "../api/designLoop";
+import type { RequirementsApi } from "../api/requirements";
+import { useDesignLoopStore } from "../stores/designLoop";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
 import type {
   DesignGateDecisionAction,
+  DesignGenerationPayload,
   DesignMockupPayload,
   DesignPackageDiffPayload,
   DesignRevisionDecision,
 } from "../types/design";
+import type { InsightApplicationPayload } from "../types/designLoop";
 
 type Locale = "en" | "it";
 
@@ -29,6 +37,8 @@ const props = withDefaults(
     prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: DesignApi;
+    loopApi?: DesignLoopApi;
+    requirementsApi?: Pick<RequirementsApi, "readiness" | "submitGate" | "decideGate">;
   }>(),
   {
     locale: "en",
@@ -39,13 +49,16 @@ const props = withDefaults(
 
 const auth = useAuthStore();
 const store = useDesignStore();
+const loopStore = useDesignLoopStore();
 const localError = ref<string | null>(null);
 const selectedAlternativeId = ref<string | null>(null);
 const gateReason = ref("");
 const diffReasons = reactive<Record<string, string>>({});
 const mockup = ref<DesignMockupPayload | null>(null);
 const mockupBusy = ref(false);
+const nextStepRefresh = ref(0);
 let mockupEpoch = 0;
+let handledApplicationId: string | null = null;
 
 const messages = {
   en: {
@@ -91,6 +104,14 @@ const messages = {
     chooseAlternative: "Choose one design alternative before creating the revision.",
     pendingDiff: "Review the pending changes before proposing more.",
     createMockup: "Create visual preview",
+    regenerate: "Regenerate the design alternatives",
+    regenerateHelp:
+      "After bringing insights into the brief, the requirements or the design, generate a new version and evaluate it again.",
+    regenerationRejected: "The design could not be regenerated.",
+    regenerationRequirements:
+      "The requirements have changed and are waiting for your approval. Approve them again, then regenerate the design alternatives.",
+    regenerationNoPackage:
+      "There is no design to regenerate yet. Generate the design alternatives first.",
     mockupTitle: "Design preview",
     mockupDraft: "Model-generated draft · not applied",
     mockupHelp:
@@ -143,6 +164,14 @@ const messages = {
     chooseAlternative: "Seleziona un'alternativa di design prima di creare la revisione.",
     pendingDiff: "Valuta le modifiche in attesa prima di proporne altre.",
     createMockup: "Crea anteprima visiva",
+    regenerate: "Rigenera le alternative di design",
+    regenerateHelp:
+      "Dopo aver portato gli spunti nel brief, nei requisiti o nel design, genera una nuova versione e valutala di nuovo.",
+    regenerationRejected: "Non è stato possibile rigenerare il design.",
+    regenerationRequirements:
+      "I requisiti sono cambiati e aspettano la tua approvazione. Riapprovali, poi rigenera le alternative di design.",
+    regenerationNoPackage:
+      "Non c'è ancora un design da rigenerare. Genera prima le alternative di design.",
     mockupTitle: "Anteprima del design",
     mockupDraft: "Bozza generata dal modello · non applicata",
     mockupHelp:
@@ -207,6 +236,73 @@ const canProposeSelection = computed(() => {
     mockup.value.package.owner_selected_alternative_id === selectedAlternativeId.value
   );
 });
+
+const selectedVisual = computed(
+  () =>
+    current.value?.package.alternatives.find(
+      (alternative) => alternative.id === selectedAlternativeId.value,
+    )?.visual_language ?? null,
+);
+
+const twinNames = computed(() =>
+  Object.fromEntries(
+    (current.value?.package.grounding.user_twin_references ?? []).map((reference) => [
+      reference.twin_id,
+      reference.name,
+    ]),
+  ),
+);
+
+function regenerationFailure(code: string | null, proposalIssue: string | null): string {
+  if (code === "REQUIREMENTS_APPROVAL_REQUIRED") return copy.value.regenerationRequirements;
+  if (code === "DESIGN_PACKAGE_NOT_FOUND") return copy.value.regenerationNoPackage;
+  return (
+    modelFeedback(proposalIssue, props.locale) ??
+    modelFeedback(code, props.locale) ??
+    copy.value.regenerationRejected
+  );
+}
+
+async function regenerate(): Promise<void> {
+  if (store.isBusy || mockupBusy.value || loopStore.isBusy) return;
+  localError.value = null;
+  let result: DesignGenerationPayload;
+  try {
+    result = await loopStore.regenerate(
+      props.projectId,
+      authorizedRequest,
+      props.loopApi ?? designLoopApi,
+    );
+  } catch (error) {
+    localError.value = regenerationFailure(
+      error instanceof DesignLoopApiError ? error.code : null,
+      null,
+    );
+    nextStepRefresh.value++;
+    return;
+  }
+  if (result.status !== "CREATED") {
+    localError.value = regenerationFailure(result.issue, result.proposal_issue);
+    nextStepRefresh.value++;
+    return;
+  }
+  const loaded = await run(() => store.load(props.projectId, authorizedRequest, api.value));
+  nextStepRefresh.value++;
+  if (loaded) {
+    mockupEpoch++;
+    mockup.value = null;
+    selectedAlternativeId.value = null;
+  }
+}
+
+async function onInsightApplied(application: InsightApplicationPayload): Promise<void> {
+  if (application.id === handledApplicationId) return;
+  handledApplicationId = application.id;
+  nextStepRefresh.value++;
+  if (application.target === "DESIGN" && application.project_id === props.projectId) {
+    await load();
+  }
+}
 
 async function generateMockup(): Promise<void> {
   if (current.value === null || selectedAlternativeId.value === null || mockupBusy.value) return;
@@ -382,6 +478,15 @@ watch(
 );
 
 watch(
+  () => loopStore.lastApplication,
+  (application) => {
+    if (application !== null && loopStore.projectId === props.projectId) {
+      void onInsightApplied(application);
+    }
+  },
+);
+
+watch(
   () => props.projectId,
   async () => {
     if (props.autoLoad) {
@@ -468,6 +573,8 @@ watch(
           :selected-alternative-id="selectedAlternativeId"
           :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
           :locale="locale"
+          :project-id="projectId"
+          :authorize="authorizedRequest"
           @select="selectedAlternativeId = $event"
         />
       </details>
@@ -490,6 +597,7 @@ watch(
           <DeclarativePrototypePreview
             :key="mockup.generation_id"
             :prototype="mockup.package.prototype"
+            :visual="selectedVisual"
             :locale="locale"
           />
           <details class="text-xs text-ink-3">
@@ -501,7 +609,11 @@ watch(
           v-else-if="current.package.prototype?.design_alternative_id === selectedAlternativeId"
         >
           <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
-          <DeclarativePrototypePreview :prototype="current.package.prototype" :locale="locale" />
+          <DeclarativePrototypePreview
+            :prototype="current.package.prototype"
+            :visual="selectedVisual"
+            :locale="locale"
+          />
         </template>
         <p v-else class="m-0 text-sm text-ink-2">
           {{ copy.mockupRequired }}
@@ -522,6 +634,71 @@ watch(
           {{ copy.proposeSelection }}
         </button>
       </section>
+
+      <section
+        v-if="current.package.prototype && pendingDiff === null"
+        class="grid gap-3"
+        data-design-regenerate
+      >
+        <DesignLoopNextStep
+          :project-id="projectId"
+          :design-requirements-version-id="
+            current.package.grounding.requirements_reference.artifact_id
+          "
+          :refresh-key="nextStepRefresh"
+          :busy="store.isBusy || mockupBusy || loopStore.isBusy"
+          :locale="locale"
+          :authorize="authorizedRequest"
+          :api="props.requirementsApi"
+          @regenerate="regenerate"
+          @reapproved="localError = null"
+        >
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="rounded-control border border-line bg-white px-4 py-2 text-sm font-semibold text-ink-2 hover:bg-surface-3 disabled:opacity-60"
+              :disabled="store.isBusy || mockupBusy || loopStore.isBusy"
+              data-testid="design-regenerate"
+              @click="regenerate"
+            >
+              {{ copy.regenerate }}
+            </button>
+            <p class="m-0 text-sm text-ink-3">{{ copy.regenerateHelp }}</p>
+          </div>
+        </DesignLoopNextStep>
+        <p
+          v-if="loopStore.busy === 'regenerate'"
+          class="m-0 text-sm text-ink-2"
+          aria-live="polite"
+          data-testid="design-regenerating"
+        >
+          {{ generationProgress(locale) }}
+        </p>
+      </section>
+
+      <ProjectDesignEvaluationPanel
+        v-if="current.package.prototype"
+        :project-id="projectId"
+        :design-version-id="current.id"
+        :design-content-hash="current.content_hash"
+        :twin-names="twinNames"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        :api="props.loopApi"
+        @applied="onInsightApplied"
+      />
+
+      <ProjectDesignDiscussionPanel
+        v-if="current.package.prototype"
+        :project-id="projectId"
+        :design-version-id="current.id"
+        :design-content-hash="current.content_hash"
+        :twin-names="twinNames"
+        :locale="locale"
+        :authorize="authorizedRequest"
+        :api="props.loopApi"
+        @applied="onInsightApplied"
+      />
 
       <section v-if="pendingDiff !== null" class="grid gap-4" aria-labelledby="design-diffs-title">
         <h3 id="design-diffs-title" class="text-xl font-semibold text-ink">

@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { apiClient } from "@/api/client";
 import { twinChatApi, type TwinChatApi } from "@/api/twinChat";
 import UiButton from "@/components/UiButton.vue";
+import InsightApplyMenu from "@/components/InsightApplyMenu.vue";
 import UiClaimLabel from "@/components/UiClaimLabel.vue";
 import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedTwinChatRequest, useTwinChatStore } from "@/stores/twinChat";
@@ -145,6 +146,17 @@ onMounted(load);
               <p v-if="insight.grounded_on.length > 0" class="m-0 font-mono text-xs text-ink-3">
                 {{ t("twinChat.groundedOn", { fields: groundingText(insight) }) }}
               </p>
+              <InsightApplyMenu
+                :project-id="projectId"
+                :source="{
+                  kind: 'TWIN_CHAT_INSIGHT',
+                  id: turn.id + ':' + index,
+                  twinId: twin.twin_id,
+                  text: insight.text,
+                }"
+                :locale="locale === 'it' ? 'it' : 'en'"
+                :authorize="authorize"
+              />
             </li>
           </ul>
         </div>

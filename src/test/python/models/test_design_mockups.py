@@ -7,10 +7,19 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from orchestwin.api.design_mockups import MockupRequest, ModelMockupApplication, _payload
+from orchestwin.api.design_mockups import (
+    DEFAULT_MOCKUP_RECIPE,
+    MockupRequest,
+    ModelMockupApplication,
+    _alternative_view,
+    _mockup_instruction,
+    _payload,
+)
+from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype, NavigationPattern
 from orchestwin.models.design_drafts import requirements_view
 from orchestwin.models.design_mockups import MockupDraft, MockupElementDraft, bind_mockup
 from orchestwin.models.planning_schema import constrain_planning_schema
+from orchestwin.models.proposal_generation import ProposalGenerationError
 
 from ..artifacts import design_fixtures as fixtures
 from .test_model_proposals import make_generator
@@ -207,9 +216,9 @@ class MemoryEvidence:
         self.events.append(kwargs)
 
 
-def application(tmp_path, *, missing=False, stale=False):
+def application(tmp_path, *, missing=False, stale=False, value=None):
     version = fixtures.design_version()
-    generator, transport = make_generator(tmp_path, draft_value())
+    generator, transport = make_generator(tmp_path, draft_value() if value is None else value)
     evidence = MemoryEvidence()
     calls = 0
 
@@ -260,7 +269,7 @@ def test_generation_retains_model_evidence_without_publishing_or_changing_gates(
     assert evidence.events[-1]["payload"]["status"] == "MOCKUP_GENERATED"
     assert evidence.request.output_schema.version_number == 7
     assert "one moment" in evidence.request.system_instruction
-    assert "error examples must be omitted" in evidence.request.system_instruction
+    assert "error examples are omitted" in evidence.request.system_instruction
 
 
 def test_missing_owner_project_does_not_call_model(tmp_path):
@@ -282,3 +291,62 @@ def test_design_changed_during_generation_is_not_accepted(tmp_path):
     assert error.value.status_code == 409
     assert len(transport.calls) == 1
     assert not any(x["kind"] == "ADAPTER_ACCEPTED" for x in evidence.events)
+
+
+def test_a_rejected_mockup_keeps_the_reason_in_the_evidence(tmp_path):
+    value = draft_value()
+    value["screens"][1]["elements"][0]["content"] = "Errore: divisione per zero"
+    app, body, evidence, transport = application(tmp_path, value=value)
+    with pytest.raises(ProposalGenerationError) as error:
+        asyncio.run(
+            app.generate(owner_user_id=fixtures.OWNER_ID, project_id=fixtures.PROJECT_ID, body=body)
+        )
+    assert error.value.code == "INVALID_MOCKUP_OUTPUT"
+    assert len(transport.calls) == 1
+    rejected = next(x for x in evidence.events if x["kind"] == "ADAPTER_REJECTED")
+    assert rejected["payload"]["code"] == "ValueError"
+    assert "success screen" in rejected["payload"]["reason"]
+    assert evidence.events[-1]["payload"] == {"status": "FAILED", "code": "INVALID_MOCKUP_OUTPUT"}
+    assert not any(x["kind"] == "ADAPTER_ACCEPTED" for x in evidence.events)
+
+
+def guided_alternative():
+    alternative = fixtures.design_version().package.alternatives[1]
+    language = alternative.visual_language
+    choices = replace(
+        language.choices,
+        archetype=LayoutArchetype.GUIDED_STEPS,
+        navigation=NavigationPattern.TOP_BAR,
+    )
+    return replace(alternative, visual_language=replace(language, choices=choices))
+
+
+def test_mockup_screen_count_follows_the_archetype_of_the_alternative():
+    dashboard = fixtures.design_version().package.alternatives[1]
+    prototype = bind_mockup(
+        MockupDraft.model_validate(draft_value()), dashboard, fixtures.requirements_version()
+    )
+    assert len(prototype.screens) == 2
+    with pytest.raises(ValueError, match="screen count does not fit"):
+        bind_mockup(
+            MockupDraft.model_validate(draft_value()),
+            guided_alternative(),
+            fixtures.requirements_version(),
+        )
+
+
+def test_mockup_instruction_and_context_follow_the_visual_language():
+    plain = fixtures.design_version().package.alternatives[0]
+    assert _mockup_instruction(plain).endswith(DEFAULT_MOCKUP_RECIPE)
+    guided = guided_alternative()
+    instruction = _mockup_instruction(guided)
+    assert ARCHETYPES[LayoutArchetype.GUIDED_STEPS].recipe in instruction
+    assert "'Reservation desk'" in instruction
+    assert "between 3 and 4 screens" in instruction
+    view = _alternative_view(guided)
+    assert set(view["visual_language"]) == {"choices", "product_name", "rationale"}
+    assert "tokens" not in view["visual_language"]
+    assert (
+        "visual_language" not in _alternative_view(plain)
+        or _alternative_view(plain)["visual_language"] is None
+    )

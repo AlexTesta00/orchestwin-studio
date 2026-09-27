@@ -142,6 +142,94 @@ def test_all_six_tasks_retain_exact_request_raw_response_and_adapter_result(tmp_
     assert current_proposal_evidence() is None
 
 
+def test_design_uses_contract_eleven_and_retains_why_a_design_in_another_language_is_rejected(
+    tmp_path,
+):
+    from .draft_fixtures import italian_requirements
+
+    request, output, adapter, method, _ = stage_case("design")
+    generator, transport = audited_generator(tmp_path, output)
+    store = MemoryEvidence()
+    result = asyncio.run(
+        Command(store, lambda: getattr(adapter(generator), method)(request)).run(
+            owner_user_id=uuid4(), project_id=uuid4()
+        )
+    )
+    _, (generation, _) = next(iter(store.requests.items()))
+    assert generation.output_schema.schema_id == "proposal-design-v11"
+    assert generation.prompt_version_ref == "proposal-design-v11"
+    assert result.provider_version == 6
+    schema = transport.calls[0]["payload"]["response_format"]["json_schema"]["schema"]
+    assert list(schema["$defs"]["VisualLanguageDraft"]["properties"])[-3:] == [
+        "twin_fit",
+        "type_scale",
+        "visual_rationale",
+    ]
+    assert list(schema["$defs"]["CritiqueDraft"]["properties"])[:7] == [
+        "alternative",
+        "as_twin",
+        "code",
+        "concerns",
+        "confidence",
+        "observation_keys",
+        "on_accessibility",
+    ]
+    bindings = [
+        item["allOf"][1]["properties"] for item in schema["properties"]["critiques"]["prefixItems"]
+    ]
+    assert [list(binding) for binding in bindings] == [
+        ["alternative", "as_twin", "code", "observation_keys"]
+    ] * len(bindings)
+    assert [
+        (binding["alternative"]["const"], binding["as_twin"]["const"]) for binding in bindings
+    ] == [(code, key) for code in ("DES-001", "DES-002") for key in ("T1", "T2")]
+    rejected = MemoryEvidence()
+    italian = italian_requirements(request)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(
+            Command(rejected, lambda: getattr(adapter(generator), method)(italian)).run(
+                owner_user_id=uuid4(), project_id=uuid4()
+            )
+        )
+    events = next(iter(rejected.events.values()))
+    assert (
+        "ADAPTER_REJECTED",
+        {
+            "code": "INVALID_PROVIDER_OUTPUT",
+            "reason": "the design is not written in the language of the requirements",
+        },
+    ) in [(kind, payload) for kind, payload, _ in events]
+
+
+def test_a_design_that_names_values_it_did_not_choose_is_rejected_with_its_reason(tmp_path):
+    from orchestwin.artifacts.visual_catalog import LayoutArchetype
+
+    request, output, adapter, method, _ = stage_case("design")
+    first = output["alternatives"][0]
+    unchosen = next(
+        item.value
+        for item in LayoutArchetype
+        if item.value not in {entry["visual"]["archetype"] for entry in output["alternatives"]}
+    )
+    first["summary"] = f"The {unchosen} layout keeps every booking in view."
+    generator, _ = audited_generator(tmp_path, output)
+    store = MemoryEvidence()
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(
+            Command(store, lambda: getattr(adapter(generator), method)(request)).run(
+                owner_user_id=uuid4(), project_id=uuid4()
+            )
+        )
+    events = next(iter(store.events.values()))
+    assert (
+        "ADAPTER_REJECTED",
+        {
+            "code": "INVALID_PROVIDER_OUTPUT",
+            "reason": "the design names catalog values that were not chosen",
+        },
+    ) in [(kind, payload) for kind, payload, _ in events]
+
+
 def test_persona_content_draft_binds_exact_brief_and_generation_evidence(tmp_path):
     request, output = fixtures.persona_input_output()
     generator, _ = audited_generator(tmp_path, output)

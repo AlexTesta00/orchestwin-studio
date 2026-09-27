@@ -34,12 +34,21 @@ def test_design_can_reference_only_approved_requirement_codes():
     branches = schema["properties"]["critiques"]["prefixItems"]
     assert len(branches) == 2 * len(context["twins"])
     pairs = set()
-    for branch in branches:
+    for index, branch in enumerate(branches, 1):
         fields = branch["allOf"][1]["properties"]
-        pairs.add((fields["alternative"]["const"], fields["twin"]["const"]))
-        twin = fields["twin"]["const"]
+        assert sorted(fields) == ["alternative", "as_twin", "code", "observation_keys"]
+        assert fields["code"] == {"const": f"CRQ-{index:03d}"}
+        pairs.add((fields["alternative"]["const"], fields["as_twin"]["const"]))
+        twin = fields["as_twin"]["const"]
         assert fields["observation_keys"]["items"]["enum"] == list(
             context["twins"][twin]["observations"]
         )
 
     assert pairs == {(alt, twin) for alt in ("DES-001", "DES-002") for twin in context["twins"]}
+    critique = schema["$defs"]["CritiqueDraft"]["properties"]
+    assert critique["as_twin"]["enum"] == list(context["twins"])
+    assert "twin" not in critique
+    fits = schema["$defs"]["VisualLanguageDraft"]["properties"]["twin_fit"]["prefixItems"]
+    assert [item["allOf"][1]["properties"] for item in fits] == [
+        {"twin": {"const": key}} for key in context["twins"]
+    ]

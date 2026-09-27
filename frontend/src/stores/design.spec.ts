@@ -87,6 +87,7 @@ const PACKAGE: DesignPackagePayload = {
       trade_offs: ["More navigation for experienced users."],
       assumptions: [],
       open_questions: [],
+      visual_language: null,
     },
     {
       id: SECOND_ALTERNATIVE_ID,
@@ -114,6 +115,7 @@ const PACKAGE: DesignPackagePayload = {
       trade_offs: ["Higher information density."],
       assumptions: [],
       open_questions: [],
+      visual_language: null,
     },
   ],
   critiques: [],

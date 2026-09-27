@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
+from orchestwin.artifacts.visual_catalog import visual_catalog_summary
 from orchestwin.models.design import (
     DesignProposalProviderKind,
     DesignProposalResult,
@@ -68,6 +69,69 @@ from orchestwin.twins.user_twins import (
     UserTwinLifecycleStatus,
     UserTwinProfile,
 )
+
+DESIGN_OUTPUT_TOKENS = 6144
+DESIGN_VISUAL_INSTRUCTION = (
+    "Each alternative also declares its visual language in 'visual', using only ids from this "
+    "catalog. "
+    + visual_catalog_summary()
+    + " Choose the values of visual first: the archetype follows the shape of the task and its "
+    "flows, the colours and typography follow the domain, the tone and the twins' age, context "
+    "of use, accessibility needs and vocabulary. visual_rationale comes last and explains the "
+    "values you chose. A text names a catalog id only when it is a value chosen by the "
+    "alternative the text talks about; summary, rationale and the lists of an alternative "
+    "describe the approach, the flows and the content. "
+    "product_name is a short product name in the requirements' language. twin_fit holds one "
+    "entry per twin key, one sentence each on how the archetype, colours, typography, density "
+    "and controls serve that twin's age, context of use, accessibility needs and vocabulary; "
+    "with declared visual or motor impairments choose a HIGH_CONTRAST mode, COMFORTABLE or "
+    "SPACIOUS density and FILLED or OUTLINED buttons. Critiques judge the visual language too "
+    "(archetype, palette and mode, typography, density, controls) from the twin's perspective, "
+    "and on_accessibility must address it whenever the twin has accessibility needs. Every "
+    "critique judges only the alternative named in its alternative field, from the point of "
+    "view of the twin named in as_twin. The two alternatives must read as two different "
+    "products, never two skins of the "
+    "same layout. visual_exploration gives each alternative the part of the catalog that "
+    "this project explores: for the dimensions it lists choose only among the values of "
+    "that alternative, so that different projects do not look alike; every other "
+    "dimension is free and follows the twins and the domain."
+)
+DESIGN_NAMES_INSTRUCTION = (
+    "In every text call the twins by their names in twins, never by their keys: keys appear "
+    "only in the twin, as_twin and twins fields."
+)
+
+
+def design_instruction(twin_keys, language):
+    if language is None:
+        opening = "Propose exactly two distinct design approaches in the requirements' language. "
+        closing = DESIGN_NAMES_INSTRUCTION
+    else:
+        name = language["name"]
+        opening = (
+            f"Propose exactly two distinct design approaches. Write every text in {name}, the "
+            "language of the requirements: titles, summaries, rationales, workflow titles and "
+            "steps, considerations, advantages, trade-offs, assumptions, questions, critiques, "
+            "concerns, visual_rationale and twin_fit statements; only codes and catalog ids "
+            "stay as they are. "
+        )
+        closing = f"{DESIGN_NAMES_INSTRUCTION} Every text is written in {name}."
+    return (
+        opening
+        + "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
+        "DRK-001 for concerns; every code must be unique. References use supplied "
+        f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
+        "critique for EVERY alternative/twin pair; cite exact observation_keys from "
+        "that twin. Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions and every list of a critique to at most three items, and each text to at "
+        "most two sentences; workflows, their steps and the information architecture keep the "
+        "items that the archetype and the task need. Prefer a small design appropriate to "
+        "scope. "
+        "Do not invent empirical evidence, owner selection, approval or a prototype. "
+        + DESIGN_VISUAL_INSTRUCTION
+        + " "
+        + closing
+    )
 
 
 def _require(condition: bool):
@@ -260,20 +324,15 @@ class ModelDesignAdapter:
         from orchestwin.models.design_drafts import DesignDraft, bind_design, design_context
 
         context, twins = design_context(request)
-        twin_keys = "/".join(twins)
+        instruction = design_instruction("/".join(twins), context["language"])
         draft = await self.generator.generate(
             task="design",
             context=context,
             output_type=DesignDraft,
-            instruction=(
-                "Propose exactly two distinct design approaches in the requirements' language. "
-                "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
-                "DRK-001 for concerns; every code must be unique. References use supplied "
-                f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
-                "critique for EVERY alternative/twin pair; cite exact observation_keys from "
-                "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
-                "Do not invent empirical evidence, owner selection, approval or a prototype."
+            max_output_tokens=min(
+                DESIGN_OUTPUT_TOKENS, self.generator.configuration.max_output_tokens
             ),
+            instruction=instruction,
         )
         output = bind_design(
             draft, request, twins, lambda code: _model_reference(self.generator, code)
@@ -282,7 +341,7 @@ class ModelDesignAdapter:
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
-            provider_version=1,
+            provider_version=6,
             package=output,
         )
 

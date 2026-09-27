@@ -38,6 +38,7 @@ from src.test.python.workflow.test_governed_project_setup import build_ready_pro
 from .design_fixtures import (
     OWNER_ID,
     PROJECT_ID,
+    design_alternative,
     design_package,
     design_version,
     requirements_version,
@@ -51,6 +52,7 @@ EXPECTED_ENTRIES = (
     "design/critiques.md",
     "design/design.json",
     "design/design.md",
+    "design/mockup.html",
     "design/mockups.md",
     DESIGN_PACKAGE_MANIFEST,
     "requirements/requirements.json",
@@ -167,6 +169,11 @@ def test_package_holds_every_approved_stage_as_markdown_and_exact_json() -> None
     assert "Receptionist Twin" in files["twins/twins.md"]
     assert "REQ-001" in files["requirements/requirements.md"]
     assert "Guided reservation flow" in files["design/design.md"]
+    assert "#### Visual language" in files["design/design.md"]
+    assert "Product name: Reservation desk." in files["design/design.md"]
+    assert "| primary |" in files["design/design.md"]
+    assert files["design/mockup.html"].startswith("<!doctype html>")
+    assert "<script" not in files["design/mockup.html"]
     assert "CRQ-001" in files["design/critiques.md"]
     assert "SCR-001" in files["design/mockups.md"]
     assert package.design.content_hash in files[DESIGN_PACKAGE_INDEX]
@@ -180,6 +187,30 @@ def test_package_bytes_are_reproducible() -> None:
     assert first.content == second.content
     assert first.content_hash == second.content_hash
     assert len(first.content_hash) == 64
+
+
+def test_design_document_names_the_archetype_else_the_stored_approach_else_the_summary() -> None:
+    document = design_package_files(sources())["design/design.md"]
+
+    assert (
+        "Layout archetype Dashboard. Keep availability and reservation actions visible together."
+        in document
+    )
+    assert "Approach Dashboard first" not in document
+    assert (
+        "Approach Guided workflow. Guide the receptionist through one decision at a time."
+        in document
+    )
+
+    bare = replace(design_alternative(index=1), approach=None)
+    package = replace(design_package(), alternatives=(bare, design_alternative(index=2)))
+    lines = design_package_files(replace(sources(), design=design_version(package=package)))[
+        "design/design.md"
+    ].splitlines()
+    heading = lines.index("### DES-001: Guided reservation flow")
+
+    assert lines[heading + 2] == "Guide the receptionist through one decision at a time."
+    assert not any(line.startswith("Approach ") for line in lines)
 
 
 def test_package_without_prototype_says_so_instead_of_failing() -> None:

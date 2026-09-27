@@ -48,6 +48,29 @@ from orchestwin.artifacts.prototypes import (
     PrototypeViewport,
 )
 from orchestwin.artifacts.references import ArtifactKind
+from orchestwin.artifacts.visual_catalog import (
+    BackgroundTreatment,
+    BorderWeight,
+    ButtonStyle,
+    ColorMode,
+    ColorScheme,
+    CornerStyle,
+    Density,
+    DesignTone,
+    Elevation,
+    Emphasis,
+    FontFamily,
+    HeaderStyle,
+    HeadingCase,
+    HeadingWeight,
+    HueFamily,
+    InputStyle,
+    LayoutArchetype,
+    NavigationPattern,
+    Saturation,
+    SurfaceTone,
+    TypeScale,
+)
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.projects.design_application import (
@@ -127,12 +150,54 @@ class DesignWorkflowPayload(ApiModel):
     user_story_ids: tuple[UUID, ...]
 
 
+class VisualChoicesPayload(ApiModel):
+    archetype: LayoutArchetype
+    hue_family: HueFamily
+    color_scheme: ColorScheme
+    color_mode: ColorMode
+    saturation: Saturation
+    surface_tone: SurfaceTone
+    heading_family: FontFamily
+    body_family: FontFamily
+    type_scale: TypeScale
+    heading_case: HeadingCase
+    heading_weight: HeadingWeight
+    corners: CornerStyle
+    density: Density
+    buttons: ButtonStyle
+    inputs: InputStyle
+    elevation: Elevation
+    borders: BorderWeight
+    navigation: NavigationPattern
+    header: HeaderStyle
+    background: BackgroundTreatment
+    emphasis: Emphasis
+    tone: DesignTone
+
+
+class TwinFitPayload(ApiModel):
+    twin_id: UUID
+    name: str
+    statement: str
+
+
+class VisualLanguagePayload(ApiModel):
+    catalog_version: int
+    catalog_content_hash: str
+    choices: VisualChoicesPayload
+    product_name: str
+    rationale: str
+    palette: dict[str, str]
+    tokens: dict[str, str]
+    twin_fit: tuple[TwinFitPayload, ...]
+
+
 class DesignAlternativePayload(ApiModel):
     """One inspectable design direction."""
 
     id: UUID
     code: str
-    approach: DesignApproach
+    approach: DesignApproach | None = None
     title: str
     summary: str
     rationale: str
@@ -148,6 +213,7 @@ class DesignAlternativePayload(ApiModel):
     trade_offs: tuple[str, ...]
     assumptions: tuple[str, ...]
     open_questions: tuple[str, ...]
+    visual_language: VisualLanguagePayload | None = None
 
 
 class EvidenceReferencePayload(ApiModel):
@@ -271,7 +337,13 @@ class DesignPackagePayload(ApiModel):
 
     def to_domain(self) -> DesignExplorationPackage:
         """Convert this complete payload through canonical domain validation."""
-        return design_package_from_snapshot(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        for alternative in payload["alternatives"]:
+            if alternative["approach"] is None:
+                del alternative["approach"]
+            if alternative["visual_language"] is None:
+                del alternative["visual_language"]
+        return design_package_from_snapshot(payload)
 
 
 class DesignPackageVersionPayload(ApiModel):

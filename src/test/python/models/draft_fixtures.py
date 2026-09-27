@@ -1,7 +1,66 @@
 """Translate domain-valid test data to the semantic model wire contracts."""
 
+from dataclasses import replace
+
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import requirements_context
+
+
+def italian_requirements(request):
+    version = request.requirements.version
+    specification = version.specification
+    specification = replace(
+        specification,
+        requirements=tuple(
+            replace(
+                item,
+                title=f"Gestire le prenotazioni {index}",
+                statement="Il sistema deve creare e rivedere le prenotazioni della struttura.",
+            )
+            for index, item in enumerate(specification.requirements, 1)
+        ),
+        user_stories=tuple(
+            replace(
+                item,
+                goal=f"creare la prenotazione {index} per un ospite senza errori",
+                benefit="servire un ospite al banco con la massima precisione",
+            )
+            for index, item in enumerate(specification.user_stories, 1)
+        ),
+        acceptance_criteria=tuple(
+            replace(
+                item,
+                statement="Le prenotazioni create sono visibili nello stato della giornata.",
+            )
+            for item in specification.acceptance_criteria
+        ),
+        scenarios=tuple(
+            replace(
+                item,
+                title=f"Registrare la prenotazione {index}",
+                trigger="Un ospite chiede una camera alla reception.",
+                steps=("Registrare la prenotazione nel sistema della struttura.",),
+                expected_outcome="La prenotazione compare nello stato della giornata.",
+            )
+            for index, item in enumerate(specification.scenarios, 1)
+        ),
+    )
+    version = replace(version, specification=specification, content_hash=specification.content_hash)
+    return replace(request, requirements=replace(request.requirements, version=version))
+
+
+def explored_choices(project_id, code):
+    from orchestwin.artifacts.visual_exploration import visual_exploration
+
+    chosen = {}
+    for name, values in visual_exploration(project_id).get(code, {}).items():
+        if name == "heading_family":
+            chosen[name] = next(value for value in values if value != "SCRIPT")
+        elif name == "color_mode":
+            chosen[name] = "DARK"
+        else:
+            chosen[name] = values[0]
+    return chosen
 
 
 def proposal_draft(stage, value, request):
@@ -92,10 +151,30 @@ def proposal_draft(stage, value, request):
             }.items():
                 if old in item:
                     item[new] = item.pop(old)
+        keys = {
+            str(twin.reference.twin_id): f"T{index}"
+            for index, twin in enumerate(request.user_modeling.user_twins, 1)
+        }
+        raw_alternatives = {entry["code"]: entry for entry in raw["alternatives"]}
+        for item in result["alternatives"]:
+            item.pop("visual_language")
+            item.pop("approach", None)
+            language = raw_alternatives[item["code"]]["visual_language"]
+            item["visual"] = {
+                **language["choices"],
+                **explored_choices(request.project_id, item["code"]),
+                "visual_rationale": language["rationale"],
+                "product_name": language["product_name"],
+                "twin_fit": [
+                    {"twin": keys[fit["twin_id"]], "statement": fit["statement"]}
+                    for fit in language["twin_fit"]
+                ],
+            }
         for item in result["critiques"]:
             item["alternative"] = item.pop("design_alternative_id")
-            item["twin"] = item.pop("user_twin_reference")
-            twin = request.user_modeling.user_twins[int(item["twin"][1:]) - 1]
+            item["as_twin"] = item.pop("user_twin_reference")
+            item["on_accessibility"] = item.pop("accessibility_observations")
+            twin = request.user_modeling.user_twins[int(item["as_twin"][1:]) - 1]
             item["observation_keys"] = [twin.observations[0].observation_key]
             item["confidence"] = item["confidence"]["value"]
             for key in ("provenance", "epistemic_status", "human_validation", "kind"):

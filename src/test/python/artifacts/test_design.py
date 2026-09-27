@@ -33,6 +33,7 @@ TWIN_ID = UUID("00000000-0000-4000-8000-000000000040")
 WORKFLOW_ID = UUID("00000000-0000-4000-8000-000000000050")
 ALTERNATIVE_ID = UUID("00000000-0000-4000-8000-000000000060")
 CRITIQUE_ID = UUID("00000000-0000-4000-8000-000000000070")
+STORED_ALTERNATIVE_HASH = "b612979edfdacd17d30b03227ae2669bcb87fdab8de9443cbdbb715a900707b4"
 
 
 def twin_reference() -> UserTwinVersionReference:
@@ -77,32 +78,36 @@ def workflow():
     )
 
 
-def alternative():
-    """Create one complete design alternative."""
-    return create_design_alternative(
-        alternative_id=ALTERNATIVE_ID,
-        code="DES-001",
-        approach=DesignApproach.GUIDED_WORKFLOW,
-        title=" Guided reservation workflow ",
-        summary=" A step-by-step reservation experience. ",
-        rationale="Reduce errors by exposing one decision at a time.",
-        requirement_ids=(SECOND_REQUIREMENT_ID, REQUIREMENT_ID),
-        user_story_ids=(STORY_ID,),
-        acceptance_criterion_ids=(CRITERION_ID,),
-        user_twin_references=(twin_reference(),),
-        workflows=(workflow(),),
-        information_architecture=(
+def alternative_arguments() -> dict[str, object]:
+    return {
+        "alternative_id": ALTERNATIVE_ID,
+        "code": "DES-001",
+        "approach": DesignApproach.GUIDED_WORKFLOW,
+        "title": " Guided reservation workflow ",
+        "summary": " A step-by-step reservation experience. ",
+        "rationale": "Reduce errors by exposing one decision at a time.",
+        "requirement_ids": (SECOND_REQUIREMENT_ID, REQUIREMENT_ID),
+        "user_story_ids": (STORY_ID,),
+        "acceptance_criterion_ids": (CRITERION_ID,),
+        "user_twin_references": (twin_reference(),),
+        "workflows": (workflow(),),
+        "information_architecture": (
             "Availability search",
             "Reservation details",
             "Confirmation",
         ),
-        accessibility_considerations=("Every form control has a persistent label",),
-        security_considerations=("Sensitive guest data is not exposed in summaries",),
-        advantages=("Reduces cognitive load",),
-        trade_offs=("Requires more navigation steps",),
-        assumptions=("Receptionists prefer guided data entry",),
-        open_questions=("Should room comparison remain visible?",),
-    )
+        "accessibility_considerations": ("Every form control has a persistent label",),
+        "security_considerations": ("Sensitive guest data is not exposed in summaries",),
+        "advantages": ("Reduces cognitive load",),
+        "trade_offs": ("Requires more navigation steps",),
+        "assumptions": ("Receptionists prefer guided data entry",),
+        "open_questions": ("Should room comparison remain visible?",),
+    }
+
+
+def alternative():
+    """Create one complete design alternative."""
+    return create_design_alternative(**alternative_arguments())
 
 
 def test_design_alternative_is_normalized_traceable_and_hashable() -> None:
@@ -209,3 +214,27 @@ def test_identical_alternatives_have_identical_snapshots_and_hashes() -> None:
     assert first.to_snapshot() == second.to_snapshot()
     assert first.canonical_json() == second.canonical_json()
     assert first.content_hash == second.content_hash
+
+
+def test_stored_alternative_with_approach_keeps_its_snapshot_and_hash() -> None:
+    value = alternative()
+    snapshot = value.to_snapshot()
+
+    assert list(snapshot)[:4] == ["id", "code", "approach", "title"]
+    assert snapshot["approach"] == "GUIDED_WORKFLOW"
+    assert value.content_hash == STORED_ALTERNATIVE_HASH
+
+
+def test_new_alternative_without_approach_omits_the_key() -> None:
+    arguments = alternative_arguments()
+    del arguments["approach"]
+    value = create_design_alternative(**arguments)
+    stored = alternative()
+
+    assert value.approach is None
+    assert "approach" not in value.to_snapshot()
+    assert value.to_snapshot() == {
+        key: item for key, item in stored.to_snapshot().items() if key != "approach"
+    }
+    assert replace(stored, approach=None) == value
+    assert value.content_hash != stored.content_hash

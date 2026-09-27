@@ -215,13 +215,19 @@ class ProposalGenerator:
             "personas": 4,
             "user-twins": 4,
             "requirements": 3,
-            "design": 5,
+            "design": 11,
             "architecture": 7,
+            "twin-discussion": 5,
         }.get(task, 1)
         if task == "design" and serialized_context.get("purpose") == "DESIGN_MOCKUP":
             contract_version = 7
         if task == "brief-dialogue" and serialized_context.get("purpose") == "BRIEF_SYNTHESIS":
             contract_version = 2
+        if (
+            task == "twin-discussion"
+            and serialized_context.get("purpose") == "DISCUSSION_SYNTHESIS"
+        ):
+            contract_version = 6
         schema = create_structured_json_schema(
             schema_id=f"proposal-{task}-v{contract_version}",
             version_number=contract_version,

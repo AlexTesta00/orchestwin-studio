@@ -217,7 +217,11 @@ class DesignExplorationPackage:
         if not MIN_DESIGN_ALTERNATIVES <= alternative_count <= MAX_DESIGN_ALTERNATIVES:
             raise ValueError("a design package requires between two and four alternatives")
 
-        approaches = tuple(alternative.approach for alternative in self.alternatives)
+        approaches = tuple(
+            alternative.approach
+            for alternative in self.alternatives
+            if alternative.approach is not None
+        )
 
         if len(approaches) != len(set(approaches)):
             raise ValueError("design alternatives must use distinct approaches")

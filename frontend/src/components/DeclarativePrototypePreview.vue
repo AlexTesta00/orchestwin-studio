@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, useId, watch } from "vue";
+
+import PrototypeElement from "./PrototypeElement.vue";
 import type {
   DeclarativePrototypePayload,
   PrototypeElementPayload,
   PrototypeViewport,
+  VisualLanguagePayload,
 } from "../types/design";
+import { layoutZones } from "./prototypeLayout";
+import { shellClasses, tokenStyle, visualChoices, type VisualLocale } from "./visualLanguage";
 
 const props = withDefaults(
-  defineProps<{ prototype: DeclarativePrototypePayload; locale?: "en" | "it" }>(),
-  { locale: "en" },
+  defineProps<{
+    prototype: DeclarativePrototypePayload;
+    visual?: VisualLanguagePayload | null;
+    locale?: VisualLocale;
+  }>(),
+  { visual: null, locale: "en" },
 );
 const labels = {
   en: {
@@ -18,6 +27,8 @@ const labels = {
     noScreen: "This screen is unavailable.",
     required: "Complete the required fields to continue.",
     example: "Interactive design preview",
+    navigation: "Product navigation",
+    steps: "Steps",
     sizes: { MOBILE: "Phone", TABLET: "Tablet", DESKTOP: "Desktop" },
   },
   it: {
@@ -27,6 +38,8 @@ const labels = {
     noScreen: "Questa schermata non è disponibile.",
     required: "Completa i campi obbligatori per continuare.",
     example: "Anteprima interattiva del design",
+    navigation: "Navigazione del prodotto",
+    steps: "Passi",
     sizes: { MOBILE: "Telefono", TABLET: "Tablet", DESKTOP: "Desktop" },
   },
 };
@@ -47,6 +60,33 @@ const currentScreen = computed(
 );
 const viewportClass = computed(
   () => ({ MOBILE: "max-w-sm", TABLET: "max-w-xl", DESKTOP: "max-w-2xl" })[viewport.value],
+);
+const choices = computed(() => visualChoices(props.visual));
+const tokens = computed(() => tokenStyle(props.visual));
+const shell = computed(() => shellClasses(choices.value));
+const productName = computed(() => props.visual?.product_name ?? props.prototype.title);
+const isPhone = computed(() => viewport.value === "MOBILE");
+const zones = computed(() =>
+  currentScreen.value === null
+    ? []
+    : layoutZones(choices.value.archetype, currentScreen.value.elements),
+);
+const columns = computed(() => zones.value.filter((zone) => zone.name === "column"));
+const others = computed(() => zones.value.filter((zone) => zone.name !== "column"));
+const showRail = computed(() => choices.value.navigation === "SIDE_RAIL" && !isPhone.value);
+const showTabs = computed(() => choices.value.navigation === "SIDE_RAIL" && isPhone.value);
+const showTopLinks = computed(
+  () => choices.value.navigation === "TOP_BAR" || choices.value.navigation === "TABS",
+);
+const showStepper = computed(() => choices.value.archetype === "GUIDED_STEPS");
+const split = computed(
+  () =>
+    !isPhone.value &&
+    others.value.length === 2 &&
+    (choices.value.archetype === "LIST_DETAIL" || choices.value.archetype === "SPLIT_SCREEN"),
+);
+const framed = computed(
+  () => choices.value.archetype === "SINGLE_CARD" || choices.value.archetype === "GUIDED_STEPS",
 );
 
 function transitionFor(elementId: string) {
@@ -90,6 +130,17 @@ watch(
 
 function fieldKey(element: PrototypeElementPayload): string {
   return element.field_name ?? element.id;
+}
+
+function twoColumns(elements: readonly PrototypeElementPayload[]): boolean {
+  return (
+    !isPhone.value &&
+    elements.filter((item) => item.kind === "TEXT_INPUT" || item.kind === "SELECT").length > 1
+  );
+}
+
+function cells(content: string): string[] {
+  return content.split(" · ").map((cell) => cell.trim());
 }
 </script>
 
@@ -147,9 +198,11 @@ function fieldKey(element: PrototypeElementPayload): string {
     <div class="min-w-0 rounded-panel border border-line bg-surface-3 p-3 sm:p-5">
       <article
         v-if="currentScreen !== null"
-        :class="viewportClass"
-        class="mx-auto overflow-hidden rounded-panel border border-line bg-white shadow-sm transition-[max-width]"
+        :class="[viewportClass, ...shell, { 'vl-phone': isPhone }]"
+        class="vl mx-auto overflow-hidden rounded-panel border border-line shadow-sm transition-[max-width]"
+        :style="tokens"
         :data-screen-id="currentScreen.id"
+        :data-archetype="choices.archetype"
       >
         <div
           class="flex items-center gap-1.5 border-b border-line-soft bg-surface-2 px-4 py-2"
@@ -158,114 +211,130 @@ function fieldKey(element: PrototypeElementPayload): string {
           <span v-for="dot in 3" :key="dot" class="h-1.5 w-1.5 rounded-full bg-button-line" />
           <span class="ml-2 text-[10px] tracking-wide text-ink-3">{{ copy.example }}</span>
         </div>
-        <div class="p-5 sm:p-6">
-          <h4
-            ref="screenHeading"
-            tabindex="-1"
-            class="m-0 mb-5 text-xl font-bold tracking-tight text-ink outline-none"
-          >
-            {{ currentScreen.title }}
-          </h4>
-          <form
-            ref="form"
-            class="grid gap-4"
-            :class="viewport !== 'MOBILE' ? 'sm:grid-cols-2' : ''"
-            @submit.prevent
-          >
-            <template v-for="element in currentScreen.elements" :key="element.id">
-              <h5
-                v-if="element.kind === 'HEADING'"
-                class="col-span-full m-0 text-lg font-semibold text-ink"
-              >
-                {{ element.content }}
-              </h5>
-              <p
-                v-else-if="element.kind === 'TEXT'"
-                class="col-span-full m-0 text-sm leading-6 text-ink-2"
-              >
-                {{ element.content }}
-              </p>
-              <ul
-                v-else-if="element.kind === 'LIST'"
-                class="col-span-full m-0 list-disc pl-5 text-sm text-ink-2"
-              >
-                <li>{{ element.content }}</li>
-              </ul>
-              <div
-                v-else-if="element.kind === 'CARD'"
-                class="rounded-panel border border-line bg-surface-2 p-4 text-sm text-ink-2"
-              >
-                {{ element.content }}
-              </div>
-              <p
-                v-else-if="element.kind === 'STATUS'"
-                class="col-span-full m-0 rounded-panel border p-4 text-base font-semibold"
-                :class="
-                  currentScreen.state === 'ERROR'
-                    ? 'border-fail-line bg-fail-bg text-fail-dark'
-                    : 'border-ok-line bg-ok-bg text-ok-dark'
-                "
-                role="status"
-              >
-                {{ element.content }}
-              </p>
-              <label
-                v-else-if="element.kind === 'TEXT_INPUT'"
-                class="grid gap-1.5 text-sm font-medium text-ink-2"
-              >
-                {{ element.accessible_name ?? element.content
-                }}<span v-if="element.required" class="sr-only">*</span>
-                <input
-                  v-model="values[fieldKey(element)]"
-                  type="text"
-                  class="min-w-0 rounded-control border border-field px-3 py-2.5 font-normal focus:border-action focus:outline-2 focus:outline-action-soft-line"
-                  :name="element.field_name ?? undefined"
-                  :required="element.required"
-                />
-              </label>
-              <label
-                v-else-if="element.kind === 'SELECT'"
-                class="grid gap-1.5 text-sm font-medium text-ink-2"
-              >
-                {{ element.accessible_name ?? element.content
-                }}<span v-if="element.required" class="sr-only">*</span>
-                <select
-                  v-model="values[fieldKey(element)]"
-                  class="min-w-0 rounded-control border border-field bg-white px-3 py-2.5 font-normal focus:border-action focus:outline-2 focus:outline-action-soft-line"
-                  :name="element.field_name ?? undefined"
-                  :required="element.required"
-                >
-                  <option disabled value="">—</option>
-                  <option v-for="option in element.options" :key="option" :value="option">
-                    {{ option }}
-                  </option>
-                </select>
-              </label>
+        <div class="vl-shell">
+          <div class="vl-bar">
+            <p class="vl-brand" data-testid="mockup-product-name">{{ productName }}</p>
+            <div
+              v-if="showTopLinks"
+              class="vl-links"
+              role="navigation"
+              :aria-label="copy.navigation"
+            >
               <button
-                v-else-if="element.kind === 'BUTTON'"
+                v-for="screen in prototype.screens"
+                :key="screen.id"
                 type="button"
-                class="col-span-full min-h-11 rounded-control bg-action px-4 py-2.5 text-sm font-semibold text-white hover:bg-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-not-allowed disabled:bg-surface-3"
-                :aria-label="element.accessible_name ?? element.content"
-                :disabled="!transitionFor(element.id)"
-                :data-trigger-element-id="element.id"
-                @click="activate(element)"
+                class="vl-navlink"
+                :aria-current="screen.id === currentScreenId ? 'page' : undefined"
+                @click="showScreen(screen.id)"
               >
-                {{ element.content }}
+                {{ screen.title }}
               </button>
-              <a
-                v-else-if="element.kind === 'LINK'"
-                href="#"
-                class="col-span-full justify-self-start rounded text-sm font-semibold text-action underline focus-visible:outline-2 focus-visible:outline-action"
-                :aria-label="element.accessible_name ?? element.content"
-                :aria-disabled="!transitionFor(element.id)"
-                @click.prevent="activate(element)"
-                >{{ element.content }}</a
+            </div>
+          </div>
+          <div class="vl-layout" :class="{ 'vl-with-rail': showRail }">
+            <div v-if="showRail" class="vl-rail" role="navigation" :aria-label="copy.navigation">
+              <button
+                v-for="screen in prototype.screens"
+                :key="screen.id"
+                type="button"
+                class="vl-navlink"
+                :aria-current="screen.id === currentScreenId ? 'page' : undefined"
+                @click="showScreen(screen.id)"
               >
-            </template>
-            <p v-if="validationError" class="col-span-full m-0 text-sm text-fail-dark" role="alert">
-              {{ copy.required }}
-            </p>
-          </form>
+                {{ screen.title }}
+              </button>
+            </div>
+            <div class="vl-main">
+              <div v-if="showStepper" class="vl-stepper" role="navigation" :aria-label="copy.steps">
+                <button
+                  v-for="(screen, index) in prototype.screens"
+                  :key="screen.id"
+                  type="button"
+                  class="vl-step"
+                  :aria-current="screen.id === currentScreenId ? 'step' : undefined"
+                  @click="showScreen(screen.id)"
+                >
+                  {{ index + 1 }}. {{ screen.title }}
+                </button>
+              </div>
+              <h4 ref="screenHeading" tabindex="-1" class="vl-title outline-none">
+                {{ currentScreen.title }}
+              </h4>
+              <form ref="form" class="vl-zones" :class="{ 'vl-frame': framed }" @submit.prevent>
+                <div v-if="columns.length > 0" class="vl-columns">
+                  <div v-for="(zone, column) in columns" :key="column" class="vl-column">
+                    <PrototypeElement
+                      v-for="(element, index) in zone.elements"
+                      :key="element.id"
+                      :element="element"
+                      :zone="zone.name"
+                      :index="index"
+                      :state="currentScreen.state"
+                      :value="values[fieldKey(element)] ?? ''"
+                      :active="transitionFor(element.id) !== undefined"
+                      @update:value="values[fieldKey(element)] = $event"
+                      @activate="activate"
+                    />
+                  </div>
+                </div>
+                <div :class="split ? 'vl-split' : 'contents'">
+                  <template v-for="zone in others" :key="zone.name">
+                    <div v-if="zone.name === 'table'" class="vl-zone vl-zone-table">
+                      <table class="vl-table">
+                        <tbody>
+                          <tr v-for="element in zone.elements" :key="element.id">
+                            <td
+                              v-for="(cell, cellIndex) in cells(element.content)"
+                              :key="cellIndex"
+                            >
+                              {{ cell }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div
+                      v-else
+                      class="vl-zone"
+                      :class="[
+                        `vl-zone-${zone.name}`,
+                        { 'vl-two-columns': zone.name === 'main' && twoColumns(zone.elements) },
+                      ]"
+                    >
+                      <PrototypeElement
+                        v-for="(element, index) in zone.elements"
+                        :key="element.id"
+                        :element="element"
+                        :zone="zone.name"
+                        :index="index"
+                        :state="currentScreen.state"
+                        :value="values[fieldKey(element)] ?? ''"
+                        :active="transitionFor(element.id) !== undefined"
+                        @update:value="values[fieldKey(element)] = $event"
+                        @activate="activate"
+                      />
+                    </div>
+                  </template>
+                </div>
+                <p v-if="validationError" class="vl-alert" role="alert">
+                  {{ copy.required }}
+                </p>
+              </form>
+            </div>
+          </div>
+          <div v-if="showTabs" class="vl-tabs" role="navigation" :aria-label="copy.navigation">
+            <button
+              v-for="screen in prototype.screens"
+              :key="screen.id"
+              type="button"
+              class="vl-navlink"
+              :aria-current="screen.id === currentScreenId ? 'page' : undefined"
+              @click="showScreen(screen.id)"
+            >
+              {{ screen.title }}
+            </button>
+          </div>
         </div>
       </article>
       <p v-else class="m-0 rounded-control bg-white p-4 text-sm text-ink-2" role="alert">
@@ -274,3 +343,408 @@ function fieldKey(element: PrototypeElementPayload): string {
     </div>
   </section>
 </template>
+
+<style scoped>
+.vl {
+  background: var(--vl-color-background);
+  color: var(--vl-color-text);
+  font-family: var(--vl-font-body);
+  font-size: var(--vl-size-body);
+  line-height: var(--vl-line-height);
+}
+.vl-shell {
+  min-height: 320px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+.vl-bg-TINTED .vl-shell {
+  background: var(--vl-color-surface-alt);
+}
+.vl-bg-GRADIENT .vl-shell {
+  background: linear-gradient(160deg, var(--vl-color-primary-soft), var(--vl-color-background) 60%);
+}
+.vl-bg-DOTS .vl-shell {
+  background-image: radial-gradient(var(--vl-color-border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.vl-bg-GRID .vl-shell {
+  background-image:
+    linear-gradient(var(--vl-color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--vl-color-border) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.vl-bg-STRIPES .vl-shell {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--vl-color-surface-alt) 0 12px,
+    transparent 12px 24px
+  );
+}
+.vl-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--vl-gap);
+  padding: var(--vl-space) calc(var(--vl-space) * 2);
+  border-bottom: var(--vl-border-width) solid var(--vl-color-border);
+  background: var(--vl-color-surface);
+}
+.vl-header-HERO_BAND .vl-bar {
+  background: var(--vl-color-primary);
+  color: var(--vl-color-on-primary);
+  padding: calc(var(--vl-space) * 3) calc(var(--vl-space) * 2);
+  border-bottom: 0;
+}
+.vl-header-MINIMAL .vl-bar {
+  background: transparent;
+  border-bottom: 0;
+}
+.vl-header-CENTERED_TITLE .vl-bar {
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+.vl-brand {
+  margin: 0;
+  font-family: var(--vl-font-heading);
+  font-weight: var(--vl-heading-weight);
+  text-transform: var(--vl-heading-transform);
+  font-variant: var(--vl-heading-variant);
+  letter-spacing: var(--vl-heading-tracking);
+  font-size: var(--vl-size-title);
+}
+.vl-links,
+.vl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--vl-space) / 2);
+}
+.vl-tabs {
+  border-top: var(--vl-border-width) solid var(--vl-color-border);
+  background: var(--vl-color-surface);
+  padding: calc(var(--vl-space) / 2);
+  justify-content: space-around;
+}
+.vl-navlink,
+.vl-step {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: calc(var(--vl-space) / 2) var(--vl-space);
+  border-radius: var(--vl-radius-control);
+  font-weight: 600;
+}
+.vl-navlink[aria-current],
+.vl-step[aria-current] {
+  background: var(--vl-color-primary-soft);
+  color: var(--vl-color-primary);
+}
+.vl-nav-TABS .vl-navlink {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.vl-nav-TABS .vl-navlink[aria-current] {
+  background: transparent;
+  border-bottom-color: var(--vl-color-primary);
+}
+.vl-layout {
+  display: grid;
+  gap: var(--vl-gap);
+  padding: calc(var(--vl-space) * 2);
+  align-items: start;
+}
+.vl-with-rail {
+  grid-template-columns: minmax(120px, 180px) 1fr;
+}
+.vl-rail {
+  display: grid;
+  gap: calc(var(--vl-space) / 2);
+  align-content: start;
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  padding: var(--vl-space);
+}
+.vl-rail .vl-navlink {
+  text-align: left;
+}
+.vl-main {
+  min-width: 0;
+}
+.vl-title {
+  margin: 0 0 var(--vl-gap);
+  font-family: var(--vl-font-heading);
+  font-weight: var(--vl-heading-weight);
+  text-transform: var(--vl-heading-transform);
+  font-variant: var(--vl-heading-variant);
+  letter-spacing: var(--vl-heading-tracking);
+  font-size: var(--vl-size-display);
+  line-height: 1.15;
+}
+.vl-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--vl-space) / 2);
+  margin-bottom: var(--vl-gap);
+}
+.vl-step {
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  color: var(--vl-color-text-muted);
+}
+.vl-zones {
+  display: grid;
+  gap: var(--vl-gap);
+}
+.vl-frame {
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  padding: calc(var(--vl-space) * 2);
+  box-shadow: var(--vl-shadow);
+}
+.vl-shell-SINGLE_CARD .vl-main,
+.vl-shell-GUIDED_STEPS .vl-main,
+.vl-shell-CONVERSATIONAL .vl-main {
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+.vl-shell-FOCUS_MODE .vl-main {
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+  text-align: center;
+}
+.vl-shell-FOCUS_MODE .vl-zone {
+  justify-items: center;
+}
+.vl-shell-SEARCH_FIRST .vl-zone-intro {
+  text-align: center;
+}
+.vl-zone {
+  display: grid;
+  gap: var(--vl-gap);
+}
+.vl-two-columns {
+  grid-template-columns: 1fr 1fr;
+}
+.vl-two-columns > :deep(.vl-h2),
+.vl-two-columns > :deep(.vl-text),
+.vl-two-columns > :deep(.vl-button),
+.vl-two-columns > :deep(.vl-link),
+.vl-two-columns > :deep(.vl-status),
+.vl-two-columns > :deep(.vl-list) {
+  grid-column: 1 / -1;
+}
+.vl-zone-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.vl-zone-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.vl-zone-thread {
+  gap: var(--vl-space);
+}
+.vl-zone-composer,
+.vl-zone-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vl-space);
+  align-items: end;
+}
+.vl-zone-composer :deep(.vl-field),
+.vl-zone-search :deep(.vl-field) {
+  flex: 1 1 160px;
+}
+.vl-zone-search {
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+.vl-zone-timeline {
+  border-left: 2px solid var(--vl-color-primary);
+  padding-left: var(--vl-gap);
+}
+.vl-split {
+  display: grid;
+  gap: var(--vl-gap);
+  align-items: start;
+}
+.vl-shell-LIST_DETAIL .vl-split {
+  grid-template-columns: 2fr 3fr;
+}
+.vl-shell-SPLIT_SCREEN .vl-split {
+  grid-template-columns: 1fr 1fr;
+}
+.vl-columns {
+  display: grid;
+  gap: var(--vl-gap);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: start;
+}
+.vl-column {
+  display: grid;
+  gap: var(--vl-space);
+  align-content: start;
+  background: var(--vl-color-surface-alt);
+  border-radius: var(--vl-radius-panel);
+  padding: var(--vl-space);
+}
+.vl-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+}
+.vl-table td {
+  padding: var(--vl-space);
+  border-bottom: 1px solid var(--vl-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+.vl-table tr:nth-child(even) td {
+  background: var(--vl-color-surface-alt);
+}
+.vl-alert {
+  margin: 0;
+  color: var(--vl-color-danger);
+  font-weight: 600;
+}
+:deep(.vl-h2) {
+  margin: 0;
+  font-family: var(--vl-font-heading);
+  font-weight: var(--vl-heading-weight);
+  text-transform: var(--vl-heading-transform);
+  font-variant: var(--vl-heading-variant);
+  letter-spacing: var(--vl-heading-tracking);
+  font-size: var(--vl-size-title);
+  line-height: 1.25;
+}
+:deep(.vl-text) {
+  margin: 0;
+}
+:deep(.vl-list) {
+  margin: 0;
+  padding-left: 1.25em;
+}
+:deep(.vl-card) {
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  padding: calc(var(--vl-space) * 1.5);
+  box-shadow: var(--vl-shadow);
+}
+:deep(.vl-bubble) {
+  max-width: 78%;
+  padding: var(--vl-space) calc(var(--vl-space) * 1.5);
+  border-radius: var(--vl-radius-panel);
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+}
+:deep(.vl-person) {
+  margin-left: auto;
+  background: var(--vl-color-primary-soft);
+}
+:deep(.vl-status) {
+  margin: 0;
+  border-radius: var(--vl-radius-panel);
+  padding: calc(var(--vl-space) * 1.5);
+  font-weight: 600;
+  border: max(1px, var(--vl-border-width)) solid;
+}
+:deep(.vl-status-ok) {
+  background: var(--vl-color-success-soft);
+  color: var(--vl-color-success);
+  border-color: var(--vl-color-success);
+}
+:deep(.vl-status-error) {
+  background: var(--vl-color-danger-soft);
+  color: var(--vl-color-danger);
+  border-color: var(--vl-color-danger);
+}
+:deep(.vl-field) {
+  display: grid;
+  gap: calc(var(--vl-space) / 2);
+  font-weight: 600;
+  color: var(--vl-color-text-muted);
+  min-width: 0;
+}
+:deep(.vl-input) {
+  min-height: var(--vl-control-height);
+  padding: 0 var(--vl-space);
+  font: inherit;
+  font-weight: 400;
+  color: var(--vl-color-text);
+  background: var(--vl-color-surface);
+  border: max(1px, var(--vl-border-width)) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-control);
+  width: 100%;
+  min-width: 0;
+}
+.vl-inputs-UNDERLINED :deep(.vl-input) {
+  border-width: 0 0 2px;
+  border-radius: 0;
+  background: transparent;
+  padding-left: 0;
+}
+.vl-inputs-FILLED :deep(.vl-input) {
+  background: var(--vl-color-surface-alt);
+  border-color: transparent;
+}
+:deep(.vl-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--vl-control-height);
+  padding: 0 calc(var(--vl-space) * 2);
+  border-radius: var(--vl-radius-control);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: max(1px, var(--vl-border-width)) solid transparent;
+  background: var(--vl-color-primary);
+  color: var(--vl-color-on-primary);
+  justify-self: start;
+}
+.vl-buttons-OUTLINED :deep(.vl-button) {
+  border-color: var(--vl-color-primary);
+  color: var(--vl-color-primary);
+  background: transparent;
+}
+.vl-buttons-SOFT :deep(.vl-button) {
+  background: var(--vl-color-primary-soft);
+  color: var(--vl-color-primary);
+}
+.vl-buttons-GHOST :deep(.vl-button) {
+  background: transparent;
+  color: var(--vl-color-primary);
+  text-decoration: underline;
+}
+.vl-emphasis-BOLD :deep(.vl-button) {
+  min-height: calc(var(--vl-control-height) * 1.15);
+  font-size: 1.05em;
+}
+:deep(.vl-button:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+:deep(.vl-link) {
+  color: var(--vl-color-accent);
+  font-weight: 600;
+  justify-self: start;
+  text-decoration: underline;
+}
+:deep(.vl-link[aria-disabled="true"]) {
+  opacity: 0.6;
+}
+.vl-phone .vl-with-rail {
+  grid-template-columns: 1fr;
+}
+.vl-phone .vl-split {
+  grid-template-columns: 1fr;
+}
+</style>

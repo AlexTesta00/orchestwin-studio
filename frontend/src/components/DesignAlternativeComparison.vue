@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 
+import DesignStyleTile from "./DesignStyleTile.vue";
+import InsightApplyMenu from "./InsightApplyMenu.vue";
+import { archetypeLabel } from "./visualLanguage";
+import type { AuthorizedDesignLoopRequest } from "../stores/designLoop";
 import type { DesignAlternativePayload, SyntheticDesignCritiquePayload } from "../types/design";
 
 type Locale = "en" | "it";
+
+interface LayoutRow {
+  label: string;
+  value: string;
+}
 
 const props = withDefaults(
   defineProps<{
@@ -13,12 +22,16 @@ const props = withDefaults(
     selectedAlternativeId?: string | null;
     disabled?: boolean;
     locale?: Locale;
+    projectId?: string | null;
+    authorize?: AuthorizedDesignLoopRequest | undefined;
   }>(),
   {
     recommendedAlternativeId: null,
     selectedAlternativeId: null,
     disabled: false,
     locale: "en",
+    projectId: null,
+    authorize: undefined,
   },
 );
 
@@ -31,6 +44,7 @@ const messages = {
     title: "Design alternatives",
     recommended: "Provider recommendation",
     selected: "Owner selection",
+    layout: "Layout",
     approach: "Approach",
     rationale: "Rationale",
     advantages: "Advantages",
@@ -53,6 +67,7 @@ const messages = {
     title: "Alternative di design",
     recommended: "Raccomandazione del provider",
     selected: "Selezione del proprietario",
+    layout: "Impostazione",
     approach: "Approccio",
     rationale: "Motivazione",
     advantages: "Vantaggi",
@@ -75,6 +90,25 @@ const messages = {
 
 const copy = computed(() => messages[props.locale]);
 const groupName = `design-alternative-${useId()}`;
+
+function layoutRow(alternative: DesignAlternativePayload): LayoutRow | null {
+  if (alternative.visual_language) {
+    return {
+      label: copy.value.layout,
+      value: archetypeLabel(props.locale, alternative.visual_language.choices.archetype),
+    };
+  }
+  if (alternative.approach) {
+    return { label: copy.value.approach, value: alternative.approach };
+  }
+  return null;
+}
+
+const layoutRows = computed<Record<string, LayoutRow | null>>(() =>
+  Object.fromEntries(
+    props.alternatives.map((alternative) => [alternative.id, layoutRow(alternative)]),
+  ),
+);
 
 function critiquesFor(alternativeId: string): SyntheticDesignCritiquePayload[] {
   return props.critiques.filter((critique) => critique.design_alternative_id === alternativeId);
@@ -148,6 +182,12 @@ function choose(alternativeId: string): void {
               </span>
             </span>
           </label>
+          <DesignStyleTile
+            v-if="alternative.visual_language"
+            :visual="alternative.visual_language"
+            :locale="locale"
+            compact
+          />
         </header>
 
         <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-2">
@@ -172,9 +212,9 @@ function choose(alternativeId: string): void {
           <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.details }}</summary>
           <div class="mt-4 grid gap-5">
             <dl class="m-0 grid gap-3 text-sm">
-              <div>
-                <dt class="font-semibold text-ink">{{ copy.approach }}</dt>
-                <dd class="m-0 mt-1 text-ink-2">{{ alternative.approach }}</dd>
+              <div v-if="layoutRows[alternative.id]" data-testid="alternative-layout">
+                <dt class="font-semibold text-ink">{{ layoutRows[alternative.id]?.label }}</dt>
+                <dd class="m-0 mt-1 text-ink-2">{{ layoutRows[alternative.id]?.value }}</dd>
               </div>
               <div>
                 <dt class="font-semibold text-ink">{{ copy.rationale }}</dt>
@@ -273,7 +313,22 @@ function choose(alternativeId: string): void {
                 <section v-if="critique.concerns.length > 0">
                   <h5 class="m-0 text-sm font-semibold">{{ copy.concerns }}</h5>
                   <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
-                    <li v-for="item in critique.concerns" :key="item">{{ item }}</li>
+                    <li v-for="(item, index) in critique.concerns" :key="item">
+                      {{ item }}
+                      <InsightApplyMenu
+                        v-if="projectId"
+                        :project-id="projectId"
+                        :source="{
+                          kind: 'DESIGN_CRITIQUE',
+                          id: critique.code + ':' + index,
+                          twinId: critique.user_twin_reference.twin_id,
+                          text: item,
+                          mitigation: critique.suggested_changes[0] ?? null,
+                        }"
+                        :locale="locale"
+                        :authorize="authorize"
+                      />
+                    </li>
                   </ul>
                 </section>
 

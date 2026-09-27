@@ -1,8 +1,9 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignApi } from "../api/design";
+import type { DesignLoopApi } from "../api/designLoop";
 import {
   BASE_DESIGN_PACKAGE,
   DESIGN_ALTERNATIVE_ID,
@@ -12,20 +13,236 @@ import {
   PENDING_DESIGN_GATE,
   PROPOSED_DESIGN_DIFF,
   SECOND_DESIGN_ALTERNATIVE_ID,
+  SELECTED_DESIGN_PACKAGE,
   SELECTED_DESIGN_VERSION,
   UNSELECTED_DESIGN_VERSION,
 } from "../test/designFixtures";
 import type {
+  DesignGenerationIssue,
+  DesignGenerationPayload,
   DesignPackageDiffPayload,
   DesignPackagePayload,
   DesignPackageVersionPayload,
   DesignReadinessPayload,
 } from "../types/design";
+import type { DesignEvaluationRunPayload, InsightApplicationPayload } from "../types/designLoop";
+import type {
+  RequirementsGateDecisionPayload,
+  RequirementsGateSubmissionPayload,
+  RequirementsReadinessPayload,
+  RequirementsSpecificationPayload,
+  RequirementsSpecificationVersionPayload,
+} from "../types/requirements";
 import ProjectDesignFlow from "./ProjectDesignFlow.vue";
 import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 import type { DesignMockupRequest, DesignMockupPayload } from "../types/design";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("access-token");
+const loopApi: DesignLoopApi = {
+  evaluate: async () => {
+    throw new Error("not evaluated in this spec");
+  },
+  runs: async () => [],
+  comparison: async () => null,
+  regenerate: async () => ({ status: "REJECTED", issue: "DESIGN_PACKAGE_NOT_FOUND" }) as never,
+  applyInsight: async () => {
+    throw new Error("not applied in this spec");
+  },
+  applications: async () => [],
+  validations: async () => [],
+  validate: async () => {
+    throw new Error("not decided in this spec");
+  },
+  discussions: async () => [],
+  startDiscussion: async () => {
+    throw new Error("not discussed in this spec");
+  },
+  nextDiscussionRound: async () => {
+    throw new Error("not discussed in this spec");
+  },
+  decideDiscussion: async () => {
+    throw new Error("not discussed in this spec");
+  },
+};
+
+const DESIGN_REQUIREMENTS = SELECTED_DESIGN_PACKAGE.grounding.requirements_reference;
+
+function requirementsVersion(
+  id: string,
+  number: number,
+  contentHash: string,
+): RequirementsSpecificationVersionPayload {
+  return {
+    id,
+    project_id: DESIGN_PROJECT_ID,
+    version_number: number,
+    based_on_version_number: number > 1 ? number - 1 : null,
+    content_hash: contentHash,
+    created_by_user_id: DESIGN_OWNER_ID,
+    created_at: DESIGN_CREATED_AT,
+    specification: {} as RequirementsSpecificationPayload,
+  };
+}
+
+const REQUIREMENTS_V1 = requirementsVersion(
+  DESIGN_REQUIREMENTS.artifact_id,
+  DESIGN_REQUIREMENTS.version_number,
+  DESIGN_REQUIREMENTS.content_hash,
+);
+const REQUIREMENTS_V2 = requirementsVersion(
+  "00000000-0000-4000-8000-000000000170",
+  2,
+  "7".repeat(64),
+);
+
+const REGENERATED_DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...SELECTED_DESIGN_VERSION,
+  id: "00000000-0000-4000-8000-000000000180",
+  version_number: 3,
+  based_on_version_number: 2,
+  content_hash: "8".repeat(64),
+  package: {
+    ...SELECTED_DESIGN_PACKAGE,
+    grounding: {
+      ...SELECTED_DESIGN_PACKAGE.grounding,
+      requirements_reference: {
+        ...DESIGN_REQUIREMENTS,
+        artifact_id: REQUIREMENTS_V2.id,
+        version_number: REQUIREMENTS_V2.version_number,
+        content_hash: REQUIREMENTS_V2.content_hash,
+      },
+    },
+  },
+};
+
+function readyRequirements(version: RequirementsSpecificationVersionPayload) {
+  return {
+    status: "READY_FOR_DESIGN_EXPLORATION" as const,
+    version,
+    gate: null,
+    approved_current_specification: true,
+  };
+}
+
+class FakeRequirementsGate {
+  current: RequirementsReadinessPayload;
+
+  constructor(initial: RequirementsReadinessPayload) {
+    this.current = initial;
+  }
+
+  readiness = vi.fn(async () => this.current);
+
+  submitGate = vi.fn(async (): Promise<RequirementsGateSubmissionPayload> => {
+    return { status: "SUBMITTED", gate: null, events: [], issue: null };
+  });
+
+  decideGate = vi.fn(async (): Promise<RequirementsGateDecisionPayload> => {
+    this.current = readyRequirements(REQUIREMENTS_V2);
+    return { status: "APPLIED", gate: null, event: null, issue: null };
+  });
+}
+
+function fakeLoopApi(): DesignLoopApi {
+  return {
+    ...loopApi,
+    runs: vi.fn(async () => []),
+    regenerate: vi.fn(),
+    applyInsight: vi.fn(),
+    validations: vi.fn(async () => []),
+    discussions: vi.fn(async () => []),
+  };
+}
+
+function rejected(issue: DesignGenerationIssue): DesignGenerationPayload {
+  return {
+    status: "REJECTED",
+    version: null,
+    issue,
+    proposal_issue: null,
+    persistence_status: null,
+  };
+}
+
+function evaluationRun(): DesignEvaluationRunPayload {
+  return {
+    schema_version: 1,
+    id: "run-1",
+    project_id: DESIGN_PROJECT_ID,
+    owner_user_id: DESIGN_OWNER_ID,
+    design_version_id: SELECTED_DESIGN_VERSION.id,
+    design_version_number: SELECTED_DESIGN_VERSION.version_number,
+    design_content_hash: SELECTED_DESIGN_VERSION.content_hash,
+    alternative_id: DESIGN_ALTERNATIVE_ID,
+    alternative_code: "DES-001",
+    bundle: {},
+    responses: [
+      {
+        evaluation_run_id: "run-1",
+        artifact_bundle_id: "bundle-1",
+        artifact_bundle_hash: "b".repeat(64),
+        twin_id: "twin-1",
+        twin_version: 1,
+        evaluator: {
+          evaluator_id: "proposer-design-twin-review",
+          evaluator_version: "1",
+          model_config_ref: "config",
+          prompt_version_ref: "prompt",
+        },
+        findings: [
+          {
+            finding_id: "UTF-001",
+            twin_id: "twin-1",
+            twin_version: 1,
+            artifact_id: "prototype-1",
+            artifact_version: 1,
+            location: "SCR-001 Guest name",
+            summary: "The guest name lacks a format hint.",
+            rationale: "The receptionist types under time pressure.",
+            criterion: "comprehensibility",
+            severity: "major",
+            epistemic_status: "MODEL_INFERRED",
+            evidence_refs: [],
+            confidence: 0.7,
+            confidence_semantics: "MODEL_SELF_ASSESSMENT_UNLESS_CALIBRATED",
+            recommended_action: "Add a format hint.",
+            requires_human_validation: true,
+            model_config_ref: "config",
+            prompt_version_ref: "prompt",
+            is_simulated_feedback: true,
+            content_hash: "9".repeat(64),
+          },
+        ],
+        summary: "The flow is short.",
+        evidence_gaps: [],
+        is_simulated_feedback: true,
+        completed_at: DESIGN_CREATED_AT,
+        content_hash: "d".repeat(64),
+        disclaimer: "Simulated feedback.",
+      },
+    ],
+    started_at: DESIGN_CREATED_AT,
+    completed_at: DESIGN_CREATED_AT,
+    content_hash: "e".repeat(64),
+  };
+}
+
+const REQUIREMENTS_APPLICATION: InsightApplicationPayload = {
+  id: "application-1",
+  project_id: DESIGN_PROJECT_ID,
+  owner_user_id: DESIGN_OWNER_ID,
+  source_kind: "SYNTHETIC_FINDING",
+  source_id: "run:run-1:twin-1:UTF-001",
+  source_twin_id: "twin-1",
+  text: "The guest name lacks a format hint.",
+  target: "REQUIREMENTS",
+  target_field: null,
+  target_version_id: REQUIREMENTS_V2.id,
+  target_version_number: 2,
+  target_code: "REQ-004",
+  created_at: DESIGN_CREATED_AT,
+  content_hash: "c".repeat(64),
+};
 
 class FakeDesignApi implements DesignApi {
   savedMockup: DesignMockupPayload | null = null;
@@ -199,8 +416,9 @@ describe("ProjectDesignFlow", () => {
         },
       },
     };
+    const requirementsApi = new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1));
     const wrapper = mount(ProjectDesignFlow, {
-      props: { projectId: DESIGN_PROJECT_ID, authorize, api },
+      props: { projectId: DESIGN_PROJECT_ID, authorize, api, loopApi, requirementsApi },
     });
     await flushPromises();
     expect(wrapper.get("[data-design-mockup]").text()).toContain("Persisted visual mockup");
@@ -216,6 +434,8 @@ describe("ProjectDesignFlow", () => {
         projectId: DESIGN_PROJECT_ID,
         authorize,
         api,
+        loopApi,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
       },
     });
 
@@ -264,6 +484,8 @@ describe("ProjectDesignFlow", () => {
         projectId: DESIGN_PROJECT_ID,
         authorize,
         api,
+        loopApi,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
       },
     });
 
@@ -273,5 +495,148 @@ describe("ProjectDesignFlow", () => {
 
     expect((recommended.element as HTMLInputElement).checked).toBe(false);
     expect(BASE_DESIGN_PACKAGE.owner_selected_alternative_id).toBeNull();
+  });
+
+  it("guides the owner from an insight brought into the requirements to the new design", async () => {
+    const api = new FakeDesignApi();
+    api.readinessResult.version = SELECTED_DESIGN_VERSION;
+    const requirementsApi = new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1));
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([evaluationRun()]);
+    vi.mocked(loop.applyInsight).mockImplementation(async () => {
+      requirementsApi.current = {
+        status: "REQUIREMENTS_APPROVAL_REQUIRED",
+        version: REQUIREMENTS_V2,
+        gate: null,
+        approved_current_specification: false,
+      };
+      return REQUIREMENTS_APPLICATION;
+    });
+    vi.mocked(loop.regenerate).mockImplementation(async () => {
+      api.readinessResult = { ...api.readinessResult, version: REGENERATED_DESIGN_VERSION };
+      return {
+        status: "CREATED",
+        version: REGENERATED_DESIGN_VERSION,
+        issue: null,
+        proposal_issue: null,
+        persistence_status: "APPENDED",
+      };
+    });
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        locale: "it",
+        authorize,
+        api,
+        loopApi: loop,
+        requirementsApi,
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="design-discussion-panel"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="design-next-step"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(true);
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(1);
+
+    await wrapper
+      .get('[data-testid="design-evaluation-panel"] [data-testid="insight-apply-requirements"]')
+      .trigger("click");
+    await flushPromises();
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="design-next-step"]').text()).toContain("REQ-004");
+    expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(false);
+    expect(
+      wrapper.get('[data-testid="design-next-regenerate"]').attributes("disabled"),
+    ).toBeDefined();
+
+    await wrapper.get('[data-testid="design-reapprove-requirements"]').trigger("click");
+    await flushPromises();
+    expect(requirementsApi.submitGate).toHaveBeenCalledTimes(1);
+    expect(requirementsApi.decideGate).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="design-next-step-1-done"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="design-next-regenerate"]').trigger("click");
+    await flushPromises();
+    expect(loop.regenerate).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-next-step"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(true);
+  });
+
+  it("explains a rejected regeneration in plain words instead of showing its code", async () => {
+    const api = new FakeDesignApi();
+    api.readinessResult.version = SELECTED_DESIGN_VERSION;
+    const requirementsApi = new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1));
+    const loop = fakeLoopApi();
+    vi.mocked(loop.regenerate)
+      .mockImplementationOnce(async () => {
+        requirementsApi.current = {
+          status: "REQUIREMENTS_APPROVAL_REQUIRED",
+          version: REQUIREMENTS_V2,
+          gate: null,
+          approved_current_specification: false,
+        };
+        return rejected("REQUIREMENTS_APPROVAL_REQUIRED");
+      })
+      .mockResolvedValueOnce(rejected("DESIGN_PACKAGE_NOT_FOUND"));
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        locale: "it",
+        authorize,
+        api,
+        loopApi: loop,
+        requirementsApi,
+      },
+    });
+    await flushPromises();
+    await wrapper.get('[data-testid="design-regenerate"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "I requisiti sono cambiati e aspettano la tua approvazione. Riapprovali, poi rigenera le alternative di design.",
+    );
+    expect(wrapper.text()).not.toContain("REQUIREMENTS_APPROVAL_REQUIRED");
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(2);
+    await wrapper.get('[data-testid="design-reapprove-requirements"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="design-next-regenerate"]').trigger("click");
+    await flushPromises();
+    expect(loop.regenerate).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "Non c'è ancora un design da rigenerare. Genera prima le alternative di design.",
+    );
+    expect(wrapper.text()).not.toContain("DESIGN_PACKAGE_NOT_FOUND");
+  });
+
+  it("reloads the design after an insight is recorded in the design", async () => {
+    const api = new FakeDesignApi();
+    api.readinessResult.version = SELECTED_DESIGN_VERSION;
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([evaluationRun()]);
+    vi.mocked(loop.applyInsight).mockResolvedValue({
+      ...REQUIREMENTS_APPLICATION,
+      target: "DESIGN",
+      target_version_id: SELECTED_DESIGN_VERSION.id,
+      target_code: "DRK-002",
+    });
+    const readiness = vi.spyOn(api, "readiness");
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        authorize,
+        api,
+        loopApi: loop,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      },
+    });
+    await flushPromises();
+    const loads = readiness.mock.calls.length;
+    await wrapper
+      .get('[data-testid="design-evaluation-panel"] [data-testid="insight-apply-design"]')
+      .trigger("click");
+    await flushPromises();
+    expect(readiness.mock.calls.length).toBe(loads + 1);
   });
 });

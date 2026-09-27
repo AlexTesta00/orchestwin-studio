@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
+import DesignStyleTile from "./DesignStyleTile.vue";
 import UiButton from "./UiButton.vue";
 
 import { apiClient } from "../api/client";
@@ -202,11 +203,18 @@ async function download(): Promise<void> {
           {{ selectedAlternative.code }} · {{ selectedAlternative.title }}
         </p>
         <p class="mt-2 text-sm leading-6 text-ink-2">{{ selectedAlternative.summary }}</p>
+        <DesignStyleTile
+          v-if="selectedAlternative.visual_language"
+          class="mt-4"
+          :visual="selectedAlternative.visual_language"
+          :locale="locale"
+        />
         <h4 class="mt-5 text-sm font-semibold text-ink-2">{{ copy.mockup }}</h4>
         <DeclarativePrototypePreview
           v-if="prototype"
           class="mt-3"
           :prototype="prototype"
+          :visual="selectedAlternative.visual_language"
           :locale="locale"
         />
         <p v-else class="mt-2 text-sm text-ink-3">{{ copy.noMockup }}</p>
