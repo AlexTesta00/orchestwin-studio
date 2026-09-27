@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, Final
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +16,8 @@ from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationRun,
     compare_design_evaluations,
     create_design_evaluation_run,
+    design_review_anchors,
+    design_review_view,
     evaluation_bundle,
     evaluation_document,
 )
@@ -21,12 +25,47 @@ from orchestwin.artifacts.design_evaluation_persistence import (
     DesignEvaluationWriteStatus,
     SqlAlchemyDesignEvaluationRepository,
 )
+from orchestwin.artifacts.design_finding_validation_persistence import (
+    FindingValidationWriteStatus,
+    SqlAlchemyFindingValidationRepository,
+)
+from orchestwin.artifacts.design_finding_validations import (
+    FindingDecision,
+    FindingValidation,
+    dismissed_finding_keys,
+    normalize_finding_note,
+)
+from orchestwin.artifacts.design_static_check import (
+    static_check_bundle,
+    static_check_document,
+    static_check_profile,
+    static_check_target,
+)
 from orchestwin.evaluation.artifact_content import prepare_artifact_content
 from orchestwin.evaluation.evaluator import EvaluationUserTwinProfile, UserTwinEvaluationRequest
+from orchestwin.evaluation.proposer_evaluator import (
+    INVALID_TWIN_REVIEW_OUTPUT,
+    ProposerDesignTwinReviewer,
+)
 from orchestwin.identity.domain import UserAccount
+from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
+from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.twins.persistence.repositories import SqlAlchemyUserTwinVersionRepository
 
 DESIGN_LOOP_API_PREFIX = "/projects/{project_id}/design"
+TWIN_REVIEW_ATTEMPTS: Final = 2
+RETRYABLE_REVIEW_CODES: Final = frozenset(
+    {INVALID_TWIN_REVIEW_OUTPUT, "INVALID_PROVIDER_OUTPUT", "INCOMPLETE_OUTPUT"}
+)
+
+
+class DesignEvaluationMode(StrEnum):
+    TWIN_REVIEW = "TWIN_REVIEW"
+    STATIC_CHECK = "STATIC_CHECK"
+
+
+class DesignEvaluationStatus(StrEnum):
+    RECORDED = "DESIGN_EVALUATION_RECORDED"
 
 
 class DesignEvaluationRequest(BaseModel):
@@ -35,11 +74,28 @@ class DesignEvaluationRequest(BaseModel):
     design_version_id: UUID
     design_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     locale: str = Field(default="it-IT", min_length=2, max_length=20)
+    mode: DesignEvaluationMode | None = None
+
+
+class FindingValidationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    twin_id: UUID
+    finding_id: str = Field(pattern=r"^UTF-[0-9]{3,6}$")
+    decision: FindingDecision
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class DesignEvaluationResult:
+    status: DesignEvaluationStatus
+    run: DesignEvaluationRun
 
 
 class DesignLoopApplication:
     def __init__(self, runtime):
         self.runtime = runtime
+        self._proposal_evidence_store = getattr(runtime, "proposal_evidence_store", None)
 
     def _sessions(self):
         database = getattr(self.runtime, "database_runtime", None)
@@ -72,29 +128,85 @@ class DesignLoopApplication:
                 twins.append(twin)
         return twins
 
-    async def evaluate(self, *, owner_user_id, project_id, body) -> DesignEvaluationRun:
-        version = await self._current(owner_user_id, project_id)
-        if (version.id, version.content_hash) != (body.design_version_id, body.design_content_hash):
-            raise HTTPException(409, detail={"code": "DESIGN_CONTEXT_CHANGED"})
-        evaluator_runtime = getattr(self.runtime, "final_evaluator_runtime", None)
-        if evaluator_runtime is None:
+    def _generator(self):
+        real = getattr(self.runtime, "real_model_runtime", None)
+        if real is None or self._proposal_evidence_store is None:
+            return None
+        return real.user_modeling.proposal_port.generator
+
+    def _mode(self, requested):
+        generator = self._generator()
+        evaluator = getattr(self.runtime, "final_evaluator_runtime", None)
+        if requested is DesignEvaluationMode.TWIN_REVIEW or (
+            requested is None and generator is not None
+        ):
+            if generator is None:
+                raise HTTPException(503, detail={"code": "DESIGN_REVIEWER_NOT_CONFIGURED"})
+            return DesignEvaluationMode.TWIN_REVIEW, generator
+        if evaluator is None:
             raise HTTPException(503, detail={"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"})
+        return DesignEvaluationMode.STATIC_CHECK, evaluator
+
+    @staticmethod
+    async def _retire(code, run_id):
+        scope = current_proposal_evidence()
+        if scope is None or scope.request is None:
+            return
+        await scope.event("APPLICATION_RESULT", {"status": code, "evaluation_run_id": str(run_id)})
+        scope.retire(role="TWIN_REVIEW", code=code)
+
+    async def _review(self, reviewer, request):
+        for attempt in range(1, TWIN_REVIEW_ATTEMPTS + 1):
+            try:
+                return await reviewer.evaluate(request)
+            except ProposalGenerationError as error:
+                if attempt == TWIN_REVIEW_ATTEMPTS or error.code not in RETRYABLE_REVIEW_CODES:
+                    raise
+                await self._retire("TWIN_REVIEW_REJECTED", request.evaluation_run_id)
+        raise RuntimeError("twin review attempts are exhausted")
+
+    async def _twin_review(self, generator, version, twins, bundle, run_id):
         try:
-            document = evaluation_document(version, language=body.locale.split("-")[0])
+            reviewer = ProposerDesignTwinReviewer(
+                generator,
+                design_view=design_review_view(version),
+                anchors=design_review_anchors(version),
+            )
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
-        twins = await self._twins(owner_user_id, project_id, version)
-        started_at = datetime.now(UTC)
-        run_id = uuid4()
-        bundle = evaluation_bundle(version, document, locale=body.locale, created_at=started_at)
+        responses = []
+        for index, twin in enumerate(twins):
+            request = UserTwinEvaluationRequest(
+                evaluation_run_id=run_id,
+                project_id=version.project_id,
+                workflow_run_id=version.id,
+                artifact_bundle=bundle,
+                twin=EvaluationUserTwinProfile.from_version(twin),
+                evidence=(),
+                requested_at=datetime.now(UTC),
+            )
+            try:
+                responses.append(await self._review(reviewer, request))
+            except ValueError as error:
+                raise HTTPException(
+                    502,
+                    detail={"code": "DESIGN_EVALUATION_FAILED", "reason": str(error)[:300]},
+                ) from error
+            if index < len(twins) - 1:
+                await self._retire("TWIN_REVIEWED", run_id)
+        return responses
+
+    async def _static_check(
+        self, evaluator_runtime, version, twins, bundle, document, target, run_id
+    ):
         responses = []
         for twin in twins:
             request = UserTwinEvaluationRequest(
                 evaluation_run_id=run_id,
-                project_id=project_id,
+                project_id=version.project_id,
                 workflow_run_id=version.id,
                 artifact_bundle=bundle,
-                twin=EvaluationUserTwinProfile.from_version(twin),
+                twin=static_check_profile(EvaluationUserTwinProfile.from_version(twin), target),
                 evidence=(),
                 requested_at=datetime.now(UTC),
             )
@@ -113,6 +225,36 @@ class DesignLoopApplication:
                     502,
                     detail={"code": "DESIGN_EVALUATION_FAILED", "reason": str(error)[:300]},
                 ) from error
+        return responses
+
+    @evidence_application
+    async def evaluate(self, *, owner_user_id, project_id, body) -> DesignEvaluationResult:
+        version = await self._current(owner_user_id, project_id)
+        if (version.id, version.content_hash) != (body.design_version_id, body.design_content_hash):
+            raise HTTPException(409, detail={"code": "DESIGN_CONTEXT_CHANGED"})
+        mode, engine = self._mode(body.mode)
+        started_at = datetime.now(UTC)
+        run_id = uuid4()
+        try:
+            if mode is DesignEvaluationMode.TWIN_REVIEW:
+                document = evaluation_document(version, language=body.locale.split("-")[0])
+                bundle = evaluation_bundle(
+                    version, document, locale=body.locale, created_at=started_at
+                )
+                target = None
+            else:
+                target = static_check_target(version, locale=body.locale)
+                document = static_check_document(version, target)
+                bundle = static_check_bundle(version, document, target, created_at=started_at)
+        except DesignEvaluationError as error:
+            raise HTTPException(409, detail={"code": error.code}) from error
+        twins = await self._twins(owner_user_id, project_id, version)
+        if mode is DesignEvaluationMode.TWIN_REVIEW:
+            responses = await self._twin_review(engine, version, twins, bundle, run_id)
+        else:
+            responses = await self._static_check(
+                engine, version, twins, bundle, document, target, run_id
+            )
         try:
             run = create_design_evaluation_run(
                 run_id=run_id,
@@ -137,7 +279,7 @@ class DesignLoopApplication:
             ).create(run)
             if status is not DesignEvaluationWriteStatus.WRITTEN:
                 raise HTTPException(409, detail={"code": f"DESIGN_EVALUATION_{status.value}"})
-        return run
+        return DesignEvaluationResult(status=DesignEvaluationStatus.RECORDED, run=run)
 
     async def runs(self, *, owner_user_id, project_id) -> tuple[DesignEvaluationRun, ...]:
         sessions = self._sessions()
@@ -146,12 +288,59 @@ class DesignLoopApplication:
                 session, owner_user_id=owner_user_id
             ).list(project_id=project_id)
 
+    async def record_validation(
+        self, *, owner_user_id, project_id, run_id, body
+    ) -> FindingValidation:
+        try:
+            note = normalize_finding_note(body.note)
+        except ValueError as error:
+            raise HTTPException(422, detail={"code": "FINDING_NOTE_INVALID"}) from error
+        sessions = self._sessions()
+        async with sessions() as session, session.begin():
+            result = await SqlAlchemyFindingValidationRepository(
+                session, owner_user_id=owner_user_id
+            ).append(
+                project_id=project_id,
+                evaluation_run_id=run_id,
+                twin_id=body.twin_id,
+                finding_id=body.finding_id,
+                decision=body.decision,
+                note=note,
+                decided_at=datetime.now(UTC),
+            )
+            if result.status is not FindingValidationWriteStatus.WRITTEN:
+                raise HTTPException(404, detail={"code": "DESIGN_FINDING_NOT_FOUND"})
+        return result.validation
+
+    async def validations(self, *, owner_user_id, project_id) -> tuple[FindingValidation, ...]:
+        sessions = self._sessions()
+        async with sessions() as session:
+            return await SqlAlchemyFindingValidationRepository(
+                session, owner_user_id=owner_user_id
+            ).current(project_id=project_id)
+
+    async def _dismissed(self, *, owner_user_id, project_id):
+        return dismissed_finding_keys(
+            await self.validations(owner_user_id=owner_user_id, project_id=project_id)
+        )
+
     async def comparison(self, *, owner_user_id, project_id):
         runs = await self.runs(owner_user_id=owner_user_id, project_id=project_id)
-        if len(runs) < 2:
+        if not runs:
             raise HTTPException(404, detail={"code": "DESIGN_EVALUATION_COMPARISON_UNAVAILABLE"})
-        head, base = runs[0], runs[1]
-        return compare_design_evaluations(base, head)
+        head = runs[0]
+        base = next(
+            (
+                item
+                for item in runs[1:]
+                if item.evaluator.evaluator_id == head.evaluator.evaluator_id
+            ),
+            None,
+        )
+        if base is None:
+            raise HTTPException(404, detail={"code": "DESIGN_EVALUATION_COMPARISON_UNAVAILABLE"})
+        dismissed = await self._dismissed(owner_user_id=owner_user_id, project_id=project_id)
+        return compare_design_evaluations(base, head, dismissed=dismissed)
 
     async def regenerate(self, *, owner_user_id, project_id):
         service = getattr(self.runtime, "design_generation_service", None)
@@ -170,10 +359,10 @@ def create_design_loop_router():
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
     ):
-        run = await DesignLoopApplication(request.app.state.application_runtime).evaluate(
+        result = await DesignLoopApplication(request.app.state.application_runtime).evaluate(
             owner_user_id=user.id, project_id=project_id, body=body
         )
-        return run.to_snapshot()
+        return result.run.to_snapshot()
 
     @router.get("/evaluations")
     async def runs(
@@ -197,6 +386,30 @@ def create_design_loop_router():
         )
         return result.to_snapshot()
 
+    @router.get("/evaluations/validations")
+    async def validations(
+        project_id: UUID,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+    ):
+        items = await DesignLoopApplication(request.app.state.application_runtime).validations(
+            owner_user_id=user.id, project_id=project_id
+        )
+        return [item.to_snapshot() for item in items]
+
+    @router.post("/evaluations/{run_id}/validations", status_code=201)
+    async def record_validation(
+        project_id: UUID,
+        run_id: UUID,
+        body: FindingValidationRequest,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+    ):
+        validation = await DesignLoopApplication(
+            request.app.state.application_runtime
+        ).record_validation(owner_user_id=user.id, project_id=project_id, run_id=run_id, body=body)
+        return validation.to_snapshot()
+
     @router.post("/regenerations", status_code=201)
     async def regenerate(
         project_id: UUID,
@@ -213,7 +426,11 @@ def create_design_loop_router():
 
 __all__ = [
     "DESIGN_LOOP_API_PREFIX",
+    "DesignEvaluationMode",
     "DesignEvaluationRequest",
+    "DesignEvaluationResult",
+    "DesignEvaluationStatus",
     "DesignLoopApplication",
+    "FindingValidationRequest",
     "create_design_loop_router",
 ]

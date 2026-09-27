@@ -311,6 +311,44 @@ def _shorten(text: str, limit: int | None) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _review_element_html(
+    element: Mapping[str, object], *, state: str, targets: Mapping[str, str]
+) -> str:
+    kind = str(element["kind"])
+    identifier = _attr(str(element["code"]).lower())
+    content = _text(element["content"])
+    name = str(element.get("accessible_name") or element["content"])
+    if kind == HEADING:
+        return f'<h3 id="{identifier}">{content}</h3>'
+    if kind == TEXT:
+        return f'<p id="{identifier}">{content}</p>'
+    if kind == LIST:
+        return f'<ul id="{identifier}"><li>{content}</li></ul>'
+    if kind == CARD:
+        return f'<article id="{identifier}">{content}</article>'
+    if kind == STATUS:
+        role = "alert" if state == "ERROR" else "status"
+        return f'<p id="{identifier}" role="{role}">{content}</p>'
+    if kind in {TEXT_INPUT, SELECT}:
+        field = _attr(element.get("field_name") or element["code"])
+        required = ' required aria-required="true"' if element.get("required") else ""
+        label = f'<label for="{identifier}">{_text(name)}</label>'
+        if kind == TEXT_INPUT:
+            return f'{label}<input type="text" id="{identifier}" name="{field}"{required}>'
+        options = "".join(
+            f"<option>{_text(option)}</option>" for option in element.get("options", ())
+        )
+        return f'{label}<select id="{identifier}" name="{field}"{required}>{options}</select>'
+    target = targets.get(str(element["id"]))
+    described = "" if name == str(element["content"]) else f' aria-label="{_attr(name)}"'
+    if kind == BUTTON:
+        leads = "" if target is None else f' data-target="{_attr(_screen_anchor(target))}"'
+        return f'<button type="button" id="{identifier}"{leads}{described}>{content}</button>'
+    if target is None:
+        return f'<a id="{identifier}" aria-disabled="true"{described}>{content}</a>'
+    return f'<a id="{identifier}" href="#{_attr(_screen_anchor(target))}"{described}>{content}</a>'
+
+
 def render_evaluation_document(
     package: Mapping[str, object], *, language: str = "und", max_content: int | None = None
 ) -> str:
@@ -342,18 +380,26 @@ def render_evaluation_document(
     parts.append("</header><main>")
     for screen in screens:
         elements = [
-            {**element, "content": _shorten(str(element["content"]), max_content)}
+            {
+                **element,
+                "content": _shorten(str(element["content"]), max_content),
+                "accessible_name": None
+                if element.get("accessible_name") is None
+                else _shorten(str(element["accessible_name"]), max_content),
+            }
             for element in screen["elements"]
         ]
+        anchor = _attr(_screen_anchor(str(screen["code"])))
         body = "".join(
-            _element_html(
-                element, zone="main", state=str(screen["state"]), index=index, targets=targets
-            )
-            for index, element in enumerate(elements)
+            _review_element_html(element, state=str(screen["state"]), targets=targets)
+            for element in elements
         )
+        if any(element["kind"] in {TEXT_INPUT, SELECT} for element in elements):
+            body = f'<form id="{anchor}-form" aria-labelledby="{anchor}-title">{body}</form>'
         parts.append(
-            f'<section id="{_attr(_screen_anchor(str(screen["code"])))}" '
-            f'data-state="{_attr(str(screen["state"]))}"><h2>{_text(screen["title"])}</h2>{body}</section>'
+            f'<section id="{anchor}" data-state="{_attr(str(screen["state"]))}" '
+            f'aria-labelledby="{anchor}-title"><h2 id="{anchor}-title">'
+            f"{_text(screen['title'])}</h2>{body}</section>"
         )
     parts.append("</main></body></html>")
     return "".join(parts)

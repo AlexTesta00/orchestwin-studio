@@ -1,9 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from uuid import UUID
 
-from orchestwin.artifacts.mockup_html import MOCKUP_HTML_FILE, mockup_html, render_mockup_html
-from orchestwin.artifacts.prototypes import create_prototype_element, create_prototype_screen
+import pytest
+
+from orchestwin.artifacts.mockup_html import (
+    MOCKUP_HTML_FILE,
+    mockup_html,
+    render_evaluation_document,
+    render_mockup_html,
+)
+from orchestwin.artifacts.prototypes import (
+    PrototypeElementKind,
+    PrototypeScreenState,
+    create_prototype_element,
+    create_prototype_screen,
+    create_prototype_transition,
+)
 from orchestwin.artifacts.visual_catalog import LayoutArchetype, NavigationPattern
 
 from . import design_fixtures
@@ -125,3 +139,147 @@ def test_guided_steps_render_a_stepper_and_focus_mode_stays_bare():
     assert "shell-FOCUS_MODE nav-NONE" in bare
     assert '<nav class="links"' not in bare
     assert '<aside class="rail"' not in bare
+
+
+def test_evaluation_document_is_semantic_and_labels_every_control():
+    html = render_evaluation_document(design_fixtures.design_package().to_snapshot(), language="it")
+    assert html.startswith(
+        '<!doctype html><html lang="it"><head><meta charset="utf-8">'
+        "<title>Reservation flow prototype</title></head><body><header>"
+        "<h1>Reservation flow prototype</h1>"
+        "<p>Guide the receptionist through one decision at a time.</p></header><main>"
+    )
+    assert (
+        '<section id="scr-001" data-state="DEFAULT" aria-labelledby="scr-001-title">'
+        '<h2 id="scr-001-title">Create reservation</h2>'
+        '<form id="scr-001-form" aria-labelledby="scr-001-title">'
+        '<label for="elm-001">Guest name</label>'
+        '<input type="text" id="elm-001" name="guest_name" required aria-required="true">'
+        '<button type="button" id="elm-002" data-target="scr-002">Save reservation</button>'
+        "</form></section>"
+    ) in html
+    assert (
+        '<section id="scr-002" data-state="SUCCESS" aria-labelledby="scr-002-title">'
+        '<h2 id="scr-002-title">Reservation confirmation</h2>'
+        '<p id="elm-003" role="status">Reservation saved</p></section></main></body></html>'
+    ) in html
+    assert "scr-002-form" not in html
+    assert 'data-role="visual-language"' not in html
+    assert "<style" not in html and "<script" not in html and "class=" not in html
+
+
+def test_evaluation_document_marks_error_alerts_and_names_every_element_kind():
+    package = dashboard_package()
+    prototype = package.prototype
+    requirements = prototype.screens[0].requirement_ids
+
+    def element(ordinal, kind, content, **options):
+        return create_prototype_element(
+            element_id=UUID(int=600 + ordinal),
+            code=f"ELM-{ordinal:03d}",
+            kind=kind,
+            content=content,
+            **options,
+        )
+
+    def control(ordinal, kind, content, name, **options):
+        return element(
+            ordinal, kind, content, accessible_name=name, requirement_ids=requirements, **options
+        )
+
+    back = control(19, PrototypeElementKind.LINK, "Back", "Back")
+    error = create_prototype_screen(
+        screen_id=UUID(int=650),
+        code="SCR-003",
+        title="Booking error",
+        state=PrototypeScreenState.ERROR,
+        elements=(
+            element(11, PrototypeElementKind.HEADING, "Check the dates"),
+            control(
+                12,
+                PrototypeElementKind.SELECT,
+                "Room type",
+                "Room type",
+                field_name="room",
+                options=("Single", "Double"),
+            ),
+            control(13, PrototypeElementKind.BUTTON, "Retry", "Retry the booking"),
+            control(14, PrototypeElementKind.LINK, "Help", "Help"),
+            element(15, PrototypeElementKind.STATUS, "The dates overlap."),
+            element(16, PrototypeElementKind.LIST, "Arrival · Departure"),
+            element(17, PrototypeElementKind.CARD, "Two nights"),
+            element(18, PrototypeElementKind.TEXT, "Fix the dates."),
+            back,
+        ),
+        requirement_ids=requirements,
+    )
+    leave = create_prototype_transition(
+        transition_id=UUID(int=660),
+        code="TRN-002",
+        source_screen_id=error.id,
+        trigger_element_id=back.id,
+        target_screen_id=prototype.entry_screen_id,
+        outcome="The reservation form opens again.",
+    )
+    snapshot = replace(
+        package,
+        prototype=replace(
+            prototype,
+            screens=(*prototype.screens, error),
+            transitions=(*prototype.transitions, leave),
+        ),
+    ).to_snapshot()
+    html = render_evaluation_document(snapshot)
+    assert '<html lang="und">' in html
+    assert "<title>Reservation desk</title>" in html and "<h1>Reservation desk</h1>" in html
+    assert '<p data-role="visual-language">archetype: DASHBOARD; hue_family: EMERALD;' in html
+    assert "navigation: SIDE_RAIL" in html
+    assert (
+        '<section id="scr-003" data-state="ERROR" aria-labelledby="scr-003-title">'
+        '<h2 id="scr-003-title">Booking error</h2>'
+        '<form id="scr-003-form" aria-labelledby="scr-003-title">'
+        '<h3 id="elm-011">Check the dates</h3>'
+        '<label for="elm-012">Room type</label><select id="elm-012" name="room">'
+        "<option>Single</option><option>Double</option></select>"
+        '<button type="button" id="elm-013" aria-label="Retry the booking">Retry</button>'
+        '<a id="elm-014" aria-disabled="true">Help</a>'
+        '<p id="elm-015" role="alert">The dates overlap.</p>'
+        '<ul id="elm-016"><li>Arrival · Departure</li></ul>'
+        '<article id="elm-017">Two nights</article>'
+        '<p id="elm-018">Fix the dates.</p>'
+        '<a id="elm-019" href="#scr-001">Back</a></form></section>'
+    ) in html
+    assert html == render_evaluation_document(snapshot)
+
+
+def test_evaluation_document_shortens_and_escapes_model_text():
+    package = design_fixtures.design_package()
+    prototype = package.prototype
+    first = prototype.screens[0]
+    field = replace(
+        first.elements[0],
+        content="Guest <b>name</b> " + "x" * 50,
+        accessible_name='Guest "name" & <i>more</i> ' + "y" * 50,
+    )
+    button = replace(first.elements[1], content="Save <now> " + "z" * 50)
+    snapshot = replace(
+        package,
+        prototype=replace(
+            prototype,
+            screens=(replace(first, elements=(field, button)), prototype.screens[1]),
+        ),
+    ).to_snapshot()
+    html = render_evaluation_document(snapshot, max_content=20)
+    assert "<p>Guide the reception…</p>" in html
+    assert '<label for="elm-001">Guest "name" &amp; &lt;i&gt;m…</label>' in html
+    assert (
+        '<button type="button" id="elm-002" data-target="scr-002" '
+        'aria-label="Save reservation">Save &lt;now&gt; zzzzzzzz…</button>'
+    ) in html
+    assert "<i>" not in html and "<now>" not in html and "<b>" not in html
+    full = render_evaluation_document(snapshot)
+    assert "z" * 50 + "</button>" in full
+    with pytest.raises(ValueError, match="requires a prototype"):
+        render_evaluation_document(
+            replace(package, owner_selected_alternative_id=None, prototype=None).to_snapshot()
+        )
