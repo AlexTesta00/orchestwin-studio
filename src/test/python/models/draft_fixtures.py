@@ -163,7 +163,7 @@ def proposal_draft(stage, value, request):
             item["visual"] = {
                 **language["choices"],
                 **explored_choices(request.project_id, item["code"]),
-                "approach_rationale": language["rationale"],
+                "visual_rationale": language["rationale"],
                 "product_name": language["product_name"],
                 "twin_fit": [
                     {"twin": keys[fit["twin_id"]], "statement": fit["statement"]}
@@ -172,8 +172,9 @@ def proposal_draft(stage, value, request):
             }
         for item in result["critiques"]:
             item["alternative"] = item.pop("design_alternative_id")
-            item["twin"] = item.pop("user_twin_reference")
-            twin = request.user_modeling.user_twins[int(item["twin"][1:]) - 1]
+            item["as_twin"] = item.pop("user_twin_reference")
+            item["on_accessibility"] = item.pop("accessibility_observations")
+            twin = request.user_modeling.user_twins[int(item["as_twin"][1:]) - 1]
             item["observation_keys"] = [twin.observations[0].observation_key]
             item["confidence"] = item["confidence"]["value"]
             for key in ("provenance", "epistemic_status", "human_validation", "kind"):

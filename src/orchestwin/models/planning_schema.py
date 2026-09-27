@@ -50,7 +50,7 @@ def constrain_planning_schema(schema, context, task):
             target = field.get("items", field)
             if name in prefixes:
                 target.update(reference(prefixes[name]))
-            elif name in {"twin", "twins"}:
+            elif name in {"twin", "twins", "as_twin"}:
                 target.update(type="string", enum=list(context["twins"]))
             elif name == "sources":
                 target.update(type="string", enum=list(context["evidence"]))
@@ -85,7 +85,7 @@ def constrain_planning_schema(schema, context, task):
                 {
                     "code": {"const": f"CRQ-{index:03d}"},
                     "alternative": {"const": alternative},
-                    "twin": {"const": key},
+                    "as_twin": {"const": key},
                     "observation_keys": {"items": {"enum": list(twin["observations"])}},
                 }
                 for index, (alternative, key, twin) in enumerate(pairs, 1)
