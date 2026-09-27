@@ -86,6 +86,63 @@ function round(ordinal: number, ownerNote: string | null = null): DiscussionRoun
   };
 }
 
+function reactingRound(ordinal: number): DiscussionRoundPayload {
+  return {
+    ...round(ordinal),
+    statements: [
+      {
+        ...statement(
+          "twin-1",
+          "Marta Rinaldi",
+          "CONCERN",
+          "A shortcut is fine if the booking summary stays on screen.",
+          ["twin-2"],
+        ),
+        reactions: [
+          {
+            twin_id: "twin-2",
+            verdict: "PARTLY",
+            reason: "Speed matters, but so does the summary.",
+          },
+        ],
+      },
+      {
+        ...statement(
+          "twin-2",
+          "Luca Bianchi",
+          "SUPPORT",
+          "With a shortcut I can live with the separate steps.",
+          ["twin-1"],
+        ),
+        reactions: [
+          {
+            twin_id: "twin-1",
+            verdict: "AGREE",
+            reason: "Keeping the summary visible helps me too.",
+          },
+          {
+            twin_id: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+            verdict: "DISAGREE",
+            reason: "The night shift does not need a separate flow.",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function answeredRound(ordinal: number): DiscussionRoundPayload {
+  const base = round(ordinal, "Pensate ai turni di notte");
+  return {
+    ...base,
+    statements: base.statements.map((item) =>
+      item.twin_id === "twin-1"
+        ? { ...item, answer_to_owner: "Di notte serve lo stesso percorso rapido, con meno campi." }
+        : item,
+    ),
+  };
+}
+
 function discussion(
   overrides: Partial<DesignDiscussionPayload> = {},
   rounds = 1,
@@ -196,6 +253,96 @@ describe("ProjectDesignDiscussionPanel", () => {
     expect(synthesis.text()).toContain("Who uses the desk at peak times?");
     expect(wrapper.find('[data-testid="discussion-start"]').exists()).toBe(false);
     await expectAccessible(wrapper.element);
+  });
+
+  it("shows each twin's reactions to the others and keeps the replies for rounds without them", async () => {
+    const api = fakeApi([discussion({ rounds: [round(1), reactingRound(2)] })]);
+    const wrapper = mountPanel(api);
+    await flushPromises();
+    const rounds = wrapper.findAll('[data-testid="discussion-round"]');
+    const [first, second] = rounds;
+    if (first === undefined || second === undefined) {
+      throw new Error("The discussion rounds were not rendered");
+    }
+    expect(first.find('[data-testid="discussion-reactions"]').exists()).toBe(false);
+    expect(
+      first
+        .findAll('[data-testid="discussion-statement"]')[1]
+        ?.get('[data-testid="discussion-replies-to"]')
+        .text(),
+    ).toBe("risponde a Marta Rinaldi");
+    expect(second.find('[data-testid="discussion-replies-to"]').exists()).toBe(false);
+    const statements = second.findAll('[data-testid="discussion-statement"]');
+    expect(statements[0]?.get('[data-testid="discussion-reactions"]').text()).toContain(
+      "Reazioni agli altri twin",
+    );
+    const lines = statements[1]?.findAll('[data-testid="discussion-reaction"]') ?? [];
+    expect(
+      lines.map((line) => [
+        line.get("strong").text(),
+        line.get('[data-testid="discussion-verdict"]').text(),
+        line.attributes("data-verdict"),
+      ]),
+    ).toEqual([
+      ["Marta Rinaldi", "D'accordo", "AGREE"],
+      ["7c9e6679", "Non d'accordo", "DISAGREE"],
+    ]);
+    expect(lines[0]?.text()).toContain("Keeping the summary visible helps me too.");
+    expect(lines[1]?.text()).toContain("The night shift does not need a separate flow.");
+    await wrapper.setProps({ locale: "en" });
+    expect(second.findAll('[data-testid="discussion-verdict"]').map((chip) => chip.text())).toEqual(
+      ["Partly", "Agrees", "Disagrees"],
+    );
+    expect(first.findAll('[data-testid="discussion-replies-to"]')[0]?.text()).toBe(
+      "answers Marta Rinaldi",
+    );
+    await expectAccessible(wrapper.element);
+  });
+
+  it("shows a twin's answer to the owner's note after the note and before the statement", async () => {
+    const api = fakeApi([discussion({ rounds: [round(1), answeredRound(2)] })]);
+    const wrapper = mountPanel(api);
+    await flushPromises();
+    const second = wrapper.findAll('[data-testid="discussion-round"]')[1];
+    const answered = second?.findAll('[data-testid="discussion-statement"]')[0];
+    if (second === undefined || answered === undefined) {
+      throw new Error("The answered statement was not rendered");
+    }
+    const answer = answered.get('[data-testid="discussion-answer-to-owner"]');
+    expect(answer.text()).toContain("Risposta alla nota del proprietario");
+    expect(answer.text()).toContain("Di notte serve lo stesso percorso rapido, con meno campi.");
+    expect(answered.text().indexOf("Di notte serve")).toBeLessThan(
+      answered.text().indexOf("The guided flow keeps me calm"),
+    );
+    const roundText = second.text();
+    expect(second.get('[data-testid="discussion-owner-note"]').text()).toBe(
+      "La tua nota: Pensate ai turni di notte",
+    );
+    expect(roundText.indexOf("La tua nota")).toBeLessThan(
+      roundText.indexOf("Risposta alla nota del proprietario"),
+    );
+    await wrapper.setProps({ locale: "en" });
+    expect(answered.get('[data-testid="discussion-answer-to-owner"]').text()).toContain(
+      "Answer to the owner's note",
+    );
+    await expectAccessible(wrapper.element);
+  });
+
+  it("shows no answer block for the statements that did not answer the owner", async () => {
+    const api = fakeApi([discussion({ rounds: [round(1), answeredRound(2)] })]);
+    const wrapper = mountPanel(api);
+    await flushPromises();
+    const [first, second] = wrapper.findAll('[data-testid="discussion-round"]');
+    const silent = second?.findAll('[data-testid="discussion-statement"]')[1];
+    if (first === undefined || silent === undefined) {
+      throw new Error("The discussion rounds were not rendered");
+    }
+    expect(first.find('[data-testid="discussion-owner-note"]').exists()).toBe(false);
+    expect(first.find('[data-testid="discussion-answer-to-owner"]').exists()).toBe(false);
+    expect(first.text()).not.toContain("Risposta alla nota del proprietario");
+    expect(silent.find('[data-testid="discussion-answer-to-owner"]').exists()).toBe(false);
+    expect(silent.text()).not.toContain("Risposta alla nota del proprietario");
+    expect(silent.text()).toContain("Too many steps for someone who books twenty rooms a day.");
   });
 
   it("asks for another round with a note, then approves the synthesis", async () => {

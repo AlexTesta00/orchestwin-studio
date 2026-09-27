@@ -16,6 +16,7 @@ export type DesignEvaluationMode = "TWIN_REVIEW" | "STATIC_CHECK";
 export type FindingDecision = "OWNER_CONFIRMED" | "OWNER_DISMISSED";
 export type DesignDiscussionStatus = "OPEN" | "APPROVED" | "CLOSED";
 export type DiscussionStance = "SUPPORT" | "CONCERN" | "OBJECTION";
+export type DiscussionVerdict = "AGREE" | "PARTLY" | "DISAGREE";
 export type DiscussionDecisionAction = "APPROVE" | "CLOSE";
 export type InsightBriefField =
   | "goals"
@@ -131,6 +132,12 @@ export interface FindingValidationPayload {
   content_hash: string;
 }
 
+export interface DiscussionReactionPayload {
+  twin_id: UUID;
+  verdict: DiscussionVerdict;
+  reason: string;
+}
+
 export interface DiscussionStatementPayload {
   twin_id: UUID;
   twin_version: number;
@@ -142,6 +149,8 @@ export interface DiscussionStatementPayload {
   grounded_on: string[];
   confidence: number;
   model_generation_id: string;
+  reactions?: DiscussionReactionPayload[];
+  answer_to_owner?: string;
 }
 
 export interface DiscussionConflictPayload {

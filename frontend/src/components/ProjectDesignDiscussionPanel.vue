@@ -10,8 +10,11 @@ import type {
   DesignDiscussionPayload,
   DiscussionDecisionAction,
   DiscussionProposalPayload,
+  DiscussionReactionPayload,
   DiscussionRoundPayload,
   DiscussionStance,
+  DiscussionStatementPayload,
+  DiscussionVerdict,
   InsightApplicationPayload,
   InsightSource,
 } from "@/types/designLoop";
@@ -55,6 +58,7 @@ const messages = {
     roundOf: "Round {n} of {max}",
     statements: "{n} contributions",
     yourNote: "Your note",
+    answerToOwner: "Answer to the owner's note",
     repliesTo: "answers {names}",
     proposes: "Proposes",
     confidence: "confidence {value}",
@@ -62,6 +66,12 @@ const messages = {
       SUPPORT: "Supports",
       CONCERN: "Has doubts",
       OBJECTION: "Objects",
+    },
+    reactions: "Reactions to the other twins",
+    verdict: {
+      AGREE: "Agrees",
+      PARTLY: "Partly",
+      DISAGREE: "Disagrees",
     },
     synthesis: "Moderator's summary",
     agreements: "Where they agree",
@@ -119,6 +129,7 @@ const messages = {
     roundOf: "Giro {n} di {max}",
     statements: "{n} interventi",
     yourNote: "La tua nota",
+    answerToOwner: "Risposta alla nota del proprietario",
     repliesTo: "risponde a {names}",
     proposes: "Propone",
     confidence: "confidenza {value}",
@@ -126,6 +137,12 @@ const messages = {
       SUPPORT: "Favorevole",
       CONCERN: "Ha dei dubbi",
       OBJECTION: "Contrario",
+    },
+    reactions: "Reazioni agli altri twin",
+    verdict: {
+      AGREE: "D'accordo",
+      PARTLY: "In parte",
+      DISAGREE: "Non d'accordo",
     },
     synthesis: "Sintesi del moderatore",
     agreements: "Dove sono d'accordo",
@@ -254,6 +271,16 @@ function stanceClass(stance: DiscussionStance): string {
   if (stance === "SUPPORT") return "border-ok-line bg-ok-bg text-ok-dark";
   if (stance === "CONCERN") return "border-hypothesis-line bg-hypothesis-bg text-hypothesis-text";
   return "border-fail-line bg-fail-bg text-fail-dark";
+}
+
+function verdictClass(verdict: DiscussionVerdict): string {
+  if (verdict === "AGREE") return "border-ok-line bg-ok-bg text-ok-dark";
+  if (verdict === "PARTLY") return "border-hypothesis-line bg-hypothesis-bg text-hypothesis-text";
+  return "border-fail-line bg-fail-bg text-fail-dark";
+}
+
+function reactionsOf(statement: DiscussionStatementPayload): DiscussionReactionPayload[] {
+  return statement.reactions ?? [];
 }
 
 function normalized(value: string): string | null {
@@ -442,7 +469,11 @@ watch(() => props.projectId, load);
           </span>
         </summary>
         <div class="mt-3 grid gap-4">
-          <p v-if="round.owner_note" class="m-0 text-sm text-ink-2">
+          <p
+            v-if="round.owner_note"
+            class="m-0 text-sm text-ink-2"
+            data-testid="discussion-owner-note"
+          >
             <strong>{{ copy.yourNote }}:</strong> {{ round.owner_note }}
           </p>
           <ul class="m-0 grid list-none gap-3 p-0">
@@ -462,16 +493,56 @@ watch(() => props.projectId, load);
                 >
                   {{ copy.stance[statement.stance] }}
                 </span>
-                <span v-if="statement.replies_to.length > 0" class="text-ink-3">
+                <span
+                  v-if="reactionsOf(statement).length === 0 && statement.replies_to.length > 0"
+                  class="text-ink-3"
+                  data-testid="discussion-replies-to"
+                >
                   {{ fill(copy.repliesTo, { names: listOf(statement.replies_to) }) }}
                 </span>
                 <span class="text-ink-3">
                   {{ fill(copy.confidence, { value: confidence(statement.confidence) }) }}
                 </span>
               </div>
+              <div
+                v-if="statement.answer_to_owner"
+                class="grid gap-1 border-l-2 border-action-soft-line pl-3 text-sm"
+                data-testid="discussion-answer-to-owner"
+              >
+                <p class="m-0 text-xs font-semibold text-ink-3">{{ copy.answerToOwner }}</p>
+                <p class="m-0 leading-6 whitespace-pre-line text-ink">
+                  {{ statement.answer_to_owner }}
+                </p>
+              </div>
               <p class="m-0 text-sm leading-6 whitespace-pre-line text-ink">
                 {{ statement.statement }}
               </p>
+              <div
+                v-if="reactionsOf(statement).length > 0"
+                class="grid gap-1 text-sm"
+                data-testid="discussion-reactions"
+              >
+                <p class="m-0 text-xs font-semibold text-ink-3">{{ copy.reactions }}</p>
+                <ul class="m-0 grid list-none gap-1 p-0">
+                  <li
+                    v-for="(reaction, index) in reactionsOf(statement)"
+                    :key="`${reaction.twin_id}:${index}`"
+                    class="flex flex-wrap items-baseline gap-2"
+                    :data-verdict="reaction.verdict"
+                    data-testid="discussion-reaction"
+                  >
+                    <strong class="text-ink">{{ twinName(reaction.twin_id) }}</strong>
+                    <span
+                      class="rounded-pill border px-2 py-0.5 text-xs font-semibold"
+                      :class="verdictClass(reaction.verdict)"
+                      data-testid="discussion-verdict"
+                    >
+                      {{ copy.verdict[reaction.verdict] }}
+                    </span>
+                    <span class="text-ink-2">{{ reaction.reason }}</span>
+                  </li>
+                </ul>
+              </div>
               <div v-if="statement.proposals.length > 0" class="grid gap-1 text-sm text-ink-2">
                 <p class="m-0 font-semibold">{{ copy.proposes }}</p>
                 <ul class="m-0 list-disc pl-5">
