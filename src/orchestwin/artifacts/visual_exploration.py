@@ -8,12 +8,16 @@ from uuid import UUID
 
 from orchestwin.artifacts.visual_catalog import (
     FONTS,
+    MODES,
+    SCRIPT_TONES,
     BackgroundTreatment,
     ColorMode,
     ColorScheme,
     CornerStyle,
+    DesignTone,
     FontFamily,
     HeaderStyle,
+    HeadingCase,
     HueFamily,
     VisualChoices,
     hue_families_are_distinct,
@@ -112,11 +116,35 @@ def exploration_bindings(
     dimensions = exploration.get(code, {})
     if not dimensions:
         return {}
-    return {
-        "visual": {
-            "properties": {name: {"enum": list(values)} for name, values in dimensions.items()}
-        }
+    visual: dict[str, object] = {
+        "properties": {name: {"enum": list(values)} for name, values in dimensions.items()}
     }
+    headings = list(dimensions.get("heading_family", ()))
+    if FontFamily.SCRIPT.value in headings:
+        modes = [
+            mode.value
+            for mode in ColorMode
+            if not MODES[mode].high_contrast
+            and mode.value in dimensions.get("color_mode", [item.value for item in ColorMode])
+        ]
+        visual["anyOf"] = [
+            {
+                "properties": {
+                    "heading_family": {
+                        "enum": [item for item in headings if item != FontFamily.SCRIPT.value]
+                    }
+                }
+            },
+            {
+                "properties": {
+                    "heading_family": {"const": FontFamily.SCRIPT.value},
+                    "tone": {"enum": [tone.value for tone in DesignTone if tone in SCRIPT_TONES]},
+                    "heading_case": {"const": HeadingCase.SENTENCE.value},
+                    "color_mode": {"enum": modes},
+                }
+            },
+        ]
+    return {"visual": visual}
 
 
 __all__ = [
