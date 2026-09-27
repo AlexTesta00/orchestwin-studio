@@ -19,6 +19,7 @@ from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype, Nav
 from orchestwin.models.design_drafts import requirements_view
 from orchestwin.models.design_mockups import MockupDraft, MockupElementDraft, bind_mockup
 from orchestwin.models.planning_schema import constrain_planning_schema
+from orchestwin.models.proposal_generation import ProposalGenerationError
 
 from ..artifacts import design_fixtures as fixtures
 from .test_model_proposals import make_generator
@@ -215,9 +216,9 @@ class MemoryEvidence:
         self.events.append(kwargs)
 
 
-def application(tmp_path, *, missing=False, stale=False):
+def application(tmp_path, *, missing=False, stale=False, value=None):
     version = fixtures.design_version()
-    generator, transport = make_generator(tmp_path, draft_value())
+    generator, transport = make_generator(tmp_path, draft_value() if value is None else value)
     evidence = MemoryEvidence()
     calls = 0
 
@@ -289,6 +290,23 @@ def test_design_changed_during_generation_is_not_accepted(tmp_path):
         )
     assert error.value.status_code == 409
     assert len(transport.calls) == 1
+    assert not any(x["kind"] == "ADAPTER_ACCEPTED" for x in evidence.events)
+
+
+def test_a_rejected_mockup_keeps_the_reason_in_the_evidence(tmp_path):
+    value = draft_value()
+    value["screens"][1]["elements"][0]["content"] = "Errore: divisione per zero"
+    app, body, evidence, transport = application(tmp_path, value=value)
+    with pytest.raises(ProposalGenerationError) as error:
+        asyncio.run(
+            app.generate(owner_user_id=fixtures.OWNER_ID, project_id=fixtures.PROJECT_ID, body=body)
+        )
+    assert error.value.code == "INVALID_MOCKUP_OUTPUT"
+    assert len(transport.calls) == 1
+    rejected = next(x for x in evidence.events if x["kind"] == "ADAPTER_REJECTED")
+    assert rejected["payload"]["code"] == "ValueError"
+    assert "success screen" in rejected["payload"]["reason"]
+    assert evidence.events[-1]["payload"] == {"status": "FAILED", "code": "INVALID_MOCKUP_OUTPUT"}
     assert not any(x["kind"] == "ADAPTER_ACCEPTED" for x in evidence.events)
 
 

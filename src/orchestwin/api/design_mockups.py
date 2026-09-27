@@ -152,7 +152,7 @@ class ModelMockupApplication:
                 current.package, owner_selected_alternative_id=alternative.id, prototype=prototype
             )
         except (TypeError, ValueError) as error:
-            await retain_adapter_result(error=error)
+            await retain_adapter_result(error=error, reason=str(error))
             raise ProposalGenerationError("INVALID_MOCKUP_OUTPUT") from error
         refreshed = await self.current(owner_user_id, project_id)
         if (refreshed.id, refreshed.content_hash) != (current.id, current.content_hash):
