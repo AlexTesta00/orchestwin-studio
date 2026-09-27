@@ -215,7 +215,7 @@ class ProposalGenerator:
             "personas": 4,
             "user-twins": 4,
             "requirements": 3,
-            "design": 9,
+            "design": 11,
             "architecture": 7,
             "twin-discussion": 5,
         }.get(task, 1)

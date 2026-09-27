@@ -75,17 +75,22 @@ DESIGN_VISUAL_INSTRUCTION = (
     "Each alternative also declares its visual language in 'visual', using only ids from this "
     "catalog. "
     + visual_catalog_summary()
-    + " Write approach_rationale first and ground it in the domain, the brief and the twins' "
-    "age, context of use, accessibility needs and vocabulary; the archetype follows the shape "
-    "of the task and its flows, the colours and typography follow the domain and the tone. "
+    + " Choose the values of visual first: the archetype follows the shape of the task and its "
+    "flows, the colours and typography follow the domain, the tone and the twins' age, context "
+    "of use, accessibility needs and vocabulary. visual_rationale comes last and explains the "
+    "values you chose. A text names a catalog id only when it is a value chosen by the "
+    "alternative the text talks about; summary, rationale and the lists of an alternative "
+    "describe the approach, the flows and the content. "
     "product_name is a short product name in the requirements' language. twin_fit holds one "
     "entry per twin key, one sentence each on how the archetype, colours, typography, density "
     "and controls serve that twin's age, context of use, accessibility needs and vocabulary; "
     "with declared visual or motor impairments choose a HIGH_CONTRAST mode, COMFORTABLE or "
     "SPACIOUS density and FILLED or OUTLINED buttons. Critiques judge the visual language too "
     "(archetype, palette and mode, typography, density, controls) from the twin's perspective, "
-    "and accessibility_observations must address it whenever the twin has accessibility "
-    "needs. The two alternatives must read as two different products, never two skins of the "
+    "and on_accessibility must address it whenever the twin has accessibility needs. Every "
+    "critique judges only the alternative named in its alternative field, from the point of "
+    "view of the twin named in as_twin. The two alternatives must read as two different "
+    "products, never two skins of the "
     "same layout. visual_exploration gives each alternative the part of the catalog that "
     "this project explores: for the dimensions it lists choose only among the values of "
     "that alternative, so that different projects do not look alike; every other "
@@ -93,7 +98,7 @@ DESIGN_VISUAL_INSTRUCTION = (
 )
 DESIGN_NAMES_INSTRUCTION = (
     "In every text call the twins by their names in twins, never by their keys: keys appear "
-    "only in the twin and twins fields."
+    "only in the twin, as_twin and twins fields."
 )
 
 
@@ -107,7 +112,7 @@ def design_instruction(twin_keys, language):
             f"Propose exactly two distinct design approaches. Write every text in {name}, the "
             "language of the requirements: titles, summaries, rationales, workflow titles and "
             "steps, considerations, advantages, trade-offs, assumptions, questions, critiques, "
-            "concerns, approach_rationale and twin_fit statements; only codes and catalog ids "
+            "concerns, visual_rationale and twin_fit statements; only codes and catalog ids "
             "stay as they are. "
         )
         closing = f"{DESIGN_NAMES_INSTRUCTION} Every text is written in {name}."
@@ -336,7 +341,7 @@ class ModelDesignAdapter:
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
-            provider_version=4,
+            provider_version=6,
             package=output,
         )
 

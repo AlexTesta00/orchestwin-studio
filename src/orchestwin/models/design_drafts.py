@@ -15,6 +15,7 @@ from orchestwin.artifacts.design_packages import (
 from orchestwin.artifacts.visual_catalog import (
     ARCHETYPES,
     VISUAL_DIMENSION_NAMES,
+    VISUAL_DIMENSIONS,
     BackgroundTreatment,
     BorderWeight,
     ButtonStyle,
@@ -78,12 +79,18 @@ CRITIQUE_TEXT_LISTS: Final = (
     "strengths",
     "concerns",
     "unmet_needs",
-    "accessibility_observations",
+    "on_accessibility",
     "trust_concerns",
     "questions",
     "suggested_changes",
 )
+CRITIQUE_DOMAIN_FIELDS: Final = {"on_accessibility": "accessibility_observations"}
+CATALOG_IDS: Final = frozenset(item.value for enum in VISUAL_DIMENSIONS.values() for item in enum)
+UNCHOSEN_CATALOG_VALUES: Final = "the design names catalog values that were not chosen"
 _KEY_TOKEN: Final = re.compile(r"\bT[1-9]\d?\b")
+_CATALOG_TOKEN: Final = re.compile(r"\b[A-Z][A-Z]+(?:_[A-Z]+)*\b")
+_ALTERNATIVE_CODE: Final = re.compile(r"\bDES-[0-9]{3,}\b")
+_SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?…])\s+")
 
 
 class WorkflowDraft(Draft):
@@ -102,7 +109,6 @@ class TwinFitDraft(BaseModel):
 
 class VisualLanguageDraft(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    approach_rationale: Text
     archetype: LayoutArchetype
     background: BackgroundTreatment
     body_family: FontFamily
@@ -127,6 +133,7 @@ class VisualLanguageDraft(BaseModel):
     tone: DesignTone
     twin_fit: Annotated[tuple[TwinFitDraft, ...], Field(min_length=1)]
     type_scale: TypeScale
+    visual_rationale: Text
 
     def choices(self) -> VisualChoices:
         return VisualChoices(**{name: getattr(self, name) for name in VISUAL_DIMENSION_NAMES})
@@ -155,12 +162,12 @@ class AlternativeDraft(Draft):
 class CritiqueDraft(Draft):
     code: str = Field(pattern=r"^CRQ-[0-9]{3,}$")
     alternative: str
-    twin: str
+    as_twin: str
     observation_keys: Links
     strengths: Annotated[tuple[Text, ...], Field(min_length=1)]
     concerns: Annotated[tuple[Text, ...], Field(min_length=1)]
     unmet_needs: tuple[Text, ...]
-    accessibility_observations: tuple[Text, ...]
+    on_accessibility: tuple[Text, ...]
     trust_concerns: tuple[Text, ...]
     questions: tuple[Text, ...]
     suggested_changes: tuple[Text, ...]
@@ -307,34 +314,41 @@ def named_text(text, names, maximum=TEXT_LENGTH):
     return text if len(named) > maximum else named
 
 
-def named_draft(draft, names):
-    def text(value, maximum=TEXT_LENGTH):
-        return named_text(value, names, maximum)
-
-    def texts(values):
-        return tuple(text(value) for value in values)
-
+def map_draft_texts(draft, single, items):
+    everyone = tuple(x.code for x in draft.alternatives)
     alternatives = tuple(
         x.model_copy(
             update={
-                "title": text(x.title, TITLE_LENGTH),
-                "summary": text(x.summary),
-                "rationale": text(x.rationale),
-                **{key: texts(getattr(x, key)) for key in ALTERNATIVE_TEXT_LISTS},
+                "title": single(x.title, (x.code,), TITLE_LENGTH),
+                "summary": single(x.summary, (x.code,), TEXT_LENGTH),
+                "rationale": single(x.rationale, (x.code,), TEXT_LENGTH),
+                **{
+                    key: items(AlternativeDraft, key, getattr(x, key), (x.code,))
+                    for key in ALTERNATIVE_TEXT_LISTS
+                },
                 "workflows": tuple(
                     w.model_copy(
-                        update={"title": text(w.title, TITLE_LENGTH), "steps": texts(w.steps)}
+                        update={
+                            "title": single(w.title, (x.code,), TITLE_LENGTH),
+                            "steps": tuple(
+                                single(step, (x.code,), TEXT_LENGTH) for step in w.steps
+                            ),
+                        }
                     )
                     for w in x.workflows
                 ),
                 "visual": x.visual.model_copy(
                     update={
-                        "approach_rationale": text(
-                            x.visual.approach_rationale, MAX_VISUAL_RATIONALE_LENGTH
+                        "visual_rationale": single(
+                            x.visual.visual_rationale, (x.code,), MAX_VISUAL_RATIONALE_LENGTH
                         ),
                         "twin_fit": tuple(
                             item.model_copy(
-                                update={"statement": text(item.statement, MAX_TWIN_FIT_LENGTH)}
+                                update={
+                                    "statement": single(
+                                        item.statement, (x.code,), MAX_TWIN_FIT_LENGTH
+                                    )
+                                }
                             )
                             for item in x.visual.twin_fit
                         ),
@@ -347,14 +361,22 @@ def named_draft(draft, names):
     critiques = tuple(
         x.model_copy(
             update={
-                "rationale": text(x.rationale),
-                **{key: texts(getattr(x, key)) for key in CRITIQUE_TEXT_LISTS},
+                "rationale": single(x.rationale, (x.alternative,), TEXT_LENGTH),
+                **{
+                    key: items(CritiqueDraft, key, getattr(x, key), (x.alternative,))
+                    for key in CRITIQUE_TEXT_LISTS
+                },
             }
         )
         for x in draft.critiques
     )
     concerns = tuple(
-        x.model_copy(update={"summary": text(x.summary), "mitigation": text(x.mitigation)})
+        x.model_copy(
+            update={
+                "summary": single(x.summary, x.alternatives, TEXT_LENGTH),
+                "mitigation": single(x.mitigation, x.alternatives, TEXT_LENGTH),
+            }
+        )
         for x in draft.concerns
     )
     return draft.model_copy(
@@ -362,9 +384,73 @@ def named_draft(draft, names):
             "alternatives": alternatives,
             "critiques": critiques,
             "concerns": concerns,
-            "open_questions": texts(draft.open_questions),
+            "open_questions": items(DesignDraft, "open_questions", draft.open_questions, everyone),
         }
     )
+
+
+def named_draft(draft, names):
+    return map_draft_texts(
+        draft,
+        lambda text, owners, maximum: named_text(text, names, maximum),
+        lambda model, field, texts, owners: tuple(named_text(text, names) for text in texts),
+    )
+
+
+def catalog_ids(text):
+    return {token for token in _CATALOG_TOKEN.findall(text) if token in CATALOG_IDS}
+
+
+def chosen_catalog_ids(draft):
+    return {
+        x.code: frozenset(str(getattr(x.visual, name)) for name in VISUAL_DIMENSION_NAMES)
+        for x in draft.alternatives
+    }
+
+
+def consistent_text(text, owners, chosen):
+    sentences = _SENTENCE_BREAK.split(text.strip())
+    kept = [
+        sentence
+        for sentence in sentences
+        if catalog_ids(sentence)
+        <= frozenset().union(
+            *(
+                chosen.get(code, frozenset())
+                for code in (*owners, *_ALTERNATIVE_CODE.findall(sentence))
+            )
+        )
+    ]
+    return text if len(kept) == len(sentences) else " ".join(kept)
+
+
+def schema_minimum(model, field):
+    return max(
+        (getattr(item, "min_length", 0) for item in model.model_fields[field].metadata),
+        default=0,
+    )
+
+
+def consistent_draft(draft):
+    chosen = chosen_catalog_ids(draft)
+
+    def single(text, owners, maximum):
+        consistent = consistent_text(text, owners, chosen)
+        if not consistent:
+            raise ValueError(UNCHOSEN_CATALOG_VALUES)
+        return consistent
+
+    def items(model, field, texts, owners):
+        kept = tuple(
+            consistent
+            for consistent in (consistent_text(text, owners, chosen) for text in texts)
+            if consistent
+        )
+        if len(kept) < schema_minimum(model, field):
+            raise ValueError(UNCHOSEN_CATALOG_VALUES)
+        return kept
+
+    return map_draft_texts(draft, single, items)
 
 
 def draft_texts(draft):
@@ -377,7 +463,7 @@ def draft_texts(draft):
         for w in x.workflows:
             yield w.title
             yield from w.steps
-        yield x.visual.approach_rationale
+        yield x.visual.visual_rationale
         yield from (item.statement for item in x.visual.twin_fit)
     for x in draft.critiques:
         yield x.rationale
@@ -409,11 +495,12 @@ def bind_design(draft, request, twins, model_reference):
     require_draft_language(
         draft, requirements_language(requirements_view(request.requirements.version))
     )
+    draft = consistent_draft(draft)
     languages = {
         x.code: create_visual_language(
             choices=x.visual.choices(),
             product_name=x.visual.product_name,
-            rationale=x.visual.approach_rationale,
+            rationale=x.visual.visual_rationale,
             twin_fit=_twin_fit(x, twins),
         )
         for x in draft.alternatives
@@ -459,7 +546,7 @@ def bind_design(draft, request, twins, model_reference):
         ]
         critiques = []
         for x in draft.critiques:
-            twin = twins[x.twin]
+            twin = twins[x.as_twin]
             observations = {item.observation_key: item for item in twin.observations}
             references = {
                 ref for key in x.observation_keys for ref in observations[key].provenance.references
@@ -475,7 +562,10 @@ def bind_design(draft, request, twins, model_reference):
                     provenance=ObservationProvenance.from_references(
                         (*references, model_reference(x.code)),
                     ),
-                    **{key: getattr(x, key) for key in CRITIQUE_TEXT_LISTS},
+                    **{
+                        CRITIQUE_DOMAIN_FIELDS.get(key, key): getattr(x, key)
+                        for key in CRITIQUE_TEXT_LISTS
+                    },
                 )
             )
         concerns = [
