@@ -1,5 +1,7 @@
 """Constrain planning references to evidence keys and typed artifact codes."""
 
+from orchestwin.artifacts.visual_exploration import exploration_bindings
+
 
 def constrain_planning_schema(schema, context, task):
     if task not in {"requirements", "design", "architecture"}:
@@ -61,8 +63,14 @@ def constrain_planning_schema(schema, context, task):
             definitions["VisualLanguageDraft"]["properties"]["twin_fit"] = _fixed_array(
                 definitions, "TwinFitDraft", [{"twin": {"const": key}} for key in context["twins"]]
             )
+        exploration = context.get("visual_exploration") or {}
         schema["properties"]["alternatives"] = _fixed_array(
-            definitions, "AlternativeDraft", [{"code": {"const": code}} for code in known["DES"]]
+            definitions,
+            "AlternativeDraft",
+            [
+                {"code": {"const": code}, **exploration_bindings(exploration, code)}
+                for code in known["DES"]
+            ],
         )
         # Coverage is a governance obligation, not something the model can omit.
         pairs = [

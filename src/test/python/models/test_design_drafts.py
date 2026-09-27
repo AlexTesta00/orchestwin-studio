@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from pydantic import ValidationError
 
 from orchestwin.artifacts.visual_catalog import (
     LayoutArchetype,
@@ -26,6 +27,13 @@ from orchestwin.twins.epistemics import EvidenceReference, EvidenceSourceKind
 from .test_fake_design import proposal_request
 
 THREE_STEPS = ("Open the reservation.", "Edit the dates.", "Confirm the change.")
+
+
+@pytest.fixture(autouse=True)
+def unrestricted_exploration(monkeypatch):
+    from orchestwin.models import design_drafts
+
+    monkeypatch.setattr(design_drafts, "visual_exploration", lambda project_id: {})
 
 
 def visual(**overrides) -> VisualLanguageDraft:
@@ -90,7 +98,6 @@ def alternative(
 ) -> AlternativeDraft:
     return AlternativeDraft(
         code=code,
-        approach="GUIDED_WORKFLOW" if code == "DES-001" else "DASHBOARD_FIRST",
         title=f"Alternative {code}",
         summary="One direction.",
         rationale="Because.",
@@ -259,6 +266,20 @@ def test_alternative_schema_exposes_the_visual_language_through_catalog_enums():
     assert properties["product_name"]["maxLength"] == 80
 
 
+def test_alternative_draft_no_longer_asks_for_an_approach():
+    schema = DesignDraft.model_json_schema()
+    assert "approach" not in schema["$defs"]["AlternativeDraft"]["properties"]
+    assert "DesignApproach" not in schema["$defs"]
+    payload = alternative("DES-001", visual()).model_dump(mode="json")
+    with pytest.raises(ValidationError, match="approach"):
+        AlternativeDraft.model_validate({**payload, "approach": "GUIDED_WORKFLOW"})
+    request = proposal_request()
+    context, _ = design_context(request)
+    package = bind(request, draft(context))
+    assert [item.approach for item in package.alternatives] == [None, None]
+    assert all("approach" not in item.to_snapshot() for item in package.alternatives)
+
+
 def test_design_instruction_carries_the_whole_catalog():
     assert visual_catalog_summary() in DESIGN_VISUAL_INSTRUCTION
     assert "approach_rationale" in DESIGN_VISUAL_INSTRUCTION
@@ -288,7 +309,7 @@ def test_model_adapter_binds_the_visual_language_and_rejects_incoherent_output()
     generator = _StubGenerator(draft(context))
     result = asyncio.run(ModelDesignAdapter(generator).propose(request))
     assert result.status is DesignProposalStatus.PROPOSED
-    assert result.provider_version == 2
+    assert result.provider_version == 3
     assert all(item.visual_language is not None for item in result.package.alternatives)
     instruction = generator.calls[0]["instruction"]
     assert DESIGN_VISUAL_INSTRUCTION in instruction

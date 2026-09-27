@@ -38,6 +38,10 @@ from orchestwin.artifacts.visual_catalog import (
     VisualChoices,
     require_distinct_visual_choices,
 )
+from orchestwin.artifacts.visual_exploration import (
+    require_explored_choices,
+    visual_exploration,
+)
 from orchestwin.artifacts.visual_language import (
     MAX_PRODUCT_NAME_LENGTH,
     MAX_TWIN_FIT_LENGTH,
@@ -97,7 +101,6 @@ class VisualLanguageDraft(BaseModel):
 
 class AlternativeDraft(Draft):
     code: str = Field(pattern=r"^DES-[0-9]{3,}$")
-    approach: domain.DesignApproach
     title: Title
     summary: Text
     rationale: Text
@@ -197,6 +200,10 @@ def design_context(request):
         "project_id": str(request.project_id),
         "governed_request_hash": request.content_hash,
         "requirements": requirements_view(request.requirements.version),
+        "visual_exploration": {
+            code: {name: list(values) for name, values in dimensions.items()}
+            for code, dimensions in visual_exploration(request.project_id).items()
+        },
         "twins": {
             key: {
                 "reference": wire_value(twin.reference),
@@ -255,6 +262,9 @@ def bind_design(draft, request, twins, model_reference):
         for x in draft.alternatives
     }
     require_distinct_visual_choices([languages[x.code].choices for x in draft.alternatives])
+    exploration = visual_exploration(request.project_id)
+    for x in draft.alternatives:
+        require_explored_choices(x.code, languages[x.code].choices, exploration)
     for x in draft.alternatives:
         _require_archetype_fit(x, languages[x.code].choices)
 
@@ -266,7 +276,7 @@ def bind_design(draft, request, twins, model_reference):
             domain.create_design_alternative(
                 alternative_id=ids[x.code],
                 code=x.code,
-                approach=x.approach,
+                approach=None,
                 visual_language=languages[x.code],
                 title=x.title,
                 summary=x.summary,

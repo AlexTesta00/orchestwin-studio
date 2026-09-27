@@ -86,7 +86,10 @@ DESIGN_VISUAL_INSTRUCTION = (
     "(archetype, palette and mode, typography, density, controls) from the twin's perspective, "
     "and accessibility_observations must address it whenever the twin has accessibility "
     "needs. The two alternatives must read as two different products, never two skins of the "
-    "same layout."
+    "same layout. visual_exploration gives each alternative the part of the catalog that "
+    "this project explores: for the dimensions it lists choose only among the values of "
+    "that alternative, so that different projects do not look alike; every other "
+    "dimension is free and follows the twins and the domain."
 )
 
 
@@ -307,7 +310,7 @@ class ModelDesignAdapter:
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
-            provider_version=2,
+            provider_version=3,
             package=output,
         )
 

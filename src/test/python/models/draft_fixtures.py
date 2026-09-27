@@ -4,6 +4,20 @@ from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import requirements_context
 
 
+def explored_choices(project_id, code):
+    from orchestwin.artifacts.visual_exploration import visual_exploration
+
+    chosen = {}
+    for name, values in visual_exploration(project_id).get(code, {}).items():
+        if name == "heading_family":
+            chosen[name] = next(value for value in values if value != "SCRIPT")
+        elif name == "color_mode":
+            chosen[name] = "DARK"
+        else:
+            chosen[name] = values[0]
+    return chosen
+
+
 def proposal_draft(stage, value, request):
     raw = wire_value(value)
     codes = {}
@@ -99,9 +113,11 @@ def proposal_draft(stage, value, request):
         raw_alternatives = {entry["code"]: entry for entry in raw["alternatives"]}
         for item in result["alternatives"]:
             item.pop("visual_language")
+            item.pop("approach", None)
             language = raw_alternatives[item["code"]]["visual_language"]
             item["visual"] = {
                 **language["choices"],
+                **explored_choices(request.project_id, item["code"]),
                 "approach_rationale": language["rationale"],
                 "product_name": language["product_name"],
                 "twin_fit": [
