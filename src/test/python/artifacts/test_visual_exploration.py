@@ -129,3 +129,36 @@ def test_bindings_constrain_only_the_explored_dimensions_of_the_alternative():
     assert properties["hue_family"] == {"enum": list(exploration[code]["hue_family"])}
     assert exploration_bindings(exploration, "DES-009") == {}
     assert exploration_bindings({}, code) == {}
+
+
+def test_script_headings_are_bound_to_their_tones_case_and_modes():
+    found = 0
+    for project in PROJECTS:
+        exploration = visual_exploration(project)
+        for code in EXPLORED_ALTERNATIVES:
+            visual = exploration_bindings(exploration, code)["visual"]
+            headings = exploration[code]["heading_family"]
+            if "SCRIPT" not in headings:
+                assert "anyOf" not in visual
+                continue
+            found += 1
+            plain, script = visual["anyOf"]
+            assert plain["properties"]["heading_family"]["enum"] == [
+                item for item in headings if item != "SCRIPT"
+            ]
+            rule = script["properties"]
+            assert rule["heading_family"] == {"const": "SCRIPT"}
+            assert rule["heading_case"] == {"const": "SENTENCE"}
+            assert set(rule["tone"]["enum"]) == {
+                "PLAYFUL",
+                "ARTISANAL",
+                "LUXURIOUS",
+                "WARM",
+                "RUSTIC",
+            }
+            allowed = exploration[code].get("color_mode", ("LIGHT", "DARK"))
+            assert rule["color_mode"]["enum"] == [
+                mode for mode in ("LIGHT", "DARK") if mode in allowed
+            ]
+            assert rule["color_mode"]["enum"]
+    assert found > 0
