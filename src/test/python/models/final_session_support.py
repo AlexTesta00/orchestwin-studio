@@ -22,7 +22,7 @@ def record(path: Path, value):
     return data
 
 
-def make_session(root: Path, *, port=54321):
+def make_session(root: Path, *, port=28765):
     root.mkdir(parents=True, exist_ok=True)
     config = record(
         root / "configuration.json",
