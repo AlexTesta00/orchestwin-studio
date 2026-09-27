@@ -512,3 +512,57 @@ def test_review_anchors_and_view_require_a_selected_prototype():
     for function in (design_review_anchors, design_review_view):
         with pytest.raises(DesignEvaluationError, match="DESIGN_PROTOTYPE_REQUIRED"):
             function(bare)
+
+
+def test_findings_of_regenerated_designs_match_by_content_words_whatever_the_criterion():
+    version = design_fixtures.design_version()
+    base = evaluate(
+        version,
+        {
+            TWIN_A: (
+                template(
+                    "UTF-001",
+                    "SCR-001 Aggiungi ospite",
+                    "La lista degli ospiti non consente di identificare eventuali duplicati.",
+                    criterion=SyntheticFindingCriterion.TRUST,
+                ),
+            ),
+            TWIN_B: (),
+        },
+    )
+    head = evaluate(
+        version,
+        {
+            TWIN_A: (
+                template(
+                    "UTF-001",
+                    "SCR-004 Lista",
+                    "La lista degli ospiti non mostra se un nome è duplicato.",
+                    criterion=SyntheticFindingCriterion.COMPREHENSIBILITY,
+                ),
+                template(
+                    "UTF-002",
+                    "SCR-004 Lista",
+                    "Il pulsante di conferma è troppo piccolo per il tocco.",
+                    criterion=SyntheticFindingCriterion.ACCESSIBILITY,
+                ),
+            ),
+            TWIN_B: (
+                template(
+                    "UTF-001",
+                    "SCR-004 Lista",
+                    "La lista degli ospiti non mostra se un nome è duplicato.",
+                    criterion=SyntheticFindingCriterion.COMPREHENSIBILITY,
+                ),
+            ),
+        },
+        run_id=UUID("00000000-0000-4000-8000-000000000903"),
+        clock=NOW + timedelta(minutes=20),
+    )
+    earlier = base.findings[0]
+    same_twin, other_problem, other_twin = head.findings
+    assert module.MATCH_SIMILARITY <= finding_similarity(earlier, same_twin) < 1.0
+    assert finding_similarity(earlier, other_problem) < module.MATCH_SIMILARITY
+    assert finding_similarity(earlier, other_twin) == 0.0
+    counts = compare_design_evaluations(base, head).to_snapshot()["counts"]
+    assert (counts["resolved"], counts["persisting"], counts["introduced"]) == (0, 1, 2)
