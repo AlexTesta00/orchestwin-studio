@@ -92,7 +92,7 @@ export const BASE_DESIGN_PACKAGE: DesignPackagePayload = {
     {
       id: SECOND_DESIGN_ALTERNATIVE_ID,
       code: "DES-002",
-      approach: "DASHBOARD_FIRST",
+      approach: null,
       title: "Reservation operations dashboard",
       summary: "Keep operational status and frequent actions visible together.",
       rationale: "Support rapid orientation across active reservation work.",

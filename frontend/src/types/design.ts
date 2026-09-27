@@ -211,7 +211,7 @@ export interface VisualLanguagePayload {
 export interface DesignAlternativePayload {
   id: UUID;
   code: string;
-  approach: DesignApproach;
+  approach?: DesignApproach | null;
   title: string;
   summary: string;
   rationale: string;

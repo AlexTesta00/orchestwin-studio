@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils";
+import { mount, type VueWrapper } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,8 +6,16 @@ import {
   DESIGN_ALTERNATIVE_ID,
   SECOND_DESIGN_ALTERNATIVE_ID,
 } from "../test/designFixtures";
+import type { DesignAlternativePayload } from "../types/design";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
 import { expectAccessible } from "@/test/axe";
+
+function layoutOf(wrapper: VueWrapper, code: string): string[] | null {
+  const row = wrapper
+    .get(`[data-test="alternative-${code}"]`)
+    .find('[data-testid="alternative-layout"]');
+  return row.exists() ? [row.get("dt").text(), row.get("dd").text()] : null;
+}
 
 describe("DesignAlternativeComparison", () => {
   it("renders provider recommendations and explicit synthetic-feedback safeguards", () => {
@@ -41,6 +49,43 @@ describe("DesignAlternativeComparison", () => {
       .setValue(true);
 
     expect(wrapper.emitted("select")).toEqual([[SECOND_DESIGN_ALTERNATIVE_ID]]);
+  });
+
+  it("shows the layout archetype, a stored approach as before, or no row at all", async () => {
+    const wrapper = mount(DesignAlternativeComparison, {
+      props: { alternatives: BASE_DESIGN_PACKAGE.alternatives, critiques: [] },
+    });
+
+    expect(layoutOf(wrapper, "DES-001")).toEqual(["Approach", "GUIDED_WORKFLOW"]);
+    expect(layoutOf(wrapper, "DES-002")).toEqual(["Layout", "Dashboard"]);
+
+    await wrapper.setProps({ locale: "it" });
+
+    expect(layoutOf(wrapper, "DES-001")).toEqual(["Approccio", "GUIDED_WORKFLOW"]);
+    expect(layoutOf(wrapper, "DES-002")).toEqual(["Impostazione", "Cruscotto"]);
+
+    const variants: DesignAlternativePayload[] = BASE_DESIGN_PACKAGE.alternatives.map(
+      (alternative) =>
+        alternative.visual_language
+          ? {
+              ...alternative,
+              approach: "DASHBOARD_FIRST",
+              visual_language: {
+                ...alternative.visual_language,
+                choices: { ...alternative.visual_language.choices, archetype: "LIST_DETAIL" },
+              },
+            }
+          : { ...alternative, approach: null },
+    );
+    await wrapper.setProps({ alternatives: variants });
+
+    expect(layoutOf(wrapper, "DES-001")).toBeNull();
+    expect(layoutOf(wrapper, "DES-002")).toEqual(["Impostazione", "Elenco e dettaglio"]);
+
+    await wrapper.setProps({ locale: "en" });
+
+    expect(layoutOf(wrapper, "DES-002")).toEqual(["Layout", "List and detail"]);
+    expect(wrapper.text()).not.toContain("DASHBOARD_FIRST");
   });
 
   it("has no axe violations", async () => {
