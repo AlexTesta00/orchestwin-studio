@@ -7,14 +7,21 @@ from uuid import UUID
 import pytest
 
 from orchestwin.artifacts.design_discussion import (
+    MAX_CONFLICT_TOPIC_LENGTH,
     MAX_DISCUSSION_ROUNDS,
+    MAX_OWNER_ANSWER_LENGTH,
+    MAX_QUESTION_LENGTH,
+    MAX_REACTION_REASON_LENGTH,
+    MAX_STATEMENT_LENGTH,
     DesignDiscussion,
     DiscussionProposalTarget,
     DiscussionStance,
     DiscussionStatus,
     DiscussionSynthesis,
+    ReactionVerdict,
     SynthesisConflict,
     SynthesisProposal,
+    TwinReaction,
     TwinStatement,
     create_discussion_round,
     design_discussion_from_snapshot,
@@ -23,6 +30,7 @@ from orchestwin.artifacts.design_discussion import (
     proposal_code,
     validate_locale,
 )
+from orchestwin.projects.requirements_primitives import snapshot_content_hash
 
 NOW = datetime(2026, 9, 27, 10, 0, tzinfo=UTC)
 PROJECT = UUID("00000000-0000-4000-8000-000000000001")
@@ -94,6 +102,35 @@ def discussion_round(ordinal=1, *, replies=(), note=None, minutes=None, **change
     }
     values.update(changes)
     return create_discussion_round(**values)
+
+
+def reaction(
+    twin_id=BRUNO, verdict=ReactionVerdict.PARTLY, reason="Capisco, ma al banco serve rapidità."
+):
+    return TwinReaction(twin_id=twin_id, verdict=verdict, reason=reason)
+
+
+def reacting_round(ordinal=2):
+    base = 100 * ordinal
+    return discussion_round(
+        ordinal,
+        statements=(
+            statement(
+                generation=base + 1,
+                statement="Ora accetto il riepilogo, ma il modulo resta lungo per me.",
+                replies_to=(BRUNO,),
+                reactions=(reaction(),),
+            ),
+            statement(
+                BRUNO,
+                "Bruno",
+                generation=base + 2,
+                statement="Concordo con Ada: anche di notte il modulo mi rallenta.",
+                replies_to=(ADA,),
+                reactions=(reaction(ADA, ReactionVerdict.AGREE, "Anche io perdo tempo."),),
+            ),
+        ),
+    )
 
 
 def discussion(**changes):
@@ -233,7 +270,7 @@ def test_statements_are_grounded_normalized_and_bounded():
         {"proposals": ("Uno.", "Due.", "Tre.", "Quattro.")},
         {"proposals": ("Uno.", "Uno.")},
         {"proposals": (" Uno.",)},
-        {"statement": "x" * 701},
+        {"statement": "x" * (MAX_STATEMENT_LENGTH + 1)},
         {"statement": "Due  spazi."},
         {"twin_name": " Ada"},
         {"replies_to": (ADA,)},
@@ -251,7 +288,7 @@ def test_synthesis_names_distinct_twins_and_numbers_its_proposals():
         lambda: conflict((ADA, "Solo io.")),
         lambda: conflict((ADA, "Sì."), (ADA, "No.")),
         lambda: conflict((ADA, "Sì."), (BRUNO, " No.")),
-        lambda: conflict(topic="x" * 201),
+        lambda: conflict(topic="x" * (MAX_CONFLICT_TOPIC_LENGTH + 1)),
         lambda: proposal(supported_by=()),
         lambda: proposal(supported_by=(ADA, ADA)),
         lambda: SynthesisProposal(
@@ -271,7 +308,7 @@ def test_synthesis_names_distinct_twins_and_numbers_its_proposals():
         {"agreements": tuple(f"Accordo {index}." for index in range(6))},
         {"agreements": ("Uguale.", "Uguale.")},
         {"questions_for_owner": tuple(f"Domanda {index}?" for index in range(5))},
-        {"questions_for_owner": ("x" * 301,)},
+        {"questions_for_owner": ("x" * (MAX_QUESTION_LENGTH + 1),)},
     ):
         with pytest.raises(ValueError):
             synthesis(**changes)
@@ -367,3 +404,157 @@ def test_language_tags_are_accepted(locale):
 def test_malformed_language_tags_are_rejected(locale):
     with pytest.raises(ValueError):
         validate_locale(locale)
+
+
+def test_reactions_are_serialized_only_when_present_and_round_trip():
+    later = reacting_round()
+    snapshot = later.to_snapshot()
+    ada, bruno = snapshot["statements"]
+    assert ada["reactions"] == [
+        {
+            "twin_id": str(BRUNO),
+            "verdict": "PARTLY",
+            "reason": "Capisco, ma al banco serve rapidità.",
+        }
+    ]
+    assert ada["replies_to"] == [str(BRUNO)]
+    assert bruno["reactions"] == [
+        {"twin_id": str(ADA), "verdict": "AGREE", "reason": "Anche io perdo tempo."}
+    ]
+    assert later.statements[0].reacted_twins == (BRUNO,)
+    assert discussion_round_from_snapshot(snapshot) == later
+    item = discussion(rounds=(discussion_round(), later))
+    assert design_discussion_from_snapshot(item.to_snapshot(), locale="it-IT") == item
+    opening = discussion_round().to_snapshot()
+    assert all("reactions" not in statement for statement in opening["statements"])
+    padded = [{**statement, "reactions": []} for statement in opening["statements"]]
+    with pytest.raises(ValueError, match="not canonical"):
+        discussion_round_from_snapshot({**opening, "statements": padded})
+
+
+def test_rounds_stored_before_reactions_reload_with_the_same_hash():
+    stored = {
+        "ordinal": 2,
+        "owner_note": "Rispondetevi.",
+        "created_at": "2026-09-27T10:02:00+00:00",
+        "statements": [
+            {
+                "twin_id": str(ADA),
+                "twin_version": 1,
+                "twin_name": "Ada",
+                "stance": "CONCERN",
+                "statement": "Il modulo resta lungo.",
+                "replies_to": [str(BRUNO)],
+                "proposals": ["Accorciare il modulo."],
+                "grounded_on": ["user_twin.goals"],
+                "confidence": 0.7,
+                "model_generation_id": str(UUID(int=201)),
+            },
+            {
+                "twin_id": str(BRUNO),
+                "twin_version": 1,
+                "twin_name": "Bruno",
+                "stance": "SUPPORT",
+                "statement": "Per me va bene così.",
+                "replies_to": [],
+                "proposals": [],
+                "grounded_on": ["user_twin.goals"],
+                "confidence": 0.6,
+                "model_generation_id": str(UUID(int=202)),
+            },
+        ],
+        "synthesis": {
+            "agreements": [],
+            "conflicts": [],
+            "proposals": [],
+            "questions_for_owner": [],
+            "model_generation_id": str(UUID(int=203)),
+        },
+    }
+    stored["content_hash"] = snapshot_content_hash(stored)
+    reloaded = discussion_round_from_snapshot(stored)
+    assert reloaded.content_hash == stored["content_hash"]
+    assert reloaded.to_snapshot() == stored
+    assert [item.reactions for item in reloaded.statements] == [(), ()]
+    assert reloaded.statements[0].replies_to == (BRUNO,)
+    assert reloaded.owner_note == "Rispondetevi."
+    assert [item.owner_answer for item in reloaded.statements] == [None, None]
+    assert all("answer_to_owner" not in item for item in reloaded.to_snapshot()["statements"])
+
+
+def test_reactions_name_other_participants_once_and_match_the_replies():
+    for changes, message in (
+        ({"replies_to": (BRUNO,), "reactions": (reaction(ADA),)}, "react to itself"),
+        ({"replies_to": (BRUNO,), "reactions": (reaction(), reaction())}, "distinct twins"),
+        ({"replies_to": (), "reactions": (reaction(),)}, "replies to the twins it reacts to"),
+        (
+            {"replies_to": (BRUNO, CARLA), "reactions": (reaction(),)},
+            "replies to the twins it reacts to",
+        ),
+        ({"replies_to": (BRUNO,), "reactions": ("PARTLY",)}, "TwinReaction"),
+        ({"replies_to": (BRUNO,), "reactions": [reaction()]}, "TwinReaction"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            statement(**changes)
+    for build, message in (
+        (lambda: reaction(verdict="AGREE"), "ReactionVerdict"),
+        (lambda: reaction(reason=" Capisco."), "normalized"),
+        (lambda: reaction(reason="x" * (MAX_REACTION_REASON_LENGTH + 1)), "exceeds"),
+        (lambda: reaction(twin_id="b02"), "UUID"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            build()
+    with pytest.raises(ValueError, match="first round"):
+        discussion_round(
+            statements=(
+                statement(generation=101, replies_to=(BRUNO,), reactions=(reaction(),)),
+                statement(BRUNO, "Bruno", generation=102),
+            )
+        )
+    with pytest.raises(ValueError, match="participants"):
+        discussion_round(
+            2,
+            statements=(
+                statement(generation=201, replies_to=(CARLA,), reactions=(reaction(CARLA),)),
+                statement(BRUNO, "Bruno", generation=202),
+            ),
+        )
+
+
+def test_answers_to_the_owner_are_serialized_only_when_present():
+    plain = statement()
+    before = plain.to_snapshot()
+    assert "answer_to_owner" not in before
+    assert plain.content_hash == snapshot_content_hash(before)
+    assert replace(plain, owner_answer=None).content_hash == plain.content_hash
+    answered = statement(owner_answer="Sì, il riepilogo mi basta.")
+    assert answered.to_snapshot() == {**before, "answer_to_owner": "Sì, il riepilogo mi basta."}
+    assert answered.content_hash != plain.content_hash
+    noted = discussion_round(
+        note="Il riepilogo vi basta?",
+        statements=(
+            statement(generation=101, owner_answer="Sì, il riepilogo mi basta."),
+            statement(BRUNO, "Bruno", generation=102),
+        ),
+    )
+    snapshot = noted.to_snapshot()
+    assert snapshot["statements"][0]["answer_to_owner"] == "Sì, il riepilogo mi basta."
+    assert "answer_to_owner" not in snapshot["statements"][1]
+    assert discussion_round_from_snapshot(snapshot) == noted
+    unanswered = discussion_round(note="Il riepilogo vi basta?")
+    assert discussion_round_from_snapshot(unanswered.to_snapshot()) == unanswered
+    with pytest.raises(ValueError, match="an answer to the owner requires the owner's note"):
+        discussion_round(
+            statements=(
+                statement(generation=101, owner_answer="Sì."),
+                statement(BRUNO, "Bruno", generation=102),
+            )
+        )
+    for answer, message in (
+        (" Sì.", "normalized"),
+        ("", "must not be empty"),
+        ("x" * (MAX_OWNER_ANSWER_LENGTH + 1), "exceeds"),
+        (7, "normalized"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            statement(owner_answer=answer)
