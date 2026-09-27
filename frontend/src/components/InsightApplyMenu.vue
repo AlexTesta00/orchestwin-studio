@@ -42,6 +42,7 @@ const messages = {
     },
     error: "The insight could not be applied.",
     duplicate: "This insight is already in the project.",
+    dismissed: "You marked this finding as not relevant, so it is not brought into the project.",
     fields: {
       goals: "Goals",
       target_users: "Target users",
@@ -67,6 +68,8 @@ const messages = {
     },
     error: "Non è stato possibile applicare lo spunto.",
     duplicate: "Questo spunto è già nel progetto.",
+    dismissed:
+      "Hai segnato questa osservazione come non pertinente, quindi non viene portata nel progetto.",
     fields: {
       goals: "Obiettivi",
       target_users: "Utenti destinatari",
@@ -126,10 +129,13 @@ async function apply(target: InsightTarget): Promise<void> {
     emit("applied", application);
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
-    failure.value =
-      store.error === "INSIGHT_ALREADY_APPLIED" || code === "INSIGHT_ALREADY_APPLIED"
-        ? copy.value.duplicate
-        : copy.value.error;
+    if (store.error === "INSIGHT_ALREADY_APPLIED" || code === "INSIGHT_ALREADY_APPLIED") {
+      failure.value = copy.value.duplicate;
+    } else if (store.error === "INSIGHT_SOURCE_DISMISSED" || code === "INSIGHT_SOURCE_DISMISSED") {
+      failure.value = copy.value.dismissed;
+    } else {
+      failure.value = copy.value.error;
+    }
   } finally {
     busy.value = false;
   }
