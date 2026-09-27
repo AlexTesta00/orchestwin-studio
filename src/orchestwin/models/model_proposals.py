@@ -91,6 +91,42 @@ DESIGN_VISUAL_INSTRUCTION = (
     "that alternative, so that different projects do not look alike; every other "
     "dimension is free and follows the twins and the domain."
 )
+DESIGN_NAMES_INSTRUCTION = (
+    "In every text call the twins by their names in twins, never by their keys: keys appear "
+    "only in the twin and twins fields."
+)
+
+
+def design_instruction(twin_keys, language):
+    if language is None:
+        opening = "Propose exactly two distinct design approaches in the requirements' language. "
+        closing = DESIGN_NAMES_INSTRUCTION
+    else:
+        name = language["name"]
+        opening = (
+            f"Propose exactly two distinct design approaches. Write every text in {name}, the "
+            "language of the requirements: titles, summaries, rationales, workflow titles and "
+            "steps, considerations, advantages, trade-offs, assumptions, questions, critiques, "
+            "concerns, approach_rationale and twin_fit statements; only codes and catalog ids "
+            "stay as they are. "
+        )
+        closing = f"{DESIGN_NAMES_INSTRUCTION} Every text is written in {name}."
+    return (
+        opening
+        + "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
+        "DRK-001 for concerns; every code must be unique. References use supplied "
+        f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
+        "critique for EVERY alternative/twin pair; cite exact observation_keys from "
+        "that twin. Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions and every list of a critique to at most three items, and each text to at "
+        "most two sentences; workflows, their steps and the information architecture keep the "
+        "items that the archetype and the task need. Prefer a small design appropriate to "
+        "scope. "
+        "Do not invent empirical evidence, owner selection, approval or a prototype. "
+        + DESIGN_VISUAL_INSTRUCTION
+        + " "
+        + closing
+    )
 
 
 def _require(condition: bool):
@@ -283,17 +319,7 @@ class ModelDesignAdapter:
         from orchestwin.models.design_drafts import DesignDraft, bind_design, design_context
 
         context, twins = design_context(request)
-        twin_keys = "/".join(twins)
-        instruction = (
-            "Propose exactly two distinct design approaches in the requirements' language. "
-            "Use DES-001 codes for alternatives, FLOW-001 for workflows, CRQ-001 for critiques, "
-            "DRK-001 for concerns; every code must be unique. References use supplied "
-            f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
-            "critique for EVERY alternative/twin pair; cite exact observation_keys from "
-            "that twin. Keep each list concise. Prefer a small design appropriate to scope. "
-            "Do not invent empirical evidence, owner selection, approval or a prototype. "
-            + DESIGN_VISUAL_INSTRUCTION
-        )
+        instruction = design_instruction("/".join(twins), context["language"])
         draft = await self.generator.generate(
             task="design",
             context=context,
@@ -310,7 +336,7 @@ class ModelDesignAdapter:
             status=DesignProposalStatus.PROPOSED,
             provider_kind=DesignProposalProviderKind.MODEL_ADAPTER,
             provider_id=self.generator.provider_id,
-            provider_version=3,
+            provider_version=4,
             package=output,
         )
 

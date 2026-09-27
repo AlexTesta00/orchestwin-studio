@@ -1,7 +1,52 @@
 """Translate domain-valid test data to the semantic model wire contracts."""
 
+from dataclasses import replace
+
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import requirements_context
+
+
+def italian_requirements(request):
+    version = request.requirements.version
+    specification = version.specification
+    specification = replace(
+        specification,
+        requirements=tuple(
+            replace(
+                item,
+                title=f"Gestire le prenotazioni {index}",
+                statement="Il sistema deve creare e rivedere le prenotazioni della struttura.",
+            )
+            for index, item in enumerate(specification.requirements, 1)
+        ),
+        user_stories=tuple(
+            replace(
+                item,
+                goal=f"creare la prenotazione {index} per un ospite senza errori",
+                benefit="servire un ospite al banco con la massima precisione",
+            )
+            for index, item in enumerate(specification.user_stories, 1)
+        ),
+        acceptance_criteria=tuple(
+            replace(
+                item,
+                statement="Le prenotazioni create sono visibili nello stato della giornata.",
+            )
+            for item in specification.acceptance_criteria
+        ),
+        scenarios=tuple(
+            replace(
+                item,
+                title=f"Registrare la prenotazione {index}",
+                trigger="Un ospite chiede una camera alla reception.",
+                steps=("Registrare la prenotazione nel sistema della struttura.",),
+                expected_outcome="La prenotazione compare nello stato della giornata.",
+            )
+            for index, item in enumerate(specification.scenarios, 1)
+        ),
+    )
+    version = replace(version, specification=specification, content_hash=specification.content_hash)
+    return replace(request, requirements=replace(request.requirements, version=version))
 
 
 def explored_choices(project_id, code):
