@@ -7,6 +7,7 @@ TASKS = frozenset(
         "personas",
         "user-twins",
         "twin-chat",
+        "twin-discussion",
         "user-twin-evaluation",
         "requirements",
         "design",

@@ -61,7 +61,9 @@ def test_revision_follows_the_clarification_round_drop() -> None:
     assert set(migration.CRITERIA.split(",")) == quoted(SyntheticFindingCriterion)
     assert set(migration.SEVERITIES.split(",")) == quoted(SyntheticFindingSeverity)
     assert set(migration.EPISTEMIC.split(",")) == quoted(SyntheticFindingEpistemicStatus)
-    assert set(migration.SOURCE_KINDS.split(",")) == quoted(InsightSourceKind)
+    assert set(migration.SOURCE_KINDS.split(",")) == quoted(
+        kind for kind in InsightSourceKind if kind is not InsightSourceKind.TWIN_DISCUSSION
+    )
     assert set(migration.TARGETS.split(",")) == quoted(InsightTarget)
 
 

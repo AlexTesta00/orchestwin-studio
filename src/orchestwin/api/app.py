@@ -16,6 +16,7 @@ from orchestwin.api.auth import AuthApiSettings, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
+from orchestwin.api.design_discussion import create_design_discussion_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
 from orchestwin.api.design_package import create_design_package_router
@@ -166,6 +167,7 @@ def create_app(
         create_design_router(),
         create_design_mockup_router(),
         create_design_loop_router(),
+        create_design_discussion_router(),
         create_insight_application_router(),
         create_artifact_graph_router(),
         create_design_package_router(),

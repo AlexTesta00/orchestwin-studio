@@ -9,6 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
+from orchestwin.artifacts.design_finding_validation_persistence import (
+    SqlAlchemyFindingValidationRepository,
+)
+from orchestwin.artifacts.design_finding_validations import (
+    dismissed_finding_keys,
+    finding_source_key,
+)
 from orchestwin.artifacts.design_packages import create_design_concern
 from orchestwin.artifacts.design_revision_application import DesignRevisionStatus
 from orchestwin.artifacts.design_revisions import DesignRevisionDecision
@@ -270,7 +277,22 @@ class InsightApplicationService:
             )
         return decision.version.id, decision.version.version_number, None, code
 
+    async def _refuse_dismissed_source(self, owner_user_id, project_id, body):
+        if body.source_kind is not InsightSourceKind.SYNTHETIC_FINDING:
+            return
+        key = finding_source_key(body.source_id)
+        if key is None:
+            return
+        sessions = self._sessions()
+        async with sessions() as session:
+            validations = await SqlAlchemyFindingValidationRepository(
+                session, owner_user_id=owner_user_id
+            ).current(project_id=project_id)
+        if key in dismissed_finding_keys(validations):
+            raise HTTPException(409, detail={"code": "INSIGHT_SOURCE_DISMISSED"})
+
     async def apply(self, *, owner_user_id, project_id, body) -> InsightApplication:
+        await self._refuse_dismissed_source(owner_user_id, project_id, body)
         if body.target is InsightTarget.BRIEF:
             outcome = await self._apply_to_brief(owner_user_id, project_id, body)
         elif body.target is InsightTarget.REQUIREMENTS:
