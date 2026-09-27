@@ -354,7 +354,7 @@ def test_reviewer_identifies_itself_by_the_proposer_model():
         "proposer-design-twin-review",
         "1.0.0",
     )
-    assert TWIN_REVIEW_PROMPT_VERSION == "s22-design-twin-review-v1"
+    assert TWIN_REVIEW_PROMPT_VERSION == "s22-design-twin-review-v2"
 
 
 def test_reviewer_sends_the_design_the_twin_the_criteria_and_the_questions():
