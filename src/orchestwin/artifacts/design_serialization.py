@@ -292,12 +292,7 @@ def _alternative_from_snapshot(payload: Mapping[str, object]):
             _required(payload, "code"),
             label="Design Alternative code",
         ),
-        approach=DesignApproach(
-            _string(
-                _required(payload, "approach"),
-                label="Design Alternative approach",
-            )
-        ),
+        approach=_approach(payload.get("approach")),
         title=_string(
             _required(payload, "title"),
             label="Design Alternative title",
@@ -366,6 +361,12 @@ def _alternative_from_snapshot(payload: Mapping[str, object]):
         ),
         visual_language=_visual_language(payload.get("visual_language")),
     )
+
+
+def _approach(value: object) -> DesignApproach | None:
+    if value is None:
+        return None
+    return DesignApproach(_string(value, label="Design Alternative approach"))
 
 
 def _visual_language(payload: object):

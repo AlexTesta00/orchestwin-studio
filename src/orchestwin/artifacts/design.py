@@ -118,7 +118,7 @@ class DesignAlternative:
 
     id: UUID
     code: str
-    approach: DesignApproach
+    approach: DesignApproach | None
     title: str
     summary: str
     rationale: str
@@ -231,28 +231,30 @@ class DesignAlternative:
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic alternative snapshot."""
-        snapshot = {
-            "id": str(self.id),
-            "code": self.code,
-            "approach": self.approach.value,
-            "title": self.title,
-            "summary": self.summary,
-            "rationale": self.rationale,
-            "requirement_ids": [str(value) for value in self.requirement_ids],
-            "user_story_ids": [str(value) for value in self.user_story_ids],
-            "acceptance_criterion_ids": [str(value) for value in self.acceptance_criterion_ids],
-            "user_twin_references": [
-                reference.to_snapshot() for reference in self.user_twin_references
-            ],
-            "workflows": [workflow.to_snapshot() for workflow in self.workflows],
-            "information_architecture": list(self.information_architecture),
-            "accessibility_considerations": list(self.accessibility_considerations),
-            "security_considerations": list(self.security_considerations),
-            "advantages": list(self.advantages),
-            "trade_offs": list(self.trade_offs),
-            "assumptions": list(self.assumptions),
-            "open_questions": list(self.open_questions),
-        }
+        snapshot: dict[str, object] = {"id": str(self.id), "code": self.code}
+        if self.approach is not None:
+            snapshot["approach"] = self.approach.value
+        snapshot.update(
+            {
+                "title": self.title,
+                "summary": self.summary,
+                "rationale": self.rationale,
+                "requirement_ids": [str(value) for value in self.requirement_ids],
+                "user_story_ids": [str(value) for value in self.user_story_ids],
+                "acceptance_criterion_ids": [str(value) for value in self.acceptance_criterion_ids],
+                "user_twin_references": [
+                    reference.to_snapshot() for reference in self.user_twin_references
+                ],
+                "workflows": [workflow.to_snapshot() for workflow in self.workflows],
+                "information_architecture": list(self.information_architecture),
+                "accessibility_considerations": list(self.accessibility_considerations),
+                "security_considerations": list(self.security_considerations),
+                "advantages": list(self.advantages),
+                "trade_offs": list(self.trade_offs),
+                "assumptions": list(self.assumptions),
+                "open_questions": list(self.open_questions),
+            }
+        )
         if self.visual_language is not None:
             snapshot["visual_language"] = self.visual_language.to_snapshot()
         return snapshot
@@ -433,7 +435,7 @@ def create_design_alternative(
     *,
     alternative_id: UUID,
     code: str,
-    approach: DesignApproach,
+    approach: DesignApproach | None = None,
     title: str,
     summary: str,
     rationale: str,

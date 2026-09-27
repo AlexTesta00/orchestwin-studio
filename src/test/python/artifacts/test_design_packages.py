@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
 
+from orchestwin.artifacts.design import DesignApproach
 from orchestwin.artifacts.design_packages import (
     DesignPackageVersion,
     create_design_grounding,
 )
+from orchestwin.artifacts.design_serialization import design_package_from_snapshot
 from orchestwin.artifacts.references import (
     ArtifactKind,
 )
@@ -87,6 +90,66 @@ def test_design_package_requires_distinct_approaches_and_critiques() -> None:
         replace(
             package,
             critiques=(package.critiques[0],),
+        )
+
+
+def test_distinct_approach_rule_ignores_alternatives_without_approach() -> None:
+    package = design_package()
+    first = replace(design_alternative(index=1), approach=None)
+    second = replace(design_alternative(index=2), approach=None)
+
+    without = replace(package, alternatives=(first, second))
+    mixed = replace(package, alternatives=(first, design_alternative(index=2)))
+
+    assert [item.approach for item in without.alternatives] == [None, None]
+    assert [item.approach for item in mixed.alternatives] == [
+        None,
+        DesignApproach.DASHBOARD_FIRST,
+    ]
+
+
+def test_stored_snapshot_with_approaches_reloads_to_the_identical_snapshot_and_hash() -> None:
+    package = design_package()
+    stored = json.loads(package.canonical_json())
+
+    restored = design_package_from_snapshot(stored)
+
+    assert [item["approach"] for item in stored["alternatives"]] == [
+        "GUIDED_WORKFLOW",
+        "DASHBOARD_FIRST",
+    ]
+    assert [item.approach for item in restored.alternatives] == [
+        DesignApproach.GUIDED_WORKFLOW,
+        DesignApproach.DASHBOARD_FIRST,
+    ]
+    assert restored.to_snapshot() == stored
+    assert restored.canonical_json() == package.canonical_json()
+    assert restored.content_hash == package.content_hash
+
+
+def test_snapshot_without_approach_reloads_without_it() -> None:
+    package = design_package()
+    snapshot = package.to_snapshot()
+    stripped = {
+        **snapshot,
+        "alternatives": [
+            {key: value for key, value in item.items() if key != "approach"}
+            for item in snapshot["alternatives"]
+        ],
+    }
+
+    restored = design_package_from_snapshot(stripped)
+
+    assert [item.approach for item in restored.alternatives] == [None, None]
+    assert restored.to_snapshot() == stripped
+    assert restored.content_hash != package.content_hash
+
+    with pytest.raises(ValueError, match="not canonical"):
+        design_package_from_snapshot(
+            {
+                **snapshot,
+                "alternatives": [{**item, "approach": None} for item in snapshot["alternatives"]],
+            }
         )
 
 

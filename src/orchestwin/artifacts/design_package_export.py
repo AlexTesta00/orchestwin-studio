@@ -14,6 +14,7 @@ from orchestwin.agents.team_gate import agent_team_gate_is_currently_approved
 from orchestwin.artifacts.design_gate import design_gate_is_currently_approved
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.mockup_html import MOCKUP_HTML_FILE, mockup_html
+from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
 from orchestwin.projects.brief_gate import project_brief_gate_is_currently_approved
 from orchestwin.projects.briefs import ProjectBriefVersion
 from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
@@ -397,6 +398,17 @@ def _alternative_codes(package: Mapping[str, object]) -> dict[str, str]:
     return {item["id"]: item["code"] for item in package["alternatives"]}
 
 
+def _direction(item: Mapping[str, object]) -> str:
+    visual = item.get("visual_language")
+    if visual is not None:
+        archetype = ARCHETYPES[LayoutArchetype(visual["choices"]["archetype"])]
+        return f"Layout archetype {archetype.label}. {item['summary']}"
+    approach = item.get("approach")
+    if approach is not None:
+        return f"Approach {_title(approach)}. {item['summary']}"
+    return item["summary"]
+
+
 def design_markdown(
     version: DesignPackageVersion, gate: HumanGate, codes: Mapping[str, str]
 ) -> str:
@@ -419,7 +431,7 @@ def design_markdown(
             [
                 f"### {item['code']}: {item['title']}",
                 "",
-                f"Approach {_title(item['approach'])}. {item['summary']}",
+                _direction(item),
                 "",
                 f"Rationale: {item['rationale']}",
                 "",
