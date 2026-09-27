@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from functools import partial
 from typing import Annotated, Final
 from uuid import UUID, uuid4
 
@@ -47,9 +48,10 @@ from orchestwin.models.twin_discussion import (
 DESIGN_DISCUSSION_API_PREFIX: Final = "/projects/{project_id}/design/discussions"
 DISCUSSION_ROLE: Final = "TWIN_DISCUSSION"
 STATEMENT_RECORDED: Final = "TWIN_STATEMENT_RECORDED"
+STATEMENT_REJECTED: Final = "TWIN_STATEMENT_REJECTED"
 SYNTHESIS_REJECTED: Final = "DISCUSSION_SYNTHESIS_REJECTED"
-SYNTHESIS_ATTEMPTS: Final = 2
-RETRYABLE_SYNTHESIS_CODES: Final = frozenset(
+GENERATION_ATTEMPTS: Final = 2
+RETRYABLE_CODES: Final = frozenset(
     {INVALID_TWIN_DISCUSSION_OUTPUT, "INVALID_PROVIDER_OUTPUT", "INCOMPLETE_OUTPUT"}
 )
 WRITE_ERRORS: Final = {
@@ -138,11 +140,41 @@ async def _record_statement(statement, discussion_id: UUID) -> None:
     await _retire(scope, STATEMENT_RECORDED, discussion_id)
 
 
-async def _reject_synthesis(discussion_id: UUID) -> None:
+async def _reject(status: str, discussion_id: UUID) -> None:
     scope = current_proposal_evidence()
     if scope is None or scope.request is None:
         return
-    await _retire(scope, SYNTHESIS_REJECTED, discussion_id)
+    await _retire(scope, status, discussion_id)
+
+
+async def _attempt(generation, *, rejected: str, discussion_id: UUID):
+    for attempt in range(1, GENERATION_ATTEMPTS + 1):
+        try:
+            return await generation()
+        except ProposalGenerationError as error:
+            if attempt == GENERATION_ATTEMPTS or error.code not in RETRYABLE_CODES:
+                raise
+            await _reject(rejected, discussion_id)
+    raise RuntimeError("discussion generation attempts are exhausted")
+
+
+async def _speak(generator, *, context, speaker, keys, previous, others, owner_note, locale):
+    output = await speak_as_twin(generator, context=context)
+    generation_id = _generation_id()
+    try:
+        return bind_statement(
+            output,
+            speaker=speaker,
+            keys=keys,
+            generation_id=generation_id,
+            previous=previous,
+            others=others,
+            owner_note=owner_note,
+            locale=locale,
+        )
+    except (TypeError, ValueError) as error:
+        rejection = await _rejection(error)
+        raise rejection from error
 
 
 async def _moderate(generator, *, context, keys, ordinal, note, statements, compose):
@@ -241,60 +273,63 @@ class DesignDiscussionApplication:
         keys = twin_keys(twins)
         findings = await self._findings(owner_user_id, project_id, version, keys)
         ordinal = 1 if previous is None else previous.ordinal + 1
+        earlier = () if previous is None else previous.statements
         statements = []
         for speaker in keys:
-            output = await speak_as_twin(
+            speaker_id = keys[speaker].twin_id
+            context = statement_context(
+                project_id=project_id,
+                locale=locale,
+                ordinal=ordinal,
+                owner_note=note,
+                keys=keys,
+                speaker=speaker,
+                design=view,
+                findings=findings,
+                previous=previous,
+            )
+            statement = await _attempt(
+                partial(
+                    _speak,
+                    generator,
+                    context=context,
+                    speaker=speaker,
+                    keys=keys,
+                    previous=next(
+                        (item.statement for item in earlier if item.twin_id == speaker_id), None
+                    ),
+                    others=tuple(item.statement for item in earlier if item.twin_id != speaker_id),
+                    owner_note=note,
+                    locale=locale,
+                ),
+                rejected=STATEMENT_REJECTED,
+                discussion_id=discussion_id,
+            )
+            statements.append(statement)
+            await _record_statement(statement, discussion_id)
+        discussion = await _attempt(
+            partial(
+                _moderate,
                 generator,
-                context=statement_context(
+                context=synthesis_context(
                     project_id=project_id,
                     locale=locale,
                     ordinal=ordinal,
                     owner_note=note,
                     keys=keys,
-                    speaker=speaker,
-                    design=view,
-                    findings=findings,
-                    previous=previous,
-                ),
-            )
-            generation_id = _generation_id()
-            try:
-                statement = bind_statement(
-                    output, speaker=speaker, keys=keys, generation_id=generation_id
-                )
-            except (TypeError, ValueError) as error:
-                rejection = await _rejection(error)
-                raise rejection from error
-            statements.append(statement)
-            await _record_statement(statement, discussion_id)
-        context = synthesis_context(
-            project_id=project_id,
-            locale=locale,
-            ordinal=ordinal,
-            owner_note=note,
-            keys=keys,
-            statements=statements,
-            previous=previous,
-        )
-        for attempt in range(1, SYNTHESIS_ATTEMPTS + 1):
-            try:
-                discussion = await _moderate(
-                    generator,
-                    context=context,
-                    keys=keys,
-                    ordinal=ordinal,
-                    note=note,
                     statements=statements,
-                    compose=compose,
-                )
-            except ProposalGenerationError as error:
-                if attempt == SYNTHESIS_ATTEMPTS or error.code not in RETRYABLE_SYNTHESIS_CODES:
-                    raise
-                await _reject_synthesis(discussion_id)
-                continue
-            await _accept_round(discussion.rounds[-1])
-            return discussion
-        raise RuntimeError("discussion synthesis attempts are exhausted")
+                ),
+                keys=keys,
+                ordinal=ordinal,
+                note=note,
+                statements=statements,
+                compose=compose,
+            ),
+            rejected=SYNTHESIS_REJECTED,
+            discussion_id=discussion_id,
+        )
+        await _accept_round(discussion.rounds[-1])
+        return discussion
 
     async def discussions(self, *, owner_user_id, project_id) -> tuple[DesignDiscussion, ...]:
         sessions = self._loop._sessions()

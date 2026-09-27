@@ -31,7 +31,12 @@ from orchestwin.models.proposal_evidence_persistence import (
     GENERATIONS,
     SqlAlchemyProposalEvidenceStore,
 )
-from orchestwin.models.twin_discussion import speak_as_twin, statement_context, twin_keys
+from orchestwin.models.twin_discussion import (
+    FOLLOW_UP_INSTRUCTION,
+    speak_as_twin,
+    statement_context,
+    twin_keys,
+)
 from orchestwin.persistence import create_database_runtime, load_database_settings
 from orchestwin.persistence.migrate import downgrade_database
 from orchestwin.projects.insight_applications import (
@@ -46,7 +51,14 @@ from orchestwin.projects.persistence.insight_applications import (
 )
 from orchestwin.twins.epistemics import ObservationValue
 from src.test.python.artifacts import design_fixtures
-from src.test.python.artifacts.test_design_discussion import NOW, discussion, discussion_round
+from src.test.python.artifacts.test_design_discussion import (
+    BRUNO,
+    NOW,
+    discussion,
+    discussion_round,
+    reacting_round,
+    statement,
+)
 from src.test.python.integration.postgres_isolation import assert_reversible_migration
 from src.test.python.integration.test_postgresql_design_loop import seed
 from src.test.python.integration.test_proposal_evidence_postgres import database, run
@@ -143,6 +155,7 @@ def test_discussions_round_trip_and_stay_unique_while_open(database):
                 ).one()
                 assert stored.round_snapshot == first.rounds[0].to_snapshot()
                 assert stored.content_hash == first.rounds[0].content_hash
+                assert all("reactions" not in item for item in stored.round_snapshot["statements"])
                 assert await session.scalar(sa.select(DISCUSSIONS.c.locale)) == "en-US"
             async with db.session_factory() as session, session.begin():
                 racing = SqlAlchemyDesignDiscussionRepository(session, owner_user_id=owner)
@@ -190,13 +203,25 @@ def test_rounds_append_in_order_until_the_limit_and_a_decision_is_final(database
                         **arguments,
                     }
                     assert await repository.append_round(**values) is status
-                for ordinal in range(2, MAX_DISCUSSION_ROUNDS + 1):
+                appended = (
+                    reacting_round(2),
+                    discussion_round(3, note="Rispondete alla nota."),
+                    discussion_round(
+                        MAX_DISCUSSION_ROUNDS,
+                        note="Ditemi cosa cambia.",
+                        statements=(
+                            statement(generation=401, owner_answer="Cambia il riepilogo."),
+                            statement(BRUNO, "Bruno", generation=402),
+                        ),
+                    ),
+                )
+                for appending in appended:
                     assert (
                         await repository.append_round(
                             project_id=project,
                             discussion_id=first.id,
-                            round=discussion_round(ordinal),
-                            expected_round_count=ordinal - 1,
+                            round=appending,
+                            expected_round_count=appending.ordinal - 1,
                         )
                         is DiscussionWriteStatus.WRITTEN
                     )
@@ -210,11 +235,32 @@ def test_rounds_append_in_order_until_the_limit_and_a_decision_is_final(database
                     is DiscussionWriteStatus.DISCUSSION_FULL
                 )
             decided_at = NOW + timedelta(hours=1)
-            full = seeded(version, rounds=MAX_DISCUSSION_ROUNDS)
             async with db.session_factory() as session, session.begin():
                 repository = SqlAlchemyDesignDiscussionRepository(session, owner_user_id=owner)
                 current = await repository.get(project_id=project, discussion_id=first.id)
-                assert current.rounds == full.rounds
+                assert current.rounds == (first.rounds[0], *appended)
+                assert [item.owner_note for item in current.rounds] == [
+                    None,
+                    None,
+                    "Rispondete alla nota.",
+                    "Ditemi cosa cambia.",
+                ]
+                assert [item.owner_answer for item in current.rounds[2].statements] == [None, None]
+                assert current.rounds[3].statements[0].owner_answer == "Cambia il riepilogo."
+                assert [item.content_hash for item in current.rounds] == [
+                    item.content_hash for item in (first.rounds[0], *appended)
+                ]
+                reacted = await session.scalar(
+                    sa.select(ROUNDS.c.round_snapshot).where(
+                        ROUNDS.c.discussion_id == first.id, ROUNDS.c.ordinal == 2
+                    )
+                )
+                assert reacted == appended[0].to_snapshot()
+                assert [item["reactions"][0]["verdict"] for item in reacted["statements"]] == [
+                    "PARTLY",
+                    "AGREE",
+                ]
+                assert current.rounds[1].content_hash == appended[0].content_hash
                 assert (
                     await repository.decide(
                         project_id=uuid4(),
@@ -428,16 +474,29 @@ def test_audited_rounds_pass_the_evidence_triggers_and_are_recorded(
     database, tmp_path, monkeypatch
 ):
     spoken = {
+        "answer_to_owner": None,
         "argument": "The guided flow is clear, but I need the date format at the desk.",
         "confidence": 0.8,
         "grounded_on": ["user_twin.role"],
         "proposals": ["Show the date format next to the field."],
-        "replies_to": [],
+        "reactions": [],
         "stance": "CONCERN",
     }
+    repeated = {**spoken, "answer_to_owner": "I keep my earlier view."}
+    revised = {
+        **spoken,
+        "answer_to_owner": "Concretely: add the date hint and I approve the flow.",
+        "argument": "After the owner's note I accept the summary; only the date hint is missing.",
+        "proposals": [],
+    }
     moderated = {
-        "agreements": [],
-        "conflicts": [],
+        "discussion_points": [
+            {
+                "positions": [{"position": "The flow is clear.", "twin": "T1"}],
+                "subject": "The guided flow is clear.",
+                "verdict": "AGREEMENT",
+            }
+        ],
         "proposals": [
             {
                 "supported_by": ["T1"],
@@ -448,7 +507,7 @@ def test_audited_rounds_pass_the_evidence_triggers_and_are_recorded(
         "questions_for_owner": ["Should the desk accept other date formats?"],
     }
     generator, transport = audited_generator(tmp_path, spoken)
-    outputs = iter((spoken, moderated, spoken, moderated))
+    outputs = iter((spoken, moderated, repeated, revised, moderated))
     deliver = transport.post_json
 
     async def scripted(**kwargs):
@@ -505,11 +564,29 @@ def test_audited_rounds_pass_the_evidence_triggers_and_are_recorded(
             assert approved.rounds == continued.discussion.rounds
             listed = await application.discussions(owner_user_id=owner, project_id=project)
             assert listed == (approved,)
-            assert len(transport.calls) == 4
-            rounds = approved.rounds
-            generations = [
+            assert len(transport.calls) == 5
+            opening, later = approved.rounds
+            assert later.statements[0].statement == revised["argument"]
+            assert later.statements[0].owner_answer == revised["answer_to_owner"]
+            assert opening.statements[0].owner_answer is None
+            assert opening.synthesis.agreements == ("The guided flow is clear.",)
+            async with db.session_factory() as session:
+                stored_rounds = (
+                    (
+                        await session.execute(
+                            sa.select(ROUNDS.c.round_snapshot).order_by(ROUNDS.c.ordinal)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            assert "answer_to_owner" not in stored_rounds[0]["statements"][0]
+            assert (
+                stored_rounds[1]["statements"][0]["answer_to_owner"] == (revised["answer_to_owner"])
+            )
+            recorded = [
                 str(item)
-                for current_round in rounds
+                for current_round in approved.rounds
                 for item in (
                     current_round.statements[0].model_generation_id,
                     current_round.synthesis.model_generation_id,
@@ -527,15 +604,22 @@ def test_audited_rounds_pass_the_evidence_triggers_and_are_recorded(
                         )
                     )
                 ).all()
-            assert sorted(str(row.id) for row in rows) == sorted(generations)
+            assert len(rows) == 5
             assert {row.task_id for row in rows} == {"proposal-twin-discussion-v1"}
+            [rejected] = [str(row.id) for row in rows if str(row.id) not in recorded]
             observed = {}
             for generation_id, kind, raw in events:
                 observed.setdefault(str(generation_id), {})[kind] = json.loads(raw)["payload"]
-            for ordinal, current_round in enumerate(rounds, 1):
-                statement_generation, synthesis_generation = generations[
-                    2 * ordinal - 2 : 2 * ordinal
-                ]
+            assert observed[rejected]["ADAPTER_REJECTED"] == {
+                "code": "ValueError",
+                "reason": "the statement repeats the previous round",
+            }
+            assert observed[rejected]["APPLICATION_RESULT"] == {
+                "status": "TWIN_STATEMENT_REJECTED",
+                "discussion_id": str(approved.id),
+            }
+            for ordinal, current_round in enumerate(approved.rounds, 1):
+                statement_generation, synthesis_generation = recorded[2 * ordinal - 2 : 2 * ordinal]
                 assert set(observed[statement_generation]) == {
                     "HTTP_REQUEST",
                     "HTTP_RESPONSE",
@@ -551,19 +635,31 @@ def test_audited_rounds_pass_the_evidence_triggers_and_are_recorded(
                 assert accepted["generated_content_hashes"] == {
                     "DISCUSSION_ROUND": [current_round.content_hash]
                 }
-                assert [item["generation_id"] for item in accepted["related_generations"]] == [
-                    statement_generation
+                assert [
+                    (item["generation_id"], item["code"])
+                    for item in accepted["related_generations"]
+                ] == [
+                    *([(rejected, "TWIN_STATEMENT_REJECTED")] if ordinal == 2 else []),
+                    (statement_generation, "TWIN_STATEMENT_RECORDED"),
                 ]
             assert [
-                observed[generations[index]]["APPLICATION_RESULT"]["status"] for index in (1, 3)
+                observed[recorded[index]]["APPLICATION_RESULT"]["status"] for index in (1, 3)
             ] == ["DESIGN_DISCUSSION_STARTED", "DESIGN_DISCUSSION_ROUND_RECORDED"]
-            sent = json.loads(transport.calls[2]["payload"]["messages"][1]["content"])["context"]
-            assert (sent["round"], sent["locale"], sent["owner_note"]) == (
-                2,
-                "en-US",
-                "Be concrete.",
-            )
-            assert sent["previous_round"]["statements"][0]["statement"] == spoken["argument"]
+            for index in (2, 3):
+                payload = transport.calls[index]["payload"]
+                assert payload["messages"][0]["content"].endswith(FOLLOW_UP_INSTRUCTION)
+                sent = json.loads(payload["messages"][1]["content"])["context"]
+                assert (sent["round"], sent["locale"], sent["owner_note"]) == (
+                    2,
+                    "en-US",
+                    "Be concrete.",
+                )
+                assert sent["previous_round"]["statements"] == []
+                assert sent["your_previous_position"] == {
+                    "stance": "CONCERN",
+                    "proposals": spoken["proposals"],
+                }
+                assert spoken["argument"] not in json.dumps(sent)
         finally:
             await db.dispose()
 

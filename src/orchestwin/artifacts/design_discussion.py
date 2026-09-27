@@ -23,19 +23,21 @@ from orchestwin.twins.limits import MAX_USER_TWINS
 
 MAX_DISCUSSION_ROUNDS: Final = 4
 MAX_DISCUSSION_TWINS: Final = MAX_USER_TWINS
-MAX_STATEMENT_LENGTH: Final = 700
+MAX_STATEMENT_LENGTH: Final = 1000
 MAX_STATEMENT_PROPOSALS: Final = 3
 MAX_STATEMENT_GROUNDING: Final = 4
-MAX_PROPOSAL_LENGTH: Final = 300
+MAX_REACTION_REASON_LENGTH: Final = 700
+MAX_PROPOSAL_LENGTH: Final = 600
 MAX_OWNER_NOTE_LENGTH: Final = 1000
+MAX_OWNER_ANSWER_LENGTH: Final = 800
 MAX_AGREEMENTS: Final = 5
-MAX_AGREEMENT_LENGTH: Final = 300
+MAX_AGREEMENT_LENGTH: Final = 500
 MAX_CONFLICTS: Final = 4
-MAX_CONFLICT_TOPIC_LENGTH: Final = 200
-MAX_POSITION_LENGTH: Final = 300
+MAX_CONFLICT_TOPIC_LENGTH: Final = 500
+MAX_POSITION_LENGTH: Final = 600
 MAX_SYNTHESIS_PROPOSALS: Final = 5
 MAX_QUESTIONS_FOR_OWNER: Final = 4
-MAX_QUESTION_LENGTH: Final = 300
+MAX_QUESTION_LENGTH: Final = 600
 MAX_TWIN_NAME_LENGTH: Final = 200
 MAX_LOCALE_LENGTH: Final = 20
 PROPOSAL_CODE_PREFIX: Final = "PRP"
@@ -59,6 +61,12 @@ class DiscussionProposalTarget(StrEnum):
     BRIEF = "BRIEF"
     REQUIREMENTS = "REQUIREMENTS"
     DESIGN = "DESIGN"
+
+
+class ReactionVerdict(StrEnum):
+    AGREE = "AGREE"
+    PARTLY = "PARTLY"
+    DISAGREE = "DISAGREE"
 
 
 def normalize_owner_note(note: str | None) -> str | None:
@@ -118,6 +126,22 @@ def _require_twin_ids(values: object, *, label: str, minimum: int) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class TwinReaction:
+    twin_id: UUID
+    verdict: ReactionVerdict
+    reason: str
+
+    def __post_init__(self) -> None:
+        _require_uuid(self.twin_id, "reaction twin ID")
+        if not isinstance(self.verdict, ReactionVerdict):
+            raise ValueError("reaction verdict must be a ReactionVerdict")
+        _require_text(self.reason, label="reaction reason", maximum=MAX_REACTION_REASON_LENGTH)
+
+    def to_snapshot(self) -> dict[str, object]:
+        return {"twin_id": str(self.twin_id), "verdict": self.verdict.value, "reason": self.reason}
+
+
+@dataclass(frozen=True, slots=True)
 class TwinStatement:
     twin_id: UUID
     twin_version: int
@@ -129,6 +153,8 @@ class TwinStatement:
     grounded_on: tuple[str, ...]
     confidence: float
     model_generation_id: UUID
+    reactions: tuple[TwinReaction, ...] = ()
+    owner_answer: str | None = None
 
     def __post_init__(self) -> None:
         _require_uuid(self.twin_id, "statement twin ID")
@@ -156,9 +182,27 @@ class TwinStatement:
         if type(self.confidence) is not float or not 0.0 <= self.confidence <= 1.0:
             raise ValueError("statement confidence must be a float between 0 and 1")
         _require_uuid(self.model_generation_id, "statement model generation ID")
+        if not isinstance(self.reactions, tuple) or any(
+            not isinstance(item, TwinReaction) for item in self.reactions
+        ):
+            raise ValueError("statement reactions must be a tuple of TwinReaction")
+        reacted = self.reacted_twins
+        _require_twin_ids(reacted, label="statement reactions", minimum=0)
+        if self.twin_id in reacted:
+            raise ValueError("a twin cannot react to itself")
+        if reacted and self.replies_to != reacted:
+            raise ValueError("a statement replies to the twins it reacts to")
+        if self.owner_answer is not None:
+            _require_text(
+                self.owner_answer, label="answer to the owner", maximum=MAX_OWNER_ANSWER_LENGTH
+            )
+
+    @property
+    def reacted_twins(self) -> tuple[UUID, ...]:
+        return tuple(item.twin_id for item in self.reactions)
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "twin_id": str(self.twin_id),
             "twin_version": self.twin_version,
             "twin_name": self.twin_name,
@@ -170,6 +214,11 @@ class TwinStatement:
             "confidence": self.confidence,
             "model_generation_id": str(self.model_generation_id),
         }
+        if self.reactions:
+            snapshot["reactions"] = [item.to_snapshot() for item in self.reactions]
+        if self.owner_answer is not None:
+            snapshot["answer_to_owner"] = self.owner_answer
+        return snapshot
 
     @property
     def content_hash(self) -> str:
@@ -340,6 +389,8 @@ class DiscussionRound:
                 raise ValueError("nobody can be answered in the first round")
             if not set(statement.replies_to) <= set(participants):
                 raise ValueError("statements reply only to the participants of the round")
+            if self.owner_note is None and statement.owner_answer is not None:
+                raise ValueError("an answer to the owner requires the owner's note")
         if not isinstance(self.synthesis, DiscussionSynthesis):
             raise ValueError("a round needs its synthesis")
         if not self.synthesis.twin_ids <= set(participants):
@@ -510,6 +561,17 @@ def _statement_from_snapshot(payload: Mapping[str, object]) -> TwinStatement:
         grounded_on=tuple(str(item) for item in payload["grounded_on"]),
         confidence=float(payload["confidence"]),
         model_generation_id=UUID(str(payload["model_generation_id"])),
+        reactions=tuple(
+            TwinReaction(
+                twin_id=UUID(str(reaction["twin_id"])),
+                verdict=ReactionVerdict(str(reaction["verdict"])),
+                reason=str(reaction["reason"]),
+            )
+            for reaction in (_mapping(item, "reaction") for item in payload.get("reactions", ()))
+        ),
+        owner_answer=None
+        if payload.get("answer_to_owner") is None
+        else str(payload["answer_to_owner"]),
     )
 
 
@@ -592,11 +654,13 @@ __all__ = [
     "MAX_DISCUSSION_ROUNDS",
     "MAX_DISCUSSION_TWINS",
     "MAX_LOCALE_LENGTH",
+    "MAX_OWNER_ANSWER_LENGTH",
     "MAX_OWNER_NOTE_LENGTH",
     "MAX_POSITION_LENGTH",
     "MAX_PROPOSAL_LENGTH",
     "MAX_QUESTIONS_FOR_OWNER",
     "MAX_QUESTION_LENGTH",
+    "MAX_REACTION_REASON_LENGTH",
     "MAX_STATEMENT_GROUNDING",
     "MAX_STATEMENT_LENGTH",
     "MAX_STATEMENT_PROPOSALS",
@@ -609,8 +673,10 @@ __all__ = [
     "DiscussionStance",
     "DiscussionStatus",
     "DiscussionSynthesis",
+    "ReactionVerdict",
     "SynthesisConflict",
     "SynthesisProposal",
+    "TwinReaction",
     "TwinStatement",
     "create_discussion_round",
     "design_discussion_from_snapshot",
