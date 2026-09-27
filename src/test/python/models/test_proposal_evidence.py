@@ -142,6 +142,41 @@ def test_all_six_tasks_retain_exact_request_raw_response_and_adapter_result(tmp_
     assert current_proposal_evidence() is None
 
 
+def test_design_uses_contract_nine_and_retains_why_a_design_in_another_language_is_rejected(
+    tmp_path,
+):
+    from .draft_fixtures import italian_requirements
+
+    request, output, adapter, method, _ = stage_case("design")
+    generator, _ = audited_generator(tmp_path, output)
+    store = MemoryEvidence()
+    result = asyncio.run(
+        Command(store, lambda: getattr(adapter(generator), method)(request)).run(
+            owner_user_id=uuid4(), project_id=uuid4()
+        )
+    )
+    _, (generation, _) = next(iter(store.requests.items()))
+    assert generation.output_schema.schema_id == "proposal-design-v9"
+    assert generation.prompt_version_ref == "proposal-design-v9"
+    assert result.provider_version == 4
+    rejected = MemoryEvidence()
+    italian = italian_requirements(request)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(
+            Command(rejected, lambda: getattr(adapter(generator), method)(italian)).run(
+                owner_user_id=uuid4(), project_id=uuid4()
+            )
+        )
+    events = next(iter(rejected.events.values()))
+    assert (
+        "ADAPTER_REJECTED",
+        {
+            "code": "INVALID_PROVIDER_OUTPUT",
+            "reason": "the design is not written in the language of the requirements",
+        },
+    ) in [(kind, payload) for kind, payload, _ in events]
+
+
 def test_persona_content_draft_binds_exact_brief_and_generation_evidence(tmp_path):
     request, output = fixtures.persona_input_output()
     generator, _ = audited_generator(tmp_path, output)
