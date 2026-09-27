@@ -44,8 +44,12 @@ EVALUATION_DOCUMENT_MEDIA_TYPE: Final = "text/html"
 DESIGN_SPECIFICATION_MEDIA_TYPE: Final = "application/json"
 MAX_EVALUATED_TWINS: Final = MAX_USER_TWINS
 MATCH_SIMILARITY: Final = 0.5
+ANCHOR_LABEL_LENGTH: Final = 80
+SCENARIO_NAME_LENGTH: Final = 200
+SCENARIO_TASK_LENGTH: Final = 2000
+SCENARIO_OUTCOME_LENGTH: Final = 1000
 _SCENARIO_NAMESPACE: Final = UUID("5b0d2f1e-0e4a-4d1f-9d6a-3c1e5e7f2a11")
-_CONTENT_STEPS: Final = (None, 400, 240, 160, 100, 60)
+CONTENT_STEPS: Final = (None, 400, 240, 160, 100, 60)
 _WORD: Final = re.compile(r"[a-z0-9àèéìòù]+")
 
 
@@ -70,7 +74,7 @@ def _digest(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _reference(
+def evaluation_reference(
     *,
     artifact_id: UUID,
     version_number: int,
@@ -99,13 +103,13 @@ def evaluation_document(
     if package.prototype is None or package.owner_selected_alternative_id is None:
         raise DesignEvaluationError("DESIGN_PROTOTYPE_REQUIRED")
     snapshot = package.to_snapshot()
-    for step in _CONTENT_STEPS:
+    for step in CONTENT_STEPS:
         text = render_evaluation_document(snapshot, language=language, max_content=step)
         content = text.encode("utf-8")
         if len(content) <= MAX_VIEW_BYTES:
             return DesignEvaluationDocument(
                 content=content,
-                reference=_reference(
+                reference=evaluation_reference(
                     artifact_id=package.prototype.id,
                     version_number=version.version_number,
                     kind=EvaluationArtifactKind.DOM_SNAPSHOT,
@@ -117,18 +121,113 @@ def evaluation_document(
     raise DesignEvaluationError("EVALUATION_DOCUMENT_TOO_LARGE")
 
 
+def _selected_alternative(version: DesignPackageVersion):
+    package = version.package
+    if package.prototype is None or package.owner_selected_alternative_id is None:
+        raise DesignEvaluationError("DESIGN_PROTOTYPE_REQUIRED")
+    return next(
+        item for item in package.alternatives if item.id == package.owner_selected_alternative_id
+    )
+
+
+def ordered_screens(version: DesignPackageVersion):
+    prototype = version.package.prototype
+    entry = next(screen for screen in prototype.screens if screen.id == prototype.entry_screen_id)
+    return (entry, *(screen for screen in prototype.screens if screen.id != entry.id))
+
+
+def _bounded(text: str, limit: int) -> str:
+    normalized = " ".join(text.split())
+    return normalized if len(normalized) <= limit else normalized[: limit - 1] + "…"
+
+
+def _anchor_label(text: str) -> str:
+    return text if len(text) <= ANCHOR_LABEL_LENGTH else text[: ANCHOR_LABEL_LENGTH - 1] + "…"
+
+
+def design_review_anchors(version: DesignPackageVersion) -> dict[str, str]:
+    _selected_alternative(version)
+    anchors: dict[str, str] = {}
+    for screen in ordered_screens(version):
+        place = f"{screen.code} {_anchor_label(screen.title)}"
+        anchors[screen.code] = place
+        for element in screen.elements:
+            label = _anchor_label(element.accessible_name or element.content)
+            anchors[f"{screen.code}/{element.code}"] = f"{place} · {element.code} {label}"
+    return anchors
+
+
+def design_review_view(version: DesignPackageVersion) -> dict[str, object]:
+    alternative = _selected_alternative(version)
+    prototype = version.package.prototype
+    screens = ordered_screens(version)
+    codes = {screen.id: screen.code for screen in screens}
+    leads = {
+        item.trigger_element_id: codes[item.target_screen_id] for item in prototype.transitions
+    }
+    visual = alternative.visual_language
+    return {
+        "alternative": {
+            "code": alternative.code,
+            "title": alternative.title,
+            "summary": alternative.summary,
+            "rationale": alternative.rationale,
+            "information_architecture": list(alternative.information_architecture),
+            "accessibility_considerations": list(alternative.accessibility_considerations),
+            "trade_offs": list(alternative.trade_offs),
+            "workflows": [
+                {"code": item.code, "title": item.title, "steps": list(item.steps)}
+                for item in alternative.workflows
+            ],
+        },
+        "visual_language": None
+        if visual is None
+        else {
+            "product_name": visual.product_name,
+            "rationale": visual.rationale,
+            "choices": visual.choices.to_snapshot(),
+            "twin_fit": {str(item.twin_id): item.statement for item in visual.twin_fit},
+        },
+        "entry_screen": screens[0].code,
+        "screens": [
+            {
+                "code": screen.code,
+                "title": screen.title,
+                "state": screen.state.value,
+                "elements": [
+                    {
+                        "code": element.code,
+                        "kind": element.kind.value,
+                        "content": element.content,
+                        "accessible_name": element.accessible_name,
+                        "field_name": element.field_name,
+                        "required": element.required,
+                        "options": list(element.options),
+                        "leads_to": leads.get(element.id),
+                    }
+                    for element in screen.elements
+                ],
+            }
+            for screen in screens
+        ],
+    }
+
+
 def evaluation_scenario(version: DesignPackageVersion, *, locale: str) -> EvaluationScenario:
     package = version.package
     alternative = next(
         item for item in package.alternatives if item.id == package.owner_selected_alternative_id
     )
     workflow = alternative.workflows[0]
+    outcomes = tuple(
+        dict.fromkeys(_bounded(step, SCENARIO_OUTCOME_LENGTH) for step in workflow.steps)
+    )
     return EvaluationScenario(
         id=uuid5(_SCENARIO_NAMESPACE, f"{version.id}:{alternative.id}"),
-        name=alternative.title,
-        task=workflow.title,
+        name=_bounded(alternative.title, SCENARIO_NAME_LENGTH),
+        task=_bounded(workflow.title, SCENARIO_TASK_LENGTH),
         locale=locale,
-        expected_outcomes=workflow.steps,
+        expected_outcomes=outcomes,
     )
 
 
@@ -147,7 +246,7 @@ def evaluation_bundle(
         scenario=evaluation_scenario(version, locale=locale),
         artifacts=(
             document.reference,
-            _reference(
+            evaluation_reference(
                 artifact_id=version.id,
                 version_number=version.version_number,
                 kind=EvaluationArtifactKind.DESIGN_SPECIFICATION,
@@ -316,6 +415,7 @@ class DesignEvaluationComparison:
     resolved: tuple[SyntheticFinding, ...]
     persisting: tuple[tuple[SyntheticFinding, SyntheticFinding], ...]
     introduced: tuple[SyntheticFinding, ...]
+    dismissed: int = 0
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -333,16 +433,32 @@ class DesignEvaluationComparison:
                 "resolved": len(self.resolved),
                 "persisting": len(self.persisting),
                 "introduced": len(self.introduced),
+                "dismissed": self.dismissed,
             },
         }
 
 
+def finding_key(run_id: UUID, finding: SyntheticFinding) -> tuple[UUID, UUID, str]:
+    return (run_id, finding.twin_id, finding.finding_id)
+
+
 def compare_design_evaluations(
-    base: DesignEvaluationRun, head: DesignEvaluationRun
+    base: DesignEvaluationRun,
+    head: DesignEvaluationRun,
+    *,
+    dismissed: frozenset[tuple[UUID, UUID, str]] = frozenset(),
 ) -> DesignEvaluationComparison:
-    remaining = list(head.findings)
+    rejected = [item for item in base.findings if finding_key(base.id, item) in dismissed]
+    considered = [item for item in base.findings if finding_key(base.id, item) not in dismissed]
+    remaining = [
+        item
+        for item in head.findings
+        if finding_key(head.id, item) not in dismissed
+        and not any(finding_similarity(earlier, item) >= MATCH_SIMILARITY for earlier in rejected)
+    ]
+    excluded = len(head.findings) - len(remaining) + len(rejected)
     resolved, persisting = [], []
-    for finding in base.findings:
+    for finding in considered:
         best, score = None, 0.0
         for candidate in remaining:
             similarity = finding_similarity(finding, candidate)
@@ -359,6 +475,7 @@ def compare_design_evaluations(
         resolved=tuple(resolved),
         persisting=tuple(persisting),
         introduced=tuple(remaining),
+        dismissed=excluded,
     )
 
 
@@ -484,6 +601,8 @@ def design_evaluation_run_from_snapshot(payload: Mapping[str, object]) -> Design
 
 
 __all__ = [
+    "ANCHOR_LABEL_LENGTH",
+    "CONTENT_STEPS",
     "DESIGN_EVALUATION_SCHEMA_VERSION",
     "DESIGN_SPECIFICATION_LOCATION",
     "EVALUATION_DOCUMENT_LOCATION",
@@ -497,11 +616,16 @@ __all__ = [
     "create_design_evaluation_run",
     "design_evaluation_run_from_snapshot",
     "design_evaluation_run_hash",
+    "design_review_anchors",
+    "design_review_view",
     "evaluation_bundle",
     "evaluation_bundle_from_snapshot",
     "evaluation_document",
+    "evaluation_reference",
     "evaluation_response_from_snapshot",
     "evaluation_scenario",
+    "finding_key",
     "finding_similarity",
+    "ordered_screens",
     "synthetic_finding_from_snapshot",
 ]

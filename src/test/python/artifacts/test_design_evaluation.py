@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -10,12 +11,16 @@ import pytest
 
 from orchestwin.artifacts import design_evaluation as module
 from orchestwin.artifacts.design_evaluation import (
+    ANCHOR_LABEL_LENGTH,
     DesignEvaluationError,
     compare_design_evaluations,
     create_design_evaluation_run,
     design_evaluation_run_from_snapshot,
+    design_review_anchors,
+    design_review_view,
     evaluation_bundle,
     evaluation_document,
+    finding_key,
     finding_similarity,
 )
 from orchestwin.artifacts.prototypes import create_prototype_element, create_prototype_screen
@@ -200,7 +205,7 @@ def test_evaluation_document_requires_a_selected_prototype_and_bounds_its_size(m
             prototype=replace(prototype, screens=(screen, prototype.screens[1]), transitions=()),
         )
     )
-    monkeypatch.setattr(module, "_CONTENT_STEPS", (None,))
+    monkeypatch.setattr(module, "CONTENT_STEPS", (None,))
     with pytest.raises(DesignEvaluationError, match="EVALUATION_DOCUMENT_TOO_LARGE"):
         evaluation_document(heavy)
 
@@ -296,6 +301,7 @@ def test_comparison_separates_resolved_persisting_and_new_findings():
         "resolved": 2,
         "persisting": 1,
         "introduced": 1,
+        "dismissed": 0,
     }
     assert [item.finding_id for item in comparison.resolved] == ["UTF-002", "UTF-003"]
     assert comparison.persisting[0][0].location == "SCR-001 Guest name"
@@ -304,3 +310,205 @@ def test_comparison_separates_resolved_persisting_and_new_findings():
     assert finding_similarity(first, second) == 1.0
     assert finding_similarity(first, base.findings[2]) == 0.0
     assert 0.0 < finding_similarity(first, relocated(second, "elsewhere")) < 1.0
+
+
+def test_comparison_excludes_the_dismissed_findings_of_each_run():
+    version = design_fixtures.design_version()
+    base = evaluate(
+        version,
+        {
+            TWIN_A: (
+                template("UTF-001", "SCR-001 Guest name", "The guest name field lacks help text."),
+                template("UTF-002", "SCR-001 Save", "The save button label is vague."),
+            ),
+            TWIN_B: (
+                template("UTF-003", "SCR-002 status", "The confirmation hides the next step."),
+            ),
+        },
+    )
+    head = evaluate(
+        version,
+        {
+            TWIN_A: (
+                template(
+                    "UTF-001", "SCR-001 guest name", "The guest name field still lacks help text."
+                ),
+                template("UTF-004", "SCR-001 Dates", "The date fields need a format hint."),
+            ),
+            TWIN_B: (),
+        },
+        run_id=UUID("00000000-0000-4000-8000-000000000902"),
+        clock=NOW + timedelta(minutes=10),
+    )
+    saved, dates = base.findings[1], head.findings[1]
+    assert finding_key(base.id, saved) == (base.id, TWIN_A, "UTF-002")
+    dismissed = frozenset(
+        {
+            finding_key(base.id, saved),
+            finding_key(head.id, dates),
+            (head.id, TWIN_B, "UTF-003"),
+        }
+    )
+    comparison = compare_design_evaluations(base, head, dismissed=dismissed)
+    assert comparison.to_snapshot()["counts"] == {
+        "base": 2,
+        "head": 1,
+        "resolved": 1,
+        "persisting": 1,
+        "introduced": 0,
+        "dismissed": 2,
+    }
+    assert [item.finding_id for item in comparison.resolved] == ["UTF-003"]
+    assert [pair[0].finding_id for pair in comparison.persisting] == ["UTF-001"]
+    assert comparison.introduced == ()
+    unrelated = frozenset({(head.id, TWIN_A, "UTF-002"), (base.id, TWIN_A, "UTF-004")})
+    assert compare_design_evaluations(base, head, dismissed=unrelated) == (
+        compare_design_evaluations(base, head)
+    )
+
+
+def dashboard_version():
+    package = design_fixtures.design_package()
+    return design_fixtures.design_version(
+        package=replace(
+            package,
+            owner_selected_alternative_id=design_fixtures.ALTERNATIVE_TWO_ID,
+            prototype=replace(
+                package.prototype, design_alternative_id=design_fixtures.ALTERNATIVE_TWO_ID
+            ),
+        )
+    )
+
+
+def test_review_anchors_name_every_screen_and_element_from_the_entry_screen():
+    version = design_fixtures.design_version()
+    assert list(design_review_anchors(version).items()) == [
+        ("SCR-001", "SCR-001 Create reservation"),
+        ("SCR-001/ELM-001", "SCR-001 Create reservation · ELM-001 Guest name"),
+        ("SCR-001/ELM-002", "SCR-001 Create reservation · ELM-002 Save reservation"),
+        ("SCR-002", "SCR-002 Reservation confirmation"),
+        ("SCR-002/ELM-003", "SCR-002 Reservation confirmation · ELM-003 Reservation saved"),
+    ]
+    prototype = version.package.prototype
+    first, confirmation = prototype.screens
+    title = "Confirmation " + "x" * 150
+    named = "Guest name " + "y" * 150
+    moved = design_fixtures.design_version(
+        package=replace(
+            version.package,
+            prototype=replace(
+                prototype,
+                entry_screen_id=confirmation.id,
+                screens=(
+                    replace(
+                        first,
+                        elements=(
+                            replace(first.elements[0], accessible_name=named),
+                            first.elements[1],
+                        ),
+                    ),
+                    replace(confirmation, title=title),
+                ),
+            ),
+        )
+    )
+    anchors = design_review_anchors(moved)
+    shortened = title[: ANCHOR_LABEL_LENGTH - 1] + "…"
+    assert list(anchors)[:3] == ["SCR-002", "SCR-002/ELM-003", "SCR-001"]
+    assert anchors["SCR-002"] == f"SCR-002 {shortened}"
+    assert anchors["SCR-002/ELM-003"] == f"SCR-002 {shortened} · ELM-003 Reservation saved"
+    assert anchors["SCR-001/ELM-001"] == (
+        f"SCR-001 Create reservation · ELM-001 {named[: ANCHOR_LABEL_LENGTH - 1]}…"
+    )
+    assert len(shortened) == ANCHOR_LABEL_LENGTH
+
+
+def test_review_view_describes_the_selected_alternative_and_its_screens():
+    version = design_fixtures.design_version()
+    view = design_review_view(version)
+    assert view["alternative"] == {
+        "code": "DES-001",
+        "title": "Guided reservation flow",
+        "summary": "Guide the receptionist through one decision at a time.",
+        "rationale": "Reduce cognitive load for occasional users.",
+        "information_architecture": ["Availability", "Reservation", "Confirmation"],
+        "accessibility_considerations": ["All controls have persistent labels"],
+        "trade_offs": ["More navigation"],
+        "workflows": [
+            {
+                "code": "FLOW-001",
+                "title": "Create a reservation",
+                "steps": ["Review availability.", "Save the reservation."],
+            }
+        ],
+    }
+    assert view["visual_language"] is None
+    assert view["entry_screen"] == "SCR-001"
+    common = {"field_name": None, "required": False, "options": [], "leads_to": None}
+    assert view["screens"] == [
+        {
+            "code": "SCR-001",
+            "title": "Create reservation",
+            "state": "DEFAULT",
+            "elements": [
+                {
+                    **common,
+                    "code": "ELM-001",
+                    "kind": "TEXT_INPUT",
+                    "content": "Guest name",
+                    "accessible_name": "Guest name",
+                    "field_name": "guest_name",
+                    "required": True,
+                },
+                {
+                    **common,
+                    "code": "ELM-002",
+                    "kind": "BUTTON",
+                    "content": "Save reservation",
+                    "accessible_name": "Save reservation",
+                    "leads_to": "SCR-002",
+                },
+            ],
+        },
+        {
+            "code": "SCR-002",
+            "title": "Reservation confirmation",
+            "state": "SUCCESS",
+            "elements": [
+                {
+                    **common,
+                    "code": "ELM-003",
+                    "kind": "STATUS",
+                    "content": "Reservation saved",
+                    "accessible_name": None,
+                }
+            ],
+        },
+    ]
+    serialized = json.dumps(view)
+    assert json.loads(serialized) == view
+    assert str(design_fixtures.PROTOTYPE_ID) not in serialized
+    assert str(version.package.prototype.screens[0].id) not in serialized
+    dashboard = design_review_view(dashboard_version())
+    language = design_fixtures.visual_language()
+    assert dashboard["alternative"]["code"] == "DES-002"
+    assert dashboard["visual_language"] == {
+        "product_name": "Reservation desk",
+        "rationale": language.rationale,
+        "choices": language.choices.to_snapshot(),
+        "twin_fit": {
+            str(design_fixtures.TWIN_ID): (
+                "Large tiles and a calm palette suit a receptionist scanning the desk."
+            )
+        },
+    }
+
+
+def test_review_anchors_and_view_require_a_selected_prototype():
+    version = design_fixtures.design_version()
+    bare = design_fixtures.design_version(
+        package=replace(version.package, owner_selected_alternative_id=None, prototype=None)
+    )
+    for function in (design_review_anchors, design_review_view):
+        with pytest.raises(DesignEvaluationError, match="DESIGN_PROTOTYPE_REQUIRED"):
+            function(bare)
