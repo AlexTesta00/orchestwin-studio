@@ -43,7 +43,8 @@ DESIGN_SPECIFICATION_LOCATION: Final = "design/design.json"
 EVALUATION_DOCUMENT_MEDIA_TYPE: Final = "text/html"
 DESIGN_SPECIFICATION_MEDIA_TYPE: Final = "application/json"
 MAX_EVALUATED_TWINS: Final = MAX_USER_TWINS
-MATCH_SIMILARITY: Final = 0.5
+MATCH_SIMILARITY: Final = 0.3
+MATCH_STEM_LENGTH: Final = 6
 ANCHOR_LABEL_LENGTH: Final = 80
 SCENARIO_NAME_LENGTH: Final = 200
 SCENARIO_TASK_LENGTH: Final = 2000
@@ -51,6 +52,83 @@ SCENARIO_OUTCOME_LENGTH: Final = 1000
 _SCENARIO_NAMESPACE: Final = UUID("5b0d2f1e-0e4a-4d1f-9d6a-3c1e5e7f2a11")
 CONTENT_STEPS: Final = (None, 400, 240, 160, 100, 60)
 _WORD: Final = re.compile(r"[a-z0-9àèéìòù]+")
+_STOPWORDS: Final = frozenset(
+    [
+        "il",
+        "lo",
+        "la",
+        "gli",
+        "le",
+        "un",
+        "uno",
+        "una",
+        "di",
+        "da",
+        "in",
+        "con",
+        "su",
+        "per",
+        "tra",
+        "fra",
+        "ma",
+        "che",
+        "non",
+        "sono",
+        "ha",
+        "hanno",
+        "del",
+        "della",
+        "dei",
+        "delle",
+        "degli",
+        "al",
+        "alla",
+        "ai",
+        "alle",
+        "dal",
+        "dalla",
+        "nel",
+        "nella",
+        "nei",
+        "nelle",
+        "sul",
+        "sulla",
+        "come",
+        "più",
+        "meno",
+        "anche",
+        "se",
+        "ci",
+        "si",
+        "mi",
+        "ti",
+        "ed",
+        "the",
+        "an",
+        "of",
+        "to",
+        "on",
+        "for",
+        "and",
+        "or",
+        "is",
+        "are",
+        "not",
+        "with",
+        "by",
+        "as",
+        "at",
+        "it",
+        "this",
+        "that",
+        "does",
+        "do",
+        "has",
+        "have",
+        "be",
+        "can",
+    ]
+)
 
 
 class DesignEvaluationError(ValueError):
@@ -394,13 +472,20 @@ def _build_run(
 
 
 def _words(text: str) -> set[str]:
-    return set(_WORD.findall(text.casefold()))
+    return {
+        word[:MATCH_STEM_LENGTH]
+        for word in _WORD.findall(text.casefold())
+        if len(word) > 2 and word not in _STOPWORDS
+    }
 
 
 def finding_similarity(first: SyntheticFinding, second: SyntheticFinding) -> float:
-    if first.twin_id != second.twin_id or first.criterion is not second.criterion:
+    if first.twin_id != second.twin_id:
         return 0.0
-    if first.location.casefold() == second.location.casefold():
+    if (
+        first.criterion is second.criterion
+        and first.location.casefold() == second.location.casefold()
+    ):
         return 1.0
     a, b = _words(first.summary), _words(second.summary)
     if not a or not b:
@@ -607,6 +692,7 @@ __all__ = [
     "DESIGN_SPECIFICATION_LOCATION",
     "EVALUATION_DOCUMENT_LOCATION",
     "MATCH_SIMILARITY",
+    "MATCH_STEM_LENGTH",
     "MAX_EVALUATED_TWINS",
     "DesignEvaluationComparison",
     "DesignEvaluationDocument",
