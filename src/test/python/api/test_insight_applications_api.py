@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import ClassVar
 from uuid import UUID, uuid4
@@ -12,6 +13,11 @@ from orchestwin.api import insight_applications as module
 from orchestwin.api.insight_applications import (
     InsightApplicationRequest,
     InsightApplicationService,
+)
+from orchestwin.artifacts.design_finding_validations import (
+    FindingDecision,
+    create_finding_validation,
+    finding_source_id,
 )
 from orchestwin.artifacts.design_revision_application import DesignRevisionStatus
 from orchestwin.projects.briefs import BriefField, create_project_brief
@@ -55,6 +61,22 @@ class MemoryApplications:
         return tuple(item for item in MemoryApplications.items if item.project_id == project_id)
 
 
+class MemoryValidations:
+    items: ClassVar[list] = []
+    reads: ClassVar[int] = 0
+
+    def __init__(self, session, *, owner_user_id):
+        self.owner_user_id = owner_user_id
+
+    async def current(self, *, project_id):
+        MemoryValidations.reads += 1
+        return tuple(
+            item
+            for item in MemoryValidations.items
+            if item.project_id == project_id and item.owner_user_id == self.owner_user_id
+        )
+
+
 class Revisions:
     def __init__(self, status, version_number):
         self.status = status
@@ -72,9 +94,12 @@ class Revisions:
         )
 
 
-def service(monkeypatch, *, brief=None, requirements=None, design=None):
+def service(monkeypatch, *, brief=None, requirements=None, design=None, validations=()):
     MemoryApplications.items = []
+    MemoryValidations.items = list(validations)
+    MemoryValidations.reads = 0
     monkeypatch.setattr(module, "SqlAlchemyInsightApplicationRepository", MemoryApplications)
+    monkeypatch.setattr(module, "SqlAlchemyFindingValidationRepository", MemoryValidations)
     created = []
 
     async def current_brief(**kwargs):
@@ -224,6 +249,131 @@ def test_missing_artifacts_and_rejected_revisions_are_reported(monkeypatch):
     with pytest.raises(HTTPException) as failure:
         apply(rejected, request(target=InsightTarget.DESIGN))
     assert failure.value.detail["code"] == "DESIGN_REVISION_REJECTED"
+
+
+RUN_ID = UUID("00000000-0000-4000-8000-000000000901")
+
+
+def owner_decision(decision, sequence_number=1):
+    return create_finding_validation(
+        evaluation_run_id=RUN_ID,
+        twin_id=design_fixtures.twin_reference().twin_id,
+        finding_id="UTF-001",
+        sequence_number=sequence_number,
+        project_id=design_fixtures.PROJECT_ID,
+        owner_user_id=design_fixtures.OWNER_ID,
+        decision=decision,
+        note=None,
+        decided_at=datetime(2026, 9, 27, 9, sequence_number, tzinfo=UTC),
+    )
+
+
+def finding_source():
+    return finding_source_id(RUN_ID, design_fixtures.twin_reference().twin_id, "UTF-001")
+
+
+def test_dismissed_synthetic_findings_are_refused_before_anything_is_created(monkeypatch):
+    application, runtime, _ = service(
+        monkeypatch,
+        requirements=design_fixtures.requirements_version(),
+        validations=(
+            owner_decision(FindingDecision.OWNER_CONFIRMED),
+            owner_decision(FindingDecision.OWNER_DISMISSED, 2),
+        ),
+    )
+    with pytest.raises(HTTPException) as failure:
+        apply(application, request(source_id=finding_source()))
+    assert failure.value.status_code == 409
+    assert failure.value.detail == {"code": "INSIGHT_SOURCE_DISMISSED"}
+    assert runtime.requirements_revision_service.proposed == []
+    assert MemoryApplications.items == []
+    runtime.database_runtime = None
+    with pytest.raises(HTTPException) as unavailable:
+        apply(application, request(source_id=finding_source()))
+    assert unavailable.value.status_code == 503
+    assert unavailable.value.detail == {"code": "DATABASE_UNAVAILABLE"}
+    assert runtime.requirements_revision_service.proposed == []
+
+
+def test_confirmed_findings_and_other_sources_are_still_applied(monkeypatch):
+    confirmed, _, _ = service(
+        monkeypatch,
+        requirements=design_fixtures.requirements_version(),
+        validations=(
+            owner_decision(FindingDecision.OWNER_DISMISSED),
+            owner_decision(FindingDecision.OWNER_CONFIRMED, 2),
+        ),
+    )
+    assert apply(confirmed, request(source_id=finding_source())).source_id == finding_source()
+    assert MemoryValidations.reads == 1
+    dismissed, _, _ = service(
+        monkeypatch,
+        requirements=design_fixtures.requirements_version(),
+        validations=(owner_decision(FindingDecision.OWNER_DISMISSED),),
+    )
+    for body in (
+        request(source_id=f"run:{RUN_ID}:UTF-001"),
+        request(source_id=finding_source_id(RUN_ID, UUID(int=5), "UTF-001")),
+        request(source_kind=InsightSourceKind.DESIGN_CRITIQUE, source_id=finding_source()),
+    ):
+        assert apply(dismissed, body).source_id == body.source_id
+    assert len(MemoryApplications.items) == 3
+    assert MemoryValidations.reads == 1
+
+
+DISCUSSION_ID = UUID("00000000-0000-4000-8000-000000000951")
+
+
+def discussion_source(ordinal=1, code="PRP-001"):
+    return f"discussion:{DISCUSSION_ID}:{ordinal}:{code}"
+
+
+def test_twin_discussion_proposals_are_applied_like_every_other_source(monkeypatch):
+    parsed = InsightApplicationRequest.model_validate(
+        {
+            "source_kind": "TWIN_DISCUSSION",
+            "source_id": discussion_source(),
+            "text": "Show the accepted date format next to the reservation dates.",
+            "target": "REQUIREMENTS",
+        }
+    )
+    assert parsed.source_kind is InsightSourceKind.TWIN_DISCUSSION
+    assert parsed.source_twin_id is None
+    application, runtime, _ = service(
+        monkeypatch,
+        requirements=design_fixtures.requirements_version(),
+        design=design_fixtures.design_version(),
+        validations=(owner_decision(FindingDecision.OWNER_DISMISSED),),
+    )
+    requirement = apply(application, parsed)
+    added = runtime.requirements_revision_service.proposed[0][
+        "proposed_specification"
+    ].requirements[-1]
+    assert added.code == requirement.target_code == "REQ-002"
+    assert added.statement == "Show the accepted date format next to the reservation dates."
+    assert added.sources[0].kind is RequirementSourceKind.OWNER_INPUT
+    assert added.sources[0].locator == f"TWIN_DISCUSSION:{discussion_source()}"
+    assert added.user_twin_references == ()
+    assert requirement.source_kind is InsightSourceKind.TWIN_DISCUSSION
+    assert requirement.to_snapshot()["source_id"] == discussion_source()
+    concern = apply(
+        application,
+        request(
+            source_kind=InsightSourceKind.TWIN_DISCUSSION,
+            source_id=discussion_source(2, "PRP-003"),
+            source_twin_id=None,
+            text="Keep the search box at the top of the dashboard.",
+            target=InsightTarget.DESIGN,
+            mitigation="Move the search box above the tiles.",
+        ),
+    )
+    proposed = runtime.design_revision_service.proposed[0]["proposed_package"]
+    assert proposed.concerns[-1].code == concern.target_code == "DRK-002"
+    assert proposed.concerns[-1].summary == "Keep the search box at the top of the dashboard."
+    assert proposed.concerns[-1].mitigation == "Move the search box above the tiles."
+    assert concern.target_version_number == 4
+    assert MemoryApplications.items == [requirement, concern]
+    assert MemoryValidations.reads == 0
 
 
 def test_router_registers_the_application_routes():

@@ -72,3 +72,25 @@ def test_brief_applications_name_a_list_field_and_others_carry_a_code():
         application(text="   ")
     with pytest.raises(ValueError, match="timezone-aware"):
         application(created_at=NOW.replace(tzinfo=None))
+
+
+def test_twin_discussion_applications_round_trip_like_the_other_kinds():
+    assert InsightSourceKind("TWIN_DISCUSSION") is InsightSourceKind.TWIN_DISCUSSION
+    source_id = f"discussion:{UUID(int=6)}:2:PRP-001"
+    for target, field, code in (
+        (InsightTarget.REQUIREMENTS, None, "REQ-004"),
+        (InsightTarget.DESIGN, None, "DRK-002"),
+        (InsightTarget.BRIEF, BriefField.RISKS, None),
+    ):
+        item = application(
+            source_kind=InsightSourceKind.TWIN_DISCUSSION,
+            source_id=source_id,
+            source_twin_id=None,
+            target=target,
+            target_field=field,
+            target_code=code,
+        )
+        snapshot = item.to_snapshot()
+        assert (snapshot["source_kind"], snapshot["source_id"]) == ("TWIN_DISCUSSION", source_id)
+        assert snapshot["source_twin_id"] is None
+        assert insight_application_from_snapshot(snapshot) == item
