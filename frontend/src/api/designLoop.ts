@@ -2,9 +2,15 @@ import { ApiRequestError } from "./requestError";
 
 import type { DesignGenerationPayload } from "../types/design";
 import type {
+  DesignDiscussionPayload,
+  DesignDiscussionRequest,
   DesignEvaluationComparisonPayload,
   DesignEvaluationRequest,
   DesignEvaluationRunPayload,
+  DiscussionDecisionRequest,
+  DiscussionRoundRequest,
+  FindingValidationPayload,
+  FindingValidationRequest,
   InsightApplicationPayload,
   InsightApplicationRequest,
 } from "../types/designLoop";
@@ -34,6 +40,31 @@ export interface DesignLoopApi {
     accessToken: string,
   ): Promise<InsightApplicationPayload>;
   applications(projectId: string, accessToken: string): Promise<InsightApplicationPayload[]>;
+  validations(projectId: string, accessToken: string): Promise<FindingValidationPayload[]>;
+  validate(
+    projectId: string,
+    runId: string,
+    body: FindingValidationRequest,
+    accessToken: string,
+  ): Promise<FindingValidationPayload>;
+  discussions(projectId: string, accessToken: string): Promise<DesignDiscussionPayload[]>;
+  startDiscussion(
+    projectId: string,
+    body: DesignDiscussionRequest,
+    accessToken: string,
+  ): Promise<DesignDiscussionPayload>;
+  nextDiscussionRound(
+    projectId: string,
+    discussionId: string,
+    body: DiscussionRoundRequest,
+    accessToken: string,
+  ): Promise<DesignDiscussionPayload>;
+  decideDiscussion(
+    projectId: string,
+    discussionId: string,
+    body: DiscussionDecisionRequest,
+    accessToken: string,
+  ): Promise<DesignDiscussionPayload>;
 }
 
 export class DesignLoopApiError extends ApiRequestError {}
@@ -172,6 +203,58 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         accessToken,
         "GET",
       )) as InsightApplicationPayload[];
+    },
+
+    async validations(projectId, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/evaluations/validations`,
+        accessToken,
+        "GET",
+      )) as FindingValidationPayload[];
+    },
+
+    async validate(projectId, runId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/evaluations/${encodeURIComponent(runId)}/validations`,
+        accessToken,
+        "POST",
+        body,
+      )) as FindingValidationPayload;
+    },
+
+    async discussions(projectId, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/discussions`,
+        accessToken,
+        "GET",
+      )) as DesignDiscussionPayload[];
+    },
+
+    async startDiscussion(projectId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/discussions`,
+        accessToken,
+        "POST",
+        body,
+      )) as DesignDiscussionPayload;
+    },
+
+    async nextDiscussionRound(projectId, discussionId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/discussions/${encodeURIComponent(discussionId)}/rounds`,
+        accessToken,
+        "POST",
+        body,
+      )) as DesignDiscussionPayload;
+    },
+
+    async decideDiscussion(projectId, discussionId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/design/discussions/${encodeURIComponent(discussionId)}/decision`,
+        accessToken,
+        "POST",
+        body,
+      )) as DesignDiscussionPayload;
     },
   };
 }

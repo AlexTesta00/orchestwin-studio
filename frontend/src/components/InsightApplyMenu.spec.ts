@@ -41,6 +41,12 @@ function fakeApi(): DesignLoopApi {
       application({ target: body.target, target_field: body.brief_field ?? null }),
     ),
     applications: vi.fn(async () => []),
+    validations: vi.fn(async () => []),
+    validate: vi.fn(),
+    discussions: vi.fn(async () => []),
+    startDiscussion: vi.fn(),
+    nextDiscussionRound: vi.fn(),
+    decideDiscussion: vi.fn(),
   };
 }
 
@@ -113,6 +119,47 @@ describe("InsightApplyMenu", () => {
     });
     expect(wrapper.get('[data-testid="insight-applied"]').text()).toBe(
       "Added to the brief (Goals, version 3).",
+    );
+  });
+
+  it("applies a discussion proposal and explains a finding set aside by the owner", async () => {
+    const api = fakeApi();
+    const wrapper = mount(InsightApplyMenu, {
+      props: {
+        projectId: "project-1",
+        source: {
+          kind: "TWIN_DISCUSSION",
+          id: "discussion:discussion-1:1:PRP-001",
+          twinId: null,
+          text: "Show the booking total before confirming.",
+        },
+        locale: "it",
+        authorize,
+        api,
+      },
+    });
+    await wrapper.get('[data-testid="insight-apply-design"]').trigger("click");
+    await flushPromises();
+    expect(vi.mocked(api.applyInsight).mock.calls[0]?.[1]).toEqual({
+      source_kind: "TWIN_DISCUSSION",
+      source_id: "discussion:discussion-1:1:PRP-001",
+      source_twin_id: null,
+      text: "Show the booking total before confirming.",
+      target: "DESIGN",
+      brief_field: null,
+      mitigation: null,
+    });
+    vi.mocked(api.applyInsight).mockRejectedValueOnce(
+      new DesignLoopApiError("failed", {
+        status: 409,
+        code: "INSIGHT_SOURCE_DISMISSED",
+        payload: null,
+      }),
+    );
+    await wrapper.get('[data-testid="insight-apply-requirements"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "Hai segnato questa osservazione come non pertinente, quindi non viene portata nel progetto.",
     );
   });
 });

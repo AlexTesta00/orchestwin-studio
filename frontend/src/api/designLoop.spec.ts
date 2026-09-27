@@ -47,6 +47,127 @@ describe("designLoop api", () => {
     expect(await api.runs("project 1", "token")).toEqual([]);
   });
 
+  it("sends the evaluation mode and records the owner's decision on a finding", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/validations") && init?.method === "POST") {
+        return response(201, { finding_id: "UTF-001", decision: "OWNER_DISMISSED" });
+      }
+      if (path.endsWith("/design/evaluations") && init?.method === "POST") {
+        return response(201, { id: "run-2", responses: [] });
+      }
+      return response(200, [{ finding_id: "UTF-001", decision: "OWNER_CONFIRMED" }]);
+    });
+    const api = createDesignLoopApi({ fetchImpl });
+    await api.evaluate(
+      "p",
+      { design_version_id: "v", design_content_hash: "a".repeat(64), mode: "STATIC_CHECK" },
+      "token",
+    );
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      design_version_id: "v",
+      design_content_hash: "a".repeat(64),
+      mode: "STATIC_CHECK",
+    });
+    const validations = await api.validations("p", "token");
+    expect(validations[0]?.decision).toBe("OWNER_CONFIRMED");
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toBe(
+      "/api/v1/projects/p/design/evaluations/validations",
+    );
+    expect(fetchImpl.mock.calls[1]?.[1]?.method).toBe("GET");
+    const decided = await api.validate(
+      "p",
+      "run 1",
+      {
+        twin_id: "twin-1",
+        finding_id: "UTF-001",
+        decision: "OWNER_DISMISSED",
+        note: "Out of scope",
+      },
+      "token",
+    );
+    expect(decided.decision).toBe("OWNER_DISMISSED");
+    const [url, init] = fetchImpl.mock.calls[2]!;
+    expect(String(url)).toBe("/api/v1/projects/p/design/evaluations/run%201/validations");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      twin_id: "twin-1",
+      finding_id: "UTF-001",
+      decision: "OWNER_DISMISSED",
+      note: "Out of scope",
+    });
+  });
+
+  it("starts, continues and decides a twin discussion", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "GET") {
+        return response(200, [{ id: "discussion-1", status: "OPEN" }]);
+      }
+      if (String(input).endsWith("/decision")) {
+        return response(200, { id: "discussion-1", status: "APPROVED" });
+      }
+      return response(201, { id: "discussion-1", status: "OPEN" });
+    });
+    const api = createDesignLoopApi({ fetchImpl });
+    expect((await api.discussions("p", "token"))[0]?.id).toBe("discussion-1");
+    await api.startDiscussion(
+      "p",
+      {
+        design_version_id: "v",
+        design_content_hash: "a".repeat(64),
+        locale: "it-IT",
+        owner_note: "Focus on speed",
+      },
+      "token",
+    );
+    await api.nextDiscussionRound(
+      "p",
+      "discussion 1",
+      { expected_round_count: 1, owner_note: null },
+      "token",
+    );
+    const decided = await api.decideDiscussion("p", "discussion 1", { action: "APPROVE" }, "token");
+    expect(decided.status).toBe("APPROVED");
+    const calls = fetchImpl.mock.calls.map(([url, init]) => [
+      String(url),
+      init?.method,
+      init?.body === undefined ? null : JSON.parse(String(init.body)),
+    ]);
+    expect(calls).toEqual([
+      ["/api/v1/projects/p/design/discussions", "GET", null],
+      [
+        "/api/v1/projects/p/design/discussions",
+        "POST",
+        {
+          design_version_id: "v",
+          design_content_hash: "a".repeat(64),
+          locale: "it-IT",
+          owner_note: "Focus on speed",
+        },
+      ],
+      [
+        "/api/v1/projects/p/design/discussions/discussion%201/rounds",
+        "POST",
+        { expected_round_count: 1, owner_note: null },
+      ],
+      [
+        "/api/v1/projects/p/design/discussions/discussion%201/decision",
+        "POST",
+        { action: "APPROVE" },
+      ],
+    ]);
+  });
+
+  it("surfaces the discussion conflicts with their code", async () => {
+    const fetchImpl = vi.fn(async () =>
+      response(409, { detail: { code: "DESIGN_DISCUSSION_OPEN" } }),
+    );
+    const api = createDesignLoopApi({ fetchImpl });
+    await expect(
+      api.startDiscussion("p", { design_version_id: "v", design_content_hash: "a" }, "token"),
+    ).rejects.toMatchObject({ status: 409, code: "DESIGN_DISCUSSION_OPEN" });
+  });
+
   it("treats a missing comparison as null and surfaces other failures with their code", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

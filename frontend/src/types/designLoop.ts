@@ -9,8 +9,14 @@ export type SyntheticFindingCriterion =
   | "trust"
   | "accessibility"
   | "task_alignment";
-export type InsightSourceKind = "TWIN_CHAT_INSIGHT" | "DESIGN_CRITIQUE" | "SYNTHETIC_FINDING";
+export type InsightSourceKind =
+  "TWIN_CHAT_INSIGHT" | "DESIGN_CRITIQUE" | "SYNTHETIC_FINDING" | "TWIN_DISCUSSION";
 export type InsightTarget = "BRIEF" | "REQUIREMENTS" | "DESIGN";
+export type DesignEvaluationMode = "TWIN_REVIEW" | "STATIC_CHECK";
+export type FindingDecision = "OWNER_CONFIRMED" | "OWNER_DISMISSED";
+export type DesignDiscussionStatus = "OPEN" | "APPROVED" | "CLOSED";
+export type DiscussionStance = "SUPPORT" | "CONCERN" | "OBJECTION";
+export type DiscussionDecisionAction = "APPROVE" | "CLOSE";
 export type InsightBriefField =
   | "goals"
   | "target_users"
@@ -94,6 +100,7 @@ export interface DesignEvaluationComparisonPayload {
     resolved: number;
     persisting: number;
     introduced: number;
+    dismissed: number;
   };
 }
 
@@ -101,6 +108,101 @@ export interface DesignEvaluationRequest {
   design_version_id: UUID;
   design_content_hash: string;
   locale?: string;
+  mode?: DesignEvaluationMode;
+}
+
+export interface FindingValidationRequest {
+  twin_id: UUID;
+  finding_id: string;
+  decision: FindingDecision;
+  note: string | null;
+}
+
+export interface FindingValidationPayload {
+  evaluation_run_id: UUID;
+  twin_id: UUID;
+  finding_id: string;
+  sequence_number: number;
+  project_id: UUID;
+  owner_user_id: UUID;
+  decision: FindingDecision;
+  note: string | null;
+  decided_at: string;
+  content_hash: string;
+}
+
+export interface DiscussionStatementPayload {
+  twin_id: UUID;
+  twin_version: number;
+  twin_name: string;
+  stance: DiscussionStance;
+  statement: string;
+  replies_to: UUID[];
+  proposals: string[];
+  grounded_on: string[];
+  confidence: number;
+  model_generation_id: string;
+}
+
+export interface DiscussionConflictPayload {
+  topic: string;
+  positions: { twin_id: UUID; position: string }[];
+}
+
+export interface DiscussionProposalPayload {
+  code: string;
+  text: string;
+  target: InsightTarget;
+  supported_by: UUID[];
+}
+
+export interface DiscussionSynthesisPayload {
+  agreements: string[];
+  conflicts: DiscussionConflictPayload[];
+  proposals: DiscussionProposalPayload[];
+  questions_for_owner: string[];
+  model_generation_id: string;
+}
+
+export interface DiscussionRoundPayload {
+  ordinal: number;
+  owner_note: string | null;
+  created_at: string;
+  content_hash: string;
+  statements: DiscussionStatementPayload[];
+  synthesis: DiscussionSynthesisPayload;
+}
+
+export interface DesignDiscussionPayload {
+  id: UUID;
+  project_id: UUID;
+  owner_user_id: UUID;
+  design_version_id: UUID;
+  design_version_number: number;
+  design_content_hash: string;
+  alternative_id: UUID;
+  alternative_code: string;
+  status: DesignDiscussionStatus;
+  created_at: string;
+  decided_at: string | null;
+  max_rounds: number;
+  rounds: DiscussionRoundPayload[];
+}
+
+export interface DesignDiscussionRequest {
+  design_version_id: UUID;
+  design_content_hash: string;
+  locale?: string;
+  owner_note?: string | null;
+}
+
+export interface DiscussionRoundRequest {
+  expected_round_count: number;
+  owner_note?: string | null;
+}
+
+export interface DiscussionDecisionRequest {
+  action: DiscussionDecisionAction;
 }
 
 export interface InsightApplicationRequest {
