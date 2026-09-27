@@ -197,7 +197,7 @@ class DesignAlternativePayload(ApiModel):
 
     id: UUID
     code: str
-    approach: DesignApproach
+    approach: DesignApproach | None = None
     title: str
     summary: str
     rationale: str
@@ -339,6 +339,8 @@ class DesignPackagePayload(ApiModel):
         """Convert this complete payload through canonical domain validation."""
         payload = self.model_dump(mode="json")
         for alternative in payload["alternatives"]:
+            if alternative["approach"] is None:
+                del alternative["approach"]
             if alternative["visual_language"] is None:
                 del alternative["visual_language"]
         return design_package_from_snapshot(payload)

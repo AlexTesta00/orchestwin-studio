@@ -375,6 +375,34 @@ def test_design_package_payload_round_trips_the_canonical_domain_snapshot() -> N
     assert payload.prototype is not None
 
 
+def test_design_package_payload_exposes_an_absent_approach_as_null_both_ways() -> None:
+    stored = design_version().package
+    package = replace(
+        stored,
+        alternatives=tuple(replace(item, approach=None) for item in stored.alternatives),
+    )
+
+    dumped = DesignPackagePayload.from_domain(package).model_dump(mode="json")
+    omitted = {
+        **dumped,
+        "alternatives": [
+            {key: value for key, value in item.items() if key != "approach"}
+            for item in dumped["alternatives"]
+        ],
+    }
+    stored_payload = DesignPackagePayload.from_domain(stored)
+
+    assert [item["approach"] for item in dumped["alternatives"]] == [None, None]
+    assert DesignPackagePayload.model_validate(dumped).to_domain() == package
+    assert DesignPackagePayload.model_validate(omitted).to_domain() == package
+    assert all("approach" not in item for item in package.to_snapshot()["alternatives"])
+    assert [item.approach.value for item in stored_payload.alternatives] == [
+        "GUIDED_WORKFLOW",
+        "DASHBOARD_FIRST",
+    ]
+    assert stored_payload.to_domain().content_hash == stored.content_hash
+
+
 def test_generation_and_current_version_are_owner_scoped() -> None:
     """Expose deterministic generation and the current immutable package."""
     client, generation, _queries, _revisions, _gates = client_fixture()

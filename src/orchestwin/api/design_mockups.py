@@ -62,6 +62,8 @@ def _mockup_instruction(alternative):
 
 def _alternative_view(alternative):
     view = wire_value(alternative)
+    if view.get("approach") is None:
+        view.pop("approach", None)
     visual = view.get("visual_language")
     if visual is not None:
         view["visual_language"] = {
