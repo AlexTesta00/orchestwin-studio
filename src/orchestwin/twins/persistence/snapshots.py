@@ -1529,3 +1529,23 @@ def _datetime(
         raise ValueError(f"{label} must be timezone-aware")
 
     return parsed
+
+
+def persona_version_from_snapshot(payload: Mapping[str, object]) -> PersonaProfileVersion:
+    return _persona_version_from_snapshot(payload)
+
+
+def user_twin_version_from_snapshot(payload: Mapping[str, object]) -> UserTwinProfileVersion:
+    return _user_twin_version_from_snapshot(payload)
+
+
+def user_modeling_snapshot_from_snapshot(payload: Mapping[str, object]) -> UserModelingSnapshot:
+    return _user_modeling_snapshot_from_snapshot(payload)
+
+
+def persona_profile_from_snapshot(payload: Mapping[str, object]) -> PersonaProfile:
+    return _persona_profile_from_snapshot(payload)
+
+
+def user_twin_profile_from_snapshot(payload: Mapping[str, object]) -> UserTwinProfile:
+    return _user_twin_profile_from_snapshot(payload)

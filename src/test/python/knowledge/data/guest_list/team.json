@@ -1,0 +1,392 @@
+{
+  "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+  "created_at": "2026-09-27T10:01:24.748991+00:00",
+  "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+  "id": "09de637b-32d6-480d-8816-24c4e992050a",
+  "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+  "proposal": {
+    "brief_version": {
+      "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+      "id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+      "version_number": 1
+    },
+    "catalog": {
+      "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+      "version": 1
+    },
+    "constraints": {
+      "catalog_content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+      "catalog_version": 1,
+      "issues": [],
+      "project_mode": "GREENFIELD_GENERATION",
+      "role_constraints": [
+        {
+          "agent_id": "WORKFLOW_ORCHESTRATOR",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "INTAKE_CLARIFICATION_AGENT",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "TEAM_SELECTOR",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "HUMAN_GATE_CONTROLLER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "ARTIFACT_MANAGER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "SANDBOX_CONTROLLER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CATALOG_ALWAYS_PRESENT",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "REQUIREMENTS_ANALYST",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CORE_REQUIREMENTS_DISCIPLINE",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "UX_RESEARCHER_USER_MODELER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CORE_USER_CENTERED_DESIGN",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "UX_UI_DESIGNER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "USER_INTERFACE_SIGNAL",
+              "evidence": {
+                "fields": [
+                  "technical_constraints"
+                ],
+                "terms": [
+                  "applicazione web"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "SOFTWARE_ARCHITECT",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CORE_ARCHITECTURE_DISCIPLINE",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "FRONTEND_ENGINEER",
+          "kind": "OPTIONAL",
+          "owner_editable": true,
+          "reasons": []
+        },
+        {
+          "agent_id": "BACKEND_ENGINEER",
+          "kind": "IMPOSSIBLE",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "EXPLICIT_SCOPE_EXCLUSION",
+              "evidence": {
+                "fields": [
+                  "technical_constraints"
+                ],
+                "terms": [
+                  "nessun backend"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "MOBILE_ENGINEER",
+          "kind": "OPTIONAL",
+          "owner_editable": true,
+          "reasons": []
+        },
+        {
+          "agent_id": "QA_TEST_ENGINEER",
+          "kind": "MANDATORY",
+          "owner_editable": false,
+          "reasons": [
+            {
+              "code": "CORE_QUALITY_DISCIPLINE",
+              "evidence": {
+                "fields": [],
+                "terms": []
+              }
+            }
+          ]
+        },
+        {
+          "agent_id": "SECURITY_REVIEWER",
+          "kind": "OPTIONAL",
+          "owner_editable": true,
+          "reasons": []
+        },
+        {
+          "agent_id": "ACCESSIBILITY_REVIEWER",
+          "kind": "OPTIONAL",
+          "owner_editable": true,
+          "reasons": []
+        },
+        {
+          "agent_id": "INTEGRATION_ENGINEER",
+          "kind": "OPTIONAL",
+          "owner_editable": true,
+          "reasons": []
+        }
+      ]
+    },
+    "constraints_content_hash": "044c66640c9290b1bbe72061a6446ee6e2a6b10907a8518487a51e38b51b1134",
+    "members": [
+      {
+        "agent_id": "WORKFLOW_ORCHESTRATOR",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "INTAKE_CLARIFICATION_AGENT",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "TEAM_SELECTOR",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "HUMAN_GATE_CONTROLLER",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "ARTIFACT_MANAGER",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "SANDBOX_CONTROLLER",
+        "justifications": [
+          {
+            "code": "CATALOG_ALWAYS_PRESENT",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "REQUIREMENTS_ANALYST",
+        "justifications": [
+          {
+            "code": "CORE_REQUIREMENTS_DISCIPLINE",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "UX_RESEARCHER_USER_MODELER",
+        "justifications": [
+          {
+            "code": "CORE_USER_CENTERED_DESIGN",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "UX_UI_DESIGNER",
+        "justifications": [
+          {
+            "code": "USER_INTERFACE_SIGNAL",
+            "evidence_fields": [
+              "technical_constraints"
+            ],
+            "evidence_terms": [
+              "applicazione web"
+            ],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "SOFTWARE_ARCHITECT",
+        "justifications": [
+          {
+            "code": "CORE_ARCHITECTURE_DISCIPLINE",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      },
+      {
+        "agent_id": "QA_TEST_ENGINEER",
+        "justifications": [
+          {
+            "code": "CORE_QUALITY_DISCIPLINE",
+            "evidence_fields": [],
+            "evidence_terms": [],
+            "kind": "DETERMINISTIC_RULE",
+            "statement": null
+          }
+        ],
+        "source": "DETERMINISTIC_MANDATORY"
+      }
+    ],
+    "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+    "project_mode": "GREENFIELD_GENERATION",
+    "provider": {
+      "kind": "MODEL_ADAPTER",
+      "provider_id": "model-proposals-1860a362440c17df489e1b0056bc5649a18de66fa79facccf8111d801d357196",
+      "provider_version": 1
+    },
+    "schema_version": 1
+  },
+  "revision_kind": "PROPOSER_GENERATED",
+  "version_number": 1
+}

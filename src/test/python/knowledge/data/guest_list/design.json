@@ -1,0 +1,1220 @@
+{
+  "based_on_version_number": 3,
+  "content_hash": "ccbf7f1ab31b6636473989a813b9598c3b63663da8f40e29ac2933cfe289e57b",
+  "created_at": "2026-09-27T10:07:11.492526+00:00",
+  "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+  "id": "99cdf9ad-a219-4925-98ab-4cceffd64d4c",
+  "package": {
+    "alternatives": [
+      {
+        "acceptance_criterion_ids": [
+          "e1081be6-6a35-4bb9-a77e-2acbb7bdf9da"
+        ],
+        "accessibility_considerations": [
+          "Ensure high contrast mode for users with visual impairments",
+          "Provide clear visual feedback for form validation"
+        ],
+        "advantages": [
+          "Simple and focused interface suitable for quick guest registration",
+          "Clear visual hierarchy supports fast scanning of guest names"
+        ],
+        "assumptions": [
+          "Users are comfortable with basic web interactions",
+          "Tablet usage is common and intuitive for the target audience"
+        ],
+        "code": "DES-001",
+        "id": "503d88c0-56b6-412a-a310-42e16e3f0938",
+        "information_architecture": [
+          "Single step for adding guest names",
+          "Immediate display in a list view",
+          "Real-time duplicate detection during input"
+        ],
+        "open_questions": [
+          "How does the real-time duplicate detection impact performance?",
+          "What level of validation feedback is most effective?"
+        ],
+        "rationale": "The single-card archetype aligns with the core task of adding one guest at a time. The monochromatic color scheme ensures clarity and reduces visual distraction, while the narrow sans-serif font enhances readability. The rounded corners provide a friendly feel, and the compact density supports quick interactions.",
+        "requirement_ids": [
+          "089aa643-b7df-45d6-a6b7-571c1f71b13a",
+          "2a3012c4-6ead-4e86-8464-d9f814f69c79",
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "5539162a-3761-409d-91fe-c39cb50f8a21",
+          "a0891f08-4c04-4d60-a655-71c7537fc415",
+          "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "security_considerations": [
+          "No backend storage means no data persistence or security concerns"
+        ],
+        "summary": "A streamlined guest registration tool designed for quick and clear addition of guests with immediate visual feedback.",
+        "title": "Guest Register Pro",
+        "trade_offs": [
+          "Limited to single guest entry per interaction",
+          "Minimal navigation options may restrict future expansion"
+        ],
+        "user_story_ids": [
+          "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+          "d002343a-d122-4939-843f-8e20e47c4131"
+        ],
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ],
+        "visual_language": {
+          "catalog_content_hash": "497c468b99de2402a2201e933754b4920f9e1e563c0e9668363f63b700cc56f7",
+          "catalog_version": 1,
+          "choices": {
+            "archetype": "SINGLE_CARD",
+            "background": "GRADIENT",
+            "body_family": "NARROW_SANS",
+            "borders": "HAIRLINE",
+            "buttons": "FILLED",
+            "color_mode": "LIGHT",
+            "color_scheme": "MONOCHROME",
+            "corners": "ROUND",
+            "density": "COMPACT",
+            "elevation": "FLAT",
+            "emphasis": "RESTRAINED",
+            "header": "COMPACT_BAR",
+            "heading_case": "SENTENCE",
+            "heading_family": "NARROW_SANS",
+            "heading_weight": "SEMIBOLD",
+            "hue_family": "INDIGO",
+            "inputs": "BOXED",
+            "navigation": "NONE",
+            "saturation": "BALANCED",
+            "surface_tone": "NEUTRAL",
+            "tone": "ESSENTIAL",
+            "type_scale": "REGULAR"
+          },
+          "palette": {
+            "accent": "#6772b2",
+            "background": "#fafafa",
+            "border": "#dedede",
+            "danger": "#98473f",
+            "danger_soft": "#ffe4e0",
+            "on_accent": "#ffffff",
+            "on_primary": "#ffffff",
+            "primary": "#5f6bb1",
+            "primary_soft": "#e5eaff",
+            "success": "#2b7440",
+            "success_soft": "#d5f5da",
+            "surface": "#fefefe",
+            "surface_alt": "#f0f0f0",
+            "text": "#292929",
+            "text_muted": "#636363"
+          },
+          "product_name": "Guest Register Pro",
+          "rationale": "The approach leverages the single-card archetype to focus on the essential task of guest registration. The monochromatic color scheme provides clarity, and the narrow sans-serif font ensures readability. Rounded corners create a welcoming interface, while compact density supports quick interactions.",
+          "tokens": {
+            "--vl-border-width": "1px",
+            "--vl-color-accent": "#6772b2",
+            "--vl-color-background": "#fafafa",
+            "--vl-color-border": "#dedede",
+            "--vl-color-danger": "#98473f",
+            "--vl-color-danger-soft": "#ffe4e0",
+            "--vl-color-on-accent": "#ffffff",
+            "--vl-color-on-primary": "#ffffff",
+            "--vl-color-primary": "#5f6bb1",
+            "--vl-color-primary-soft": "#e5eaff",
+            "--vl-color-success": "#2b7440",
+            "--vl-color-success-soft": "#d5f5da",
+            "--vl-color-surface": "#fefefe",
+            "--vl-color-surface-alt": "#f0f0f0",
+            "--vl-color-text": "#292929",
+            "--vl-color-text-muted": "#636363",
+            "--vl-control-height": "36px",
+            "--vl-font-body": "Bahnschrift, \"Arial Narrow\", \"Helvetica Neue Condensed\", \"Franklin Gothic Medium\", \"Roboto Condensed\", sans-serif",
+            "--vl-font-heading": "Bahnschrift, \"Arial Narrow\", \"Helvetica Neue Condensed\", \"Franklin Gothic Medium\", \"Roboto Condensed\", sans-serif",
+            "--vl-gap": "10px",
+            "--vl-heading-tracking": "0",
+            "--vl-heading-transform": "none",
+            "--vl-heading-variant": "normal",
+            "--vl-heading-weight": "700",
+            "--vl-line-height": "1.55",
+            "--vl-radius-control": "14px",
+            "--vl-radius-panel": "20px",
+            "--vl-shadow": "none",
+            "--vl-size-body": "16px",
+            "--vl-size-display": "32px",
+            "--vl-size-title": "24px",
+            "--vl-space": "6px"
+          },
+          "twin_fit": [
+            {
+              "name": "Addetti all'accoglienza",
+              "statement": "The single-card layout allows T1 to quickly add and verify guest names without navigating away from the main task, supporting their need for fast and clear display of guest information.",
+              "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d"
+            },
+            {
+              "name": "Organizzatori volontari",
+              "statement": "T2 can easily enter guest names on a tablet using the touch-friendly single-card interface, which matches their assumption of using the app on tablets.",
+              "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5"
+            }
+          ]
+        },
+        "workflows": [
+          {
+            "code": "FLOW-001",
+            "id": "9bb93a16-8e14-4bba-a509-edeace74797f",
+            "requirement_ids": [
+              "2b2159d3-80a8-4d39-906e-38e252fd7229",
+              "5539162a-3761-409d-91fe-c39cb50f8a21",
+              "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+              "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+            ],
+            "steps": [
+              "User enters guest name in input field",
+              "System validates name and detects duplicates in real-time",
+              "User confirms addition if valid",
+              "Name appears immediately in the guest list"
+            ],
+            "title": "Guest Registration Flow",
+            "user_story_ids": [
+              "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+              "d002343a-d122-4939-843f-8e20e47c4131"
+            ]
+          }
+        ]
+      },
+      {
+        "acceptance_criterion_ids": [
+          "e1081be6-6a35-4bb9-a77e-2acbb7bdf9da"
+        ],
+        "accessibility_considerations": [
+          "Use of high contrast mode for users with low vision",
+          "Large touch targets for tablet use"
+        ],
+        "advantages": [
+          "List-based approach allows for better overview of registered guests",
+          "Supports multiple simultaneous guest additions and edits",
+          "Visual separation between input and output areas"
+        ],
+        "assumptions": [
+          "Users prefer seeing all guests at once rather than entering one by one",
+          "Tablet users benefit from larger interactive elements"
+        ],
+        "code": "DES-002",
+        "id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+        "information_architecture": [
+          "Separate input section for adding guests",
+          "List view showing all registered guests",
+          "Visual indication of duplicate names during input"
+        ],
+        "open_questions": [
+          "Does the split-screen design allow for efficient multitasking?",
+          "How well does the table-first layout scale with many guests?"
+        ],
+        "rationale": "The table-first archetype suits the need to see all guests simultaneously. The neutral accent color scheme balances professionalism with friendliness. The geometric sans-serif font offers modern clarity, and the sharp corners convey precision. The spacious density accommodates both tablet and desktop use.",
+        "requirement_ids": [
+          "089aa643-b7df-45d6-a6b7-571c1f71b13a",
+          "2a3012c4-6ead-4e86-8464-d9f814f69c79",
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "5539162a-3761-409d-91fe-c39cb50f8a21",
+          "a0891f08-4c04-4d60-a655-71c7537fc415",
+          "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "security_considerations": [
+          "No data persistence eliminates data breach risks"
+        ],
+        "summary": "A comprehensive guest list manager that displays all entries in a structured table format with real-time duplicate detection.",
+        "title": "Event Guest Manager",
+        "trade_offs": [
+          "More complex layout may be overwhelming for casual users",
+          "Requires more space for optimal viewing"
+        ],
+        "user_story_ids": [
+          "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+          "d002343a-d122-4939-843f-8e20e47c4131"
+        ],
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ],
+        "visual_language": {
+          "catalog_content_hash": "497c468b99de2402a2201e933754b4920f9e1e563c0e9668363f63b700cc56f7",
+          "catalog_version": 1,
+          "choices": {
+            "archetype": "TABLE_FIRST",
+            "background": "STRIPES",
+            "body_family": "GROTESQUE_SANS",
+            "borders": "BOLD",
+            "buttons": "OUTLINED",
+            "color_mode": "LIGHT",
+            "color_scheme": "NEUTRAL_ACCENT",
+            "corners": "SHARP",
+            "density": "SPACIOUS",
+            "elevation": "SUBTLE",
+            "emphasis": "BALANCED",
+            "header": "MINIMAL",
+            "heading_case": "UPPERCASE",
+            "heading_family": "GROTESQUE_SANS",
+            "heading_weight": "BLACK",
+            "hue_family": "TEAL",
+            "inputs": "FILLED",
+            "navigation": "TOP_BAR",
+            "saturation": "VIVID",
+            "surface_tone": "TINTED",
+            "tone": "INSTITUTIONAL",
+            "type_scale": "DISPLAY"
+          },
+          "palette": {
+            "accent": "#6f7877",
+            "background": "#f2fdfb",
+            "border": "#d6e1df",
+            "danger": "#a53a31",
+            "danger_soft": "#ffe4e0",
+            "on_accent": "#ffffff",
+            "on_primary": "#ffffff",
+            "primary": "#008479",
+            "primary_soft": "#c7f7ef",
+            "success": "#007835",
+            "success_soft": "#d5f5da",
+            "surface": "#fbfffe",
+            "surface_alt": "#e8f3f1",
+            "text": "#1f2c2a",
+            "text_muted": "#586764"
+          },
+          "product_name": "Event Guest Manager",
+          "rationale": "The table-first approach enables T1 to quickly scan through all guests and identify any issues. The neutral accent color scheme provides a professional yet approachable appearance. The geometric sans-serif font offers clarity and modernity. Sharp corners give a precise look, and spacious density improves usability on tablets.",
+          "tokens": {
+            "--vl-border-width": "2px",
+            "--vl-color-accent": "#6f7877",
+            "--vl-color-background": "#f2fdfb",
+            "--vl-color-border": "#d6e1df",
+            "--vl-color-danger": "#a53a31",
+            "--vl-color-danger-soft": "#ffe4e0",
+            "--vl-color-on-accent": "#ffffff",
+            "--vl-color-on-primary": "#ffffff",
+            "--vl-color-primary": "#008479",
+            "--vl-color-primary-soft": "#c7f7ef",
+            "--vl-color-success": "#007835",
+            "--vl-color-success-soft": "#d5f5da",
+            "--vl-color-surface": "#fbfffe",
+            "--vl-color-surface-alt": "#e8f3f1",
+            "--vl-color-text": "#1f2c2a",
+            "--vl-color-text-muted": "#586764",
+            "--vl-control-height": "52px",
+            "--vl-font-body": "Arial, Helvetica, \"Liberation Sans\", \"Nimbus Sans\", sans-serif",
+            "--vl-font-heading": "Arial, Helvetica, \"Liberation Sans\", \"Nimbus Sans\", sans-serif",
+            "--vl-gap": "24px",
+            "--vl-heading-tracking": "0.08em",
+            "--vl-heading-transform": "uppercase",
+            "--vl-heading-variant": "normal",
+            "--vl-heading-weight": "900",
+            "--vl-line-height": "1.6",
+            "--vl-radius-control": "2px",
+            "--vl-radius-panel": "4px",
+            "--vl-shadow": "0 1px 2px rgba(0, 0, 0, 0.06)",
+            "--vl-size-body": "17px",
+            "--vl-size-display": "44px",
+            "--vl-size-title": "30px",
+            "--vl-space": "14px"
+          },
+          "twin_fit": [
+            {
+              "name": "Addetti all'accoglienza",
+              "statement": "T1 benefits from the table-first layout which allows them to see all guests at a glance, supporting their goal of verifying guest presence and identifying duplicates efficiently.",
+              "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d"
+            },
+            {
+              "name": "Organizzatori volontari",
+              "statement": "T2 finds the table-first design suitable for tablet use, where they can easily add and review guests, matching their assumption of using the app on tablets.",
+              "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5"
+            }
+          ]
+        },
+        "workflows": [
+          {
+            "code": "FLOW-001",
+            "id": "22ff99f2-b721-4ee5-8448-05469d61e706",
+            "requirement_ids": [
+              "2b2159d3-80a8-4d39-906e-38e252fd7229",
+              "5539162a-3761-409d-91fe-c39cb50f8a21",
+              "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+              "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+            ],
+            "steps": [
+              "User adds guest name in the input area",
+              "System validates name and highlights duplicates",
+              "User confirms addition",
+              "Guest name appears in the table list"
+            ],
+            "title": "Guest Entry Workflow",
+            "user_story_ids": [
+              "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+              "d002343a-d122-4939-843f-8e20e47c4131"
+            ]
+          }
+        ]
+      }
+    ],
+    "concerns": [
+      {
+        "code": "DRK-001",
+        "design_alternative_ids": [
+          "503d88c0-56b6-412a-a310-42e16e3f0938",
+          "5e5fde3f-ba74-404e-8728-36ccee1a465a"
+        ],
+        "id": "996e51e3-179d-4197-b04e-be859da26dff",
+        "mitigation": "Implement a clear error message system for empty names and duplicates",
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "summary": "Potential for user confusion when dealing with empty names or duplicates, especially in a real-time environment."
+      }
+    ],
+    "critiques": [
+      {
+        "accessibility_observations": [
+          "The high contrast mode could be beneficial for T1 who requires fast and clear display of guest information.",
+          "The compact density might pose challenges for T2 who uses tablets and needs touch-friendly interfaces."
+        ],
+        "code": "CRQ-001",
+        "concerns": [
+          "The single-card approach limits the ability to manage multiple guests efficiently",
+          "The real-time validation could slow down input if not optimized"
+        ],
+        "confidence": 0.8,
+        "design_alternative_id": "503d88c0-56b6-412a-a310-42e16e3f0938",
+        "epistemic_status": "MODEL_INFERRED",
+        "human_validation": "REQUIRED",
+        "id": "1970bc85-950e-4b91-a7dd-306b166edae9",
+        "kind": "SYNTHETIC_USER_TWIN",
+        "provenance": [
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.pain_points",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+            "locator": "profile",
+            "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+            "source_kind": "SYSTEM_ARTIFACT",
+            "source_version": 2,
+            "summary": "Confirmed persona used as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.goals",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "locator": "brief",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_kind": "PROJECT_BRIEF",
+            "source_version": 1,
+            "summary": "Exact approved Project Brief business content supplied as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.context_of_use",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.information_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "81953186701adf2db0874457758549b98fdc56642d77d190af5547961581b1c7",
+            "locator": "CRQ-001",
+            "source_id": "generation:4890a5b9-f7bd-424f-ad00-09ee82e48213",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          }
+        ],
+        "questions": [
+          "Would T1 prefer a list view instead of a single-card approach for managing multiple guests?",
+          "Could the real-time validation be made less intrusive?"
+        ],
+        "rationale": "This alternative effectively addresses T1's need for quick and clear guest information display. However, it doesn't fully account for T1's recurring task of verifying guest presence, which would benefit from a list view that allows for easy scanning.",
+        "strengths": [
+          "Clear focus on single guest registration",
+          "Effective use of monochromatic colors for clarity",
+          "Real-time duplicate detection enhances user experience"
+        ],
+        "suggested_changes": [
+          "Consider adding a toggle to switch between single-card and list views",
+          "Implement a more subtle real-time validation indicator"
+        ],
+        "trust_concerns": [
+          "T1's concern about accurate list display is partially addressed but could be improved with better visual cues"
+        ],
+        "unmet_needs": [
+          "Need for a broader overview of guest list during check-in",
+          "Requirement for quick scanning of all registered guests"
+        ],
+        "user_twin_reference": {
+          "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+          "name": "Addetti all'accoglienza",
+          "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+          "version_number": 1
+        }
+      },
+      {
+        "accessibility_observations": [
+          "The spacious density and large touch targets support T2's tablet usage",
+          "The neutral accent color scheme is accessible for users with color vision deficiency"
+        ],
+        "code": "CRQ-002",
+        "concerns": [
+          "The single-card approach may not suit T2's preference for simple interactions",
+          "The lack of navigation options limits scalability for future features"
+        ],
+        "confidence": 0.7,
+        "design_alternative_id": "503d88c0-56b6-412a-a310-42e16e3f0938",
+        "epistemic_status": "MODEL_INFERRED",
+        "human_validation": "REQUIRED",
+        "id": "547d61c8-579b-4933-b694-7f7d24cde10b",
+        "kind": "SYNTHETIC_USER_TWIN",
+        "provenance": [
+          {
+            "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+            "locator": "profile",
+            "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+            "source_kind": "SYSTEM_ARTIFACT",
+            "source_version": 2,
+            "summary": "Confirmed persona used as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.goals",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "locator": "brief",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_kind": "PROJECT_BRIEF",
+            "source_version": 1,
+            "summary": "Exact approved Project Brief business content supplied as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.recurring_tasks",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.context_of_use",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.information_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "81953186701adf2db0874457758549b98fdc56642d77d190af5547961581b1c7",
+            "locator": "CRQ-002",
+            "source_id": "generation:4890a5b9-f7bd-424f-ad00-09ee82e48213",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          }
+        ],
+        "questions": [
+          "Does T2 find the single-card approach intuitive enough for quick guest additions?",
+          "Is there a risk of missing guest entries in a single-card flow?"
+        ],
+        "rationale": "While the single-card approach works for T2's basic needs, it doesn't fully consider their recurring task of adding guests and checking the list, which would be more efficient with a table view.",
+        "strengths": [
+          "Simple and focused interface reduces cognitive load",
+          "Touch-friendly elements support tablet usage",
+          "Immediate visual feedback helps prevent errors"
+        ],
+        "suggested_changes": [
+          "Add a batch entry option for multiple guests",
+          "Include a summary of total guests added for quick verification"
+        ],
+        "trust_concerns": [
+          "T2's concern about data integrity is met with a transparent system that prevents data loss"
+        ],
+        "unmet_needs": [
+          "Need for a more efficient way to add multiple guests",
+          "Requirement for a quick overview of all registered guests"
+        ],
+        "user_twin_reference": {
+          "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+          "name": "Organizzatori volontari",
+          "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+          "version_number": 1
+        }
+      },
+      {
+        "accessibility_observations": [
+          "The high contrast mode supports T1's need for fast and clear display of guest information",
+          "The spacious density makes the interface easier to navigate for T1"
+        ],
+        "code": "CRQ-003",
+        "concerns": [
+          "The table-first approach may be too complex for T1's simple verification tasks",
+          "The bold borders could be visually overwhelming"
+        ],
+        "confidence": 0.75,
+        "design_alternative_id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+        "epistemic_status": "MODEL_INFERRED",
+        "human_validation": "REQUIRED",
+        "id": "9b00f119-d490-43ec-8d30-228c393cb39e",
+        "kind": "SYNTHETIC_USER_TWIN",
+        "provenance": [
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.pain_points",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+            "locator": "profile",
+            "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+            "source_kind": "SYSTEM_ARTIFACT",
+            "source_version": 2,
+            "summary": "Confirmed persona used as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.goals",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "locator": "brief",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_kind": "PROJECT_BRIEF",
+            "source_version": 1,
+            "summary": "Exact approved Project Brief business content supplied as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.context_of_use",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.information_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "81953186701adf2db0874457758549b98fdc56642d77d190af5547961581b1c7",
+            "locator": "CRQ-003",
+            "source_id": "generation:4890a5b9-f7bd-424f-ad00-09ee82e48213",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          }
+        ],
+        "questions": [
+          "Will T1 find the table view cluttered during busy check-in periods?",
+          "Can the bold borders be adjusted for better visual balance?"
+        ],
+        "rationale": "The table-first approach meets T1's need for an overview of all guests, but the complexity of the interface might hinder quick verification tasks. The bold borders, while providing definition, could distract from the primary task.",
+        "strengths": [
+          "Provides comprehensive view of all guests",
+          "Supports real-time duplicate detection effectively",
+          "High contrast mode enhances accessibility"
+        ],
+        "suggested_changes": [
+          "Add a simplified view option for quick verification",
+          "Reduce border weight to maintain visual balance"
+        ],
+        "trust_concerns": [
+          "T1's concern about accurate list display is well-addressed by the clear table presentation"
+        ],
+        "unmet_needs": [
+          "Need for a faster way to add individual guests",
+          "Requirement for a cleaner interface during peak check-in times"
+        ],
+        "user_twin_reference": {
+          "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+          "name": "Addetti all'accoglienza",
+          "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+          "version_number": 1
+        }
+      },
+      {
+        "accessibility_observations": [
+          "The spacious density and touch-friendly elements suit T2's tablet usage",
+          "The neutral accent color scheme supports various visual preferences"
+        ],
+        "code": "CRQ-004",
+        "concerns": [
+          "The table-first layout might be overkill for T2's simple guest addition needs",
+          "The uppercase headings could be harder to read for some users"
+        ],
+        "confidence": 0.85,
+        "design_alternative_id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+        "epistemic_status": "MODEL_INFERRED",
+        "human_validation": "REQUIRED",
+        "id": "1c0f58db-ad9b-4ab4-a540-8933f7106091",
+        "kind": "SYNTHETIC_USER_TWIN",
+        "provenance": [
+          {
+            "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+            "locator": "profile",
+            "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+            "source_kind": "SYSTEM_ARTIFACT",
+            "source_version": 2,
+            "summary": "Confirmed persona used as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.goals",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "locator": "brief",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_kind": "PROJECT_BRIEF",
+            "source_version": 1,
+            "summary": "Exact approved Project Brief business content supplied as model context."
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.recurring_tasks",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.context_of_use",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+            "locator": "user_twin.information_needs",
+            "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          },
+          {
+            "content_hash": "81953186701adf2db0874457758549b98fdc56642d77d190af5547961581b1c7",
+            "locator": "CRQ-004",
+            "source_id": "generation:4890a5b9-f7bd-424f-ad00-09ee82e48213",
+            "source_kind": "MODEL_OUTPUT",
+            "source_version": 1,
+            "summary": null
+          }
+        ],
+        "questions": [
+          "Does T2 find the table view helpful for their regular guest addition tasks?",
+          "Would lowercase headings improve readability for T2?"
+        ],
+        "rationale": "The table-first approach perfectly fits T2's need for a structured list of guests, but it might introduce unnecessary complexity for their simple task of adding guests. The uppercase headings, while bold, may reduce readability.",
+        "strengths": [
+          "Ideal for viewing all guests at once",
+          "Supports multiple simultaneous guest additions",
+          "Clear visual separation between input and output areas"
+        ],
+        "suggested_changes": [
+          "Add a simplified single-guest view for quick additions",
+          "Consider lowercase headings for better readability"
+        ],
+        "trust_concerns": [
+          "T2's concern about data integrity is addressed by the transparent nature of the app"
+        ],
+        "unmet_needs": [
+          "Need for a quicker way to add individual guests",
+          "Requirement for a more streamlined interface for simple tasks"
+        ],
+        "user_twin_reference": {
+          "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+          "name": "Organizzatori volontari",
+          "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+          "version_number": 1
+        }
+      }
+    ],
+    "grounding": {
+      "acceptance_criterion_ids": [
+        "e1081be6-6a35-4bb9-a77e-2acbb7bdf9da"
+      ],
+      "agent_team_reference": {
+        "artifact_id": "09de637b-32d6-480d-8816-24c4e992050a",
+        "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+        "kind": "AGENT_TEAM",
+        "version_number": 1
+      },
+      "catalog": {
+        "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+        "version": 1
+      },
+      "requirement_ids": [
+        "089aa643-b7df-45d6-a6b7-571c1f71b13a",
+        "2a3012c4-6ead-4e86-8464-d9f814f69c79",
+        "2b2159d3-80a8-4d39-906e-38e252fd7229",
+        "5539162a-3761-409d-91fe-c39cb50f8a21",
+        "a0891f08-4c04-4d60-a655-71c7537fc415",
+        "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+        "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+      ],
+      "requirements_reference": {
+        "artifact_id": "66c4cb70-d16c-4c6f-a984-701b7e225d59",
+        "content_hash": "d5627be28efc71464c9e8c27787e2251e387a6b7f63f4f5bfe01197862e18c2a",
+        "kind": "REQUIREMENTS_SPECIFICATION",
+        "version_number": 2
+      },
+      "user_modeling_reference": {
+        "artifact_id": "1012ab5c-812f-4627-87b8-8257c1438f95",
+        "content_hash": "3cfae06d6b2ab26b508239b07c26a8b4bb99bbc2b91cedd1910ae9082c528885",
+        "kind": "USER_MODELING",
+        "version_number": 1
+      },
+      "user_story_ids": [
+        "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+        "d002343a-d122-4939-843f-8e20e47c4131"
+      ],
+      "user_twin_references": [
+        {
+          "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+          "name": "Addetti all'accoglienza",
+          "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+          "version_number": 1
+        },
+        {
+          "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+          "name": "Organizzatori volontari",
+          "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+          "version_number": 1
+        }
+      ]
+    },
+    "open_questions": [
+      "How should the system handle guest removal or editing?",
+      "Should there be a print/export function for guest lists?",
+      "What level of customization should be allowed for guest categories or tags?"
+    ],
+    "owner_selected_alternative_id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+    "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+    "prototype": {
+      "code": "PRT-001",
+      "design_alternative_id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+      "entry_screen_id": "387c3cd0-a822-471e-881d-3d2d4dd2d7b1",
+      "id": "259a0135-e141-4ba4-a942-5513b59c49d4",
+      "screens": [
+        {
+          "acceptance_criterion_ids": [],
+          "code": "SCR-001",
+          "elements": [
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-001",
+              "content": "EVENT GUEST MANAGER",
+              "field_name": null,
+              "id": "6ac39e92-f20c-4334-8660-83cea71fd011",
+              "kind": "HEADING",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-002",
+              "content": "1 · Marco Rossi",
+              "field_name": null,
+              "id": "2f310858-a39b-40a9-8780-5332a42ee05b",
+              "kind": "LIST",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-003",
+              "content": "2 · Anna Bianchi",
+              "field_name": null,
+              "id": "da5c9c82-2f53-41d9-a2ed-5cf9c26a100e",
+              "kind": "LIST",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-004",
+              "content": "3 · Luca Verdi",
+              "field_name": null,
+              "id": "b2db7190-40a2-4866-bf9b-be57d32f89b8",
+              "kind": "LIST",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-005",
+              "content": "4 · Sofia Neri",
+              "field_name": null,
+              "id": "68d385ac-0569-4349-a7ac-5ba2c895b317",
+              "kind": "LIST",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-006",
+              "content": "5 · Giuseppe Gialli",
+              "field_name": null,
+              "id": "76852e86-db38-4102-ae27-f35b6c0cb931",
+              "kind": "LIST",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Aggiungi ospite",
+              "code": "ELM-007",
+              "content": "Aggiungi ospite",
+              "field_name": null,
+              "id": "4494f6db-f729-4aba-bc2e-ff7ddb268c72",
+              "kind": "BUTTON",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            }
+          ],
+          "id": "387c3cd0-a822-471e-881d-3d2d4dd2d7b1",
+          "requirement_ids": [
+            "2b2159d3-80a8-4d39-906e-38e252fd7229",
+            "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+          ],
+          "state": "DEFAULT",
+          "title": "Lista Ospiti",
+          "user_story_ids": []
+        },
+        {
+          "acceptance_criterion_ids": [],
+          "code": "SCR-002",
+          "elements": [
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-008",
+              "content": "AGGIUNGI OSPITE",
+              "field_name": null,
+              "id": "fd7130bf-7146-47e5-87c0-06719cd1d48c",
+              "kind": "HEADING",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Nome ospite",
+              "code": "ELM-009",
+              "content": "Nome ospite",
+              "field_name": "guest_name",
+              "id": "57a75f13-f6c2-4a3f-bc02-0e136a35f15a",
+              "kind": "TEXT_INPUT",
+              "options": [],
+              "required": true,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Conferma",
+              "code": "ELM-010",
+              "content": "Conferma",
+              "field_name": null,
+              "id": "03d3b46d-32e7-4086-bada-7b8b703db050",
+              "kind": "BUTTON",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Annulla",
+              "code": "ELM-011",
+              "content": "Annulla",
+              "field_name": null,
+              "id": "674e7fc2-fffc-4966-9a22-388f534e26bb",
+              "kind": "LINK",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            }
+          ],
+          "id": "efa1185b-fb7f-448e-b048-a92966c9db77",
+          "requirement_ids": [
+            "2b2159d3-80a8-4d39-906e-38e252fd7229"
+          ],
+          "state": "DEFAULT",
+          "title": "Aggiungi Ospite",
+          "user_story_ids": []
+        },
+        {
+          "acceptance_criterion_ids": [],
+          "code": "SCR-003",
+          "elements": [
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-012",
+              "content": "OSPITE AGGIUNTO CON SUCCESSO",
+              "field_name": null,
+              "id": "31752e17-a329-4b05-8f2a-1c81fa608cbe",
+              "kind": "HEADING",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": null,
+              "code": "ELM-013",
+              "content": "Il nome 'Marco Rossi' è stato aggiunto alla lista.",
+              "field_name": null,
+              "id": "424fa1c2-e16c-4c1b-a7e6-5459e786808f",
+              "kind": "TEXT",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Continua ad aggiungere ospiti",
+              "code": "ELM-014",
+              "content": "Continua ad aggiungere ospiti",
+              "field_name": null,
+              "id": "502764a2-b55b-4039-91c0-9255ddc3f82f",
+              "kind": "BUTTON",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "2b2159d3-80a8-4d39-906e-38e252fd7229"
+              ],
+              "user_story_ids": []
+            },
+            {
+              "acceptance_criterion_ids": [],
+              "accessible_name": "Torna alla lista",
+              "code": "ELM-015",
+              "content": "Torna alla lista",
+              "field_name": null,
+              "id": "ea4654c5-f831-466c-a378-0e5cac6269b4",
+              "kind": "LINK",
+              "options": [],
+              "required": false,
+              "requirement_ids": [
+                "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+              ],
+              "user_story_ids": []
+            }
+          ],
+          "id": "31526ba4-442a-4e22-9aac-eb74936ec3d0",
+          "requirement_ids": [
+            "2b2159d3-80a8-4d39-906e-38e252fd7229",
+            "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+          ],
+          "state": "SUCCESS",
+          "title": "Conferma Aggiunta",
+          "user_story_ids": []
+        }
+      ],
+      "supported_viewports": [
+        "DESKTOP",
+        "MOBILE",
+        "TABLET"
+      ],
+      "title": "Event Guest Manager",
+      "transitions": [
+        {
+          "code": "TRN-001",
+          "id": "9a5a3903-dbd4-4fa4-9411-337ebfc40827",
+          "outcome": "Aggiungi ospite",
+          "source_screen_id": "387c3cd0-a822-471e-881d-3d2d4dd2d7b1",
+          "target_screen_id": "efa1185b-fb7f-448e-b048-a92966c9db77",
+          "trigger_element_id": "4494f6db-f729-4aba-bc2e-ff7ddb268c72"
+        },
+        {
+          "code": "TRN-002",
+          "id": "16a05e8d-3087-430e-a196-ebc676f25f55",
+          "outcome": "Conferma",
+          "source_screen_id": "efa1185b-fb7f-448e-b048-a92966c9db77",
+          "target_screen_id": "31526ba4-442a-4e22-9aac-eb74936ec3d0",
+          "trigger_element_id": "03d3b46d-32e7-4086-bada-7b8b703db050"
+        },
+        {
+          "code": "TRN-003",
+          "id": "dd4c4c24-c5f5-417d-b5e2-d59f0368fcba",
+          "outcome": "Annulla",
+          "source_screen_id": "efa1185b-fb7f-448e-b048-a92966c9db77",
+          "target_screen_id": "387c3cd0-a822-471e-881d-3d2d4dd2d7b1",
+          "trigger_element_id": "674e7fc2-fffc-4966-9a22-388f534e26bb"
+        },
+        {
+          "code": "TRN-004",
+          "id": "4a2f1f80-2536-4e8c-bfef-712543ef5a65",
+          "outcome": "Continua ad aggiungere ospiti",
+          "source_screen_id": "31526ba4-442a-4e22-9aac-eb74936ec3d0",
+          "target_screen_id": "efa1185b-fb7f-448e-b048-a92966c9db77",
+          "trigger_element_id": "502764a2-b55b-4039-91c0-9255ddc3f82f"
+        },
+        {
+          "code": "TRN-005",
+          "id": "0d67ab35-0a32-448d-adca-18a53e7a3902",
+          "outcome": "Torna alla lista",
+          "source_screen_id": "31526ba4-442a-4e22-9aac-eb74936ec3d0",
+          "target_screen_id": "387c3cd0-a822-471e-881d-3d2d4dd2d7b1",
+          "trigger_element_id": "ea4654c5-f831-466c-a378-0e5cac6269b4"
+        }
+      ]
+    },
+    "recommended_alternative_id": "5e5fde3f-ba74-404e-8728-36ccee1a465a",
+    "schema_version": 1
+  },
+  "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+  "version_number": 4
+}
