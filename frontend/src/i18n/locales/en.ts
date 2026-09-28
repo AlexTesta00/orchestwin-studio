@@ -253,6 +253,7 @@ const messages = {
   },
   projects: {
     new: "New project",
+    import: "Start from a knowledge folder",
     cancel: "Cancel",
     note: "Projects stay still until you move them forward.",
     table: {
@@ -281,6 +282,8 @@ const messages = {
     detail: {
       back: "Back to projects",
       eyebrow: "Project detail",
+      importedFrom:
+        "Started from the knowledge folder of {project}, version {version}. Review and approve each step.",
     },
     errors: {
       project_not_found: "The project was not found.",

@@ -5,6 +5,9 @@ import { flushPromises, shallowMount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/api/client";
 import type { ProjectBriefVersionResponse, ProjectResponse } from "@/api/contracts";
+import { projectImportsApi } from "@/api/projectImports";
+import { createAppI18n } from "@/i18n";
+import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import { useClarificationStore } from "@/stores/clarification";
 import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
@@ -39,6 +42,7 @@ describe("project route requests", () => {
     vi.restoreAllMocks();
     state.route = reactive({ params: { projectId: "first" } });
     vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([]);
+    vi.spyOn(projectImportsApi, "origin").mockResolvedValue(null);
   });
 
   it.each(["success", "failure"])(
@@ -126,12 +130,26 @@ function hydrateStages(pinia: ReturnType<typeof createPinia>) {
   return { clarification, team, modeling, requirements, design };
 }
 
+const ORIGIN: ProjectImportOriginPayload = {
+  origin: {
+    project_id: "source",
+    project_name: "Reception desk",
+    package_version: 3,
+    package_content_hash: "a".repeat(64),
+    schema_version: 2,
+  },
+  stages: {},
+  imported_at: "2026-09-27T10:00:00Z",
+  archive_hash: "b".repeat(64),
+};
+
 describe("progressive project workspace", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     state.route = reactive({ params: { projectId: "first" } });
     vi.spyOn(apiClient, "getProject").mockResolvedValue(project("first"));
     vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([BRIEF]);
+    vi.spyOn(projectImportsApi, "origin").mockResolvedValue(null);
   });
 
   function mountWorkspace(pinia = createPinia()) {
@@ -282,6 +300,46 @@ describe("progressive project workspace", () => {
     const wrapper = mountWorkspace(createPinia());
     await flushPromises();
     await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("tells once per project which knowledge folder an imported project started from", async () => {
+    const origin = vi.spyOn(projectImportsApi, "origin").mockResolvedValue(ORIGIN);
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [createPinia(), createAppI18n("it")],
+        stubs: { UiStepper: false, UiCard: false },
+      },
+    });
+    await flushPromises();
+    expect(origin).toHaveBeenCalledWith("first", "token");
+    expect(wrapper.get('[data-testid="project-import-origin"]').text()).toBe(
+      "Nato dalla cartella di conoscenza di Reception desk, versione 3. Rivedi e approva ogni passo.",
+    );
+    await expectAccessible(wrapper.element);
+    wrapper.findComponent({ name: "ProjectBriefDialogue" }).vm.$emit("synthesized", BRIEF);
+    await flushPromises();
+    expect(apiClient.listBriefVersions).toHaveBeenCalledTimes(2);
+    expect(origin).toHaveBeenCalledTimes(1);
+    state.route.params.projectId = "second";
+    await flushPromises();
+    expect(origin).toHaveBeenCalledTimes(2);
+    expect(origin).toHaveBeenLastCalledWith("second", "token");
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["was not imported", () => Promise.resolve(null)],
+    ["cannot tell its origin", () => Promise.reject(new Error("network down"))],
+  ])("shows no origin and keeps the page usable when the project %s", async (_label, origin) => {
+    vi.spyOn(projectImportsApi, "origin").mockImplementation(origin);
+    const wrapper = mountWorkspace(createPinia());
+    await flushPromises();
+    expect(wrapper.text()).toContain("Project first");
+    expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="project-import-origin"]').exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

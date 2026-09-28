@@ -9,6 +9,7 @@ import type {
   ProjectBriefVersionResponse,
   ProjectResponse,
 } from "@/api/contracts";
+import { projectImportsApi } from "@/api/projectImports";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
@@ -32,6 +33,7 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
+import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 
 const route = useRoute();
@@ -104,6 +106,8 @@ const { t, locale } = useI18n({
 const project = ref<ProjectResponse | null>(null);
 const currentBrief = ref<ProjectBriefVersionResponse | null>(null);
 const briefHistory = ref<readonly ProjectBriefVersionResponse[]>([]);
+const importOrigin = ref<ProjectImportOriginPayload | null>(null);
+let originSequence = 0;
 
 const loading = ref(true);
 const saving = ref(false);
@@ -338,9 +342,22 @@ async function saveBrief(brief: ProjectBriefInput): Promise<void> {
   }
 }
 
+async function loadImportOrigin(): Promise<void> {
+  const id = projectId.value;
+  const sequence = ++originSequence;
+  importOrigin.value = null;
+  if (!id) return;
+
+  const request = authorized((accessToken) => projectImportsApi.origin(id, accessToken));
+  const origin = await request.catch(() => null);
+  if (sequence === originSequence) importOrigin.value = origin;
+}
+
 watch(projectId, loadProject, { immediate: true });
+watch(projectId, loadImportOrigin, { immediate: true });
 onUnmounted(() => {
   projectEpoch++;
+  originSequence++;
 });
 </script>
 
@@ -390,6 +407,18 @@ onUnmounted(() => {
             {{ stageLabels[activeStage] }}
           </h1>
           <p class="m-0 text-[17px] leading-7 text-ink-2">{{ stageDescriptions[activeStage] }}</p>
+          <p
+            v-if="importOrigin"
+            class="m-0 rounded-panel border border-action-soft-line bg-action-soft px-4 py-3 text-sm leading-6 text-ink-2"
+            data-testid="project-import-origin"
+          >
+            {{
+              t("projects.detail.importedFrom", {
+                project: importOrigin.origin.project_name,
+                version: importOrigin.origin.package_version,
+              })
+            }}
+          </p>
         </header>
 
         <div

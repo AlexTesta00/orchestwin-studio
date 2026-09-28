@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
 import type { ProjectMode } from "@/api/contracts";
+import ProjectImportDialog from "@/components/ProjectImportDialog.vue";
 import UiButton from "@/components/UiButton.vue";
 import UiCard from "@/components/UiCard.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiStatusChip from "@/components/UiStatusChip.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useProjectsStore } from "@/stores/projects";
+import type { ProjectImportPayload } from "@/types/projectImports";
 
 const { t, te, locale } = useI18n({
   useScope: "global",
@@ -23,12 +25,33 @@ const projectStore = useProjectsStore();
 const { projects, loading, errorDetail } = storeToRefs(projectStore);
 
 const creating = ref(false);
+const importing = ref(false);
 const displayName = ref("");
 const mode = ref<ProjectMode>("GREENFIELD_GENERATION");
 
 onMounted(() => {
   void projectStore.loadProjects(apiClient, auth);
 });
+
+watch(creating, (open) => {
+  if (open) importing.value = false;
+});
+
+function openImport(): void {
+  creating.value = false;
+  importing.value = true;
+}
+
+async function onImported(payload: ProjectImportPayload): Promise<void> {
+  importing.value = false;
+  await projectStore.loadProjects(apiClient, auth);
+  await router.push({
+    name: "project-detail",
+    params: {
+      projectId: payload.project.id,
+    },
+  });
+}
 
 function updatedOn(value: string): string {
   const parsed = new Date(value);
@@ -68,9 +91,14 @@ async function createProject(): Promise<void> {
           {{ t("projects.description") }}
         </p>
       </div>
-      <UiButton data-testid="new-project" @click="creating = !creating">
-        {{ creating ? t("projects.cancel") : t("projects.new") }}
-      </UiButton>
+      <div class="flex flex-wrap items-center gap-3">
+        <UiButton variant="secondary" data-testid="import-project" @click="openImport">
+          {{ t("projects.import") }}
+        </UiButton>
+        <UiButton data-testid="new-project" @click="creating = !creating">
+          {{ creating ? t("projects.cancel") : t("projects.new") }}
+        </UiButton>
+      </div>
     </header>
 
     <UiStateBlock
@@ -134,6 +162,13 @@ async function createProject(): Promise<void> {
       </form>
     </UiCard>
 
+    <ProjectImportDialog
+      v-if="importing"
+      :locale="locale === 'it' ? 'it' : 'en'"
+      @imported="onImported"
+      @cancel="importing = false"
+    />
+
     <UiStateBlock
       v-if="projects.length === 0 && !loading"
       kind="empty"
@@ -144,12 +179,13 @@ async function createProject(): Promise<void> {
     <UiCard v-else tone="table">
       <div
         class="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1.5fr)_minmax(0,1fr)_84px] gap-4 border-b border-line-soft bg-surface-3 px-5 py-3 font-mono text-[11px] tracking-wide text-ink-3 uppercase"
-        role="row"
+        aria-hidden="true"
+        data-testid="project-columns"
       >
         <span>{{ t("projects.table.name") }}</span>
         <span>{{ t("projects.table.mode") }}</span>
         <span>{{ t("projects.table.updated") }}</span>
-        <span class="sr-only">{{ t("projects.table.open") }}</span>
+        <span></span>
       </div>
       <ul class="m-0 list-none p-0" data-testid="project-rows">
         <li
@@ -176,6 +212,7 @@ async function createProject(): Promise<void> {
           <span class="font-mono text-xs text-ink-3">{{ updatedOn(project.updated_at) }}</span>
           <RouterLink
             class="inline-flex min-h-9 items-center justify-center rounded-control border border-button-line bg-surface px-3 text-sm font-semibold text-ink hover:bg-surface-3"
+            :aria-label="`${t('projects.table.open')} ${project.display_name}`"
             :to="{
               name: 'project-detail',
               params: {
