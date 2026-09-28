@@ -217,7 +217,7 @@ def test_register_hashes_password_and_issues_session() -> None:
     result = asyncio.run(
         service.register(
             email=" Owner@Example.COM ",
-            password="correct horse battery staple",
+            password="Correct horse battery staple!",
         )
     )
 
@@ -225,7 +225,7 @@ def test_register_hashes_password_and_issues_session() -> None:
     assert result.authenticated is not None
     assert result.authenticated.user.id == USER_ID
     assert result.authenticated.user.email.value == "owner@example.com"
-    assert result.authenticated.user.password_hash != "correct horse battery staple"
+    assert result.authenticated.user.password_hash != "Correct horse battery staple!"
     assert users.users
     assert sessions.sessions
 
@@ -237,13 +237,13 @@ def test_duplicate_registration_is_rejected() -> None:
     first = asyncio.run(
         service.register(
             email="owner@example.com",
-            password="correct horse battery staple",
+            password="Correct horse battery staple!",
         )
     )
     second = asyncio.run(
         service.register(
             email="OWNER@example.com",
-            password="another correct horse battery",
+            password="Another correct horse battery!",
         )
     )
 
@@ -265,7 +265,7 @@ def test_login_returns_one_generic_invalid_result() -> None:
     asyncio.run(
         service.register(
             email="owner@example.com",
-            password="correct horse battery staple",
+            password="Correct horse battery staple!",
         )
     )
     wrong_password = asyncio.run(
@@ -285,7 +285,7 @@ def test_current_user_requires_valid_access_token() -> None:
     registration = asyncio.run(
         service.register(
             email="owner@example.com",
-            password="correct horse battery staple",
+            password="Correct horse battery staple!",
         )
     )
     assert registration.authenticated is not None

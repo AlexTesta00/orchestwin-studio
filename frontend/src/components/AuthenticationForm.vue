@@ -19,6 +19,11 @@ const { t } = useI18n({
   useScope: "global",
 });
 
+const MINIMUM_PASSWORD_LENGTH = 8;
+const MAXIMUM_PASSWORD_LENGTH = 1024;
+const UPPERCASE_LETTER = /\p{Uppercase}/u;
+const SPECIAL_CHARACTER = /[^\p{L}\p{N}\p{White_Space}]/u;
+
 const email = ref("");
 const password = ref("");
 const validationError = ref<string | null>(null);
@@ -34,17 +39,21 @@ watch(visibleError, async (value) => {
   errorSummary.value?.focus();
 });
 
+function passwordError(): string | null {
+  const length = [...password.value].length;
+  const registering = props.mode === "register";
+  if (registering && length < MINIMUM_PASSWORD_LENGTH) return "password_too_short";
+  if (length > MAXIMUM_PASSWORD_LENGTH) return "password_too_long";
+  if (registering && !UPPERCASE_LETTER.test(password.value)) return "password_missing_uppercase";
+  if (registering && !SPECIAL_CHARACTER.test(password.value)) return "password_missing_special";
+  return null;
+}
+
 function submit(): void {
   validationError.value = null;
   if (props.busy) return;
-  if (props.mode === "register" && [...password.value].length < 15) {
-    validationError.value = "password_too_short";
-    return;
-  }
-  if ([...password.value].length > 1024) {
-    validationError.value = "password_too_long";
-    return;
-  }
+  validationError.value = passwordError();
+  if (validationError.value !== null) return;
   emit("submit", {
     email: email.value,
     password: password.value,
@@ -92,10 +101,10 @@ function submit(): void {
         name="password"
         type="password"
         :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
-        :minlength="mode === 'register' ? 15 : 1"
+        :minlength="mode === 'register' ? MINIMUM_PASSWORD_LENGTH : 1"
         :aria-invalid="visibleError?.startsWith('password_') ? 'true' : undefined"
         :aria-describedby="mode === 'register' ? 'password-hint' : undefined"
-        maxlength="1024"
+        :maxlength="MAXIMUM_PASSWORD_LENGTH"
         required
       />
 

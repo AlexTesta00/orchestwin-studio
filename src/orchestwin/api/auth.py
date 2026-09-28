@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, ClassVar, Literal
 from uuid import UUID
@@ -31,6 +34,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from orchestwin.api.rate_limit import AttemptLimiter
+from orchestwin.api.validation import password_violation_code
 from orchestwin.identity.application import (
     AuthenticatedSession,
     AuthenticationResult,
@@ -94,6 +99,17 @@ class AuthApiSettings(BaseSettings):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class AuthAttemptLimits:
+    login_email_limit: int = 10
+    login_email_window_seconds: float = 600
+    login_client_limit: int = 60
+    login_client_window_seconds: float = 600
+    registration_client_limit: int = 20
+    registration_client_window_seconds: float = 3600
+    clock: Callable[[], float] = time.monotonic
+
+
 class RegisterRequest(BaseModel):
     """Local account registration request."""
 
@@ -104,7 +120,7 @@ class RegisterRequest(BaseModel):
         max_length=320,
     )
     password: str = Field(
-        min_length=15,
+        min_length=8,
         max_length=1024,
         repr=False,
     )
@@ -209,6 +225,23 @@ def unauthorized_exception() -> HTTPException:
     )
 
 
+def client_address(request: Request) -> str:
+    return request.client.host if request.client is not None else "unknown"
+
+
+def reject_limited_attempts(*retry_after: int | None) -> None:
+    waits = [seconds for seconds in retry_after if seconds is not None]
+
+    if waits:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too_many_attempts",
+            headers={
+                "Retry-After": str(max(waits)),
+            },
+        )
+
+
 def set_refresh_cookie(
     response: Response,
     *,
@@ -286,8 +319,25 @@ def invalid_refresh_response(
 
 def create_auth_router(
     settings: AuthApiSettings,
+    attempt_limits: AuthAttemptLimits | None = None,
 ) -> APIRouter:
     """Create the local authentication router."""
+    limits = attempt_limits if attempt_limits is not None else AuthAttemptLimits()
+    login_email_attempts = AttemptLimiter(
+        limit=limits.login_email_limit,
+        window_seconds=limits.login_email_window_seconds,
+        clock=limits.clock,
+    )
+    login_client_attempts = AttemptLimiter(
+        limit=limits.login_client_limit,
+        window_seconds=limits.login_client_window_seconds,
+        clock=limits.clock,
+    )
+    registration_client_attempts = AttemptLimiter(
+        limit=limits.registration_client_limit,
+        window_seconds=limits.registration_client_window_seconds,
+        clock=limits.clock,
+    )
     router = APIRouter(
         prefix="/auth",
         tags=["authentication"],
@@ -302,12 +352,17 @@ def create_auth_router(
     )
     async def register(
         payload: RegisterRequest,
+        request: Request,
         response: Response,
         service: Annotated[
             IdentityApplicationService,
             Depends(identity_service_dependency),
         ],
     ) -> AuthenticationResponse:
+        client_key = client_address(request)
+        reject_limited_attempts(registration_client_attempts.retry_after(client_key))
+        registration_client_attempts.record(client_key)
+
         result = await service.register(
             email=payload.email,
             password=payload.password,
@@ -322,7 +377,11 @@ def create_auth_router(
         if result.status is AuthenticationStatus.INVALID_REGISTRATION:
             raise HTTPException(
                 status_code=(status.HTTP_422_UNPROCESSABLE_CONTENT),
-                detail="invalid_registration",
+                detail=(
+                    password_violation_code(result.password_violation)
+                    if result.password_violation is not None
+                    else "invalid_registration"
+                ),
             )
 
         authenticated = require_authenticated(result)
@@ -343,20 +402,31 @@ def create_auth_router(
     )
     async def login(
         payload: LoginRequest,
+        request: Request,
         response: Response,
         service: Annotated[
             IdentityApplicationService,
             Depends(identity_service_dependency),
         ],
     ) -> AuthenticationResponse:
+        email_key = payload.email.strip().lower()
+        client_key = client_address(request)
+        reject_limited_attempts(
+            login_email_attempts.retry_after(email_key),
+            login_client_attempts.retry_after(client_key),
+        )
+
         result = await service.login(
             email=payload.email,
             password=payload.password,
         )
 
         if result.status is not AuthenticationStatus.AUTHENTICATED:
+            login_email_attempts.record(email_key)
+            login_client_attempts.record(client_key)
             raise unauthorized_exception()
 
+        login_email_attempts.reset(email_key)
         authenticated = require_authenticated(result)
 
         set_refresh_cookie(

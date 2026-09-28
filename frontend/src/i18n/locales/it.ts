@@ -64,7 +64,7 @@ const messages = {
     },
     email: "Indirizzo email",
     password: "Password",
-    passwordHint: "Usa almeno 15 caratteri. Sono supportati spazi e passphrase.",
+    passwordHint: "Almeno 8 caratteri, con una lettera maiuscola e un carattere speciale.",
     submitting: "Attendi…",
     login: {
       eyebrow: "Benvenuto",
@@ -83,9 +83,12 @@ const messages = {
       loginLink: "Accedi",
     },
     errors: {
-      password_too_short:
-        "La password deve contenere almeno 15 caratteri. Puoi usare una frase con spazi.",
+      password_too_short: "La password deve avere almeno 8 caratteri.",
       password_too_long: "La password può contenere al massimo 1024 caratteri.",
+      password_missing_uppercase: "La password deve contenere almeno una lettera maiuscola.",
+      password_missing_special:
+        "La password deve contenere almeno un carattere speciale, per esempio ! ? # {'@'}.",
+      too_many_attempts: "Troppi tentativi. Riprova tra qualche minuto.",
       invalid_request: "Controlla i dati inseriti e riprova.",
       invalid_authentication: "L'email o la password non sono valide.",
       email_already_registered: "Esiste già un account con questo indirizzo email.",
