@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from datetime import datetime
-from typing import Annotated, Final
+from typing import Annotated, Any, Final
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
 
 from orchestwin.api.auth import current_user_dependency
@@ -26,6 +38,8 @@ PROJECT_IMPORT_ORIGIN_PATH: Final = "/projects/{project_id}/import"
 FOLDER_ARCHIVE_TOO_LARGE: Final = "FOLDER_ARCHIVE_TOO_LARGE"
 PROJECT_IMPORT_NOT_FOUND: Final = "PROJECT_IMPORT_NOT_FOUND"
 PROJECT_IMPORT_SERVICE_UNAVAILABLE: Final = "PROJECT_IMPORT_SERVICE_UNAVAILABLE"
+MULTIPART_OVERHEAD: Final = 64 * 1024
+MAX_IMPORT_REQUEST_SIZE: Final = MAX_ARCHIVE_SIZE + MULTIPART_OVERHEAD
 _FOLDER_CODE_PREFIX: Final = "FOLDER_"
 
 
@@ -144,8 +158,23 @@ def project_import_service_dependency(request: Request) -> ProjectImportService:
     return service
 
 
+class BoundedImportRoute(APIRoute):
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def bounded_handler(request: Request) -> Response:
+            declared = request.headers.get("content-length", "")
+            if declared.isdecimal() and int(declared) > MAX_IMPORT_REQUEST_SIZE:
+                raise project_import_problem(
+                    status.HTTP_413_CONTENT_TOO_LARGE, FOLDER_ARCHIVE_TOO_LARGE
+                )
+            return await handler(request)
+
+        return bounded_handler
+
+
 def create_project_import_router() -> APIRouter:
-    router = APIRouter(tags=["knowledge"])
+    router = APIRouter(tags=["knowledge"], route_class=BoundedImportRoute)
 
     @router.post(
         PROJECT_IMPORTS_PATH,
@@ -194,10 +223,13 @@ def create_project_import_router() -> APIRouter:
 
 __all__ = [
     "FOLDER_ARCHIVE_TOO_LARGE",
+    "MAX_IMPORT_REQUEST_SIZE",
+    "MULTIPART_OVERHEAD",
     "PROJECT_IMPORTS_PATH",
     "PROJECT_IMPORT_NOT_FOUND",
     "PROJECT_IMPORT_ORIGIN_PATH",
     "PROJECT_IMPORT_SERVICE_UNAVAILABLE",
+    "BoundedImportRoute",
     "FolderOriginPayload",
     "ImportedProjectPayload",
     "ImportedStagePayload",

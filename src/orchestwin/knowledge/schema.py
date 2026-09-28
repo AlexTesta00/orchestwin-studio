@@ -1638,7 +1638,7 @@ def validate_files(files: Mapping[str, str]) -> None:
             continue
         try:
             payload = json.loads(files[path])
-        except (TypeError, ValueError) as error:
+        except (TypeError, ValueError, RecursionError) as error:
             raise KnowledgeSchemaError(
                 code="DOCUMENT_NOT_JSON", document=name, message=str(error), path=path
             ) from error

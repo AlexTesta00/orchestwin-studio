@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
+from starlette.types import Message
 
 from orchestwin.api.auth import current_user_dependency
-from orchestwin.api.twin_imports import create_twin_import_router
+from orchestwin.api.twin_imports import (
+    MAX_TWIN_IMPORT_BODY_SIZE,
+    create_twin_import_router,
+    twin_import_request,
+)
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.knowledge.twin_import import ImportedTwin, TwinImportError
 from orchestwin.knowledge.twin_import_service import (
@@ -37,6 +43,8 @@ OTHER_PROJECT_ID = UUID("00000000-0000-4000-8000-00000000c000")
 TWIN_ID = UUID("00000000-0000-4000-8000-000000000030")
 OTHER_TWIN_ID = UUID("00000000-0000-4000-8000-000000000130")
 FROM_PROJECT = {"source_project_id": str(SOURCE_PROJECT_ID), "twin_id": str(TWIN_ID)}
+JSON_HEADERS = {"Content-Type": "application/json"}
+CHUNK_SIZE = 256 * 1024
 NOT_FOUND = ("PROJECT_NOT_FOUND", "SOURCE_PROJECT_NOT_FOUND", "SOURCE_TWIN_NOT_FOUND")
 INVALID = ("TWIN_DOCUMENT_INVALID", "TWIN_DOCUMENT_UNSUPPORTED")
 UNAVAILABLE = ("TWIN_IMPORT_SOURCES_UNAVAILABLE",)
@@ -163,6 +171,12 @@ def client(service: FakeTwinImportService | None) -> TestClient:
     application.state.twin_import_service = service
     application.dependency_overrides[current_user_dependency] = user
     return TestClient(application)
+
+
+def sized_body(size: int) -> bytes:
+    document = {**folder_document(), "annotations": ""}
+    document["annotations"] = "x" * (size - len(json.dumps({"document": document}).encode()))
+    return json.dumps({"document": document}).encode()
 
 
 def created(imported: ImportedTwin) -> dict[str, object]:
@@ -342,6 +356,65 @@ def test_a_request_that_is_not_exactly_one_of_the_two_forms_is_refused(body):
     response = client(service).post(
         PATH, content=body, headers={"Content-Type": "application/json"}
     )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": {"code": "TWIN_IMPORT_REQUEST_INVALID"}}
+    assert service.calls == []
+
+
+def test_a_body_at_the_size_limit_is_read_and_one_byte_more_is_refused():
+    service = FakeTwinImportService()
+    api = client(service)
+    largest = sized_body(MAX_TWIN_IMPORT_BODY_SIZE)
+    oversized = sized_body(MAX_TWIN_IMPORT_BODY_SIZE + 1)
+
+    accepted = api.post(PATH, content=largest, headers=JSON_HEADERS)
+    refused = api.post(PATH, content=oversized, headers=JSON_HEADERS)
+
+    assert (len(largest), len(oversized)) == (1024 * 1024, 1024 * 1024 + 1)
+    assert accepted.status_code == 201
+    assert refused.status_code == 413
+    assert refused.json() == {"detail": {"code": "TWIN_IMPORT_TOO_LARGE"}}
+    assert [name for name, _ in service.calls] == ["import_document"]
+
+
+def test_a_body_without_a_declared_length_stops_being_read_past_the_limit():
+    chunks = [b" " * CHUNK_SIZE] * 8
+    delivered: list[bytes] = []
+
+    async def receive() -> Message:
+        delivered.append(chunks[len(delivered)])
+        more = len(delivered) < len(chunks)
+        return {"type": "http.request", "body": delivered[-1], "more_body": more}
+
+    request = Request({"type": "http", "method": "POST", "headers": []}, receive)
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(twin_import_request(request))
+
+    assert refused.value.status_code == 413
+    assert refused.value.detail == {"code": "TWIN_IMPORT_TOO_LARGE"}
+    assert len(delivered) * CHUNK_SIZE == MAX_TWIN_IMPORT_BODY_SIZE + CHUNK_SIZE
+
+
+def test_a_document_nested_beyond_the_depth_limit_is_an_invalid_request():
+    service = FakeTwinImportService()
+    depth = 100
+    body = '{"document": ' + '{"a": ' * depth + "0" + "}" * (depth + 1)
+
+    response = client(service).post(PATH, content=body, headers=JSON_HEADERS)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": {"code": "TWIN_IMPORT_REQUEST_INVALID"}}
+    assert service.calls == []
+
+
+def test_a_document_nested_beyond_the_parser_limit_is_an_invalid_request():
+    service = FakeTwinImportService()
+    depth = 100_000
+    body = '{"document": ' + '{"a": ' * depth + "0" + "}" * (depth + 1)
+
+    response = client(service).post(PATH, content=body, headers=JSON_HEADERS)
 
     assert response.status_code == 422
     assert response.json() == {"detail": {"code": "TWIN_IMPORT_REQUEST_INVALID"}}

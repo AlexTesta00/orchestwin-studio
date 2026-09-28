@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
+from starlette.types import Message, Receive, Scope, Send
 
 from orchestwin.api import project_imports as module
 from orchestwin.api.auth import current_user_dependency
@@ -226,6 +227,35 @@ def test_upload_beyond_the_limit_is_refused_without_reading_more(
     assert accepted.status_code == 201
     assert requested == [9, 9]
     assert service.calls == [("import", OWNER, b"12345678", None)]
+
+
+def test_a_declared_length_beyond_the_limit_is_refused_before_the_form_is_read() -> None:
+    service = FakeProjectImportService()
+    app = application(service)
+    received: list[str] = []
+
+    async def counted(scope: Scope, receive: Receive, send: Send) -> None:
+        async def counted_receive() -> Message:
+            message = await receive()
+            received.append(message["type"])
+            return message
+
+        await app(scope, counted_receive, send)
+
+    api = TestClient(counted)
+    limit = module.MAX_IMPORT_REQUEST_SIZE
+
+    refused = api.post(IMPORTS, files=upload(), headers={"Content-Length": str(limit + 1)})
+    unread = list(received)
+    accepted = api.post(IMPORTS, files=upload(), headers={"Content-Length": str(limit)})
+
+    assert limit == module.MAX_ARCHIVE_SIZE + 64 * 1024
+    assert refused.status_code == 413
+    assert refused.json() == {"detail": {"code": "FOLDER_ARCHIVE_TOO_LARGE", "location": None}}
+    assert unread == []
+    assert accepted.status_code == 201
+    assert "http.request" in received
+    assert service.calls == [("import", OWNER, ARCHIVE, None)]
 
 
 def test_import_without_an_archive_is_a_validation_error() -> None:
