@@ -165,6 +165,7 @@ def _proposal_health(config, token, supported_tasks=TASKS):
             and health["max_output_tokens"] >= config.max_output_tokens
             and type(health.get("max_sequence_length")) is int
             and health["max_sequence_length"] > config.max_output_tokens
+            and health["max_sequence_length"] >= config.context_window_tokens
             and type(health.get("completed_generation_count")) is int
             and health["completed_generation_count"] >= 0
             and _proposal_adapter_matches(config, health)

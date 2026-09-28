@@ -18,6 +18,8 @@ CLOUD_ROOT = "/workspace/orchestwin-studio"
 CLOUD_PYTHON = "/opt/orchestwin/training-venv/bin/python"
 CLOUD_HF_HOME = "/workspace/hf-cache"
 SERVING_ROOT = "/workspace/serving"
+SERVED_SEQUENCE_LENGTH = 32768
+SERVED_OUTPUT_TOKENS = 12288
 DEFAULT_GPUS = ("NVIDIA A100 80GB PCIe", "NVIDIA RTX PRO 6000 Blackwell Server Edition")
 DEFAULT_IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 DEFAULT_CUDA = ()
@@ -296,6 +298,8 @@ def command_serve(args):
             f"--keepalive-seconds {args.keepalive_seconds} "
             f"--model-repository {json.dumps(args.model)} "
             f"--model-revision {json.dumps(args.revision)} --precision {args.precision} "
+            f"--max-sequence-length {SERVED_SEQUENCE_LENGTH} "
+            f"--max-output-tokens {SERVED_OUTPUT_TOKENS} "
             f"--engine {args.engine} --failure-hold-minutes {args.failure_hold_minutes} )"
         )
         run_remote(
@@ -330,6 +334,7 @@ def command_serve(args):
     runtime["base_url"] = f"http://127.0.0.1:{args.local_port}"
     runtime["token_file"] = str(local_token).replace("\\", "/")
     runtime["timeout_seconds"] = min(1200, int(runtime.get("timeout_seconds", 600)))
+    runtime["context_window_tokens"] = SERVED_SEQUENCE_LENGTH
     remote_config = local_dir / "proposal-remote.json"
     remote_config.write_text(json.dumps(runtime, indent=2, sort_keys=True), encoding="utf-8")
     receipt.update(

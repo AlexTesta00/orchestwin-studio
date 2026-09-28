@@ -182,7 +182,17 @@ def proposal_health(runtime):
 
 
 @pytest.mark.parametrize(
-    "change", [None, "identity", "missing_task", "budget", "redirect", "old_health", "old_decoder"]
+    "change",
+    [
+        None,
+        "identity",
+        "missing_task",
+        "budget",
+        "window",
+        "redirect",
+        "old_health",
+        "old_decoder",
+    ],
 )
 def test_authenticated_live_health_rejects_wrong_identity_or_capability_without_inference(
     configuration, monkeypatch, change
@@ -219,6 +229,10 @@ def test_authenticated_live_health_rejects_wrong_identity_or_capability_without_
             payload["supported_tasks"] = ["team"]
         if change == "budget":
             payload["max_output_tokens"] = 32
+        if change == "window":
+            payload["max_sequence_length"] = (
+                runtime.proposal_configuration.context_window_tokens - 1
+            )
         if change == "old_health":
             payload.pop("health_contract_version")
         if change == "old_decoder":

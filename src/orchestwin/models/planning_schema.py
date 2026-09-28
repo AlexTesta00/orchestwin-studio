@@ -2,6 +2,24 @@
 
 from orchestwin.artifacts.visual_exploration import exploration_bindings
 
+CRITIQUE_LISTS = (
+    "strengths",
+    "concerns",
+    "unmet_needs",
+    "on_accessibility",
+    "trust_concerns",
+    "questions",
+    "suggested_changes",
+)
+UNBOUNDED_CRITIQUE_TWINS = 2
+SHORT_CRITIQUE_TWINS = 4
+
+
+def critique_list_limit(twin_count):
+    if twin_count <= UNBOUNDED_CRITIQUE_TWINS:
+        return None
+    return 2 if twin_count <= SHORT_CRITIQUE_TWINS else 1
+
 
 def constrain_planning_schema(schema, context, task):
     if task not in {"requirements", "design", "architecture"}:
@@ -72,6 +90,10 @@ def constrain_planning_schema(schema, context, task):
                 for code in known["DES"]
             ],
         )
+        limit = critique_list_limit(len(context["twins"]))
+        if limit is not None and "CritiqueDraft" in definitions:
+            for name in CRITIQUE_LISTS:
+                definitions["CritiqueDraft"]["properties"][name]["maxItems"] = limit
         # Coverage is a governance obligation, not something the model can omit.
         pairs = [
             (alternative, key, twin)

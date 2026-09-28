@@ -45,6 +45,7 @@ from orchestwin.models.model_proposals import (
     DESIGN_VISUAL_INSTRUCTION,
     ModelDesignAdapter,
     design_instruction,
+    design_output_tokens,
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.projects.requirements_primitives import canonical_json
@@ -951,3 +952,90 @@ def test_a_draft_without_inconsistent_mentions_is_returned_unchanged():
     package = bind(request, consistent)
     assert package.alternatives[0].summary == consistent.alternatives[0].summary
     assert package.critiques[0].rationale == consistent.critiques[0].rationale
+
+
+def test_the_design_budget_and_the_critique_lists_follow_the_number_of_twins(monkeypatch):
+    language = {"code": "it", "name": "Italian"}
+    two = design_instruction("T1/T2", language)
+    three = design_instruction("T1/T2/T3", language)
+    four = design_instruction("T1/T2/T3/T4", language)
+    five = design_instruction("T1/T2/T3/T4/T5", language)
+
+    assert [design_output_tokens(count) for count in (1, 2, 3, 4, 5, 8)] == [
+        6144,
+        6144,
+        8192,
+        10240,
+        12288,
+        18432,
+    ]
+    assert (
+        "that twin. Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions and every list of a critique to at most three items, and each text to at "
+        "most two sentences; workflows, their steps" in two
+    )
+    assert (
+        "questions to at most three items, every list of a critique to at most two items, and "
+        "each text to at most two sentences; workflows, their steps" in three
+    )
+    assert three.replace("T1/T2/T3", "T1/T2/T3/T4") == four
+    assert (
+        "every list of a critique to at most one item; each text of a critique is one sentence "
+        "and every other text is at most two sentences; workflows, their steps" in five
+    )
+    assert "T1/T2/T3/T4/T5 twin keys" in five
+
+    request = proposal_request()
+    context, twins = design_context(request)
+    first = next(iter(twins.values()))
+    widened = {f"T{index}": first for index in range(1, 4)}
+    monkeypatch.setattr(design_drafts, "design_context", lambda _request: (context, widened))
+
+    class Refusing(_StubGenerator):
+        async def generate(self, **kwargs):
+            self.calls.append(kwargs)
+            raise ValueError("stopped before any output")
+
+    generator = Refusing(None)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelDesignAdapter(generator).propose(request))
+
+    assert generator.calls[0]["max_output_tokens"] == 8192
+    assert generator.calls[0]["instruction"] == design_instruction("T1/T2/T3", context["language"])
+
+    eight = {f"T{index}": first for index in range(1, 9)}
+    monkeypatch.setattr(design_drafts, "design_context", lambda _request: (context, eight))
+    capped = Refusing(None)
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelDesignAdapter(capped).propose(request))
+
+    assert capped.calls[0]["max_output_tokens"] == _StubConfiguration.max_output_tokens
+
+
+def test_a_server_with_a_higher_ceiling_gives_the_design_room_for_more_twins(monkeypatch):
+    request = proposal_request()
+    context, twins = design_context(request)
+    first = next(iter(twins.values()))
+
+    class Generous(_StubConfiguration):
+        max_output_tokens = 12288
+
+    class Refusing(_StubGenerator):
+        configuration = Generous()
+
+        async def generate(self, **kwargs):
+            self.calls.append(kwargs)
+            raise ValueError("stopped before any output")
+
+    budgets = {}
+    for count in (2, 3, 4, 5, 8):
+        widened = {f"T{index}": first for index in range(1, count + 1)}
+        monkeypatch.setattr(
+            design_drafts, "design_context", lambda _request, chosen=widened: (context, chosen)
+        )
+        generator = Refusing(None)
+        with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+            asyncio.run(ModelDesignAdapter(generator).propose(request))
+        budgets[count] = generator.calls[0]["max_output_tokens"]
+
+    assert budgets == {2: 6144, 3: 8192, 4: 10240, 5: 12288, 8: 12288}

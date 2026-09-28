@@ -642,3 +642,17 @@ def test_prompt_beyond_the_context_window_is_blocked_before_any_model_call(tmp_p
     with pytest.raises(ProposalGenerationError, match="CONTEXT_BUDGET_EXCEEDED"):
         asyncio.run(ModelTeamProposalAdapter(narrow).propose(team_fixtures.build_request()))
     assert transport.calls == []
+
+
+@pytest.mark.parametrize(("served", "expected"), [(12288, 8192), (8192, 8192), (4096, 4096)])
+def test_a_task_without_its_own_budget_keeps_the_default_whatever_the_server_serves(
+    tmp_path, served, expected
+):
+    generator, transport = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+    sized = ProposalGenerator(
+        generator.configuration.model_copy(update={"max_output_tokens": served}), generator.port
+    )
+
+    asyncio.run(ModelTeamProposalAdapter(sized).propose(team_fixtures.build_request()))
+
+    assert transport.calls[0]["payload"]["max_tokens"] == expected
