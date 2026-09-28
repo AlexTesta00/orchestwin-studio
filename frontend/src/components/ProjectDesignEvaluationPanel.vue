@@ -44,8 +44,15 @@ const props = withDefaults(
     locale?: Locale;
     authorize?: AuthorizedDesignLoopRequest | undefined;
     api?: DesignLoopApi | undefined;
+    autoEvaluateVersionId?: string | null;
   }>(),
-  { twinNames: () => ({}), locale: "en", authorize: undefined, api: undefined },
+  {
+    twinNames: () => ({}),
+    locale: "en",
+    authorize: undefined,
+    api: undefined,
+    autoEvaluateVersionId: null,
+  },
 );
 
 const emit = defineEmits<{
@@ -60,6 +67,7 @@ const messages = {
     intro:
       "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, regenerate the design and evaluate again.",
     evaluate: "Ask the twins to evaluate the design",
+    autoEvaluate: "The review starts on its own when you apply a design.",
     staticCheck: "Static accessibility check",
     staticHelp:
       "The static check looks at the fields and buttons of the mockup without the language model.",
@@ -136,6 +144,7 @@ const messages = {
     intro:
       "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, rigenera il design e valuta di nuovo.",
     evaluate: "Chiedi ai twin di valutare il design",
+    autoEvaluate: "La valutazione parte da sola quando applichi un design.",
     staticCheck: "Controllo statico di accessibilità",
     staticHelp:
       "Il controllo statico esamina i campi e i pulsanti del mockup senza usare il modello linguistico.",
@@ -223,6 +232,23 @@ const failure = ref<string | null>(null);
 const loadFailure = ref<string | null>(null);
 const decisionFailure = ref<{ key: string; code: string } | null>(null);
 const notes = reactive<Record<string, string>>({});
+const runsLoaded = ref(false);
+const autoStarted = new Set<string>();
+
+const autoReviewDue = computed(
+  () =>
+    props.autoEvaluateVersionId !== null &&
+    props.autoEvaluateVersionId === props.designVersionId &&
+    runsLoaded.value &&
+    active.value &&
+    !store.isBusy &&
+    !runs.value.some(
+      (run) =>
+        runMode(run) === "TWIN_REVIEW" &&
+        run.design_version_id === props.designVersionId &&
+        run.design_content_hash === props.designContentHash,
+    ),
+);
 
 const comparisonTitle = computed(() => {
   const head = runs.value.find((run) => run.id === comparison.value?.head_run_id);
@@ -314,8 +340,10 @@ function sourceOf(
 
 async function load(): Promise<void> {
   loadFailure.value = null;
+  runsLoaded.value = false;
   try {
     await store.load(props.projectId, authorize, api.value);
+    runsLoaded.value = true;
   } catch {
     loadFailure.value = store.error ?? "DESIGN_LOOP_REQUEST_FAILED";
   }
@@ -369,8 +397,18 @@ async function decide(
   }
 }
 
+async function autoEvaluate(): Promise<void> {
+  const versionId = props.designVersionId;
+  if (!autoReviewDue.value || autoStarted.has(versionId)) return;
+  autoStarted.add(versionId);
+  await evaluate("TWIN_REVIEW");
+}
+
 onMounted(load);
 watch(() => props.projectId, load);
+watch(autoReviewDue, (due) => {
+  if (due) void autoEvaluate();
+});
 </script>
 
 <template>
@@ -409,6 +447,9 @@ watch(() => props.projectId, load);
           {{ runningMode === "STATIC_CHECK" ? copy.checking : copy.evaluating }}
         </p>
       </div>
+      <p class="m-0 text-sm text-ink-2" data-testid="design-evaluate-auto">
+        {{ copy.autoEvaluate }}
+      </p>
       <p class="m-0 text-xs text-ink-3">{{ copy.staticHelp }}</p>
     </div>
     <p

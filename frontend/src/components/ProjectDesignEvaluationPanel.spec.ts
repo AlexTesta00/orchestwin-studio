@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignLoopApi } from "@/api/designLoop";
 import { DesignLoopApiError } from "@/api/designLoop";
+import { useDesignLoopStore } from "@/stores/designLoop";
 import { expectAccessible } from "@/test/axe";
 import type {
   DesignEvaluationComparisonPayload,
@@ -154,7 +155,11 @@ function apiError(status: number, code: string): DesignLoopApiError {
   return new DesignLoopApiError("failed", { status, code, payload: null });
 }
 
-function mountPanel(api: DesignLoopApi, locale: "en" | "it" = "en") {
+function mountPanel(
+  api: DesignLoopApi,
+  locale: "en" | "it" = "en",
+  autoEvaluateVersionId: string | null = null,
+) {
   return mount(ProjectDesignEvaluationPanel, {
     props: {
       projectId: "project-1",
@@ -164,9 +169,16 @@ function mountPanel(api: DesignLoopApi, locale: "en" | "it" = "en") {
       locale,
       authorize,
       api,
+      autoEvaluateVersionId,
     },
   });
 }
+
+const AUTOMATIC_REVIEW = {
+  design_version_id: "version-1",
+  design_content_hash: "a".repeat(64),
+  mode: "TWIN_REVIEW",
+};
 
 describe("ProjectDesignEvaluationPanel", () => {
   beforeEach(() => {
@@ -399,5 +411,80 @@ describe("ProjectDesignEvaluationPanel", () => {
       source_id: "run:run-1:twin-1:UTF-001",
     });
     expect(wrapper.emitted("applied")).toEqual([[application]]);
+  });
+
+  it("starts the twin review once, on its own, for the design the owner has just applied", async () => {
+    const api = fakeApi([]);
+    const wrapper = mountPanel(api, "it", "version-1");
+    expect(api.evaluate).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.evaluate).mock.calls[0]?.[1]).toEqual({
+      ...AUTOMATIC_REVIEW,
+      locale: "it-IT",
+    });
+    expect(wrapper.findAll('[data-testid="design-evaluation-run"]')).toHaveLength(1);
+    expect(wrapper.emitted("evaluated")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="design-evaluate-auto"]').text()).toBe(
+      "La valutazione parte da sola quando applichi un design.",
+    );
+    await wrapper.setProps({ locale: "en", twinNames: { "twin-1": "Marta" } });
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="design-evaluate-auto"]').text()).toBe(
+      "The review starts on its own when you apply a design.",
+    );
+    await expectAccessible(wrapper.element);
+  });
+
+  it("never repeats a failed automatic review but keeps the manual button working", async () => {
+    const api = fakeApi([]);
+    vi.mocked(api.evaluate).mockRejectedValueOnce(apiError(502, "DESIGN_EVALUATION_FAILED"));
+    const wrapper = mountPanel(api, "en", "version-1");
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="design-evaluation-error"]').text()).toContain(
+      "The evaluation could not be completed.",
+    );
+    await wrapper.setProps({ locale: "it" });
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    await wrapper.get('[data-testid="design-evaluate"]').trigger("click");
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(2);
+    expect(wrapper.findAll('[data-testid="design-evaluation-run"]')).toHaveLength(1);
+  });
+
+  it("starts on its own only for the applied version when no twin review exists yet", async () => {
+    const cases: [DesignEvaluationRunPayload[], string | null, boolean][] = [
+      [[run("run-1", [])], "version-1", false],
+      [[], null, false],
+      [[], "version-0", false],
+      [[run("run-1", [], "s67-static-check")], "version-1", true],
+    ];
+    for (const [runs, autoEvaluateVersionId, started] of cases) {
+      setActivePinia(createPinia());
+      const api = fakeApi(runs);
+      const wrapper = mountPanel(api, "en", autoEvaluateVersionId);
+      await flushPromises();
+      expect(vi.mocked(api.evaluate).mock.calls.map((call) => call[1])).toEqual(
+        started ? [{ ...AUTOMATIC_REVIEW, locale: "en-US" }] : [],
+      );
+      wrapper.unmount();
+    }
+  });
+
+  it("waits until the other design loop requests are over before starting the review", async () => {
+    const api = fakeApi([]);
+    const wrapper = mountPanel(api, "en", "version-1");
+    const store = useDesignLoopStore();
+    store.discussionBusy = "load";
+    await flushPromises();
+    expect(api.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="design-evaluate"]').attributes("disabled")).toBeDefined();
+    store.discussionBusy = null;
+    await flushPromises();
+    expect(api.evaluate).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.evaluate).mock.calls[0]?.[1]).toMatchObject(AUTOMATIC_REVIEW);
   });
 });

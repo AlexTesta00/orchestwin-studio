@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignApi } from "../api/design";
@@ -33,6 +33,8 @@ import type {
   RequirementsSpecificationPayload,
   RequirementsSpecificationVersionPayload,
 } from "../types/requirements";
+import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
+import ProjectDesignEvaluationPanel from "./ProjectDesignEvaluationPanel.vue";
 import ProjectDesignFlow from "./ProjectDesignFlow.vue";
 import { buildSelectedDesignPackage } from "../test/prototypeFixtures";
 import type { DesignMockupRequest, DesignMockupPayload } from "../types/design";
@@ -152,6 +154,18 @@ function fakeLoopApi(): DesignLoopApi {
     validations: vi.fn(async () => []),
     discussions: vi.fn(async () => []),
   };
+}
+
+function reviewingLoopApi(): DesignLoopApi {
+  return { ...fakeLoopApi(), evaluate: vi.fn(async () => evaluationRun()) };
+}
+
+function button(wrapper: VueWrapper, label: string) {
+  const found = wrapper.findAll("button").find((item) => item.text().includes(label));
+  if (found === undefined) {
+    throw new Error(`The button "${label}" was not rendered`);
+  }
+  return found;
 }
 
 function rejected(issue: DesignGenerationIssue): DesignGenerationPayload {
@@ -684,5 +698,70 @@ describe("ProjectDesignFlow", () => {
     });
     expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(true);
     wrapper.unmount();
+  });
+
+  it("asks the twins to review the design as soon as the owner applies it", async () => {
+    const api = new FakeDesignApi();
+    const loop = reviewingLoopApi();
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        authorize,
+        api,
+        loopApi: loop,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(false);
+
+    await wrapper.get(`input[data-alternative-id="${DESIGN_ALTERNATIVE_ID}"]`).setValue(true);
+    await button(wrapper, "Create visual preview").trigger("click");
+    await flushPromises();
+    await button(wrapper, "Review this design choice").trigger("click");
+    await flushPromises();
+    expect(loop.evaluate).not.toHaveBeenCalled();
+
+    await button(wrapper, "Apply this design").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.getComponent(ProjectDesignEvaluationPanel).props()).toMatchObject({
+      designVersionId: SELECTED_DESIGN_VERSION.id,
+      designContentHash: SELECTED_DESIGN_VERSION.content_hash,
+      autoEvaluateVersionId: SELECTED_DESIGN_VERSION.id,
+    });
+    expect(vi.mocked(loop.evaluate).mock.calls.map((call) => call[1])).toEqual([
+      {
+        design_version_id: SELECTED_DESIGN_VERSION.id,
+        design_content_hash: SELECTED_DESIGN_VERSION.content_hash,
+        mode: "TWIN_REVIEW",
+        locale: "en-US",
+      },
+    ]);
+    expect(wrapper.findAll('[data-testid="design-evaluation-run"]')).toHaveLength(1);
+  });
+
+  it("never asks the twins for a review when an existing design is opened", async () => {
+    const api = new FakeDesignApi();
+    api.readinessResult.version = SELECTED_DESIGN_VERSION;
+    const loop = reviewingLoopApi();
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        authorize,
+        api,
+        loopApi: loop,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.getComponent(ProjectDesignEvaluationPanel).props("autoEvaluateVersionId")).toBe(
+      null,
+    );
+    expect(loop.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.getComponent(DesignAlternativeComparison).props("twins")).toEqual(
+      SELECTED_DESIGN_VERSION.package.grounding.user_twin_references,
+    );
   });
 });
