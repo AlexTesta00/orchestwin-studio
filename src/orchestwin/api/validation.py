@@ -4,6 +4,12 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from orchestwin.identity.passwords import PasswordPolicyViolation
+
+
+def password_violation_code(violation: PasswordPolicyViolation) -> str:
+    return f"password_{violation.value}"
+
 
 async def request_validation_error(request: Request, error: RequestValidationError):
     errors = error.errors()
@@ -14,8 +20,8 @@ async def request_validation_error(request: Request, error: RequestValidationErr
         for issue in errors:
             if issue["loc"] == ("body", "password"):
                 code = {
-                    "string_too_short": "password_too_short",
-                    "string_too_long": "password_too_long",
+                    "string_too_short": password_violation_code(PasswordPolicyViolation.TOO_SHORT),
+                    "string_too_long": password_violation_code(PasswordPolicyViolation.TOO_LONG),
                 }.get(issue["type"], "invalid_registration")
                 break
     elif path.endswith("/auth/login"):

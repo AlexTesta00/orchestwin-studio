@@ -64,7 +64,7 @@ const messages = {
     },
     email: "Email address",
     password: "Password",
-    passwordHint: "Use at least 15 characters. Spaces and passphrases are supported.",
+    passwordHint: "At least 8 characters, with an uppercase letter and a special character.",
     submitting: "Please wait…",
     login: {
       eyebrow: "Welcome",
@@ -83,9 +83,12 @@ const messages = {
       loginLink: "Log in",
     },
     errors: {
-      password_too_short:
-        "Use at least 15 characters for your password. A phrase with spaces is accepted.",
+      password_too_short: "The password must have at least 8 characters.",
       password_too_long: "Use at most 1024 characters for your password.",
+      password_missing_uppercase: "The password must contain at least one uppercase letter.",
+      password_missing_special:
+        "The password must contain at least one special character, for example ! ? # {'@'}.",
+      too_many_attempts: "Too many attempts. Try again in a few minutes.",
       invalid_request: "Check the entered information and try again.",
       invalid_authentication: "The email or password is not valid.",
       email_already_registered: "An account already uses this email address.",

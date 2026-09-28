@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
 from orchestwin.api.artifacts import create_artifact_graph_router
-from orchestwin.api.auth import AuthApiSettings, create_auth_router
+from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
@@ -50,6 +50,7 @@ def create_app(
     *,
     runtime: ApplicationRuntime | None = None,
     auth_settings: AuthApiSettings | None = None,
+    auth_attempt_limits: AuthAttemptLimits | None = None,
 ) -> FastAPI:
     """Assemble a FastAPI application from explicit adapters."""
     resolved_settings = settings if settings is not None else load_settings()
@@ -168,7 +169,7 @@ def create_app(
 
     for router in (
         create_health_router(),
-        create_auth_router(resolved_auth_settings),
+        create_auth_router(resolved_auth_settings, auth_attempt_limits),
         create_project_router(),
         create_clarification_router(),
         create_brief_dialogue_router(),

@@ -133,6 +133,19 @@ describe("ApiClient", () => {
     });
   });
 
+  it("reports a rate-limited sign-in with its stable code", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "too_many_attempts" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "600" },
+      }),
+    );
+    const client = new ApiClient("/api/v1", fetchImplementation);
+    await expect(
+      client.login({ email: "owner@example.com", password: "Wrong password!" }),
+    ).rejects.toMatchObject({ name: "ApiError", status: 429, detail: "too_many_attempts" });
+  });
+
   it("preserves structured provider errors instead of calling them unexpected", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()
