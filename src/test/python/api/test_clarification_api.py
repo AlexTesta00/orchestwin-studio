@@ -35,6 +35,8 @@ from orchestwin.projects.briefs import (
     create_project_brief,
 )
 from orchestwin.projects.clarification_application import (
+    BriefAssumptionBulkAcceptanceResult,
+    BriefAssumptionBulkAcceptanceStatus,
     BriefAssumptionCreationResult,
     BriefAssumptionCreationStatus,
     BriefAssumptionDecisionResult,
@@ -153,6 +155,8 @@ class FakeClarificationService:
             created_by_user_id=USER_ID,
             created_at=NOW,
         )
+        self.bulk_status = BriefAssumptionBulkAcceptanceStatus.ACCEPTED
+        self.bulk_reasons: list[str | None] = []
 
     async def create_assumption(
         self,
@@ -211,6 +215,38 @@ class FakeClarificationService:
         return BriefAssumptionDecisionResult(
             status=(BriefAssumptionDecisionStatus.ACCEPTED),
             assumption=accepted,
+            version=self.clarified_version,
+        )
+
+    async def accept_all_assumptions(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        reason: str | None = None,
+    ) -> BriefAssumptionBulkAcceptanceResult:
+        del project_id
+        self.bulk_reasons.append(reason)
+
+        if self.bulk_status is BriefAssumptionBulkAcceptanceStatus.BRIEF_NOT_FOUND:
+            return BriefAssumptionBulkAcceptanceResult(status=self.bulk_status)
+
+        if self.bulk_status is BriefAssumptionBulkAcceptanceStatus.NOTHING_TO_ACCEPT:
+            return BriefAssumptionBulkAcceptanceResult(
+                status=self.bulk_status,
+                skipped=(self.assumption,),
+            )
+
+        accepted = accept_brief_assumption(
+            self.assumption,
+            decided_by_user_id=owner_user_id,
+            decided_at=(NOW + timedelta(minutes=1)),
+            reason=reason,
+        )
+
+        return BriefAssumptionBulkAcceptanceResult(
+            status=BriefAssumptionBulkAcceptanceStatus.ACCEPTED,
+            accepted=(accepted,),
             version=self.clarified_version,
         )
 
@@ -344,7 +380,9 @@ class FakeProjectBriefGateService:
         return self.events
 
 
-def build_client() -> TestClient:
+def build_client(
+    clarification_service: FakeClarificationService | None = None,
+) -> TestClient:
     """Create a client with explicit service doubles."""
     settings = ApplicationSettings(
         environment=RuntimeEnvironment.TEST,
@@ -354,7 +392,9 @@ def build_client() -> TestClient:
     )
     runtime = ApplicationRuntime(
         identity_service=FakeIdentityService(),
-        clarification_service=(FakeClarificationService()),
+        clarification_service=(
+            FakeClarificationService() if clarification_service is None else clarification_service
+        ),
         brief_gate_service=(FakeProjectBriefGateService()),
     )
 
@@ -406,6 +446,67 @@ def test_assumption_creation_and_acceptance_are_explicit() -> None:
     assert accepted.status_code == 200
     assert accepted.json()["status"] == "ACCEPTED"
     assert accepted.json()["brief_version"]["version_number"] == 2
+
+
+def test_all_proposals_can_be_accepted_at_once() -> None:
+    service = FakeClarificationService()
+
+    with build_client(service) as client:
+        accepted = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions/accept-all",
+            headers=authorization_header(),
+            json={"reason": "  Confirmed   together. "},
+        )
+        without_body = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions/accept-all",
+            headers=authorization_header(),
+        )
+
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "ACCEPTED"
+    assert [item["id"] for item in accepted.json()["accepted"]] == [str(ASSUMPTION_ID)]
+    assert accepted.json()["accepted"][0]["status"] == "ACCEPTED"
+    assert accepted.json()["accepted"][0]["decision_reason"] == "Confirmed together."
+    assert accepted.json()["skipped"] == []
+    assert accepted.json()["brief_version"]["version_number"] == 2
+    assert without_body.status_code == 200
+    assert service.bulk_reasons == ["Confirmed together.", None]
+
+
+def test_accepting_all_without_acceptable_proposals_is_a_conflict() -> None:
+    service = FakeClarificationService()
+    service.bulk_status = BriefAssumptionBulkAcceptanceStatus.NOTHING_TO_ACCEPT
+
+    with build_client(service) as client:
+        response = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions/accept-all",
+            headers=authorization_header(),
+            json={"reason": None},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["status"] == "NOTHING_TO_ACCEPT"
+    assert response.json()["accepted"] == []
+    assert [item["status"] for item in response.json()["skipped"]] == ["PROPOSED"]
+    assert response.json()["brief_version"] is None
+
+
+def test_accepting_all_without_a_brief_is_not_found() -> None:
+    service = FakeClarificationService()
+    service.bulk_status = BriefAssumptionBulkAcceptanceStatus.BRIEF_NOT_FOUND
+
+    with build_client(service) as client:
+        response = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions/accept-all",
+            headers=authorization_header(),
+        )
+        anonymous = client.post(
+            f"/api/v1/projects/{PROJECT_ID}/brief-assumptions/accept-all",
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "project_brief_not_found"}
+    assert anonymous.status_code == 401
 
 
 def test_project_brief_gate_can_be_submitted_and_approved() -> None:

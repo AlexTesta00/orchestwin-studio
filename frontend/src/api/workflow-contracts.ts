@@ -57,13 +57,22 @@ export type BriefAssumptionDecisionStatus =
   | "REJECTED"
   | "ASSUMPTION_NOT_FOUND"
   | "ASSUMPTION_NOT_PROPOSED"
-  | "ASSUMPTION_STALE"
   | "FIELD_ALREADY_PROVIDED"
   | "VERSION_UNCHANGED";
 
 export interface BriefAssumptionDecisionResponse {
   readonly status: BriefAssumptionDecisionStatus;
   readonly assumption: BriefAssumptionResponse | null;
+  readonly brief_version: ProjectBriefVersionResponse | null;
+}
+
+export type BriefAssumptionBulkAcceptanceStatus =
+  "ACCEPTED" | "NOTHING_TO_ACCEPT" | "BRIEF_NOT_FOUND";
+
+export interface BriefAssumptionBulkAcceptanceResponse {
+  readonly status: BriefAssumptionBulkAcceptanceStatus;
+  readonly accepted: readonly BriefAssumptionResponse[];
+  readonly skipped: readonly BriefAssumptionResponse[];
   readonly brief_version: ProjectBriefVersionResponse | null;
 }
 
@@ -187,6 +196,12 @@ export interface ProjectWorkflowApi {
     assumptionId: string,
     reason?: string | null,
   ): Promise<BriefAssumptionDecisionResponse>;
+
+  acceptAllProjectBriefAssumptions(
+    accessToken: string,
+    projectId: string,
+    reason?: string | null,
+  ): Promise<BriefAssumptionBulkAcceptanceResponse>;
 
   rejectProjectBriefAssumption(
     accessToken: string,

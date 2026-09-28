@@ -22,6 +22,7 @@ import type {
   TeamProposalVersionResponse,
 } from "./team-contracts";
 import type {
+  BriefAssumptionBulkAcceptanceResponse,
   BriefAssumptionCreateInput,
   BriefAssumptionCreationResponse,
   BriefAssumptionDecisionResponse,
@@ -161,7 +162,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
   }
 
   public getProject(accessToken: string, projectId: string): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+    return this.request<ProjectResponse>(this.projectPath(projectId), {
       headers: this.authorization(accessToken),
     });
   }
@@ -171,7 +172,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
     displayName: string,
   ): Promise<ProjectResponse> {
-    return this.request<ProjectResponse>(`/projects/${projectId}`, {
+    return this.request<ProjectResponse>(this.projectPath(projectId), {
       method: "PATCH",
       headers: this.authorization(accessToken),
       body: JSON.stringify({
@@ -181,7 +182,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
   }
 
   public async archiveProject(accessToken: string, projectId: string): Promise<void> {
-    await this.request<void>(`/projects/${projectId}`, {
+    await this.request<void>(this.projectPath(projectId), {
       method: "DELETE",
       headers: this.authorization(accessToken),
     });
@@ -192,11 +193,14 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
     input: ProjectBriefInput,
   ): Promise<ProjectBriefVersionResponse> {
-    return this.request<ProjectBriefVersionResponse>(`/projects/${projectId}/brief-versions`, {
-      method: "POST",
-      headers: this.authorization(accessToken),
-      body: JSON.stringify(input),
-    });
+    return this.request<ProjectBriefVersionResponse>(
+      `${this.projectPath(projectId)}/brief-versions`,
+      {
+        method: "POST",
+        headers: this.authorization(accessToken),
+        body: JSON.stringify(input),
+      },
+    );
   }
 
   public currentBriefVersion(
@@ -204,7 +208,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<ProjectBriefVersionResponse> {
     return this.request<ProjectBriefVersionResponse>(
-      `/projects/${projectId}/brief-versions/current`,
+      `${this.projectPath(projectId)}/brief-versions/current`,
       {
         headers: this.authorization(accessToken),
       },
@@ -216,7 +220,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<readonly ProjectBriefVersionResponse[]> {
     return this.request<readonly ProjectBriefVersionResponse[]>(
-      `/projects/${projectId}/brief-versions`,
+      `${this.projectPath(projectId)}/brief-versions`,
       {
         headers: this.authorization(accessToken),
       },
@@ -229,7 +233,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     versionNumber: number,
   ): Promise<ProjectBriefVersionResponse> {
     return this.request<ProjectBriefVersionResponse>(
-      `/projects/${projectId}/brief-versions/${versionNumber}`,
+      `${this.projectPath(projectId)}/brief-versions/${encodeURIComponent(versionNumber)}`,
       {
         headers: this.authorization(accessToken),
       },
@@ -241,7 +245,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<readonly BriefAssumptionResponse[]> {
     return this.request<readonly BriefAssumptionResponse[]>(
-      `/projects/${projectId}/brief-assumptions`,
+      `${this.projectPath(projectId)}/brief-assumptions`,
       {
         headers: this.authorization(accessToken),
       },
@@ -254,7 +258,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     input: BriefAssumptionCreateInput,
   ): Promise<BriefAssumptionCreationResponse> {
     return this.request<BriefAssumptionCreationResponse>(
-      `/projects/${projectId}/brief-assumptions`,
+      `${this.projectPath(projectId)}/brief-assumptions`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -271,7 +275,25 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     reason: string | null = null,
   ): Promise<BriefAssumptionDecisionResponse> {
     return this.request<BriefAssumptionDecisionResponse>(
-      `/projects/${projectId}/brief-assumptions/${assumptionId}/accept`,
+      `${this.projectPath(projectId)}/brief-assumptions/${encodeURIComponent(assumptionId)}/accept`,
+      {
+        method: "POST",
+        headers: this.authorization(accessToken),
+        body: JSON.stringify({
+          reason,
+        }),
+      },
+      [409],
+    );
+  }
+
+  public acceptAllProjectBriefAssumptions(
+    accessToken: string,
+    projectId: string,
+    reason: string | null = null,
+  ): Promise<BriefAssumptionBulkAcceptanceResponse> {
+    return this.request<BriefAssumptionBulkAcceptanceResponse>(
+      `${this.projectPath(projectId)}/brief-assumptions/accept-all`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -290,7 +312,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     reason: string,
   ): Promise<BriefAssumptionDecisionResponse> {
     return this.request<BriefAssumptionDecisionResponse>(
-      `/projects/${projectId}/brief-assumptions/${assumptionId}/reject`,
+      `${this.projectPath(projectId)}/brief-assumptions/${encodeURIComponent(assumptionId)}/reject`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -307,7 +329,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<ProjectBriefGateSubmissionResponse> {
     return this.request<ProjectBriefGateSubmissionResponse>(
-      `/projects/${projectId}/gates/project-brief/submit`,
+      `${this.projectPath(projectId)}/gates/project-brief/submit`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -320,9 +342,12 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     accessToken: string,
     projectId: string,
   ): Promise<HumanGateResponse> {
-    return this.request<HumanGateResponse>(`/projects/${projectId}/gates/project-brief/current`, {
-      headers: this.authorization(accessToken),
-    });
+    return this.request<HumanGateResponse>(
+      `${this.projectPath(projectId)}/gates/project-brief/current`,
+      {
+        headers: this.authorization(accessToken),
+      },
+    );
   }
 
   public listProjectBriefGateEvents(
@@ -331,7 +356,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     gateId: string,
   ): Promise<readonly HumanGateEventResponse[]> {
     return this.request<readonly HumanGateEventResponse[]>(
-      `/projects/${projectId}/gates/project-brief/${gateId}/events`,
+      `${this.projectPath(projectId)}/gates/project-brief/${encodeURIComponent(gateId)}/events`,
       {
         headers: this.authorization(accessToken),
       },
@@ -345,7 +370,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     reason: string | null = null,
   ): Promise<ProjectBriefGateDecisionResponse> {
     return this.request<ProjectBriefGateDecisionResponse>(
-      `/projects/${projectId}/gates/project-brief/decisions`,
+      `${this.projectPath(projectId)}/gates/project-brief/decisions`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -369,7 +394,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<TeamProposalGenerationResponse> {
     return this.request<TeamProposalGenerationResponse>(
-      `/projects/${projectId}/team-proposals`,
+      `${this.projectPath(projectId)}/team-proposals`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -383,7 +408,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<readonly TeamProposalVersionResponse[]> {
     return this.request<readonly TeamProposalVersionResponse[]>(
-      `/projects/${projectId}/team-proposals`,
+      `${this.projectPath(projectId)}/team-proposals`,
       {
         headers: this.authorization(accessToken),
       },
@@ -395,7 +420,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<TeamProposalVersionResponse> {
     return this.request<TeamProposalVersionResponse>(
-      `/projects/${projectId}/team-proposals/current`,
+      `${this.projectPath(projectId)}/team-proposals/current`,
       {
         headers: this.authorization(accessToken),
       },
@@ -408,7 +433,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     input: TeamProposalEditInput,
   ): Promise<TeamEditResponse> {
     return this.request<TeamEditResponse>(
-      `/projects/${projectId}/team-proposals/current`,
+      `${this.projectPath(projectId)}/team-proposals/current`,
       {
         method: "PATCH",
         headers: this.authorization(accessToken),
@@ -423,7 +448,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     projectId: string,
   ): Promise<AgentTeamGateSubmissionResponse> {
     return this.request<AgentTeamGateSubmissionResponse>(
-      `/projects/${projectId}/gates/agent-team/submit`,
+      `${this.projectPath(projectId)}/gates/agent-team/submit`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -436,9 +461,12 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     accessToken: string,
     projectId: string,
   ): Promise<HumanGateResponse> {
-    return this.request<HumanGateResponse>(`/projects/${projectId}/gates/agent-team/current`, {
-      headers: this.authorization(accessToken),
-    });
+    return this.request<HumanGateResponse>(
+      `${this.projectPath(projectId)}/gates/agent-team/current`,
+      {
+        headers: this.authorization(accessToken),
+      },
+    );
   }
 
   public listAgentTeamGateEvents(
@@ -447,7 +475,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     gateId: string,
   ): Promise<readonly HumanGateEventResponse[]> {
     return this.request<readonly HumanGateEventResponse[]>(
-      `/projects/${projectId}/gates/agent-team/${gateId}/events`,
+      `${this.projectPath(projectId)}/gates/agent-team/${encodeURIComponent(gateId)}/events`,
       {
         headers: this.authorization(accessToken),
       },
@@ -461,7 +489,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     reason: string | null = null,
   ): Promise<AgentTeamGateDecisionResponse> {
     return this.request<AgentTeamGateDecisionResponse>(
-      `/projects/${projectId}/gates/agent-team/decisions`,
+      `${this.projectPath(projectId)}/gates/agent-team/decisions`,
       {
         method: "POST",
         headers: this.authorization(accessToken),
@@ -478,7 +506,7 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     accessToken: string,
     projectId: string,
   ): Promise<ProjectReadinessResponse> {
-    return this.request<ProjectReadinessResponse>(`/projects/${projectId}/readiness`, {
+    return this.request<ProjectReadinessResponse>(`${this.projectPath(projectId)}/readiness`, {
       headers: this.authorization(accessToken),
     });
   }
@@ -487,6 +515,10 @@ export class ApiClient implements AuthenticationApi, ProjectApi, ProjectWorkflow
     return {
       Authorization: `Bearer ${accessToken}`,
     };
+  }
+
+  private projectPath(projectId: string): string {
+    return `/projects/${encodeURIComponent(projectId)}`;
   }
 
   private async request<T>(

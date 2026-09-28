@@ -58,6 +58,10 @@ const { t, locale } = useI18n({
         noAssumptions: "No assumptions have been proposed.",
         decisionReason: "Decision rationale",
         accept: "Accept assumption",
+        acceptAll: "Accept all proposals",
+        acceptAllDone: "Accepted proposals: {count}. The brief is now version {version}.",
+        acceptAllSkipped: "Proposals left to decide: {count}.",
+        acceptAllNothing: "There are no proposals to accept.",
         reject: "Reject assumption",
         rejectIdea: "Reject idea",
         audit: "Version details",
@@ -115,7 +119,6 @@ const { t, locale } = useI18n({
           FIELD_ALREADY_PROVIDED: "The field already contains owner-provided information",
           ASSUMPTION_NOT_FOUND: "Assumption not found",
           ASSUMPTION_NOT_PROPOSED: "The assumption has already been decided",
-          ASSUMPTION_STALE: "The assumption refers to an older brief",
           SUBMITTED: "Submitted",
           ALREADY_PENDING: "Already pending",
           ALREADY_APPROVED: "Already approved",
@@ -150,6 +153,10 @@ const { t, locale } = useI18n({
         noAssumptions: "Non sono state proposte assunzioni.",
         decisionReason: "Motivazione della decisione",
         accept: "Accetta proposta",
+        acceptAll: "Accetta tutte le proposte",
+        acceptAllDone: "Proposte accettate: {count}. Il brief è alla versione {version}.",
+        acceptAllSkipped: "Proposte lasciate da decidere: {count}.",
+        acceptAllNothing: "Non ci sono proposte da accettare.",
         reject: "Rifiuta proposta",
         rejectIdea: "Rifiuta idea",
         audit: "Dettagli di versione",
@@ -207,7 +214,6 @@ const { t, locale } = useI18n({
           FIELD_ALREADY_PROVIDED: "Il campo contiene già informazioni fornite dall'owner",
           ASSUMPTION_NOT_FOUND: "Assunzione non trovata",
           ASSUMPTION_NOT_PROPOSED: "L'assunzione è già stata valutata",
-          ASSUMPTION_STALE: "L'assunzione appartiene a una versione precedente",
           SUBMITTED: "Sottoposto",
           ALREADY_PENDING: "Già in attesa",
           ALREADY_APPROVED: "Già approvato",
@@ -237,6 +243,29 @@ const assumptionStatement = ref("");
 const assumptionReasons = ref<Record<string, string>>({});
 const gateReason = ref("");
 const localError = ref<string | null>(null);
+
+const proposedCount = computed(
+  () => store.assumptions.filter((assumption) => assumption.status === "PROPOSED").length,
+);
+
+const bulkAcceptanceText = computed(() => {
+  const result = store.lastBulkAcceptance;
+
+  if (result === null) return null;
+
+  if (result.status !== "ACCEPTED" || result.brief_version === null) {
+    return t("flow.acceptAllNothing");
+  }
+
+  const accepted = t("flow.acceptAllDone", {
+    count: result.accepted.length,
+    version: result.brief_version.version_number,
+  });
+
+  if (result.skipped.length === 0) return accepted;
+
+  return `${accepted} ${t("flow.acceptAllSkipped", { count: result.skipped.length })}`;
+});
 
 function executeAuthorized<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
   if (props.authorize !== undefined) {
@@ -326,6 +355,12 @@ async function acceptAssumption(assumption: BriefAssumptionResponse): Promise<vo
     resolvedApi.value,
     executeAuthorized,
   );
+}
+
+async function acceptAllAssumptions(): Promise<void> {
+  localError.value = null;
+
+  await store.acceptAllAssumptions(props.projectId, null, resolvedApi.value, executeAuthorized);
 }
 
 async function rejectAssumption(assumption: BriefAssumptionResponse): Promise<void> {
@@ -421,7 +456,7 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
     </div>
 
     <details
-      :open="store.assumptions.some((assumption) => assumption.status === 'PROPOSED')"
+      :open="proposedCount > 0 || bulkAcceptanceText !== null"
       class="rounded-panel border border-line bg-white p-4"
       aria-labelledby="assumptions-title"
     >
@@ -465,6 +500,25 @@ async function decideGate(action: ProjectBriefGateDecisionAction): Promise<void>
             {{ t("flow.createAssumption") }}
           </button>
         </form>
+
+        <div v-if="proposedCount >= 2">
+          <UiButton
+            data-testid="accept-all-assumptions"
+            :disabled="store.busy"
+            @click="acceptAllAssumptions"
+          >
+            {{ t("flow.acceptAll") }}
+          </UiButton>
+        </div>
+
+        <p
+          :class="bulkAcceptanceText === null ? 'sr-only' : 'm-0 text-sm font-semibold text-ink-2'"
+          data-testid="accept-all-outcome"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {{ bulkAcceptanceText }}
+        </p>
 
         <ul v-if="store.assumptions.length > 0" class="grid gap-4">
           <li

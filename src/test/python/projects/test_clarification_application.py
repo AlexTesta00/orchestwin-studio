@@ -3,23 +3,29 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
 from orchestwin.projects.briefs import (
     BriefField,
+    ProjectBrief,
     ProjectBriefVersion,
     create_project_brief,
 )
 from orchestwin.projects.clarification_application import (
+    BriefAssumptionBulkAcceptanceResult,
+    BriefAssumptionBulkAcceptanceStatus,
+    BriefAssumptionDecisionResult,
     BriefAssumptionDecisionStatus,
     LocalProjectClarificationApplicationService,
 )
 from orchestwin.projects.clarification_state import (
     BriefAssumption,
+    BriefAssumptionSource,
     BriefAssumptionStatus,
     accept_brief_assumption,
+    create_brief_assumption,
     reject_brief_assumption,
 )
 from orchestwin.projects.repository import (
@@ -322,9 +328,13 @@ class InMemoryClarificationUnitOfWork:
         return None
 
 
-def build_fixture():
+def build_fixture(
+    brief: ProjectBrief | None = None,
+):
     """Create an incomplete brief and deterministic service."""
-    brief = create_project_brief(name="Project")
+    if brief is None:
+        brief = create_project_brief(name="Project")
+
     version = ProjectBriefVersion(
         id=UUID(int=100),
         project_id=PROJECT_ID,
@@ -356,6 +366,89 @@ def build_fixture():
         current_briefs,
         assumptions,
         service,
+    )
+
+
+def propose(
+    assumptions: InMemoryAssumptionRepository,
+    *,
+    field: BriefField,
+    statement: str,
+    minutes_before: int = 0,
+) -> BriefAssumption:
+    assumption = create_brief_assumption(
+        assumption_id=UUID(int=3000 + len(assumptions.assumptions)),
+        project_id=PROJECT_ID,
+        brief_version_number=1,
+        field=field,
+        statement=statement,
+        source=BriefAssumptionSource.MODEL_PROPOSED,
+        created_by_user_id=OWNER_ID,
+        created_at=NOW - timedelta(minutes=minutes_before),
+    )
+    assumptions.assumptions.append(assumption)
+
+    return assumption
+
+
+def current_version(
+    current_briefs: InMemoryCurrentBriefRepository,
+) -> ProjectBriefVersion:
+    version = asyncio.run(
+        current_briefs.get_current_owned_for_update(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert version is not None
+
+    return version
+
+
+def fill_brief(
+    current_briefs: InMemoryCurrentBriefRepository,
+    brief: ProjectBrief,
+) -> None:
+    previous = current_version(current_briefs)
+    current_briefs.set_current(
+        owner_user_id=OWNER_ID,
+        version=ProjectBriefVersion(
+            id=UUID(int=200 + previous.version_number),
+            project_id=PROJECT_ID,
+            version_number=previous.version_number + 1,
+            schema_version=brief.SCHEMA_VERSION,
+            brief=brief,
+            content_hash=brief.content_hash,
+            created_by_user_id=OWNER_ID,
+            created_at=NOW,
+        ),
+    )
+
+
+def accept(
+    service: LocalProjectClarificationApplicationService,
+    assumption_id: UUID,
+) -> BriefAssumptionDecisionResult:
+    return asyncio.run(
+        service.accept_assumption(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            assumption_id=assumption_id,
+        )
+    )
+
+
+def accept_all(
+    service: LocalProjectClarificationApplicationService,
+    reason: str | None = None,
+) -> BriefAssumptionBulkAcceptanceResult:
+    return asyncio.run(
+        service.accept_all_assumptions(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            reason=reason,
+        )
     )
 
 
@@ -403,3 +496,181 @@ def test_accepting_assumption_creates_explicit_brief_version() -> None:
     )
 
     assert current == accepted.version
+
+
+def test_remaining_proposals_stay_acceptable_after_one_is_accepted() -> None:
+    current_briefs, assumptions, service = build_fixture()
+    proposals = [
+        propose(assumptions, field=BriefField.BUDGET, statement="Approximately EUR 5,000."),
+        propose(assumptions, field=BriefField.DOMAIN, statement="Community events."),
+        propose(assumptions, field=BriefField.GOALS, statement="Sell tickets online."),
+    ]
+
+    results = [accept(service, proposal.id) for proposal in proposals]
+
+    assert [result.status for result in results] == [BriefAssumptionDecisionStatus.ACCEPTED] * 3
+    assert [result.version.version_number for result in results if result.version is not None] == [
+        2,
+        3,
+        4,
+    ]
+    assert all(
+        assumption.status is BriefAssumptionStatus.ACCEPTED
+        for assumption in assumptions.assumptions
+    )
+
+    brief = current_version(current_briefs).brief
+
+    assert brief.budget == "Approximately EUR 5,000."
+    assert brief.domain == "Community events."
+    assert brief.goals == ("Sell tickets online.",)
+
+
+def test_proposal_for_a_field_filled_meanwhile_answers_field_already_provided() -> None:
+    current_briefs, assumptions, service = build_fixture()
+    proposal = propose(assumptions, field=BriefField.BUDGET, statement="Approximately EUR 5,000.")
+    fill_brief(current_briefs, create_project_brief(name="Project", budget="EUR 9,000."))
+
+    result = accept(service, proposal.id)
+
+    assert result.status is BriefAssumptionDecisionStatus.FIELD_ALREADY_PROVIDED
+    assert result.version is None
+    assert assumptions.assumptions == [proposal]
+    assert current_version(current_briefs).version_number == 2
+    assert current_version(current_briefs).brief.budget == "EUR 9,000."
+
+
+def test_accept_all_materializes_every_proposal_in_one_version() -> None:
+    current_briefs, assumptions, service = build_fixture(
+        create_project_brief(
+            name="Project",
+            unknown_fields=[
+                BriefField.BUDGET,
+                BriefField.DOMAIN,
+                BriefField.GOALS,
+            ],
+        )
+    )
+    propose(assumptions, field=BriefField.GOALS, statement="Sell tickets online.")
+    propose(assumptions, field=BriefField.DOMAIN, statement="Community events.")
+    propose(assumptions, field=BriefField.BUDGET, statement="Approximately EUR 5,000.")
+
+    result = accept_all(service, reason="Confirmed together.")
+
+    assert result.status is BriefAssumptionBulkAcceptanceStatus.ACCEPTED
+    assert [assumption.field for assumption in result.accepted] == [
+        BriefField.BUDGET,
+        BriefField.DOMAIN,
+        BriefField.GOALS,
+    ]
+    assert result.skipped == ()
+    assert result.version is not None
+    assert result.version.version_number == 2
+    assert result.version.brief.budget == "Approximately EUR 5,000."
+    assert result.version.brief.domain == "Community events."
+    assert result.version.brief.goals == ("Sell tickets online.",)
+    assert result.version.brief.unknown_fields == frozenset()
+    assert current_version(current_briefs) == result.version
+    assert {
+        (
+            assumption.status,
+            assumption.decided_at,
+            assumption.decision_reason,
+        )
+        for assumption in assumptions.assumptions
+    } == {
+        (
+            BriefAssumptionStatus.ACCEPTED,
+            NOW,
+            "Confirmed together.",
+        )
+    }
+
+
+def test_accept_all_keeps_the_first_text_proposal_and_skips_the_later_one() -> None:
+    _, assumptions, service = build_fixture()
+    later = propose(
+        assumptions,
+        field=BriefField.BUDGET,
+        statement="About EUR 8,000.",
+        minutes_before=1,
+    )
+    first = propose(
+        assumptions,
+        field=BriefField.BUDGET,
+        statement="Approximately EUR 5,000.",
+        minutes_before=2,
+    )
+
+    result = accept_all(service)
+
+    assert result.status is BriefAssumptionBulkAcceptanceStatus.ACCEPTED
+    assert [assumption.id for assumption in result.accepted] == [first.id]
+    assert result.skipped == (later,)
+    assert result.version is not None
+    assert result.version.version_number == 2
+    assert result.version.brief.budget == "Approximately EUR 5,000."
+    assert assumptions.assumptions[0] == later
+
+
+def test_accept_all_appends_every_statement_of_a_list_field() -> None:
+    _, assumptions, service = build_fixture()
+    propose(
+        assumptions,
+        field=BriefField.GOALS,
+        statement="Check guests in at the door.",
+        minutes_before=1,
+    )
+    propose(
+        assumptions,
+        field=BriefField.GOALS,
+        statement="Sell tickets online.",
+        minutes_before=2,
+    )
+
+    result = accept_all(service)
+
+    assert result.status is BriefAssumptionBulkAcceptanceStatus.ACCEPTED
+    assert len(result.accepted) == 2
+    assert result.skipped == ()
+    assert result.version is not None
+    assert result.version.version_number == 2
+    assert result.version.brief.goals == (
+        "Sell tickets online.",
+        "Check guests in at the door.",
+    )
+
+
+def test_accept_all_without_acceptable_proposals_creates_no_version() -> None:
+    current_briefs, assumptions, service = build_fixture()
+    proposal = propose(assumptions, field=BriefField.NAME, statement="Another name.")
+    rejected = reject_brief_assumption(
+        propose(assumptions, field=BriefField.BUDGET, statement="Approximately EUR 5,000."),
+        decided_by_user_id=OWNER_ID,
+        reason="Not relevant.",
+        decided_at=NOW,
+    )
+    assumptions.assumptions[-1] = rejected
+
+    result = accept_all(service)
+
+    assert result.status is BriefAssumptionBulkAcceptanceStatus.NOTHING_TO_ACCEPT
+    assert result.accepted == ()
+    assert result.skipped == (proposal,)
+    assert result.version is None
+    assert current_version(current_briefs).version_number == 1
+    assert assumptions.assumptions == [proposal, rejected]
+
+
+def test_accept_all_without_a_brief_reports_brief_not_found() -> None:
+    _, _, service = build_fixture()
+
+    result = asyncio.run(
+        service.accept_all_assumptions(
+            project_id=UUID(int=999),
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert result.status is BriefAssumptionBulkAcceptanceStatus.BRIEF_NOT_FOUND
+    assert result.version is None
