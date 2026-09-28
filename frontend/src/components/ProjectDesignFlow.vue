@@ -61,6 +61,7 @@ const diffReasons = reactive<Record<string, string>>({});
 const mockup = ref<DesignMockupPayload | null>(null);
 const mockupBusy = ref(false);
 const nextStepRefresh = ref(0);
+const reviewRequestedFor = ref<string | null>(null);
 let mockupEpoch = 0;
 let handledApplicationId: string | null = null;
 
@@ -411,7 +412,8 @@ async function decideDiff(
     return;
   }
 
-  await run(() =>
+  const previousVersionId = current.value?.id ?? null;
+  const decided = await run(() =>
     store.decideRevision(
       props.projectId,
       diff.id,
@@ -421,6 +423,17 @@ async function decideDiff(
       api.value,
     ),
   );
+  const version = current.value;
+
+  if (
+    decided &&
+    decision === "APPROVE" &&
+    version !== null &&
+    version.id !== previousVersionId &&
+    version.package.prototype !== null
+  ) {
+    reviewRequestedFor.value = version.id;
+  }
 }
 
 async function submitGate(): Promise<void> {
@@ -501,6 +514,7 @@ watch(
 watch(
   () => props.projectId,
   async () => {
+    reviewRequestedFor.value = null;
     if (props.autoLoad) {
       await load();
     }
@@ -608,6 +622,7 @@ watch(
           <DesignAlternativeComparison
             :alternatives="current.package.alternatives"
             :critiques="current.package.critiques"
+            :twins="current.package.grounding.user_twin_references"
             :recommended-alternative-id="current.package.recommended_alternative_id"
             :selected-alternative-id="selectedAlternativeId"
             :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
@@ -725,6 +740,7 @@ watch(
         :locale="locale"
         :authorize="authorizedRequest"
         :api="props.loopApi"
+        :auto-evaluate-version-id="reviewRequestedFor"
         @applied="onInsightApplied"
       />
 

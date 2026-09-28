@@ -3,21 +3,59 @@ import { computed, useId } from "vue";
 
 import DesignStyleTile from "./DesignStyleTile.vue";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
+import TwinIdentity from "./TwinIdentity.vue";
 import { archetypeLabel } from "./visualLanguage";
 import type { AuthorizedDesignLoopRequest } from "../stores/designLoop";
-import type { DesignAlternativePayload, SyntheticDesignCritiquePayload } from "../types/design";
+import type {
+  DesignAlternativePayload,
+  SyntheticDesignCritiquePayload,
+  UserTwinVersionReferencePayload,
+} from "../types/design";
 
 type Locale = "en" | "it";
+
+type CritiqueList =
+  | "strengths"
+  | "concerns"
+  | "unmet_needs"
+  | "accessibility_observations"
+  | "trust_concerns"
+  | "questions"
+  | "suggested_changes";
 
 interface LayoutRow {
   label: string;
   value: string;
 }
 
+interface OpinionList {
+  key: CritiqueList;
+  items: readonly string[];
+}
+
+interface TwinOpinion {
+  twinId: string;
+  name: string;
+  fit: string | null;
+  critique: SyntheticDesignCritiquePayload | null;
+  lists: OpinionList[];
+}
+
+const CRITIQUE_LISTS: readonly CritiqueList[] = [
+  "strengths",
+  "concerns",
+  "unmet_needs",
+  "accessibility_observations",
+  "trust_concerns",
+  "questions",
+  "suggested_changes",
+];
+
 const props = withDefaults(
   defineProps<{
     alternatives: readonly DesignAlternativePayload[];
     critiques: readonly SyntheticDesignCritiquePayload[];
+    twins?: readonly UserTwinVersionReferencePayload[];
     recommendedAlternativeId?: string | null;
     selectedAlternativeId?: string | null;
     disabled?: boolean;
@@ -26,6 +64,7 @@ const props = withDefaults(
     authorize?: AuthorizedDesignLoopRequest | undefined;
   }>(),
   {
+    twins: () => [],
     recommendedAlternativeId: null,
     selectedAlternativeId: null,
     disabled: false,
@@ -53,12 +92,20 @@ const messages = {
     accessibility: "Accessibility considerations",
     security: "Security considerations",
     workflows: "Workflows",
-    critiques: "Synthetic User Twin critiques",
+    twinsTitle: "What the twins think",
+    twinFit: "How this design serves them",
+    lists: {
+      strengths: "Strengths",
+      concerns: "Concerns",
+      unmet_needs: "Unmet needs",
+      accessibility_observations: "Accessibility",
+      trust_concerns: "Trust",
+      questions: "Open questions",
+      suggested_changes: "Suggested changes",
+    },
     details: "Alternative details",
     confidence: "Self-assessed confidence",
-    provenance: "Provenance",
-    concerns: "Concerns",
-    questions: "Questions for human validation",
+    provenance: "Provenance of the critiques",
     select: "Select {title}",
     methodology:
       "User Twin critiques are simulated feedback and design hypotheses. They are not empirical evidence of real-user behavior.",
@@ -76,12 +123,20 @@ const messages = {
     accessibility: "Considerazioni di accessibilità",
     security: "Considerazioni di sicurezza",
     workflows: "Flussi",
-    critiques: "Critiche sintetiche dei User Twin",
+    twinsTitle: "Cosa ne pensano i twin",
+    twinFit: "Come gli serve questo design",
+    lists: {
+      strengths: "Punti di forza",
+      concerns: "Criticità",
+      unmet_needs: "Bisogni non coperti",
+      accessibility_observations: "Accessibilità",
+      trust_concerns: "Fiducia",
+      questions: "Domande aperte",
+      suggested_changes: "Modifiche suggerite",
+    },
     details: "Dettagli dell'alternativa",
     confidence: "Confidenza auto-valutata",
-    provenance: "Provenienza",
-    concerns: "Criticità",
-    questions: "Domande per la validazione umana",
+    provenance: "Provenienza delle critiche",
     select: "Seleziona {title}",
     methodology:
       "Le critiche dei User Twin sono feedback simulato e ipotesi progettuali. Non sono evidenza empirica del comportamento di utenti reali.",
@@ -112,6 +167,45 @@ const layoutRows = computed<Record<string, LayoutRow | null>>(() =>
 
 function critiquesFor(alternativeId: string): SyntheticDesignCritiquePayload[] {
   return props.critiques.filter((critique) => critique.design_alternative_id === alternativeId);
+}
+
+function listsOf(critique: SyntheticDesignCritiquePayload): OpinionList[] {
+  return CRITIQUE_LISTS.map((key) => ({ key, items: critique[key] })).filter(
+    (list) => list.items.length > 0,
+  );
+}
+
+function opinionsOf(alternative: DesignAlternativePayload): TwinOpinion[] {
+  const critiques = critiquesFor(alternative.id);
+  const fits = alternative.visual_language?.twin_fit ?? [];
+  const names = new Map<string, string>();
+  for (const twin of [
+    ...props.twins,
+    ...critiques.map((critique) => critique.user_twin_reference),
+    ...fits,
+  ]) {
+    if (!names.has(twin.twin_id)) {
+      names.set(twin.twin_id, twin.name);
+    }
+  }
+  return [...names].flatMap(([twinId, name]) => {
+    const critique = critiques.find((item) => item.user_twin_reference.twin_id === twinId) ?? null;
+    const fit = fits.find((item) => item.twin_id === twinId)?.statement ?? null;
+    if (critique === null && fit === null) {
+      return [];
+    }
+    return [{ twinId, name, fit, critique, lists: critique === null ? [] : listsOf(critique) }];
+  });
+}
+
+const opinions = computed<Record<string, TwinOpinion[]>>(() =>
+  Object.fromEntries(
+    props.alternatives.map((alternative) => [alternative.id, opinionsOf(alternative)]),
+  ),
+);
+
+function opinionsFor(alternativeId: string): TwinOpinion[] {
+  return opinions.value[alternativeId] ?? [];
 }
 
 function confidenceLabel(value: number): string {
@@ -190,25 +284,84 @@ function choose(alternativeId: string): void {
           />
         </header>
 
-        <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-2">
-          <h4 class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-            {{ copy.critiques }}
+        <section
+          v-if="opinionsFor(alternative.id).length > 0"
+          class="grid gap-3 border-t border-line pt-4"
+          data-testid="twin-opinions"
+        >
+          <h4 class="m-0 text-base font-semibold tracking-block text-ink">
+            {{ copy.twinsTitle }}<span class="sr-only">: {{ alternative.title }}</span>
           </h4>
-          <ul class="m-0 grid list-none gap-2 p-0">
+          <ul class="m-0 grid list-none gap-3 p-0">
             <li
-              v-for="critique in critiquesFor(alternative.id)"
-              :key="critique.id"
-              class="text-sm leading-6 text-ink-2"
+              v-for="opinion in opinionsFor(alternative.id)"
+              :key="opinion.twinId"
+              class="@container grid gap-3 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-3 break-words text-hypothesis-text sm:p-4"
+              :data-twin-id="opinion.twinId"
+              data-testid="twin-opinion"
             >
-              <strong class="font-semibold text-ink">{{
-                critique.user_twin_reference.name
-              }}</strong>
-              {{ critique.rationale }}
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h5 class="m-0 min-w-0">
+                  <TwinIdentity
+                    :identity-key="opinion.twinId"
+                    :name="opinion.name"
+                    :locale="locale"
+                    compact
+                  />
+                </h5>
+                <p
+                  v-if="opinion.critique"
+                  class="m-0 text-xs font-semibold"
+                  data-testid="twin-opinion-confidence"
+                >
+                  {{ copy.confidence }}: {{ confidenceLabel(opinion.critique.confidence) }}
+                </p>
+              </div>
+              <div
+                v-if="opinion.fit !== null"
+                class="grid gap-1 rounded-control border border-hypothesis-line bg-surface p-3"
+                data-testid="twin-opinion-fit"
+              >
+                <h6 class="m-0 text-sm font-semibold">{{ copy.twinFit }}</h6>
+                <p class="m-0 text-sm leading-6">{{ opinion.fit }}</p>
+              </div>
+              <template v-if="opinion.critique">
+                <p class="m-0 text-[15px] leading-6" data-testid="twin-opinion-rationale">
+                  {{ opinion.critique.rationale }}
+                </p>
+                <div v-if="opinion.lists.length > 0" class="grid gap-3 @lg:grid-cols-2">
+                  <section
+                    v-for="list in opinion.lists"
+                    :key="list.key"
+                    :data-testid="`twin-opinion-${list.key}`"
+                  >
+                    <h6 class="m-0 text-sm font-semibold">{{ copy.lists[list.key] }}</h6>
+                    <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
+                      <li v-for="(item, index) in list.items" :key="item">
+                        {{ item }}
+                        <InsightApplyMenu
+                          v-if="projectId && list.key === 'concerns'"
+                          :project-id="projectId"
+                          :source="{
+                            kind: 'DESIGN_CRITIQUE',
+                            id: opinion.critique.code + ':' + index,
+                            twinId: opinion.critique.user_twin_reference.twin_id,
+                            text: item,
+                            mitigation: opinion.critique.suggested_changes[0] ?? null,
+                          }"
+                          :locale="locale"
+                          :authorize="authorize"
+                        />
+                      </li>
+                    </ul>
+                  </section>
+                </div>
+              </template>
             </li>
           </ul>
         </section>
 
-        <details class="text-sm">
+        <details class="text-sm" data-testid="alternative-details">
           <summary class="cursor-pointer font-semibold text-ink-2">{{ copy.details }}</summary>
           <div class="mt-4 grid gap-5">
             <dl class="m-0 grid gap-3 text-sm">
@@ -287,74 +440,39 @@ function choose(alternativeId: string): void {
               </ol>
             </section>
 
-            <section v-if="critiquesFor(alternative.id).length > 0" class="grid gap-3">
-              <h4 class="m-0 font-semibold text-ink">{{ copy.critiques }}</h4>
-              <article
-                v-for="critique in critiquesFor(alternative.id)"
-                :key="critique.id"
-                class="grid gap-3 rounded-panel border border-hypothesis-line bg-hypothesis-bg p-4 text-hypothesis-text"
-              >
-                <header class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="m-0 font-semibold">
-                    {{ critique.code }} · {{ critique.user_twin_reference.name }}
+            <section
+              v-if="critiquesFor(alternative.id).length > 0"
+              data-testid="critique-provenance"
+            >
+              <h4 class="m-0 font-semibold text-ink">{{ copy.provenance }}</h4>
+              <ul class="mt-2 grid list-none gap-3 p-0">
+                <li
+                  v-for="critique in critiquesFor(alternative.id)"
+                  :key="critique.id"
+                  class="grid gap-2"
+                >
+                  <p class="m-0 flex flex-wrap items-center gap-2">
+                    <span class="font-semibold text-ink">
+                      {{ critique.code }} · {{ critique.user_twin_reference.name }}
+                    </span>
+                    <span
+                      class="rounded-pill border border-hypothesis-line bg-hypothesis-bg px-2.5 py-1 font-mono text-[11px] text-hypothesis-text"
+                    >
+                      {{ critique.epistemic_status }} · {{ critique.human_validation }}
+                    </span>
                   </p>
-                  <span
-                    class="rounded-pill border border-hypothesis-line bg-surface px-2.5 py-1 font-mono text-[11px]"
-                  >
-                    {{ critique.epistemic_status }} · {{ critique.human_validation }}
-                  </span>
-                </header>
-
-                <p class="m-0 text-sm">{{ critique.rationale }}</p>
-                <p class="m-0 font-mono text-[11px] tracking-wide uppercase">
-                  {{ copy.confidence }}: {{ confidenceLabel(critique.confidence) }}
-                </p>
-
-                <section v-if="critique.concerns.length > 0">
-                  <h5 class="m-0 text-sm font-semibold">{{ copy.concerns }}</h5>
-                  <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
-                    <li v-for="(item, index) in critique.concerns" :key="item">
-                      {{ item }}
-                      <InsightApplyMenu
-                        v-if="projectId"
-                        :project-id="projectId"
-                        :source="{
-                          kind: 'DESIGN_CRITIQUE',
-                          id: critique.code + ':' + index,
-                          twinId: critique.user_twin_reference.twin_id,
-                          text: item,
-                          mitigation: critique.suggested_changes[0] ?? null,
-                        }"
-                        :locale="locale"
-                        :authorize="authorize"
-                      />
-                    </li>
-                  </ul>
-                </section>
-
-                <section v-if="critique.questions.length > 0">
-                  <h5 class="m-0 text-sm font-semibold">{{ copy.questions }}</h5>
-                  <ul class="mt-1 list-disc space-y-1 pl-5 text-sm">
-                    <li v-for="item in critique.questions" :key="item">{{ item }}</li>
-                  </ul>
-                </section>
-
-                <details>
-                  <summary class="cursor-pointer text-sm font-semibold">
-                    {{ copy.provenance }}
-                  </summary>
-                  <ul class="mt-2 grid gap-2 text-xs">
+                  <ul class="m-0 grid list-none gap-2 p-0 text-xs text-ink-2">
                     <li
                       v-for="reference in critique.provenance"
                       :key="`${reference.source_kind}:${reference.source_id}:${reference.locator}`"
-                      class="rounded-control bg-surface p-2 break-all"
+                      class="rounded-control bg-surface-2 p-2 break-all"
                     >
                       {{ reference.source_kind }} · {{ reference.source_id }}
                       <span v-if="reference.locator !== null"> · {{ reference.locator }}</span>
                     </li>
                   </ul>
-                </details>
-              </article>
+                </li>
+              </ul>
             </section>
           </div>
         </details>
