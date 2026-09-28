@@ -5,6 +5,8 @@ import io
 import re
 from copy import deepcopy
 
+import pytest
+
 from orchestwin.knowledge.tables import (
     TABLE_COLUMNS,
     design_tables,
@@ -40,6 +42,8 @@ DESIGN_PATHS = [
 PROTOTYPE_PATHS = ["design/tables/screens.csv", "design/tables/transitions.csv"]
 TRICKY = 'Nome, cognome e "soprannome"\ndell\'ospite,\r\n  su due righe\tcon tab '
 TRICKY_CELL = 'Nome, cognome e "soprannome" dell\'ospite, su due righe con tab'
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+HYPERLINK = '=HYPERLINK("https://example.com/x","Apri")'
 RECEPTION = "Addetti all'accoglienza"
 VOLUNTEERS = "Organizzatori volontari"
 TWIN_IDS = {RECEPTION: identity(1), VOLUNTEERS: identity(2)}
@@ -590,6 +594,63 @@ def test_list_items_are_normalized_before_they_are_joined() -> None:
 
     assert records(text)[0]["steps"] == f"1. {TRICKY_CELL}; 2. Premere Aggiungi"
     assert text.count("\n") == 2
+
+
+@pytest.mark.parametrize(
+    ("title", "cell"),
+    [
+        (HYPERLINK, f"'{HYPERLINK}"),
+        ("- Aggiunta ospite", "'- Aggiunta ospite"),
+        ("+39 055 123456", "'+39 055 123456"),
+        ("@nome", "'@nome"),
+        ("   =1+1", "'=1+1"),
+        ("\t\r\n=1+1", "'=1+1"),
+        ("Aggiunta ospite", "Aggiunta ospite"),
+        ("Ospiti = invitati + accompagnatori", "Ospiti = invitati + accompagnatori"),
+    ],
+)
+def test_a_cell_that_a_spreadsheet_would_run_as_a_formula_is_written_as_text(
+    title: str, cell: str
+) -> None:
+    snapshot = specification()
+    snapshot["requirements"][0]["title"] = title
+
+    text = requirements_tables(snapshot)["requirements/tables/requirements.csv"]
+
+    assert records(text)[0]["title"] == cell
+
+
+def test_no_cell_of_any_table_starts_like_a_formula() -> None:
+    requirements_snapshot = specification()
+    requirements_snapshot["risks"][0]["summary"] = "-1 posto a tavola"
+    requirements_snapshot["scenarios"][0]["preconditions"] = ["=A1", "-B2"]
+    requirements_snapshot["scenarios"][0]["steps"] = ["=SOMMA(A1:A3)"]
+    design_snapshot = package()
+    design_snapshot["alternatives"][0]["workflows"][0]["steps"][0] = "+39 055 123456"
+    design_snapshot["critiques"][0]["strengths"] = ["@organizzatori"]
+    design_snapshot["prototype"]["screens"][0]["elements"][1]["content"] = HYPERLINK
+
+    tables = knowledge_tables(specification=requirements_snapshot, package=design_snapshot)
+
+    assert [
+        cell
+        for text in tables.values()
+        for row in cells(text)
+        for cell in row
+        if cell.startswith(FORMULA_PREFIXES)
+    ] == []
+    assert malformed_tables(tables) == []
+    risk = records(tables["requirements/tables/risks.csv"])[0]
+    scenario = records(tables["requirements/tables/scenarios.csv"])[0]
+    workflow_step = records(tables["design/tables/workflows.csv"])[0]
+    strength = records(tables["design/tables/critiques.csv"])[0]
+    button = records(tables["design/tables/screens.csv"])[1]
+    trigger = records(tables["design/tables/transitions.csv"])[0]
+    assert risk["summary"] == "'-1 posto a tavola"
+    assert (scenario["preconditions"], scenario["steps"]) == ("'=A1; -B2", "1. =SOMMA(A1:A3)")
+    assert workflow_step["step"] == "'+39 055 123456"
+    assert (strength["aspect"], strength["text"]) == ("strengths", "'@organizzatori")
+    assert button["content"] == trigger["trigger_content"] == f"'{HYPERLINK}"
 
 
 def test_booleans_are_written_yes_or_no_and_null_is_written_empty() -> None:
