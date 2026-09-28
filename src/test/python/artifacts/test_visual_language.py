@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import replace
 
 import pytest
@@ -7,20 +8,59 @@ import pytest
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.artifacts.design_serialization import design_package_from_snapshot
 from orchestwin.artifacts.visual_catalog import (
+    FONTS,
+    NEUTRAL_VISUAL_CHOICES,
     PALETTE_ROLES,
     VISUAL_CATALOG_CONTENT_HASH,
     VISUAL_CATALOG_VERSION,
+    VISUAL_DIMENSION_NAMES,
+    VISUAL_DIMENSIONS,
+    ColorMode,
+    DesignTone,
+    FontFamily,
     HueFamily,
+    LayoutArchetype,
+    NavigationPattern,
+    VisualChoices,
     resolve_palette,
+    resolve_visual_tokens,
 )
 from orchestwin.artifacts.visual_language import (
     MAX_PRODUCT_NAME_LENGTH,
+    MAX_TOKEN_VALUE_LENGTH,
     VisualLanguage,
     create_visual_language,
     visual_language_from_snapshot,
 )
 
 from . import design_fixtures
+
+CATALOG_BASES = (
+    NEUTRAL_VISUAL_CHOICES,
+    replace(
+        NEUTRAL_VISUAL_CHOICES,
+        archetype=LayoutArchetype.LIST_DETAIL,
+        navigation=NavigationPattern.SIDE_RAIL,
+    ),
+    replace(NEUTRAL_VISUAL_CHOICES, color_mode=ColorMode.DARK),
+    replace(NEUTRAL_VISUAL_CHOICES, tone=DesignTone.PLAYFUL),
+    replace(NEUTRAL_VISUAL_CHOICES, tone=DesignTone.TECHNICAL),
+)
+UNREADABLE_BODY_FAMILIES = (FontFamily.MODERN_SERIF, FontFamily.DISPLAY_HEAVY, FontFamily.SCRIPT)
+
+
+def catalog_variants() -> list[VisualChoices]:
+    variants: list[VisualChoices] = []
+    for base in CATALOG_BASES:
+        for name, values in VISUAL_DIMENSIONS.items():
+            for value in values:
+                with suppress(ValueError):
+                    variants.append(replace(base, **{name: value}))
+    return variants
+
+
+def with_token(name: str, value: str) -> VisualLanguage:
+    return replace(design_fixtures.visual_language(), tokens=((name, value),))
 
 
 def test_visual_language_resolves_palette_and_tokens_from_the_catalog():
@@ -67,6 +107,78 @@ def test_visual_language_normalizes_text_and_rejects_bad_values():
         replace(language, tokens=(("--vl-a", "1"), ("--vl-a", "2")))
     with pytest.raises(ValueError, match="content hash"):
         replace(language, catalog_content_hash="abc")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "url(//host/x)",
+        "red;background:url(x)",
+        "expression(alert(1))",
+        "var(--vl-x)",
+        "rgb(1,2,3",
+        "x" * (MAX_TOKEN_VALUE_LENGTH + 1),
+        "calc(1px + 2px)",
+        "image-set(x 1x)",
+        "rgb(rgb(1, 2, 3))",
+        "xrgb(1, 2, 3)",
+        "rgba (0, 0, 0, 0.5)",
+        "red)",
+        '"Segoe UI, sans-serif',
+        "#a1b2c3 !important",
+        "red\nblue",
+        " 16px",
+        "",
+    ],
+)
+def test_visual_tokens_reject_values_that_are_not_plain_css(value: str) -> None:
+    with pytest.raises(ValueError, match="plain CSS values"):
+        with_token("--vl-color-primary", value)
+
+
+@pytest.mark.parametrize(
+    "name", ["--vl-x:y", "--vl-X", "--vl-", "--vl-a--b", "--vl-a-", "--vl-a\n"]
+)
+def test_visual_tokens_reject_names_that_are_not_plain_custom_properties(name: str) -> None:
+    with pytest.raises(ValueError, match="named CSS custom properties"):
+        with_token(name, "16px")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "#a1b2c3",
+        "0 1px 2px rgba(0, 0, 0, 0.06)",
+        'system-ui, -apple-system, "Segoe UI", sans-serif',
+        "1.6",
+        "52px",
+        "hsl(210, 40%, 50%)",
+        "x" * MAX_TOKEN_VALUE_LENGTH,
+    ],
+)
+def test_visual_tokens_accept_plain_css_values(value: str) -> None:
+    assert with_token("--vl-color-primary", value).token_values == {"--vl-color-primary": value}
+
+
+def test_every_token_the_catalog_resolves_is_a_plain_css_value() -> None:
+    variants = catalog_variants()
+    stacks: set[str] = set()
+
+    for choices in variants:
+        language = create_visual_language(
+            choices=choices, product_name="Catalog", rationale="Every catalog value"
+        )
+        assert language.token_values == resolve_visual_tokens(choices)
+        stacks.update(
+            (language.token_values["--vl-font-heading"], language.token_values["--vl-font-body"])
+        )
+
+    covered = {
+        (name, getattr(choices, name)) for choices in variants for name in VISUAL_DIMENSION_NAMES
+    }
+    every_value = {(name, value) for name, values in VISUAL_DIMENSIONS.items() for value in values}
+    assert every_value - covered == {("body_family", family) for family in UNREADABLE_BODY_FAMILIES}
+    assert stacks == {spec.stack for spec in FONTS.values()}
 
 
 def test_visual_language_snapshot_round_trips_and_rejects_non_canonical_payloads():
