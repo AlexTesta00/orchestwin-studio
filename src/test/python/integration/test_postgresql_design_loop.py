@@ -158,6 +158,25 @@ def test_evaluation_runs_and_insight_applications_round_trip(database):
             async with db.session_factory() as session:
                 applications = SqlAlchemyInsightApplicationRepository(session, owner_user_id=owner)
                 assert await applications.list(project_id=project) == (application,)
+                source = (InsightSourceKind.SYNTHETIC_FINDING, application.source_id)
+                other = (InsightSourceKind.DESIGN_CRITIQUE, application.source_id)
+                assert await applications.applied_sources(
+                    project_id=project, target=InsightTarget.DESIGN, sources=(source, other)
+                ) == frozenset({source})
+                assert (
+                    await applications.applied_sources(
+                        project_id=project, target=InsightTarget.BRIEF, sources=(source,)
+                    )
+                    == frozenset()
+                )
+                assert (
+                    await SqlAlchemyInsightApplicationRepository(
+                        session, owner_user_id=foreign
+                    ).applied_sources(
+                        project_id=project, target=InsightTarget.DESIGN, sources=(source,)
+                    )
+                    == frozenset()
+                )
         finally:
             await db.dispose()
 

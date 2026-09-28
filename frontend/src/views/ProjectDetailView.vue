@@ -10,6 +10,7 @@ import type {
   ProjectResponse,
 } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
+import InsightBriefTray from "@/components/InsightBriefTray.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
 import ProjectBriefEditor from "@/components/ProjectBriefEditor.vue";
@@ -33,6 +34,7 @@ import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
 import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
+import { useInsightTrayStore } from "@/stores/insightTray";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 
@@ -43,6 +45,7 @@ const modeling = useUserModelingStore();
 const requirements = useRequirementsStore();
 const design = useDesignStore();
 const clarification = useClarificationStore();
+const tray = useInsightTrayStore();
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
@@ -137,6 +140,7 @@ const projectId = computed(() => {
 
   return value ?? "";
 });
+const trayVisible = computed(() => tray.isVisible(projectId.value));
 
 function approved(
   gate: { status: string; artifact: { artifact_id: string; content_hash: string } } | null,
@@ -269,6 +273,15 @@ watch(
   },
 );
 
+watch(
+  () => tray.resultOf(projectId.value)?.briefVersionNumber ?? null,
+  (version) => {
+    if (version !== null && version > (currentBrief.value?.version_number ?? 0)) {
+      void refreshBrief();
+    }
+  },
+);
+
 function errorCode(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     return error.detail;
@@ -322,6 +335,21 @@ async function loadProject(): Promise<void> {
   }
 }
 
+async function refreshBrief(): Promise<void> {
+  const id = projectId.value;
+  const epoch = projectEpoch;
+  try {
+    const versions = await authorized((accessToken) =>
+      apiClient.listBriefVersions(accessToken, id),
+    );
+    if (epoch !== projectEpoch) return;
+    briefHistory.value = [...versions];
+    currentBrief.value = versions[versions.length - 1] ?? null;
+  } catch {
+    if (epoch === projectEpoch) await loadProject();
+  }
+}
+
 async function saveBrief(brief: ProjectBriefInput): Promise<void> {
   const id = projectId.value;
   const epoch = projectEpoch;
@@ -362,7 +390,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="studio-workspace mx-auto grid w-full gap-8 lg:grid-cols-[272px_minmax(0,1fr)]">
+  <div
+    class="studio-workspace mx-auto grid w-full gap-8 lg:grid-cols-[272px_minmax(0,1fr)]"
+    :class="{ 'pb-44 sm:pb-36 md:pb-28': trayVisible }"
+    data-testid="project-workspace"
+  >
     <UiStateBlock
       v-if="loading"
       kind="loading"
@@ -599,6 +631,12 @@ onUnmounted(() => {
         />
       </UiSidePanel>
     </template>
+    <InsightBriefTray
+      v-if="projectId"
+      :project-id="projectId"
+      :locale="locale === 'it' ? 'it' : 'en'"
+      :authorize="authorized"
+    />
   </div>
 </template>
 

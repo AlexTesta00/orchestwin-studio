@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import ClassVar
@@ -8,23 +9,31 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from orchestwin.api import insight_applications as module
+from orchestwin.api.app import create_app
+from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.insight_applications import (
     InsightApplicationRequest,
     InsightApplicationService,
+    InsightBatchRequest,
 )
+from orchestwin.api.services import ApplicationRuntime
 from orchestwin.artifacts.design_finding_validations import (
     FindingDecision,
     create_finding_validation,
     finding_source_id,
 )
 from orchestwin.artifacts.design_revision_application import DesignRevisionStatus
+from orchestwin.config import ApplicationSettings
 from orchestwin.projects.briefs import BriefField, create_project_brief
 from orchestwin.projects.insight_applications import InsightSourceKind, InsightTarget
 from orchestwin.projects.requirements import RequirementKind
 from orchestwin.projects.requirements_primitives import RequirementSourceKind
 from orchestwin.projects.requirements_revision_application import RequirementsRevisionStatus
+from src.test.python.api.test_training_api import _user
 from src.test.python.artifacts import design_fixtures
 
 
@@ -59,6 +68,17 @@ class MemoryApplications:
 
     async def list(self, *, project_id, limit=200):
         return tuple(item for item in MemoryApplications.items if item.project_id == project_id)
+
+    async def applied_sources(self, *, project_id, target, sources):
+        wanted = frozenset(sources)
+        return frozenset(
+            (item.source_kind, item.source_id)
+            for item in MemoryApplications.items
+            if item.project_id == project_id
+            and item.owner_user_id == self.owner_user_id
+            and item.target is target
+            and (item.source_kind, item.source_id) in wanted
+        )
 
 
 class MemoryValidations:
@@ -376,9 +396,223 @@ def test_twin_discussion_proposals_are_applied_like_every_other_source(monkeypat
     assert MemoryValidations.reads == 0
 
 
-def test_router_registers_the_application_routes():
+def test_router_registers_the_batch_route_before_the_other_application_routes():
     router = module.create_insight_application_router()
-    assert sorted(route.path for route in router.routes) == [
-        "/projects/{project_id}/insight-applications",
-        "/projects/{project_id}/insight-applications",
+    assert [(route.path, sorted(route.methods)) for route in router.routes] == [
+        ("/projects/{project_id}/insight-applications/batch", ["POST"]),
+        ("/projects/{project_id}/insight-applications", ["POST"]),
+        ("/projects/{project_id}/insight-applications", ["GET"]),
     ]
+
+
+def batch(application, *bodies):
+    return asyncio.run(
+        application.apply_batch(
+            owner_user_id=design_fixtures.OWNER_ID,
+            project_id=design_fixtures.PROJECT_ID,
+            bodies=bodies,
+        )
+    )
+
+
+def brief_item(source_id, text, field=None):
+    return request(
+        source_kind=InsightSourceKind.TWIN_CHAT_INSIGHT,
+        source_id=source_id,
+        text=text,
+        target=InsightTarget.BRIEF,
+        brief_field=field,
+    )
+
+
+def test_a_batch_brings_several_insights_into_one_brief_version(monkeypatch):
+    brief = create_project_brief(
+        description="A reservation desk.",
+        risks=("Peak hours",),
+        unknown_fields=(BriefField.GOALS,),
+    )
+    application, _, created = service(monkeypatch, brief=brief)
+    applications, version_number = batch(
+        application,
+        brief_item("turn-1:0", "Guests arrive in groups."),
+        brief_item("turn-1:1", "Show the queue length.", BriefField.GOALS),
+        brief_item("turn-2:0", "  Staff   change shifts at noon. ", BriefField.RISKS),
+    )
+    assert len(created) == 1
+    assert created[0].functional_requirements == ("Guests arrive in groups.",)
+    assert created[0].goals == ("Show the queue length.",)
+    assert created[0].risks == ("Peak hours", "Staff change shifts at noon.")
+    assert created[0].unknown_fields == frozenset()
+    assert version_number == 2
+    assert MemoryApplications.items == list(applications)
+    assert [item.source_id for item in applications] == ["turn-1:0", "turn-1:1", "turn-2:0"]
+    assert [item.target_field for item in applications] == [
+        BriefField.FUNCTIONAL_REQUIREMENTS,
+        BriefField.GOALS,
+        BriefField.RISKS,
+    ]
+    assert {
+        (item.target, item.target_version_id, item.target_version_number) for item in applications
+    } == {(InsightTarget.BRIEF, UUID(int=55), 2)}
+    assert len({item.created_at for item in applications}) == 1
+
+
+def test_a_text_already_in_its_field_is_not_appended_twice(monkeypatch):
+    brief = create_project_brief(description="A reservation desk.", risks=("Peak hours",))
+    application, _, created = service(monkeypatch, brief=brief)
+    applications, _ = batch(
+        application,
+        brief_item("turn-1:0", "Peak   hours", BriefField.RISKS),
+        brief_item("turn-1:1", "Late check-in.", BriefField.RISKS),
+        brief_item("turn-2:0", "Late check-in.", BriefField.RISKS),
+        brief_item("turn-2:1", "Late check-in."),
+    )
+    assert created[0].risks == ("Peak hours", "Late check-in.")
+    assert created[0].functional_requirements == ("Late check-in.",)
+    assert len(applications) == 4
+    assert MemoryApplications.items == list(applications)
+
+
+def test_a_batch_refuses_other_targets_and_more_than_twenty_items(monkeypatch):
+    application, runtime, created = service(
+        monkeypatch,
+        brief=create_project_brief(description="A reservation desk."),
+        design=design_fixtures.design_version(),
+    )
+    with pytest.raises(HTTPException) as failure:
+        batch(application, brief_item("turn-1:0", "One."), request(target=InsightTarget.DESIGN))
+    assert failure.value.status_code == 422
+    assert failure.value.detail == {"code": "INSIGHT_BATCH_TARGET_NOT_BRIEF"}
+    items = [brief_item(f"turn-{index}:0", f"Insight {index}.") for index in range(21)]
+    for invalid in (items, []):
+        with pytest.raises(ValidationError):
+            InsightBatchRequest(items=invalid)
+    assert len(InsightBatchRequest(items=items[:20]).items) == 20
+    assert created == []
+    assert runtime.design_revision_service.proposed == []
+    assert MemoryApplications.items == []
+
+
+def test_an_already_applied_or_repeated_source_refuses_the_whole_batch(monkeypatch):
+    application, _, created = service(
+        monkeypatch,
+        brief=create_project_brief(description="A reservation desk."),
+        requirements=design_fixtures.requirements_version(),
+    )
+    batch(application, brief_item("turn-1:0", "Guests arrive in groups."))
+    apply(
+        application,
+        request(
+            source_kind=InsightSourceKind.TWIN_CHAT_INSIGHT,
+            source_id="turn-5:0",
+            text="Keep the reservation dates visible.",
+        ),
+    )
+    recorded = list(MemoryApplications.items)
+    created.clear()
+    for bodies, sources in (
+        (
+            (brief_item("turn-2:0", "Show the queue."), brief_item("turn-1:0", "Groups.")),
+            ["turn-1:0"],
+        ),
+        ((brief_item("turn-3:0", "One."), brief_item("turn-3:0", "Two.")), ["turn-3:0"]),
+    ):
+        with pytest.raises(HTTPException) as failure:
+            batch(application, *bodies)
+        assert failure.value.status_code == 409
+        assert failure.value.detail == {"code": "INSIGHT_ALREADY_APPLIED", "sources": sources}
+    assert created == []
+    assert MemoryApplications.items == recorded
+    applications, _ = batch(application, brief_item("turn-5:0", "Keep the dates visible."))
+    assert [item.target for item in applications] == [InsightTarget.BRIEF]
+
+
+def test_a_dismissed_source_refuses_the_whole_batch(monkeypatch):
+    application, _, created = service(
+        monkeypatch,
+        brief=create_project_brief(description="A reservation desk."),
+        validations=(owner_decision(FindingDecision.OWNER_DISMISSED),),
+    )
+    with pytest.raises(HTTPException) as failure:
+        batch(
+            application,
+            brief_item("turn-1:0", "Guests arrive in groups."),
+            request(source_id=finding_source(), target=InsightTarget.BRIEF),
+        )
+    assert failure.value.status_code == 409
+    assert failure.value.detail == {
+        "code": "INSIGHT_SOURCE_DISMISSED",
+        "sources": [finding_source()],
+    }
+    assert MemoryValidations.reads == 1
+    assert created == []
+    assert MemoryApplications.items == []
+
+
+def test_a_batch_writes_nothing_without_a_brief_or_a_new_brief_version(monkeypatch):
+    application, _, _ = service(monkeypatch)
+    with pytest.raises(HTTPException) as missing:
+        batch(application, brief_item("turn-1:0", "One."))
+    assert missing.value.status_code == 404
+    assert missing.value.detail == {"code": "PROJECT_BRIEF_NOT_FOUND"}
+    application, runtime, _ = service(
+        monkeypatch, brief=create_project_brief(description="A reservation desk.")
+    )
+
+    async def refused(**kwargs):
+        return SimpleNamespace(version=None)
+
+    runtime.project_service.create_brief_version = refused
+    with pytest.raises(HTTPException) as failure:
+        batch(application, brief_item("turn-1:0", "One."), brief_item("turn-1:1", "Two."))
+    assert failure.value.status_code == 409
+    assert failure.value.detail == {"code": "BRIEF_VERSION_NOT_CREATED"}
+    assert MemoryApplications.items == []
+
+
+def test_the_batch_route_answers_with_the_applications_and_the_brief_version(monkeypatch):
+    _, runtime, created = service(
+        monkeypatch, brief=create_project_brief(description="A reservation desk.")
+    )
+    app = create_app(
+        ApplicationSettings(api_prefix="/api/v1"),
+        runtime=ApplicationRuntime(
+            database_runtime=runtime.database_runtime, project_service=runtime.project_service
+        ),
+    )
+    app.dependency_overrides[current_user_dependency] = lambda: replace(
+        _user(), id=design_fixtures.OWNER_ID
+    )
+    http = TestClient(app)
+    path = f"/api/v1/projects/{design_fixtures.PROJECT_ID}/insight-applications/batch"
+    item = {
+        "source_kind": "TWIN_CHAT_INSIGHT",
+        "source_id": "turn-1:0",
+        "text": "Guests arrive in groups.",
+        "target": "BRIEF",
+        "brief_field": "risks",
+    }
+    answered = http.post(
+        path, json={"items": [item, {**item, "source_id": "turn-1:1", "text": "Show the queue."}]}
+    )
+    assert answered.status_code == 201
+    payload = answered.json()
+    assert payload["brief_version_number"] == 2
+    assert [entry["source_id"] for entry in payload["applications"]] == ["turn-1:0", "turn-1:1"]
+    assert {entry["target_field"] for entry in payload["applications"]} == {"risks"}
+    assert payload["applications"][0] == MemoryApplications.items[0].to_snapshot()
+    assert created[0].risks == ("Guests arrive in groups.", "Show the queue.")
+    repeated = http.post(path, json={"items": [item]})
+    assert repeated.status_code == 409
+    assert repeated.json() == {
+        "detail": {"code": "INSIGHT_ALREADY_APPLIED", "sources": ["turn-1:0"]}
+    }
+    for items in ([], [{**item, "source_id": f"turn-{index}:9"} for index in range(21)]):
+        assert http.post(path, json={"items": items}).status_code == 422
+    design = http.post(
+        path, json={"items": [{**item, "source_id": "turn-9:0", "target": "DESIGN"}]}
+    )
+    assert design.status_code == 422
+    assert design.json() == {"detail": {"code": "INSIGHT_BATCH_TARGET_NOT_BRIEF"}}
+    assert len(created) == 1
+    assert len(MemoryApplications.items) == 2

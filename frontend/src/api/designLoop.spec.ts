@@ -47,6 +47,51 @@ describe("designLoop api", () => {
     expect(await api.runs("project 1", "token")).toEqual([]);
   });
 
+  it("posts the insights set aside for the brief in one batch", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith("/insight-applications/batch") && init?.method === "POST"
+        ? response(201, { applications: [{ id: "application-1" }], brief_version_number: 4 })
+        : response(404, null),
+    );
+    const api = createDesignLoopApi({ basePath: "/api/v1/", fetchImpl });
+    const body = {
+      items: [
+        {
+          source_kind: "TWIN_CHAT_INSIGHT" as const,
+          source_id: "turn-1:0",
+          source_twin_id: "twin-1",
+          text: "Fast check-in.",
+          target: "BRIEF" as const,
+          brief_field: "goals" as const,
+        },
+      ],
+    };
+    const result = await api.applyInsightBatch("project 1", body, "token");
+    expect(result.brief_version_number).toBe(4);
+    expect(result.applications).toHaveLength(1);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(String(url)).toBe("/api/v1/projects/project%201/insight-applications/batch");
+    expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer token");
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it("surfaces a refused batch with its code and the offending sources", async () => {
+    const fetchImpl = vi.fn(async () =>
+      response(409, { detail: { code: "INSIGHT_ALREADY_APPLIED", sources: ["turn-1:0"] } }),
+    );
+    const api = createDesignLoopApi({ fetchImpl });
+    await expect(api.applyInsightBatch("p", { items: [] }, "token")).rejects.toMatchObject({
+      status: 409,
+      code: "INSIGHT_ALREADY_APPLIED",
+      payload: { detail: { code: "INSIGHT_ALREADY_APPLIED", sources: ["turn-1:0"] } },
+    });
+    await expect(api.applyInsightBatch("p", { items: [] }, " ")).rejects.toBeInstanceOf(
+      DesignLoopApiError,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("sends the evaluation mode and records the owner's decision on a finding", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);

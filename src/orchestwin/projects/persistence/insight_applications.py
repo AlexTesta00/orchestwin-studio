@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
 from uuid import UUID
 
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.projects.insight_applications import (
     InsightApplication,
+    InsightSourceKind,
+    InsightTarget,
     insight_application_from_snapshot,
 )
 from orchestwin.projects.persistence.models import ProjectRecord
@@ -108,6 +111,26 @@ class SqlAlchemyInsightApplicationRepository:
         )
         rows = (await self._session.execute(statement)).all()
         return tuple(insight_application_from_snapshot(_snapshot(row)) for row in rows)
+
+    async def applied_sources(
+        self,
+        *,
+        project_id: UUID,
+        target: InsightTarget,
+        sources: Iterable[tuple[InsightSourceKind, str]],
+    ) -> frozenset[tuple[InsightSourceKind, str]]:
+        wanted = frozenset(sources)
+        if not wanted:
+            return frozenset()
+        statement = sa.select(APPLICATIONS.c.source_kind, APPLICATIONS.c.source_id).where(
+            APPLICATIONS.c.project_id == project_id,
+            APPLICATIONS.c.owner_user_id == self._owner_user_id,
+            APPLICATIONS.c.target == target.value,
+            APPLICATIONS.c.source_id.in_(sorted({source_id for _, source_id in wanted})),
+        )
+        rows = (await self._session.execute(statement)).all()
+        found = {(InsightSourceKind(row.source_kind), row.source_id) for row in rows}
+        return wanted & found
 
 
 __all__ = [

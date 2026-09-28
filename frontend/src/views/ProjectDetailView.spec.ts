@@ -9,6 +9,7 @@ import { projectImportsApi } from "@/api/projectImports";
 import { createAppI18n } from "@/i18n";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import { useClarificationStore } from "@/stores/clarification";
+import { useInsightTrayStore } from "@/stores/insightTray";
 import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
@@ -293,6 +294,63 @@ describe("progressive project workspace", () => {
       id: "synthesized",
       version_number: 2,
     });
+    wrapper.unmount();
+  });
+
+  it("mounts the insight tray once and keeps it hidden while it is empty", async () => {
+    const pinia = createPinia();
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createI18n({ legacy: false, locale: "en" })],
+        stubs: { UiStepper: false, UiCard: false, InsightBriefTray: false },
+      },
+    });
+    await flushPromises();
+    const trays = wrapper.findAllComponents({ name: "InsightBriefTray" });
+    expect(trays).toHaveLength(1);
+    expect(trays[0]!.props("projectId")).toBe("first");
+    expect(wrapper.find('[data-testid="insight-brief-tray"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="project-workspace"]').classes()).not.toContain("pb-44");
+    useInsightTrayStore(pinia).add("first", {
+      sourceKind: "TWIN_CHAT_INSIGHT",
+      sourceId: "turn-1:0",
+      sourceTwinId: null,
+      text: "Guests arrive in groups.",
+      briefField: "goals",
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="insight-brief-tray"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="project-workspace"]').classes()).toContain("pb-44");
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("reloads the brief in place after the tray brings insights into it", async () => {
+    const pinia = createPinia();
+    hydrateStages(pinia);
+    const wrapper = mountWorkspace(pinia);
+    await flushPromises();
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
+    const tray = useInsightTrayStore(pinia);
+    tray.$patch({ results: { first: { count: 1, briefVersionNumber: 1 } } });
+    await flushPromises();
+    expect(apiClient.listBriefVersions).toHaveBeenCalledTimes(1);
+    const trayBrief = {
+      ...BRIEF,
+      id: "tray-brief",
+      version_number: 2,
+      content_hash: "tray-brief-hash",
+    };
+    vi.spyOn(apiClient, "listBriefVersions").mockResolvedValue([BRIEF, trayBrief]);
+    tray.$patch({ results: { first: { count: 3, briefVersionNumber: 2 } } });
+    await flushPromises();
+    expect(apiClient.getProject).toHaveBeenCalledTimes(1);
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(
+      wrapper.findComponent({ name: "ProjectClarificationFlow" }).props("currentBrief"),
+    ).toMatchObject({ id: "tray-brief", version_number: 2 });
     wrapper.unmount();
   });
 
