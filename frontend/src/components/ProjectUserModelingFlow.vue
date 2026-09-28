@@ -4,6 +4,7 @@ import { computed, reactive, ref, watch } from "vue";
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import UserModelingProvenanceInspector from "./UserModelingProvenanceInspector.vue";
 import TwinIdentity from "./TwinIdentity.vue";
+import TwinImportPanel from "./TwinImportPanel.vue";
 import { workflowStatusLabel } from "./workflowLabels";
 import UiButton from "./UiButton.vue";
 import UiCard from "./UiCard.vue";
@@ -1431,6 +1432,15 @@ watch(
           </UiButton>
         </div>
       </form>
+
+      <TwinImportPanel
+        v-if="twins.length > 0"
+        class="mt-6"
+        :project-id="projectId"
+        :locale="locale"
+        :authorize="authorize"
+        @imported="loadProject"
+      />
     </section>
 
     <section
