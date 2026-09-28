@@ -4,9 +4,9 @@ import { computed } from "vue";
 import type { VisualLanguagePayload } from "../types/design";
 import {
   archetypeLabel,
+  choiceLabel,
   dimensionLabel,
   tokenStyle,
-  valueLabel,
   type VisualLocale,
 } from "./visualLanguage";
 
@@ -39,7 +39,7 @@ const chips = computed(() =>
   (["color_mode", "tone", "density", "corners", "navigation"] as const).map((dimension) => ({
     dimension,
     label: dimensionLabel(props.locale, dimension),
-    value: valueLabel(props.visual.choices[dimension]),
+    value: choiceLabel(props.locale, dimension, props.visual.choices[dimension]),
   })),
 );
 </script>

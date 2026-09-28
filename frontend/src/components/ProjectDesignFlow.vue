@@ -7,7 +7,10 @@ import UiCard from "./UiCard.vue";
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 
 import { apiClient } from "@/api/client";
+import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue";
 import DesignAlternativeComparison from "./DesignAlternativeComparison.vue";
+import DesignTableView from "./DesignTableView.vue";
+import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
 import DesignLoopNextStep from "./DesignLoopNextStep.vue";
 import ProjectDesignDiscussionPanel from "./ProjectDesignDiscussionPanel.vue";
@@ -18,6 +21,7 @@ import type { RequirementsApi } from "../api/requirements";
 import { useDesignLoopStore } from "../stores/designLoop";
 import { useAuthStore } from "../stores/auth";
 import { type AuthorizedRequest, useDesignStore } from "../stores/design";
+import { useRequirementsStore } from "../stores/requirements";
 import type {
   DesignGateDecisionAction,
   DesignGenerationPayload,
@@ -186,6 +190,14 @@ const messages = {
 const copy = computed(() => messages[props.locale]);
 const api = computed(() => props.api ?? designApi);
 const current = computed(() => store.current);
+const view = ref<ArtifactView>("text");
+const viewPanelId = "design-view-panel";
+const requirementsStore = useRequirementsStore();
+const requirementsSpecification = computed(() =>
+  requirementsStore.projectId === props.projectId
+    ? (requirementsStore.current?.specification ?? null)
+    : null,
+);
 const packageValue = computed(() => store.current?.package ?? null);
 const diffs = computed(() => store.diffHistory);
 const pendingDiff = computed(() => store.pendingDiffs[0] ?? null);
@@ -562,63 +574,91 @@ watch(
         </p>
       </details>
 
-      <details :open="current.package.owner_selected_alternative_id === null">
-        <summary class="mb-3 cursor-pointer font-semibold text-ink">
-          {{ copy.alternativeDetails }}
-        </summary>
-        <DesignAlternativeComparison
-          :alternatives="current.package.alternatives"
-          :critiques="current.package.critiques"
-          :recommended-alternative-id="current.package.recommended_alternative_id"
-          :selected-alternative-id="selectedAlternativeId"
-          :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
-          :locale="locale"
-          :project-id="projectId"
-          :authorize="authorizedRequest"
-          @select="selectedAlternativeId = $event"
-        />
-      </details>
+      <ArtifactViewSwitch v-model="view" :locale="locale" :panel-id="viewPanelId" />
 
-      <section v-if="selectedAlternativeId !== null" class="grid gap-3" data-design-mockup>
-        <header class="flex flex-wrap items-center justify-between gap-3">
-          <h3 class="text-lg font-bold text-ink">{{ copy.mockupTitle }}</h3>
-          <button
-            type="button"
-            class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white disabled:bg-surface-3"
+      <DesignTableView
+        v-if="view === 'table'"
+        :id="viewPanelId"
+        :design="current.package"
+        :requirements="requirementsSpecification"
+        :locale="locale"
+        data-testid="design-table-view"
+      />
+      <ProjectDiagramsView
+        v-else-if="view === 'diagram'"
+        :id="viewPanelId"
+        :project-id="projectId"
+        stage="design"
+        :locale="locale"
+        :refresh-key="current.content_hash"
+        :authorize="authorize"
+        data-testid="design-diagram-view"
+      />
+
+      <div
+        v-show="view === 'text'"
+        :id="view === 'text' ? viewPanelId : undefined"
+        class="grid gap-6"
+        data-testid="design-text-view"
+      >
+        <details :open="current.package.owner_selected_alternative_id === null">
+          <summary class="mb-3 cursor-pointer font-semibold text-ink">
+            {{ copy.alternativeDetails }}
+          </summary>
+          <DesignAlternativeComparison
+            :alternatives="current.package.alternatives"
+            :critiques="current.package.critiques"
+            :recommended-alternative-id="current.package.recommended_alternative_id"
+            :selected-alternative-id="selectedAlternativeId"
             :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
-            @click="generateMockup"
+            :locale="locale"
+            :project-id="projectId"
+            :authorize="authorizedRequest"
+            @select="selectedAlternativeId = $event"
+          />
+        </details>
+
+        <section v-if="selectedAlternativeId !== null" class="grid gap-3" data-design-mockup>
+          <header class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-lg font-bold text-ink">{{ copy.mockupTitle }}</h3>
+            <button
+              type="button"
+              class="rounded-control bg-action px-4 py-2 text-sm font-semibold text-white disabled:bg-surface-3"
+              :disabled="store.isBusy || mockupBusy || pendingDiff !== null"
+              @click="generateMockup"
+            >
+              {{ copy.createMockup }}
+            </button>
+          </header>
+          <template v-if="mockup?.package.prototype">
+            <p class="m-0 text-xs font-semibold text-action">{{ copy.mockupDraft }}</p>
+            <p class="m-0 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
+            <DeclarativePrototypePreview
+              :key="mockup.generation_id"
+              :prototype="mockup.package.prototype"
+              :visual="selectedVisual"
+              :locale="locale"
+            />
+            <details class="text-xs text-ink-3">
+              <summary class="cursor-pointer">{{ copy.audit }}</summary>
+              <p class="break-all">{{ mockup.generation_id }}</p>
+            </details>
+          </template>
+          <template
+            v-else-if="current.package.prototype?.design_alternative_id === selectedAlternativeId"
           >
-            {{ copy.createMockup }}
-          </button>
-        </header>
-        <template v-if="mockup?.package.prototype">
-          <p class="m-0 text-xs font-semibold text-action">{{ copy.mockupDraft }}</p>
-          <p class="m-0 text-sm text-ink-2">{{ copy.mockupHelp }}</p>
-          <DeclarativePrototypePreview
-            :key="mockup.generation_id"
-            :prototype="mockup.package.prototype"
-            :visual="selectedVisual"
-            :locale="locale"
-          />
-          <details class="text-xs text-ink-3">
-            <summary class="cursor-pointer">{{ copy.audit }}</summary>
-            <p class="break-all">{{ mockup.generation_id }}</p>
-          </details>
-        </template>
-        <template
-          v-else-if="current.package.prototype?.design_alternative_id === selectedAlternativeId"
-        >
-          <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
-          <DeclarativePrototypePreview
-            :prototype="current.package.prototype"
-            :visual="selectedVisual"
-            :locale="locale"
-          />
-        </template>
-        <p v-else class="m-0 text-sm text-ink-2">
-          {{ copy.mockupRequired }}
-        </p>
-      </section>
+            <p class="m-0 text-sm text-ink-2">{{ copy.approvedPrototype }}</p>
+            <DeclarativePrototypePreview
+              :prototype="current.package.prototype"
+              :visual="selectedVisual"
+              :locale="locale"
+            />
+          </template>
+          <p v-else class="m-0 text-sm text-ink-2">
+            {{ copy.mockupRequired }}
+          </p>
+        </section>
+      </div>
 
       <section
         v-if="mockup !== null"

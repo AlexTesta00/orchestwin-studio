@@ -96,29 +96,166 @@ export const ARCHETYPE_LABELS: Record<VisualLocale, Record<LayoutArchetype, stri
 
 const DIMENSION_LABELS: Record<VisualLocale, Record<string, string>> = {
   en: {
+    archetype: "Layout",
+    hue_family: "Hue",
+    color_scheme: "Colour scheme",
     color_mode: "Mode",
-    tone: "Tone",
-    density: "Density",
-    corners: "Corners",
+    saturation: "Saturation",
+    surface_tone: "Surfaces",
     heading_family: "Headings",
     body_family: "Body",
+    type_scale: "Type scale",
+    heading_case: "Heading case",
+    heading_weight: "Heading weight",
+    corners: "Corners",
+    density: "Density",
+    buttons: "Buttons",
+    inputs: "Inputs",
+    elevation: "Shadows",
+    borders: "Borders",
     navigation: "Navigation",
-    hue_family: "Hue",
+    header: "Header",
+    background: "Background",
+    emphasis: "Emphasis",
+    tone: "Tone",
   },
   it: {
+    archetype: "Impaginazione",
+    hue_family: "Tinta",
+    color_scheme: "Schema di colori",
     color_mode: "Modalità",
-    tone: "Tono",
-    density: "Densità",
-    corners: "Angoli",
+    saturation: "Saturazione",
+    surface_tone: "Superfici",
     heading_family: "Titoli",
     body_family: "Testo",
+    type_scale: "Scala dei caratteri",
+    heading_case: "Maiuscole dei titoli",
+    heading_weight: "Peso dei titoli",
+    corners: "Angoli",
+    density: "Densità",
+    buttons: "Pulsanti",
+    inputs: "Campi",
+    elevation: "Ombre",
+    borders: "Bordi",
     navigation: "Navigazione",
-    hue_family: "Tinta",
+    header: "Intestazione",
+    background: "Sfondo",
+    emphasis: "Enfasi",
+    tone: "Tono",
+  },
+};
+
+const FONT_LABELS_IT: Record<string, string> = {
+  HUMANIST_SANS: "Senza grazie umanistico",
+  GEOMETRIC_SANS: "Senza grazie geometrico",
+  GROTESQUE_SANS: "Senza grazie grottesco",
+  SOFT_SANS: "Senza grazie morbido",
+  NARROW_SANS: "Senza grazie stretto",
+  WIDE_SANS: "Senza grazie largo",
+  SYSTEM_UI: "Carattere di sistema",
+  TRANSITIONAL_SERIF: "Con grazie transizionale",
+  OLD_STYLE_SERIF: "Con grazie antico",
+  MODERN_SERIF: "Con grazie moderno",
+  SLAB_SERIF: "Con grazie squadrate",
+  MONOSPACE: "Monospazio",
+  DISPLAY_HEAVY: "Da titolo, pesante",
+  SCRIPT: "Calligrafico",
+};
+
+const CHOICE_LABELS_IT: Record<string, Record<string, string>> = {
+  hue_family: {
+    CRIMSON: "Cremisi",
+    CORAL: "Corallo",
+    TERRACOTTA: "Terracotta",
+    AMBER: "Ambra",
+    OCHRE: "Ocra",
+    OLIVE: "Oliva",
+    FOREST: "Verde bosco",
+    EMERALD: "Smeraldo",
+    TEAL: "Ottanio",
+    OCEAN: "Oceano",
+    COBALT: "Cobalto",
+    INDIGO: "Indaco",
+    VIOLET: "Viola",
+    PLUM: "Prugna",
+    MAGENTA: "Magenta",
+    ROSE: "Rosa",
+    SLATE: "Ardesia",
+    GRAPHITE: "Grafite",
+    SAND: "Sabbia",
+  },
+  color_scheme: {
+    MONOCHROME: "Monocromatico",
+    ANALOGOUS: "Analogo",
+    COMPLEMENTARY: "Complementare",
+    TRIADIC: "Triadico",
+    SPLIT_COMPLEMENTARY: "Complementare diviso",
+    NEUTRAL_ACCENT: "Neutro con accento",
+  },
+  color_mode: {
+    LIGHT: "Chiaro",
+    DARK: "Scuro",
+    HIGH_CONTRAST_LIGHT: "Chiaro ad alto contrasto",
+    HIGH_CONTRAST_DARK: "Scuro ad alto contrasto",
+  },
+  saturation: { MUTED: "Tenue", BALANCED: "Equilibrata", VIVID: "Vivace" },
+  surface_tone: { NEUTRAL: "Neutre", TINTED: "Colorate", WARM: "Calde", COOL: "Fredde" },
+  heading_family: FONT_LABELS_IT,
+  body_family: FONT_LABELS_IT,
+  type_scale: { COMPACT: "Compatta", REGULAR: "Normale", DISPLAY: "Grande" },
+  heading_case: {
+    SENTENCE: "Maiuscola iniziale",
+    UPPERCASE: "Tutto maiuscolo",
+    SMALL_CAPS: "Maiuscoletto",
+  },
+  heading_weight: { REGULAR: "Normale", SEMIBOLD: "Semigrassetto", BLACK: "Nero" },
+  corners: { SHARP: "Vivi", SOFT: "Smussati", ROUND: "Arrotondati", PILL: "A pillola" },
+  density: { COMPACT: "Compatta", COMFORTABLE: "Comoda", SPACIOUS: "Ariosa" },
+  buttons: { FILLED: "Pieni", OUTLINED: "Con contorno", SOFT: "Tenui", GHOST: "Senza fondo" },
+  inputs: { BOXED: "Riquadrati", UNDERLINED: "Sottolineati", FILLED: "Con fondo" },
+  elevation: { FLAT: "Nessuna", SUBTLE: "Leggere", RAISED: "Marcate" },
+  borders: { NONE: "Nessuno", HAIRLINE: "Sottili", BOLD: "Spessi" },
+  navigation: {
+    NONE: "Nessuna",
+    TOP_BAR: "Barra in alto",
+    SIDE_RAIL: "Barra laterale",
+    TABS: "Schede",
+  },
+  header: {
+    MINIMAL: "Minima",
+    COMPACT_BAR: "Barra compatta",
+    HERO_BAND: "Fascia in evidenza",
+    CENTERED_TITLE: "Titolo centrato",
+  },
+  background: {
+    PLAIN: "Uniforme",
+    TINTED: "Colorato",
+    GRADIENT: "Sfumato",
+    DOTS: "A puntini",
+    GRID: "A griglia",
+    STRIPES: "A righe",
+  },
+  emphasis: { RESTRAINED: "Contenuta", BALANCED: "Equilibrata", BOLD: "Forte" },
+  tone: {
+    ESSENTIAL: "Essenziale",
+    WARM: "Caloroso",
+    INSTITUTIONAL: "Istituzionale",
+    PLAYFUL: "Giocoso",
+    TECHNICAL: "Tecnico",
+    EDITORIAL: "Editoriale",
+    LUXURIOUS: "Lussuoso",
+    ENERGETIC: "Energico",
+    CALM: "Calmo",
+    RUSTIC: "Rustico",
+    FUTURISTIC: "Futuristico",
+    CLINICAL: "Clinico",
+    ARTISANAL: "Artigianale",
+    CIVIC: "Civico",
   },
 };
 
 export function dimensionLabel(locale: VisualLocale, dimension: string): string {
-  return DIMENSION_LABELS[locale][dimension] ?? dimension.replace(/_/g, " ");
+  return DIMENSION_LABELS[locale][dimension] ?? valueLabel(dimension);
 }
 
 export function valueLabel(value: string): string {
@@ -128,6 +265,19 @@ export function valueLabel(value: string): string {
 
 export function archetypeLabel(locale: VisualLocale, archetype: LayoutArchetype): string {
   return ARCHETYPE_LABELS[locale][archetype];
+}
+
+export function choiceLabel(locale: VisualLocale, dimension: string, value: string): string {
+  if (dimension === "archetype") {
+    const archetypes: Readonly<Record<string, string>> = ARCHETYPE_LABELS[locale];
+    return archetypes[value] ?? valueLabel(value);
+  }
+
+  if (locale === "it") {
+    return CHOICE_LABELS_IT[dimension]?.[value] ?? valueLabel(value);
+  }
+
+  return valueLabel(value);
 }
 
 export function visualChoices(

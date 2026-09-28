@@ -100,8 +100,18 @@
     border-radius: 6px;
   }
 
+  [data-diagram-sandbox] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    *,
+    *:not([data-diagram-sandbox] *),
     ::before,
     ::after {
       animation-duration: 0.01ms !important;
