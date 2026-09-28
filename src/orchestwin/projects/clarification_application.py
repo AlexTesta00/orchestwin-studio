@@ -93,9 +93,14 @@ class BriefAssumptionDecisionStatus(StrEnum):
     REJECTED = "REJECTED"
     ASSUMPTION_NOT_FOUND = "ASSUMPTION_NOT_FOUND"
     ASSUMPTION_NOT_PROPOSED = "ASSUMPTION_NOT_PROPOSED"
-    ASSUMPTION_STALE = "ASSUMPTION_STALE"
     FIELD_ALREADY_PROVIDED = "FIELD_ALREADY_PROVIDED"
     VERSION_UNCHANGED = "VERSION_UNCHANGED"
+
+
+class BriefAssumptionBulkAcceptanceStatus(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    NOTHING_TO_ACCEPT = "NOTHING_TO_ACCEPT"
+    BRIEF_NOT_FOUND = "BRIEF_NOT_FOUND"
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +117,14 @@ class BriefAssumptionDecisionResult:
 
     status: BriefAssumptionDecisionStatus
     assumption: BriefAssumption | None = None
+    version: ProjectBriefVersion | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefAssumptionBulkAcceptanceResult:
+    status: BriefAssumptionBulkAcceptanceStatus
+    accepted: tuple[BriefAssumption, ...] = ()
+    skipped: tuple[BriefAssumption, ...] = ()
     version: ProjectBriefVersion | None = None
 
 
@@ -145,6 +158,14 @@ class ProjectClarificationApplicationService(Protocol):
         reason: str | None = None,
     ) -> BriefAssumptionDecisionResult:
         """Accept an assumption and create an explicit brief version."""
+
+    async def accept_all_assumptions(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        reason: str | None = None,
+    ) -> BriefAssumptionBulkAcceptanceResult: ...
 
     async def reject_assumption(
         self,
@@ -266,12 +287,6 @@ class LocalProjectClarificationApplicationService:
                     assumption=assumption,
                 )
 
-            if assumption.brief_version_number != current.version_number:
-                return BriefAssumptionDecisionResult(
-                    status=BriefAssumptionDecisionStatus.ASSUMPTION_STALE,
-                    assumption=assumption,
-                )
-
             if assumption.field in current.brief.provided_fields:
                 return BriefAssumptionDecisionResult(
                     status=(BriefAssumptionDecisionStatus.FIELD_ALREADY_PROVIDED),
@@ -312,6 +327,98 @@ class LocalProjectClarificationApplicationService:
             return BriefAssumptionDecisionResult(
                 status=BriefAssumptionDecisionStatus.ACCEPTED,
                 assumption=accepted,
+                version=creation.version,
+            )
+
+    async def accept_all_assumptions(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        reason: str | None = None,
+    ) -> BriefAssumptionBulkAcceptanceResult:
+        timestamp = self._current_time()
+
+        async with self._unit_of_work_factory() as unit:
+            current = await unit.current_briefs.get_current_owned_for_update(
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+            )
+
+            if current is None:
+                return BriefAssumptionBulkAcceptanceResult(
+                    status=BriefAssumptionBulkAcceptanceStatus.BRIEF_NOT_FOUND
+                )
+
+            existing = await unit.assumptions.list_owned(
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+            )
+            proposed = sorted(
+                (
+                    assumption
+                    for assumption in existing
+                    if assumption.status is BriefAssumptionStatus.PROPOSED
+                ),
+                key=lambda assumption: (assumption.created_at, assumption.field.value),
+            )
+            provided_fields = current.brief.provided_fields
+            updated_brief = current.brief
+            selected: list[BriefAssumption] = []
+            skipped: list[BriefAssumption] = []
+
+            for assumption in proposed:
+                if assumption.field in provided_fields or (
+                    assumption.field not in LIST_FIELDS
+                    and assumption.field in updated_brief.provided_fields
+                ):
+                    skipped.append(assumption)
+                    continue
+
+                updated_brief = self._brief_with_assumption(updated_brief, assumption)
+                selected.append(assumption)
+
+            if not selected:
+                return BriefAssumptionBulkAcceptanceResult(
+                    status=BriefAssumptionBulkAcceptanceStatus.NOTHING_TO_ACCEPT,
+                    skipped=tuple(skipped),
+                )
+
+            accepted: list[BriefAssumption] = []
+
+            for assumption in selected:
+                decided = await unit.assumptions.accept_owned(
+                    project_id=project_id,
+                    owner_user_id=owner_user_id,
+                    assumption_id=assumption.id,
+                    decided_at=timestamp,
+                    reason=reason,
+                )
+
+                if decided is None:
+                    raise RuntimeError("a proposed assumption disappeared during bulk acceptance")
+
+                accepted.append(decided)
+
+            creation = await unit.briefs.create_owned_version(
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+                created_by_user_id=owner_user_id,
+                brief=updated_brief,
+            )
+
+            if (
+                creation.status is not BriefVersionCreationStatus.CREATED
+                or creation.version is None
+            ):
+                raise RuntimeError(
+                    "accepted assumptions did not create a new Project Brief version"
+                )
+
+            return BriefAssumptionBulkAcceptanceResult(
+                status=BriefAssumptionBulkAcceptanceStatus.ACCEPTED,
+                accepted=tuple(accepted),
+                skipped=tuple(skipped),
                 version=creation.version,
             )
 
@@ -368,7 +475,12 @@ class LocalProjectClarificationApplicationService:
         value: object = assumption.statement
 
         if assumption.field in LIST_FIELDS:
-            value = (assumption.statement,)
+            existing = brief.value_for(assumption.field)
+            value = (
+                (*existing, assumption.statement)
+                if isinstance(existing, tuple)
+                else (assumption.statement,)
+            )
 
         return replace(
             brief,

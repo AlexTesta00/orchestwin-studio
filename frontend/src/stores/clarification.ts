@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 
 import { ApiError } from "@/api/client";
 import type {
+  BriefAssumptionBulkAcceptanceResponse,
   BriefAssumptionCreateInput,
   BriefAssumptionCreationResponse,
   BriefAssumptionDecisionResponse,
@@ -47,6 +48,7 @@ export const useClarificationStore = defineStore("clarification", () => {
 
   const lastAssumptionCreation = ref<BriefAssumptionCreationResponse | null>(null);
   const lastAssumptionDecision = ref<BriefAssumptionDecisionResponse | null>(null);
+  const lastBulkAcceptance = ref<BriefAssumptionBulkAcceptanceResponse | null>(null);
   const lastGateSubmission = ref<ProjectBriefGateSubmissionResponse | null>(null);
   const lastGateDecision = ref<ProjectBriefGateDecisionResponse | null>(null);
 
@@ -61,6 +63,7 @@ export const useClarificationStore = defineStore("clarification", () => {
 
     lastAssumptionCreation.value = null;
     lastAssumptionDecision.value = null;
+    lastBulkAcceptance.value = null;
     lastGateSubmission.value = null;
     lastGateDecision.value = null;
 
@@ -132,6 +135,8 @@ export const useClarificationStore = defineStore("clarification", () => {
     authorize: AuthorizedRequest,
   ): Promise<BriefAssumptionCreationResponse | null> {
     return perform(async () => {
+      lastBulkAcceptance.value = null;
+
       const result = await authorize((accessToken) =>
         api.createProjectBriefAssumption(accessToken, targetProjectId, input),
       );
@@ -152,11 +157,40 @@ export const useClarificationStore = defineStore("clarification", () => {
     authorize: AuthorizedRequest,
   ): Promise<BriefAssumptionDecisionResponse | null> {
     return perform(async () => {
+      lastBulkAcceptance.value = null;
+
       const result = await authorize((accessToken) =>
         api.acceptProjectBriefAssumption(accessToken, targetProjectId, assumptionId, reason),
       );
 
       lastAssumptionDecision.value = result;
+
+      await refreshState(targetProjectId, api, authorize);
+
+      return result;
+    });
+  }
+
+  async function acceptAllAssumptions(
+    targetProjectId: string,
+    reason: string | null,
+    api: ProjectWorkflowApi,
+    authorize: AuthorizedRequest,
+  ): Promise<BriefAssumptionBulkAcceptanceResponse | null> {
+    return perform(async () => {
+      const result = await authorize((accessToken) =>
+        api.acceptAllProjectBriefAssumptions(accessToken, targetProjectId, reason),
+      );
+
+      lastBulkAcceptance.value = result;
+
+      if (result.brief_version !== null) {
+        lastAssumptionDecision.value = {
+          status: "ACCEPTED",
+          assumption: result.accepted.at(-1) ?? null,
+          brief_version: result.brief_version,
+        };
+      }
 
       await refreshState(targetProjectId, api, authorize);
 
@@ -172,6 +206,8 @@ export const useClarificationStore = defineStore("clarification", () => {
     authorize: AuthorizedRequest,
   ): Promise<BriefAssumptionDecisionResponse | null> {
     return perform(async () => {
+      lastBulkAcceptance.value = null;
+
       const result = await authorize((accessToken) =>
         api.rejectProjectBriefAssumption(accessToken, targetProjectId, assumptionId, reason),
       );
@@ -230,6 +266,7 @@ export const useClarificationStore = defineStore("clarification", () => {
 
     lastAssumptionCreation,
     lastAssumptionDecision,
+    lastBulkAcceptance,
     lastGateSubmission,
     lastGateDecision,
 
@@ -240,6 +277,7 @@ export const useClarificationStore = defineStore("clarification", () => {
     load,
     createAssumption,
     acceptAssumption,
+    acceptAllAssumptions,
     rejectAssumption,
     submitGate,
     decideGate,
