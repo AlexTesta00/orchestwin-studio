@@ -454,6 +454,19 @@ def test_validate_files_reports_broken_json_and_ignores_files_without_a_schema()
     assert invalid.value.location == "kind"
 
 
+def test_validate_files_reports_json_nested_beyond_the_parser_limit_as_not_json() -> None:
+    nested = "[" * 100_000 + "]" * 100_000
+
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_files({stage_document("team"): nested})
+
+    assert (caught.value.code, caught.value.document, caught.value.path) == (
+        "DOCUMENT_NOT_JSON",
+        "team",
+        "team/team.json",
+    )
+
+
 def test_validate_document_rejects_an_unknown_schema_name() -> None:
     with pytest.raises(KnowledgeSchemaError) as caught:
         validate_document("roadmap", {})

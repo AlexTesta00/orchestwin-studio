@@ -589,6 +589,7 @@ describe("TwinImportPanel", () => {
         "Il file del twin viene da un'altra versione dello Studio e non si può usare.",
       TWIN_IMPORT_REQUEST_INVALID:
         "La richiesta non è stata compresa. Ricarica la pagina e riprova.",
+      TWIN_IMPORT_TOO_LARGE: "Il file del twin è troppo grande: il limite è 1 MB.",
     };
     const api = new FakeTwinImports();
     const wrapper = mountPanel(api, { locale: "it" });

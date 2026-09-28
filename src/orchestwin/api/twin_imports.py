@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.identity.domain import UserAccount
+from orchestwin.knowledge.archive import within_depth
 from orchestwin.knowledge.twin_import import TwinImportError
 from orchestwin.knowledge.twin_import_service import (
     ImportableTwin,
@@ -21,6 +22,8 @@ from orchestwin.knowledge.twin_import_sources import TwinImportCandidate
 
 TWIN_IMPORTS_API_PREFIX: Final = "/projects/{project_id}/user-modeling/twin-imports"
 TWIN_IMPORT_REQUEST_INVALID: Final = "TWIN_IMPORT_REQUEST_INVALID"
+TWIN_IMPORT_TOO_LARGE: Final = "TWIN_IMPORT_TOO_LARGE"
+MAX_TWIN_IMPORT_BODY_SIZE: Final = 1024 * 1024
 _NOT_FOUND_CODES: Final = frozenset(
     {"PROJECT_NOT_FOUND", "SOURCE_PROJECT_NOT_FOUND", "SOURCE_TWIN_NOT_FOUND"}
 )
@@ -229,12 +232,35 @@ def twin_import_failure(error: TwinImportError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=detail)
 
 
+def twin_import_too_large() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        detail={"code": TWIN_IMPORT_TOO_LARGE},
+    )
+
+
+async def twin_import_body(request: Request) -> bytes:
+    declared = request.headers.get("content-length", "")
+    if declared.isdecimal() and int(declared) > MAX_TWIN_IMPORT_BODY_SIZE:
+        raise twin_import_too_large()
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_TWIN_IMPORT_BODY_SIZE:
+            raise twin_import_too_large()
+    return bytes(body)
+
+
 async def twin_import_request(
     request: Request,
 ) -> TwinImportFromProjectRequest | TwinImportDocumentRequest:
+    body = await twin_import_body(request)
     try:
-        return _REQUEST.validate_python(json.loads(await request.body()))
-    except (ValueError, ValidationError) as error:
+        payload = json.loads(body)
+        if not within_depth(payload):
+            raise ValueError("the request is nested too deeply")
+        return _REQUEST.validate_python(payload)
+    except (ValueError, ValidationError, RecursionError) as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": TWIN_IMPORT_REQUEST_INVALID},
@@ -320,8 +346,10 @@ def create_twin_import_router() -> APIRouter:
 
 
 __all__ = [
+    "MAX_TWIN_IMPORT_BODY_SIZE",
     "TWIN_IMPORTS_API_PREFIX",
     "TWIN_IMPORT_REQUEST_INVALID",
+    "TWIN_IMPORT_TOO_LARGE",
     "ImportableTwinPayload",
     "TwinImportCandidatePayload",
     "TwinImportDocumentRequest",
@@ -330,7 +358,9 @@ __all__ = [
     "TwinImportSourcePayload",
     "TwinImportSourcesPayload",
     "create_twin_import_router",
+    "twin_import_body",
     "twin_import_failure",
     "twin_import_request",
     "twin_import_service_dependency",
+    "twin_import_too_large",
 ]

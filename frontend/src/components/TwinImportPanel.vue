@@ -132,6 +132,7 @@ const messages = {
         "The twin file comes from a different version of the Studio and cannot be used.",
       TWIN_IMPORT_REQUEST_INVALID:
         "The request could not be understood. Reload the page and try again.",
+      TWIN_IMPORT_TOO_LARGE: "The twin file is too large: the limit is 1 MB.",
       CONTEXT_CHANGED: "The twins of this project changed in the meantime. Try again.",
       PERSISTENCE_REJECTED: "The twin could not be saved. Try again.",
     },
@@ -209,6 +210,7 @@ const messages = {
         "Il file del twin viene da un'altra versione dello Studio e non si può usare.",
       TWIN_IMPORT_REQUEST_INVALID:
         "La richiesta non è stata compresa. Ricarica la pagina e riprova.",
+      TWIN_IMPORT_TOO_LARGE: "Il file del twin è troppo grande: il limite è 1 MB.",
       CONTEXT_CHANGED: "Nel frattempo i twin di questo progetto sono cambiati. Riprova.",
       PERSISTENCE_REJECTED: "Non è stato possibile salvare il twin. Riprova.",
     },

@@ -23,6 +23,7 @@ MAX_ARCHIVE_ENTRIES: Final = 400
 MAX_ENTRY_SIZE: Final = 8 * 1024 * 1024
 MAX_FOLDER_SIZE: Final = 64 * 1024 * 1024
 MAX_PATH_LENGTH: Final = 240
+MAX_DOCUMENT_DEPTH: Final = 64
 _FORBIDDEN_PATH_CHARACTERS: Final = frozenset('\\:*?"<>|\0')
 
 
@@ -107,14 +108,29 @@ def read_folder_archive(content: bytes) -> dict[str, str]:
     return files
 
 
+def within_depth(value: object, limit: int = MAX_DOCUMENT_DEPTH) -> bool:
+    level = [value]
+    for _ in range(limit):
+        following: list[object] = []
+        for item in level:
+            if isinstance(item, dict):
+                following.extend(item.values())
+            elif isinstance(item, list):
+                following.extend(item)
+        if not following:
+            return True
+        level = following
+    return False
+
+
 def _json(files: Mapping[str, str], path: str) -> Mapping[str, object]:
     if path not in files:
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_MISSING", path)
     try:
         document = json.loads(files[path])
-    except ValueError as error:
+    except (ValueError, RecursionError) as error:
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", path) from error
-    if not isinstance(document, dict):
+    if not isinstance(document, dict) or not within_depth(document):
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", path)
     return document
 
@@ -166,6 +182,7 @@ def read_verified_folder(content: bytes) -> VerifiedFolder:
 __all__ = [
     "MAX_ARCHIVE_ENTRIES",
     "MAX_ARCHIVE_SIZE",
+    "MAX_DOCUMENT_DEPTH",
     "MAX_ENTRY_SIZE",
     "MAX_FOLDER_SIZE",
     "KnowledgeArchiveError",
@@ -174,4 +191,5 @@ __all__ = [
     "read_verified_folder",
     "safe_path",
     "verify_folder",
+    "within_depth",
 ]

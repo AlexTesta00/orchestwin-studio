@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import zipfile
@@ -8,11 +9,13 @@ import pytest
 
 from orchestwin.knowledge import archive as module
 from orchestwin.knowledge.archive import (
+    MAX_DOCUMENT_DEPTH,
     KnowledgeArchiveError,
     read_folder_archive,
     read_verified_folder,
     safe_path,
     verify_folder,
+    within_depth,
 )
 from orchestwin.knowledge.folder import build_knowledge_folder, folder_archive, json_text
 from orchestwin.knowledge.layout import KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST
@@ -144,6 +147,41 @@ def test_folder_without_manifest_or_with_a_broken_one_is_rejected() -> None:
     rejected = failure(lambda: verify_folder(incomplete))
     assert rejected.code == "FOLDER_DOCUMENT_INVALID"
     assert rejected.detail == f"{KNOWLEDGE_MANIFEST}: package"
+
+
+def test_json_nested_beyond_the_depth_limit_is_an_invalid_document() -> None:
+    files = folder().files
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    nested: object = 0
+    for _ in range(MAX_DOCUMENT_DEPTH):
+        nested = {"a": nested}
+    shallow = nested["a"]
+
+    refused = failure(
+        lambda: verify_folder({**files, KNOWLEDGE_MANIFEST: json_text({**manifest, "x": nested})})
+    )
+
+    assert (refused.code, refused.detail) == ("FOLDER_DOCUMENT_INVALID", KNOWLEDGE_MANIFEST)
+    assert within_depth(shallow) is True
+    assert within_depth(nested) is False
+    assert within_depth([[1, 2], {"a": [3]}], limit=4) is True
+    assert within_depth([[1, 2], {"a": [3]}], limit=3) is False
+
+
+def test_json_nested_beyond_the_parser_limit_is_an_invalid_document() -> None:
+    files = folder().files
+    nested = "[" * 100_000 + "]" * 100_000
+    path = "requirements/requirements.json"
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    manifest["files"][path] = hashlib.sha256(nested.encode("utf-8")).hexdigest()
+    listed = {**files, path: nested, KNOWLEDGE_MANIFEST: json_text(manifest)}
+
+    in_manifest = failure(lambda: verify_folder({**files, KNOWLEDGE_MANIFEST: nested}))
+    in_document = failure(lambda: verify_folder(listed))
+
+    assert (in_manifest.code, in_manifest.detail) == ("FOLDER_DOCUMENT_INVALID", KNOWLEDGE_MANIFEST)
+    assert in_document.code == "FOLDER_DOCUMENT_INVALID"
+    assert in_document.detail.startswith("requirements")
 
 
 @pytest.mark.parametrize(("key", "value"), [("schema_version", 1), ("kind", "something.else")])
