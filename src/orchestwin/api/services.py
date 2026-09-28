@@ -33,7 +33,6 @@ from orchestwin.api.design import (
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
-from orchestwin.artifacts.design_package_export import DesignPackageExportService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import (
     ApplicationSettings,
@@ -198,7 +197,6 @@ class ApplicationRuntime:
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
-    design_package_export_service: DesignPackageExportService | None = None
     project_diagram_service: ProjectDiagramService | None = None
     knowledge_package_service: KnowledgePackageService | None = None
     twin_import_service: TwinImportService | None = None
@@ -289,17 +287,6 @@ def create_default_runtime(
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
     )
-    design_package_export_service = DesignPackageExportService(
-        project_service=project_service,
-        brief_gate_service=brief_gate_service,
-        team_proposal_service=team_proposal_service,
-        agent_team_service=agent_team_service,
-        user_modeling_services=user_modeling,
-        requirements_query_service=requirements.queries,
-        requirements_gate_service=requirements.gate,
-        design_query_service=design.queries,
-        design_gate_service=design.gate,
-    )
     project_diagram_service = ProjectDiagramService(
         project_service=project_service,
         requirements_query_service=requirements.queries,
@@ -358,7 +345,6 @@ def create_default_runtime(
         design_query_service=design.queries,
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,
-        design_package_export_service=design_package_export_service,
         project_diagram_service=project_diagram_service,
         knowledge_package_service=knowledge_package_service,
         twin_import_service=twin_import_service,

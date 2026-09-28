@@ -19,7 +19,6 @@ from orchestwin.api.design import create_design_router
 from orchestwin.api.design_discussion import create_design_discussion_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
-from orchestwin.api.design_package import create_design_package_router
 from orchestwin.api.diagrams import create_diagram_router
 from orchestwin.api.health import create_health_router
 from orchestwin.api.insight_applications import create_insight_application_router
@@ -137,7 +136,6 @@ def create_app(
     application.state.design_query_service = resolved_runtime.design_query_service
     application.state.design_gate_service = resolved_runtime.design_gate_service
     application.state.artifact_graph_query_service = resolved_runtime.artifact_graph_query_service
-    application.state.design_package_export_service = resolved_runtime.design_package_export_service
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
@@ -184,7 +182,6 @@ def create_app(
         create_design_discussion_router(),
         create_insight_application_router(),
         create_artifact_graph_router(),
-        create_design_package_router(),
         create_diagram_router(),
         create_knowledge_package_router(),
         create_twin_import_router(),
