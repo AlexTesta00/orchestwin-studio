@@ -15,6 +15,8 @@ _DESIGN_STAGE: Final = "design"
 _SEPARATOR: Final = "; "
 _TRUE: Final = "yes"
 _FALSE: Final = "no"
+_FORMULA_PREFIXES: Final = ("=", "+", "-", "@")
+_TEXT_MARKER: Final = "'"
 _REQUIREMENT_LINKS: Final = (
     "user_stories",
     "acceptance_criteria",
@@ -172,20 +174,25 @@ class _Codes:
         )
 
 
-def _cell(value: object) -> str:
+def _text(value: object) -> str:
     if value is None:
         return ""
     if isinstance(value, bool):
         return _TRUE if value else _FALSE
     if isinstance(value, list | tuple):
-        return _SEPARATOR.join(_cell(item) for item in value)
+        return _SEPARATOR.join(_text(item) for item in value)
     return " ".join(str(value).split())
+
+
+def _cell(value: object) -> str:
+    text = _text(value)
+    return _TEXT_MARKER + text if text.startswith(_FORMULA_PREFIXES) else text
 
 
 def _csv(columns: Sequence[str], rows: Iterable[Mapping[str, object]]) -> str:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n")
-    writer.writeheader()
+    writer.writerow({column: _cell(column) for column in columns})
     writer.writerows({column: _cell(value) for column, value in row.items()} for row in rows)
     return buffer.getvalue()
 
@@ -223,7 +230,7 @@ def _names(references: Iterable[Mapping[str, object]]) -> list[object]:
 
 
 def _numbered(steps: Iterable[object]) -> list[str]:
-    return [f"{number}. {_cell(step)}" for number, step in enumerate(steps, 1)]
+    return [f"{number}. {_text(step)}" for number, step in enumerate(steps, 1)]
 
 
 def _matches(identifier: object, candidate: object) -> bool:
