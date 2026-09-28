@@ -36,6 +36,7 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.spec.ts"],
     setupFiles: ["./src/test/setup.ts"],
+    css: { include: [/\/styles\/tailwind\.css\?raw$/] },
     clearMocks: true,
     restoreMocks: true,
     unstubEnvs: true,

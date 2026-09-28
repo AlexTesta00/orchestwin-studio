@@ -639,4 +639,50 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
     expect(readiness.mock.calls.length).toBe(loads + 1);
   });
+
+  it("shows the design as text first, then as tables and as diagrams on request", async () => {
+    const api = new FakeDesignApi();
+    api.readinessResult.version = SELECTED_DESIGN_VERSION;
+    const wrapper = mount(ProjectDesignFlow, {
+      props: {
+        projectId: DESIGN_PROJECT_ID,
+        locale: "it",
+        authorize,
+        api,
+        loopApi: fakeLoopApi(),
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      },
+      global: { stubs: { ProjectDiagramsView: true } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-text-view"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="design-text-view"]').attributes("id")).toBe(
+      "design-view-panel",
+    );
+    expect(wrapper.find('[data-testid="design-table-view"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="artifact-view-table"]').trigger("click");
+
+    const table = wrapper.get('[data-testid="design-table-view"]');
+    expect(wrapper.get('[data-testid="design-text-view"]').isVisible()).toBe(false);
+    expect(table.attributes("id")).toBe("design-view-panel");
+    for (const alternative of SELECTED_DESIGN_VERSION.package.alternatives) {
+      expect(table.text()).toContain(alternative.code);
+      expect(table.text()).toContain(alternative.title);
+    }
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+
+    expect(wrapper.find('[data-testid="design-table-view"]').exists()).toBe(false);
+    expect(wrapper.getComponent({ name: "ProjectDiagramsView" }).props()).toMatchObject({
+      projectId: DESIGN_PROJECT_ID,
+      stage: "design",
+      locale: "it",
+      refreshKey: SELECTED_DESIGN_VERSION.content_hash,
+    });
+    expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
 });

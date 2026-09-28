@@ -28,8 +28,9 @@ describe("DesignStyleTile", () => {
       "danger",
     ]);
     expect(swatches[2]!.attributes("style")).toContain(rgb(VISUAL.palette.primary!));
-    expect(wrapper.text()).toContain("Light");
-    expect(wrapper.text()).toContain("Calm");
+    expect(wrapper.text()).toContain("Modalità: Chiaro");
+    expect(wrapper.text()).toContain("Tono: Calmo");
+    expect(wrapper.text()).toContain("Navigazione: Barra laterale");
     expect(wrapper.text()).toContain(VISUAL.rationale);
     expect(wrapper.get('[data-testid="style-twin-fit"]').text()).toContain(
       VISUAL.twin_fit[0]!.statement,
@@ -43,6 +44,8 @@ describe("DesignStyleTile", () => {
     const wrapper = mount(DesignStyleTile, { props: { visual: VISUAL, compact: true } });
     expect(wrapper.text()).not.toContain(VISUAL.rationale);
     expect(wrapper.get('[data-testid="style-archetype"]').text()).toBe("Dashboard");
+    expect(wrapper.text()).toContain("Mode: Light");
+    expect(wrapper.text()).toContain("Navigation: Side rail");
     await expectAccessible(wrapper.element);
   });
 });
