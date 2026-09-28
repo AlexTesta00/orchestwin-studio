@@ -253,6 +253,7 @@ const messages = {
   },
   projects: {
     new: "Nuovo progetto",
+    import: "Parti da una cartella di conoscenza",
     cancel: "Annulla",
     note: "I progetti restano fermi finché non sei tu a farli avanzare.",
     table: {
@@ -281,6 +282,8 @@ const messages = {
     detail: {
       back: "Torna ai progetti",
       eyebrow: "Dettaglio del progetto",
+      importedFrom:
+        "Nato dalla cartella di conoscenza di {project}, versione {version}. Rivedi e approva ogni passo.",
     },
     errors: {
       project_not_found: "Il progetto non è stato trovato.",
