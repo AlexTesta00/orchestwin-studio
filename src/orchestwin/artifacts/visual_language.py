@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
@@ -26,7 +27,21 @@ from orchestwin.projects.requirements_primitives import (
 MAX_PRODUCT_NAME_LENGTH: Final = 80
 MAX_VISUAL_RATIONALE_LENGTH: Final = 2000
 MAX_TWIN_FIT_LENGTH: Final = 1000
-_TOKEN_PREFIX: Final = "--vl-"
+MAX_TOKEN_VALUE_LENGTH: Final = 200
+_TOKEN_NAME: Final = re.compile(r"--vl-[a-z0-9]+(?:-[a-z0-9]+)*")
+_CSS_TEXT: Final = r"[A-Za-z0-9 #,.%-]"
+_CSS_VALUE: Final = re.compile(
+    rf'(?:{_CSS_TEXT}|"{_CSS_TEXT}*"|(?<![A-Za-z0-9-])(?:rgba?|hsla?)\({_CSS_TEXT}*\))+'
+)
+
+
+def _plain_css_value(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) <= MAX_TOKEN_VALUE_LENGTH
+        and value == value.strip()
+        and _CSS_VALUE.fullmatch(value) is not None
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,14 +94,11 @@ class VisualLanguage:
         if len(names) != len(self.tokens):
             raise ValueError("visual tokens must be unique")
         if not names or not all(
-            isinstance(name, str)
-            and name.startswith(_TOKEN_PREFIX)
-            and isinstance(value, str)
-            and value.strip() == value
-            and value
-            for name, value in names.items()
+            isinstance(name, str) and _TOKEN_NAME.fullmatch(name) is not None for name in names
         ):
             raise ValueError("visual tokens must be named CSS custom properties")
+        if not all(_plain_css_value(value) for value in names.values()):
+            raise ValueError("visual tokens must be plain CSS values")
         object.__setattr__(self, "palette", tuple((role, roles[role]) for role in PALETTE_ROLES))
         object.__setattr__(self, "tokens", tuple(sorted(names.items())))
 
@@ -233,6 +245,7 @@ def visual_language_from_snapshot(payload: Mapping[str, object]) -> VisualLangua
 
 __all__ = [
     "MAX_PRODUCT_NAME_LENGTH",
+    "MAX_TOKEN_VALUE_LENGTH",
     "MAX_TWIN_FIT_LENGTH",
     "MAX_VISUAL_RATIONALE_LENGTH",
     "TwinFit",
