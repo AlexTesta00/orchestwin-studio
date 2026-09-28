@@ -242,6 +242,15 @@ export interface InsightApplicationPayload {
   content_hash: string;
 }
 
+export interface InsightBatchApplicationRequest {
+  items: InsightApplicationRequest[];
+}
+
+export interface InsightBatchApplicationPayload {
+  applications: InsightApplicationPayload[];
+  brief_version_number: number;
+}
+
 export interface InsightSource {
   kind: InsightSourceKind;
   id: string;

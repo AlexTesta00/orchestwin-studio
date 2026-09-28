@@ -18,6 +18,7 @@ from orchestwin.projects.requirements_primitives import (
 MAX_INSIGHT_TEXT_LENGTH: Final = 2000
 MAX_SOURCE_ID_LENGTH: Final = 200
 MAX_TARGET_CODE_LENGTH: Final = 16
+MAX_INSIGHT_BATCH_ITEMS: Final = 20
 BRIEF_LIST_TARGETS: Final = (
     BriefField.GOALS,
     BriefField.TARGET_USERS,
@@ -202,6 +203,7 @@ def insight_application_from_snapshot(payload) -> InsightApplication:
 __all__ = [
     "BRIEF_LIST_TARGETS",
     "DEFAULT_BRIEF_FIELD",
+    "MAX_INSIGHT_BATCH_ITEMS",
     "MAX_INSIGHT_TEXT_LENGTH",
     "MAX_SOURCE_ID_LENGTH",
     "InsightApplication",

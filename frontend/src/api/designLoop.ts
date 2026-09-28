@@ -13,6 +13,8 @@ import type {
   FindingValidationRequest,
   InsightApplicationPayload,
   InsightApplicationRequest,
+  InsightBatchApplicationPayload,
+  InsightBatchApplicationRequest,
 } from "../types/designLoop";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -67,6 +69,14 @@ export interface DesignLoopApi {
   ): Promise<DesignDiscussionPayload>;
 }
 
+export interface InsightBatchApi {
+  applyInsightBatch(
+    projectId: string,
+    body: InsightBatchApplicationRequest,
+    accessToken: string,
+  ): Promise<InsightBatchApplicationPayload>;
+}
+
 export class DesignLoopApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
@@ -112,7 +122,9 @@ async function responsePayload(response: Response): Promise<unknown> {
   }
 }
 
-export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignLoopApi {
+export function createDesignLoopApi(
+  options: DesignLoopApiOptions = {},
+): DesignLoopApi & InsightBatchApi {
   const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
@@ -195,6 +207,15 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         "POST",
         body,
       )) as InsightApplicationPayload;
+    },
+
+    async applyInsightBatch(projectId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/insight-applications/batch`,
+        accessToken,
+        "POST",
+        body,
+      )) as InsightBatchApplicationPayload;
     },
 
     async applications(projectId, accessToken) {
