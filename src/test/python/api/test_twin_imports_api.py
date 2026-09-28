@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -10,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from starlette.types import Message
 
+from orchestwin.api import twin_imports as module
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.twin_imports import (
     MAX_TWIN_IMPORT_BODY_SIZE,
@@ -415,6 +417,20 @@ def test_a_document_nested_beyond_the_parser_limit_is_an_invalid_request():
     body = '{"document": ' + '{"a": ' * depth + "0" + "}" * (depth + 1)
 
     response = client(service).post(PATH, content=body, headers=JSON_HEADERS)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": {"code": "TWIN_IMPORT_REQUEST_INVALID"}}
+    assert service.calls == []
+
+
+def test_a_request_the_parser_cannot_nest_is_an_invalid_request(monkeypatch):
+    service = FakeTwinImportService()
+
+    def too_deep(body):
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON object")
+
+    monkeypatch.setattr(module, "json", SimpleNamespace(loads=too_deep))
+    response = client(service).post(PATH, json=FROM_PROJECT)
 
     assert response.status_code == 422
     assert response.json() == {"detail": {"code": "TWIN_IMPORT_REQUEST_INVALID"}}

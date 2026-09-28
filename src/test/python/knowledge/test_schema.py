@@ -10,6 +10,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from functools import cache
+from types import SimpleNamespace
 from typing import Any, Final
 from uuid import UUID
 
@@ -39,6 +40,7 @@ from orchestwin.knowledge.layout import (
     stage_document,
 )
 from orchestwin.knowledge.schema import (
+    MAX_DOCUMENT_DEPTH,
     SCHEMA_DIALECT,
     SCHEMA_NAMES,
     KnowledgeSchemaError,
@@ -96,6 +98,12 @@ FRESH_PROCESS_DIGEST: Final = (
     "import hashlib, json\n"
     "from orchestwin.knowledge.schema import schema_files\n"
     "print(hashlib.sha256(json.dumps(schema_files(), sort_keys=True).encode()).hexdigest())\n"
+)
+NESTED_TOO_DEEPLY: Final = (
+    "DOCUMENT_INVALID",
+    "team",
+    "team/team.json",
+    "the document is nested too deeply",
 )
 
 
@@ -264,6 +272,19 @@ def changed(document: dict[str, Any], keys: tuple[str | int, ...], value: object
     else:
         target[keys[-1]] = value
     return result
+
+
+def nested_value(depth: int) -> object:
+    value: object = 0
+    for _ in range(depth):
+        value = {"a": value}
+    return value
+
+
+def team_failure(text: str) -> tuple[str, str, str | None, str]:
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_files({stage_document("team"): text})
+    return (caught.value.code, caught.value.document, caught.value.path, caught.value.message)
 
 
 def test_schema_files_publish_one_valid_json_schema_for_every_document_kind() -> None:
@@ -454,17 +475,34 @@ def test_validate_files_reports_broken_json_and_ignores_files_without_a_schema()
     assert invalid.value.location == "kind"
 
 
-def test_validate_files_reports_json_nested_beyond_the_parser_limit_as_not_json() -> None:
-    nested = "[" * 100_000 + "]" * 100_000
+def test_validate_files_reports_a_document_nested_beyond_the_depth_limit_as_invalid() -> None:
+    team = json.loads(built_folder().files[stage_document("team")])
+    within = json.dumps({**team, "x": nested_value(MAX_DOCUMENT_DEPTH // 2)})
+    beyond = json.dumps({**team, "x": nested_value(MAX_DOCUMENT_DEPTH + 30)})
 
-    with pytest.raises(KnowledgeSchemaError) as caught:
-        validate_files({stage_document("team"): nested})
+    validate_files({stage_document("team"): within})
 
-    assert (caught.value.code, caught.value.document, caught.value.path) == (
-        "DOCUMENT_NOT_JSON",
-        "team",
-        "team/team.json",
-    )
+    assert team_failure(beyond) == NESTED_TOO_DEEPLY
+
+
+def test_validate_files_reports_json_the_parser_cannot_nest_as_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def too_deep(text: str) -> object:
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON array")
+
+    monkeypatch.setattr(schema_module, "json", SimpleNamespace(loads=too_deep))
+
+    assert team_failure("[]") == NESTED_TOO_DEEPLY
+
+
+@pytest.mark.parametrize("text", ['{"id": ', "", "[" * (MAX_DOCUMENT_DEPTH + 30)])
+def test_validate_files_still_reports_a_text_that_is_not_json_as_not_json(text: str) -> None:
+    assert team_failure(text)[:3] == ("DOCUMENT_NOT_JSON", "team", "team/team.json")
+
+
+def test_validate_files_reports_json_nested_beyond_the_parser_limit_as_invalid() -> None:
+    assert team_failure("[" * 100_000 + "]" * 100_000) == NESTED_TOO_DEEPLY
 
 
 def test_validate_document_rejects_an_unknown_schema_name() -> None:

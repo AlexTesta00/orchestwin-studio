@@ -112,6 +112,7 @@ SCHEMA_NAMES: Final = (
     "insights",
 )
 SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
+MAX_DOCUMENT_DEPTH: Final = 64
 _SCHEMA_ID_PREFIX: Final = f"urn:orchestwin:knowledge-folder:{KNOWLEDGE_SCHEMA_VERSION}"
 _FINDING_CONFIDENCE_SEMANTICS: Final = "MODEL_SELF_ASSESSMENT_UNLESS_CALIBRATED"
 _BRIEF_SCHEMA_VERSION: Final = ProjectBrief.SCHEMA_VERSION
@@ -1605,6 +1606,30 @@ def _location(parts: tuple[int | str, ...]) -> str:
     return location
 
 
+def within_depth(value: object, limit: int = MAX_DOCUMENT_DEPTH) -> bool:
+    level = [value]
+    for _ in range(limit):
+        following: list[object] = []
+        for item in level:
+            if isinstance(item, dict):
+                following.extend(item.values())
+            elif isinstance(item, list):
+                following.extend(item)
+        if not following:
+            return True
+        level = following
+    return False
+
+
+def _nested_too_deeply(name: str, path: str) -> KnowledgeSchemaError:
+    return KnowledgeSchemaError(
+        code="DOCUMENT_INVALID",
+        document=name,
+        message="the document is nested too deeply",
+        path=path,
+    )
+
+
 def _validate(name: str, payload: object, path: str | None) -> None:
     model = _MODELS.get(name)
     if model is None:
@@ -1638,14 +1663,19 @@ def validate_files(files: Mapping[str, str]) -> None:
             continue
         try:
             payload = json.loads(files[path])
-        except (TypeError, ValueError, RecursionError) as error:
+        except RecursionError as error:
+            raise _nested_too_deeply(name, path) from error
+        except (TypeError, ValueError) as error:
             raise KnowledgeSchemaError(
                 code="DOCUMENT_NOT_JSON", document=name, message=str(error), path=path
             ) from error
+        if not within_depth(payload):
+            raise _nested_too_deeply(name, path)
         _validate(name, payload, path)
 
 
 __all__ = [
+    "MAX_DOCUMENT_DEPTH",
     "SCHEMA_DIALECT",
     "SCHEMA_NAMES",
     "KnowledgeSchemaError",
@@ -1654,4 +1684,5 @@ __all__ = [
     "schema_name_for_path",
     "validate_document",
     "validate_files",
+    "within_depth",
 ]

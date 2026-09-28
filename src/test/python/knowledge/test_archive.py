@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import zipfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -182,6 +183,20 @@ def test_json_nested_beyond_the_parser_limit_is_an_invalid_document() -> None:
     assert (in_manifest.code, in_manifest.detail) == ("FOLDER_DOCUMENT_INVALID", KNOWLEDGE_MANIFEST)
     assert in_document.code == "FOLDER_DOCUMENT_INVALID"
     assert in_document.detail.startswith("requirements")
+
+
+def test_json_the_parser_cannot_nest_is_an_invalid_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    files = folder().files
+
+    def too_deep(text: str) -> object:
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON array")
+
+    monkeypatch.setattr(module, "json", SimpleNamespace(loads=too_deep))
+    refused = failure(lambda: verify_folder(files))
+
+    assert (refused.code, refused.detail) == ("FOLDER_DOCUMENT_INVALID", KNOWLEDGE_MANIFEST)
 
 
 @pytest.mark.parametrize(("key", "value"), [("schema_version", 1), ("kind", "something.else")])
