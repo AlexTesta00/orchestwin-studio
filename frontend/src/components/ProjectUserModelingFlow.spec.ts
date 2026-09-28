@@ -5,6 +5,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectUserModelingFlow from "./ProjectUserModelingFlow.vue";
+import TwinImportPanel from "./TwinImportPanel.vue";
 import { createAppI18n } from "@/i18n";
 
 import { userModelingApi } from "../api/userModeling";
@@ -22,6 +23,7 @@ import type {
   UserTwinProfileDiffPayload,
   UserTwinVersionPayload,
 } from "../types/userModeling";
+import type { TwinImportPayload } from "../types/twinImports";
 import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
@@ -758,5 +760,168 @@ describe("ProjectUserModelingFlow", () => {
     expect(propose).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(false);
     wrapper.unmount();
+  });
+
+  it("offers a twin from another project only after the list of twins of this project", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [confirmedPersona];
+    const wrapper = mountFlow();
+
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(false);
+
+    store.applySnapshot({
+      ...snapshot,
+      snapshot: { ...snapshot.snapshot, twin_count: 0, twin_versions: [] },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[aria-labelledby="twins-heading"]').exists()).toBe(true);
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(false);
+
+    store.applySnapshot(snapshot);
+    await flushPromises();
+
+    const panel = wrapper.findComponent(TwinImportPanel);
+    const twinsSection = wrapper.get('[aria-labelledby="twins-heading"]');
+    const lastTwin = twinsSection.findAll('[data-testid="open-twin-chat"]').at(-1);
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("projectId")).toBe(PROJECT_ID);
+    expect(panel.props("locale")).toBe("en");
+    expect(panel.text()).toContain("Add a twin from another project");
+    expect(twinsSection.element.contains(panel.element)).toBe(true);
+    expect(
+      (lastTwin?.element.compareDocumentPosition(panel.element) ?? 0) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("gives the twin import the language and the authorization of the step", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const authorize = <T>(operation: (token: string) => Promise<T>) => operation(ACCESS_TOKEN);
+
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("it")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        authorize,
+        locale: "it",
+        autoLoad: false,
+      },
+    });
+
+    const panel = wrapper.findComponent(TwinImportPanel);
+    expect(panel.props("locale")).toBe("it");
+    expect(panel.props("authorize")).toBe(authorize);
+    expect(panel.text()).toContain("Aggiungi un twin da un altro progetto");
+  });
+
+  it("reloads the step after an import so that the new twin appears and needs a new approval", async () => {
+    const importedTwinId = "00000000-0000-4000-8000-000000000032";
+    const importedTwin: UserTwinVersionPayload = {
+      ...twinVersion,
+      id: "00000000-0000-4000-8000-000000000033",
+      twin_id: importedTwinId,
+      content_hash: "5".repeat(64),
+      profile: { ...twinVersion.profile, name: "Night Porter User Twin" },
+    };
+    const snapshotTwo: UserModelingSnapshotVersionPayload = {
+      ...snapshot,
+      id: "00000000-0000-4000-8000-000000000041",
+      version_number: 2,
+      based_on_version_number: 1,
+      content_hash: "6".repeat(64),
+      snapshot: { ...snapshot.snapshot, twin_count: 2, twin_versions: [twinVersion, importedTwin] },
+    };
+    const readinessAfterImport: UserModelingReadinessPayload = {
+      ...readinessApproved,
+      snapshot_version_id: snapshotTwo.id,
+      snapshot_version_number: 2,
+      snapshot_content_hash: snapshotTwo.content_hash,
+      approved_current_snapshot: false,
+      workflow_state: "USER_MODELING_REVIEW_REQUIRED",
+      twins: [
+        ...readinessReview.twins,
+        {
+          twin_id: importedTwinId,
+          version_number: 1,
+          persisted_status: "PROJECT_GROUNDED_UT",
+          effective_status: "PROJECT_GROUNDED_UT",
+        },
+      ],
+    };
+    const importPayload: TwinImportPayload = {
+      status: "TWIN_IMPORTED",
+      twin: {
+        twin_id: importedTwinId,
+        version_id: importedTwin.id,
+        version_number: 1,
+        name: importedTwin.profile.name,
+        content_hash: importedTwin.content_hash,
+        validation_status: "PROJECT_GROUNDED_UT",
+      },
+      persona: {
+        persona_id: "00000000-0000-4000-8000-000000000022",
+        version_id: "00000000-0000-4000-8000-000000000023",
+        version_number: 1,
+        name: "Night Porter",
+      },
+      snapshot: {
+        version_id: snapshotTwo.id,
+        version_number: 2,
+        content_hash: snapshotTwo.content_hash,
+        twin_count: 2,
+      },
+      origin: {
+        project_id: "00000000-0000-4000-8000-000000000090",
+        project_name: "Hotel night desk",
+        twin_id: "00000000-0000-4000-8000-000000000091",
+        twin_version_number: 3,
+        twin_content_hash: "7".repeat(64),
+        persona_id: "00000000-0000-4000-8000-000000000092",
+        persona_version_number: 2,
+        persona_content_hash: "8".repeat(64),
+      },
+      gate_approval_required: true,
+    };
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessApproved;
+    store.currentGate = approvedGate;
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessAfterImport);
+    vi.spyOn(userModelingApi, "getCurrentSnapshot").mockResolvedValue(snapshotTwo);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([snapshot, snapshotTwo]);
+    vi.spyOn(userModelingApi, "getCurrentGate").mockResolvedValue(approvedGate);
+    vi.spyOn(userModelingApi, "getGateEvents").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    const load = vi.spyOn(store, "load");
+    const wrapper = mountFlow();
+
+    expect(wrapper.text()).toContain("You have approved these user profiles.");
+    expect(wrapper.find('[data-testid="submit-gate"]').exists()).toBe(false);
+
+    wrapper.findComponent(TwinImportPanel).vm.$emit("imported", importPayload);
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(store.currentSnapshot?.id).toBe(snapshotTwo.id);
+    expect(
+      wrapper.findAll('[data-testid="open-twin-chat"]').map((button) => button.text()),
+    ).toEqual([`Talk to ${twinVersion.profile.name}`, "Talk to Night Porter User Twin"]);
+    expect(wrapper.text()).not.toContain("You have approved these user profiles.");
+    expect(wrapper.text()).toContain(
+      "The profiles have changed since your last approval. Review them again.",
+    );
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
+      "Review and approve your user profiles to continue.",
+    );
+    expect(wrapper.find('[data-testid="submit-gate"]').exists()).toBe(true);
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(true);
+    await expectAccessible(wrapper.element);
   });
 });

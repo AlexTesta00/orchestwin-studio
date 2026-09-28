@@ -3,13 +3,16 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RequirementsApi } from "../api/requirements";
+import { requirementsAlignmentApi } from "../api/requirementsAlignment";
 import type {
   HumanGatePayload,
   RequirementsReadinessPayload,
   RequirementsSpecificationDiffPayload,
   RequirementsSpecificationVersionPayload,
 } from "../types/requirements";
+import type { RequirementsAlignmentPayload } from "../types/requirementsAlignment";
 import ProjectRequirementsFlow from "./ProjectRequirementsFlow.vue";
+import RequirementsTwinAlignment from "./RequirementsTwinAlignment.vue";
 import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
@@ -329,6 +332,14 @@ class FakeApi implements RequirementsApi {
 const authorize = <T>(operation: (accessToken: string) => Promise<T>): Promise<T> =>
   operation("access-token");
 
+const ALIGNED: RequirementsAlignmentPayload = {
+  aligned: true,
+  issue: "REQUIREMENTS_ALREADY_ALIGNED",
+  requirements_version_number: 1,
+  snapshot_version_number: 1,
+  twins_approved: true,
+};
+
 function mountFlow(api: RequirementsApi, autoLoad = false) {
   return mount(ProjectRequirementsFlow, {
     props: {
@@ -344,6 +355,7 @@ function mountFlow(api: RequirementsApi, autoLoad = false) {
 describe("ProjectRequirementsFlow", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
   });
 
   it("generates and renders the first governed specification", async () => {
@@ -430,6 +442,168 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(new FakeApi());
     await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
     await flushPromises();
+    await expectAccessible(wrapper.element);
+  });
+
+  it("shows the requirements as text first and as a table on request", async () => {
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: {
+        projectId: PROJECT_ID,
+        locale: "it",
+        autoLoad: false,
+        authorize,
+        api: new FakeApi(),
+      },
+      attachTo: document.body,
+    });
+    await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="artifact-view-text"]').attributes("aria-selected")).toBe(
+      "true",
+    );
+    expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="requirements-table-view"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="artifact-view-table"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(false);
+    const table = wrapper.get('[data-testid="requirements-table-view"]');
+    expect(table.attributes("id")).toBe("requirements-view-panel");
+    expect(table.text()).toContain("REQ-001");
+    expect(table.text()).toContain("Create reservations");
+    expect(wrapper.get('[data-testid="artifact-view-table"]').attributes("aria-controls")).toBe(
+      "requirements-view-panel",
+    );
+    wrapper.unmount();
+  });
+
+  it("draws the diagrams of the current version of the requirements", async () => {
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: {
+        projectId: PROJECT_ID,
+        locale: "it",
+        autoLoad: false,
+        authorize,
+        api: new FakeApi(),
+      },
+      global: { stubs: { ProjectDiagramsView: true } },
+    });
+    await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
+    await flushPromises();
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+
+    const diagrams = wrapper.getComponent({ name: "ProjectDiagramsView" });
+    expect(diagrams.props()).toMatchObject({
+      projectId: PROJECT_ID,
+      stage: "requirements",
+      locale: "it",
+      refreshKey: VERSION.content_hash,
+    });
+    expect(wrapper.find('[data-testid="requirements-table-view"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="artifact-view-text"]').trigger("click");
+
+    expect(wrapper.findComponent({ name: "ProjectDiagramsView" }).exists()).toBe(false);
+    expect(wrapper.get('[data-testid="requirements-text-view"]').attributes("id")).toBe(
+      "requirements-view-panel",
+    );
+  });
+
+  it("does not check the twins before the requirements exist", async () => {
+    const wrapper = mountFlow(new FakeApi());
+    await flushPromises();
+
+    expect(wrapper.findComponent(RequirementsTwinAlignment).exists()).toBe(false);
+    expect(requirementsAlignmentApi.status).not.toHaveBeenCalled();
+  });
+
+  it("checks the twins again when a proposed change appears", async () => {
+    const api = new FakeApi();
+    api.readinessResult = {
+      status: "REQUIREMENTS_APPROVAL_REQUIRED",
+      version: VERSION,
+      gate: null,
+      approved_current_specification: false,
+    };
+    api.historyResult = [VERSION];
+    const wrapper = mountFlow(api, true);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
+    await wrapper.get('[data-testid="submit-requirements-revision"]').trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.getComponent(RequirementsTwinAlignment).props("refreshKey")).toBe(
+      `${VERSION.content_hash}:1`,
+    );
+    expect(requirementsAlignmentApi.status).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates the requirements to the current twins and reloads them for a new approval", async () => {
+    const api = new FakeApi();
+    const realignedVersion: RequirementsSpecificationVersionPayload = {
+      ...VERSION,
+      id: "00000000-0000-4000-8000-000000000021",
+      version_number: 2,
+      based_on_version_number: 1,
+      content_hash: "9".repeat(64),
+    };
+    api.readinessResult = {
+      status: "REQUIREMENTS_APPROVAL_REQUIRED",
+      version: VERSION,
+      gate: null,
+      approved_current_specification: false,
+    };
+    api.historyResult = [VERSION];
+    const status = vi
+      .spyOn(requirementsAlignmentApi, "status")
+      .mockResolvedValue({ ...ALIGNED, aligned: false, issue: null });
+    const realign = vi.spyOn(requirementsAlignmentApi, "realign").mockImplementation(async () => {
+      api.readinessResult = { ...api.readinessResult, version: realignedVersion };
+      api.historyResult = [VERSION, realignedVersion];
+      status.mockResolvedValue({ ...ALIGNED, requirements_version_number: 2 });
+      return {
+        version_id: realignedVersion.id,
+        version_number: 2,
+        based_on_version_number: 1,
+        content_hash: realignedVersion.content_hash,
+        user_modeling_version_number: 2,
+        twin_count: 1,
+        gate_approval_required: true,
+      };
+    });
+    const readiness = vi.spyOn(api, "readiness");
+    const wrapper = mountFlow(api, true);
+    await flushPromises();
+
+    const alignment = wrapper.getComponent(RequirementsTwinAlignment);
+    expect(alignment.props()).toMatchObject({
+      projectId: PROJECT_ID,
+      locale: "en",
+      refreshKey: `${VERSION.content_hash}:0`,
+    });
+    expect(status).toHaveBeenCalledWith(PROJECT_ID, "access-token");
+    expect(wrapper.get("header").element.nextElementSibling?.getAttribute("data-testid")).toBe(
+      "requirements-twin-alignment",
+    );
+    expect(readiness).toHaveBeenCalledTimes(1);
+
+    await wrapper.get('[data-testid="requirements-twin-alignment-update"]').trigger("click");
+    await flushPromises();
+
+    expect(realign).toHaveBeenCalledWith(PROJECT_ID, "access-token");
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("Version 2");
+    expect(alignment.props("refreshKey")).toBe(`${realignedVersion.content_hash}:0`);
+    expect(status).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="requirements-twin-alignment-done"]').text()).toContain(
+      "Version 2 of the requirements is ready with the same content. Approve it again below.",
+    );
+    expect(wrapper.get('[data-testid="submit-requirements-gate"]').text()).toBe(
+      "Prepare for approval",
+    );
     await expectAccessible(wrapper.element);
   });
 });
