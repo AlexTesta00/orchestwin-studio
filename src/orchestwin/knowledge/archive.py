@@ -16,14 +16,19 @@ from orchestwin.knowledge.layout import (
     STAGES,
     stage_document,
 )
-from orchestwin.knowledge.schema import KnowledgeSchemaError, validate_document, validate_files
+from orchestwin.knowledge.schema import (
+    MAX_DOCUMENT_DEPTH,
+    KnowledgeSchemaError,
+    validate_document,
+    validate_files,
+    within_depth,
+)
 
 MAX_ARCHIVE_SIZE: Final = 16 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES: Final = 400
 MAX_ENTRY_SIZE: Final = 8 * 1024 * 1024
 MAX_FOLDER_SIZE: Final = 64 * 1024 * 1024
 MAX_PATH_LENGTH: Final = 240
-MAX_DOCUMENT_DEPTH: Final = 64
 _FORBIDDEN_PATH_CHARACTERS: Final = frozenset('\\:*?"<>|\0')
 
 
@@ -106,21 +111,6 @@ def read_folder_archive(content: bytes) -> dict[str, str]:
             except UnicodeDecodeError as error:
                 raise KnowledgeArchiveError("FOLDER_ARCHIVE_INVALID", item.filename) from error
     return files
-
-
-def within_depth(value: object, limit: int = MAX_DOCUMENT_DEPTH) -> bool:
-    level = [value]
-    for _ in range(limit):
-        following: list[object] = []
-        for item in level:
-            if isinstance(item, dict):
-                following.extend(item.values())
-            elif isinstance(item, list):
-                following.extend(item)
-        if not following:
-            return True
-        level = following
-    return False
 
 
 def _json(files: Mapping[str, str], path: str) -> Mapping[str, object]:
