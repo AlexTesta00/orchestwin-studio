@@ -18,6 +18,7 @@ from orchestwin.models.design import (
     DesignProposalResult,
     DesignProposalStatus,
 )
+from orchestwin.models.planning_schema import critique_list_limit
 from orchestwin.models.profile_drafts import PersonaModelOutput, UserTwinModelOutput
 from orchestwin.models.proposal_evidence import (
     generation_output_reference,
@@ -71,6 +72,26 @@ from orchestwin.twins.user_twins import (
 )
 
 DESIGN_OUTPUT_TOKENS = 6144
+DESIGN_EXTRA_TWIN_OUTPUT_TOKENS = 2048
+DESIGN_BASELINE_TWINS = 2
+CRITIQUE_LIST_INSTRUCTIONS = {
+    None: (
+        "Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions and every list of a critique to at most three items, and each text to at "
+        "most two sentences; "
+    ),
+    2: (
+        "Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions to at most three items, every list of a critique to at most two items, "
+        "and each text to at most two sentences; "
+    ),
+    1: (
+        "Keep the lists of considerations, advantages, trade-offs, assumptions and "
+        "questions to at most three items and every list of a critique to at most one "
+        "item; each text of a critique is one sentence and every other text is at most two "
+        "sentences; "
+    ),
+}
 DESIGN_VISUAL_INSTRUCTION = (
     "Each alternative also declares its visual language in 'visual', using only ids from this "
     "catalog. "
@@ -102,7 +123,13 @@ DESIGN_NAMES_INSTRUCTION = (
 )
 
 
+def design_output_tokens(twin_count):
+    extra = max(0, twin_count - DESIGN_BASELINE_TWINS)
+    return DESIGN_OUTPUT_TOKENS + DESIGN_EXTRA_TWIN_OUTPUT_TOKENS * extra
+
+
 def design_instruction(twin_keys, language):
+    lists = CRITIQUE_LIST_INSTRUCTIONS[critique_list_limit(len(twin_keys.split("/")))]
     if language is None:
         opening = "Propose exactly two distinct design approaches in the requirements' language. "
         closing = DESIGN_NAMES_INSTRUCTION
@@ -122,9 +149,7 @@ def design_instruction(twin_keys, language):
         "DRK-001 for concerns; every code must be unique. References use supplied "
         f"requirement/story/criterion codes and {twin_keys} twin keys. Include one synthetic "
         "critique for EVERY alternative/twin pair; cite exact observation_keys from "
-        "that twin. Keep the lists of considerations, advantages, trade-offs, assumptions and "
-        "questions and every list of a critique to at most three items, and each text to at "
-        "most two sentences; workflows, their steps and the information architecture keep the "
+        "that twin. " + lists + "workflows, their steps and the information architecture keep the "
         "items that the archetype and the task need. Prefer a small design appropriate to "
         "scope. "
         "Do not invent empirical evidence, owner selection, approval or a prototype. "
@@ -330,7 +355,8 @@ class ModelDesignAdapter:
             context=context,
             output_type=DesignDraft,
             max_output_tokens=min(
-                DESIGN_OUTPUT_TOKENS, self.generator.configuration.max_output_tokens
+                design_output_tokens(len(twins)),
+                self.generator.configuration.max_output_tokens,
             ),
             instruction=instruction,
         )

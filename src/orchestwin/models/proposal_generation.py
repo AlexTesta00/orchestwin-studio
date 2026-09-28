@@ -62,6 +62,7 @@ class ProposalGenerationError(RuntimeError):
 
 
 PROMPT_CHARACTERS_PER_TOKEN: Final = 4
+DEFAULT_OUTPUT_TOKENS: Final = 8192
 
 
 def estimate_prompt_tokens(request) -> int:
@@ -200,7 +201,9 @@ class ProposalGenerator:
         if task not in TASKS:
             raise ValueError("unsupported proposal task")
         budget = (
-            self.configuration.max_output_tokens if max_output_tokens is None else max_output_tokens
+            min(DEFAULT_OUTPUT_TOKENS, self.configuration.max_output_tokens)
+            if max_output_tokens is None
+            else max_output_tokens
         )
         if type(budget) is not int or not 1 <= budget <= self.configuration.max_output_tokens:
             raise ValueError("invalid proposal output budget")
