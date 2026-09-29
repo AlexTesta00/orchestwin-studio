@@ -53,15 +53,25 @@ const tray = useInsightTrayStore();
 const packages = useKnowledgePackagesStore();
 const mockups = useDesignMockupsStore();
 // Reload downstream state when its approved inputs change on this page.
-const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
-const teamContext = computed(
-  () => `${briefContext.value}:${team.currentVersion?.id}:${team.gate?.status}`,
+const briefContext = computed(() =>
+  briefKnown.value && clarificationSettled.value
+    ? `${currentBrief.value?.id}:${clarification.gate?.status}`
+    : null,
 );
-const twinContext = computed(
-  () => `${teamContext.value}:${modeling.currentSnapshot?.id}:${modeling.currentGate?.status}`,
+const teamContext = computed(() =>
+  briefContext.value !== null && teamSettled.value
+    ? `${briefContext.value}:${team.currentVersion?.id}:${team.gate?.status}`
+    : null,
 );
-const requirementsContext = computed(
-  () => `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`,
+const twinContext = computed(() =>
+  teamContext.value !== null && modelingSettled.value
+    ? `${teamContext.value}:${modeling.currentSnapshot?.id}:${modeling.currentGate?.status}`
+    : null,
+);
+const requirementsContext = computed(() =>
+  twinContext.value !== null && requirementsSettled.value
+    ? `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`
+    : null,
 );
 
 provide(
@@ -175,6 +185,8 @@ const importOrigin = ref<ProjectImportOriginPayload | null>(null);
 let originSequence = 0;
 
 const loading = ref(true);
+const reloading = ref(false);
+const briefReloads = ref(0);
 const saving = ref(false);
 const errorDetail = ref<string | null>(null);
 const selectedStage = ref<number | null>(null);
@@ -191,7 +203,7 @@ function onDialogueActive(active: boolean): void {
 }
 
 async function onDialogueSynthesized(): Promise<void> {
-  await loadProject();
+  await reloadProject();
   briefMode.value = "form";
 }
 
@@ -205,6 +217,43 @@ const projectId = computed(() => {
   return value ?? "";
 });
 const trayVisible = computed(() => tray.isVisible(projectId.value));
+const briefKnown = computed(() => !loading.value && !reloading.value && project.value !== null);
+
+function settledOnPage(owner: () => string | null, busy: () => boolean) {
+  const ran = ref(false);
+  watch(
+    () => owner() === projectId.value && busy(),
+    (running) => {
+      if (running) ran.value = true;
+    },
+    { flush: "sync", immediate: true },
+  );
+  watch(
+    projectId,
+    () => {
+      ran.value = owner() === projectId.value && busy();
+    },
+    { flush: "sync" },
+  );
+  return computed(() => ran.value && owner() === projectId.value && !busy());
+}
+
+const clarificationSettled = settledOnPage(
+  () => clarification.projectId,
+  () => clarification.busy,
+);
+const teamSettled = settledOnPage(
+  () => team.projectId,
+  () => team.busy,
+);
+const modelingSettled = settledOnPage(
+  () => modeling.projectId,
+  () => modeling.isBusy,
+);
+const requirementsSettled = settledOnPage(
+  () => requirements.projectId,
+  () => requirements.isBusy,
+);
 
 function approved(
   gate: { status: string; artifact: { artifact_id: string; content_hash: string } } | null,
@@ -491,6 +540,7 @@ async function loadProject(): Promise<void> {
   project.value = null;
   currentBrief.value = null;
   briefHistory.value = [];
+  reloading.value = false;
   if (!id) {
     errorDetail.value = "project_not_found";
     loading.value = false;
@@ -514,6 +564,31 @@ async function loadProject(): Promise<void> {
     if (epoch === projectEpoch) errorDetail.value = errorCode(error, "project_load_failed");
   } finally {
     if (epoch === projectEpoch) loading.value = false;
+  }
+}
+
+async function reloadProject(): Promise<void> {
+  const id = projectId.value;
+  const epoch = ++projectEpoch;
+  reloading.value = true;
+  errorDetail.value = null;
+
+  try {
+    const [projectResult, versions] = await Promise.all([
+      authorized((accessToken) => apiClient.getProject(accessToken, id)),
+      authorized((accessToken) => apiClient.listBriefVersions(accessToken, id)),
+    ]);
+    if (epoch !== projectEpoch) return;
+    selectedStage.value = null;
+    briefMode.value = null;
+    project.value = projectResult;
+    briefHistory.value = [...versions];
+    currentBrief.value = versions[versions.length - 1] ?? null;
+    briefReloads.value += 1;
+  } catch (error: unknown) {
+    if (epoch === projectEpoch) errorDetail.value = errorCode(error, "project_load_failed");
+  } finally {
+    if (epoch === projectEpoch) reloading.value = false;
   }
 }
 
@@ -544,7 +619,7 @@ async function saveBrief(brief: ProjectBriefInput): Promise<void> {
 
   try {
     await authorized((accessToken) => apiClient.createBriefVersion(accessToken, id, brief));
-    if (epoch === projectEpoch) await loadProject();
+    if (epoch === projectEpoch) await reloadProject();
   } catch (error: unknown) {
     if (epoch === projectEpoch) errorDetail.value = errorCode(error, "brief_save_failed");
   } finally {
@@ -611,10 +686,12 @@ watch(
       activeStage.value === 5,
       chosenGenerated.value?.version.content_hash,
       mockups.projectId === projectId.value,
+      mockups.design?.contentHash,
     ] as const,
-  ([packageShown, contentHash, active]) => {
+  ([packageShown, contentHash, active, drawnFor]) => {
     const chosen = chosenGenerated.value;
     if (!packageShown || contentHash === undefined || !active || chosen === null) return;
+    if (drawnFor !== contentHash) return;
     if (mockups.documentFor(chosen.alternative.id, { source: "applied" }) !== null) return;
     void mockups
       .loadDocument(chosen.alternative.id, authorized, { source: "applied" })
@@ -735,7 +812,7 @@ onUnmounted(() => {
           >
             <ProjectBriefDialogue
               v-show="briefView === 'dialogue'"
-              :key="`${projectId}:brief-dialogue`"
+              :key="`${projectId}:${briefReloads}:brief-dialogue`"
               :project-id="projectId"
               :current-brief="currentBrief"
               :authorize="authorized"
@@ -810,8 +887,9 @@ onUnmounted(() => {
           <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
             <ProjectTeamSelectionFlow
               id="studio-team"
-              :key="`${projectId}:${briefContext}:team`"
+              :key="`${projectId}:team`"
               :project-id="projectId"
+              :upstream="briefContext"
               :active="activeStage === 1"
             />
           </div>
@@ -819,11 +897,12 @@ onUnmounted(() => {
             <ProjectUserModelingFlow
               id="studio-twins"
               v-if="auth.accessToken"
-              :key="`${projectId}:${teamContext}:user-modeling`"
+              :key="`${projectId}:user-modeling`"
               :project-id="projectId"
               :access-token="auth.accessToken"
               :authorize="authorized"
               :locale="locale === 'it' ? 'it' : 'en'"
+              :upstream="teamContext"
               :active="activeStage === 2"
               @open-chat="chatTwin = $event"
             />
@@ -832,9 +911,10 @@ onUnmounted(() => {
             <ProjectRequirementsFlow
               id="studio-requirements"
               :prerequisite-ready="modeling.isReadyForRequirements"
-              :key="`${projectId}:${twinContext}:requirements`"
+              :key="`${projectId}:requirements`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
+              :upstream="twinContext"
               :active="activeStage === 3"
             />
           </div>
@@ -842,9 +922,10 @@ onUnmounted(() => {
             <ProjectDesignFlow
               id="studio-design"
               :prerequisite-ready="requirements.isReadyForDesign"
-              :key="`${projectId}:${requirementsContext}:design`"
+              :key="`${projectId}:design`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
+              :upstream="requirementsContext"
               :active="activeStage === 4"
             />
           </div>
