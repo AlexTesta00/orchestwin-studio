@@ -18,6 +18,14 @@ from orchestwin.projects.domain import (
     Project,
     ProjectMode,
 )
+from orchestwin.projects.progress import (
+    ProjectNextAction,
+    ProjectOverview,
+    ProjectProgress,
+    ProjectProgressFacts,
+    ProjectStage,
+    project_progress,
+)
 from orchestwin.projects.repository import (
     BriefVersionCreationResult,
     BriefVersionCreationStatus,
@@ -244,6 +252,26 @@ class InMemoryBriefRepository:
         )
 
 
+class InMemoryOverviewRepository:
+    def __init__(self, projects: InMemoryProjectRepository) -> None:
+        self._projects = projects
+        self.progress: dict[UUID, ProjectProgress] = {}
+
+    def _overview(self, project: Project) -> ProjectOverview:
+        return ProjectOverview(
+            project=project,
+            progress=self.progress.get(project.id, project_progress(ProjectProgressFacts())),
+        )
+
+    async def list_active_owned(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]:
+        projects = await self._projects.list_active_owned(owner_user_id=owner_user_id)
+        return tuple(self._overview(project) for project in projects)
+
+    async def get_owned(self, *, project_id: UUID, owner_user_id: UUID) -> ProjectOverview | None:
+        project = await self._projects.get_owned(project_id=project_id, owner_user_id=owner_user_id)
+        return None if project is None else self._overview(project)
+
+
 class InMemoryProjectUnitOfWork:
     """Reusable in-memory project unit of work."""
 
@@ -251,9 +279,11 @@ class InMemoryProjectUnitOfWork:
         self,
         projects: InMemoryProjectRepository,
         briefs: InMemoryBriefRepository,
+        overviews: InMemoryOverviewRepository | None = None,
     ) -> None:
         self.projects = projects
         self.briefs = briefs
+        self.overviews = overviews or InMemoryOverviewRepository(projects)
 
     async def __aenter__(
         self,
@@ -341,3 +371,46 @@ def test_brief_versions_are_created_and_reused() -> None:
     assert first.status is (BriefVersionCreationStatus.CREATED)
     assert second.status is (BriefVersionCreationStatus.UNCHANGED)
     assert first.version == second.version
+
+
+def test_overviews_carry_the_progress_of_each_project_of_the_owner() -> None:
+    projects = InMemoryProjectRepository()
+    briefs = InMemoryBriefRepository(projects)
+    overviews = InMemoryOverviewRepository(projects)
+    service = LocalProjectApplicationService(
+        unit_of_work_factory=lambda: InMemoryProjectUnitOfWork(projects, briefs, overviews)
+    )
+    first = asyncio.run(
+        service.create(
+            owner_user_id=OWNER_ID,
+            display_name="Guest list",
+            mode=ProjectMode.GREENFIELD_GENERATION,
+        )
+    )
+    second = asyncio.run(
+        service.create(
+            owner_user_id=OWNER_ID,
+            display_name="Front desk",
+            mode=ProjectMode.BROWNFIELD_ASSESSMENT,
+        )
+    )
+    foreign = asyncio.run(
+        service.create(
+            owner_user_id=OTHER_OWNER_ID,
+            display_name="Stranger",
+            mode=ProjectMode.GREENFIELD_GENERATION,
+        )
+    )
+    designing = ProjectProgress(ProjectStage.DESIGN, ProjectNextAction.APPROVE_DESIGN)
+    overviews.progress[second.id] = designing
+
+    listed = asyncio.run(service.list_overviews(owner_user_id=OWNER_ID))
+    single = asyncio.run(service.get_overview(project_id=second.id, owner_user_id=OWNER_ID))
+    hidden = asyncio.run(service.get_overview(project_id=foreign.id, owner_user_id=OWNER_ID))
+
+    assert [(overview.project, overview.progress) for overview in listed] == [
+        (first, ProjectProgress(ProjectStage.BRIEF, ProjectNextAction.DESCRIBE_IDEA)),
+        (second, designing),
+    ]
+    assert single == ProjectOverview(project=second, progress=designing)
+    assert hidden is None
