@@ -1,12 +1,15 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
+import { computed } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignLoopApi } from "@/api/designLoop";
 import { DesignLoopApiError } from "@/api/designLoop";
 import { MAX_TRAY_ITEMS, useInsightTrayStore } from "@/stores/insightTray";
+import { expectAccessible } from "@/test/axe";
 import type { InsightApplicationPayload, InsightSource } from "@/types/designLoop";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
+import { surfaceKey } from "./UiSurface.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
@@ -245,5 +248,32 @@ describe("InsightApplyMenu", () => {
     expect(wrapper.get('[role="alert"]').text()).toBe(
       "Hai segnato questa osservazione come non pertinente, quindi non viene portata nel progetto.",
     );
+  });
+
+  it("follows the dark surface it sits on, with the same actions and identifiers", async () => {
+    const api = fakeApi();
+    const wrapper = mount(InsightApplyMenu, {
+      props: { projectId: "project-1", source: CHAT_SOURCE, locale: "it", authorize, api },
+      global: { provide: { [surfaceKey as symbol]: computed(() => "night") } },
+    });
+    const menu = wrapper.get('[data-testid="insight-apply-menu"]');
+    expect(menu.attributes("data-surface-context")).toBe("night");
+    const design = wrapper.get('[data-testid="insight-apply-design"]');
+    expect(design.classes()).toEqual(expect.arrayContaining(["bg-on-night", "text-ink"]));
+    expect(design.classes()).not.toContain("bg-action");
+    expect(wrapper.get('[data-testid="insight-apply-requirements"]').classes()).toContain(
+      "border-night-line-strong",
+    );
+    expect(wrapper.get('[data-testid="insight-brief-field"]').classes()).toContain(
+      "bg-night-panel",
+    );
+    expect(wrapper.html()).not.toMatch(/bg-white|text-ink-2/);
+    await design.trigger("click");
+    await flushPromises();
+    expect(vi.mocked(api.applyInsight).mock.calls[0]?.[1]).toMatchObject({ target: "DESIGN" });
+    expect(wrapper.get('[data-testid="insight-applied"]').classes()).toContain(
+      "text-petrol-on-night-2",
+    );
+    await expectAccessible(wrapper.element);
   });
 });

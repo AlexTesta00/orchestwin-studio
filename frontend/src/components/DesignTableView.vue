@@ -2,6 +2,7 @@
 import { computed, useId } from "vue";
 
 import ArtifactTable, { type ArtifactTableColumn } from "./ArtifactTable.vue";
+import { useSurface } from "./UiSurface.vue";
 import { choiceLabel, dimensionLabel } from "./visualLanguage";
 import type {
   DeclarativePrototypePayload,
@@ -63,6 +64,36 @@ const props = withDefaults(
   }>(),
   { requirements: null, locale: "en" },
 );
+
+const palettes = {
+  light: {
+    title: "text-ink",
+    text: "text-ink-2",
+    muted: "text-ink-3",
+    empty: "rounded-panel border-line-soft bg-surface-2 text-ink-2",
+    region: "rounded-panel border-line bg-surface",
+    head: "bg-surface-3",
+    row: "border-line-soft even:bg-row-alt",
+    cell: "text-ink-2",
+    chosen: "border-ok-line bg-ok-bg text-ok-dark",
+    recommended: "border-action-soft-line bg-action-soft text-action",
+  },
+  night: {
+    title: "text-on-night",
+    text: "text-on-night-2",
+    muted: "text-on-night-3",
+    empty: "rounded-tile border-night-line bg-night-raised text-on-night-2",
+    region: "rounded-tile border-night-line bg-night-raised",
+    head: "bg-on-night/3",
+    row: "border-on-night/8",
+    cell: "text-on-night",
+    chosen: "border-petrol-on-night bg-petrol-on-night/16 text-petrol-on-night-2",
+    recommended: "border-night-line-strong text-on-night-2",
+  },
+};
+
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 
 const messages = {
   en: {
@@ -531,7 +562,7 @@ function layoutLabel(archetype: LayoutArchetype): string {
 </script>
 
 <template>
-  <div class="grid gap-8" data-testid="design-table-view">
+  <div class="grid gap-8" data-testid="design-table-view" :data-surface-context="surface">
     <section
       v-for="table in transposedTables"
       :key="table.key"
@@ -539,19 +570,21 @@ function layoutLabel(archetype: LayoutArchetype): string {
       :data-testid="`design-section-${table.key}`"
     >
       <div class="grid gap-1">
-        <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ table.title }}</h4>
-        <p class="m-0 text-sm leading-6 text-ink-2">{{ table.description }}</p>
+        <h4 :class="['m-0 text-base font-semibold tracking-block', palette.title]">
+          {{ table.title }}
+        </h4>
+        <p :class="['m-0 text-sm leading-6', palette.text]">{{ table.description }}</p>
       </div>
       <p
         v-if="alternativeColumns.length === 0"
-        class="m-0 rounded-panel border border-line-soft bg-surface-2 p-4 text-sm text-ink-2"
+        :class="['m-0 border p-4 text-sm', palette.empty]"
         data-testid="design-table-empty"
       >
         {{ copy.empty }}
       </p>
       <div
         v-else
-        class="overflow-x-auto rounded-panel border border-line bg-surface"
+        :class="['overflow-x-auto border', palette.region]"
         role="region"
         tabindex="0"
         :aria-labelledby="`${uid}-${table.key}`"
@@ -563,11 +596,14 @@ function layoutLabel(archetype: LayoutArchetype): string {
               table.title
             }}
           </caption>
-          <thead class="bg-surface-3">
+          <thead :class="palette.head">
             <tr>
               <th
                 scope="col"
-                class="px-3 py-2.5 align-top text-[13px] font-semibold whitespace-nowrap text-ink-3"
+                :class="[
+                  'px-3 py-2.5 align-top text-[13px] font-semibold whitespace-nowrap',
+                  palette.muted,
+                ]"
               >
                 {{ table.corner }}
               </th>
@@ -579,10 +615,12 @@ function layoutLabel(archetype: LayoutArchetype): string {
                 :class="table.columnClass"
                 :data-testid="`design-column-${column.code}`"
               >
-                <span class="block font-mono text-[11px] tracking-wide text-ink-3 uppercase">
+                <span
+                  :class="['block font-mono text-[11px] tracking-wide uppercase', palette.muted]"
+                >
                   {{ column.code }}
                 </span>
-                <span class="mt-0.5 block text-[15px] leading-6 font-semibold text-ink">
+                <span :class="['mt-0.5 block text-[15px] leading-6 font-semibold', palette.title]">
                   {{ column.title }}
                 </span>
                 <span
@@ -591,14 +629,20 @@ function layoutLabel(archetype: LayoutArchetype): string {
                 >
                   <span
                     v-if="column.chosen"
-                    class="rounded-pill border border-ok-line bg-ok-bg px-2.5 py-0.5 text-xs font-semibold text-ok-dark"
+                    :class="[
+                      'rounded-pill border px-2.5 py-0.5 text-xs font-semibold',
+                      palette.chosen,
+                    ]"
                     data-testid="badge-chosen"
                   >
                     {{ copy.chosen }}
                   </span>
                   <span
                     v-if="column.recommended"
-                    class="rounded-pill border border-action-soft-line bg-action-soft px-2.5 py-0.5 text-xs font-semibold text-action"
+                    :class="[
+                      'rounded-pill border px-2.5 py-0.5 text-xs font-semibold',
+                      palette.recommended,
+                    ]"
                     data-testid="badge-recommended"
                   >
                     {{ copy.recommended }}
@@ -611,16 +655,20 @@ function layoutLabel(archetype: LayoutArchetype): string {
             <tr
               v-for="row in table.rows"
               :key="row.key"
-              class="border-t border-line-soft align-top even:bg-row-alt"
+              :class="['border-t align-top', palette.row]"
               :data-testid="`design-row-${row.key}`"
             >
               <th
                 scope="row"
-                class="px-3 py-2.5 leading-6 font-semibold whitespace-nowrap text-ink"
+                :class="['px-3 py-2.5 leading-6 font-semibold whitespace-nowrap', palette.title]"
               >
                 {{ row.label }}
               </th>
-              <td v-for="cell in row.cells" :key="cell.id" class="px-3 py-2.5 leading-6 text-ink-2">
+              <td
+                v-for="cell in row.cells"
+                :key="cell.id"
+                :class="['px-3 py-2.5 leading-6', palette.cell]"
+              >
                 <span v-if="cell.lines.length === 0" role="img" :aria-label="copy.emptyCell"
                   >—</span
                 >
@@ -642,8 +690,10 @@ function layoutLabel(archetype: LayoutArchetype): string {
       :data-testid="`design-section-${section.key}`"
     >
       <div class="grid gap-1">
-        <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ section.title }}</h4>
-        <p class="m-0 text-sm leading-6 text-ink-2">{{ section.description }}</p>
+        <h4 :class="['m-0 text-base font-semibold tracking-block', palette.title]">
+          {{ section.title }}
+        </h4>
+        <p :class="['m-0 text-sm leading-6', palette.text]">{{ section.description }}</p>
       </div>
       <ArtifactTable
         :caption="section.title"

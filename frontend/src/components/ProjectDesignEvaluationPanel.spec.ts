@@ -1,9 +1,15 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignLoopApi } from "@/api/designLoop";
 import { DesignLoopApiError } from "@/api/designLoop";
+import {
+  clearFollowedGenerations,
+  GenerationJobsApiError,
+  generationJobsApi,
+  type GenerationRequestJob,
+} from "@/api/generationJobs";
 import { useDesignLoopStore } from "@/stores/designLoop";
 import { expectAccessible } from "@/test/axe";
 import type {
@@ -276,10 +282,105 @@ describe("ProjectDesignEvaluationPanel", () => {
     expect(wrapper.text()).toContain("No findings: the twin had nothing to object.");
     await wrapper.get('[data-testid="design-static-check"]').trigger("click");
     await flushPromises();
-    expect(wrapper.get('[data-testid="design-evaluator-unavailable"]').text()).toContain(
-      "local evaluator is not configured",
+    expect(wrapper.get('[data-testid="design-evaluator-unavailable"]').text()).toBe(
+      "The static accessibility check is not available in this installation of the Studio. The review of the twins is still available.",
     );
     expect(wrapper.find('[data-testid="design-evaluation-error"]').exists()).toBe(false);
+    await wrapper.setProps({ locale: "it" });
+    expect(wrapper.get('[data-testid="design-evaluator-unavailable"]').text()).toBe(
+      "Il controllo statico di accessibilità non è disponibile in questa installazione dello Studio. La revisione dei twin resta disponibile.",
+    );
+    expect(wrapper.text()).not.toMatch(/evaluator/i);
+  });
+
+  it("offers the static accessibility check only when it can run", async () => {
+    const api = fakeApi([]);
+    vi.mocked(api.evaluate).mockRejectedValueOnce(apiError(503, "DESIGN_REVIEWER_NOT_CONFIGURED"));
+    const wrapper = mount(ProjectDesignEvaluationPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        locale: "it",
+        authorize,
+        api,
+        staticCheckAvailable: false,
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="design-static-check"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="design-evaluate"]').text()).toBe(
+      "Chiedi ai twin di valutare il design",
+    );
+    await wrapper.get('[data-testid="design-evaluate"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="design-reviewer-unavailable"]').text()).toBe(
+      "Il modello linguistico che interpreta i twin non è collegato, quindi la revisione dei twin non può partire.",
+    );
+    await wrapper.setProps({ staticCheckAvailable: true });
+    expect(wrapper.get('[data-testid="design-static-check"]').text()).toBe(
+      "Controllo statico di accessibilità",
+    );
+    expect(wrapper.get('[data-testid="design-reviewer-unavailable"]').text()).toContain(
+      "Puoi comunque eseguire il controllo statico di accessibilità.",
+    );
+  });
+
+  it("names the screens and the elements by their titles in the stored texts of the review", async () => {
+    const coded: SyntheticFindingPayload = {
+      ...finding("UTF-001", "In SCR-002 il campo ELM-014 non dice il formato."),
+      location: "SCR-001 Registra gli ospiti · ELM-014 Nome dell'ospite",
+      rationale: "Da SCR-001 si arriva a SCR-002 senza un avviso.",
+      recommended_action: "Aggiungi un esempio sotto ELM-014 in SCR-002.",
+    };
+    const older: DesignEvaluationRunPayload = {
+      ...run("run-0", [{ ...coded, finding_id: "UTF-000", content_hash: "0".repeat(64) }]),
+      design_version_id: "version-0",
+    };
+    const current = run("run-1", [coded]);
+    current.responses[0]!.summary = "SCR-002 è il punto debole.";
+    const api = fakeApi([current, older]);
+    const wrapper = mount(ProjectDesignEvaluationPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        twinNames: { "twin-1": "Marta Rinaldi" },
+        locale: "it",
+        authorize,
+        api,
+        screens: [
+          { code: "SCR-001", title: "Registra gli ospiti" },
+          { code: "SCR-002", title: "Conferma" },
+        ],
+      },
+    });
+    await flushPromises();
+    const [latest, earlier] = wrapper.findAll('[data-testid="design-finding"]');
+    expect(latest?.text()).toContain(
+      "In «Conferma» il campo «Nome dell'ospite» non dice il formato.",
+    );
+    expect(latest?.text()).toContain("Dove: Registra gli ospiti · Nome dell'ospite");
+    expect(latest?.text()).toContain(
+      "Da «Registra gli ospiti» si arriva a «Conferma» senza un avviso.",
+    );
+    expect(latest?.text()).toContain(
+      "Azione suggerita: Aggiungi un esempio sotto «Nome dell'ospite» in «Conferma».",
+    );
+    expect(wrapper.text()).toContain("Sintesi: «Conferma» è il punto debole.");
+    expect(earlier?.text()).toContain(
+      "In SCR-002 il campo «Nome dell'ospite» non dice il formato.",
+    );
+    expect(earlier?.text()).toContain(
+      "Da «Registra gli ospiti» si arriva a SCR-002 senza un avviso.",
+    );
+
+    await latest?.get('[data-testid="insight-apply-requirements"]').trigger("click");
+    await flushPromises();
+    expect(vi.mocked(api.applyInsight).mock.calls[0]?.[1]).toMatchObject({
+      text: "In «Conferma» il campo «Nome dell'ospite» non dice il formato.",
+      mitigation: "Aggiungi un esempio sotto «Nome dell'ospite» in «Conferma».",
+    });
   });
 
   it("hides the dismissed count when no finding was set aside", async () => {
@@ -486,5 +587,92 @@ describe("ProjectDesignEvaluationPanel", () => {
     await flushPromises();
     expect(api.evaluate).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.evaluate).mock.calls[0]?.[1]).toMatchObject(AUTOMATIC_REVIEW);
+  });
+});
+
+describe("ProjectDesignEvaluationPanel and a review still running", () => {
+  function reviewJob(overrides: Partial<GenerationRequestJob> = {}): GenerationRequestJob {
+    return {
+      job_id: "00000000-0000-4000-8000-0000000009bb",
+      kind: "REQUEST",
+      operation: "DESIGN_EVALUATION",
+      status: "RUNNING",
+      stage: "GENERATING",
+      attempt: 1,
+      started_at: "2026-09-28T10:00:00+00:00",
+      finished_at: null,
+      alternative_id: null,
+      failure: null,
+      response: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    clearFollowedGenerations();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it("waits for the review after a reload and never starts a second one", async () => {
+    const api = fakeApi([]);
+    const finished = run("run-9", [finding("UTF-009", "The search needs a hint.")]);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([reviewJob()]);
+    vi.spyOn(generationJobsApi, "job")
+      .mockResolvedValueOnce(reviewJob())
+      .mockImplementationOnce(async () => {
+        vi.mocked(api.runs).mockResolvedValue([{ ...finished, design_version_id: "version-1" }]);
+        return reviewJob({
+          status: "SUCCEEDED",
+          stage: null,
+          response: { status_code: 201, body: finished },
+        });
+      });
+    const wrapper = mountPanel(api, "it", "version-1");
+    await vi.advanceTimersByTimeAsync(50);
+
+    const notice = wrapper.get('[data-testid="generation-job-notice"]');
+    expect(notice.text()).toContain("Lo Studio sta generando la revisione dei twin sul design.");
+    expect(wrapper.get('[data-testid="design-evaluate"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="design-static-check"]').attributes("disabled")).toBeDefined();
+    expect(api.evaluate).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(wrapper.find('[data-testid="generation-job-notice"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="design-evaluation-run"]')).toHaveLength(1);
+    expect(api.runs).toHaveBeenCalledTimes(2);
+    expect(api.evaluate).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("says that an interrupted review can be started again and does not start it by itself", async () => {
+    const api = fakeApi([]);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([reviewJob()]);
+    vi.spyOn(generationJobsApi, "job").mockRejectedValue(
+      new GenerationJobsApiError("GENERATION_JOB_NOT_FOUND", {
+        status: 404,
+        code: "GENERATION_JOB_NOT_FOUND",
+        payload: null,
+      }),
+    );
+    const wrapper = mountPanel(api, "en", "version-1");
+    await vi.advanceTimersByTimeAsync(2050);
+
+    const failure = wrapper.get('[data-testid="generation-job-failure"]');
+    expect(failure.attributes("data-lost")).toBe("true");
+    expect(failure.text()).toContain(
+      "The generation of the twins' review of the design stopped, perhaps because the Studio was restarted.",
+    );
+    expect(wrapper.find('[data-testid="design-evaluation-error"]').exists()).toBe(false);
+    expect(api.runs).toHaveBeenCalledTimes(2);
+    expect(api.evaluate).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="design-evaluate"]').attributes("disabled")).toBeUndefined();
+    wrapper.unmount();
   });
 });
