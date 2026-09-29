@@ -17,6 +17,8 @@ describe("model runtime status", () => {
       global: { plugins: [createPinia()] },
     });
     await flushPromises();
+    expect(wrapper.get("h2").text()).toBe("AI assistants");
+    expect(wrapper.get("[role='status']").text()).toContain("Real AI assistants are not connected");
     expect(wrapper.text()).toContain("Real AI assistants are not connected");
     await wrapper.get("button").trigger("click");
     await flushPromises();

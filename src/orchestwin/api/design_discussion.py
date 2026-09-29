@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design_loop import DesignLoopApplication
+from orchestwin.api.generation_jobs import GenerationOperation
+from orchestwin.api.generation_requests import generation_request
 from orchestwin.artifacts.design_discussion import (
     LOCALE_PATTERN,
     MAX_DISCUSSION_ROUNDS,
@@ -27,6 +29,7 @@ from orchestwin.artifacts.design_discussion_persistence import (
 )
 from orchestwin.artifacts.design_evaluation import DesignEvaluationError, design_review_view
 from orchestwin.identity.domain import UserAccount
+from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.proposal_evidence import (
     current_proposal_evidence,
     evidence_application,
@@ -35,10 +38,13 @@ from orchestwin.models.proposal_evidence import (
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.twin_discussion import (
     INVALID_TWIN_DISCUSSION_OUTPUT,
+    STATEMENT_PURPOSE,
+    TWIN_DISCUSSION_TASK,
     bind_statement,
     bind_synthesis,
     discussion_findings,
     moderate_discussion,
+    screen_titles,
     speak_as_twin,
     statement_context,
     synthesis_context,
@@ -52,7 +58,12 @@ STATEMENT_REJECTED: Final = "TWIN_STATEMENT_REJECTED"
 SYNTHESIS_REJECTED: Final = "DISCUSSION_SYNTHESIS_REJECTED"
 GENERATION_ATTEMPTS: Final = 2
 RETRYABLE_CODES: Final = frozenset(
-    {INVALID_TWIN_DISCUSSION_OUTPUT, "INVALID_PROVIDER_OUTPUT", "INCOMPLETE_OUTPUT"}
+    {
+        INVALID_TWIN_DISCUSSION_OUTPUT,
+        "INVALID_PROVIDER_OUTPUT",
+        "INCOMPLETE_OUTPUT",
+        "RESPONSE_SCHEMA_ERROR",
+    }
 )
 WRITE_ERRORS: Final = {
     DiscussionWriteStatus.PROJECT_NOT_FOUND: (404, "PROJECT_NOT_FOUND"),
@@ -104,6 +115,14 @@ class DesignDiscussionResult:
     discussion: DesignDiscussion
 
 
+def discussion_route(generator):
+    return generator.route(TWIN_DISCUSSION_TASK, STATEMENT_PURPOSE)
+
+
+def hosted_discussion(generator) -> bool:
+    return discussion_route(generator).configuration.provider_kind in HOSTED_PROVIDER_KINDS
+
+
 def _refusal(status: DiscussionWriteStatus) -> HTTPException:
     code, detail = WRITE_ERRORS[status]
     return HTTPException(code, detail={"code": detail})
@@ -135,6 +154,11 @@ async def _record_statement(statement, discussion_id: UUID) -> None:
         {
             "result": statement.to_snapshot(),
             "generated_content_hashes": {"TWIN_STATEMENT": [statement.content_hash]},
+            **(
+                {"related_generations": list(scope.related_generations)}
+                if scope.related_generations
+                else {}
+            ),
         },
     )
     await _retire(scope, STATEMENT_RECORDED, discussion_id)
@@ -158,8 +182,10 @@ async def _attempt(generation, *, rejected: str, discussion_id: UUID):
     raise RuntimeError("discussion generation attempts are exhausted")
 
 
-async def _speak(generator, *, context, speaker, keys, previous, others, owner_note, locale):
-    output = await speak_as_twin(generator, context=context)
+async def _speak(
+    generator, *, context, speaker, keys, previous, others, owner_note, locale, hosted
+):
+    output = await speak_as_twin(generator, context=context, hosted=hosted)
     generation_id = _generation_id()
     try:
         return bind_statement(
@@ -177,8 +203,8 @@ async def _speak(generator, *, context, speaker, keys, previous, others, owner_n
         raise rejection from error
 
 
-async def _moderate(generator, *, context, keys, ordinal, note, statements, compose):
-    output = await moderate_discussion(generator, context=context)
+async def _moderate(generator, *, context, keys, ordinal, note, statements, compose, hosted):
+    output = await moderate_discussion(generator, context=context, hosted=hosted)
     generation_id = _generation_id()
     try:
         return compose(
@@ -232,15 +258,18 @@ class DesignDiscussionApplication:
         except ValueError as error:
             raise HTTPException(422, detail={"code": "DISCUSSION_NOTE_INVALID"}) from error
 
-    async def _design(self, owner_user_id, project_id, version_id, content_hash):
+    async def _design(
+        self, owner_user_id, project_id, version_id, content_hash, *, generator, locale
+    ):
         version = await self._loop._current(owner_user_id, project_id)
         if (version.id, version.content_hash) != (version_id, content_hash):
             raise HTTPException(409, detail={"code": "DESIGN_CONTEXT_CHANGED"})
+        hosted = hosted_discussion(generator)
         try:
-            view = design_review_view(version)
+            view = design_review_view(version, hosted=hosted, language=locale.split("-")[0])
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
-        return version, view
+        return version, view, hosted
 
     async def _still_current(self, owner_user_id, project_id, version):
         refreshed = await self._loop._current(owner_user_id, project_id)
@@ -264,6 +293,7 @@ class DesignDiscussionApplication:
         project_id,
         version,
         view,
+        hosted,
         twins,
         locale,
         note,
@@ -301,6 +331,7 @@ class DesignDiscussionApplication:
                     others=tuple(item.statement for item in earlier if item.twin_id != speaker_id),
                     owner_note=note,
                     locale=locale,
+                    hosted=hosted,
                 ),
                 rejected=STATEMENT_REJECTED,
                 discussion_id=discussion_id,
@@ -318,12 +349,14 @@ class DesignDiscussionApplication:
                     owner_note=note,
                     keys=keys,
                     statements=statements,
+                    screens=screen_titles(view) if hosted else (),
                 ),
                 keys=keys,
                 ordinal=ordinal,
                 note=note,
                 statements=statements,
                 compose=compose,
+                hosted=hosted,
             ),
             rejected=SYNTHESIS_REJECTED,
             discussion_id=discussion_id,
@@ -340,8 +373,13 @@ class DesignDiscussionApplication:
     async def start(self, *, owner_user_id, project_id, body) -> DesignDiscussionResult:
         note = self._note(body.owner_note)
         generator = self._generator()
-        version, view = await self._design(
-            owner_user_id, project_id, body.design_version_id, body.design_content_hash
+        version, view, hosted = await self._design(
+            owner_user_id,
+            project_id,
+            body.design_version_id,
+            body.design_content_hash,
+            generator=generator,
+            locale=body.locale,
         )
         twins = await self._loop._twins(owner_user_id, project_id, version)
         sessions = self._loop._sessions()
@@ -384,6 +422,7 @@ class DesignDiscussionApplication:
             project_id=project_id,
             version=version,
             view=view,
+            hosted=hosted,
             twins=twins,
             locale=body.locale,
             note=note,
@@ -418,8 +457,13 @@ class DesignDiscussionApplication:
             raise _refusal(DiscussionWriteStatus.DISCUSSION_CHANGED)
         if len(current.rounds) >= MAX_DISCUSSION_ROUNDS:
             raise _refusal(DiscussionWriteStatus.DISCUSSION_FULL)
-        version, view = await self._design(
-            owner_user_id, project_id, current.design_version_id, current.design_content_hash
+        version, view, hosted = await self._design(
+            owner_user_id,
+            project_id,
+            current.design_version_id,
+            current.design_content_hash,
+            generator=generator,
+            locale=current.locale,
         )
         twins = await self._loop._twins(owner_user_id, project_id, version)
         discussion = await self._discuss(
@@ -429,6 +473,7 @@ class DesignDiscussionApplication:
             project_id=project_id,
             version=version,
             view=view,
+            hosted=hosted,
             twins=twins,
             locale=current.locale,
             note=note,
@@ -490,10 +535,20 @@ def create_design_discussion_router():
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
     ):
-        result = await DesignDiscussionApplication(request.app.state.application_runtime).start(
-            owner_user_id=user.id, project_id=project_id, body=body
+        async def opening():
+            result = await DesignDiscussionApplication(request.app.state.application_runtime).start(
+                owner_user_id=user.id, project_id=project_id, body=body
+            )
+            return result.discussion.to_snapshot()
+
+        return await generation_request(
+            request,
+            GenerationOperation.DISCUSSION_START,
+            opening,
+            owner_user_id=user.id,
+            project_id=project_id,
+            body=body,
         )
-        return result.discussion.to_snapshot()
 
     @router.post("/{discussion_id}/rounds", status_code=201)
     async def next_round(
@@ -503,12 +558,22 @@ def create_design_discussion_router():
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
     ):
-        result = await DesignDiscussionApplication(
-            request.app.state.application_runtime
-        ).next_round(
-            owner_user_id=user.id, project_id=project_id, discussion_id=discussion_id, body=body
+        async def continuation():
+            result = await DesignDiscussionApplication(
+                request.app.state.application_runtime
+            ).next_round(
+                owner_user_id=user.id, project_id=project_id, discussion_id=discussion_id, body=body
+            )
+            return result.discussion.to_snapshot()
+
+        return await generation_request(
+            request,
+            GenerationOperation.DISCUSSION_ROUND,
+            continuation,
+            owner_user_id=user.id,
+            project_id=project_id,
+            body=body,
         )
-        return result.discussion.to_snapshot()
 
     @router.post("/{discussion_id}/decision")
     async def decide(
@@ -538,4 +603,6 @@ __all__ = [
     "DiscussionDecisionRequest",
     "DiscussionRoundRequest",
     "create_design_discussion_router",
+    "discussion_route",
+    "hosted_discussion",
 ]

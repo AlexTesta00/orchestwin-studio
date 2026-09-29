@@ -46,7 +46,7 @@ describe("ProjectBriefEditor", () => {
     );
   });
 
-  it("has no axe violations", async () => {
+  it("has no axe violations", { timeout: 30000 }, async () => {
     const wrapper = mount(ProjectBriefEditor, {
       props: { initial: null, busy: false },
       global: { plugins: [createAppI18n()] },

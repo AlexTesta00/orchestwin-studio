@@ -1,11 +1,15 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
+import { computed } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignLoopApi } from "@/api/designLoop";
 import { DesignLoopApiError } from "@/api/designLoop";
-import type { InsightApplicationPayload } from "@/types/designLoop";
+import { MAX_TRAY_ITEMS, useInsightTrayStore } from "@/stores/insightTray";
+import { expectAccessible } from "@/test/axe";
+import type { InsightApplicationPayload, InsightSource } from "@/types/designLoop";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
+import { surfaceKey } from "./UiSurface.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
@@ -50,27 +54,59 @@ function fakeApi(): DesignLoopApi {
   };
 }
 
+const CHAT_SOURCE: InsightSource = {
+  kind: "TWIN_CHAT_INSIGHT",
+  id: "turn-1:0",
+  twinId: "twin-1",
+  text: "Fast check-in.",
+};
+
+function mountMenu(
+  api: DesignLoopApi,
+  source: InsightSource = CHAT_SOURCE,
+  locale: "en" | "it" = "it",
+) {
+  return mount(InsightApplyMenu, {
+    props: { projectId: "project-1", source, locale, authorize, api },
+  });
+}
+
 describe("InsightApplyMenu", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
   });
 
+  it("offers the design first, then the requirements and the brief last", () => {
+    const wrapper = mountMenu(fakeApi());
+    const actions = wrapper
+      .findAll("button")
+      .map((button) => [button.attributes("data-testid"), button.text()]);
+    expect(actions).toEqual([
+      ["insight-apply-design", "Nel design"],
+      ["insight-apply-requirements", "Nei requisiti"],
+      ["insight-apply-brief", "Metti da parte per il brief"],
+    ]);
+    expect(wrapper.get('[data-testid="insight-apply-design"]').classes()).toContain("bg-action");
+    expect(wrapper.get('[data-testid="insight-apply-requirements"]').classes()).not.toContain(
+      "bg-action",
+    );
+    const note = wrapper.get('[data-testid="insight-brief-note"]');
+    expect(note.text()).toBe(
+      "Nel brief cambia il punto di partenza: brief, squadra, twin, requisiti e design andranno approvati di nuovo.",
+    );
+    expect(wrapper.get('[data-testid="insight-apply-brief"]').attributes("aria-describedby")).toBe(
+      note.attributes("id"),
+    );
+  });
+
   it("applies the insight to the requirements and reports the created code", async () => {
     const api = fakeApi();
-    const wrapper = mount(InsightApplyMenu, {
-      props: {
-        projectId: "project-1",
-        source: {
-          kind: "SYNTHETIC_FINDING",
-          id: "run:1:UTF-001",
-          twinId: "twin-1",
-          text: "Show the date format.",
-          mitigation: "Add a hint.",
-        },
-        locale: "it",
-        authorize,
-        api,
-      },
+    const wrapper = mountMenu(api, {
+      kind: "SYNTHETIC_FINDING",
+      id: "run:1:UTF-001",
+      twinId: "twin-1",
+      text: "Show the date format.",
+      mitigation: "Add a hint.",
     });
     await wrapper.get('[data-testid="insight-apply-requirements"]').trigger("click");
     await flushPromises();
@@ -89,7 +125,82 @@ describe("InsightApplyMenu", () => {
     expect(wrapper.emitted("applied")).toHaveLength(1);
   });
 
-  it("sends the chosen brief field and explains duplicates", async () => {
+  it("sets the insight aside for the brief with the chosen field and applies nothing", async () => {
+    const api = fakeApi();
+    const wrapper = mountMenu(api, CHAT_SOURCE, "en");
+    await wrapper.get('[data-testid="insight-brief-field"]').setValue("goals");
+    await wrapper.get('[data-testid="insight-apply-brief"]').trigger("click");
+    await flushPromises();
+    expect(api.applyInsight).not.toHaveBeenCalled();
+    expect(wrapper.emitted("applied")).toBeUndefined();
+    expect(wrapper.find('[data-testid="insight-applied"]').exists()).toBe(false);
+    expect(useInsightTrayStore().itemsOf("project-1")).toEqual([
+      {
+        sourceKind: "TWIN_CHAT_INSIGHT",
+        sourceId: "turn-1:0",
+        sourceTwinId: "twin-1",
+        text: "Fast check-in.",
+        briefField: "goals",
+      },
+    ]);
+    const brief = wrapper.get('[data-testid="insight-apply-brief"]');
+    expect(brief.attributes("disabled")).toBeDefined();
+    expect(brief.text()).toBe("Set aside for the brief");
+    expect(wrapper.get('[data-testid="insight-brief-field"]').attributes("disabled")).toBeDefined();
+    await brief.trigger("click");
+    expect(useInsightTrayStore().itemsOf("project-1")).toHaveLength(1);
+    expect(
+      wrapper.get('[data-testid="insight-apply-design"]').attributes("disabled"),
+    ).toBeUndefined();
+  });
+
+  it("shows an insight already set aside as disabled with its field until the tray is emptied", async () => {
+    const tray = useInsightTrayStore();
+    tray.add("project-1", {
+      sourceKind: "TWIN_CHAT_INSIGHT",
+      sourceId: "turn-1:0",
+      sourceTwinId: "twin-1",
+      text: "Fast check-in.",
+      briefField: "risks",
+    });
+    const wrapper = mountMenu(fakeApi());
+    const brief = wrapper.get('[data-testid="insight-apply-brief"]');
+    expect(brief.attributes("disabled")).toBeDefined();
+    expect(brief.text()).toBe("Messo da parte per il brief");
+    expect(
+      (wrapper.get('[data-testid="insight-brief-field"]').element as HTMLSelectElement).value,
+    ).toBe("risks");
+    tray.clear("project-1");
+    await flushPromises();
+    expect(brief.attributes("disabled")).toBeUndefined();
+    expect(brief.text()).toBe("Metti da parte per il brief");
+  });
+
+  it("stops setting insights aside when the tray is full", async () => {
+    const tray = useInsightTrayStore();
+    for (let index = 0; index < MAX_TRAY_ITEMS; index += 1) {
+      tray.add("project-1", {
+        sourceKind: "TWIN_CHAT_INSIGHT",
+        sourceId: `turn-${index + 10}:0`,
+        sourceTwinId: null,
+        text: `Insight ${index}.`,
+        briefField: "goals",
+      });
+    }
+    const wrapper = mountMenu(fakeApi());
+    expect(wrapper.get('[data-testid="insight-apply-brief"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="insight-brief-full"]').text()).toBe(
+      "Hai già messo da parte 20 spunti, il massimo per una versione del brief.",
+    );
+    tray.remove("project-1", "TWIN_CHAT_INSIGHT", "turn-10:0");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="insight-brief-full"]').exists()).toBe(false);
+    expect(
+      wrapper.get('[data-testid="insight-apply-brief"]').attributes("disabled"),
+    ).toBeUndefined();
+  });
+
+  it("explains a duplicate brought into the requirements", async () => {
     const api = fakeApi();
     vi.mocked(api.applyInsight).mockRejectedValueOnce(
       new DesignLoopApiError("failed", {
@@ -98,45 +209,20 @@ describe("InsightApplyMenu", () => {
         payload: null,
       }),
     );
-    const wrapper = mount(InsightApplyMenu, {
-      props: {
-        projectId: "project-1",
-        source: { kind: "TWIN_CHAT_INSIGHT", id: "turn-1:0", text: "Fast check-in." },
-        authorize,
-        api,
-      },
-    });
-    await wrapper.get('[data-testid="insight-brief-field"]').setValue("goals");
-    await wrapper.get('[data-testid="insight-apply-brief"]').trigger("click");
+    const wrapper = mountMenu(api, CHAT_SOURCE, "en");
+    await wrapper.get('[data-testid="insight-apply-requirements"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toBe("This insight is already in the project.");
-    await wrapper.get('[data-testid="insight-apply-brief"]').trigger("click");
-    await flushPromises();
-    expect(vi.mocked(api.applyInsight).mock.calls[1]?.[1]).toMatchObject({
-      target: "BRIEF",
-      brief_field: "goals",
-      source_twin_id: null,
-    });
-    expect(wrapper.get('[data-testid="insight-applied"]').text()).toBe(
-      "Added to the brief (Goals, version 3).",
-    );
+    expect(wrapper.emitted("applied")).toBeUndefined();
   });
 
   it("applies a discussion proposal and explains a finding set aside by the owner", async () => {
     const api = fakeApi();
-    const wrapper = mount(InsightApplyMenu, {
-      props: {
-        projectId: "project-1",
-        source: {
-          kind: "TWIN_DISCUSSION",
-          id: "discussion:discussion-1:1:PRP-001",
-          twinId: null,
-          text: "Show the booking total before confirming.",
-        },
-        locale: "it",
-        authorize,
-        api,
-      },
+    const wrapper = mountMenu(api, {
+      kind: "TWIN_DISCUSSION",
+      id: "discussion:discussion-1:1:PRP-001",
+      twinId: null,
+      text: "Show the booking total before confirming.",
     });
     await wrapper.get('[data-testid="insight-apply-design"]').trigger("click");
     await flushPromises();
@@ -149,6 +235,7 @@ describe("InsightApplyMenu", () => {
       brief_field: null,
       mitigation: null,
     });
+    expect(wrapper.emitted("applied")).toHaveLength(1);
     vi.mocked(api.applyInsight).mockRejectedValueOnce(
       new DesignLoopApiError("failed", {
         status: 409,
@@ -161,5 +248,32 @@ describe("InsightApplyMenu", () => {
     expect(wrapper.get('[role="alert"]').text()).toBe(
       "Hai segnato questa osservazione come non pertinente, quindi non viene portata nel progetto.",
     );
+  });
+
+  it("follows the dark surface it sits on, with the same actions and identifiers", async () => {
+    const api = fakeApi();
+    const wrapper = mount(InsightApplyMenu, {
+      props: { projectId: "project-1", source: CHAT_SOURCE, locale: "it", authorize, api },
+      global: { provide: { [surfaceKey as symbol]: computed(() => "night") } },
+    });
+    const menu = wrapper.get('[data-testid="insight-apply-menu"]');
+    expect(menu.attributes("data-surface-context")).toBe("night");
+    const design = wrapper.get('[data-testid="insight-apply-design"]');
+    expect(design.classes()).toEqual(expect.arrayContaining(["bg-on-night", "text-ink"]));
+    expect(design.classes()).not.toContain("bg-action");
+    expect(wrapper.get('[data-testid="insight-apply-requirements"]').classes()).toContain(
+      "border-night-line-strong",
+    );
+    expect(wrapper.get('[data-testid="insight-brief-field"]').classes()).toContain(
+      "bg-night-panel",
+    );
+    expect(wrapper.html()).not.toMatch(/bg-white|text-ink-2/);
+    await design.trigger("click");
+    await flushPromises();
+    expect(vi.mocked(api.applyInsight).mock.calls[0]?.[1]).toMatchObject({ target: "DESIGN" });
+    expect(wrapper.get('[data-testid="insight-applied"]').classes()).toContain(
+      "text-petrol-on-night-2",
+    );
+    await expectAccessible(wrapper.element);
   });
 });

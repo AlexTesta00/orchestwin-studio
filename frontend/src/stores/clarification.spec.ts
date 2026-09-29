@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
+import type { ProjectBriefVersionResponse } from "@/api/contracts";
 import type {
   BriefAssumptionResponse,
   HumanGateResponse,
@@ -49,6 +50,36 @@ const GATE: HumanGateResponse = {
   resume_status: null,
 };
 
+const BRIEF_VERSION: ProjectBriefVersionResponse = {
+  id: "brief-version-2",
+  project_id: PROJECT_ID,
+  version_number: 2,
+  schema_version: 1,
+  content_hash: "b".repeat(64),
+  created_by_user_id: "owner-id",
+  created_at: "2026-08-12T12:02:00Z",
+  brief: {
+    name: "Project",
+    description: null,
+    problem: null,
+    goals: null,
+    target_users: null,
+    domain: null,
+    technical_constraints: null,
+    temporal_constraints: null,
+    budget: "Approximately EUR 5,000.",
+    functional_requirements: null,
+    non_functional_requirements: null,
+    risks: null,
+    stakeholders: null,
+    available_artifacts: null,
+    definition_of_done: null,
+    unknown_fields: [],
+    provided_fields: ["name", "budget"],
+    missing_fields: [],
+  },
+};
+
 const authorize: AuthorizedRequest = <T>(
   operation: (accessToken: string) => Promise<T>,
 ): Promise<T> => operation("access-token");
@@ -75,6 +106,17 @@ function buildApi(): ProjectWorkflowApi {
         status: "ACCEPTED",
         assumption: assumptions[0] ?? null,
         brief_version: null,
+      };
+    },
+
+    async acceptAllProjectBriefAssumptions() {
+      assumptions = [{ ...ASSUMPTION, status: "ACCEPTED" }];
+
+      return {
+        status: "ACCEPTED",
+        accepted: assumptions,
+        skipped: [],
+        brief_version: BRIEF_VERSION,
       };
     },
 
@@ -164,6 +206,66 @@ describe("useClarificationStore", () => {
     expect(result?.status).toBe("ACCEPTED");
     expect(store.lastAssumptionDecision?.assumption?.status).toBe("ACCEPTED");
     expect(store.assumptions[0]?.status).toBe("ACCEPTED");
+  });
+
+  it("accepts every proposal at once and announces the new brief version", async () => {
+    const store = useClarificationStore();
+    const api = buildApi();
+    const acceptAll = vi.spyOn(api, "acceptAllProjectBriefAssumptions");
+
+    await store.load(PROJECT_ID, api, authorize);
+
+    const result = await store.acceptAllAssumptions(
+      PROJECT_ID,
+      "Confirmed together.",
+      api,
+      authorize,
+    );
+
+    expect(acceptAll).toHaveBeenCalledWith("access-token", PROJECT_ID, "Confirmed together.");
+    expect(result?.status).toBe("ACCEPTED");
+    expect(store.lastBulkAcceptance).toEqual(result);
+    expect(store.lastAssumptionDecision).toEqual({
+      status: "ACCEPTED",
+      assumption: { ...ASSUMPTION, status: "ACCEPTED" },
+      brief_version: BRIEF_VERSION,
+    });
+    expect(store.assumptions[0]?.status).toBe("ACCEPTED");
+    expect(store.busy).toBe(false);
+    expect(store.errorDetail).toBeNull();
+  });
+
+  it("keeps the brief version untouched when no proposal can be accepted", async () => {
+    const store = useClarificationStore();
+    const api = buildApi();
+
+    api.acceptAllProjectBriefAssumptions = async () => ({
+      status: "NOTHING_TO_ACCEPT",
+      accepted: [],
+      skipped: [ASSUMPTION],
+      brief_version: null,
+    });
+
+    await store.load(PROJECT_ID, api, authorize);
+
+    const result = await store.acceptAllAssumptions(PROJECT_ID, null, api, authorize);
+
+    expect(result?.status).toBe("NOTHING_TO_ACCEPT");
+    expect(store.lastBulkAcceptance?.skipped).toEqual([ASSUMPTION]);
+    expect(store.lastAssumptionDecision).toBeNull();
+    expect(store.errorDetail).toBeNull();
+  });
+
+  it("forgets the bulk outcome once a single proposal is decided", async () => {
+    const store = useClarificationStore();
+    const api = buildApi();
+
+    await store.load(PROJECT_ID, api, authorize);
+    await store.acceptAllAssumptions(PROJECT_ID, null, api, authorize);
+    await store.rejectAssumption(PROJECT_ID, ASSUMPTION.id, "Not supported.", api, authorize);
+
+    expect(store.lastBulkAcceptance).toBeNull();
+    expect(store.lastAssumptionDecision?.status).toBe("REJECTED");
   });
 
   it("treats a missing gate as an empty workflow state", async () => {

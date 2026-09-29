@@ -58,12 +58,14 @@ from orchestwin.models.output_language import (
     word_count,
     written_in_another_language,
 )
+from orchestwin.models.planning_schema import HOSTED_DESIGN_PURPOSE
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements_drafts import Draft, Links, Text, Title
 from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
 
 TITLE_LENGTH: Final = 200
 TEXT_LENGTH: Final = 2000
+HOSTED_DESIGN_CONTRACT_VERSION: Final = 101
 LANGUAGE_GROUPS: Final = ("requirements", "stories", "criteria", "scenarios")
 LANGUAGE_MIN_WORDS: Final = 4
 ALTERNATIVE_TEXT_LISTS: Final = (
@@ -85,6 +87,10 @@ CRITIQUE_TEXT_LISTS: Final = (
     "suggested_changes",
 )
 CRITIQUE_DOMAIN_FIELDS: Final = {"on_accessibility": "accessibility_observations"}
+VERDICT_LIMITS: Final = {
+    "verdict": domain.MAX_CRITIQUE_VERDICT_LENGTH,
+    "quote": domain.MAX_CRITIQUE_QUOTE_LENGTH,
+}
 CATALOG_IDS: Final = frozenset(item.value for enum in VISUAL_DIMENSIONS.values() for item in enum)
 UNCHOSEN_CATALOG_VALUES: Final = "the design names catalog values that were not chosen"
 _KEY_TOKEN: Final = re.compile(r"\bT[1-9]\d?\b")
@@ -190,6 +196,19 @@ class DesignDraft(BaseModel):
     recommendation: str
     concerns: tuple[ConcernDraft, ...]
     open_questions: tuple[Text, ...]
+
+
+class HostedCritiqueDraft(CritiqueDraft):
+    quote: Annotated[str, Field(min_length=1, max_length=domain.MAX_CRITIQUE_QUOTE_LENGTH)]
+    verdict: Annotated[str, Field(min_length=1, max_length=domain.MAX_CRITIQUE_VERDICT_LENGTH)]
+
+
+class HostedDesignDraft(DesignDraft):
+    critiques: Annotated[tuple[HostedCritiqueDraft, ...], Field(min_length=2)]
+
+
+def hosted_design_context(context):
+    return {**context, "purpose": HOSTED_DESIGN_PURPOSE}
 
 
 def requirement_code_map(spec):
@@ -366,6 +385,7 @@ def map_draft_texts(draft, single, items):
                     key: items(CritiqueDraft, key, getattr(x, key), (x.alternative,))
                     for key in CRITIQUE_TEXT_LISTS
                 },
+                **_verdict_texts(x, single),
             }
         )
         for x in draft.critiques
@@ -387,6 +407,19 @@ def map_draft_texts(draft, single, items):
             "open_questions": items(DesignDraft, "open_questions", draft.open_questions, everyone),
         }
     )
+
+
+def verdict_values(critique):
+    if not isinstance(critique, HostedCritiqueDraft):
+        return {}
+    return {"verdict": critique.verdict, "quote": critique.quote}
+
+
+def _verdict_texts(critique, single):
+    return {
+        key: single(value, (critique.alternative,), VERDICT_LIMITS[key])
+        for key, value in verdict_values(critique).items()
+    }
 
 
 def named_draft(draft, names):
@@ -469,6 +502,7 @@ def draft_texts(draft):
         yield x.rationale
         for key in CRITIQUE_TEXT_LISTS:
             yield from getattr(x, key)
+        yield from verdict_values(x).values()
     for x in draft.concerns:
         yield x.summary
         yield x.mitigation
@@ -566,6 +600,7 @@ def bind_design(draft, request, twins, model_reference):
                         CRITIQUE_DOMAIN_FIELDS.get(key, key): getattr(x, key)
                         for key in CRITIQUE_TEXT_LISTS
                     },
+                    **verdict_values(x),
                 )
             )
         concerns = [

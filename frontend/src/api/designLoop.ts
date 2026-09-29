@@ -1,3 +1,4 @@
+import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type { DesignGenerationPayload } from "../types/design";
@@ -13,6 +14,8 @@ import type {
   FindingValidationRequest,
   InsightApplicationPayload,
   InsightApplicationRequest,
+  InsightBatchApplicationPayload,
+  InsightBatchApplicationRequest,
 } from "../types/designLoop";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -67,6 +70,14 @@ export interface DesignLoopApi {
   ): Promise<DesignDiscussionPayload>;
 }
 
+export interface InsightBatchApi {
+  applyInsightBatch(
+    projectId: string,
+    body: InsightBatchApplicationRequest,
+    accessToken: string,
+  ): Promise<InsightBatchApplicationPayload>;
+}
+
 export class DesignLoopApiError extends ApiRequestError {}
 
 function normalizedBasePath(value: string): string {
@@ -112,7 +123,9 @@ async function responsePayload(response: Response): Promise<unknown> {
   }
 }
 
-export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignLoopApi {
+export function createDesignLoopApi(
+  options: DesignLoopApiOptions = {},
+): DesignLoopApi & InsightBatchApi {
   const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
@@ -125,6 +138,7 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
     accessToken: string,
     method: "GET" | "POST",
     body?: unknown,
+    generationProjectId?: string,
   ): Promise<unknown> {
     const headers = new Headers();
     headers.set("Accept", "application/json");
@@ -134,7 +148,14 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
       headers.set("Content-Type", "application/json");
       init.body = JSON.stringify(body);
     }
-    const response = await fetchImpl(path, init);
+    const response =
+      generationProjectId === undefined
+        ? await fetchImpl(path, init)
+        : await sendGeneration(path, init, {
+            fetchImpl,
+            basePath,
+            projectId: generationProjectId,
+          });
     const payload = await responsePayload(response);
     if (!response.ok) {
       throw new DesignLoopApiError("The design loop request failed", {
@@ -153,6 +174,7 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignEvaluationRunPayload;
     },
 
@@ -185,6 +207,7 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         accessToken,
         "POST",
         {},
+        projectId,
       )) as DesignGenerationPayload;
     },
 
@@ -195,6 +218,15 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         "POST",
         body,
       )) as InsightApplicationPayload;
+    },
+
+    async applyInsightBatch(projectId, body, accessToken) {
+      return (await request(
+        `${projectPath(projectId)}/insight-applications/batch`,
+        accessToken,
+        "POST",
+        body,
+      )) as InsightBatchApplicationPayload;
     },
 
     async applications(projectId, accessToken) {
@@ -236,6 +268,7 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignDiscussionPayload;
     },
 
@@ -245,6 +278,7 @@ export function createDesignLoopApi(options: DesignLoopApiOptions = {}): DesignL
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignDiscussionPayload;
     },
 

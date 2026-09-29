@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     HTTPException,
     Request,
@@ -41,6 +42,8 @@ from orchestwin.projects.briefs import (
     BriefField,
 )
 from orchestwin.projects.clarification_application import (
+    BriefAssumptionBulkAcceptanceResult,
+    BriefAssumptionBulkAcceptanceStatus,
     BriefAssumptionCreationResult,
     BriefAssumptionCreationStatus,
     BriefAssumptionDecisionResult,
@@ -185,6 +188,15 @@ class BriefAssumptionDecisionResponse(BaseModel):
 
     status: BriefAssumptionDecisionStatus
     assumption: BriefAssumptionResponse | None
+    brief_version: ProjectBriefVersionResponse | None
+
+
+class BriefAssumptionBulkAcceptanceResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: BriefAssumptionBulkAcceptanceStatus
+    accepted: tuple[BriefAssumptionResponse, ...]
+    skipped: tuple[BriefAssumptionResponse, ...]
     brief_version: ProjectBriefVersionResponse | None
 
 
@@ -431,6 +443,21 @@ def _assumption_decision_response(
     )
 
 
+def _assumption_bulk_acceptance_response(
+    result: BriefAssumptionBulkAcceptanceResult,
+) -> BriefAssumptionBulkAcceptanceResponse:
+    return BriefAssumptionBulkAcceptanceResponse(
+        status=result.status,
+        accepted=tuple(
+            BriefAssumptionResponse.from_domain(assumption) for assumption in result.accepted
+        ),
+        skipped=tuple(
+            BriefAssumptionResponse.from_domain(assumption) for assumption in result.skipped
+        ),
+        brief_version=_brief_version_response(result.version),
+    )
+
+
 def _brief_gate_submission_response(
     result: ProjectBriefGateSubmissionResult,
 ) -> ProjectBriefGateSubmissionResponse:
@@ -530,6 +557,50 @@ def create_clarification_router() -> APIRouter:
             response.status_code = status.HTTP_409_CONFLICT
 
         return _assumption_creation_response(result)
+
+    @router.post(
+        "/{project_id}/brief-assumptions/accept-all",
+        response_model=BriefAssumptionBulkAcceptanceResponse,
+        operation_id="acceptAllProjectBriefAssumptions",
+    )
+    async def accept_all_assumptions_endpoint(
+        project_id: UUID,
+        response: Response,
+        user: Annotated[
+            UserAccount,
+            Depends(current_user_dependency),
+        ],
+        service: Annotated[
+            ProjectClarificationApplicationService,
+            Depends(clarification_service_dependency),
+        ],
+        payload: Annotated[
+            BriefAssumptionDecisionRequest | None,
+            Body(),
+        ] = None,
+    ) -> BriefAssumptionBulkAcceptanceResponse:
+        try:
+            result = await service.accept_all_assumptions(
+                project_id=project_id,
+                owner_user_id=user.id,
+                reason=None if payload is None else payload.reason,
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=(status.HTTP_422_UNPROCESSABLE_CONTENT),
+                detail="invalid_assumption_acceptance",
+            ) from error
+
+        if result.status is BriefAssumptionBulkAcceptanceStatus.BRIEF_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="project_brief_not_found",
+            )
+
+        if result.status is BriefAssumptionBulkAcceptanceStatus.NOTHING_TO_ACCEPT:
+            response.status_code = status.HTTP_409_CONFLICT
+
+        return _assumption_bulk_acceptance_response(result)
 
     @router.post(
         "/{project_id}/brief-assumptions/{assumption_id}/accept",

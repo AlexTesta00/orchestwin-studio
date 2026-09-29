@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 import { apiClient } from "@/api/client";
@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useShellStore } from "@/stores/shell";
 
 const router = useRouter();
+const route = useRoute();
 const shellStore = useShellStore();
 const authStore = useAuthStore();
 
@@ -29,10 +30,22 @@ const navigationToggleText = computed(() =>
   isNavigationOpen.value ? t("navigation.close") : t("navigation.menu"),
 );
 
-function navigationLinkClasses(isExactActive: boolean): string[] {
+const inProjects = computed(() => route.name === "projects" || route.name === "project-detail");
+
+const initials = computed(() => {
+  const name = (user.value?.email ?? "").split("@")[0] ?? "";
+  const parts = name.split(/[^\p{L}\p{N}]+/u).filter((part) => part.length > 0);
+  return parts
+    .slice(0, 2)
+    .map((part) => Array.from(part)[0] ?? "")
+    .join("")
+    .toUpperCase();
+});
+
+function navigationLinkClasses(isActive: boolean): string[] {
   return [
-    "block rounded-control px-3 py-2 text-sm font-semibold transition-colors duration-150",
-    isExactActive ? "bg-surface-3 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+    "inline-flex min-h-11 items-center rounded-control px-3.5 text-[15px] font-medium text-ink transition-colors duration-150",
+    isActive ? "bg-surface-3" : "hover:bg-surface-3/70",
   ];
 }
 
@@ -55,23 +68,21 @@ async function logout(): Promise<void> {
       {{ t("navigation.skip") }}
     </a>
 
-    <header
-      class="sticky top-0 z-40 border-b border-topbar-line bg-surface/78 backdrop-blur-xl backdrop-saturate-150"
-    >
+    <header class="sticky top-0 z-40 border-b border-topbar-line bg-page/94 backdrop-blur-sm">
       <div
-        class="mx-auto grid max-w-[1180px] grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto]"
+        class="mx-auto flex min-h-16 max-w-[1240px] flex-wrap items-center gap-x-6 px-4 py-2.5 sm:px-6 md:flex-nowrap lg:px-8"
       >
         <RouterLink
-          class="inline-flex items-center gap-2.5 rounded-control text-[15px] font-semibold tracking-block"
+          class="inline-flex min-h-11 shrink-0 items-center rounded-control"
           to="/"
           :aria-label="t('app.homeAriaLabel')"
+          data-testid="home-link"
         >
-          <UiBrandMark :size="26" />
-          <span>{{ t("app.title") }}</span>
+          <UiBrandMark wordmark />
         </RouterLink>
 
         <button
-          class="inline-flex min-h-11 items-center justify-center rounded-control border border-button-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 md:hidden"
+          class="ml-auto inline-flex min-h-11 items-center justify-center rounded-pill border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-3 md:hidden"
           type="button"
           aria-controls="primary-navigation"
           :aria-expanded="isNavigationOpen"
@@ -85,86 +96,107 @@ async function logout(): Promise<void> {
         <nav
           id="primary-navigation"
           :class="[
-            'col-span-full w-full flex-col gap-1 md:col-span-1 md:w-auto md:flex-row md:items-center md:justify-self-end',
+            'mt-2.5 w-full flex-col gap-3 border-t border-line pt-3 md:mt-0 md:ml-auto md:w-auto md:flex-row md:items-center md:gap-1 md:border-0 md:pt-0',
             isNavigationOpen ? 'flex' : 'hidden md:flex',
           ]"
           :aria-label="t('navigation.label')"
           @click="shellStore.closeNavigation"
         >
-          <RouterLink v-slot="{ href, navigate, isExactActive }" custom to="/">
-            <a
-              :href="href"
-              :class="navigationLinkClasses(isExactActive)"
-              :aria-current="isExactActive ? 'page' : undefined"
-              data-testid="overview-link"
-              @click="navigate"
+          <div class="flex flex-col gap-1 md:flex-row md:items-center">
+            <RouterLink v-slot="{ href, navigate, isExactActive }" custom to="/">
+              <a
+                :href="href"
+                :class="navigationLinkClasses(isExactActive)"
+                :aria-current="isExactActive ? 'page' : undefined"
+                data-testid="overview-link"
+                @click="navigate"
+              >
+                {{ t("navigation.overview") }}
+              </a>
+            </RouterLink>
+
+            <RouterLink
+              v-if="isAuthenticated"
+              v-slot="{ href, navigate, isExactActive }"
+              custom
+              to="/projects"
             >
-              {{ t("navigation.overview") }}
-            </a>
-          </RouterLink>
+              <a
+                :href="href"
+                :class="navigationLinkClasses(inProjects)"
+                :aria-current="isExactActive ? 'page' : undefined"
+                data-testid="projects-link"
+                @click="navigate"
+              >
+                {{ t("navigation.projects") }}
+              </a>
+            </RouterLink>
 
-          <RouterLink
-            v-if="isAuthenticated"
-            v-slot="{ href, navigate, isExactActive }"
-            custom
-            to="/projects"
-          >
-            <a
-              :href="href"
-              :class="navigationLinkClasses(isExactActive)"
-              :aria-current="isExactActive ? 'page' : undefined"
-              data-testid="projects-link"
-              @click="navigate"
+            <RouterLink
+              v-if="!isAuthenticated"
+              v-slot="{ href, navigate, isExactActive }"
+              custom
+              to="/login"
             >
-              {{ t("navigation.projects") }}
-            </a>
-          </RouterLink>
+              <a
+                :href="href"
+                :class="navigationLinkClasses(isExactActive)"
+                :aria-current="isExactActive ? 'page' : undefined"
+                data-testid="login-link"
+                @click="navigate"
+              >
+                {{ t("navigation.login") }}
+              </a>
+            </RouterLink>
 
-          <RouterLink
-            v-if="!isAuthenticated"
-            :class="navigationLinkClasses(false)"
-            to="/login"
-            data-testid="login-link"
-          >
-            {{ t("navigation.login") }}
-          </RouterLink>
+            <RouterLink
+              v-if="!isAuthenticated"
+              class="inline-flex min-h-11 items-center justify-center rounded-control border border-ink bg-ink px-4 text-[15px] font-semibold text-white transition-colors duration-150 hover:bg-ink-2 md:ml-1.5"
+              to="/register"
+              data-testid="register-link"
+            >
+              {{ t("navigation.register") }}
+            </RouterLink>
+          </div>
 
-          <RouterLink
-            v-if="!isAuthenticated"
-            :class="navigationLinkClasses(false)"
-            to="/register"
-            data-testid="register-link"
-          >
-            {{ t("navigation.register") }}
-          </RouterLink>
+          <span aria-hidden="true" class="mx-2 hidden h-5 w-px bg-line-strong md:block" />
 
-          <button
-            v-if="isAuthenticated"
-            class="rounded-control px-3 py-2 text-left text-sm font-semibold text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-            type="button"
-            :disabled="authenticationStatus === 'loading'"
-            data-testid="logout-button"
-            @click="logout"
-          >
-            {{ t("navigation.logout") }}
-          </button>
+          <div class="flex items-center gap-1">
+            <LanguageSwitcher />
+
+            <template v-if="isAuthenticated">
+              <span
+                class="ml-auto inline-flex min-h-11 items-center px-1 md:ml-1"
+                :title="user?.email"
+                data-testid="user-initials"
+              >
+                <span
+                  aria-hidden="true"
+                  class="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-ink px-1 text-[13px] font-semibold text-white"
+                >
+                  {{ initials }}
+                </span>
+                <span class="sr-only">{{ t("navigation.account", { email: user?.email }) }}</span>
+              </span>
+
+              <button
+                class="inline-flex min-h-11 items-center rounded-control px-3 text-[15px] font-medium text-ink-3 transition-colors duration-150 hover:bg-surface-3/70 hover:text-ink disabled:cursor-not-allowed"
+                type="button"
+                :disabled="authenticationStatus === 'loading'"
+                data-testid="logout-button"
+                @click="logout"
+              >
+                {{ t("navigation.logout") }}
+              </button>
+            </template>
+          </div>
         </nav>
-
-        <div
-          class="col-span-full flex items-center justify-between gap-4 md:col-span-1 md:justify-end"
-        >
-          <span v-if="user" class="hidden font-mono text-xs text-ink-3 lg:inline">
-            {{ user.email }}
-          </span>
-
-          <LanguageSwitcher />
-        </div>
       </div>
     </header>
 
     <main
       id="main-content"
-      class="mx-auto min-h-[calc(100vh-4.5rem)] w-full max-w-[1180px] px-4 py-8 focus:outline-none sm:px-6 sm:py-10"
+      class="mx-auto min-h-[calc(100vh-4rem)] w-full max-w-[1320px] px-4 pt-4 pb-12 focus:outline-none sm:px-6"
       tabindex="-1"
     >
       <RouterView />

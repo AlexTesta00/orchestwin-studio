@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -50,6 +51,11 @@ from orchestwin.workflow.gates import (
     HumanGateType,
     create_human_gate,
     transition_human_gate,
+)
+from src.test.python.artifacts.test_design_package_extension import (
+    ASSERTIONS,
+    VERDICTS,
+    fixture_package,
 )
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "design_fixtures.py"
@@ -544,6 +550,144 @@ def test_application_factory_registers_design_routes_and_state_slots() -> None:
     assert application.state.design_revision_service is None
     assert application.state.design_query_service is None
     assert application.state.design_gate_service is None
+
+
+def test_design_package_payload_round_trips_the_mockup_the_assertions_and_the_verdicts() -> None:
+    package = fixture_package()
+
+    payload = DesignPackagePayload.from_domain(package)
+    dumped = payload.model_dump(mode="json")
+
+    assert payload.generated_mockup is not None
+    assert payload.generated_mockup.mockup.design_alternative_id == (
+        package.owner_selected_alternative_id
+    )
+    assert [screen.code for screen in payload.generated_mockup.mockup.screens] == [
+        screen.code for screen in package.generated_mockup.mockup.screens
+    ]
+    assert payload.generated_mockup.requirement_ids_by_code == dict(
+        package.generated_mockup.requirement_ids_by_code
+    )
+    assert payload.owner_assertions == ASSERTIONS
+    assert [(item.verdict, item.quote) for item in payload.critiques] == list(VERDICTS)
+    assert dumped["generated_mockup"] == package.to_snapshot()["generated_mockup"]
+    assert payload.to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain().content_hash == (
+        package.content_hash
+    )
+
+
+def test_design_package_payload_exposes_absent_additions_as_null_and_empty() -> None:
+    package = design_version().package
+    dumped = DesignPackagePayload.from_domain(package).model_dump(mode="json")
+    omitted = {
+        **{
+            key: value
+            for key, value in dumped.items()
+            if key not in {"generated_mockup", "owner_assertions"}
+        },
+        "critiques": [
+            {key: value for key, value in item.items() if key not in {"verdict", "quote"}}
+            for item in dumped["critiques"]
+        ],
+    }
+
+    assert dumped["generated_mockup"] is None
+    assert dumped["owner_assertions"] == []
+    assert all((item["verdict"], item["quote"]) == (None, None) for item in dumped["critiques"])
+    assert DesignPackagePayload.model_validate(dumped).to_domain() == package
+    assert DesignPackagePayload.model_validate(omitted).to_domain() == package
+    assert DesignPackagePayload.model_validate(dumped).to_domain().content_hash == (
+        package.content_hash
+    )
+
+
+def test_revision_endpoint_accepts_a_package_with_a_generated_mockup() -> None:
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    proposed = fixture_package()
+    payload = DesignPackagePayload.from_domain(proposed).model_dump(mode="json")
+
+    response = client.post(path("/revisions"), json={"package": payload})
+
+    assert response.status_code == 201
+    assert revisions.proposed == proposed
+
+
+def test_revision_endpoint_validates_a_client_mockup_like_the_output_of_a_model() -> None:
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    dumped = DesignPackagePayload.from_domain(fixture_package()).model_dump(mode="json")
+
+    def variant(change) -> dict:
+        value = json.loads(json.dumps(dumped))
+        change(value)
+        return value
+
+    def script(value) -> None:
+        screen = value["generated_mockup"]["mockup"]["screens"][0]
+        screen["markup"] += "<script>alert(1)</script>"
+
+    def remote_style(value) -> None:
+        value["generated_mockup"]["mockup"]["styles"] += ".x{background:url(https://x.invalid)}"
+
+    def unused_code(value) -> None:
+        value["generated_mockup"]["requirement_ids_by_code"]["REQ-042"] = str(UUID(int=42))
+
+    def lone_verdict(value) -> None:
+        value["critiques"][0]["quote"] = None
+
+    def too_many_assertions(value) -> None:
+        value["owner_assertions"] = [f"Asserzione numero {index}" for index in range(21)]
+
+    for change in (script, remote_style, unused_code, lone_verdict, too_many_assertions):
+        response = client.post(path("/revisions"), json={"package": variant(change)})
+
+        assert response.status_code == 422
+        assert response.json() == {"detail": {"code": "INVALID_DESIGN_PACKAGE"}}
+
+    assert revisions.proposed is None
+
+
+def test_openapi_describes_the_mockup_the_assertions_and_the_verdicts() -> None:
+    app = FastAPI()
+    app.include_router(create_design_router())
+    schemas = app.openapi()["components"]["schemas"]
+    dumped = DesignPackagePayload.from_domain(fixture_package()).model_dump(mode="json")
+    bound = dumped["generated_mockup"]
+
+    def named(model: str) -> list[dict]:
+        found = [
+            schema
+            for name, schema in schemas.items()
+            if name == model or name.startswith(f"{model}-")
+        ]
+        assert found
+        return found
+
+    for model, sample in (
+        ("DesignPackagePayload", dumped),
+        ("SyntheticDesignCritiquePayload", dumped["critiques"][0]),
+        ("BoundGeneratedMockupPayload", bound),
+        ("GeneratedMockupPayload", bound["mockup"]),
+        ("GeneratedScreenPayload", bound["mockup"]["screens"][0]),
+    ):
+        for schema in named(model):
+            assert set(schema["properties"]) == set(sample)
+
+    for schema in named("BoundGeneratedMockupPayload"):
+        assert schema["properties"]["requirement_ids_by_code"]["additionalProperties"] == {
+            "type": "string",
+            "format": "uuid",
+        }
+
+    assert {
+        "CRITIQUE_VERDICT",
+        "GENERATED_MOCKUP",
+        "GENERATED_SCREEN",
+        "GENERATED_STYLES",
+        "OWNER_ASSERTION",
+        "OWNER_ASSERTION_ORDER",
+    } <= set(schemas["DesignArtifactKind"]["enum"])
 
 
 def test_router_freezes_the_sprint_six_design_http_surface() -> None:

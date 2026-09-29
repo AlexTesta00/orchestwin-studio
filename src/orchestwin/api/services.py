@@ -33,7 +33,6 @@ from orchestwin.api.design import (
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
-from orchestwin.artifacts.design_package_export import DesignPackageExportService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import (
     ApplicationSettings,
@@ -50,6 +49,16 @@ from orchestwin.identity.application import (
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.persistence import SqlAlchemyIdentityUnitOfWorkFactory
 from orchestwin.identity.tokens import JwtAccessTokenService
+from orchestwin.knowledge.diagram_service import ProjectDiagramService
+from orchestwin.knowledge.export import KnowledgeSourceLoader
+from orchestwin.knowledge.feedback_runtime import SqlAlchemyKnowledgeFeedbackQueryService
+from orchestwin.knowledge.package_service import (
+    KnowledgePackageService,
+    SqlAlchemyKnowledgePackageStore,
+)
+from orchestwin.knowledge.project_import_service import ProjectImportService
+from orchestwin.knowledge.twin_import_service import TwinImportService
+from orchestwin.knowledge.twin_import_sources import SqlAlchemyTwinImportCandidateQuery
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
 from orchestwin.models.real_runtime import (
     RealModelRuntime,
@@ -82,16 +91,26 @@ from orchestwin.projects.persistence import (
 from orchestwin.projects.requirements_application import (
     LocalRequirementsGenerationService,
 )
+from orchestwin.projects.requirements_change_application import LocalRequirementsChangeService
 from orchestwin.projects.requirements_gate import LocalRequirementsGateService
+from orchestwin.projects.requirements_realignment_service import (
+    RequirementsRealignmentService,
+)
 from orchestwin.projects.requirements_revision_application import (
     LocalRequirementsRevisionService,
 )
 from orchestwin.projects.requirements_runtime import (
+    ManagedRequirementsUnitOfWorkFactory,
     SqlAlchemyRequirementsQueryService,
     build_requirements_services,
 )
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
-from orchestwin.twins.runtime import UserModelingServices, build_user_modeling_services
+from orchestwin.twins.runtime import (
+    ManagedUserModelingUnitOfWorkFactory,
+    SqlAlchemyUserModelingGovernanceAdapter,
+    UserModelingServices,
+    build_user_modeling_services,
+)
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
 
 DATABASE_URL_ENVIRONMENT = "ORCHESTWIN_DATABASE_URL"
@@ -174,18 +193,28 @@ class ApplicationRuntime:
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
     requirements_gate_service: LocalRequirementsGateService | None = None
+    requirements_change_service: LocalRequirementsChangeService | None = None
     design_generation_service: DesignGenerationService | None = None
     design_revision_service: DesignRevisionService | None = None
     design_query_service: DesignQueryService | None = None
     design_gate_service: DesignGateService | None = None
     artifact_graph_query_service: ArtifactGraphQueryService | None = None
-    design_package_export_service: DesignPackageExportService | None = None
+    project_diagram_service: ProjectDiagramService | None = None
+    knowledge_package_service: KnowledgePackageService | None = None
+    twin_import_service: TwinImportService | None = None
+    requirements_realignment_service: RequirementsRealignmentService | None = None
+    project_import_service: ProjectImportService | None = None
     training_api_service: TrainingApiService | None = None
 
     async def close(self) -> None:
         """Dispose process-level resources."""
-        if self.database_runtime is not None:
-            await self.database_runtime.dispose()
+        closing = getattr(self.real_model_runtime, "close", None)
+        try:
+            if closing is not None:
+                await closing()
+        finally:
+            if self.database_runtime is not None:
+                await self.database_runtime.dispose()
 
 
 def create_default_runtime(
@@ -265,17 +294,42 @@ def create_default_runtime(
     artifact_graph_query_service = SqlAlchemyArtifactGraphQueryService(
         database_runtime.session_factory
     )
-    design_package_export_service = DesignPackageExportService(
+    project_diagram_service = ProjectDiagramService(
         project_service=project_service,
-        brief_gate_service=brief_gate_service,
-        team_proposal_service=team_proposal_service,
-        agent_team_service=agent_team_service,
-        user_modeling_services=user_modeling,
         requirements_query_service=requirements.queries,
-        requirements_gate_service=requirements.gate,
         design_query_service=design.queries,
-        design_gate_service=design.gate,
     )
+    knowledge_package_service = KnowledgePackageService(
+        source_loader=KnowledgeSourceLoader(
+            project_service=project_service,
+            brief_gate_service=brief_gate_service,
+            team_proposal_service=team_proposal_service,
+            agent_team_service=agent_team_service,
+            user_modeling_services=user_modeling,
+            requirements_query_service=requirements.queries,
+            requirements_gate_service=requirements.gate,
+            design_query_service=design.queries,
+            design_gate_service=design.gate,
+            feedback_query_service=SqlAlchemyKnowledgeFeedbackQueryService(
+                database_runtime.session_factory
+            ),
+        ),
+        store=SqlAlchemyKnowledgePackageStore(database_runtime.session_factory),
+    )
+    twin_import_service = TwinImportService(
+        governance=SqlAlchemyUserModelingGovernanceAdapter(database_runtime.session_factory),
+        uow_factory=ManagedUserModelingUnitOfWorkFactory(database_runtime.session_factory),
+        project_service=project_service,
+        user_modeling_queries=user_modeling.queries,
+        user_modeling_gates=user_modeling.gates,
+        candidates=SqlAlchemyTwinImportCandidateQuery(database_runtime.session_factory),
+    )
+    requirements_realignment_service = RequirementsRealignmentService(
+        uow_factory=ManagedRequirementsUnitOfWorkFactory(database_runtime.session_factory),
+        user_modeling_queries=user_modeling.queries,
+        user_modeling_gates=user_modeling.gates,
+    )
+    project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
 
     return ApplicationRuntime(
         real_model_runtime=real_models,
@@ -293,12 +347,17 @@ def create_default_runtime(
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,
         requirements_gate_service=requirements.gate,
+        requirements_change_service=requirements.changes,
         design_generation_service=design.generation,
         design_revision_service=design.revisions,
         design_query_service=design.queries,
         design_gate_service=design.gate,
         artifact_graph_query_service=artifact_graph_query_service,
-        design_package_export_service=design_package_export_service,
+        project_diagram_service=project_diagram_service,
+        knowledge_package_service=knowledge_package_service,
+        twin_import_service=twin_import_service,
+        requirements_realignment_service=requirements_realignment_service,
+        project_import_service=project_import_service,
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,
             adapter_registry=ContentAddressedAdapterRegistry(

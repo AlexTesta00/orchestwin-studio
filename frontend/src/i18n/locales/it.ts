@@ -2,6 +2,7 @@ const messages = {
   ui: {
     claim: {
       hypothesis: "Proposta dell'AI, non validata",
+      confirmed: "Confermato da te",
       proof: "Evidenza verificata",
     },
     status: {
@@ -15,10 +16,29 @@ const messages = {
     },
     stepper: {
       label: "Passi",
-      pending: "in attesa",
+      pending: "In attesa",
       approved: "Approvato",
       decision: "Decisione {n} di {max}",
-      current: "Passo corrente",
+      current: "Tocca a te",
+    },
+    stepHeader: {
+      current: "Tocca a te",
+      approved: "Approvato da te",
+      pending: "In attesa",
+      rejected: "Da rivedere",
+    },
+    decision: {
+      title: "La decisione è tua",
+      secondary: "Chiedi modifiche",
+      requestLabel: "Che cosa vuoi cambiare?",
+      requestPlaceholder: "Scrivi una nota per l'assistente: ne preparerà una nuova versione.",
+      cancel: "Annulla",
+      send: "Invia la richiesta",
+      busy: "Operazione in corso…",
+    },
+    technical: {
+      show: "Dettagli tecnici",
+      hide: "Nascondi dettagli tecnici",
     },
     drawer: {
       show: "Dettagli tecnici",
@@ -44,6 +64,7 @@ const messages = {
     label: "Lingua",
   },
   navigation: {
+    account: "Hai effettuato l'accesso come {email}",
     close: "Chiudi",
     closeLabel: "Chiudi la navigazione principale",
     label: "Navigazione principale",
@@ -64,7 +85,7 @@ const messages = {
     },
     email: "Indirizzo email",
     password: "Password",
-    passwordHint: "Usa almeno 15 caratteri. Sono supportati spazi e passphrase.",
+    passwordHint: "Almeno 8 caratteri, con una lettera maiuscola e un carattere speciale.",
     submitting: "Attendi…",
     login: {
       eyebrow: "Benvenuto",
@@ -83,9 +104,12 @@ const messages = {
       loginLink: "Accedi",
     },
     errors: {
-      password_too_short:
-        "La password deve contenere almeno 15 caratteri. Puoi usare una frase con spazi.",
+      password_too_short: "La password deve avere almeno 8 caratteri.",
       password_too_long: "La password può contenere al massimo 1024 caratteri.",
+      password_missing_uppercase: "La password deve contenere almeno una lettera maiuscola.",
+      password_missing_special:
+        "La password deve contenere almeno un carattere speciale, per esempio ! ? # {'@'}.",
+      too_many_attempts: "Troppi tentativi. Riprova tra qualche minuto.",
       invalid_request: "Controlla i dati inseriti e riprova.",
       invalid_authentication: "L'email o la password non sono valide.",
       email_already_registered: "Esiste già un account con questo indirizzo email.",
@@ -227,7 +251,7 @@ const messages = {
     },
   },
   twinChat: {
-    title: "Parla con {name}",
+    title: "Conversazione con {name}",
     version: "Profilo, versione {n}",
     notice:
       "Le risposte sono generate dall'AI a partire dal profilo approvato: sono ipotesi da verificare con persone reali, non risultati di ricerca.",
@@ -238,9 +262,9 @@ const messages = {
     confidence: "confidenza {value}",
     groundedOn: "Basato su: {fields}",
     empty:
-      "Nessuna domanda ancora. Chiedi a {name} come lavora, cosa la frustra o cosa si aspetta dall'applicazione.",
-    thinking: "{name} sta rispondendo…",
-    questionLabel: "La tua domanda per {name}",
+      "Nessuna domanda ancora. Chiedi come lavora, che cosa rende difficile il suo lavoro o che cosa si aspetta dall'applicazione.",
+    thinking: "Il twin sta rispondendo…",
+    questionLabel: "La tua domanda per il twin",
     questionMissing: "Scrivi una domanda prima di inviare.",
     ask: "Chiedi",
     kinds: {
@@ -253,6 +277,7 @@ const messages = {
   },
   projects: {
     new: "Nuovo progetto",
+    import: "Parti da una cartella di conoscenza",
     cancel: "Annulla",
     note: "I progetti restano fermi finché non sei tu a farli avanzare.",
     table: {
@@ -281,6 +306,8 @@ const messages = {
     detail: {
       back: "Torna ai progetti",
       eyebrow: "Dettaglio del progetto",
+      importedFrom:
+        "Nato dalla cartella di conoscenza di {project}, versione {version}. Rivedi e approva ogni passo.",
     },
     errors: {
       project_not_found: "Il progetto non è stato trovato.",
@@ -305,7 +332,8 @@ const messages = {
     openForm: "Passa al modulo",
     goToForm: "Controlla il brief",
     progress: "Domanda {asked} di {limit}",
-    essentialsLeft: "{count} informazioni essenziali ancora da chiedere",
+    essentialsLeft:
+      "{count} informazione essenziale ancora da chiedere | {count} informazioni essenziali ancora da chiedere",
     essentialsDone: "Informazioni essenziali raccolte",
     followUp: "Approfondimento",
     unknownAnswer: "Non lo so ancora",
@@ -342,7 +370,8 @@ const messages = {
     listFields: "Cosa vorresti ottenere",
     markUnknown: "Non lo so ancora",
     oneItemPerLine: "Inserisci un elemento per riga.",
-    missingSummary: "{count} informazioni da chiarire: puoi completarle nei prossimi passaggi.",
+    missingSummary:
+      "{count} informazione da chiarire: puoi completarla nei prossimi passaggi. | {count} informazioni da chiarire: puoi completarle nei prossimi passaggi.",
     saveVersion: "Salva la descrizione",
     saving: "Salvataggio…",
     historyTitle: "Cronologia delle versioni",

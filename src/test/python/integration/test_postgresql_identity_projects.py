@@ -79,11 +79,11 @@ async def run_integration_scenario() -> None:
 
         owner_result = await identity.register(
             email="owner@example.com",
-            password=("correct horse battery staple"),
+            password=("Correct horse battery staple!"),
         )
         other_result = await identity.register(
             email="other@example.com",
-            password=("another correct battery staple"),
+            password=("Another correct battery staple!"),
         )
 
         assert owner_result.status is (AuthenticationStatus.AUTHENTICATED)

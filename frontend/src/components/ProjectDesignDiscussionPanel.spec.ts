@@ -1,9 +1,14 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesignLoopApi } from "@/api/designLoop";
 import { DesignLoopApiError } from "@/api/designLoop";
+import {
+  clearFollowedGenerations,
+  generationJobsApi,
+  type GenerationRequestJob,
+} from "@/api/generationJobs";
 import { expectAccessible } from "@/test/axe";
 import type {
   DesignDiscussionPayload,
@@ -484,5 +489,285 @@ describe("ProjectDesignDiscussionPanel", () => {
       mitigation: null,
     });
     expect(wrapper.emitted("applied")).toEqual([[application]]);
+  });
+
+  it("names screens and elements by their titles in what the twins say and in the synthesis", async () => {
+    const base = answeredRound(1);
+    const coded: DiscussionRoundPayload = {
+      ...base,
+      statements: [
+        {
+          ...base.statements[0]!,
+          statement: "L'avviso di SCR-004 funziona, ma porta ora alla nuova SCR-005.",
+          answer_to_owner: "Di notte SCR-004 basta.",
+          proposals: ["Sposta ELM-041 in SCR-004"],
+          reactions: [
+            { twin_id: "twin-2", verdict: "PARTLY", reason: "In ELM-041 manca la data." },
+          ],
+        },
+        base.statements[1]!,
+      ],
+      synthesis: {
+        ...base.synthesis,
+        agreements: ["SCR-004 Conferma della presenza è chiara."],
+        conflicts: [
+          {
+            topic: "Il percorso verso SCR-004",
+            positions: [{ twin_id: "twin-1", position: "Tenere SCR-004 separata." }],
+          },
+        ],
+        proposals: [
+          {
+            code: "PRP-001",
+            text: "Mostrare ELM-041 in cima a SCR-004.",
+            target: "DESIGN",
+            supported_by: ["twin-1"],
+          },
+        ],
+        questions_for_owner: ["Chi usa SCR-004 di sera?"],
+      },
+    };
+    const api = fakeApi([discussion({ rounds: [coded] })]);
+    const wrapper = mount(ProjectDesignDiscussionPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        twinNames: { "twin-1": "Marta Rinaldi", "twin-2": "Luca Bianchi" },
+        screens: [{ code: "SCR-004", title: "Conferma della presenza" }],
+        elements: { "ELM-041": "Lista numerata" },
+        locale: "it",
+        authorize,
+        api,
+      },
+    });
+    await flushPromises();
+    const first = wrapper.findAll('[data-testid="discussion-statement"]')[0];
+    expect(first?.get('[data-testid="discussion-statement-text"]').text()).toBe(
+      "L'avviso di «Conferma della presenza» funziona, ma porta ora alla nuova SCR-005.",
+    );
+    expect(first?.get('[data-testid="discussion-answer-to-owner"]').text()).toContain(
+      "Di notte «Conferma della presenza» basta.",
+    );
+    expect(first?.text()).toContain("Sposta «Lista numerata» in «Conferma della presenza»");
+    expect(first?.get('[data-testid="discussion-reaction"]').text()).toContain(
+      "In «Lista numerata» manca la data.",
+    );
+    const synthesis = wrapper.get('[data-testid="discussion-synthesis"]');
+    expect(synthesis.text()).toContain("«Conferma della presenza» è chiara.");
+    expect(synthesis.get('[data-testid="discussion-conflict"]').text()).toContain(
+      "Il percorso verso «Conferma della presenza»",
+    );
+    expect(synthesis.get('[data-testid="discussion-conflict"]').text()).toContain(
+      "Marta Rinaldi: Tenere «Conferma della presenza» separata.",
+    );
+    expect(synthesis.get('[data-testid="discussion-proposal"]').text()).toContain(
+      "Mostrare «Lista numerata» in cima a «Conferma della presenza».",
+    );
+    expect(synthesis.text()).toContain("Chi usa «Conferma della presenza» di sera?");
+    expect(wrapper.text()).not.toMatch(/SCR-004|ELM-041/);
+
+    await synthesis.get('[data-testid="insight-apply-design"]').trigger("click");
+    await flushPromises();
+    expect(vi.mocked(api.applyInsight).mock.calls[0]?.[1]).toMatchObject({
+      source_id: "discussion:discussion-1:1:PRP-001",
+      text: "Mostrare «Lista numerata» in cima a «Conferma della presenza».",
+    });
+  });
+
+  it("names the workflows of the discussed alternative by their titles", async () => {
+    const base = round(1);
+    const coded: DiscussionRoundPayload = {
+      ...base,
+      statements: [
+        {
+          ...base.statements[0]!,
+          statement: "Il flusso FLOW-002 dice che con Annulla la lista resta invariata.",
+        },
+        { ...base.statements[1]!, statement: "FLOW-003 non riguarda questa alternativa." },
+      ],
+      synthesis: {
+        ...base.synthesis,
+        agreements: ["FLOW-002 parla di maiuscole o spazi diversi."],
+      },
+    };
+    const wrapper = mount(ProjectDesignDiscussionPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        workflows: {
+          "alternative-1": [{ code: "FLOW-002", title: "Nome vuoto e possibile duplicato" }],
+          "alternative-2": [{ code: "FLOW-003", title: "Un altro flusso" }],
+        },
+        locale: "it",
+        authorize,
+        api: fakeApi([discussion({ rounds: [coded] })]),
+      },
+    });
+    await flushPromises();
+    const texts = wrapper.findAll('[data-testid="discussion-statement-text"]');
+    expect(texts[0]?.text()).toBe(
+      "Il flusso «Nome vuoto e possibile duplicato» dice che con Annulla la lista resta invariata.",
+    );
+    expect(texts[1]?.text()).toBe("FLOW-003 non riguarda questa alternativa.");
+    expect(wrapper.get('[data-testid="discussion-synthesis"]').text()).toContain(
+      "«Nome vuoto e possibile duplicato» parla di maiuscole o spazi diversi.",
+    );
+  });
+
+  it("says in plain words which fields of the twin a contribution is based on", async () => {
+    const base = round(1);
+    const grounded: DiscussionRoundPayload = {
+      ...base,
+      statements: [
+        {
+          ...base.statements[0]!,
+          grounded_on: ["user_twin.goals", "user_twin.technical_literacy", "persona.goals"],
+        },
+        { ...base.statements[1]!, grounded_on: ["accessibility_needs", "user_twin.shift_pattern"] },
+      ],
+    };
+    const wrapper = mountPanel(fakeApi([discussion({ rounds: [grounded] })]));
+    await flushPromises();
+    const lines = wrapper.findAll('[data-testid="discussion-technical-statement"]');
+    expect(lines[0]?.text()).toContain("basato su obiettivi e competenza tecnica");
+    expect(lines[1]?.text()).toContain("basato su esigenze di accessibilità e shift pattern");
+    expect(wrapper.text()).not.toMatch(/user_twin|technical_literacy|accessibility_needs/);
+    await wrapper.setProps({ locale: "en" });
+    expect(lines[0]?.text()).toContain("grounded on goals and technical literacy");
+  });
+
+  it("stays closed until the person opens it, and opens by itself for a discussion in progress", async () => {
+    const closed = mount(ProjectDesignDiscussionPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        locale: "it",
+        authorize,
+        api: fakeApi([]),
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    const toggle = closed.get('[data-testid="discussion-toggle"]');
+    const body = closed.get('[data-testid="discussion-body"]');
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(toggle.attributes("aria-controls")).toBe(body.attributes("id"));
+    expect(toggle.text()).toBe("Apri la discussione");
+    expect(body.isVisible()).toBe(false);
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(toggle.text()).toBe("Chiudi il pannello");
+    expect(body.isVisible()).toBe(true);
+    closed.unmount();
+
+    const open = mount(ProjectDesignDiscussionPanel, {
+      props: {
+        projectId: "project-1",
+        designVersionId: "version-1",
+        designContentHash: "a".repeat(64),
+        locale: "it",
+        authorize,
+        api: fakeApi([discussion()]),
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(open.get('[data-testid="discussion-toggle"]').attributes("aria-expanded")).toBe("true");
+    expect(open.get('[data-testid="discussion-body"]').isVisible()).toBe(true);
+    await expectAccessible(open.element);
+    open.unmount();
+  });
+});
+
+describe("ProjectDesignDiscussionPanel and a discussion still being written", () => {
+  function discussionJob(
+    operation: "DISCUSSION_START" | "DISCUSSION_ROUND",
+    overrides: Partial<GenerationRequestJob> = {},
+  ): GenerationRequestJob {
+    return {
+      job_id: "00000000-0000-4000-8000-0000000009ee",
+      kind: "REQUEST",
+      operation,
+      status: "RUNNING",
+      stage: "GENERATING",
+      attempt: 1,
+      started_at: "2026-09-28T10:00:00+00:00",
+      finished_at: null,
+      alternative_id: null,
+      failure: null,
+      response: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    clearFollowedGenerations();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it("waits for a round started before a reload and shows it when it is ready", async () => {
+    const api = fakeApi([discussion()]);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([discussionJob("DISCUSSION_ROUND")]);
+    vi.spyOn(generationJobsApi, "job")
+      .mockResolvedValueOnce(discussionJob("DISCUSSION_ROUND"))
+      .mockImplementationOnce(async () => {
+        vi.mocked(api.discussions).mockResolvedValue([discussion({}, 2)]);
+        return discussionJob("DISCUSSION_ROUND", {
+          status: "SUCCEEDED",
+          stage: null,
+          response: { status_code: 201, body: discussion({}, 2) },
+        });
+      });
+    const wrapper = mountPanel(api);
+    await vi.advanceTimersByTimeAsync(50);
+
+    const notice = wrapper.get('[data-testid="generation-job-notice"]');
+    expect(notice.text()).toContain("Lo Studio sta generando un nuovo giro della discussione.");
+    expect(wrapper.get('[data-testid="discussion-body"]').isVisible()).toBe(true);
+    const next = wrapper.get('[data-testid="discussion-next-round"]');
+    expect(next.attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="discussion-approve"]').attributes("disabled")).toBeDefined();
+    await next.trigger("click");
+
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(wrapper.find('[data-testid="generation-job-notice"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="discussion-round"]')).toHaveLength(2);
+    expect(api.nextDiscussionRound).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("says that an interrupted discussion can be started again and waits for the owner", async () => {
+    const api = fakeApi([]);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([discussionJob("DISCUSSION_START")]);
+    vi.spyOn(generationJobsApi, "job").mockResolvedValue(
+      discussionJob("DISCUSSION_START", {
+        status: "FAILED",
+        stage: null,
+        failure: { code: "GENERATION_JOB_CANCELLED", reasons: [] },
+      }),
+    );
+    const wrapper = mountPanel(api, "en");
+    await vi.advanceTimersByTimeAsync(2050);
+
+    const failure = wrapper.get('[data-testid="generation-job-failure"]');
+    expect(failure.attributes("data-lost")).toBe("true");
+    expect(failure.text()).toContain("The generation of the twins' discussion stopped");
+    expect(wrapper.find('[data-testid="discussion-error"]').exists()).toBe(false);
+    expect(
+      wrapper.get('[data-testid="discussion-start-button"]').attributes("disabled"),
+    ).toBeUndefined();
+    expect(api.startDiscussion).not.toHaveBeenCalled();
+    expect(api.discussions).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
   });
 });

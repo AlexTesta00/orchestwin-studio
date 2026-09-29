@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
+import { useSurface } from "./UiSurface.vue";
 import type {
   RequirementsArtifactKind,
   RequirementsSpecificationVersionPayload,
@@ -37,7 +38,7 @@ const messages = {
     title: "Version comparison",
     base: "Base version",
     target: "Target version",
-    artifact: "Artifact",
+    artifact: "Item",
     kind: "Kind",
     status: "Change",
     empty: "At least two versions are required for comparison.",
@@ -45,12 +46,20 @@ const messages = {
     removed: "Removed",
     changed: "Changed",
     unchanged: "Unchanged",
+    kinds: {
+      REQUIREMENT: "Requirement",
+      USER_STORY: "User story",
+      ACCEPTANCE_CRITERION: "Acceptance criterion",
+      SCENARIO: "Usage scenario",
+      RISK: "Risk",
+      DEFINITION_OF_DONE: "Definition of done",
+    },
   },
   it: {
     title: "Confronto versioni",
     base: "Versione base",
     target: "Versione di destinazione",
-    artifact: "Artefatto",
+    artifact: "Elemento",
     kind: "Tipo",
     status: "Modifica",
     empty: "Per il confronto sono necessarie almeno due versioni.",
@@ -58,9 +67,41 @@ const messages = {
     removed: "Rimosso",
     changed: "Modificato",
     unchanged: "Invariato",
+    kinds: {
+      REQUIREMENT: "Requisito",
+      USER_STORY: "Storia dell'utente",
+      ACCEPTANCE_CRITERION: "Criterio di accettazione",
+      SCENARIO: "Scenario d'uso",
+      RISK: "Rischio",
+      DEFINITION_OF_DONE: "Definizione di fatto",
+    },
   },
 } as const;
 
+const palettes = {
+  light: {
+    title: "text-ink",
+    muted: "text-ink-3",
+    field: "border-field bg-surface text-ink",
+    line: "border-line",
+    cell: "text-ink-2",
+    code: "text-ink",
+    changed: "text-action",
+  },
+  night: {
+    title: "text-on-night",
+    muted: "text-on-night-3",
+    field: "border-night-line-strong bg-night-panel text-on-night [color-scheme:dark]",
+    line: "border-night-line",
+    cell: "text-on-night-2",
+    code: "text-on-night",
+    changed: "text-petrol-on-night-2",
+  },
+};
+
+const titleId = `requirements-version-comparison-${useId()}`;
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const copy = computed(() => messages[props.locale]);
 const baseVersionNumber = ref<number | null>(null);
 const targetVersionNumber = ref<number | null>(null);
@@ -194,23 +235,23 @@ function statusLabel(status: ComparisonStatus): string {
 </script>
 
 <template>
-  <section
-    class="grid gap-4 rounded-card border border-line bg-white p-5 shadow-sm"
-    aria-labelledby="requirements-version-comparison-title"
-  >
-    <h3 id="requirements-version-comparison-title" class="text-xl font-semibold text-ink">
+  <section class="grid gap-3">
+    <h2 :id="titleId" :class="['m-0 text-sm font-semibold', palette.title]">
       {{ copy.title }}
-    </h3>
+    </h2>
 
-    <p v-if="orderedVersions.length < 2" class="m-0 text-sm text-ink-2">
+    <p v-if="orderedVersions.length < 2" :class="['m-0 text-[13px]', palette.muted]">
       {{ copy.empty }}
     </p>
 
     <template v-else>
       <div class="grid gap-3 sm:grid-cols-2">
-        <label class="grid gap-1 text-sm font-bold text-ink-2">
+        <label :class="['grid gap-1 text-[13px] font-medium', palette.muted]">
           {{ copy.base }}
-          <select v-model="baseVersionNumber" class="rounded-control border px-3 py-2">
+          <select
+            v-model="baseVersionNumber"
+            :class="['min-h-11 rounded-field border px-3 text-sm', palette.field]"
+          >
             <option
               v-for="version in orderedVersions"
               :key="`base:${version.id}`"
@@ -220,9 +261,12 @@ function statusLabel(status: ComparisonStatus): string {
             </option>
           </select>
         </label>
-        <label class="grid gap-1 text-sm font-bold text-ink-2">
+        <label :class="['grid gap-1 text-[13px] font-medium', palette.muted]">
           {{ copy.target }}
-          <select v-model="targetVersionNumber" class="rounded-control border px-3 py-2">
+          <select
+            v-model="targetVersionNumber"
+            :class="['min-h-11 rounded-field border px-3 text-sm', palette.field]"
+          >
             <option
               v-for="version in orderedVersions"
               :key="`target:${version.id}`"
@@ -234,20 +278,34 @@ function statusLabel(status: ComparisonStatus): string {
         </label>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-left text-sm" data-testid="version-comparison">
+      <div class="overflow-x-auto" role="region" tabindex="0" :aria-labelledby="titleId">
+        <table
+          class="w-full border-collapse text-left text-[13px]"
+          data-testid="version-comparison"
+        >
           <thead>
-            <tr class="border-b text-xs tracking-wide text-ink-3 uppercase">
-              <th class="px-2 py-2">{{ copy.artifact }}</th>
-              <th class="px-2 py-2">{{ copy.kind }}</th>
-              <th class="px-2 py-2">{{ copy.status }}</th>
+            <tr :class="['border-b', palette.line, palette.muted]">
+              <th scope="col" class="px-2 py-2 font-medium">{{ copy.artifact }}</th>
+              <th scope="col" class="px-2 py-2 font-medium">{{ copy.kind }}</th>
+              <th scope="col" class="px-2 py-2 font-medium">{{ copy.status }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="`${row.kind}:${row.code}`" class="border-b">
-              <td class="px-2 py-2 font-semibold text-ink">{{ row.code }}</td>
-              <td class="px-2 py-2 text-ink-2">{{ row.kind }}</td>
-              <td class="px-2 py-2 font-bold">{{ statusLabel(row.status) }}</td>
+            <tr
+              v-for="row in rows"
+              :key="`${row.kind}:${row.code}`"
+              :class="['border-b', palette.line]"
+            >
+              <td :class="['px-2 py-2 font-mono text-xs', palette.code]">{{ row.code }}</td>
+              <td :class="['px-2 py-2', palette.cell]">{{ copy.kinds[row.kind] }}</td>
+              <td
+                :class="[
+                  'px-2 py-2 font-semibold',
+                  row.status === 'UNCHANGED' ? palette.cell : palette.changed,
+                ]"
+              >
+                {{ statusLabel(row.status) }}
+              </td>
             </tr>
           </tbody>
         </table>

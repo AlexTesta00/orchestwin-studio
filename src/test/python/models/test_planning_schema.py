@@ -1,9 +1,16 @@
 """Reference grammars reject fabricated links before model output is accepted."""
 
+import copy
 import re
 
+import pytest
+
 from orchestwin.models.design_drafts import DesignDraft, design_context
-from orchestwin.models.planning_schema import constrain_planning_schema
+from orchestwin.models.planning_schema import (
+    CRITIQUE_LISTS,
+    constrain_planning_schema,
+    critique_list_limit,
+)
 from orchestwin.models.requirements_drafts import RequirementsDraft, requirements_context
 
 from . import test_fake_design as design_fixtures
@@ -52,3 +59,49 @@ def test_design_can_reference_only_approved_requirement_codes():
     assert [item["allOf"][1]["properties"] for item in fits] == [
         {"twin": {"const": key}} for key in context["twins"]
     ]
+
+
+def context_with_twins(count):
+    context, _ = design_context(design_fixtures.proposal_request())
+    template = next(iter(context["twins"].values()))
+    context["twins"] = {f"T{index}": template for index in range(1, count + 1)}
+    return context
+
+
+def test_critiques_get_shorter_lists_as_the_twins_grow():
+    assert [critique_list_limit(count) for count in range(1, 9)] == [
+        None,
+        None,
+        2,
+        2,
+        1,
+        1,
+        1,
+        1,
+    ]
+    for count, limit in ((2, None), (3, 2), (4, 2), (5, 1), (8, 1)):
+        schema = DesignDraft.model_json_schema()
+        constrain_planning_schema(schema, context_with_twins(count), "design")
+        critique = schema["$defs"]["CritiqueDraft"]["properties"]
+
+        assert len(schema["properties"]["critiques"]["prefixItems"]) == 2 * count
+        assert [critique[name].get("maxItems") for name in CRITIQUE_LISTS] == [limit] * len(
+            CRITIQUE_LISTS
+        )
+        assert critique["strengths"]["minItems"] == 1
+        assert critique["concerns"]["minItems"] == 1
+        fits = schema["$defs"]["VisualLanguageDraft"]["properties"]["twin_fit"]
+        assert len(fits["prefixItems"]) == count
+
+
+@pytest.mark.parametrize("purpose", ["DESIGN_MOCKUP", "DESIGN_MOCKUP_HTML", "DESIGN_ITERATION"])
+def test_design_purposes_other_than_the_alternatives_keep_their_own_schema(purpose):
+    context, _ = design_context(design_fixtures.proposal_request())
+    schema = {
+        "type": "object",
+        "properties": {"approach": {"type": "string"}, "css": {"type": "string"}},
+        "required": ["approach", "css"],
+    }
+    before = copy.deepcopy(schema)
+    constrain_planning_schema(schema, {**context, "purpose": purpose}, "design")
+    assert schema == before

@@ -2,6 +2,34 @@
 
 from orchestwin.artifacts.visual_exploration import exploration_bindings
 
+CRITIQUE_LISTS = (
+    "strengths",
+    "concerns",
+    "unmet_needs",
+    "on_accessibility",
+    "trust_concerns",
+    "questions",
+    "suggested_changes",
+)
+UNBOUNDED_CRITIQUE_TWINS = 2
+SHORT_CRITIQUE_TWINS = 4
+DESIGN_ALTERNATIVE_CODES = ("DES-001", "DES-002")
+HOSTED_DESIGN_PURPOSE = "DESIGN_ALTERNATIVES_HOSTED"
+HOSTED_CRITIQUE_DEFINITION = "HostedCritiqueDraft"
+
+
+def critique_list_limit(twin_count):
+    if twin_count <= UNBOUNDED_CRITIQUE_TWINS:
+        return None
+    return 2 if twin_count <= SHORT_CRITIQUE_TWINS else 1
+
+
+def critique_pairs(twin_keys):
+    pairs = [(alternative, key) for alternative in DESIGN_ALTERNATIVE_CODES for key in twin_keys]
+    return [
+        (f"CRQ-{index:03d}", alternative, key) for index, (alternative, key) in enumerate(pairs, 1)
+    ]
+
 
 def constrain_planning_schema(schema, context, task):
     if task not in {"requirements", "design", "architecture"}:
@@ -16,7 +44,7 @@ def constrain_planning_schema(schema, context, task):
         }
 
     if task == "design":
-        known["DES"] = ["DES-001", "DES-002"]
+        known["DES"] = list(DESIGN_ALTERNATIVE_CODES)
     if task == "architecture" and "structure" in context:
         known["CMP"] = [x["code"] for x in context["structure"]["components"]]
         known["ENV"] = [x["code"] for x in context["structure"]["environments"]]
@@ -55,7 +83,7 @@ def constrain_planning_schema(schema, context, task):
             elif name == "sources":
                 target.update(type="string", enum=list(context["evidence"]))
     if task == "design":
-        if context.get("purpose") == "DESIGN_MOCKUP":
+        if context.get("purpose") not in (None, HOSTED_DESIGN_PURPOSE):
             return
         schema["properties"]["recommendation"].update(reference("DES"))
 
@@ -72,23 +100,27 @@ def constrain_planning_schema(schema, context, task):
                 for code in known["DES"]
             ],
         )
+        hosted = context.get("purpose") == HOSTED_DESIGN_PURPOSE
+        critique = HOSTED_CRITIQUE_DEFINITION if hosted else "CritiqueDraft"
+        limit = None if hosted else critique_list_limit(len(context["twins"]))
+        if limit is not None and critique in definitions:
+            for name in CRITIQUE_LISTS:
+                definitions[critique]["properties"][name]["maxItems"] = limit
         # Coverage is a governance obligation, not something the model can omit.
-        pairs = [
-            (alternative, key, twin)
-            for alternative in known["DES"]
-            for key, twin in context["twins"].items()
-        ]
+        pairs = critique_pairs(list(context["twins"]))
         schema["properties"]["critiques"] = _fixed_array(
             definitions,
-            "CritiqueDraft",
+            critique,
             [
                 {
-                    "code": {"const": f"CRQ-{index:03d}"},
+                    "code": {"const": code},
                     "alternative": {"const": alternative},
                     "as_twin": {"const": key},
-                    "observation_keys": {"items": {"enum": list(twin["observations"])}},
+                    "observation_keys": {
+                        "items": {"enum": list(context["twins"][key]["observations"])}
+                    },
                 }
-                for index, (alternative, key, twin) in enumerate(pairs, 1)
+                for code, alternative, key in pairs
             ],
         )
 

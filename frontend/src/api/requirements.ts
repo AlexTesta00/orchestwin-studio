@@ -1,3 +1,4 @@
+import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -25,6 +26,7 @@ interface RequestOptions {
   method: HttpMethod;
   accessToken: string;
   body?: unknown;
+  generationProjectId?: string;
 }
 
 export interface RequirementsApiOptions {
@@ -44,6 +46,11 @@ export interface RequirementsApi {
   proposeRevision(
     projectId: string,
     request: RequirementsRevisionRequest,
+    accessToken: string,
+  ): Promise<RequirementsRevisionPayload>;
+  requestChange(
+    projectId: string,
+    request: string,
     accessToken: string,
   ): Promise<RequirementsRevisionPayload>;
   revisionHistory(
@@ -153,7 +160,14 @@ export function createRequirementsApi(options: RequirementsApiOptions = {}): Req
     }
 
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-    const response = await fetchImpl(path, init);
+    const response =
+      optionsValue.generationProjectId === undefined
+        ? await fetchImpl(path, init)
+        : await sendGeneration(path, init, {
+            fetchImpl,
+            basePath,
+            projectId: optionsValue.generationProjectId,
+          });
     const payload = await responsePayload(response);
 
     if (!response.ok) {
@@ -181,6 +195,7 @@ export function createRequirementsApi(options: RequirementsApiOptions = {}): Req
       return request(`${projectPath(projectId)}/proposals`, {
         method: "POST",
         accessToken,
+        generationProjectId: projectId,
       });
     },
 
@@ -203,6 +218,15 @@ export function createRequirementsApi(options: RequirementsApiOptions = {}): Req
         method: "POST",
         accessToken,
         body: requestValue,
+      });
+    },
+
+    requestChange(projectId, requestValue, accessToken) {
+      return request(`${projectPath(projectId)}/change-requests`, {
+        method: "POST",
+        accessToken,
+        body: { request: requestValue },
+        generationProjectId: projectId,
       });
     },
 

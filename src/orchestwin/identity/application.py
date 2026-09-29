@@ -19,6 +19,7 @@ from orchestwin.identity.domain import (
 from orchestwin.identity.passwords import (
     Argon2PasswordService,
     PasswordPolicyError,
+    PasswordPolicyViolation,
 )
 from orchestwin.identity.repository import UserRepository
 from orchestwin.identity.sessions import (
@@ -61,6 +62,7 @@ class AuthenticationResult:
 
     status: AuthenticationStatus
     authenticated: AuthenticatedSession | None = None
+    password_violation: PasswordPolicyViolation | None = None
 
     def __post_init__(self) -> None:
         """Associate credentials only with successful authentication."""
@@ -68,6 +70,12 @@ class AuthenticationResult:
 
         if succeeded != (self.authenticated is not None):
             raise ValueError("only authenticated results may contain credentials")
+
+        if (
+            self.password_violation is not None
+            and self.status is not AuthenticationStatus.INVALID_REGISTRATION
+        ):
+            raise ValueError("only invalid registrations may report a password violation")
 
 
 class IdentityUnitOfWork(Protocol):
@@ -142,7 +150,7 @@ class IdentityApplicationService(Protocol):
 class LocalIdentityApplicationService:
     """Local account use cases composed from explicit ports."""
 
-    DUMMY_PASSWORD = "not a real OrchesTwin account password"
+    DUMMY_PASSWORD = "not a real OrchesTwin account password!"
 
     def __init__(
         self,
@@ -166,11 +174,13 @@ class LocalIdentityApplicationService:
         try:
             normalized_email = NormalizedEmail.parse(email)
             password_hash = self._password_service.hash(password)
-        except (
-            InvalidEmailAddress,
-            PasswordPolicyError,
-        ):
+        except InvalidEmailAddress:
             return AuthenticationResult(status=(AuthenticationStatus.INVALID_REGISTRATION))
+        except PasswordPolicyError as error:
+            return AuthenticationResult(
+                status=AuthenticationStatus.INVALID_REGISTRATION,
+                password_violation=error.violation,
+            )
 
         try:
             async with self._unit_of_work_factory() as unit:

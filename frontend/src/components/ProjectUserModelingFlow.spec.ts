@@ -1,12 +1,21 @@
 import { createPinia, setActivePinia } from "pinia";
 
-import { flushPromises, mount } from "@vue/test-utils";
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils";
+
+import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectUserModelingFlow from "./ProjectUserModelingFlow.vue";
+import TwinImportPanel from "./TwinImportPanel.vue";
 import { createAppI18n } from "@/i18n";
 
+import {
+  clearFollowedGenerations,
+  GenerationJobsApiError,
+  generationJobsApi,
+  type GenerationRequestJob,
+} from "../api/generationJobs";
 import { userModelingApi } from "../api/userModeling";
 
 import { useTeamStore } from "../stores/team";
@@ -22,6 +31,7 @@ import type {
   UserTwinProfileDiffPayload,
   UserTwinVersionPayload,
 } from "../types/userModeling";
+import type { TwinImportPayload } from "../types/twinImports";
 import { expectAccessible } from "@/test/axe";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
@@ -434,8 +444,9 @@ const proposedDiff: UserTwinProfileDiffPayload = {
   applied_snapshot_version_id: null,
 };
 
-function mountFlow() {
+function mountFlow(attachTo?: HTMLElement) {
   return mount(ProjectUserModelingFlow, {
+    ...(attachTo === undefined ? {} : { attachTo }),
     global: {
       plugins: [createAppI18n("en")],
     },
@@ -451,9 +462,56 @@ function mountFlow() {
   });
 }
 
+type FlowWrapper = ReturnType<typeof mountFlow>;
+
+function decisionPrimary(wrapper: FlowWrapper, decision: string) {
+  return wrapper.get(
+    `[data-testid="twins-decision"][data-decision="${decision}"] [data-testid="decision-primary"]`,
+  );
+}
+
+async function openTechnicalDetails(wrapper: FlowWrapper): Promise<void> {
+  const toggle = wrapper.get(
+    '[data-testid="user-modeling-technical-details"] [data-testid="step-technical-details-toggle"]',
+  );
+  if (toggle.attributes("aria-expanded") !== "true") {
+    await toggle.trigger("click");
+  }
+}
+
+function profilePanel(): DOMWrapper<Element> {
+  const panel = document.body.querySelector('[data-testid="side-panel"]');
+  if (panel === null) {
+    throw new Error("The profile panel is not open");
+  }
+  return new DOMWrapper(panel);
+}
+
+function openProfileInPage(): boolean {
+  return document.body.querySelector('[data-testid="twin-profile-details"]') !== null;
+}
+
+function emulateVisibility(): () => void {
+  const original = Object.getOwnPropertyDescriptor(Element.prototype, "checkVisibility");
+  Object.defineProperty(Element.prototype, "checkVisibility", {
+    configurable: true,
+    value(this: Element) {
+      return this.closest('[style*="display: none"]') === null;
+    },
+  });
+  return () => {
+    if (original === undefined) {
+      Reflect.deleteProperty(Element.prototype, "checkVisibility");
+    } else {
+      Object.defineProperty(Element.prototype, "checkVisibility", original);
+    }
+  };
+}
+
 describe("ProjectUserModelingFlow", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    document.body.innerHTML = "";
   });
 
   afterEach(() => {
@@ -479,10 +537,16 @@ describe("ProjectUserModelingFlow", () => {
 
     const wrapper = mountFlow();
 
-    expect(wrapper.text()).toContain("PROTO_PERSONA");
-
     expect(wrapper.text()).toContain("Pending confirmation");
-    expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeDefined();
+    expect(
+      wrapper.get('[data-testid="starting-personas"]').element.closest("details:not([open])"),
+    ).toBeNull();
+    const card = wrapper.get('[data-testid="persona-card"]');
+    expect(card.attributes("data-claim-status")).toBe("hypothesis");
+    expect(card.text()).toContain("From the brief");
+
+    await openTechnicalDetails(wrapper);
+    expect(wrapper.text()).toContain("PROTO_PERSONA");
 
     await wrapper.get('[data-testid="confirm-persona"]').trigger("click");
 
@@ -503,9 +567,97 @@ describe("ProjectUserModelingFlow", () => {
     expect(
       store.currentPersonas.some((persona) => persona.profile.confirmation_status === "CONFIRMED"),
     ).toBe(true);
+    expect(wrapper.get('[data-testid="persona-card"]').attributes("data-claim-status")).toBe(
+      "confirmed",
+    );
+    expect(wrapper.get('[data-testid="persona-card"]').text()).toContain("Confirmed by you");
   });
 
-  it("renders User Twin epistemic status, confidence, validation requirement and provenance", () => {
+  it("sets a proposed profile aside only with a reason", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [pendingPersona];
+    const decidePersona = vi.spyOn(userModelingApi, "decidePersona").mockResolvedValue({
+      status: "APPLIED",
+      issue: null,
+      decision_issue: null,
+      version: {
+        ...pendingPersona,
+        version_number: 2,
+        profile: {
+          ...pendingPersona.profile,
+          confirmation_status: "REJECTED",
+          rejection_reason: "Not our audience",
+        },
+      },
+    });
+    const wrapper = mountFlow(document.body.appendChild(document.createElement("div")));
+
+    expect(wrapper.find('[data-testid="reject-persona"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="reject-persona-start"]').trigger("click");
+    await flushPromises();
+    expect(document.activeElement?.id).toBe(`persona-reason-${PERSONA_ID}`);
+    expect(wrapper.get(`#persona-reason-${PERSONA_ID}`).attributes("placeholder")).toBe(
+      "Explain why this profile does not describe who will use the product…",
+    );
+
+    await wrapper.get('[data-testid="persona-card"] [data-variant="quiet"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="reject-persona"]').exists()).toBe(false);
+    expect(document.activeElement?.getAttribute("data-testid")).toBe("reject-persona-start");
+
+    await wrapper.get('[data-testid="reject-persona-start"]').trigger("click");
+    await flushPromises();
+    const reject = wrapper.get('[data-testid="reject-persona"]');
+    expect(reject.attributes("disabled")).toBeDefined();
+
+    await wrapper.get(`#persona-reason-${PERSONA_ID}`).setValue("Not our audience");
+    await wrapper.get('[data-testid="reject-persona"]').trigger("click");
+    await flushPromises();
+
+    expect(decidePersona).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { decision: "REJECT", reason: "Not our audience" },
+      ACCESS_TOKEN,
+    );
+    const card = wrapper.get('[data-testid="persona-card"]');
+    expect(card.attributes("data-confirmation")).toBe("REJECTED");
+    expect(card.text()).toContain("Set aside: Not our audience");
+    expect(card.find('[data-testid="confirm-persona"]').exists()).toBe(false);
+  });
+
+  it("creates the twins from the bar once every profile is decided", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [pendingPersona];
+    const generate = vi.spyOn(store, "generateSnapshot").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      snapshot_version: snapshot,
+      twin_versions: [twinVersion],
+    });
+    const wrapper = mountFlow();
+
+    const bar = wrapper.get('[data-testid="twins-decision"][data-decision="generate"]');
+    expect(bar.find('[data-testid="decision-secondary"]').exists()).toBe(false);
+    expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins");
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
+    expect(bar.text()).toContain("Confirm or set aside every proposed profile");
+
+    store.personaVersions = [confirmedPersona];
+    await flushPromises();
+
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+    expect(bar.text()).toContain("Confirmed profiles: 1.");
+    await decisionPrimary(wrapper, "generate").trigger("click");
+    await flushPromises();
+
+    expect(generate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+  });
+
+  it("renders User Twin epistemic status, confidence, validation requirement and provenance", async () => {
     const store = useUserModelingStore();
 
     store.activateProject(PROJECT_ID);
@@ -518,25 +670,120 @@ describe("ProjectUserModelingFlow", () => {
 
     const wrapper = mountFlow();
 
-    expect(wrapper.text()).toContain("Model inferred");
-
-    expect(wrapper.text()).toContain("42%");
-
-    expect(wrapper.text()).toContain("Human validation required");
-
-    expect(wrapper.text()).toContain("PROJECT_GROUNDED_UT");
     expect(wrapper.findAll('[data-testid="twin-identity"]').length).toBeGreaterThan(0);
     expect(
-      wrapper.get('[data-testid="profiles-technical-details"]').attributes("open"),
-    ).toBeUndefined();
-    expect(
-      wrapper.get('[data-testid="twin-technical-details"]').attributes("open"),
-    ).toBeUndefined();
-    expect(wrapper.get('[data-testid="twin-profile-details"]').attributes("open")).toBeDefined();
+      wrapper
+        .get(
+          '[data-testid="user-modeling-technical-details"] [data-testid="step-technical-details-toggle"]',
+        )
+        .attributes("aria-expanded"),
+    ).toBe("false");
+    expect(openProfileInPage()).toBe(false);
 
-    const details = wrapper.findAll('[data-testid="provenance-inspector"]');
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
+
+    expect(openProfileInPage()).toBe(true);
+    const profile = profilePanel().get('[data-testid="twin-profile-details"]');
+    expect(profile.text()).toContain("Model inferred");
+
+    expect(profile.text()).toContain("42%");
+
+    expect(profile.text()).toContain("Human validation required");
+
+    const details = profilePanel().findAll('[data-testid="provenance-inspector"]');
 
     expect(details.length).toBeGreaterThan(0);
+
+    await profilePanel().get('[data-testid="side-panel-close"]').trigger("click");
+    expect(openProfileInPage()).toBe(false);
+
+    await openTechnicalDetails(wrapper);
+    expect(wrapper.text()).toContain("PROJECT_GROUNDED_UT");
+    expect(wrapper.find('[data-testid="twin-technical-details"]').exists()).toBe(true);
+  });
+
+  it("shows every twin as a card with its origin, open hypotheses, goals and a way to talk", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessReview;
+    const wrapper = mountFlow();
+
+    const card = wrapper.get('[data-testid="twin-card"]');
+    expect(card.attributes("data-claim-status")).toBe("hypothesis");
+    expect(card.attributes("data-twin-id")).toBe(TWIN_ID);
+    expect(card.get("h3").text()).toBe("Receptionist User Twin");
+    expect(card.text()).toContain("From the brief");
+    expect(card.get('[data-testid="hypothesis-chip"]').text()).toBe("1 hypothesis to verify");
+    expect(card.text()).toContain("Goals");
+    expect(card.text()).toContain("Reduce booking errors");
+    expect(card.text()).toContain("Hotel receptionist");
+    expect(wrapper.get('[data-testid="user-modeling-count"]').text()).toBe(
+      "1 twin to approve. The twins' answers are simulated: hypotheses to weigh, not opinions of real people.",
+    );
+  });
+
+  it("frames an approved twin with a confirmed border and names a reused twin by its project", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    const importedTwin: UserTwinVersionPayload = {
+      ...twinVersion,
+      profile: {
+        ...twinVersion.profile,
+        observations: [
+          {
+            ...goalsObservation,
+            provenance: [
+              ...goalsObservation.provenance,
+              {
+                source_kind: "SYSTEM_ARTIFACT",
+                source_id: "user-twin:00000000-0000-4000-8000-000000000099",
+                source_version: 2,
+                content_hash: "9".repeat(64),
+                locator: "project:00000000-0000-4000-8000-000000000098",
+                summary: "Imported from the project Hotel night desk",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    store.applySnapshot({
+      ...snapshot,
+      snapshot: { ...snapshot.snapshot, twin_versions: [importedTwin] },
+    });
+    store.readiness = readinessApproved;
+    store.currentGate = approvedGate;
+    const wrapper = mountFlow();
+
+    const card = wrapper.get('[data-testid="twin-card"]');
+    expect(card.attributes("data-claim-status")).toBe("confirmed");
+    expect(card.text()).toContain("Approved profile");
+    expect(card.text()).toContain("Reused from “Hotel night desk”");
+    expect(card.find('[data-testid="hypothesis-chip"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="user-modeling-count"]').text()).toContain(
+      "1 twin approved by you.",
+    );
+  });
+
+  it("gives a profile and the twin born from it the same robot", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [confirmedPersona];
+    const wrapper = mountFlow();
+
+    const personaAvatar = wrapper
+      .get('[data-testid="persona-card"] [data-testid="twin-identity"]')
+      .attributes("data-avatar");
+
+    store.applySnapshot(snapshot);
+    await flushPromises();
+
+    expect(
+      wrapper
+        .get('[data-testid="twin-card"] [data-testid="twin-identity"]')
+        .attributes("data-avatar"),
+    ).toBe(personaAvatar);
   });
 
   it("replaces an unknown context of use with text accepted by the domain", async () => {
@@ -560,9 +807,11 @@ describe("ProjectUserModelingFlow", () => {
       snapshot_version: null,
     });
     const wrapper = mountFlow();
-    await wrapper.get('[data-testid="edit-twin-observation"]').trigger("click");
-    await wrapper.get('[data-testid="revision-value"]').setValue("At the reception desk");
-    await wrapper.get('[data-testid="submit-revision"]').trigger("submit");
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
+    const panel = profilePanel();
+    await panel.get('[data-testid="edit-twin-observation"]').trigger("click");
+    await panel.get('[data-testid="revision-value"]').setValue("At the reception desk");
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
     await flushPromises();
     expect(propose).toHaveBeenCalledWith(
       PROJECT_ID,
@@ -602,13 +851,17 @@ describe("ProjectUserModelingFlow", () => {
 
     const wrapper = mountFlow();
 
-    await wrapper.get('[data-testid="edit-twin-observation"]').trigger("click");
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
 
-    await wrapper
+    const panel = profilePanel();
+
+    await panel.get('[data-testid="edit-twin-observation"]').trigger("click");
+
+    await panel
       .get('[data-testid="revision-value"]')
       .setValue("Reduce booking errors\nReduce check-in delays");
 
-    await wrapper.get('[data-testid="submit-revision"]').trigger("submit");
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
 
     await flushPromises();
 
@@ -636,6 +889,13 @@ describe("ProjectUserModelingFlow", () => {
     expect(store.currentSnapshot?.version_number).toBe(1);
 
     expect(store.currentTwins.some((twin) => twin.version_number === 1)).toBe(true);
+
+    expect(panel.get('[data-testid="profile-diff"]').attributes("data-diff-status")).toBe(
+      "PROPOSED",
+    );
+    expect(wrapper.get('[data-testid="twin-pending-diffs"]').text()).toBe(
+      "1 change to approve in the profile",
+    );
   });
 
   it("derives OWNER_APPROVED_UT after Gate 3 approves the exact current snapshot", async () => {
@@ -663,7 +923,11 @@ describe("ProjectUserModelingFlow", () => {
 
     const wrapper = mountFlow();
 
-    await wrapper.get('[data-testid="approve-gate"]').trigger("click");
+    expect(wrapper.get('[data-testid="twins-decision"][data-decision="approve"]').text()).toContain(
+      "It does not mean their assumptions have been verified with real users.",
+    );
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
 
     await flushPromises();
 
@@ -679,6 +943,8 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(store.isReadyForRequirements).toBe(true);
 
+    await openTechnicalDetails(wrapper);
+
     expect(wrapper.get('[data-testid="effective-lifecycle"]').text()).toContain(
       "OWNER_APPROVED_UT",
     );
@@ -688,9 +954,408 @@ describe("ProjectUserModelingFlow", () => {
     );
 
     expect(twinVersion.profile.validation_status).toBe("PROJECT_GROUNDED_UT");
-    expect(wrapper.get('[data-testid="twin-profile-details"]').attributes("open")).toBeUndefined();
+    expect(openProfileInPage()).toBe(false);
     expect(wrapper.text()).toContain("Approved profile");
+    expect(wrapper.text()).toContain("You have approved these user profiles.");
     expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
+    expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+  });
+
+  it("confirms the twins with one press that submits them and then approves them", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const noGate = { ...readinessReview, gate_exists: false, gate_id: null, gate_status: null };
+    store.readiness = noGate;
+    const submitGate = vi.spyOn(userModelingApi, "submitGate").mockResolvedValue({
+      outcome: "APPLIED",
+      gate: pendingGate,
+      events: [],
+      issue: null,
+    });
+    const decideGate = vi.spyOn(userModelingApi, "decideGate").mockResolvedValue({
+      outcome: "APPLIED",
+      gate: approvedGate,
+      events: [],
+      issue: null,
+    });
+    vi.spyOn(userModelingApi, "getReadiness").mockImplementation(async () =>
+      decideGate.mock.calls.length > 0 ? readinessApproved : readinessReview,
+    );
+    const wrapper = mountFlow();
+
+    const bar = wrapper.get('[data-testid="twins-decision"][data-decision="approve"]');
+    expect(bar.attributes("data-gate-pending")).toBe("false");
+    expect(bar.find('[data-testid="decision-secondary"]').exists()).toBe(false);
+    expect(decisionPrimary(wrapper, "approve").text()).toBe("Confirm the twins and continue");
+    expect(wrapper.text()).not.toContain("Prepare for approval");
+    expect(wrapper.find('[data-testid="twins-other-decisions"]').exists()).toBe(false);
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
+    await flushPromises();
+
+    expect(submitGate).toHaveBeenCalledTimes(1);
+    expect(submitGate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(decideGate).toHaveBeenCalledTimes(1);
+    expect(decideGate).toHaveBeenCalledWith(
+      PROJECT_ID,
+      { action: "APPROVE", reason: null },
+      ACCESS_TOKEN,
+    );
+    expect(submitGate.mock.invocationCallOrder[0]!).toBeLessThan(
+      decideGate.mock.invocationCallOrder[0]!,
+    );
+    expect(store.isReadyForRequirements).toBe(true);
+    expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+  });
+
+  it("asks for changes while the twins wait for approval and closes the note once recorded", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessReview;
+    store.currentGate = pendingGate;
+    const submitGate = vi.spyOn(userModelingApi, "submitGate");
+    const decideGate = vi.spyOn(userModelingApi, "decideGate").mockResolvedValue({
+      outcome: "APPLIED",
+      gate: { ...pendingGate, status: "REVISION_REQUESTED", event_sequence: 2 },
+      events: [],
+      issue: null,
+    });
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessReview);
+    const wrapper = mountFlow();
+
+    const approve = wrapper.get('[data-testid="twins-decision"][data-decision="approve"]');
+    expect(approve.attributes("data-gate-pending")).toBe("true");
+    expect(wrapper.get('[data-testid="twins-other-decisions"]').attributes("open")).toBeUndefined();
+
+    await approve.get('[data-testid="decision-secondary"]').trigger("click");
+    const note = approve.get('[data-testid="decision-note"]');
+    expect(note.attributes("placeholder")).toBe(
+      "Write what does not convince you in the profiles: the note stays in the history of the decisions.",
+    );
+    await note.setValue("The receptionist works at night");
+    await approve.get('[data-testid="decision-send"]').trigger("click");
+    await flushPromises();
+
+    expect(submitGate).not.toHaveBeenCalled();
+    expect(decideGate).toHaveBeenCalledWith(
+      PROJECT_ID,
+      { action: "REQUEST_REVISION", reason: "The receptionist works at night" },
+      ACCESS_TOKEN,
+    );
+    expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="user-modeling-gate-notice"]').text()).toContain(
+      "You asked for changes.",
+    );
+  });
+
+  it("shows a failed approval and only approves on the next press", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = { ...readinessReview, gate_exists: false, gate_id: null, gate_status: null };
+    const submitGate = vi.spyOn(userModelingApi, "submitGate").mockResolvedValue({
+      outcome: "APPLIED",
+      gate: pendingGate,
+      events: [],
+      issue: null,
+    });
+    const decideGate = vi
+      .spyOn(userModelingApi, "decideGate")
+      .mockRejectedValueOnce(new Error("TIMEOUT"))
+      .mockResolvedValue({ outcome: "APPLIED", gate: approvedGate, events: [], issue: null });
+    vi.spyOn(userModelingApi, "getReadiness").mockImplementation(async () =>
+      decideGate.mock.calls.length > 1 ? readinessApproved : readinessReview,
+    );
+    const wrapper = mountFlow();
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
+    await flushPromises();
+
+    expect(submitGate).toHaveBeenCalledTimes(1);
+    expect(decideGate).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      "Model generation timed out. Check model availability before retrying.",
+    );
+    expect(
+      wrapper
+        .get('[data-testid="twins-decision"][data-decision="approve"]')
+        .attributes("data-gate-pending"),
+    ).toBe("true");
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
+    await flushPromises();
+
+    expect(submitGate).toHaveBeenCalledTimes(1);
+    expect(decideGate).toHaveBeenCalledTimes(2);
+    expect(decideGate).toHaveBeenLastCalledWith(
+      PROJECT_ID,
+      { action: "APPROVE", reason: null },
+      ACCESS_TOKEN,
+    );
+  });
+
+  it("makes no approval when the submission fails", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = { ...readinessReview, gate_exists: false, gate_id: null, gate_status: null };
+    const submitGate = vi
+      .spyOn(userModelingApi, "submitGate")
+      .mockRejectedValue(new Error("PROVIDER_UNAVAILABLE"));
+    const decideGate = vi.spyOn(userModelingApi, "decideGate");
+    const wrapper = mountFlow();
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
+    await flushPromises();
+
+    expect(submitGate).toHaveBeenCalledTimes(1);
+    expect(decideGate).not.toHaveBeenCalled();
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      "The local model is unavailable. Check model status above.",
+    );
+    expect(
+      wrapper
+        .get('[data-testid="twins-decision"][data-decision="approve"]')
+        .attributes("data-gate-pending"),
+    ).toBe("false");
+  });
+
+  it("rejects the profiles from the other decisions only with a reason", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessReview;
+    store.currentGate = pendingGate;
+    const decideGate = vi.spyOn(userModelingApi, "decideGate").mockResolvedValue({
+      outcome: "APPLIED",
+      gate: { ...pendingGate, status: "REJECTED", event_sequence: 2 },
+      events: [],
+      issue: null,
+    });
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessReview);
+    const wrapper = mountFlow();
+
+    const reject = wrapper.get('[data-testid="twins-reject"]');
+    expect(reject.attributes("disabled")).toBeDefined();
+    await wrapper.get("#gate-three-reason").setValue("Wrong audience");
+    await wrapper.get('[data-testid="twins-reject"]').trigger("click");
+    await flushPromises();
+
+    expect(decideGate).toHaveBeenCalledWith(
+      PROJECT_ID,
+      { action: "REJECT", reason: "Wrong audience" },
+      ACCESS_TOKEN,
+    );
+  });
+
+  it("asks to create the twins again when the brief or the team changed", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = { ...readinessReview, context_current: false };
+    store.currentGate = pendingGate;
+    const wrapper = mountFlow();
+
+    expect(wrapper.get('[data-testid="user-modeling-stale-context"]').text()).toContain(
+      "The brief or team changed",
+    );
+    expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins again");
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+    expect(wrapper.find('[data-testid="twins-other-decisions"]').exists()).toBe(false);
+  });
+
+  it("mounts its decision in the bar of the page when the page offers one", async () => {
+    const target = document.createElement("div");
+    target.id = "step-decision-bar";
+    document.body.appendChild(target);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [pendingPersona];
+    const wrapper = mountFlow(host);
+    await flushPromises();
+
+    expect(target.querySelector('[data-testid="twins-decision"]')).not.toBeNull();
+    expect(wrapper.element.querySelector('[data-testid="decision-bar"]')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("puts its technical row after the bar of the page and back in the step without it", async () => {
+    const row = document.createElement("div");
+    row.id = "step-technical-row";
+    const host = document.createElement("div");
+    document.body.append(row, host);
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const wrapper = mountFlow(host);
+    await flushPromises();
+
+    expect(
+      row.querySelector(
+        '[data-testid="user-modeling-technical-details"] [data-testid="step-technical-details"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      wrapper.element.querySelector('[data-testid="user-modeling-technical-details"]'),
+    ).toBeNull();
+    wrapper.unmount();
+    expect(row.childElementCount).toBe(0);
+    row.remove();
+
+    const alone = mountFlow(host);
+    await flushPromises();
+    expect(
+      alone.element.querySelector('[data-testid="user-modeling-technical-details"]'),
+    ).not.toBeNull();
+    alone.unmount();
+    host.remove();
+  });
+
+  it("takes the bar and the row of the page as soon as its hidden step is shown and active", async () => {
+    const bar = document.createElement("div");
+    bar.id = "step-decision-bar";
+    const row = document.createElement("div");
+    row.id = "step-technical-row";
+    const host = document.createElement("div");
+    document.body.append(bar, row, host);
+    const restore = emulateVisibility();
+    try {
+      vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = readinessReview;
+      store.currentGate = pendingGate;
+      const Stage = defineComponent({
+        props: { shown: { type: Boolean, required: true } },
+        setup(stage) {
+          return () =>
+            withDirectives(
+              h("div", [
+                h(ProjectUserModelingFlow, {
+                  projectId: PROJECT_ID,
+                  accessToken: ACCESS_TOKEN,
+                  locale: "en",
+                  autoLoad: false,
+                  active: stage.shown,
+                }),
+              ]),
+              [[vShow, stage.shown]],
+            );
+        },
+      });
+      const wrapper = mount(Stage, {
+        attachTo: host,
+        props: { shown: false },
+        global: { plugins: [createAppI18n("en")] },
+      });
+      await flushPromises();
+
+      expect(bar.childElementCount).toBe(0);
+      expect(row.childElementCount).toBe(0);
+      expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(true);
+
+      await wrapper.setProps({ shown: true });
+      await flushPromises();
+
+      expect(
+        bar.querySelector('[data-testid="twins-decision"] [data-testid="decision-bar"]'),
+      ).not.toBeNull();
+      expect(row.querySelector('[data-testid="user-modeling-technical-details"]')).not.toBeNull();
+      expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+      wrapper.unmount();
+    } finally {
+      restore();
+      bar.remove();
+      row.remove();
+      host.remove();
+    }
+  });
+
+  it("takes the bar of the page when it is mounted while its step is being shown", async () => {
+    const bar = document.createElement("div");
+    bar.id = "step-decision-bar";
+    const row = document.createElement("div");
+    row.id = "step-technical-row";
+    const host = document.createElement("div");
+    document.body.append(bar, row, host);
+    const restore = emulateVisibility();
+    try {
+      vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = readinessReview;
+      store.currentGate = pendingGate;
+      const Stage = defineComponent({
+        props: { shown: { type: Boolean, required: true } },
+        setup(stage) {
+          return () =>
+            withDirectives(
+              h("div", [
+                stage.shown
+                  ? h(ProjectUserModelingFlow, {
+                      projectId: PROJECT_ID,
+                      accessToken: ACCESS_TOKEN,
+                      locale: "en",
+                      autoLoad: false,
+                      active: true,
+                    })
+                  : null,
+              ]),
+              [[vShow, stage.shown]],
+            );
+        },
+      });
+      const wrapper = mount(Stage, {
+        attachTo: host,
+        props: { shown: false },
+        global: { plugins: [createAppI18n("en")] },
+      });
+      await flushPromises();
+
+      await wrapper.setProps({ shown: true });
+      await flushPromises();
+
+      expect(
+        bar.querySelector('[data-testid="twins-decision"] [data-testid="decision-bar"]'),
+      ).not.toBeNull();
+      expect(row.querySelector('[data-testid="user-modeling-technical-details"]')).not.toBeNull();
+      wrapper.unmount();
+    } finally {
+      restore();
+      bar.remove();
+      row.remove();
+      host.remove();
+    }
+  });
+
+  it("names what gets in the way of a twin without a gendered pronoun", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    const value = structuredClone(snapshot);
+    value.snapshot.twin_versions[0]!.profile.observations = [
+      {
+        ...goalsObservation,
+        observation_key: "user_twin.frustrations",
+        value: { kind: "ITEMS", text: null, items: ["Code all'ingresso"], reason: null },
+      },
+    ];
+    store.applySnapshot(value);
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("it")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "it", autoLoad: false },
+    });
+
+    const card = wrapper.get('[data-testid="twin-card"]');
+    expect(card.text()).toContain("Che cosa è di ostacolo");
+    expect(card.text()).toContain("Code all'ingresso");
+    expect(card.text()).not.toContain("lo frena");
+    wrapper.unmount();
   });
 
   it("offers a conversation with every User Twin and hands the twin to the owner", async () => {
@@ -701,7 +1366,7 @@ describe("ProjectUserModelingFlow", () => {
     await flushPromises();
 
     const button = wrapper.get('[data-testid="open-twin-chat"]');
-    expect(button.text()).toBe(`Talk to ${twinVersion.profile.name}`);
+    expect(button.text()).toBe(`Talk to the twin: ${twinVersion.profile.name}`);
     await button.trigger("click");
     expect(wrapper.emitted("open-chat")?.[0]?.[0]).toEqual(twinVersion);
   });
@@ -757,6 +1422,280 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(propose).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("offers a twin from another project only once the project has twins, before their cards", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.personaVersions = [confirmedPersona];
+    const wrapper = mountFlow();
+
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(false);
+
+    store.applySnapshot({
+      ...snapshot,
+      snapshot: { ...snapshot.snapshot, twin_count: 0, twin_versions: [] },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[aria-labelledby="twins-heading"]').exists()).toBe(true);
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(false);
+
+    store.applySnapshot(snapshot);
+    await flushPromises();
+
+    const panel = wrapper.findComponent(TwinImportPanel);
+    const firstTwin = wrapper.get('[data-testid="twin-card"]');
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("projectId")).toBe(PROJECT_ID);
+    expect(panel.props("locale")).toBe("en");
+    expect(panel.text()).toContain("Add a twin from another project");
+    expect(
+      panel.element.compareDocumentPosition(firstTwin.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("gives the twin import the language and the authorization of the step", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const authorize = <T>(operation: (token: string) => Promise<T>) => operation(ACCESS_TOKEN);
+
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("it")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        authorize,
+        locale: "it",
+        autoLoad: false,
+      },
+    });
+
+    const panel = wrapper.findComponent(TwinImportPanel);
+    expect(panel.props("locale")).toBe("it");
+    expect(panel.props("authorize")).toBe(authorize);
+    expect(panel.text()).toContain("Aggiungi un twin da un altro progetto");
+  });
+
+  it("reloads the step after an import so that the new twin appears and needs a new approval", async () => {
+    const importedTwinId = "00000000-0000-4000-8000-000000000032";
+    const importedTwin: UserTwinVersionPayload = {
+      ...twinVersion,
+      id: "00000000-0000-4000-8000-000000000033",
+      twin_id: importedTwinId,
+      content_hash: "5".repeat(64),
+      profile: { ...twinVersion.profile, name: "Night Porter User Twin" },
+    };
+    const snapshotTwo: UserModelingSnapshotVersionPayload = {
+      ...snapshot,
+      id: "00000000-0000-4000-8000-000000000041",
+      version_number: 2,
+      based_on_version_number: 1,
+      content_hash: "6".repeat(64),
+      snapshot: { ...snapshot.snapshot, twin_count: 2, twin_versions: [twinVersion, importedTwin] },
+    };
+    const readinessAfterImport: UserModelingReadinessPayload = {
+      ...readinessApproved,
+      snapshot_version_id: snapshotTwo.id,
+      snapshot_version_number: 2,
+      snapshot_content_hash: snapshotTwo.content_hash,
+      approved_current_snapshot: false,
+      workflow_state: "USER_MODELING_REVIEW_REQUIRED",
+      twins: [
+        ...readinessReview.twins,
+        {
+          twin_id: importedTwinId,
+          version_number: 1,
+          persisted_status: "PROJECT_GROUNDED_UT",
+          effective_status: "PROJECT_GROUNDED_UT",
+        },
+      ],
+    };
+    const importPayload: TwinImportPayload = {
+      status: "TWIN_IMPORTED",
+      twin: {
+        twin_id: importedTwinId,
+        version_id: importedTwin.id,
+        version_number: 1,
+        name: importedTwin.profile.name,
+        content_hash: importedTwin.content_hash,
+        validation_status: "PROJECT_GROUNDED_UT",
+      },
+      persona: {
+        persona_id: "00000000-0000-4000-8000-000000000022",
+        version_id: "00000000-0000-4000-8000-000000000023",
+        version_number: 1,
+        name: "Night Porter",
+      },
+      snapshot: {
+        version_id: snapshotTwo.id,
+        version_number: 2,
+        content_hash: snapshotTwo.content_hash,
+        twin_count: 2,
+      },
+      origin: {
+        project_id: "00000000-0000-4000-8000-000000000090",
+        project_name: "Hotel night desk",
+        twin_id: "00000000-0000-4000-8000-000000000091",
+        twin_version_number: 3,
+        twin_content_hash: "7".repeat(64),
+        persona_id: "00000000-0000-4000-8000-000000000092",
+        persona_version_number: 2,
+        persona_content_hash: "8".repeat(64),
+      },
+      gate_approval_required: true,
+    };
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessApproved;
+    store.currentGate = approvedGate;
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessAfterImport);
+    vi.spyOn(userModelingApi, "getCurrentSnapshot").mockResolvedValue(snapshotTwo);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([snapshot, snapshotTwo]);
+    vi.spyOn(userModelingApi, "getCurrentGate").mockResolvedValue(approvedGate);
+    vi.spyOn(userModelingApi, "getGateEvents").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    const load = vi.spyOn(store, "load");
+    const wrapper = mountFlow();
+
+    expect(wrapper.text()).toContain("You have approved these user profiles.");
+    expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+
+    wrapper.findComponent(TwinImportPanel).vm.$emit("imported", importPayload);
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(store.currentSnapshot?.id).toBe(snapshotTwo.id);
+    expect(
+      wrapper.findAll('[data-testid="open-twin-chat"]').map((button) => button.text()),
+    ).toEqual([
+      `Talk to the twin: ${twinVersion.profile.name}`,
+      "Talk to the twin: Night Porter User Twin",
+    ]);
+    expect(wrapper.text()).not.toContain("You have approved these user profiles.");
+    expect(wrapper.text()).toContain(
+      "The profiles have changed since your last approval. Review them again.",
+    );
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
+      "Review and approve your user profiles to continue.",
+    );
+    expect(
+      wrapper
+        .find('[data-testid="twins-decision"][data-decision="approve"][data-gate-pending="false"]')
+        .exists(),
+    ).toBe(true);
+    expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(true);
+    await expectAccessible(wrapper.element);
+  });
+});
+
+describe("ProjectUserModelingFlow and a generation still running", () => {
+  function modelingJob(
+    operation: "PERSONA_PROPOSAL" | "USER_TWIN_GENERATION",
+    overrides: Partial<GenerationRequestJob> = {},
+  ): GenerationRequestJob {
+    return {
+      job_id: "00000000-0000-4000-8000-0000000009dd",
+      kind: "REQUEST",
+      operation,
+      status: "RUNNING",
+      stage: "GENERATING",
+      attempt: 1,
+      started_at: CREATED_AT,
+      finished_at: null,
+      alternative_id: null,
+      failure: null,
+      response: null,
+      ...overrides,
+    };
+  }
+
+  function mountAutomatic() {
+    return mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "en", autoLoad: true },
+    });
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = "";
+    clearFollowedGenerations();
+    vi.useFakeTimers();
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+    vi.restoreAllMocks();
+  });
+
+  it("waits for the profiles of a proposal started before a reload and never proposes twice", async () => {
+    const store = useUserModelingStore();
+    const load = vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([modelingJob("PERSONA_PROPOSAL")]);
+    vi.spyOn(generationJobsApi, "job")
+      .mockResolvedValueOnce(modelingJob("PERSONA_PROPOSAL"))
+      .mockResolvedValueOnce(
+        modelingJob("PERSONA_PROPOSAL", {
+          status: "SUCCEEDED",
+          stage: null,
+          response: { status_code: 200, body: { status: "CREATED" } },
+        }),
+      );
+    const wrapper = mountAutomatic();
+    await vi.advanceTimersByTimeAsync(50);
+
+    const notice = wrapper.get('[data-testid="generation-job-notice"]');
+    expect(notice.text()).toContain("The Studio is generating the user profiles.");
+    expect(wrapper.find('[data-testid="user-modeling-busy"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="propose-personas"]').attributes("disabled")).toBeDefined();
+    expect(propose).not.toHaveBeenCalled();
+    const loads = load.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(wrapper.find('[data-testid="generation-job-notice"]').exists()).toBe(false);
+    expect(load.mock.calls.length).toBeGreaterThan(loads);
+    expect(propose).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("says that an interrupted generation of the twins can be started again and waits for the owner", async () => {
+    const store = useUserModelingStore();
+    vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+    const generate = vi.spyOn(store, "generateSnapshot");
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([modelingJob("USER_TWIN_GENERATION")]);
+    vi.spyOn(generationJobsApi, "job").mockRejectedValue(
+      new GenerationJobsApiError("GENERATION_JOB_NOT_FOUND", {
+        status: 404,
+        code: "GENERATION_JOB_NOT_FOUND",
+        payload: null,
+      }),
+    );
+    const wrapper = mountAutomatic();
+    await vi.advanceTimersByTimeAsync(2050);
+
+    const failure = wrapper.get('[data-testid="generation-job-failure"]');
+    expect(failure.attributes("data-lost")).toBe("true");
+    expect(failure.text()).toContain("The generation of the user twins stopped");
+    expect(failure.text()).toContain("you can start it again whenever you want");
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(generate).not.toHaveBeenCalled();
+    expect(propose).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

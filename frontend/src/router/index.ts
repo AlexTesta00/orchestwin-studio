@@ -46,11 +46,18 @@ const applicationRoutes = Object.freeze([
     },
   },
   {
-    path: "/projects/:projectId",
+    path: "/projects/:projectId([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
     name: "project-detail",
     component: () => import("@/views/ProjectDetailView.vue"),
     meta: {
       requiresAuthentication: true,
+    },
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    redirect: {
+      name: "overview",
+      params: {},
     },
   },
 ] satisfies RouteRecordRaw[]);

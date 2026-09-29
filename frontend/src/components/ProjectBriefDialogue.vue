@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { briefDialogueApi, type BriefDialogueApi } from "@/api/briefDialogue";
 import { apiClient } from "@/api/client";
-import type { ProjectBriefVersionResponse } from "@/api/contracts";
+import type { BriefField, ProjectBriefVersionResponse } from "@/api/contracts";
+import UiBrandMark from "@/components/UiBrandMark.vue";
 import UiButton from "@/components/UiButton.vue";
-import UiCard from "@/components/UiCard.vue";
 import { useAuthStore } from "@/stores/auth";
 import { type AuthorizedBriefDialogueRequest, useBriefDialogueStore } from "@/stores/briefDialogue";
 import type { BriefDialogueTurnPayload } from "@/types/briefDialogue";
@@ -29,6 +29,85 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n({ useScope: "global" });
+const { t: tl } = useI18n({
+  useScope: "local",
+  messages: {
+    en: {
+      chat: {
+        analyst: "Requirements analyst",
+        analystSays: "The analyst:",
+        youSay: "You:",
+        greeting:
+          "Hi! I am the requirements analyst. Tell me your idea in two lines: what do you want to build?",
+        typing: "The analyst is writing",
+        shapeTitle: "The brief takes shape",
+        shapeIntro: "Each answer fills a point. What is missing, I will propose at the end.",
+        waiting: "Waiting for your answer",
+        asking: "I am asking you now",
+        openPoint: "You do not know yet: it stays an open point",
+        startHint: "Then I will ask one question at a time and compose the brief.",
+        answerHint: "Answer in your own words. Press Enter to send.",
+        listHint: "One item per line. Press Send when you are done.",
+        unknownHint: "Not sure yet?",
+        seeBrief: "See the brief and the proposals",
+        fields: {
+          name: "Name",
+          description: "The idea",
+          problem: "The problem",
+          goals: "Goals",
+          target_users: "For whom",
+          domain: "Context",
+          technical_constraints: "Technical constraints",
+          temporal_constraints: "Timing",
+          budget: "Budget",
+          functional_requirements: "What it must do",
+          non_functional_requirements: "Expected qualities",
+          risks: "Risks",
+          stakeholders: "People involved",
+          available_artifacts: "Available materials",
+          definition_of_done: "When it is done",
+        },
+      },
+    },
+    it: {
+      chat: {
+        analyst: "Analista delle esigenze",
+        analystSays: "L'analista:",
+        youSay: "Tu:",
+        greeting:
+          "Ciao! Sono l'analista delle esigenze. Raccontami l'idea in due righe: che cosa vuoi realizzare?",
+        typing: "L'analista sta scrivendo",
+        shapeTitle: "Il brief prende forma",
+        shapeIntro: "Ogni risposta riempie un punto. Quello che manca te lo proporrò alla fine.",
+        waiting: "In attesa della tua risposta",
+        asking: "Te lo sto chiedendo ora",
+        openPoint: "Non lo sai ancora: resta un punto aperto",
+        startHint: "Poi ti farò una domanda alla volta e comporrò il brief.",
+        answerHint: "Rispondi con parole tue. Premi Invio per mandarla.",
+        listHint: "Un elemento per riga. Premi Invia quando hai finito.",
+        unknownHint: "Non lo sai ancora?",
+        seeBrief: "Vedi il brief e le proposte",
+        fields: {
+          name: "Nome",
+          description: "L'idea",
+          problem: "Il problema",
+          goals: "Obiettivi",
+          target_users: "Per chi",
+          domain: "Contesto",
+          technical_constraints: "Vincoli tecnici",
+          temporal_constraints: "Tempi",
+          budget: "Budget",
+          functional_requirements: "Cosa deve fare",
+          non_functional_requirements: "Qualità attese",
+          risks: "Rischi",
+          stakeholders: "Persone coinvolte",
+          available_artifacts: "Materiali disponibili",
+          definition_of_done: "Quando sarà finito",
+        },
+      },
+    },
+  },
+});
 const auth = useAuthStore();
 const store = useBriefDialogueStore();
 
@@ -38,6 +117,32 @@ const answerText = ref("");
 const answerMissing = ref(false);
 const synthesizing = ref(false);
 const synthesizedVersion = ref<number | null>(null);
+const log = ref<HTMLElement | null>(null);
+
+const displayOrder: readonly BriefField[] = [
+  "name",
+  "description",
+  "problem",
+  "target_users",
+  "goals",
+  "functional_requirements",
+  "domain",
+  "temporal_constraints",
+  "technical_constraints",
+  "budget",
+  "non_functional_requirements",
+  "risks",
+  "stakeholders",
+  "available_artifacts",
+  "definition_of_done",
+];
+const defaultEssentials: readonly BriefField[] = [
+  "description",
+  "problem",
+  "goals",
+  "target_users",
+  "functional_requirements",
+];
 
 const authorize: AuthorizedBriefDialogueRequest = (operation) =>
   props.authorize ? props.authorize(operation) : auth.withAccessToken(apiClient, operation);
@@ -47,13 +152,17 @@ const active = computed(() => store.isActive);
 const pending = computed(() => store.pendingTurn);
 const answered = computed(() => store.answeredTurns);
 const busy = computed(() => store.busy);
+const composing = computed(
+  () => pending.value === null && (dialogue.value?.status === "READY" || synthesizing.value),
+);
+const typing = computed(() => busy.value && !composing.value);
 const progressText = computed(() => {
   const progress = store.progress;
   if (progress === null) return "";
   const left = progress.open_essential_fields.length;
   const essentials =
     left > 0
-      ? t("briefDialogue.essentialsLeft", { count: left })
+      ? t("briefDialogue.essentialsLeft", { count: left }, left)
       : t("briefDialogue.essentialsDone");
   return `${t("briefDialogue.progress", {
     asked: progress.questions_asked,
@@ -68,8 +177,45 @@ const errorText = computed(() => {
   return translated === key ? t("briefDialogue.errors.default", { code }) : translated;
 });
 
+type ShapeState = "answered" | "open" | "asking" | "waiting";
+
+const shapeCards = computed(() => {
+  const current = active.value ? dialogue.value : null;
+  const turns = current?.turns ?? [];
+  const essentials = current?.essential_fields ?? defaultEssentials;
+  const asked = turns
+    .map((turn) => turn.field)
+    .filter((field): field is BriefField => field !== null);
+  const fields = new Set<BriefField>([...essentials, ...asked]);
+  return displayOrder
+    .filter((field) => fields.has(field))
+    .map((field) => {
+      const turn = [...turns]
+        .reverse()
+        .find((candidate) => candidate.field === field && candidate.answer !== null);
+      let state: ShapeState = "waiting";
+      let value = tl("chat.waiting");
+      if (turn !== undefined) {
+        state = turn.answer?.kind === "UNKNOWN" ? "open" : "answered";
+        value = state === "open" ? tl("chat.openPoint") : answerLabel(turn);
+      } else if (field === "description" && current !== null && current.statement.trim() !== "") {
+        state = "answered";
+        value = current.statement;
+      }
+      if (pending.value?.field === field) {
+        state = "asking";
+        value = tl("chat.asking");
+      }
+      return { field, state, value };
+    });
+});
+
+function shapeLabel(field: BriefField): string {
+  return tl(`chat.fields.${field}`);
+}
+
 function fieldLabel(turn: BriefDialogueTurnPayload): string {
-  return turn.field === null ? t("briefDialogue.followUp") : t(`brief.fields.${turn.field}`);
+  return turn.field === null ? t("briefDialogue.followUp") : shapeLabel(turn.field);
 }
 
 function answerLabel(turn: BriefDialogueTurnPayload): string {
@@ -84,6 +230,12 @@ function itemsOf(value: string): string[] {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+async function scrollToLatest(): Promise<void> {
+  await nextTick();
+  const element = log.value;
+  if (element !== null) element.scrollTop = element.scrollHeight;
 }
 
 async function load(): Promise<void> {
@@ -149,6 +301,12 @@ async function send(): Promise<void> {
   answerText.value = "";
 }
 
+function sendOnEnter(event: KeyboardEvent): void {
+  if (event.isComposing || pending.value?.answer_type !== "TEXT" || busy.value) return;
+  event.preventDefault();
+  void send();
+}
+
 async function sayUnknown(): Promise<void> {
   answerMissing.value = false;
   try {
@@ -202,224 +360,426 @@ watch(
   },
 );
 
-onMounted(load);
+watch(
+  () => [answered.value.length, pending.value?.id, typing.value, composing.value],
+  () => {
+    void scrollToLatest();
+  },
+);
+
+let logObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (typeof ResizeObserver !== "undefined" && log.value !== null) {
+    logObserver = new ResizeObserver(() => {
+      void scrollToLatest();
+    });
+    logObserver.observe(log.value);
+  }
+  void load();
+});
+
+onBeforeUnmount(() => {
+  logObserver?.disconnect();
+  logObserver = null;
+});
 </script>
 
 <template>
-  <section class="grid gap-5" data-testid="brief-dialogue" aria-labelledby="brief-dialogue-title">
-    <header class="grid gap-2">
-      <h2 id="brief-dialogue-title" class="m-0 text-2xl font-semibold tracking-card">
-        {{ t("briefDialogue.title") }}
-      </h2>
-      <p class="m-0 max-w-3xl text-[15px] leading-6 text-ink-2">{{ t("briefDialogue.intro") }}</p>
-    </header>
-
+  <section
+    class="flex min-w-0 flex-col gap-4"
+    data-testid="brief-dialogue"
+    aria-labelledby="brief-dialogue-title"
+  >
     <p
       v-if="errorText !== null"
-      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 text-sm font-semibold text-fail-dark"
+      class="rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm font-semibold text-fail-on-night"
       role="alert"
       data-testid="brief-dialogue-error"
     >
       {{ errorText }}
     </p>
 
-    <UiCard v-if="!active" data-testid="brief-dialogue-entry">
-      <template v-if="store.modelUnavailable">
-        <p class="m-0 text-[15px] leading-6 text-ink-2" data-testid="brief-dialogue-unavailable">
-          {{ t("briefDialogue.modelUnavailable") }}
-        </p>
-        <div class="mt-4">
-          <UiButton
-            variant="secondary"
-            data-testid="brief-dialogue-open-form"
-            @click="emit('open-form')"
-          >
-            {{ t("briefDialogue.openForm") }}
-          </UiButton>
-        </div>
-      </template>
-      <template v-else-if="synthesizedVersion !== null">
-        <p class="m-0 text-[15px] leading-6 text-ink-2" data-testid="brief-dialogue-synthesized">
-          {{ t("briefDialogue.synthesized") }}
-        </p>
-        <div class="mt-4">
-          <UiButton data-testid="brief-dialogue-open-form" @click="emit('open-form')">
-            {{ t("briefDialogue.goToForm") }}
-          </UiButton>
-        </div>
-      </template>
-      <form v-else class="grid gap-4" @submit.prevent="start">
-        <label class="grid gap-2 text-sm font-semibold" for="brief-dialogue-statement">
-          {{ t("briefDialogue.statementLabel") }}
-          <textarea
-            id="brief-dialogue-statement"
-            v-model="statement"
-            data-testid="brief-dialogue-statement"
-            rows="4"
-            class="rounded-control border border-field bg-surface px-3 py-2 text-[15px] font-normal"
-            :placeholder="t('briefDialogue.statementPlaceholder')"
-            :disabled="busy"
-          ></textarea>
-        </label>
-        <p v-if="statementMissing" class="m-0 text-sm font-semibold text-fail-dark" role="alert">
-          {{ t("briefDialogue.statementRequired") }}
-        </p>
-        <div class="flex flex-wrap items-center gap-4">
-          <UiButton type="submit" :disabled="busy" data-testid="brief-dialogue-start">
-            {{
-              busy
-                ? t("briefDialogue.waiting")
-                : currentBrief
-                  ? t("briefDialogue.restart")
-                  : t("briefDialogue.start")
-            }}
-          </UiButton>
-          <button
-            type="button"
-            class="text-sm font-semibold text-action underline-offset-4 hover:underline"
-            data-testid="brief-dialogue-open-form"
-            @click="emit('open-form')"
-          >
-            {{ t("briefDialogue.preferForm") }}
-          </button>
-        </div>
-      </form>
-    </UiCard>
-
-    <template v-else-if="dialogue !== null">
-      <p
-        class="m-0 font-mono text-xs text-ink-3"
-        data-testid="brief-dialogue-progress"
-        aria-live="polite"
+    <div class="flex flex-wrap items-start gap-5">
+      <section
+        class="flex h-[min(640px,calc(100vh-220px))] min-h-[480px] min-w-0 flex-[1.6_1_460px] flex-col overflow-hidden rounded-sheet bg-night"
+        :aria-busy="busy ? 'true' : undefined"
+        :data-testid="
+          !active
+            ? 'brief-dialogue-entry'
+            : pending !== null
+              ? 'brief-dialogue-question'
+              : undefined
+        "
       >
-        {{ progressText }}
-      </p>
+        <header class="flex items-center gap-3 border-b border-night-line px-5 py-3.5">
+          <span aria-hidden="true" class="inline-flex shrink-0">
+            <UiBrandMark :size="36" surface="night" />
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 id="brief-dialogue-title" class="text-[15px] font-semibold text-on-night">
+              {{ tl("chat.analyst") }}
+            </h2>
+            <p
+              v-if="active && dialogue !== null"
+              class="mt-0.5 font-mono text-[11px] leading-snug tracking-[0.04em] text-on-night-3"
+              data-testid="brief-dialogue-progress"
+            >
+              {{ progressText }}
+            </p>
+          </div>
+        </header>
 
-      <ol
-        v-if="answered.length > 0"
-        class="m-0 grid list-none gap-3 p-0"
-        data-testid="brief-dialogue-turns"
-      >
-        <li
-          v-for="turn in answered"
-          :key="turn.id"
-          class="grid gap-1 rounded-panel border border-line bg-surface-2 px-4 py-3"
-          data-testid="brief-dialogue-turn"
+        <div
+          ref="log"
+          role="log"
+          aria-live="polite"
+          class="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-6 sm:px-5"
         >
-          <span class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">{{
-            fieldLabel(turn)
-          }}</span>
-          <p class="m-0 text-sm text-ink-2">{{ turn.question }}</p>
-          <p class="m-0 text-[15px] leading-6 whitespace-pre-line text-ink">
-            {{ answerLabel(turn) }}
+          <p
+            class="max-w-[82%] self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3 text-[15px] leading-[1.55] text-on-night"
+          >
+            <span class="sr-only">{{ tl("chat.analystSays") }} </span>{{ tl("chat.greeting") }}
           </p>
-        </li>
-      </ol>
 
-      <UiCard v-if="pending !== null" tone="elevated" data-testid="brief-dialogue-question">
-        <span class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">{{
-          fieldLabel(pending)
-        }}</span>
-        <h3 class="m-0 mt-2 text-xl font-semibold text-ink">{{ pending.question }}</h3>
-        <form class="mt-4 grid gap-3" @submit.prevent="send">
-          <label class="sr-only" for="brief-dialogue-answer">{{
-            t("briefDialogue.answerLabel")
-          }}</label>
-          <textarea
-            id="brief-dialogue-answer"
-            v-model="answerText"
-            data-testid="brief-dialogue-answer"
-            rows="3"
-            class="rounded-control border border-field bg-surface px-3 py-2 text-[15px]"
-            :placeholder="
-              pending.answer_type === 'ITEM_LIST'
-                ? t('briefDialogue.answerPlaceholderList')
-                : t('briefDialogue.answerPlaceholderText')
-            "
-            :disabled="busy"
-          ></textarea>
-          <p v-if="pending.answer_type === 'ITEM_LIST'" class="m-0 text-xs text-ink-3">
-            {{ t("brief.oneItemPerLine") }}
+          <template v-if="!active">
+            <template v-if="store.modelUnavailable">
+              <div
+                class="grid max-w-[82%] gap-3 self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3"
+              >
+                <p
+                  class="text-[15px] leading-[1.55] text-on-night"
+                  data-testid="brief-dialogue-unavailable"
+                >
+                  <span class="sr-only">{{ tl("chat.analystSays") }} </span
+                  >{{ t("briefDialogue.modelUnavailable") }}
+                </p>
+                <div>
+                  <UiButton
+                    variant="outline"
+                    data-testid="brief-dialogue-open-form"
+                    @click="emit('open-form')"
+                  >
+                    {{ t("briefDialogue.openForm") }}
+                  </UiButton>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="synthesizedVersion !== null">
+              <p
+                class="max-w-[82%] self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3 text-[15px] leading-[1.55] text-on-night"
+                data-testid="brief-dialogue-synthesized"
+              >
+                <span class="sr-only">{{ tl("chat.analystSays") }} </span
+                >{{ t("briefDialogue.synthesized") }}
+              </p>
+              <div class="self-start">
+                <UiButton
+                  variant="pill"
+                  data-testid="brief-dialogue-open-form"
+                  @click="emit('open-form')"
+                >
+                  {{ tl("chat.seeBrief") }}
+                </UiButton>
+              </div>
+            </template>
+          </template>
+
+          <template v-else-if="dialogue !== null">
+            <p
+              class="max-w-[82%] self-end rounded-[18px_18px_6px_18px] bg-on-night px-4 py-3 text-[15px] leading-[1.55] break-words whitespace-pre-line text-ink"
+            >
+              <span class="sr-only">{{ tl("chat.youSay") }} </span>{{ dialogue.statement }}
+            </p>
+            <ol
+              v-if="answered.length > 0"
+              class="m-0 flex list-none flex-col gap-3 p-0"
+              data-testid="brief-dialogue-turns"
+            >
+              <li
+                v-for="turn in answered"
+                :key="turn.id"
+                class="flex flex-col gap-3"
+                data-testid="brief-dialogue-turn"
+              >
+                <p
+                  class="max-w-[82%] self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3 text-[15px] leading-[1.55] text-on-night"
+                >
+                  <span class="sr-only">{{ tl("chat.analystSays") }} </span>{{ turn.question }}
+                </p>
+                <p
+                  class="max-w-[82%] self-end rounded-[18px_18px_6px_18px] bg-on-night px-4 py-3 text-[15px] leading-[1.55] break-words whitespace-pre-line text-ink"
+                >
+                  <span class="sr-only">{{ tl("chat.youSay") }} </span>{{ answerLabel(turn) }}
+                </p>
+              </li>
+            </ol>
+
+            <p
+              v-if="pending !== null"
+              class="max-w-[82%] self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3 text-[15px] leading-[1.55] text-on-night"
+              data-testid="brief-dialogue-pending"
+            >
+              <span
+                class="mb-1 block font-mono text-[11px] tracking-label text-violet-on-night-2 uppercase"
+              >
+                {{ fieldLabel(pending) }}
+              </span>
+              <span class="sr-only">{{ tl("chat.analystSays") }} </span>{{ pending.question }}
+            </p>
+
+            <div
+              v-else-if="composing"
+              class="grid max-w-[82%] gap-3 self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3"
+              data-testid="brief-dialogue-composing"
+            >
+              <p class="text-[15px] leading-[1.55] text-on-night" aria-live="polite">
+                <span class="sr-only">{{ tl("chat.analystSays") }} </span
+                >{{
+                  synthesizing || busy
+                    ? t("briefDialogue.composing")
+                    : t("briefDialogue.readyToCompose")
+                }}
+              </p>
+              <div v-if="!synthesizing && !busy">
+                <UiButton
+                  variant="pill"
+                  data-testid="brief-dialogue-retry-compose"
+                  @click="synthesize"
+                >
+                  {{ t("briefDialogue.retryCompose") }}
+                </UiButton>
+              </div>
+            </div>
+
+            <div
+              v-else-if="!busy"
+              class="grid max-w-[82%] gap-3 self-start rounded-[18px_18px_18px_6px] border border-on-night/10 bg-on-night/7 px-4 py-3"
+              data-testid="brief-dialogue-resume"
+            >
+              <p class="text-[15px] leading-[1.55] text-on-night">
+                <span class="sr-only">{{ tl("chat.analystSays") }} </span
+                >{{ t("briefDialogue.interrupted") }}
+              </p>
+              <div>
+                <UiButton
+                  variant="pill"
+                  :disabled="busy"
+                  data-testid="brief-dialogue-continue"
+                  @click="continueQuestion"
+                >
+                  {{ t("briefDialogue.continueQuestion") }}
+                </UiButton>
+              </div>
+            </div>
+          </template>
+
+          <div
+            v-if="typing"
+            class="flex gap-[5px] self-start rounded-[18px] bg-on-night/7 px-4 py-3.5"
+            role="img"
+            :aria-label="tl('chat.typing')"
+            data-testid="brief-dialogue-typing"
+          >
+            <span class="h-[7px] w-[7px] rounded-full bg-petrol-on-night-2 opacity-90" />
+            <span class="h-[7px] w-[7px] rounded-full bg-petrol-on-night-2 opacity-60" />
+            <span class="h-[7px] w-[7px] rounded-full bg-petrol-on-night-2 opacity-30" />
+          </div>
+        </div>
+
+        <form
+          v-if="!active && !store.modelUnavailable && synthesizedVersion === null"
+          class="grid gap-2.5 border-t border-night-line px-4 pt-3 pb-4"
+          novalidate
+          @submit.prevent="start"
+        >
+          <label class="sr-only" for="brief-dialogue-statement">
+            {{ t("briefDialogue.statementLabel") }}
+          </label>
+          <div class="flex items-end gap-2">
+            <textarea
+              id="brief-dialogue-statement"
+              v-model="statement"
+              data-testid="brief-dialogue-statement"
+              rows="3"
+              class="min-w-0 flex-1 resize-none rounded-[14px] border border-on-night/18 bg-night-raised px-3.5 py-3 text-[15px] leading-[1.45] text-on-night placeholder:text-on-night-3"
+              :placeholder="t('briefDialogue.statementPlaceholder')"
+              :disabled="busy"
+            ></textarea>
+            <UiButton
+              type="submit"
+              variant="pill"
+              class="shrink-0"
+              :disabled="busy"
+              data-testid="brief-dialogue-start"
+            >
+              {{
+                busy
+                  ? t("briefDialogue.waiting")
+                  : currentBrief
+                    ? t("briefDialogue.restart")
+                    : t("briefDialogue.start")
+              }}
+            </UiButton>
+          </div>
+          <p v-if="statementMissing" class="text-sm font-semibold text-fail-on-night" role="alert">
+            {{ t("briefDialogue.statementRequired") }}
           </p>
-          <p v-if="answerMissing" class="m-0 text-sm font-semibold text-fail-dark" role="alert">
+          <p class="flex flex-wrap items-center gap-x-2 text-xs text-on-night-3">
+            <span>{{ tl("chat.startHint") }}</span>
+            <button
+              type="button"
+              class="inline-flex min-h-11 items-center font-semibold text-petrol-on-night-2 underline-offset-4 hover:underline"
+              data-testid="brief-dialogue-open-form"
+              @click="emit('open-form')"
+            >
+              {{ t("briefDialogue.preferForm") }}
+            </button>
+          </p>
+        </form>
+
+        <form
+          v-else-if="active && pending !== null"
+          class="grid gap-2 border-t border-night-line px-4 pt-3 pb-4"
+          novalidate
+          data-testid="brief-dialogue-composer"
+          @submit.prevent="send"
+        >
+          <label class="sr-only" for="brief-dialogue-answer">
+            {{ t("briefDialogue.answerLabel") }}
+          </label>
+          <div class="flex items-end gap-2">
+            <textarea
+              id="brief-dialogue-answer"
+              v-model="answerText"
+              data-testid="brief-dialogue-answer"
+              :rows="pending.answer_type === 'ITEM_LIST' ? 3 : 2"
+              class="min-w-0 flex-1 resize-none rounded-[14px] border border-on-night/18 bg-night-raised px-3.5 py-3 text-[15px] leading-[1.45] text-on-night placeholder:text-on-night-3"
+              :placeholder="
+                pending.answer_type === 'ITEM_LIST'
+                  ? t('briefDialogue.answerPlaceholderList')
+                  : t('briefDialogue.answerPlaceholderText')
+              "
+              aria-describedby="brief-dialogue-answer-hint"
+              :disabled="busy"
+              @keydown.enter.exact="sendOnEnter"
+            ></textarea>
+            <UiButton
+              type="submit"
+              variant="pill"
+              class="shrink-0"
+              :disabled="busy"
+              data-testid="brief-dialogue-send"
+            >
+              {{ t("briefDialogue.send") }}
+            </UiButton>
+          </div>
+          <p v-if="answerMissing" class="text-sm font-semibold text-fail-on-night" role="alert">
             {{ t("briefDialogue.answerRequired") }}
           </p>
-          <div class="flex flex-wrap gap-3">
-            <UiButton type="submit" :disabled="busy" data-testid="brief-dialogue-send">
-              {{ busy ? t("briefDialogue.waiting") : t("briefDialogue.send") }}
-            </UiButton>
-            <UiButton
-              variant="secondary"
+          <p
+            id="brief-dialogue-answer-hint"
+            class="flex flex-wrap items-center gap-x-2 text-xs text-on-night-3"
+          >
+            <span>
+              {{
+                pending.answer_type === "ITEM_LIST" ? tl("chat.listHint") : tl("chat.answerHint")
+              }}
+            </span>
+            <span>{{ tl("chat.unknownHint") }}</span>
+            <button
+              type="button"
+              class="inline-flex min-h-11 items-center font-semibold text-violet-on-night-2 underline-offset-4 hover:underline disabled:text-on-night-3 disabled:no-underline"
               :disabled="busy"
               data-testid="brief-dialogue-unknown"
               @click="sayUnknown"
             >
               {{ t("briefDialogue.unknown") }}
-            </UiButton>
-          </div>
+            </button>
+          </p>
         </form>
-      </UiCard>
+      </section>
 
-      <UiCard
-        v-else-if="dialogue.status === 'READY' || synthesizing"
-        tone="soft"
-        data-testid="brief-dialogue-composing"
+      <aside
+        class="min-w-0 flex-[1_1_280px] rounded-sheet border border-night-line bg-night-raised p-5 sm:p-[22px] lg:sticky lg:top-24"
+        aria-labelledby="brief-shape-title"
+        data-testid="brief-dialogue-shape"
       >
-        <p class="m-0 text-[15px] leading-6 text-ink-2" aria-live="polite">
-          {{
-            synthesizing || busy ? t("briefDialogue.composing") : t("briefDialogue.readyToCompose")
-          }}
-        </p>
-        <div v-if="!synthesizing && !busy" class="mt-4">
-          <UiButton data-testid="brief-dialogue-retry-compose" @click="synthesize">
-            {{ t("briefDialogue.retryCompose") }}
-          </UiButton>
-        </div>
-      </UiCard>
-
-      <UiCard v-else tone="soft" data-testid="brief-dialogue-resume">
-        <p class="m-0 text-[15px] leading-6 text-ink-2">{{ t("briefDialogue.interrupted") }}</p>
-        <div class="mt-4">
-          <UiButton
-            :disabled="busy"
-            data-testid="brief-dialogue-continue"
-            @click="continueQuestion"
+        <h3
+          id="brief-shape-title"
+          class="mb-1 font-mono text-[11px] tracking-label text-on-night-3 uppercase"
+        >
+          {{ tl("chat.shapeTitle") }}
+        </h3>
+        <p class="mb-4 text-sm leading-normal text-on-night-3">{{ tl("chat.shapeIntro") }}</p>
+        <ul class="m-0 flex list-none flex-col gap-2 p-0">
+          <li
+            v-for="card in shapeCards"
+            :key="card.field"
+            :class="[
+              'rounded-field px-3 py-2.5',
+              card.state === 'answered'
+                ? 'border border-night-line-strong bg-night-raised'
+                : card.state === 'asking'
+                  ? 'border-[1.5px] border-dashed border-violet-on-night bg-violet-on-night/12'
+                  : 'border-[1.5px] border-dashed border-violet-on-night/70 bg-violet-on-night/6',
+            ]"
+            :data-shape-field="card.field"
+            :data-shape-state="card.state"
           >
-            {{ busy ? t("briefDialogue.waiting") : t("briefDialogue.continueQuestion") }}
-          </UiButton>
-        </div>
-      </UiCard>
+            <p
+              :class="[
+                'text-xs font-semibold',
+                card.state === 'answered' ? 'text-petrol-on-night-2' : 'text-violet-on-night-2',
+              ]"
+            >
+              {{ shapeLabel(card.field) }}
+            </p>
+            <p
+              :class="[
+                'mt-0.5 line-clamp-4 text-sm leading-[1.45] break-words',
+                card.state === 'answered' ? 'text-on-night' : 'text-violet-on-night-2',
+              ]"
+            >
+              {{ card.value }}
+            </p>
+          </li>
+        </ul>
+      </aside>
+    </div>
 
-      <div class="flex flex-wrap items-center gap-4 text-sm font-semibold">
-        <button
-          v-if="pending !== null"
-          type="button"
-          class="text-action underline-offset-4 hover:underline disabled:text-ink-3"
-          data-testid="brief-dialogue-compose"
-          :disabled="busy"
-          @click="synthesize"
-        >
-          {{ t("briefDialogue.composeNow") }}
-        </button>
-        <button
-          type="button"
-          class="text-action underline-offset-4 hover:underline disabled:text-ink-3"
-          data-testid="brief-dialogue-open-form"
-          :disabled="busy"
-          @click="emit('open-form')"
-        >
-          {{ t("briefDialogue.openForm") }}
-        </button>
-        <button
-          type="button"
-          class="text-ink-3 underline-offset-4 hover:underline disabled:text-ink-3"
-          data-testid="brief-dialogue-close"
-          :disabled="busy"
-          @click="closeDialogue"
-        >
-          {{ t("briefDialogue.close") }}
-        </button>
-      </div>
-    </template>
+    <div
+      v-if="active && dialogue !== null"
+      class="flex flex-wrap items-center gap-x-5 text-sm font-semibold"
+    >
+      <button
+        v-if="pending !== null"
+        type="button"
+        class="inline-flex min-h-11 items-center text-petrol-on-night-2 underline-offset-4 hover:underline disabled:text-on-night-3 disabled:no-underline"
+        data-testid="brief-dialogue-compose"
+        :disabled="busy"
+        @click="synthesize"
+      >
+        {{ t("briefDialogue.composeNow") }}
+      </button>
+      <button
+        type="button"
+        class="inline-flex min-h-11 items-center text-petrol-on-night-2 underline-offset-4 hover:underline disabled:text-on-night-3 disabled:no-underline"
+        data-testid="brief-dialogue-open-form"
+        :disabled="busy"
+        @click="emit('open-form')"
+      >
+        {{ t("briefDialogue.openForm") }}
+      </button>
+      <button
+        type="button"
+        class="inline-flex min-h-11 items-center text-on-night-3 underline-offset-4 hover:underline disabled:no-underline"
+        data-testid="brief-dialogue-close"
+        :disabled="busy"
+        @click="closeDialogue"
+      >
+        {{ t("briefDialogue.close") }}
+      </button>
+    </div>
   </section>
 </template>

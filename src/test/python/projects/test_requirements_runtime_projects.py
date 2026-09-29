@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestwin.models.requirements_runtime import RequirementsRuntimeMode
+from orchestwin.projects.requirements_change_application import LocalRequirementsChangeService
 from orchestwin.projects.requirements_runtime import (
     ManagedRequirementsUnitOfWork,
     SqlAlchemyRequirementsGateUnitOfWork,
@@ -86,3 +87,20 @@ def test_requirements_services_share_one_configured_session_factory() -> None:
     assert services.revisions is not None
     assert services.queries is not None
     assert services.gate is not None
+
+
+def test_the_change_request_shares_the_revisions_the_governance_and_the_provider() -> None:
+    session_factory = cast(
+        async_sessionmaker[AsyncSession],
+        lambda: cast(AsyncSession, FakeSession()),
+    )
+
+    services = build_requirements_services(session_factory)
+    changes = services.changes
+
+    assert isinstance(changes, LocalRequirementsChangeService)
+    assert changes._revisions is services.revisions
+    assert changes._proposals is services.generation._proposals
+    assert changes._governance is services.generation._governance
+    assert changes._uow_factory is services.generation._uow_factory
+    assert changes._proposal_evidence_store is services.generation._proposal_evidence_store

@@ -8,6 +8,8 @@ from uuid import UUID
 import pytest
 
 from orchestwin.artifacts.design import (
+    MAX_CRITIQUE_QUOTE_LENGTH,
+    MAX_CRITIQUE_VERDICT_LENGTH,
     DesignApproach,
     create_design_alternative,
     create_design_workflow,
@@ -34,6 +36,8 @@ WORKFLOW_ID = UUID("00000000-0000-4000-8000-000000000050")
 ALTERNATIVE_ID = UUID("00000000-0000-4000-8000-000000000060")
 CRITIQUE_ID = UUID("00000000-0000-4000-8000-000000000070")
 STORED_ALTERNATIVE_HASH = "b612979edfdacd17d30b03227ae2669bcb87fdab8de9443cbdbb715a900707b4"
+STORED_CRITIQUE_HASH = "d69368620a9ec66d53873dcaf68f1a667dc21171ec460492e69d2425485cfd6e"
+QUOTE = "Trovo subito il prossimo passo, ma vorrei una scorciatoia per i clienti abituali."
 
 
 def twin_reference() -> UserTwinVersionReference:
@@ -238,3 +242,96 @@ def test_new_alternative_without_approach_omits_the_key() -> None:
     }
     assert replace(stored, approach=None) == value
     assert value.content_hash != stored.content_hash
+
+
+def critique_arguments() -> dict[str, object]:
+    return {
+        "critique_id": CRITIQUE_ID,
+        "code": "CRQ-001",
+        "design_alternative_id": ALTERNATIVE_ID,
+        "user_twin_reference": twin_reference(),
+        "strengths": ("The workflow exposes a clear next action.",),
+        "concerns": ("Repeated navigation may slow expert users.",),
+        "accessibility_observations": ("Focus order must follow the workflow.",),
+        "suggested_changes": ("Add a compact expert mode later.",),
+        "provenance": provenance(),
+        "confidence": ConfidenceScore(0.65),
+        "rationale": "The feedback is inferred from the approved User Twin profile.",
+    }
+
+
+def test_stored_critique_without_verdict_keeps_its_snapshot_and_hash() -> None:
+    value = create_synthetic_design_critique(**critique_arguments())
+
+    assert (value.verdict, value.quote) == (None, None)
+    assert {"verdict", "quote"}.isdisjoint(value.to_snapshot())
+    assert value.content_hash == STORED_CRITIQUE_HASH
+
+
+def test_critique_verdict_and_quote_are_normalized_and_enter_the_snapshot() -> None:
+    plain = create_synthetic_design_critique(**critique_arguments())
+    value = create_synthetic_design_critique(
+        **critique_arguments(),
+        verdict="  Utile,   con riserve ",
+        quote=f"\n {QUOTE.replace(', ', ',   ')} ",
+    )
+    snapshot = value.to_snapshot()
+
+    assert value.verdict == "Utile, con riserve"
+    assert value.quote == QUOTE
+    assert snapshot["verdict"] == "Utile, con riserve"
+    assert snapshot["quote"] == QUOTE
+    assert {
+        key: item for key, item in snapshot.items() if key not in {"verdict", "quote"}
+    } == plain.to_snapshot()
+    assert replace(plain, verdict="Utile, con riserve", quote=QUOTE) == value
+    assert value.content_hash != STORED_CRITIQUE_HASH
+
+
+def test_critique_verdict_and_quote_accept_their_maximum_lengths() -> None:
+    value = create_synthetic_design_critique(
+        **critique_arguments(),
+        verdict="v" * MAX_CRITIQUE_VERDICT_LENGTH,
+        quote="q" * MAX_CRITIQUE_QUOTE_LENGTH,
+    )
+
+    assert (len(value.verdict), len(value.quote)) == (60, 240)
+
+
+@pytest.mark.parametrize(
+    ("verdict", "quote", "message"),
+    (
+        ("Utile", None, "verdict and quote must be present together"),
+        (None, QUOTE, "verdict and quote must be present together"),
+        ("v" * (MAX_CRITIQUE_VERDICT_LENGTH + 1), QUOTE, "verdict exceeds maximum length"),
+        ("Utile", "q" * (MAX_CRITIQUE_QUOTE_LENGTH + 1), "quote exceeds maximum length"),
+        ("   ", QUOTE, "verdict must not be empty"),
+        ("Utile", "", "quote must not be empty"),
+        ("Utile\x07", QUOTE, "verdict must not contain control characters"),
+        ("Utile", "Trovo\x00 subito il prossimo passo.", "quote must not contain control"),
+    ),
+)
+def test_critique_verdict_and_quote_respect_their_rules(
+    verdict: str | None,
+    quote: str | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        create_synthetic_design_critique(**critique_arguments(), verdict=verdict, quote=quote)
+
+
+def test_critique_constructor_rejects_a_verdict_that_is_not_in_its_stored_form() -> None:
+    value = create_synthetic_design_critique(
+        **critique_arguments(),
+        verdict="Utile",
+        quote=QUOTE,
+    )
+
+    with pytest.raises(ValueError, match="verdict must be normalized"):
+        replace(value, verdict=" Utile")
+
+    with pytest.raises(ValueError, match="quote must be normalized"):
+        replace(value, quote=QUOTE.replace(" ", "  ", 1))
+
+    with pytest.raises(ValueError, match="verdict and quote must be present together"):
+        replace(value, quote=None)

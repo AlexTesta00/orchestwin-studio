@@ -14,6 +14,8 @@ class PasswordPolicyViolation(StrEnum):
 
     TOO_SHORT = "too_short"
     TOO_LONG = "too_long"
+    MISSING_UPPERCASE = "missing_uppercase"
+    MISSING_SPECIAL = "missing_special"
 
 
 class PasswordPolicyError(ValueError):
@@ -29,9 +31,7 @@ class PasswordPolicyError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class PasswordPolicy:
-    """Length-based single-factor password policy."""
-
-    minimum_length: int = 15
+    minimum_length: int = 8
     maximum_length: int = 1024
 
     def validate(self, password: str) -> str:
@@ -41,6 +41,12 @@ class PasswordPolicy:
 
         if len(password) > self.maximum_length:
             raise PasswordPolicyError(PasswordPolicyViolation.TOO_LONG)
+
+        if not any(character.isupper() for character in password):
+            raise PasswordPolicyError(PasswordPolicyViolation.MISSING_UPPERCASE)
+
+        if all(character.isalnum() or character.isspace() for character in password):
+            raise PasswordPolicyError(PasswordPolicyViolation.MISSING_SPECIAL)
 
         return password
 

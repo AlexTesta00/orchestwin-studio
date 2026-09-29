@@ -12,6 +12,15 @@ import "@fontsource/libre-franklin/600.css";
 import "@fontsource/libre-franklin/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/geist/400.css";
+import "@fontsource/geist/500.css";
+import "@fontsource/geist/600.css";
+import "@fontsource/geist/700.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
+import "@fontsource/geist-mono/600.css";
+import "@fontsource/lexend-zetta/200.css";
+import "@fontsource/lexend-zetta/300.css";
 import "./styles/tailwind.css";
 
 const application = createApp(App);

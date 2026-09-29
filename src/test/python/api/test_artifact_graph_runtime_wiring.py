@@ -31,6 +31,7 @@ def test_default_runtime_composes_the_artifact_graph_query_service(
         revisions=object(),
         queries=object(),
         gate=object(),
+        changes=object(),
     )
     design_marker = SimpleNamespace(
         generation=object(),

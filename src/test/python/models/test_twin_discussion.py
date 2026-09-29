@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -31,6 +32,10 @@ from orchestwin.models.twin_discussion import (
     ANSWER_OUTPUT_LENGTH,
     ARGUMENT_OUTPUT_LENGTH,
     FOLLOW_UP_INSTRUCTION,
+    HOSTED_FOLLOW_UP_INSTRUCTION,
+    HOSTED_STATEMENT_INSTRUCTION,
+    HOSTED_SYNTHESIS_INSTRUCTION,
+    NAMES_INSTEAD_OF_CODES,
     POSITION_OUTPUT_LENGTH,
     PROPOSAL_OUTPUT_LENGTH,
     QUESTION_OUTPUT_LENGTH,
@@ -47,8 +52,10 @@ from orchestwin.models.twin_discussion import (
     known_observations,
     moderate_discussion,
     repeats_previous_statement,
+    screen_titles,
     speak_as_twin,
     statement_context,
+    statement_instruction,
     statement_output_type,
     synthesis_context,
     synthesis_output_type,
@@ -127,6 +134,16 @@ REPLY = {
 NOTE = "Ditemi se il riepilogo finale vi basta."
 ANSWER = "Sì, il riepilogo mi basta se resta leggibile di notte."
 CUT_SENTENCE = "Come T2, trovo chiaro il modulo."
+LOCAL_SHA256 = (
+    "496ed38226bd2a77775a8239bfc72c1afa1d249ed04379ff1ba59fa3423c2b4e",
+    "17c23d194f2d7a2f0b2cf6abdd8e41de9973af483f62d5b869af12d9d8364ba1",
+    "b7b97c50ed75c23395d1f731a36295d94ad8c0396690e5194f604538b7456298",
+)
+TITLES_NOT_CODES = (
+    "In every text name a screen by its title between quotation marks, an element by the text "
+    "that it shows and a workflow by its name: never write a code such as SCR-004, ELM-012 or "
+    "FLOW-002."
+)
 ENGLISH_REASON = (
     "T2 prioritizes accuracy and sharing, which aligns with my need for reliable calculations "
     "but conflicts with my focus on speed and simplicity."
@@ -779,6 +796,31 @@ def test_speaking_and_moderating_use_the_twin_discussion_task_with_their_contrac
     assert len(sent_point["positions"]["prefixItems"]) == 2
     assert [item.supported_by for item in moderated.proposals] == [["T1", "T2"], ["T2"]]
     assert [item.verdict for item in moderated.discussion_points] == ["AGREEMENT", "DISAGREEMENT"]
+
+
+def test_the_discussion_leaves_schema_errors_to_its_own_attempts():
+    keys = twin_keys(twins())
+    speaker = RecordingGenerator({**REPLY, "answer_to_owner": ANSWER})
+    context = later_context(keys, "T2", first_round(keys), owner_note="Rispondete.")
+    asyncio.run(speak_as_twin(speaker, context=context))
+    moderator = RecordingGenerator(SYNTHESIS, max_output_tokens=4096)
+    asyncio.run(
+        moderate_discussion(
+            moderator,
+            context=synthesis_context(
+                project_id=design_fixtures.PROJECT_ID,
+                locale="it-IT",
+                ordinal=1,
+                owner_note=None,
+                keys=keys,
+                statements=(),
+            ),
+        )
+    )
+    assert [call["retry_schema_errors"] for call in (*speaker.calls, *moderator.calls)] == [
+        False,
+        False,
+    ]
 
 
 def test_later_statements_use_the_follow_up_instruction_and_budgets_stay_bounded():
@@ -1488,3 +1530,105 @@ def test_bind_synthesis_rejects_repeated_twins_unknown_verdicts_and_outside_twin
     ):
         with pytest.raises(ValueError, match=message):
             bind_synthesis(built, keys=keys, generation_id=UUID(int=9))
+
+
+def opening_context(keys, speaker, design=None):
+    return statement_context(
+        project_id=design_fixtures.PROJECT_ID,
+        locale="it-IT",
+        ordinal=1,
+        owner_note=None,
+        keys=keys,
+        speaker=speaker,
+        design={} if design is None else design,
+        findings=(),
+        previous=None,
+    )
+
+
+def moderation_context(keys, statements=(), screens=()):
+    return synthesis_context(
+        project_id=design_fixtures.PROJECT_ID,
+        locale="it-IT",
+        ordinal=1,
+        owner_note=None,
+        keys=keys,
+        statements=statements,
+        screens=screens,
+    )
+
+
+def discussion_instructions(**options):
+    keys = twin_keys(twins())
+    opening = RecordingGenerator(STATEMENT)
+    later = RecordingGenerator({**REPLY, "answer_to_owner": ANSWER})
+    moderator = RecordingGenerator(SYNTHESIS, max_output_tokens=4096)
+    asyncio.run(speak_as_twin(opening, context=opening_context(keys, "T1"), **options))
+    asyncio.run(
+        speak_as_twin(
+            later,
+            context=later_context(keys, "T2", first_round(keys), owner_note="Rispondete."),
+            **options,
+        )
+    )
+    asyncio.run(moderate_discussion(moderator, context=moderation_context(keys), **options))
+    return [generator.calls[0]["instruction"] for generator in (opening, later, moderator)]
+
+
+@pytest.mark.parametrize("options", [{}, {"hosted": False}])
+def test_the_local_route_keeps_the_three_instructions_of_the_discussion_byte_for_byte(options):
+    sent = discussion_instructions(**options)
+    assert sent == [STATEMENT_INSTRUCTION, FOLLOW_UP_INSTRUCTION, SYNTHESIS_INSTRUCTION]
+    assert tuple(hashlib.sha256(text.encode("utf-8")).hexdigest() for text in sent) == (
+        LOCAL_SHA256
+    )
+    assert all(NAMES_INSTEAD_OF_CODES not in text for text in sent)
+
+
+def test_the_hosted_route_adds_the_titles_sentence_once_to_every_instruction_of_the_discussion():
+    sent = discussion_instructions(hosted=True)
+    local = (STATEMENT_INSTRUCTION, FOLLOW_UP_INSTRUCTION, SYNTHESIS_INSTRUCTION)
+    assert NAMES_INSTEAD_OF_CODES == TITLES_NOT_CODES
+    assert sent == [
+        HOSTED_STATEMENT_INSTRUCTION,
+        HOSTED_FOLLOW_UP_INSTRUCTION,
+        HOSTED_SYNTHESIS_INSTRUCTION,
+    ]
+    assert sent == [f"{text} {TITLES_NOT_CODES}" for text in local]
+    assert all(text.count(TITLES_NOT_CODES) == 1 for text in sent)
+    assert [
+        statement_instruction(opening=opening, hosted=hosted)
+        for hosted in (False, True)
+        for opening in (True, False)
+    ] == [
+        STATEMENT_INSTRUCTION,
+        FOLLOW_UP_INSTRUCTION,
+        HOSTED_STATEMENT_INSTRUCTION,
+        HOSTED_FOLLOW_UP_INSTRUCTION,
+    ]
+
+
+def test_the_contexts_of_the_discussion_carry_the_titles_of_the_screens_next_to_their_codes():
+    keys = twin_keys(twins())
+    view = design_review_view(design_fixtures.design_version())
+    titles = screen_titles(view)
+    assert titles == [
+        {"code": "SCR-001", "title": "Create reservation"},
+        {"code": "SCR-002", "title": "Reservation confirmation"},
+    ]
+    assert screen_titles(opening_context(keys, "T1", view)["design"]) == titles
+    statements = first_round(keys).statements
+    plain = moderation_context(keys, statements)
+    titled = moderation_context(keys, statements, titles)
+    assert list(plain) == [
+        "project_id",
+        "purpose",
+        "locale",
+        "round",
+        "owner_note",
+        "participants",
+        "statements",
+    ]
+    assert list(titled) == [*list(plain)[:-1], "screens", "statements"]
+    assert titled["screens"] == titles
+    assert {key: value for key, value in titled.items() if key != "screens"} == plain

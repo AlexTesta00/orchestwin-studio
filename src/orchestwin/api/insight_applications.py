@@ -24,6 +24,7 @@ from orchestwin.projects.briefs import BriefField
 from orchestwin.projects.insight_applications import (
     BRIEF_LIST_TARGETS,
     DEFAULT_BRIEF_FIELD,
+    MAX_INSIGHT_BATCH_ITEMS,
     MAX_INSIGHT_TEXT_LENGTH,
     MAX_SOURCE_ID_LENGTH,
     InsightApplication,
@@ -67,6 +68,20 @@ class InsightApplicationRequest(BaseModel):
     requirement_kind: RequirementKind | None = None
 
 
+class InsightBatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[InsightApplicationRequest] = Field(min_length=1, max_length=MAX_INSIGHT_BATCH_ITEMS)
+
+
+def _normalized(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _unique(values) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
 def _title(text: str) -> str:
     words = text.split()
     title = ""
@@ -87,6 +102,57 @@ def _next_code(prefix: str, codes) -> str:
     return f"{prefix}-{(max(numbers, default=0) + 1):03d}"
 
 
+def _brief_field(body) -> BriefField:
+    field = body.brief_field or DEFAULT_BRIEF_FIELD
+    if field not in BRIEF_LIST_TARGETS:
+        raise HTTPException(422, detail={"code": "BRIEF_FIELD_NOT_A_LIST"})
+    return field
+
+
+def _brief_items(brief, field: BriefField) -> tuple[str, ...]:
+    existing = brief.value_for(field) or ()
+    if not isinstance(existing, tuple):
+        raise HTTPException(422, detail={"code": "BRIEF_FIELD_NOT_A_LIST"})
+    return existing
+
+
+def _extended_brief(brief, entries):
+    values: dict[BriefField, tuple[str, ...]] = {}
+    for field, text in entries:
+        items = values[field] if field in values else _brief_items(brief, field)
+        values[field] = items if text in items else (*items, text)
+    try:
+        return replace(
+            brief,
+            unknown_fields=brief.unknown_fields - frozenset(values),
+            **{field.value: items for field, items in values.items()},
+        )
+    except ValueError as error:
+        raise HTTPException(422, detail={"code": "INVALID_PROJECT_BRIEF"}) from error
+
+
+def _application(owner_user_id, project_id, body, outcome, created_at) -> InsightApplication:
+    version_id, version_number, field, code = outcome
+    try:
+        return create_insight_application(
+            application_id=uuid4(),
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            source_kind=body.source_kind,
+            source_id=body.source_id,
+            source_twin_id=body.source_twin_id,
+            text=body.text,
+            target=body.target,
+            target_field=field,
+            target_version_id=version_id,
+            target_version_number=version_number,
+            target_code=code,
+            created_at=created_at,
+        )
+    except ValueError as error:
+        raise HTTPException(422, detail={"code": "INSIGHT_APPLICATION_INVALID"}) from error
+
+
 class InsightApplicationService:
     def __init__(self, runtime):
         self.runtime = runtime
@@ -103,34 +169,31 @@ class InsightApplicationService:
             raise HTTPException(503, detail={"code": f"{name.upper()}_UNAVAILABLE"})
         return service
 
-    async def _apply_to_brief(self, owner_user_id, project_id, body):
+    async def _current_brief(self, owner_user_id, project_id):
         service = self._service("project_service")
         current = await service.current_brief(project_id=project_id, owner_user_id=owner_user_id)
         if current is None:
             raise HTTPException(404, detail={"code": "PROJECT_BRIEF_NOT_FOUND"})
-        field = body.brief_field or DEFAULT_BRIEF_FIELD
-        if field not in BRIEF_LIST_TARGETS:
-            raise HTTPException(422, detail={"code": "BRIEF_FIELD_NOT_A_LIST"})
-        existing = current.brief.value_for(field) or ()
-        if not isinstance(existing, tuple):
-            raise HTTPException(422, detail={"code": "BRIEF_FIELD_NOT_A_LIST"})
-        text = " ".join(body.text.split())
-        if text in existing:
-            raise HTTPException(409, detail={"code": "INSIGHT_ALREADY_APPLIED"})
-        try:
-            brief = replace(
-                current.brief,
-                unknown_fields=current.brief.unknown_fields - {field},
-                **{field.value: (*existing, text)},
-            )
-        except ValueError as error:
-            raise HTTPException(422, detail={"code": "INVALID_PROJECT_BRIEF"}) from error
+        return service, current
+
+    async def _brief_version(self, service, owner_user_id, project_id, brief):
         result = await service.create_brief_version(
             project_id=project_id, owner_user_id=owner_user_id, brief=brief
         )
         version = getattr(result, "version", None)
         if version is None:
             raise HTTPException(409, detail={"code": "BRIEF_VERSION_NOT_CREATED"})
+        return version
+
+    async def _apply_to_brief(self, owner_user_id, project_id, body):
+        service, current = await self._current_brief(owner_user_id, project_id)
+        field = _brief_field(body)
+        text = _normalized(body.text)
+        if text in _brief_items(current.brief, field):
+            raise HTTPException(409, detail={"code": "INSIGHT_ALREADY_APPLIED"})
+        version = await self._brief_version(
+            service, owner_user_id, project_id, _extended_brief(current.brief, ((field, text),))
+        )
         return version.id, version.version_number, field, None
 
     async def _apply_to_requirements(self, owner_user_id, project_id, body):
@@ -140,7 +203,7 @@ class InsightApplicationService:
         if current is None:
             raise HTTPException(404, detail={"code": "REQUIREMENTS_NOT_FOUND"})
         specification = current.specification
-        text = " ".join(body.text.split())
+        text = _normalized(body.text)
         if any(item.statement == text for item in specification.requirements):
             raise HTTPException(409, detail={"code": "INSIGHT_ALREADY_APPLIED"})
         code = _next_code("REQ", (item.code for item in specification.requirements))
@@ -221,7 +284,7 @@ class InsightApplicationService:
         if current is None:
             raise HTTPException(404, detail={"code": "DESIGN_PACKAGE_NOT_FOUND"})
         package = current.package
-        text = " ".join(body.text.split())
+        text = _normalized(body.text)
         if any(item.summary == text for item in package.concerns):
             raise HTTPException(409, detail={"code": "INSIGHT_ALREADY_APPLIED"})
         code = _next_code("DRK", (item.code for item in package.concerns))
@@ -235,7 +298,7 @@ class InsightApplicationService:
             if selected is not None
             else tuple(item.id for item in package.alternatives)
         )
-        mitigation = " ".join((body.mitigation or "").split()) or (
+        mitigation = _normalized(body.mitigation or "") or (
             "Review the chosen design against this observation before approval."
         )
         try:
@@ -277,19 +340,53 @@ class InsightApplicationService:
             )
         return decision.version.id, decision.version.version_number, None, code
 
-    async def _refuse_dismissed_source(self, owner_user_id, project_id, body):
-        if body.source_kind is not InsightSourceKind.SYNTHETIC_FINDING:
-            return
-        key = finding_source_key(body.source_id)
-        if key is None:
-            return
+    async def _dismissed_sources(self, owner_user_id, project_id, bodies) -> list[str]:
+        keyed = []
+        for body in bodies:
+            if body.source_kind is not InsightSourceKind.SYNTHETIC_FINDING:
+                continue
+            key = finding_source_key(body.source_id)
+            if key is not None:
+                keyed.append((body.source_id, key))
+        if not keyed:
+            return []
         sessions = self._sessions()
         async with sessions() as session:
             validations = await SqlAlchemyFindingValidationRepository(
                 session, owner_user_id=owner_user_id
             ).current(project_id=project_id)
-        if key in dismissed_finding_keys(validations):
+        dismissed = dismissed_finding_keys(validations)
+        return _unique(source_id for source_id, key in keyed if key in dismissed)
+
+    async def _refuse_dismissed_source(self, owner_user_id, project_id, body):
+        if await self._dismissed_sources(owner_user_id, project_id, (body,)):
             raise HTTPException(409, detail={"code": "INSIGHT_SOURCE_DISMISSED"})
+
+    async def _applied_sources(self, owner_user_id, project_id, bodies) -> list[str]:
+        sources = [(body.source_kind, _normalized(body.source_id)) for body in bodies]
+        repeated = {source for index, source in enumerate(sources) if source in sources[:index]}
+        sessions = self._sessions()
+        async with sessions() as session:
+            recorded = await SqlAlchemyInsightApplicationRepository(
+                session, owner_user_id=owner_user_id
+            ).applied_sources(project_id=project_id, target=InsightTarget.BRIEF, sources=sources)
+        offending = repeated | recorded
+        return _unique(
+            body.source_id
+            for body, source in zip(bodies, sources, strict=True)
+            if source in offending
+        )
+
+    async def _record(self, owner_user_id, applications) -> None:
+        sessions = self._sessions()
+        async with sessions() as session, session.begin():
+            repository = SqlAlchemyInsightApplicationRepository(
+                session, owner_user_id=owner_user_id
+            )
+            for application in applications:
+                status = await repository.create(application)
+                if status is not InsightApplicationWriteStatus.WRITTEN:
+                    raise HTTPException(404, detail={"code": "PROJECT_NOT_FOUND"})
 
     async def apply(self, *, owner_user_id, project_id, body) -> InsightApplication:
         await self._refuse_dismissed_source(owner_user_id, project_id, body)
@@ -299,33 +396,45 @@ class InsightApplicationService:
             outcome = await self._apply_to_requirements(owner_user_id, project_id, body)
         else:
             outcome = await self._apply_to_design(owner_user_id, project_id, body)
-        version_id, version_number, field, code = outcome
-        try:
-            application = create_insight_application(
-                application_id=uuid4(),
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                source_kind=body.source_kind,
-                source_id=body.source_id,
-                source_twin_id=body.source_twin_id,
-                text=body.text,
-                target=body.target,
-                target_field=field,
-                target_version_id=version_id,
-                target_version_number=version_number,
-                target_code=code,
-                created_at=datetime.now(UTC),
-            )
-        except ValueError as error:
-            raise HTTPException(422, detail={"code": "INSIGHT_APPLICATION_INVALID"}) from error
-        sessions = self._sessions()
-        async with sessions() as session, session.begin():
-            status = await SqlAlchemyInsightApplicationRepository(
-                session, owner_user_id=owner_user_id
-            ).create(application)
-            if status is not InsightApplicationWriteStatus.WRITTEN:
-                raise HTTPException(404, detail={"code": "PROJECT_NOT_FOUND"})
+        application = _application(owner_user_id, project_id, body, outcome, datetime.now(UTC))
+        await self._record(owner_user_id, (application,))
         return application
+
+    async def apply_batch(
+        self, *, owner_user_id, project_id, bodies
+    ) -> tuple[tuple[InsightApplication, ...], int]:
+        if any(body.target is not InsightTarget.BRIEF for body in bodies):
+            raise HTTPException(422, detail={"code": "INSIGHT_BATCH_TARGET_NOT_BRIEF"})
+        entries = tuple((_brief_field(body), _normalized(body.text)) for body in bodies)
+        if any(not text for _, text in entries) or any(
+            not _normalized(body.source_id) for body in bodies
+        ):
+            raise HTTPException(422, detail={"code": "INSIGHT_APPLICATION_INVALID"})
+        dismissed = await self._dismissed_sources(owner_user_id, project_id, bodies)
+        if dismissed:
+            raise HTTPException(
+                409, detail={"code": "INSIGHT_SOURCE_DISMISSED", "sources": dismissed}
+            )
+        applied = await self._applied_sources(owner_user_id, project_id, bodies)
+        if applied:
+            raise HTTPException(409, detail={"code": "INSIGHT_ALREADY_APPLIED", "sources": applied})
+        service, current = await self._current_brief(owner_user_id, project_id)
+        version = await self._brief_version(
+            service, owner_user_id, project_id, _extended_brief(current.brief, entries)
+        )
+        created_at = datetime.now(UTC)
+        applications = tuple(
+            _application(
+                owner_user_id,
+                project_id,
+                body,
+                (version.id, version.version_number, field, None),
+                created_at,
+            )
+            for body, (field, _) in zip(bodies, entries, strict=True)
+        )
+        await self._record(owner_user_id, applications)
+        return applications, version.version_number
 
     async def applications(self, *, owner_user_id, project_id):
         sessions = self._sessions()
@@ -337,6 +446,22 @@ class InsightApplicationService:
 
 def create_insight_application_router():
     router = APIRouter(prefix=INSIGHT_APPLICATIONS_API_PREFIX, tags=["design"])
+
+    @router.post("/batch", status_code=201)
+    async def apply_batch(
+        project_id: UUID,
+        body: InsightBatchRequest,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+    ):
+        service = InsightApplicationService(request.app.state.application_runtime)
+        applications, version_number = await service.apply_batch(
+            owner_user_id=user.id, project_id=project_id, bodies=tuple(body.items)
+        )
+        return {
+            "applications": [item.to_snapshot() for item in applications],
+            "brief_version_number": version_number,
+        }
 
     @router.post("", status_code=201)
     async def apply(
@@ -368,5 +493,6 @@ __all__ = [
     "INSIGHT_APPLICATIONS_API_PREFIX",
     "InsightApplicationRequest",
     "InsightApplicationService",
+    "InsightBatchRequest",
     "create_insight_application_router",
 ]

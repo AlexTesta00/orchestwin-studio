@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, provide, ref, watch } from "vue";
 
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
-import DesignStyleTile from "./DesignStyleTile.vue";
+import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
+import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 
 import { apiClient } from "../api/client";
-import { designPackageApi, type DesignPackageApi } from "../api/designPackage";
+import type { KnowledgePackagesApi } from "../api/knowledgePackages";
 import { useAuthStore } from "../stores/auth";
-import { useDesignStore, type AuthorizedRequest } from "../stores/design";
+import { useDesignStore } from "../stores/design";
+import { useKnowledgePackagesStore, type AuthorizedRequest } from "../stores/knowledgePackages";
 import { useUserModelingStore } from "../stores/userModeling";
+import type { DeclarativePrototypePayload, DesignAlternativePayload } from "../types/design";
+import type { KnowledgePackageVersionPayload } from "../types/knowledgePackages";
 
 type Locale = "en" | "it";
+
+const HERO_IMAGE = "/home/pacchetto.webp";
+const AGENT_AVATAR = "/team/fe.webp";
 
 const props = withDefaults(
   defineProps<{
@@ -19,7 +26,7 @@ const props = withDefaults(
     stages: readonly { label: string; version: number | null; approved: boolean }[];
     locale?: Locale;
     authorize?: AuthorizedRequest;
-    api?: DesignPackageApi;
+    api?: KnowledgePackagesApi;
     saveExport?: (blob: Blob, fileName: string) => void;
   }>(),
   {
@@ -27,67 +34,187 @@ const props = withDefaults(
   },
 );
 
+defineSlots<{
+  preview?(props: {
+    alternative: DesignAlternativePayload;
+    prototype: DeclarativePrototypePayload | null;
+  }): unknown;
+}>();
+
+provide(
+  surfaceKey,
+  computed<SurfaceContext>(() => "night"),
+);
+
 const messages = {
   en: {
-    eyebrow: "Design package",
-    title: "Your project is ready to be built",
+    agentRole: "Interface developer",
+    agentReady:
+      "I gathered the five approved steps into a folder ready for your development tools.",
+    agentWaiting:
+      "When the five steps are approved, I will gather them into a folder ready for your development tools.",
+    eyebrow: "Knowledge folder",
+    title: "The project is ready",
+    titleWaiting: "The folder is not ready yet",
     intro:
-      "The five steps are approved. Download the package and continue in your own development environment: it holds the brief, the team, the twins, the requirements and the chosen design, as Markdown and JSON.",
-    path: "The path you approved",
-    version: "version {number}",
+      "The five steps are approved. The folder holds the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    introWaiting:
+      "The folder will hold the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    notReady: "The folder can be prepared when all five steps are approved.",
+    pendingSteps: "Still waiting: {steps}.",
+    prepare: "Prepare and download the folder",
+    preparing: "Preparing the folder…",
+    latest: "{files} files · version {number}",
+    created: "Version {number} of the folder is ready and downloaded: {file}",
+    reused: "Nothing changed since version {number}: the same folder was downloaded again: {file}",
+    failed: "The folder could not be prepared.",
+    downloadFailed: "The folder could not be downloaded.",
+    outdated: {
+      TEAM_OUTDATED:
+        "The team follows an earlier version of the brief. Open the Team step, update the team and approve it again.",
+      USER_TWINS_OUTDATED:
+        "The twins follow an earlier version of the brief or of the team. Open the User Twins step and approve them again.",
+      REQUIREMENTS_OUTDATED:
+        "The requirements follow an earlier version of the twins. Open the Requirements step, update them to the current twins and approve them again.",
+      DESIGN_OUTDATED:
+        "The design follows an earlier version of the requirements. Open the Design step, regenerate the alternatives and approve the design again.",
+    },
+    contents: "What it contains",
+    twins: ["twin, in its own reusable file", "twins, each in its own reusable file"],
+    diagrams: ["diagram of requirements and design", "diagrams of requirements and design"],
+    tables: ["table of requirements and design", "tables of requirements and design"],
+    findings: [
+      "observation of the twins on the chosen design",
+      "observations of the twins on the chosen design",
+    ],
+    feedback:
+      "{reviews} twin reviews · {decisions} decisions of yours · {discussions} approved discussions",
+    countedLater: "Diagrams, tables and observations are counted when you prepare the folder.",
+    design: "The chosen design",
+    noDesign: "The chosen design appears here once the design step is approved.",
+    noPreview: "No preview",
+    path: "The steps and their versions",
+    stageVersion: "version {number}",
     noVersion: "no version",
     approved: "approved",
     pending: "pending",
-    design: "The design you chose",
-    noDesign: "The chosen design appears here once the design step is approved.",
-    mockup: "Mockup of the chosen design",
-    noMockup: "No mockup was saved for the chosen alternative.",
-    twins: "The people it is built for",
-    noTwins: "No user twin is available yet.",
-    download: "Download the design package",
-    downloading: "Preparing the package…",
-    downloaded: "Package downloaded: {file}",
-    downloadError: "The package could not be downloaded.",
-    next: "What happens next",
-    nextText:
-      "Open the package in your editor: ORCHESTWIN.md is the index. From here the project continues with your own tools, while the Studio keeps the approved versions.",
+    howTo: "How to use it",
+    steps: [
+      "Extract the archive inside your project, for example in a folder named orchestwin.",
+      "Open ORCHESTWIN.md: it is the index and explains every file.",
+      "Build with your own tools. Requirements, screens and elements have stable codes to quote in your work.",
+      "When the scope changes, come back to the Studio, approve the new version and download the folder again.",
+    ],
+    history: "Versions of the folder",
+    historyIntro:
+      "A new version is created only when something changed. Every version can be downloaded again exactly as it was.",
+    loadingHistory: "Loading the versions…",
+    noHistory: "No version has been prepared yet.",
+    version: "Version {number}",
+    versionMeta: "{date} · {files} files",
+    download: "Download",
+    downloadVersion: "Download version {number}",
+    earlier: "Earlier versions ({count})",
   },
   it: {
-    eyebrow: "Pacchetto di design",
-    title: "Il tuo progetto è pronto per essere realizzato",
+    agentRole: "Sviluppatore dell'interfaccia",
+    agentReady:
+      "Ho raccolto i cinque passi approvati in una cartella pronta per i tuoi strumenti di sviluppo.",
+    agentWaiting:
+      "Quando i cinque passi saranno approvati, li raccoglierò in una cartella pronta per i tuoi strumenti di sviluppo.",
+    eyebrow: "Cartella di conoscenza",
+    title: "Il progetto è pronto",
+    titleWaiting: "La cartella non è ancora pronta",
     intro:
-      "I cinque passi sono approvati. Scarica il pacchetto e continua nel tuo ambiente di sviluppo: contiene brief, squadra, twin, requisiti e il design scelto, in Markdown e JSON.",
-    path: "Il percorso che hai approvato",
-    version: "versione {number}",
+      "I cinque passi sono approvati. La cartella raccoglie brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    introWaiting:
+      "La cartella raccoglierà brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    notReady: "La cartella si può preparare quando tutti e cinque i passi sono approvati.",
+    pendingSteps: "Sono ancora in attesa: {steps}.",
+    prepare: "Prepara e scarica la cartella",
+    preparing: "Preparo la cartella…",
+    latest: "{files} file · versione {number}",
+    created: "La versione {number} della cartella è pronta ed è stata scaricata: {file}",
+    reused:
+      "Non è cambiato nulla dalla versione {number}: ho scaricato di nuovo la stessa cartella: {file}",
+    failed: "Non è stato possibile preparare la cartella.",
+    downloadFailed: "Non è stato possibile scaricare la cartella.",
+    outdated: {
+      TEAM_OUTDATED:
+        "La squadra segue una versione precedente del brief. Apri il passo Squadra, aggiorna la squadra e approvala di nuovo.",
+      USER_TWINS_OUTDATED:
+        "I twin seguono una versione precedente del brief o della squadra. Apri il passo User Twin e approvali di nuovo.",
+      REQUIREMENTS_OUTDATED:
+        "I requisiti seguono una versione precedente dei twin. Apri il passo Requisiti, aggiornali ai twin attuali e approvali di nuovo.",
+      DESIGN_OUTDATED:
+        "Il design segue una versione precedente dei requisiti. Apri il passo Design, rigenera le alternative e approva di nuovo il design.",
+    },
+    contents: "Che cosa contiene",
+    twins: ["twin, in un file riutilizzabile", "twin, ciascuno in un file riutilizzabile"],
+    diagrams: ["diagramma di requisiti e design", "diagrammi di requisiti e design"],
+    tables: ["tabella di requisiti e design", "tabelle di requisiti e design"],
+    findings: [
+      "osservazione dei twin sul design scelto",
+      "osservazioni dei twin sul design scelto",
+    ],
+    feedback:
+      "{reviews} revisioni dei twin · {decisions} tue decisioni · {discussions} discussioni approvate",
+    countedLater: "Diagrammi, tabelle e osservazioni si contano quando prepari la cartella.",
+    design: "Il design scelto",
+    noDesign: "Il design scelto compare qui dopo l'approvazione del passo Design.",
+    noPreview: "Nessuna anteprima",
+    path: "I passi e le loro versioni",
+    stageVersion: "versione {number}",
     noVersion: "nessuna versione",
     approved: "approvato",
     pending: "in attesa",
-    design: "Il design che hai scelto",
-    noDesign: "Il design scelto compare qui dopo l'approvazione del passo Design.",
-    mockup: "Mockup del design scelto",
-    noMockup: "Nessun mockup è stato salvato per l'alternativa scelta.",
-    twins: "Le persone per cui è pensato",
-    noTwins: "Nessun user twin è ancora disponibile.",
-    download: "Scarica il pacchetto di design",
-    downloading: "Preparazione del pacchetto…",
-    downloaded: "Pacchetto scaricato: {file}",
-    downloadError: "Non è stato possibile scaricare il pacchetto.",
-    next: "Cosa succede adesso",
-    nextText:
-      "Apri il pacchetto nel tuo editor: ORCHESTWIN.md è l'indice. Da qui il progetto prosegue con i tuoi strumenti, mentre lo Studio conserva le versioni approvate.",
+    howTo: "Come usarla",
+    steps: [
+      "Estrai l'archivio dentro il tuo progetto, per esempio in una cartella chiamata orchestwin.",
+      "Apri ORCHESTWIN.md: è l'indice e spiega ogni file.",
+      "Realizza il progetto con i tuoi strumenti. Requisiti, schermate ed elementi hanno codici stabili da citare nel lavoro.",
+      "Quando lo scopo cambia, torna nello Studio, approva la nuova versione e scarica di nuovo la cartella.",
+    ],
+    history: "Versioni della cartella",
+    historyIntro:
+      "Una nuova versione nasce solo quando cambia qualcosa. Ognuna si riscarica esattamente com'era.",
+    loadingHistory: "Carico le versioni…",
+    noHistory: "Non hai ancora preparato nessuna versione.",
+    version: "Versione {number}",
+    versionMeta: "{date} · {files} file",
+    download: "Scarica",
+    downloadVersion: "Scarica la versione {number}",
+    earlier: "Versioni precedenti ({count})",
   },
 } as const;
 
 const auth = useAuthStore();
 const design = useDesignStore();
 const modeling = useUserModelingStore();
+const packages = useKnowledgePackagesStore();
 
 const copy = computed(() => messages[props.locale]);
-const api = computed(() => props.api ?? designPackageApi);
 const busy = ref(false);
 const error = ref<string | null>(null);
-const downloadedFile = ref<string | null>(null);
+const outcome = ref<{ reused: boolean; number: number; file: string } | null>(null);
 
+const ready = computed(
+  () => props.stages.length > 0 && props.stages.every((stage) => stage.approved),
+);
+const pendingStages = computed(() =>
+  new Intl.ListFormat(props.locale === "it" ? "it-IT" : "en-GB", {
+    style: "long",
+    type: "conjunction",
+  }).format(props.stages.filter((stage) => !stage.approved).map((stage) => stage.label)),
+);
+const versions = computed<KnowledgePackageVersionPayload[]>(() =>
+  packages.projectId === props.projectId ? packages.versions : [],
+);
+const latest = computed(() => versions.value[0] ?? null);
+const earlier = computed(() => versions.value.slice(1));
+const loadingHistory = computed(
+  () => packages.projectId === props.projectId && packages.pending.load,
+);
 const selectedAlternative = computed(() =>
   design.projectId === props.projectId ? design.selectedAlternative : null,
 );
@@ -97,10 +224,54 @@ const prototype = computed(() => {
     ? candidate
     : null;
 });
-const twins = computed(() => (modeling.projectId === props.projectId ? modeling.currentTwins : []));
+const twins = computed(() => {
+  const current = modeling.projectId === props.projectId ? modeling.currentTwins : [];
+  if (current.length > 0) {
+    return current.map((twin) => ({ id: twin.id, name: twin.profile.name }));
+  }
+  return (latest.value?.twins ?? []).map((twin) => ({ id: twin.twin_id, name: twin.name }));
+});
+const counts = computed(() => {
+  const version = latest.value;
+  if (version === null) {
+    return [];
+  }
+  return [
+    {
+      key: "diagrams",
+      count: version.diagram_count,
+      label: plural(version.diagram_count, "diagrams"),
+    },
+    { key: "tables", count: version.table_count, label: plural(version.table_count, "tables") },
+    {
+      key: "findings",
+      count: version.feedback.findings,
+      label: plural(version.feedback.findings, "findings"),
+    },
+  ];
+});
+const dateFormat = computed(
+  () =>
+    new Intl.DateTimeFormat(props.locale === "it" ? "it-IT" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }),
+);
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function plural(count: number, key: "twins" | "diagrams" | "tables" | "findings"): string {
+  const [one, many] = copy.value[key];
+  return count === 1 ? one : many;
+}
+
+function versionMeta(version: KnowledgePackageVersionPayload): string {
+  return fill(copy.value.versionMeta, {
+    date: dateFormat.value.format(new Date(version.created_at)),
+    files: version.file_count,
+  });
 }
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
@@ -121,120 +292,421 @@ function saveBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
-async function download(): Promise<void> {
+function failureMessage(fallback: string): string {
+  const code = packages.error?.code ?? null;
+  if (code === null) {
+    return fallback;
+  }
+  if (code.endsWith("_APPROVAL_REQUIRED")) {
+    return copy.value.notReady;
+  }
+  const outdated: Readonly<Record<string, string>> = copy.value.outdated;
+  return outdated[code] ?? fallback;
+}
+
+async function fetchVersion(number: number): Promise<string> {
+  const result = await packages.download(props.projectId, number, authorizedRequest, props.api);
+  saveBlob(result.blob, result.fileName);
+  return result.fileName;
+}
+
+async function prepare(): Promise<void> {
   busy.value = true;
   error.value = null;
-  downloadedFile.value = null;
+  outcome.value = null;
 
   try {
-    const result = await authorizedRequest((token) => api.value.download(props.projectId, token));
-    saveBlob(result.blob, result.fileName);
-    downloadedFile.value = result.fileName;
-  } catch (failure) {
-    error.value =
-      failure instanceof Error && failure.message.length > 0
-        ? failure.message
-        : copy.value.downloadError;
+    const publication = await packages.publish(props.projectId, authorizedRequest, props.api);
+    const file = await fetchVersion(publication.version.version_number);
+    outcome.value = {
+      reused: publication.reused,
+      number: publication.version.version_number,
+      file,
+    };
+  } catch {
+    error.value = failureMessage(copy.value.failed);
   } finally {
     busy.value = false;
   }
 }
+
+async function download(version: KnowledgePackageVersionPayload): Promise<void> {
+  busy.value = true;
+  error.value = null;
+
+  try {
+    await fetchVersion(version.version_number);
+  } catch {
+    error.value = failureMessage(copy.value.downloadFailed);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function loadHistory(): Promise<void> {
+  try {
+    await packages.load(props.projectId, authorizedRequest, props.api);
+  } catch {
+    error.value = null;
+  }
+}
+
+watch(() => props.projectId, loadHistory, { immediate: true });
 </script>
 
 <template>
-  <section class="space-y-8" aria-labelledby="design-package-title" data-testid="design-package">
-    <header class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <p class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-        {{ copy.eyebrow }}
-      </p>
-      <h2 id="design-package-title" class="mt-2 text-2xl font-semibold tracking-title">
-        {{ copy.title }}
-      </h2>
-      <p class="mt-3 max-w-2xl text-sm leading-6 text-ink-2">{{ copy.intro }}</p>
-      <div class="mt-5 flex flex-wrap items-center gap-3">
-        <UiButton :disabled="busy" data-testid="download-package" @click="download">
-          {{ busy ? copy.downloading : copy.download }}
-        </UiButton>
-        <p
-          v-if="downloadedFile"
-          class="m-0 text-sm text-ink-2"
-          data-testid="download-done"
-          aria-live="polite"
+  <div class="grid gap-4 text-on-night" data-surface="night" data-testid="design-package">
+    <UiAgentMessage :role-label="copy.agentRole" :avatar="AGENT_AVATAR" class="mb-1">
+      {{ ready ? copy.agentReady : copy.agentWaiting }}
+    </UiAgentMessage>
+
+    <section
+      class="@container relative isolate overflow-hidden rounded-[20px] border border-on-night/14 bg-night"
+      aria-labelledby="design-package-title"
+      data-testid="package-hero"
+    >
+      <div class="flex flex-col @3xl:min-h-[300px] @3xl:flex-row @3xl:items-center">
+        <div
+          class="relative h-44 shrink-0 @3xl:absolute @3xl:inset-0 @3xl:-z-10 @3xl:h-auto"
+          aria-hidden="true"
+          data-testid="package-hero-image"
         >
-          {{ fill(copy.downloaded, { file: downloadedFile }) }}
+          <img
+            :src="HERO_IMAGE"
+            alt=""
+            decoding="async"
+            class="h-full w-full object-cover object-right"
+          />
+          <div
+            class="absolute inset-0 bg-linear-to-b from-night/0 via-night/15 to-night @3xl:bg-linear-to-r @3xl:from-night/95 @3xl:via-night/70 @3xl:via-45% @3xl:to-night/0 @3xl:to-75%"
+          />
+        </div>
+        <div class="relative max-w-[560px] px-6 pt-1 pb-8 @3xl:p-8">
+          <p class="m-0 font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
+            {{ copy.eyebrow }}
+          </p>
+          <h2
+            id="design-package-title"
+            class="mt-3 mb-2.5 font-display text-[clamp(22px,2.4vw,32px)] leading-[1.12] font-extralight tracking-display text-balance uppercase"
+          >
+            {{ ready ? copy.title : copy.titleWaiting }}
+          </h2>
+          <p
+            class="m-0 mb-6 text-[15px] leading-[1.55] text-on-night-2 @3xl:max-w-[calc(52cqw-2rem)]"
+          >
+            {{ ready ? copy.intro : copy.introWaiting }}
+          </p>
+          <p
+            v-if="!ready"
+            class="m-0 mb-6 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+            data-testid="package-not-ready"
+          >
+            {{ copy.notReady }}
+            <template v-if="pendingStages">
+              {{ fill(copy.pendingSteps, { steps: pendingStages }) }}
+            </template>
+          </p>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <UiButton
+              variant="pill"
+              size="lg"
+              :disabled="busy || !ready"
+              data-testid="download-package"
+              @click="prepare"
+            >
+              {{ busy ? copy.preparing : copy.prepare }}
+            </UiButton>
+            <span
+              v-if="latest"
+              class="font-mono text-xs text-on-night-3"
+              data-testid="package-latest"
+            >
+              {{ fill(copy.latest, { files: latest.file_count, number: latest.version_number }) }}
+            </span>
+          </div>
+          <div aria-live="polite">
+            <p
+              v-if="outcome"
+              class="m-0 mt-4 rounded-field border border-petrol-on-night/50 bg-petrol-on-night/10 px-4 py-3 text-sm leading-normal font-semibold wrap-anywhere text-petrol-on-night-2"
+              data-testid="download-done"
+            >
+              {{
+                fill(outcome.reused ? copy.reused : copy.created, {
+                  number: outcome.number,
+                  file: outcome.file,
+                })
+              }}
+            </p>
+          </div>
+          <p
+            v-if="error"
+            class="m-0 mt-4 rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm leading-normal font-semibold text-fail-on-night"
+            role="alert"
+            data-testid="download-error"
+          >
+            {{ error }}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-4">
+      <section
+        class="rounded-tile border border-night-line bg-night-raised p-6"
+        aria-labelledby="package-contents-title"
+        data-testid="package-summary"
+      >
+        <h2 id="package-contents-title" class="m-0 mb-4 text-lg leading-tight font-semibold">
+          {{ copy.contents }}
+        </h2>
+        <ul class="m-0 list-none p-0">
+          <li class="flex items-baseline gap-3.5 border-t border-on-night/10 py-2.5">
+            <span class="min-w-12 font-display text-[28px] leading-none font-extralight">
+              {{ twins.length }}
+            </span>
+            {{ " " }}
+            <span class="min-w-0 text-[15px] leading-snug text-on-night-2">
+              {{ plural(twins.length, "twins") }}
+              <span v-if="twins.length > 0" class="mt-1 block text-[13px] text-on-night-3">
+                <template v-for="(twin, index) in twins" :key="twin.id">
+                  <span data-testid="package-twin">{{ twin.name }}</span>
+                  <template v-if="index < twins.length - 1">, </template>
+                </template>
+              </span>
+            </span>
+          </li>
+        </ul>
+        <ul v-if="counts.length > 0" class="m-0 list-none p-0" data-testid="package-contents">
+          <li
+            v-for="row in counts"
+            :key="row.key"
+            class="flex items-baseline gap-3.5 border-t border-on-night/10 py-2.5"
+          >
+            <span class="min-w-12 font-display text-[28px] leading-none font-extralight">
+              {{ row.count }}
+            </span>
+            {{ " " }}
+            <span class="min-w-0 text-[15px] leading-snug text-on-night-2">
+              {{ row.label }}
+              <span
+                v-if="row.key === 'findings' && latest"
+                class="mt-1 block text-[13px] text-on-night-3"
+              >
+                {{
+                  fill(copy.feedback, {
+                    reviews: latest.feedback.reviews,
+                    decisions: latest.feedback.decisions,
+                    discussions: latest.feedback.discussions,
+                  })
+                }}
+              </span>
+            </span>
+          </li>
+        </ul>
+        <p
+          v-else
+          class="m-0 border-t border-on-night/10 pt-2.5 text-sm leading-normal text-on-night-3"
+          data-testid="package-counted-later"
+        >
+          {{ copy.countedLater }}
+        </p>
+
+        <div
+          v-if="selectedAlternative"
+          class="mt-4 flex flex-wrap items-center gap-3.5 rounded-field border border-night-line p-3"
+          data-testid="package-design"
+        >
+          <div
+            class="relative h-[100px] w-[160px] shrink-0 overflow-hidden rounded-lg bg-white"
+            data-testid="package-preview"
+          >
+            <slot name="preview" :alternative="selectedAlternative" :prototype="prototype">
+              <div
+                v-if="prototype"
+                class="pointer-events-none w-[960px] origin-top-left scale-[0.16667]"
+                :inert="true"
+                aria-hidden="true"
+                data-testid="package-preview-default"
+              >
+                <DeclarativePrototypePreview
+                  :prototype="prototype"
+                  :visual="selectedAlternative.visual_language"
+                  :locale="locale"
+                />
+              </div>
+              <p
+                v-else
+                class="m-0 grid h-full place-items-center bg-surface-2 px-2 text-center text-xs text-ink-3"
+                data-testid="package-preview-missing"
+              >
+                {{ copy.noPreview }}
+              </p>
+            </slot>
+          </div>
+          <div class="min-w-36 flex-1">
+            <p class="m-0 text-xs text-on-night-3">{{ copy.design }}</p>
+            <p
+              class="m-0 mt-0.5 text-[15px] leading-snug font-semibold"
+              data-testid="package-alternative"
+            >
+              {{ selectedAlternative.code }} · {{ selectedAlternative.title }}
+            </p>
+          </div>
+        </div>
+        <p
+          v-else
+          class="m-0 mt-4 rounded-field border border-night-line p-3 text-sm leading-normal text-on-night-3"
+          data-testid="package-no-design"
+        >
+          {{ copy.noDesign }}
+        </p>
+
+        <details
+          class="group mt-4 border-t border-on-night/10 pt-1"
+          :open="!ready"
+          data-testid="package-path"
+        >
+          <summary
+            class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 text-sm font-semibold text-petrol-on-night-2 [&::-webkit-details-marker]:hidden"
+          >
+            <span
+              aria-hidden="true"
+              class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150 group-open:rotate-45"
+            />
+            {{ copy.path }}
+          </summary>
+          <ol class="m-0 grid list-none gap-1.5 p-0 pb-1">
+            <li
+              v-for="(stage, index) in stages"
+              :key="stage.label"
+              class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-on-night/10 py-1.5 text-sm"
+              data-testid="package-stage"
+            >
+              <span class="font-semibold">{{ index + 1 }}. {{ stage.label }}</span>
+              {{ " " }}
+              <span
+                :class="[
+                  'font-mono text-xs',
+                  stage.approved ? 'text-petrol-on-night-2' : 'text-warn-on-night',
+                ]"
+              >
+                {{
+                  stage.version === null
+                    ? copy.noVersion
+                    : fill(copy.stageVersion, { number: stage.version })
+                }}
+                · {{ stage.approved ? copy.approved : copy.pending }}
+              </span>
+            </li>
+          </ol>
+        </details>
+      </section>
+
+      <section
+        class="rounded-tile border border-night-line bg-night-raised p-6"
+        aria-labelledby="package-howto-title"
+      >
+        <h2 id="package-howto-title" class="m-0 mb-4 text-lg leading-tight font-semibold">
+          {{ copy.howTo }}
+        </h2>
+        <ol class="m-0 grid list-none gap-3.5 p-0">
+          <li
+            v-for="(step, index) in copy.steps"
+            :key="step"
+            class="flex gap-3 text-[15px] leading-normal text-on-night-2"
+            data-testid="package-step"
+          >
+            <span
+              class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border-[1.5px] border-on-night/50 text-xs font-semibold text-on-night"
+              aria-hidden="true"
+            >
+              {{ index + 1 }}
+            </span>
+            <span>{{ step }}</span>
+          </li>
+        </ol>
+      </section>
+    </div>
+
+    <section
+      class="rounded-tile border border-night-line bg-night-raised px-6 py-[18px]"
+      aria-labelledby="package-history-title"
+      data-testid="package-history"
+    >
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div class="min-w-[min(100%,15rem)] flex-1">
+          <h2 id="package-history-title" class="m-0 text-base leading-tight font-semibold">
+            {{ copy.history }}
+          </h2>
+          <p class="m-0 mt-0.5 text-sm leading-normal text-on-night-3">
+            {{ copy.historyIntro }}
+          </p>
+        </div>
+        <div
+          v-if="latest"
+          class="flex flex-wrap items-center gap-x-4 gap-y-2"
+          data-testid="package-version"
+        >
+          <p class="m-0 text-sm text-on-night-2">
+            <strong class="font-semibold text-on-night" data-testid="package-version-title">
+              {{ fill(copy.version, { number: latest.version_number }) }}
+            </strong>
+            · {{ versionMeta(latest) }}
+          </p>
+          <UiButton
+            variant="outline"
+            :disabled="busy"
+            :aria-label="fill(copy.downloadVersion, { number: latest.version_number })"
+            data-testid="download-version"
+            @click="download(latest)"
+          >
+            {{ copy.download }}
+          </UiButton>
+        </div>
+        <p
+          v-else
+          class="m-0 text-sm text-on-night-3"
+          :aria-busy="loadingHistory ? 'true' : undefined"
+          data-testid="package-no-history"
+        >
+          {{ loadingHistory ? copy.loadingHistory : copy.noHistory }}
         </p>
       </div>
-      <p
-        v-if="error"
-        class="mt-4 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
-        role="alert"
-        data-testid="download-error"
-      >
-        {{ error }}
-      </p>
-    </header>
-
-    <section class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <h3 class="m-0 text-lg font-semibold tracking-block">{{ copy.path }}</h3>
-      <ol class="mt-4 grid list-none gap-2 p-0">
-        <li
-          v-for="(stage, index) in stages"
-          :key="stage.label"
-          class="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2 text-sm"
-          data-testid="package-stage"
+      <details v-if="earlier.length > 0" class="group mt-3 border-t border-on-night/10 pt-1">
+        <summary
+          class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 text-sm font-semibold text-petrol-on-night-2 [&::-webkit-details-marker]:hidden"
         >
-          <span class="font-semibold">{{ index + 1 }}. {{ stage.label }}</span>
-          <span class="font-mono text-xs text-ink-3">
-            {{
-              stage.version === null
-                ? copy.noVersion
-                : fill(copy.version, { number: stage.version })
-            }}
-            · {{ stage.approved ? copy.approved : copy.pending }}
-          </span>
-        </li>
-      </ol>
+          <span
+            aria-hidden="true"
+            class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150 group-open:rotate-45"
+          />
+          {{ fill(copy.earlier, { count: earlier.length }) }}
+        </summary>
+        <ol class="m-0 grid list-none gap-2 p-0">
+          <li
+            v-for="version in earlier"
+            :key="version.id"
+            class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-on-night/10 py-2"
+            data-testid="package-version"
+          >
+            <p class="m-0 text-sm text-on-night-2">
+              <strong class="font-semibold text-on-night" data-testid="package-version-title">
+                {{ fill(copy.version, { number: version.version_number }) }}
+              </strong>
+              · {{ versionMeta(version) }}
+            </p>
+            <UiButton
+              variant="outline"
+              :disabled="busy"
+              :aria-label="fill(copy.downloadVersion, { number: version.version_number })"
+              data-testid="download-version"
+              @click="download(version)"
+            >
+              {{ copy.download }}
+            </UiButton>
+          </li>
+        </ol>
+      </details>
     </section>
-
-    <section class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <h3 class="m-0 text-lg font-semibold tracking-block">{{ copy.design }}</h3>
-      <template v-if="selectedAlternative">
-        <p class="mt-3 text-base font-semibold" data-testid="package-alternative">
-          {{ selectedAlternative.code }} · {{ selectedAlternative.title }}
-        </p>
-        <p class="mt-2 text-sm leading-6 text-ink-2">{{ selectedAlternative.summary }}</p>
-        <DesignStyleTile
-          v-if="selectedAlternative.visual_language"
-          class="mt-4"
-          :visual="selectedAlternative.visual_language"
-          :locale="locale"
-        />
-        <h4 class="mt-5 text-sm font-semibold text-ink-2">{{ copy.mockup }}</h4>
-        <DeclarativePrototypePreview
-          v-if="prototype"
-          class="mt-3"
-          :prototype="prototype"
-          :visual="selectedAlternative.visual_language"
-          :locale="locale"
-        />
-        <p v-else class="mt-2 text-sm text-ink-3">{{ copy.noMockup }}</p>
-      </template>
-      <p v-else class="mt-3 text-sm text-ink-3">{{ copy.noDesign }}</p>
-    </section>
-
-    <section class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <h3 class="m-0 text-lg font-semibold tracking-block">{{ copy.twins }}</h3>
-      <ul v-if="twins.length > 0" class="mt-3 grid list-none gap-1 p-0 text-sm">
-        <li v-for="twin in twins" :key="twin.id" data-testid="package-twin">
-          {{ twin.profile.name }}
-        </li>
-      </ul>
-      <p v-else class="mt-3 text-sm text-ink-3">{{ copy.noTwins }}</p>
-    </section>
-
-    <section class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <h3 class="m-0 text-lg font-semibold tracking-block">{{ copy.next }}</h3>
-      <p class="mt-3 text-sm leading-6 text-ink-2">{{ copy.nextText }}</p>
-    </section>
-  </section>
+  </div>
 </template>

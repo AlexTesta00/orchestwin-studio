@@ -35,7 +35,7 @@ const localeOptions = computed(() =>
 
 <template>
   <div
-    class="inline-flex items-center rounded-pill border border-line-strong bg-surface p-0.5"
+    class="inline-flex items-center"
     role="group"
     :aria-label="t('locale.label')"
     data-testid="language-switcher"
@@ -44,16 +44,22 @@ const localeOptions = computed(() =>
       v-for="option in localeOptions"
       :key="option.value"
       type="button"
-      :class="[
-        'min-w-11 rounded-pill px-3 py-1.5 font-mono text-xs font-medium uppercase transition-colors',
-        option.value === selectedLocale ? 'bg-ink text-white' : 'text-ink-2 hover:bg-surface-3',
-      ]"
+      class="group inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill"
       :aria-pressed="option.value === selectedLocale ? 'true' : 'false'"
       :aria-label="option.label"
       :lang="option.value"
       @click="selectedLocale = option.value"
     >
-      {{ option.value }}
+      <span
+        :class="[
+          'inline-flex min-w-9 items-center justify-center rounded-pill px-2 py-1.5 font-mono text-xs leading-none font-medium tracking-eyebrow uppercase transition-colors duration-150',
+          option.value === selectedLocale
+            ? 'bg-ink text-white'
+            : 'text-ink-2 group-hover:bg-surface-3 group-hover:text-ink',
+        ]"
+      >
+        {{ option.value }}
+      </span>
     </button>
   </div>
 </template>

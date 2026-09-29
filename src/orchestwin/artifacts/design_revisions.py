@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Final, Protocol
-from uuid import UUID
+from uuid import UUID, uuid5
 
+from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup
+from orchestwin.artifacts.design import SyntheticDesignCritique
 from orchestwin.artifacts.design_packages import (
     DesignExplorationPackage,
     DesignPackageVersion,
 )
+from orchestwin.artifacts.generated_mockups import GeneratedScreen
 from orchestwin.projects.requirements_primitives import (
     canonical_json,
     normalize_optional_text,
@@ -41,6 +45,12 @@ class DesignArtifactKind(StrEnum):
     PROTOTYPE = "PROTOTYPE"
     SELECTION = "SELECTION"
     OPEN_QUESTIONS = "OPEN_QUESTIONS"
+    CRITIQUE_VERDICT = "CRITIQUE_VERDICT"
+    GENERATED_MOCKUP = "GENERATED_MOCKUP"
+    GENERATED_SCREEN = "GENERATED_SCREEN"
+    GENERATED_STYLES = "GENERATED_STYLES"
+    OWNER_ASSERTION = "OWNER_ASSERTION"
+    OWNER_ASSERTION_ORDER = "OWNER_ASSERTION_ORDER"
 
 
 class DesignPackageDiffStatus(StrEnum):
@@ -516,6 +526,9 @@ def _design_package_changes(
         )
 
     changes.extend(_prototype_changes(base, proposed))
+    changes.extend(_generated_mockup_changes(base, proposed))
+    changes.extend(_owner_assertion_changes(base, proposed))
+    changes.extend(_critique_verdict_changes(base, proposed))
 
     before_selection = _selection_snapshot(base)
     after_selection = _selection_snapshot(proposed)
@@ -622,6 +635,181 @@ def _prototype_changes(
             after=None if after is None else after.to_snapshot(),
         )
     ]
+
+
+def _change_kind(before: object, after: object) -> DesignChangeKind:
+    if before is None:
+        return DesignChangeKind.ADD
+
+    if after is None:
+        return DesignChangeKind.REMOVE
+
+    return DesignChangeKind.REPLACE
+
+
+def _text_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _generated_mockup_changes(
+    base: DesignExplorationPackage,
+    proposed: DesignExplorationPackage,
+) -> list[DesignPackageChange]:
+    before = base.generated_mockup
+    after = proposed.generated_mockup
+    before_snapshot = None if before is None else before.to_snapshot()
+    after_snapshot = None if after is None else after.to_snapshot()
+
+    if before_snapshot == after_snapshot:
+        return []
+
+    anchor = after if after is not None else before
+
+    if anchor is None:
+        raise RuntimeError("generated mockup change requires before or after state")
+
+    changes = [
+        DesignPackageChange(
+            kind=_change_kind(before_snapshot, after_snapshot),
+            artifact_kind=DesignArtifactKind.GENERATED_MOCKUP,
+            artifact_id=anchor.design_alternative_id,
+            before=before_snapshot,
+            after=after_snapshot,
+        )
+    ]
+
+    if before is not None and after is not None:
+        changes.extend(_generated_screen_changes(base.project_id, before, after))
+
+        if before.mockup.styles != after.mockup.styles:
+            changes.append(
+                DesignPackageChange(
+                    kind=DesignChangeKind.REPLACE,
+                    artifact_kind=DesignArtifactKind.GENERATED_STYLES,
+                    artifact_id=base.project_id,
+                    before={"styles_hash": _text_hash(before.mockup.styles)},
+                    after={"styles_hash": _text_hash(after.mockup.styles)},
+                )
+            )
+
+    return changes
+
+
+def _generated_screen_changes(
+    project_id: UUID,
+    before: BoundGeneratedMockup,
+    after: BoundGeneratedMockup,
+) -> list[DesignPackageChange]:
+    before_screens = {screen.code: _screen_summary(screen) for screen in before.mockup.screens}
+    after_screens = {screen.code: _screen_summary(screen) for screen in after.mockup.screens}
+    changes: list[DesignPackageChange] = []
+
+    for code in sorted(before_screens.keys() | after_screens.keys()):
+        before_summary = before_screens.get(code)
+        after_summary = after_screens.get(code)
+
+        if before_summary == after_summary:
+            continue
+
+        changes.append(
+            DesignPackageChange(
+                kind=_change_kind(before_summary, after_summary),
+                artifact_kind=DesignArtifactKind.GENERATED_SCREEN,
+                artifact_id=uuid5(project_id, f"generated-screen:{code}"),
+                before=before_summary,
+                after=after_summary,
+            )
+        )
+
+    return changes
+
+
+def _screen_summary(screen: GeneratedScreen) -> dict[str, object]:
+    return {
+        "code": screen.code,
+        "title": screen.title,
+        "state": screen.state.value,
+        "markup_hash": _text_hash(screen.markup),
+    }
+
+
+def _owner_assertion_changes(
+    base: DesignExplorationPackage,
+    proposed: DesignExplorationPackage,
+) -> list[DesignPackageChange]:
+    before = base.owner_assertions
+    after = proposed.owner_assertions
+    kept = set(before) & set(after)
+    changes = [
+        DesignPackageChange(
+            kind=DesignChangeKind.REMOVE,
+            artifact_kind=DesignArtifactKind.OWNER_ASSERTION,
+            artifact_id=uuid5(base.project_id, f"owner-assertion:{text}"),
+            before={"text": text},
+            after=None,
+        )
+        for text in before
+        if text not in kept
+    ]
+    changes.extend(
+        DesignPackageChange(
+            kind=DesignChangeKind.ADD,
+            artifact_kind=DesignArtifactKind.OWNER_ASSERTION,
+            artifact_id=uuid5(base.project_id, f"owner-assertion:{text}"),
+            before=None,
+            after={"text": text},
+        )
+        for text in after
+        if text not in kept
+    )
+
+    if [text for text in before if text in kept] != [text for text in after if text in kept]:
+        changes.append(
+            DesignPackageChange(
+                kind=DesignChangeKind.REPLACE,
+                artifact_kind=DesignArtifactKind.OWNER_ASSERTION_ORDER,
+                artifact_id=base.project_id,
+                before={"items": list(before)},
+                after={"items": list(after)},
+            )
+        )
+
+    return changes
+
+
+def _critique_verdict_changes(
+    base: DesignExplorationPackage,
+    proposed: DesignExplorationPackage,
+) -> list[DesignPackageChange]:
+    before = {critique.id: critique for critique in base.critiques}
+    after = {critique.id: critique for critique in proposed.critiques}
+    changes: list[DesignPackageChange] = []
+
+    for critique_id in sorted(before.keys() & after.keys(), key=lambda value: value.hex):
+        before_verdict = _verdict_snapshot(before[critique_id])
+        after_verdict = _verdict_snapshot(after[critique_id])
+
+        if before_verdict == after_verdict:
+            continue
+
+        changes.append(
+            DesignPackageChange(
+                kind=_change_kind(before_verdict, after_verdict),
+                artifact_kind=DesignArtifactKind.CRITIQUE_VERDICT,
+                artifact_id=critique_id,
+                before=before_verdict,
+                after=after_verdict,
+            )
+        )
+
+    return changes
+
+
+def _verdict_snapshot(critique: SyntheticDesignCritique) -> dict[str, object] | None:
+    if critique.verdict is None or critique.quote is None:
+        return None
+
+    return {"verdict": critique.verdict, "quote": critique.quote}
 
 
 def _selection_snapshot(package: DesignExplorationPackage) -> dict[str, object]:

@@ -1,3 +1,4 @@
+import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -25,6 +26,7 @@ interface RequestOptions {
   method: HttpMethod;
   accessToken: string;
   body?: unknown;
+  generationProjectId?: string;
 }
 
 export interface DesignApiOptions {
@@ -155,7 +157,14 @@ export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
     }
 
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-    const response = await fetchImpl(path, init);
+    const response =
+      optionsValue.generationProjectId === undefined
+        ? await fetchImpl(path, init)
+        : await sendGeneration(path, init, {
+            fetchImpl,
+            basePath,
+            projectId: optionsValue.generationProjectId,
+          });
     const payload = await responsePayload(response);
 
     if (!response.ok) {
@@ -198,6 +207,7 @@ export function createDesignApi(options: DesignApiOptions = {}): DesignApi {
       return request(`${projectPath(projectId)}/proposals`, {
         method: "POST",
         accessToken,
+        generationProjectId: projectId,
       });
     },
 

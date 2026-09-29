@@ -30,6 +30,8 @@ class StructuredGenerationProviderKind(StrEnum):
     FAKE_DETERMINISTIC = "FAKE_DETERMINISTIC"
     OPENAI_COMPATIBLE_LOCAL = "OPENAI_COMPATIBLE_LOCAL"
     UNSLOTH_DIRECT_LOCAL = "UNSLOTH_DIRECT_LOCAL"
+    ANTHROPIC_HOSTED = "ANTHROPIC_HOSTED"
+    OPENAI_COMPATIBLE_HOSTED = "OPENAI_COMPATIBLE_HOSTED"
 
 
 class StructuredGenerationStatus(StrEnum):
@@ -37,6 +39,19 @@ class StructuredGenerationStatus(StrEnum):
 
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
+
+
+class StructuredOutputMode(StrEnum):
+    STRICT = "STRICT"
+    PROMPTED = "PROMPTED"
+
+
+_HOSTED_PROVIDER_KINDS: Final = frozenset(
+    {
+        StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
+        StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED,
+    }
+)
 
 
 class StructuredGenerationFinishReason(StrEnum):
@@ -60,6 +75,8 @@ class StructuredGenerationFailureCode(StrEnum):
     IDENTITY_MISMATCH = "IDENTITY_MISMATCH"
     ADAPTER_NOT_LOADED = "ADAPTER_NOT_LOADED"
     PROVIDER_ERROR = "PROVIDER_ERROR"
+    PROVIDER_REFUSED = "PROVIDER_REFUSED"
+    GENERATION_BUDGET_EXCEEDED = "GENERATION_BUDGET_EXCEEDED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,22 +258,42 @@ class StructuredGenerationUsage:
     input_tokens: int
     output_tokens: int
     latency_milliseconds: int
+    cache_read_input_tokens: int = 0
+    cache_write_input_tokens: int = 0
+    cost_microusd: int | None = None
+    reasoning_tokens: int = 0
 
     def __post_init__(self) -> None:
         for value, label in (
             (self.input_tokens, "structured generation input tokens"),
             (self.output_tokens, "structured generation output tokens"),
             (self.latency_milliseconds, "structured generation latency"),
+            (self.cache_read_input_tokens, "structured generation cache read tokens"),
+            (self.cache_write_input_tokens, "structured generation cache write tokens"),
+            (
+                0 if self.cost_microusd is None else self.cost_microusd,
+                "structured generation cost",
+            ),
+            (self.reasoning_tokens, "structured generation reasoning tokens"),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"{label} must be a non-negative integer")
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "latency_milliseconds": self.latency_milliseconds,
         }
+        for key, value in (
+            ("cache_read_input_tokens", self.cache_read_input_tokens),
+            ("cache_write_input_tokens", self.cache_write_input_tokens),
+            ("cost_microusd", self.cost_microusd),
+            ("reasoning_tokens", self.reasoning_tokens),
+        ):
+            if value:
+                snapshot[key] = value
+        return snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +351,7 @@ class StructuredGenerationFailure:
     message: str
     retryable: bool
     provider_status_code: int | None = None
+    usage: StructuredGenerationUsage | None = None
 
     def __post_init__(self) -> None:
         _require_normalized_text(self.message, label="structured generation failure message")
@@ -321,14 +359,19 @@ class StructuredGenerationFailure:
             isinstance(self.provider_status_code, bool) or self.provider_status_code < 100
         ):
             raise ValueError("provider status code must be a valid HTTP-style status")
+        if self.usage is not None and not isinstance(self.usage, StructuredGenerationUsage):
+            raise ValueError("structured generation failure usage has an invalid type")
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "code": self.code.value,
             "message": self.message,
             "retryable": self.retryable,
             "provider_status_code": self.provider_status_code,
         }
+        if self.usage is not None:
+            snapshot["usage"] = self.usage.to_snapshot()
+        return snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +382,7 @@ class StructuredGenerationResult:
     status: StructuredGenerationStatus
     success: StructuredGenerationSuccess | None
     failure: StructuredGenerationFailure | None
+    output_mode: StructuredOutputMode | None = None
 
     def __post_init__(self) -> None:
         succeeded = self.status is StructuredGenerationStatus.SUCCEEDED
@@ -346,18 +390,26 @@ class StructuredGenerationResult:
             raise ValueError("structured generation success shape is inconsistent")
         if succeeded == (self.failure is not None):
             raise ValueError("structured generation failure shape is inconsistent")
+        if self.output_mode is not None and (
+            not isinstance(self.output_mode, StructuredOutputMode)
+            or self.provider_kind not in _HOSTED_PROVIDER_KINDS
+        ):
+            raise ValueError("an output mode is recorded only for hosted results")
 
     @property
     def content_hash(self) -> str:
         return snapshot_content_hash(self.to_snapshot())
 
     def to_snapshot(self) -> dict[str, object]:
-        return {
+        snapshot: dict[str, object] = {
             "provider_kind": self.provider_kind.value,
             "status": self.status.value,
             "success": None if self.success is None else self.success.to_snapshot(),
             "failure": None if self.failure is None else self.failure.to_snapshot(),
         }
+        if self.output_mode is not None:
+            snapshot["output_mode"] = self.output_mode.value
+        return snapshot
 
 
 @runtime_checkable
@@ -473,12 +525,14 @@ def successful_structured_generation_result(
     *,
     provider_kind: StructuredGenerationProviderKind,
     success: StructuredGenerationSuccess,
+    output_mode: StructuredOutputMode | None = None,
 ) -> StructuredGenerationResult:
     return StructuredGenerationResult(
         provider_kind=provider_kind,
         status=StructuredGenerationStatus.SUCCEEDED,
         success=success,
         failure=None,
+        output_mode=output_mode,
     )
 
 
@@ -489,16 +543,20 @@ def failed_structured_generation_result(
     message: str,
     retryable: bool,
     provider_status_code: int | None = None,
+    usage: StructuredGenerationUsage | None = None,
+    output_mode: StructuredOutputMode | None = None,
 ) -> StructuredGenerationResult:
     return StructuredGenerationResult(
         provider_kind=provider_kind,
         status=StructuredGenerationStatus.FAILED,
+        output_mode=output_mode,
         success=None,
         failure=StructuredGenerationFailure(
             code=code,
             message=message,
             retryable=retryable,
             provider_status_code=provider_status_code,
+            usage=usage,
         ),
     )
 

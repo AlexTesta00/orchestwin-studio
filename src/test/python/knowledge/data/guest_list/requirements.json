@@ -1,0 +1,447 @@
+{
+  "based_on_version_number": 1,
+  "content_hash": "d5627be28efc71464c9e8c27787e2251e387a6b7f63f4f5bfe01197862e18c2a",
+  "created_at": "2026-09-27T10:06:45.506485+00:00",
+  "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+  "id": "66c4cb70-d16c-4c6f-a984-701b7e225d59",
+  "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+  "specification": {
+    "acceptance_criteria": [
+      {
+        "code": "AC-001",
+        "id": "e1081be6-6a35-4bb9-a77e-2acbb7bdf9da",
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "statement": "L'applicazione deve consentire l'inserimento di un nome ospite e la sua visualizzazione immediata nella lista.",
+        "user_story_ids": [
+          "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+          "d002343a-d122-4939-843f-8e20e47c4131"
+        ],
+        "verification_method": "DEMONSTRATION"
+      }
+    ],
+    "context": {
+      "agent_team": {
+        "artifact_id": "09de637b-32d6-480d-8816-24c4e992050a",
+        "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+        "kind": "AGENT_TEAM",
+        "version_number": 1
+      },
+      "catalog": {
+        "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+        "version": 1
+      },
+      "project_brief": {
+        "artifact_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+        "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+        "kind": "PROJECT_BRIEF",
+        "version_number": 1
+      },
+      "user_modeling": {
+        "artifact_id": "1012ab5c-812f-4627-87b8-8257c1438f95",
+        "content_hash": "3cfae06d6b2ab26b508239b07c26a8b4bb99bbc2b91cedd1910ae9082c528885",
+        "kind": "USER_MODELING",
+        "version_number": 1
+      }
+    },
+    "definition_of_done": [
+      {
+        "applicability": "REQUIRED",
+        "code": "DOD-001",
+        "condition": null,
+        "id": "8441dd82-e72f-4c2b-83aa-eccba7ed68eb",
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "statement": "Un volontario aggiunge tre ospiti e li vede in lista",
+        "verification_method": "DEMONSTRATION"
+      }
+    ],
+    "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+    "requirements": [
+      {
+        "code": "REQ-001",
+        "id": "2b2159d3-80a8-4d39-906e-38e252fd7229",
+        "kind": "FUNCTIONAL",
+        "priority": "MUST",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "functional_requirements[0]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "goals[0]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "kind": "USER_TWIN",
+            "locator": "user_twin.goals",
+            "source_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "source_version": 1
+          }
+        ],
+        "statement": "Inserire il nome di un ospite e aggiungerlo alla lista",
+        "title": "Aggiunta ospite",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-002",
+        "id": "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58",
+        "kind": "FUNCTIONAL",
+        "priority": "MUST",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "functional_requirements[1]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "goals[1]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "kind": "USER_TWIN",
+            "locator": "user_twin.goals",
+            "source_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "source_version": 1
+          }
+        ],
+        "statement": "Mostrare la lista con numero progressivo e nome",
+        "title": "Visualizzazione lista",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-003",
+        "id": "a738ba18-f1bd-42a3-aad7-cc98dc2b8171",
+        "kind": "FUNCTIONAL",
+        "priority": "MUST",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "functional_requirements[2]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "goals[2]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "kind": "USER_TWIN",
+            "locator": "user_twin.goals",
+            "source_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "source_version": 1
+          }
+        ],
+        "statement": "Rifiutare nomi vuoti con un messaggio visibile",
+        "title": "Validazione nome",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-004",
+        "id": "a0891f08-4c04-4d60-a655-71c7537fc415",
+        "kind": "NON_FUNCTIONAL",
+        "priority": "SHOULD",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "non_functional_requirements[0]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "kind": "USER_TWIN",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "source_version": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "kind": "USER_TWIN",
+            "locator": "user_twin.accessibility_needs",
+            "source_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "source_version": 1
+          }
+        ],
+        "statement": "Facile da usare su tablet",
+        "title": "Compatibilità tablet",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-005",
+        "id": "2a3012c4-6ead-4e86-8464-d9f814f69c79",
+        "kind": "NON_FUNCTIONAL",
+        "priority": "SHOULD",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "non_functional_requirements[1]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          }
+        ],
+        "statement": "Nessuna registrazione",
+        "title": "Senza registrazione",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-006",
+        "id": "089aa643-b7df-45d6-a6b7-571c1f71b13a",
+        "kind": "CONSTRAINT",
+        "priority": "MUST",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "technical_constraints[0]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          },
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "technical_constraints[1]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          }
+        ],
+        "statement": "Applicazione web statica senza backend",
+        "title": "Architettura statica",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          },
+          {
+            "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+            "name": "Organizzatori volontari",
+            "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+            "version_number": 1
+          }
+        ]
+      },
+      {
+        "code": "REQ-007",
+        "id": "5539162a-3761-409d-91fe-c39cb50f8a21",
+        "kind": "NON_FUNCTIONAL",
+        "priority": "SHOULD",
+        "sources": [
+          {
+            "content_hash": null,
+            "kind": "USER_TWIN",
+            "locator": "SYNTHETIC_FINDING:run:2d803802-b936-4b2f-9d29-07f7ccd9a31c:e98bf864-69ba-4198-85f9-d4e932c54a3d:UTF-001",
+            "source_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "source_version": null
+          }
+        ],
+        "statement": "Aggiungere una funzionalità di controllo in tempo reale per identificare eventuali nomi duplicati mentre l'utente digita.",
+        "title": "Aggiungere una funzionalità di controllo in tempo reale per identificare eventuali nomi duplicati mentre l'utente",
+        "user_twin_references": [
+          {
+            "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+            "name": "Addetti all'accoglienza",
+            "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+            "version_number": 1
+          }
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "code": "RSK-001",
+        "id": "9bd4b003-df8a-4358-9879-7bb0d5505b62",
+        "impact": "MEDIUM",
+        "likelihood": "POSSIBLE",
+        "mitigation": "Implementare controllo di unicità dei nomi durante l'inserimento",
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229"
+        ],
+        "review_status": "PROPOSED",
+        "sources": [
+          {
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "kind": "PROJECT_BRIEF",
+            "locator": "risks[0]",
+            "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "source_version": 1
+          }
+        ],
+        "summary": "Nomi duplicati possono causare confusione durante l'identificazione degli ospiti"
+      }
+    ],
+    "scenarios": [
+      {
+        "acceptance_criterion_ids": [
+          "e1081be6-6a35-4bb9-a77e-2acbb7bdf9da"
+        ],
+        "actor": {
+          "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+          "name": "Organizzatori volontari",
+          "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+          "version_number": 1
+        },
+        "code": "SCN-001",
+        "expected_outcome": "Il volontario può aggiungere tre ospiti e vedere immediatamente i nomi nella lista",
+        "id": "3cfca47e-7f32-4d0a-b0d5-fc06e9ac27ea",
+        "preconditions": [
+          "L'utente ha accesso all'applicazione web",
+          "L'applicazione è operativa"
+        ],
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "steps": [
+          "L'utente inserisce il nome di un ospite",
+          "L'utente conferma l'aggiunta",
+          "L'utente verifica che il nome sia visualizzato nella lista",
+          "L'utente ripete il processo per due altri ospiti"
+        ],
+        "title": "Aggiunta e visualizzazione ospiti",
+        "trigger": "Un volontario desidera registrare nuovi ospiti per un evento"
+      }
+    ],
+    "schema_version": 1,
+    "user_stories": [
+      {
+        "benefit": "Permette agli addetti all'accoglienza di identificare rapidamente gli ospiti durante il check-in",
+        "code": "USR-001",
+        "goal": "Visualizzare chi è registrato in modo chiaro e veloce",
+        "id": "d002343a-d122-4939-843f-8e20e47c4131",
+        "requirement_ids": [
+          "a0891f08-4c04-4d60-a655-71c7537fc415",
+          "b3b6c532-7fcd-4d21-ab6d-29a49c0c9a58"
+        ],
+        "user_twin_reference": {
+          "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+          "name": "Addetti all'accoglienza",
+          "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+          "version_number": 1
+        }
+      },
+      {
+        "benefit": "Consente agli organizzatori volontari di registrare ospiti senza dover gestire fogli di carta",
+        "code": "USR-002",
+        "goal": "Aggiungere ospiti per nome",
+        "id": "43eed0ef-c4c8-48f6-8488-f2db87cf3fb3",
+        "requirement_ids": [
+          "2b2159d3-80a8-4d39-906e-38e252fd7229",
+          "a738ba18-f1bd-42a3-aad7-cc98dc2b8171"
+        ],
+        "user_twin_reference": {
+          "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+          "name": "Organizzatori volontari",
+          "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+          "version_number": 1
+        }
+      }
+    ],
+    "user_twin_references": [
+      {
+        "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+        "name": "Addetti all'accoglienza",
+        "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+        "version_number": 1
+      },
+      {
+        "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+        "name": "Organizzatori volontari",
+        "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+        "version_number": 1
+      }
+    ]
+  },
+  "version_number": 2
+}

@@ -1,0 +1,1749 @@
+{
+  "content_hash": "3cfae06d6b2ab26b508239b07c26a8b4bb99bbc2b91cedd1910ae9082c528885",
+  "created_at": "2026-09-27T10:01:44.582158+00:00",
+  "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+  "id": "1012ab5c-812f-4627-87b8-8257c1438f95",
+  "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+  "snapshot": {
+    "agent_team_reference": {
+      "artifact_id": "09de637b-32d6-480d-8816-24c4e992050a",
+      "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+      "version_number": 1
+    },
+    "catalog": {
+      "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+      "version": 1
+    },
+    "persona_versions": [
+      {
+        "based_on_version_number": 1,
+        "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+        "created_at": "2026-09-27T10:01:29.195747+00:00",
+        "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+        "id": "7ebe9bd9-f8e6-41a0-b020-902d9c57f990",
+        "persona_id": "a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+        "profile": {
+          "confirmation_status": "CONFIRMED",
+          "kind": "PROTO_PERSONA",
+          "name": "Organizzatori volontari",
+          "observations": [
+            {
+              "confidence": 1.0,
+              "epistemic_status": "USER_PROVIDED",
+              "human_validation": "NOT_REQUIRED",
+              "observation_key": "persona.role",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[0]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                }
+              ],
+              "rationale": null,
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Organizzatori volontari"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.summary",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[0]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.summary",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "The persona is described as volunteers organizing events, aligning with the project's goal of managing guest lists for community workshops.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Volontari che organizzano eventi comunitari e gestiscono la lista degli ospiti per workshop. Sono motivati a semplificare il processo di registrazione e controllo dei partecipanti."
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.goals",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[0]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.goals",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Based on the project brief, the main goals include adding guests, viewing updated lists, and avoiding empty names, which directly aligns with this persona's responsibilities.",
+              "value": {
+                "items": [
+                  "Aggiungere ospiti per nome",
+                  "Vedere la lista aggiornata",
+                  "Evitare nomi vuoti"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.context_of_use",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[0]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.context_of_use",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "The persona works in a community setting where ease of use on tablets is essential, matching the functional requirement of the application.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Utilizza l'applicazione durante gli eventi comunitari per registrare ospiti rapidamente su tablet. Ha bisogno di una soluzione semplice e immediata per gestire i partecipanti."
+              }
+            }
+          ],
+          "rejection_reason": null,
+          "schema_version": 1,
+          "source": "SYSTEM_PROPOSED"
+        },
+        "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+        "version_number": 2
+      },
+      {
+        "based_on_version_number": 1,
+        "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+        "created_at": "2026-09-27T10:01:29.264490+00:00",
+        "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+        "id": "2deeb7ae-ee47-45af-b1e1-d34842ac5afb",
+        "persona_id": "e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+        "profile": {
+          "confirmation_status": "CONFIRMED",
+          "kind": "PROTO_PERSONA",
+          "name": "Addetti all'accoglienza",
+          "observations": [
+            {
+              "confidence": 1.0,
+              "epistemic_status": "USER_PROVIDED",
+              "human_validation": "NOT_REQUIRED",
+              "observation_key": "persona.role",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[1]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                }
+              ],
+              "rationale": null,
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Addetti all'accoglienza"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.summary",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[1]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.summary",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "This persona is responsible for welcoming guests, which fits with the need to manage and display a list of attendees effectively.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Addetti all'accoglienza che ricevono ospiti e verificano la presenza tramite la lista digitale. Devono essere in grado di consultare e confermare i nomi registrati."
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.goals",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[1]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.goals",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Their primary goals involve verifying guest information and ensuring no duplicates or invalid entries, consistent with the app's requirements.",
+              "value": {
+                "items": [
+                  "Verificare la presenza degli ospiti",
+                  "Controllare la lista aggiornata",
+                  "Identificare eventuali nomi duplicati o errati"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "persona.context_of_use",
+              "provenance": [
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief.target_users[1]",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Target user group supplied in the approved Project Brief."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "425cbe03dd0559a2231002bd72efef4b4959e2c0380c3f765ba41ece623b5fac",
+                  "locator": "persona.context_of_use",
+                  "source_id": "generation:17f42e3d-ac33-4043-8755-7f4493401a0a",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "They interact with the system during event setup and check-in, requiring an interface optimized for quick access and clarity.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Usano l'applicazione durante l'accesso e l'accoglienza degli ospiti. Hanno bisogno di visualizzare chi è registrato in modo chiaro e veloce per facilitare l'identificazione."
+              }
+            }
+          ],
+          "rejection_reason": null,
+          "schema_version": 1,
+          "source": "SYSTEM_PROPOSED"
+        },
+        "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+        "version_number": 2
+      }
+    ],
+    "project_brief_reference": {
+      "artifact_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+      "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+      "version_number": 1
+    },
+    "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+    "schema_version": 1,
+    "twin_versions": [
+      {
+        "based_on_version_number": null,
+        "content_hash": "8c985c52a8ca08b3588c94f5aa29ce1a5d3db529bff09733e0a0612896fc5293",
+        "created_at": "2026-09-27T10:01:44.582158+00:00",
+        "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+        "id": "3b99606f-dbd9-47d7-bb71-e1042d591099",
+        "profile": {
+          "agent_team_reference": {
+            "artifact_id": "09de637b-32d6-480d-8816-24c4e992050a",
+            "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+            "version_number": 1
+          },
+          "catalog": {
+            "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+            "version": 1
+          },
+          "name": "Addetti all'accoglienza",
+          "observations": [
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.role",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.role",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Explicitly stated in the project brief as the target user group.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Addetti all'accoglienza"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.expertise",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.expertise",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "No specific expertise mentioned, but they welcome guests, suggesting basic organizational skills.",
+              "value": {
+                "items": [],
+                "kind": "UNKNOWN",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.goals",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.goals",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Directly extracted from the project brief goals related to verifying guest presence and identifying duplicates.",
+              "value": {
+                "items": [
+                  "Verificare la presenza degli ospiti",
+                  "Controllare la lista aggiornata",
+                  "Identificare eventuali nomi duplicati o errati"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.recurring_tasks",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.recurring_tasks",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Based on project brief, tasks include checking in guests and validating the list.",
+              "value": {
+                "items": [
+                  "Verifica presenza ospiti",
+                  "Controllo lista ospiti"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.context_of_use",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.context_of_use",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Explicitly mentioned in the persona summary as using the app during check-in.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Usano l'applicazione durante l'accesso e l'accoglienza degli ospiti. Hanno bisogno di visualizzare chi è registrato in modo chiaro e veloce per facilitare l'identificazione."
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.information_needs",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.information_needs",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Needs to confirm guest identity and ensure list accuracy.",
+              "value": {
+                "items": [
+                  "Identità ospite",
+                  "Lista aggiornata",
+                  "Conferma presenza"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.decision_criteria",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.decision_criteria",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Decisions involve confirming guest identities and detecting duplicate or invalid entries.",
+              "value": {
+                "items": [
+                  "Identità corretta",
+                  "Nessun doppione"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.preferred_vocabulary",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.preferred_vocabulary",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Likely prefers clear and direct terminology for guest verification.",
+              "value": {
+                "items": [],
+                "kind": "UNKNOWN",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.frustrations",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.frustrations",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Frustrated by inaccurate or incomplete lists that complicate identification.",
+              "value": {
+                "items": [
+                  "Lista incompleta",
+                  "Duplicati"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.pain_points",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.pain_points",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Pain points include difficulty identifying guests and potential confusion from errors.",
+              "value": {
+                "items": [
+                  "Identificazione complicata",
+                  "Errori nella lista"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.trust_concerns",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.trust_concerns",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Concerned about data accuracy and consistency in guest lists.",
+              "value": {
+                "items": [
+                  "Accuratezza della lista",
+                  "Consistenza dei dati"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.accessibility_needs",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.accessibility_needs",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Requires fast and clear display of guest information for easy access.",
+              "value": {
+                "items": [
+                  "Visualizzazione rapida",
+                  "Chiarezza dell'interfaccia"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.operational_constraints",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.operational_constraints",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Operational constraints include needing quick access during busy check-in periods.",
+              "value": {
+                "items": [
+                  "Tempo limitato",
+                  "Alta concentrazione"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.technical_literacy",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.technical_literacy",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Assumed to have basic digital skills for using a web app in a community setting.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Media"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.risk_sensitivity",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.risk_sensitivity",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Moderate risk sensitivity due to importance of accurate guest tracking.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Media"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.assumptions",
+              "provenance": [
+                {
+                  "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+                  "locator": "profile",
+                  "source_id": "persona:e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.assumptions",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Assumes reliable internet access and straightforward list viewing during events.",
+              "value": {
+                "items": [
+                  "Connessione stabile",
+                  "Interfaccia intuitiva"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            }
+          ],
+          "persona_reference": {
+            "confirmation_status": "CONFIRMED",
+            "content_hash": "ec828ea8a292705d3dcde21d109700401a0ebc8129099df88cdb6427ade3efbb",
+            "kind": "PROTO_PERSONA",
+            "persona_id": "e4b4fca5-204c-44fb-aa9a-e5e7b4b19396",
+            "source": "SYSTEM_PROPOSED",
+            "version_number": 2
+          },
+          "project_brief_reference": {
+            "artifact_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "version_number": 1
+          },
+          "requires_human_validation": true,
+          "schema_version": 1,
+          "validation_status": "PROJECT_GROUNDED_UT"
+        },
+        "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+        "twin_id": "e98bf864-69ba-4198-85f9-d4e932c54a3d",
+        "version_number": 1
+      },
+      {
+        "based_on_version_number": null,
+        "content_hash": "fe09760fd75125ec60814bcc6634958c5755103090aba64b5a0b705a662f3f55",
+        "created_at": "2026-09-27T10:01:44.582158+00:00",
+        "created_by_user_id": "e5337b09-0cba-4fdc-b437-4c857246436d",
+        "id": "60f04f02-7ae8-492a-8008-30620733d663",
+        "profile": {
+          "agent_team_reference": {
+            "artifact_id": "09de637b-32d6-480d-8816-24c4e992050a",
+            "content_hash": "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884",
+            "version_number": 1
+          },
+          "catalog": {
+            "content_hash": "de63d5de0bd3a7fa279af74ba7c08c7bbecef8de817b7ba4f2e286a09540d9f8",
+            "version": 1
+          },
+          "name": "Organizzatori volontari",
+          "observations": [
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.role",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.role",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Explicitly stated in the project brief as the target user group.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Organizzatori volontari"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.expertise",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.expertise",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "No specific expertise mentioned, but they are organizers, implying basic digital literacy.",
+              "value": {
+                "items": [],
+                "kind": "UNKNOWN",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.goals",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.goals",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Directly extracted from the project brief goals related to adding guests, viewing lists, and avoiding empty names.",
+              "value": {
+                "items": [
+                  "Aggiungere ospiti per nome",
+                  "Vedere la lista aggiornata",
+                  "Evitare nomi vuoti"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.recurring_tasks",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.recurring_tasks",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Based on the project brief, recurring tasks include adding guests and checking the list.",
+              "value": {
+                "items": [
+                  "Aggiungere ospiti",
+                  "Visualizzare la lista degli ospiti"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.context_of_use",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.context_of_use",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Explicitly mentioned in the persona summary as using the app during events on tablets.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Utilizza l'applicazione durante gli eventi comunitari per registrare ospiti rapidamente su tablet. Ha bisogno di una soluzione semplice e immediata per gestire i partecipanti."
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.information_needs",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.information_needs",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Needs to know guest details, presence confirmation, and list updates.",
+              "value": {
+                "items": [
+                  "Nome ospite",
+                  "Lista aggiornata",
+                  "Presenza confermata"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.decision_criteria",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.decision_criteria",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Based on project brief, decisions involve adding valid names and verifying list accuracy.",
+              "value": {
+                "items": [
+                  "Validità del nome",
+                  "Precisione della lista"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.preferred_vocabulary",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.preferred_vocabulary",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "No explicit vocabulary provided, but likely simple and direct language due to context.",
+              "value": {
+                "items": [],
+                "kind": "UNKNOWN",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.frustrations",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.frustrations",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Frustrated by paper-based systems that lose names and counts.",
+              "value": {
+                "items": [
+                  "Perdita di informazioni",
+                  "Conteggio errato"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.pain_points",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.pain_points",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Paper-based systems cause pain points like lost data and inefficient management.",
+              "value": {
+                "items": [
+                  "Lista su carta",
+                  "Dati persi"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.trust_concerns",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.trust_concerns",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "No explicit trust concerns identified, but may worry about data integrity.",
+              "value": {
+                "items": [
+                  "Integrità dei dati"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.accessibility_needs",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.accessibility_needs",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Needs to work on tablets, implying touch-friendly interface.",
+              "value": {
+                "items": [
+                  "Interfaccia touch-friendly",
+                  "Accesso facile"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.operational_constraints",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.operational_constraints",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Operational constraints include working in community settings with limited tech support.",
+              "value": {
+                "items": [
+                  "Ambiente comunitario",
+                  "Senza supporto tecnico"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.technical_literacy",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.technical_literacy",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Assumed to have minimal technical skills based on being volunteers without backend knowledge.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Bassa"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.risk_sensitivity",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.risk_sensitivity",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Risk sensitivity is low since no sensitive data is involved and the system avoids duplicates.",
+              "value": {
+                "items": [],
+                "kind": "TEXT",
+                "reason": null,
+                "text": "Bassa"
+              }
+            },
+            {
+              "confidence": 1.0,
+              "epistemic_status": "MODEL_INFERRED",
+              "human_validation": "REQUIRED",
+              "observation_key": "user_twin.assumptions",
+              "provenance": [
+                {
+                  "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+                  "locator": "profile",
+                  "source_id": "persona:a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+                  "source_kind": "SYSTEM_ARTIFACT",
+                  "source_version": 2,
+                  "summary": "Confirmed persona used as model context."
+                },
+                {
+                  "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+                  "locator": "brief",
+                  "source_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+                  "source_kind": "PROJECT_BRIEF",
+                  "source_version": 1,
+                  "summary": "Exact approved Project Brief business content supplied as model context."
+                },
+                {
+                  "content_hash": "87488f3b74c06c335c201360a83c4f2dd3681d37aed7f6ecd975e74d709a0d46",
+                  "locator": "user_twin.assumptions",
+                  "source_id": "generation:294a819d-f0b1-4842-80d2-036769e1d897",
+                  "source_kind": "MODEL_OUTPUT",
+                  "source_version": 1,
+                  "summary": null
+                }
+              ],
+              "rationale": "Assumes the app will be used on tablets and that users are comfortable with basic interactions.",
+              "value": {
+                "items": [
+                  "Uso su tablet",
+                  "Interazione basilare"
+                ],
+                "kind": "ITEMS",
+                "reason": null,
+                "text": null
+              }
+            }
+          ],
+          "persona_reference": {
+            "confirmation_status": "CONFIRMED",
+            "content_hash": "4e384968d5d022fd68427f3d68ddf6d33a91e4e15777ffd531cab0c4daa6655c",
+            "kind": "PROTO_PERSONA",
+            "persona_id": "a1dc9a02-2e57-4c00-b288-ed1f10e59479",
+            "source": "SYSTEM_PROPOSED",
+            "version_number": 2
+          },
+          "project_brief_reference": {
+            "artifact_id": "88bf9e36-83a5-429d-ba8c-423d68c3ad23",
+            "content_hash": "4c83e667b2191e944a0a0e00e0c03d07168f356c13e2c6a41ad9d5617b1e6966",
+            "version_number": 1
+          },
+          "requires_human_validation": true,
+          "schema_version": 1,
+          "validation_status": "PROJECT_GROUNDED_UT"
+        },
+        "project_id": "0eacaaec-d4e5-4357-b670-dc7fd5005542",
+        "twin_id": "f921405b-21d5-4ef6-b99c-fe0dcb1033b5",
+        "version_number": 1
+      }
+    ]
+  },
+  "version_number": 1
+}

@@ -16,11 +16,20 @@ from orchestwin.projects.domain import (
     ProjectMode,
     create_project,
 )
+from orchestwin.projects.progress import ProjectOverview
 from orchestwin.projects.repository import (
     BriefVersionCreationResult,
     ProjectBriefRepository,
     ProjectRepository,
 )
+
+
+class ProjectOverviewRepository(Protocol):
+    async def list_active_owned(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]: ...
+
+    async def get_owned(
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> ProjectOverview | None: ...
 
 
 class ProjectUnitOfWork(Protocol):
@@ -33,6 +42,9 @@ class ProjectUnitOfWork(Protocol):
     @property
     def briefs(self) -> ProjectBriefRepository:
         """Return the Project Brief repository."""
+
+    @property
+    def overviews(self) -> ProjectOverviewRepository: ...
 
     async def __aenter__(self) -> Self:
         """Open the transaction."""
@@ -70,6 +82,12 @@ class ProjectApplicationService(Protocol):
         owner_user_id: UUID,
     ) -> tuple[Project, ...]:
         """List active projects."""
+
+    async def list_overviews(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]: ...
+
+    async def get_overview(
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> ProjectOverview | None: ...
 
     async def get(
         self,
@@ -166,6 +184,19 @@ class LocalProjectApplicationService:
         """List active projects belonging to one owner."""
         async with self._unit_of_work_factory() as unit:
             return await unit.projects.list_active_owned(owner_user_id=owner_user_id)
+
+    async def list_overviews(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]:
+        async with self._unit_of_work_factory() as unit:
+            return await unit.overviews.list_active_owned(owner_user_id=owner_user_id)
+
+    async def get_overview(
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> ProjectOverview | None:
+        async with self._unit_of_work_factory() as unit:
+            return await unit.overviews.get_owned(
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+            )
 
     async def get(
         self,

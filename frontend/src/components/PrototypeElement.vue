@@ -12,8 +12,9 @@ const props = withDefaults(
     state: PrototypeScreenState;
     value?: string;
     active?: boolean;
+    figure?: string | null | undefined;
   }>(),
-  { value: "", active: false },
+  { value: "", active: false, figure: null },
 );
 
 const emit = defineEmits<{
@@ -42,17 +43,27 @@ function onInput(event: Event): void {
   <ul v-else-if="element.kind === 'LIST'" class="vl-list">
     <li>{{ element.content }}</li>
   </ul>
-  <div v-else-if="element.kind === 'CARD'" class="vl-card">{{ element.content }}</div>
+  <div v-else-if="element.kind === 'CARD'" class="vl-card">
+    <template v-if="figure">
+      <span class="vl-tile-label">{{ element.content }}</span>
+      <span class="vl-figure">{{ figure }}</span>
+    </template>
+    <template v-else>{{ element.content }}</template>
+  </div>
   <p
     v-else-if="element.kind === 'STATUS'"
     class="vl-status"
     :class="state === 'ERROR' ? 'vl-status-error' : 'vl-status-ok'"
     role="status"
   >
-    {{ element.content }}
+    <template v-if="figure">
+      <span class="vl-tile-label">{{ element.content }}</span>
+      <span class="vl-figure">{{ figure }}</span>
+    </template>
+    <template v-else>{{ element.content }}</template>
   </p>
   <label v-else-if="element.kind === 'TEXT_INPUT'" class="vl-field">
-    {{ label }}<span v-if="element.required" class="sr-only">*</span>
+    {{ label }}<span v-if="element.required" class="vl-hidden">*</span>
     <input
       type="text"
       class="vl-input"
@@ -63,7 +74,7 @@ function onInput(event: Event): void {
     />
   </label>
   <label v-else-if="element.kind === 'SELECT'" class="vl-field">
-    {{ label }}<span v-if="element.required" class="sr-only">*</span>
+    {{ label }}<span v-if="element.required" class="vl-hidden">*</span>
     <select
       class="vl-input"
       :name="element.field_name ?? undefined"

@@ -1,9 +1,31 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { clearFollowedGenerations } from "./generationJobs";
 import { createRequirementsApi, RequirementsApiError } from "./requirements";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010";
 const ACCESS_TOKEN = "access-token";
+const JOB_ID = "00000000-0000-4000-8000-0000000000aa";
+
+function job(
+  response: { status_code: number; body: unknown } | null,
+  operation = "REQUIREMENTS_PROPOSAL",
+) {
+  return {
+    job_id: JOB_ID,
+    kind: "REQUEST",
+    operation,
+    status: response === null ? "RUNNING" : response.status_code < 400 ? "SUCCEEDED" : "FAILED",
+    stage: response === null ? "GENERATING" : null,
+    attempt: 1,
+    started_at: "2026-09-28T10:00:00+00:00",
+    finished_at: response === null ? null : "2026-09-28T10:02:00+00:00",
+    alternative_id: null,
+    result: null,
+    failure: null,
+    response,
+  };
+}
 
 function response(payload: unknown, status = 200): Response {
   return {
@@ -125,5 +147,179 @@ describe("Requirements API client", () => {
     });
 
     await expect(api.history(PROJECT_ID, " ")).rejects.toBeInstanceOf(RequirementsApiError);
+  });
+});
+
+describe("Requirements generation in the background", () => {
+  const created = {
+    status: "CREATED",
+    version: null,
+    issue: null,
+    proposal_issue: null,
+    persistence_status: null,
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it("asks for a job and resolves with the answer the job carries", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      return init?.method === "POST"
+        ? response(job(null), 202)
+        : response(job({ status_code: 201, body: created }));
+    });
+    const api = createRequirementsApi({ fetchImpl: fetchMock });
+
+    const pending = api.generate(PROJECT_ID, ACCESS_TOKEN);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(pending).resolves.toEqual(created);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [postInput, postInit] = fetchMock.mock.calls[0] ?? [];
+    expect(postInput).toBe(`/api/v1/projects/${PROJECT_ID}/requirements/proposals`);
+    expect(postInit?.headers).toMatchObject({
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      Prefer: "respond-async",
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `/api/v1/projects/${PROJECT_ID}/generation-jobs/${JOB_ID}`,
+    );
+  });
+
+  it("throws for a refused job the same error as the synchronous answer", async () => {
+    const refusal = { detail: { code: "USER_MODELING_APPROVAL_REQUIRED" } };
+    const synchronous = createRequirementsApi({ fetchImpl: async () => response(refusal, 409) });
+    const expected = await synchronous.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    vi.useFakeTimers();
+    const background = createRequirementsApi({
+      fetchImpl: async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        return init?.method === "POST"
+          ? response(job(null), 202)
+          : response(job({ status_code: 409, body: refusal }));
+      },
+    });
+
+    const pending = background.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+    const actual = await pending;
+
+    expect(expected).toBeInstanceOf(RequirementsApiError);
+    expect(actual).toBeInstanceOf(RequirementsApiError);
+    expect(actual).toMatchObject({
+      name: expected.name,
+      message: expected.message,
+      status: expected.status,
+      code: expected.code,
+      payload: expected.payload,
+    });
+  });
+
+  it("returns the answer of a server that does not know background jobs", async () => {
+    const fetchMock = vi.fn(async () => response(created, 201));
+    const api = createRequirementsApi({ fetchImpl: fetchMock });
+
+    await expect(api.generate(PROJECT_ID, ACCESS_TOKEN)).resolves.toEqual(created);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Requirements written again from a request of the owner", () => {
+  const CHANGE_URL = `/api/v1/projects/${PROJECT_ID}/requirements/change-requests`;
+  const REQUEST = "Add the search by the name of the guest.";
+  const proposed = {
+    status: "CREATED",
+    diff: null,
+    version: null,
+    issue: null,
+    proposal_issue: null,
+    diff_persistence_status: "APPENDED",
+    version_persistence_status: null,
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it("sends the request as a background job and resolves with the proposed revision", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      return init?.method === "POST"
+        ? response(job(null, "REQUIREMENTS_CHANGE"), 202)
+        : response(job({ status_code: 201, body: proposed }, "REQUIREMENTS_CHANGE"));
+    });
+    const api = createRequirementsApi({ fetchImpl: fetchMock });
+
+    const pending = api.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(pending).resolves.toEqual(proposed);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [postInput, postInit] = fetchMock.mock.calls[0] ?? [];
+    expect(postInput).toBe(CHANGE_URL);
+    expect(postInit?.method).toBe("POST");
+    expect(postInit?.body).toBe(JSON.stringify({ request: REQUEST }));
+    expect(postInit?.headers).toMatchObject({
+      Accept: "application/json",
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+      Prefer: "respond-async",
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `/api/v1/projects/${PROJECT_ID}/generation-jobs/${JOB_ID}`,
+    );
+  });
+
+  it("returns the proposed revision of a server that answers at once", async () => {
+    const fetchMock = vi.fn(async () => response(proposed, 201));
+    const api = createRequirementsApi({ fetchImpl: fetchMock });
+
+    await expect(api.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN)).resolves.toEqual(proposed);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the code of a refusal that the job carries", async () => {
+    vi.useFakeTimers();
+    const refusal = { detail: { code: "REQUIREMENTS_UNCHANGED" } };
+    const api = createRequirementsApi({
+      fetchImpl: async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        return init?.method === "POST"
+          ? response(job(null, "REQUIREMENTS_CHANGE"), 202)
+          : response(job({ status_code: 409, body: refusal }, "REQUIREMENTS_CHANGE"));
+      },
+    });
+
+    const pending = api.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(pending).resolves.toMatchObject({
+      name: "RequirementsApiError",
+      status: 409,
+      code: "REQUIREMENTS_UNCHANGED",
+    });
+  });
+
+  it("tells a server without the operation apart from requirements that do not exist", async () => {
+    const missingRoute = createRequirementsApi({
+      fetchImpl: async () => response({ detail: "Not Found" }, 404),
+    });
+    const missingRequirements = createRequirementsApi({
+      fetchImpl: async () =>
+        response({ detail: { code: "REQUIREMENTS_SPECIFICATION_NOT_FOUND" } }, 404),
+    });
+
+    await expect(
+      missingRoute.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN),
+    ).rejects.toMatchObject({ status: 404, code: null });
+    await expect(
+      missingRequirements.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN),
+    ).rejects.toMatchObject({ status: 404, code: "REQUIREMENTS_SPECIFICATION_NOT_FOUND" });
   });
 });

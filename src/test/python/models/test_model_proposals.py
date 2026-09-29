@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from copy import deepcopy
 from dataclasses import replace
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.models.model_proposals import (
+    HOSTED_PROFILE_NAME_INSTRUCTION,
+    PERSONAS_INSTRUCTION,
+    USER_TWINS_INSTRUCTION,
     ModelDesignAdapter,
     ModelRequirementsAdapter,
     ModelTeamProposalAdapter,
@@ -31,7 +36,10 @@ from orchestwin.models.proposal_generation import (
     build_proposal_generator,
     wire_value,
 )
-from orchestwin.models.structured_generation import ModelRuntimeIdentity
+from orchestwin.models.structured_generation import (
+    ModelRuntimeIdentity,
+    StructuredGenerationProviderKind,
+)
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     UserModelingBriefInput,
@@ -45,6 +53,18 @@ from . import test_fake_design as design_fixtures
 from . import test_fake_requirements as requirements_fixtures
 from . import test_fake_team_proposal_adapter as team_fixtures
 from . import test_user_modeling as user_fixtures
+
+LOCAL = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
+HOSTED = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
+LOCAL_PROFILE_SHA256 = {
+    "personas": "b52ccbbab2904fdf6144a1e99a46c6cd848ca7aa89fb32c76af5871c4e8d03ef",
+    "user_twins": "aa03bc4d36bf72a5e0e32e9b3e96a1140d6515372bd7f89ecfd8ce9a4fe7179e",
+}
+ROLE_AS_NAME = (
+    "name is the role of the represented people as a short noun phrase of at most six words, in "
+    "the language of the brief, with a capital first letter; it never contains the words Twin or "
+    "Persona and never a colon."
+)
 
 
 class CompletionTransport:
@@ -536,6 +556,63 @@ def test_compact_twin_drafts_cannot_bypass_profile_governance(tmp_path, change):
         asyncio.run(ModelUserModelingAdapter(generator).propose_user_twins(request))
 
 
+class ProfileGenerator:
+    def __init__(self, output, provider_kind):
+        self.output = output
+        self.calls = []
+        self.configuration = SimpleNamespace(provider_kind=provider_kind)
+
+    @property
+    def provider_id(self):
+        return "profile-generator"
+
+    def route(self, task, purpose=None):
+        return self
+
+    async def generate(self, **kwargs):
+        self.calls.append(kwargs)
+        return kwargs["output_type"].model_validate_json(json.dumps(self.output))
+
+
+def profile_instructions(stage, provider_kind, name=None):
+    request, output = persona_input_output() if stage == "personas" else twin_input_output()
+    if name is not None:
+        output["proposals"][0]["name"] = name
+    generator = ProfileGenerator(output, provider_kind)
+    result = asyncio.run(getattr(ModelUserModelingAdapter(generator), f"propose_{stage}")(request))
+    [call] = generator.calls
+    return call["instruction"], result
+
+
+@pytest.mark.parametrize(
+    ("stage", "instruction"),
+    [("personas", PERSONAS_INSTRUCTION), ("user_twins", USER_TWINS_INSTRUCTION)],
+)
+def test_the_local_route_keeps_the_profile_instructions_byte_for_byte(tmp_path, stage, instruction):
+    sent, _result = profile_instructions(stage, LOCAL)
+    assert sent == instruction
+    assert hashlib.sha256(sent.encode("utf-8")).hexdigest() == LOCAL_PROFILE_SHA256[stage]
+    assert HOSTED_PROFILE_NAME_INSTRUCTION not in sent
+    request, output = persona_input_output() if stage == "personas" else twin_input_output()
+    generator, transport = make_generator(tmp_path, output)
+    asyncio.run(getattr(ModelUserModelingAdapter(generator), f"propose_{stage}")(request))
+    system = transport.calls[0]["payload"]["messages"][0]["content"]
+    assert system.endswith(instruction)
+    assert HOSTED_PROFILE_NAME_INSTRUCTION not in system
+
+
+@pytest.mark.parametrize(
+    ("stage", "instruction"),
+    [("personas", PERSONAS_INSTRUCTION), ("user_twins", USER_TWINS_INSTRUCTION)],
+)
+def test_the_hosted_route_asks_for_the_role_of_the_people_as_the_name(stage, instruction):
+    sent, result = profile_instructions(stage, HOSTED, name="Twin: volontario della mensa")
+    assert HOSTED_PROFILE_NAME_INSTRUCTION == ROLE_AS_NAME
+    assert sent == f"{instruction} {ROLE_AS_NAME}"
+    assert sent.count(ROLE_AS_NAME) == 1
+    assert result.proposals[0].profile.name == "Twin: volontario della mensa"
+
+
 @pytest.mark.parametrize("stage", ["team", "user_modeling", "requirements", "design"])
 def test_model_runtime_requires_explicit_configuration(monkeypatch, stage):
     import importlib
@@ -642,3 +719,17 @@ def test_prompt_beyond_the_context_window_is_blocked_before_any_model_call(tmp_p
     with pytest.raises(ProposalGenerationError, match="CONTEXT_BUDGET_EXCEEDED"):
         asyncio.run(ModelTeamProposalAdapter(narrow).propose(team_fixtures.build_request()))
     assert transport.calls == []
+
+
+@pytest.mark.parametrize(("served", "expected"), [(12288, 8192), (8192, 8192), (4096, 4096)])
+def test_a_task_without_its_own_budget_keeps_the_default_whatever_the_server_serves(
+    tmp_path, served, expected
+):
+    generator, transport = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+    sized = ProposalGenerator(
+        generator.configuration.model_copy(update={"max_output_tokens": served}), generator.port
+    )
+
+    asyncio.run(ModelTeamProposalAdapter(sized).propose(team_fixtures.build_request()))
+
+    assert transport.calls[0]["payload"]["max_tokens"] == expected

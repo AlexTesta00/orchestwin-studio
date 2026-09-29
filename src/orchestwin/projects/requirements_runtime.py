@@ -37,6 +37,9 @@ from orchestwin.projects.requirements_application import (
     GovernedRequirementsContext,
     LocalRequirementsGenerationService,
 )
+from orchestwin.projects.requirements_change_application import (
+    LocalRequirementsChangeService,
+)
 from orchestwin.projects.requirements_gate import (
     LocalRequirementsGateService,
 )
@@ -423,6 +426,7 @@ class RequirementsServices:
     revisions: LocalRequirementsRevisionService
     queries: SqlAlchemyRequirementsQueryService
     gate: LocalRequirementsGateService
+    changes: LocalRequirementsChangeService
 
 
 def build_requirements_services(
@@ -437,21 +441,31 @@ def build_requirements_services(
     )
     command_uow_factory = ManagedRequirementsUnitOfWorkFactory(session_factory)
     gate_uow_factory = SqlAlchemyRequirementsGateUnitOfWorkFactory(session_factory)
+    evidence_store = SqlAlchemyProposalEvidenceStore(session_factory)
+    governance = SqlAlchemyRequirementsGovernanceAdapter(session_factory)
+    revisions = LocalRequirementsRevisionService(
+        uow_factory=command_uow_factory,
+    )
 
     return RequirementsServices(
         runtime_mode=runtime.mode,
         generation=LocalRequirementsGenerationService(
-            proposal_evidence_store=SqlAlchemyProposalEvidenceStore(session_factory),
-            governance=SqlAlchemyRequirementsGovernanceAdapter(session_factory),
+            proposal_evidence_store=evidence_store,
+            governance=governance,
             proposals=runtime.proposal_port,
             uow_factory=command_uow_factory,
         ),
-        revisions=LocalRequirementsRevisionService(
-            uow_factory=command_uow_factory,
-        ),
+        revisions=revisions,
         queries=SqlAlchemyRequirementsQueryService(session_factory),
         gate=LocalRequirementsGateService(
             unit_of_work_factory=gate_uow_factory,
+        ),
+        changes=LocalRequirementsChangeService(
+            proposal_evidence_store=evidence_store,
+            governance=governance,
+            proposals=runtime.proposal_port,
+            uow_factory=command_uow_factory,
+            revisions=revisions,
         ),
     )
 
