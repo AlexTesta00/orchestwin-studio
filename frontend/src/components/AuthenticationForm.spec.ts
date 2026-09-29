@@ -1,9 +1,11 @@
 import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { h } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createAppI18n, type SupportedLocale } from "@/i18n";
 
 import AuthenticationForm from "./AuthenticationForm.vue";
+import UiSurface from "./UiSurface.vue";
 import { expectAccessible } from "@/test/axe";
 
 enableAutoUnmount(afterEach);
@@ -160,6 +162,41 @@ describe("AuthenticationForm", () => {
 
     expect(alert.text()).toBe("The email or password is not valid.");
     expect(alert.attributes("tabindex")).toBe("-1");
+  });
+
+  it("follows the dark surface around it and stays light on its own", async () => {
+    const light = mountForm("register", "invalid_registration");
+    expect(light.get('input[name="email"]').classes()).toContain("bg-surface");
+    expect(light.get('[role="alert"]').classes()).toContain("bg-fail-bg");
+    expect(light.get("label").classes()).toContain("text-ink-2");
+
+    const night = mount(UiSurface, {
+      props: { tone: "night" },
+      slots: {
+        default: () =>
+          h(AuthenticationForm, { mode: "register", busy: false, error: "invalid_registration" }),
+      },
+      global: { plugins: [createAppI18n("it")] },
+    });
+    expect(night.get('input[name="email"]').classes()).toContain("bg-on-night/4");
+    expect(night.get('input[name="password"]').classes()).toContain("h-[52px]");
+    expect(night.get('[role="alert"]').classes()).toContain("text-fail-on-night");
+    expect(night.get("label").classes()).toContain("text-on-night-2");
+    expect(night.get("#password-hint").classes()).toContain("text-on-night-3");
+    const submit = night.get('button[type="submit"]');
+    expect(submit.text()).toBe("Registrati");
+    expect(submit.classes()).toContain("bg-on-night");
+    expect(submit.classes()).toContain("rounded-pill");
+  });
+
+  it("shows that the credentials are on their way", () => {
+    const wrapper = mount(AuthenticationForm, {
+      props: { mode: "login", busy: true, error: null },
+      global: { plugins: [createAppI18n("it")] },
+    });
+    const submit = wrapper.get('button[type="submit"]');
+    expect(submit.text()).toBe("Attendi…");
+    expect(submit.attributes("disabled")).toBeDefined();
   });
 
   it("has no axe violations in registration mode", async () => {
