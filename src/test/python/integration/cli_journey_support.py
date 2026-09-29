@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -13,7 +14,7 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -55,9 +56,41 @@ TERMINAL_COLUMNS: Final = "160"
 ACCESS_LINE: Final = re.compile(r'^INFO:\s+\S+:\d+ - "')
 CELL_GAP: Final = re.compile(r" {2,}")
 EMPTY_CELL: Final = "-"
+KNOWLEDGE: Final = "orchestwin"
+PROJECT_NAME: Final = "Tip splitter"
+IDEA: Final = "A small web app that splits a restaurant bill and the tip among friends."
+BRIEF_ANSWERS: Final[Mapping[str, object]] = {
+    "problem": "Friends waste time working out who owes what after a dinner.",
+    "target_users": ["Groups of friends who eat out together"],
+    "goals": ["Split a bill fairly in less than a minute"],
+    "functional_requirements": [
+        "Enter the total of the bill",
+        "Choose the tip percentage",
+        "Show how much each person pays",
+    ],
+}
+GIT: Final = "git"
+GIT_NAME: Final = "Test"
+GIT_EMAIL: Final = "test@example.com"
+GIT_BRANCH: Final = "main"
+GIT_HOME: Final = "git-home"
+GIT_SECONDS: Final = 60.0
+GIT_OPTIONS: Final = (
+    "-c",
+    "core.autocrlf=false",
+    "-c",
+    f"user.name={GIT_NAME}",
+    "-c",
+    f"user.email={GIT_EMAIL}",
+)
+GIT_CLEARED: Final = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY")
 
 
 class StudioFailure(RuntimeError):
+    pass
+
+
+class GitFailure(RuntimeError):
     pass
 
 
@@ -134,6 +167,19 @@ class Run:
 
     def shows(self, sentence: str) -> bool:
         return flat(sentence) in flat(f"{self.output}\n{self.errors}")
+
+    def order_gaps(self, *sentences: str) -> list[str]:
+        written = flat(self.output)
+        position = 0
+        gaps: list[str] = []
+        for sentence in sentences:
+            wanted = flat(sentence)
+            found = written.find(wanted, position)
+            if found < 0:
+                gaps.append(f"missing, or not in this order: {sentence}")
+                continue
+            position = found + len(wanted)
+        return gaps
 
     def writes(self) -> list[Exchange]:
         return [
@@ -435,6 +481,7 @@ class Terminal:
         directory: Path,
         answers: Sequence[str] = (),
         offline: bool = False,
+        sleep: Callable[[float], None] = short_wait,
     ) -> Run:
         directory.mkdir(parents=True, exist_ok=True)
         transport = RecordingTransport(self.origin, offline=offline)
@@ -456,7 +503,7 @@ class Terminal:
             interactive=False,
             now=utc_now,
             monotonic=time.monotonic,
-            sleep=short_wait,
+            sleep=sleep,
             read_secret=no_secret,
             open_browser=browser.open,
             transport=transport,
@@ -499,6 +546,153 @@ class Journey:
 
     def report(self) -> str:
         return "\n\n".join(self.problems)
+
+
+@dataclass
+class Scene:
+    origin: str
+    port: int
+    api: StudioApi
+    terminal: Terminal
+    outside: Path
+    project: Path
+    answers: Path
+    project_id: str = ""
+
+    @property
+    def base(self) -> str:
+        return f"/projects/{self.project_id}"
+
+    @property
+    def local(self) -> Path:
+        return self.project / ".orchestwin"
+
+    @property
+    def knowledge(self) -> Path:
+        return self.project / KNOWLEDGE
+
+    def ut(
+        self,
+        *arguments: str,
+        directory: Path | None = None,
+        answers: Sequence[str] = (),
+        offline: bool = False,
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self.terminal.run(
+            arguments,
+            directory=self.project if directory is None else directory,
+            answers=answers,
+            offline=offline,
+            sleep=sleep,
+        )
+
+    def document(self, path: str) -> object:
+        return self.api.document(f"{self.base}{path}")
+
+    def folders(self) -> list[Mapping]:
+        return self.document("/knowledge-packages")["versions"]
+
+    def folder_numbers(self) -> list[int]:
+        return [item["version_number"] for item in self.folders()]
+
+
+def journey_scene(root: Path, origin: str, port: int, api: StudioApi) -> Scene:
+    return Scene(
+        origin=origin,
+        port=port,
+        api=api,
+        terminal=Terminal(root, origin),
+        outside=root / "outside",
+        project=root / "project",
+        answers=write_json(
+            root / "answers.json",
+            {"name": PROJECT_NAME, "idea": IDEA, "answers": dict(BRIEF_ANSWERS)},
+        ),
+    )
+
+
+def stay_on_the_studio(scene: Scene) -> None:
+    assert scene.terminal.refused == []
+    ports = {
+        urllib.parse.urlsplit(exchange.url).port
+        for run in scene.terminal.runs
+        for exchange in run.exchanges
+    }
+    assert ports == {scene.port}
+    assert not ports & FORBIDDEN_PORTS
+
+
+def choose_through_the_api(scene: Scene, design: Mapping, alternative_id: str) -> None:
+    requirements = scene.document("/requirements/current")
+    package = chosen_package(design, requirements, alternative_id)
+    proposed = scene.api.request("POST", f"{scene.base}/design/revisions", {"package": package})
+    assert proposed.status == 201, f"the prepared choice answered {proposed.status} {proposed.code}"
+    diff = proposed.json()["diff"]["id"]
+    decided = scene.api.request(
+        "POST", f"{scene.base}/design/revisions/{diff}/decision", {"decision": "APPROVE"}
+    )
+    assert decided.status == 200, f"the prepared choice answered {decided.status} {decided.code}"
+
+
+def git_available() -> bool:
+    return shutil.which(GIT) is not None
+
+
+def git_variables(root: Path) -> dict[str, str]:
+    home = root / GIT_HOME
+    home.mkdir(parents=True, exist_ok=True)
+    return {
+        "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CEILING_DIRECTORIES": str(root),
+        "GIT_AUTHOR_NAME": GIT_NAME,
+        "GIT_AUTHOR_EMAIL": GIT_EMAIL,
+        "GIT_COMMITTER_NAME": GIT_NAME,
+        "GIT_COMMITTER_EMAIL": GIT_EMAIL,
+    }
+
+
+class Repository:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def git(self, *arguments: str, moment: datetime | None = None) -> str:
+        variables = dict(os.environ)
+        if moment is not None:
+            stamp = moment.isoformat()
+            variables.update({"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp})
+        completed = subprocess.run(
+            [GIT, *GIT_OPTIONS, *arguments],
+            cwd=self.root,
+            env=variables,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GIT_SECONDS,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise GitFailure(
+                f"git {' '.join(arguments)} ended with {completed.returncode}: "
+                f"{completed.stderr.strip()}"
+            )
+        return completed.stdout
+
+    def create(self) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.git("init", "-q", "-b", GIT_BRANCH)
+
+    def commit(self, message: str, files: Mapping[str, str], moment: datetime) -> str:
+        for path, content in files.items():
+            target = self.root.joinpath(*path.split("/"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content.encode("utf-8"))
+        self.git("add", "--", *files)
+        self.git("commit", "-q", "-m", message, moment=moment)
+        return self.git("rev-parse", "HEAD").strip()
 
 
 def table_rows(output: str) -> list[list[str]]:
