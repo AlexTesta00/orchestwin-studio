@@ -148,6 +148,46 @@ describe("Requirements API client", () => {
 
     await expect(api.history(PROJECT_ID, " ")).rejects.toBeInstanceOf(RequirementsApiError);
   });
+
+  it.each([
+    [
+      "the reason of a refused proposal",
+      { code: "PROPOSAL_REJECTED", proposal_issue: "REQUIREMENTS_ANALYST_REQUIRED" },
+      "REQUIREMENTS_ANALYST_REQUIRED",
+    ],
+    ["the refusal when no reason is given", { code: "PROPOSAL_REJECTED" }, "PROPOSAL_REJECTED"],
+    [
+      "the refusal when the reason is null",
+      { code: "PROPOSAL_REJECTED", proposal_issue: null },
+      "PROPOSAL_REJECTED",
+    ],
+    [
+      "the refusal when the reason is not text",
+      { code: "PROPOSAL_REJECTED", proposal_issue: ["GROUNDED_INPUT_REQUIRED"] },
+      "PROPOSAL_REJECTED",
+    ],
+    [
+      "the refusal when the reason is empty",
+      { code: "PROPOSAL_REJECTED", proposal_issue: "" },
+      "PROPOSAL_REJECTED",
+    ],
+    ["any other conflict as it is", { code: "REQUIREMENTS_UNCHANGED" }, "REQUIREMENTS_UNCHANGED"],
+  ])("uses as the code of a proposal and of a change %s", async (_case, detail, code) => {
+    const api = createRequirementsApi({ fetchImpl: async () => response({ detail }, 409) });
+
+    const errors = await Promise.all([
+      api.generate(PROJECT_ID, ACCESS_TOKEN).catch((caught: unknown) => caught),
+      api
+        .requestChange(PROJECT_ID, "Add the search by name.", ACCESS_TOKEN)
+        .catch((caught: unknown) => caught),
+    ]);
+
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(RequirementsApiError);
+      expect(error).toMatchObject({ status: 409, code, message: code });
+      expect((error as RequirementsApiError).payload).toEqual({ detail });
+    }
+  });
 });
 
 describe("Requirements generation in the background", () => {
@@ -209,6 +249,37 @@ describe("Requirements generation in the background", () => {
     const actual = await pending;
 
     expect(expected).toBeInstanceOf(RequirementsApiError);
+    expect(actual).toBeInstanceOf(RequirementsApiError);
+    expect(actual).toMatchObject({
+      name: expected.name,
+      message: expected.message,
+      status: expected.status,
+      code: expected.code,
+      payload: expected.payload,
+    });
+  });
+
+  it("throws for a refused proposal that the job carries the reason of the synchronous answer", async () => {
+    const refusal = {
+      detail: { code: "PROPOSAL_REJECTED", proposal_issue: "REQUIREMENTS_ANALYST_REQUIRED" },
+    };
+    const synchronous = createRequirementsApi({ fetchImpl: async () => response(refusal, 409) });
+    const expected = await synchronous.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    vi.useFakeTimers();
+    const background = createRequirementsApi({
+      fetchImpl: async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        return init?.method === "POST"
+          ? response(job(null), 202)
+          : response(job({ status_code: 409, body: refusal }));
+      },
+    });
+
+    const pending = background.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+    const actual = await pending;
+
+    expect(expected).toMatchObject({ status: 409, code: "REQUIREMENTS_ANALYST_REQUIRED" });
     expect(actual).toBeInstanceOf(RequirementsApiError);
     expect(actual).toMatchObject({
       name: expected.name,
@@ -303,6 +374,31 @@ describe("Requirements written again from a request of the owner", () => {
       name: "RequirementsApiError",
       status: 409,
       code: "REQUIREMENTS_UNCHANGED",
+    });
+  });
+
+  it("keeps the reason of a refused change that the job carries", async () => {
+    vi.useFakeTimers();
+    const refusal = {
+      detail: { code: "PROPOSAL_REJECTED", proposal_issue: "GROUNDED_INPUT_REQUIRED" },
+    };
+    const api = createRequirementsApi({
+      fetchImpl: async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        return init?.method === "POST"
+          ? response(job(null, "REQUIREMENTS_CHANGE"), 202)
+          : response(job({ status_code: 409, body: refusal }, "REQUIREMENTS_CHANGE"));
+      },
+    });
+
+    const pending = api.requestChange(PROJECT_ID, REQUEST, ACCESS_TOKEN).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(pending).resolves.toMatchObject({
+      name: "RequirementsApiError",
+      status: 409,
+      code: "GROUNDED_INPUT_REQUIRED",
+      payload: refusal,
     });
   });
 

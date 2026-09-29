@@ -152,6 +152,43 @@ describe("Design API client", () => {
 
     await expect(api.history(PROJECT_ID, " ")).rejects.toBeInstanceOf(DesignApiError);
   });
+
+  it.each([
+    [
+      "the reason of a refused proposal",
+      { code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" },
+      "UX_DESIGNER_REQUIRED",
+    ],
+    ["the refusal when no reason is given", { code: "PROPOSAL_REJECTED" }, "PROPOSAL_REJECTED"],
+    [
+      "the refusal when the reason is null",
+      { code: "PROPOSAL_REJECTED", proposal_issue: null },
+      "PROPOSAL_REJECTED",
+    ],
+    [
+      "the refusal when the reason is not text",
+      { code: "PROPOSAL_REJECTED", proposal_issue: { code: "UX_DESIGNER_REQUIRED" } },
+      "PROPOSAL_REJECTED",
+    ],
+    [
+      "the refusal when the reason is empty",
+      { code: "PROPOSAL_REJECTED", proposal_issue: "" },
+      "PROPOSAL_REJECTED",
+    ],
+    [
+      "any other conflict as it is",
+      { code: "DESIGN_PACKAGE_ALREADY_EXISTS" },
+      "DESIGN_PACKAGE_ALREADY_EXISTS",
+    ],
+  ])("uses as the code %s", async (_case, detail, code) => {
+    const api = createDesignApi({ fetchImpl: async () => response({ detail }, 409) });
+
+    const error = await api.generate(PROJECT_ID, ACCESS_TOKEN).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(DesignApiError);
+    expect(error).toMatchObject({ status: 409, code, message: code });
+    expect((error as DesignApiError).payload).toEqual({ detail });
+  });
 });
 
 describe("Design alternatives generated in the background", () => {
@@ -201,6 +238,30 @@ describe("Design alternatives generated in the background", () => {
     await vi.advanceTimersByTimeAsync(2000);
     const actual = await pending;
 
+    expect(actual).toBeInstanceOf(DesignApiError);
+    expect(actual).toMatchObject({
+      name: expected.name,
+      message: expected.message,
+      status: expected.status,
+      code: expected.code,
+      payload: expected.payload,
+    });
+  });
+
+  it("throws for a refused proposal that the job carries the reason of the synchronous answer", async () => {
+    const refusal = {
+      detail: { code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" },
+    };
+    const synchronous = createDesignApi({ fetchImpl: async () => response(refusal, 409) });
+    const expected = await synchronous.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    vi.useFakeTimers();
+    const api = createDesignApi({ fetchImpl: background({ status_code: 409, body: refusal }) });
+
+    const pending = api.generate(PROJECT_ID, ACCESS_TOKEN).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+    const actual = await pending;
+
+    expect(expected).toMatchObject({ status: 409, code: "UX_DESIGNER_REQUIRED" });
     expect(actual).toBeInstanceOf(DesignApiError);
     expect(actual).toMatchObject({
       name: expected.name,

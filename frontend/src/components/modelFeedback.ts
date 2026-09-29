@@ -31,6 +31,22 @@ const messages: Record<string, [string, string]> = {
     "The model returned an invalid proposal. Your project is unchanged. You can try again.",
     "Il modello ha restituito una proposta non valida. Il progetto è invariato. Puoi riprovare.",
   ],
+  PROPOSAL_REJECTED: [
+    "The model could not prepare this proposal from the approved steps. Your project is unchanged. You can try again.",
+    "Il modello non è riuscito a preparare questa proposta a partire dai passi approvati. Il progetto è invariato. Puoi riprovare.",
+  ],
+  UX_DESIGNER_REQUIRED: [
+    "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
+    "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+  ],
+  REQUIREMENTS_ANALYST_REQUIRED: [
+    "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
+    "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+  ],
+  GROUNDED_INPUT_REQUIRED: [
+    "The approved steps do not give the model enough facts for this proposal. Add details to the brief or to the earlier steps, then try again.",
+    "I passi approvati non danno al modello abbastanza informazioni per questa proposta. Aggiungi dettagli al brief o ai passi precedenti, poi riprova.",
+  ],
   INCOMPLETE_OUTPUT: [
     "The assistant did not complete its response. Your project has been preserved. You can try again.",
     "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
