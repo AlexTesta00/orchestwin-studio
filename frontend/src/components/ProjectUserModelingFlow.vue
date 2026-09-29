@@ -26,6 +26,7 @@ import UiStatusChip from "./UiStatusChip.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { twinPeers } from "./twinIdentity";
+import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 
 import { isGenerationInterrupted } from "../api/generationJobs";
 import { useGenerationResume } from "../stores/generationJobs";
@@ -58,11 +59,13 @@ const props = withDefaults(
     authorize?: <T>(operation: (token: string) => Promise<T>) => Promise<T>;
     locale?: Locale;
     autoLoad?: boolean;
+    upstream?: UpstreamValue;
     active?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
+    upstream: null,
     active: true,
   },
 );
@@ -79,6 +82,8 @@ provide(
 const loadedProjectId = ref<string | null>(null);
 
 const autoProposalAttempted = ref(false);
+
+const proposalFollowsApproval = ref(false);
 
 const emit = defineEmits<{ "open-chat": [twin: UserTwinVersionPayload] }>();
 
@@ -1260,6 +1265,7 @@ const teamApproved = computed(
 const shouldProposeAutomatically = computed(
   () =>
     props.autoLoad &&
+    proposalFollowsApproval.value &&
     teamApproved.value &&
     loadedProjectId.value === props.projectId &&
     modelingChecked.value &&
@@ -1633,6 +1639,8 @@ watch(
 
     autoProposalAttempted.value = false;
 
+    proposalFollowsApproval.value = false;
+
     if (!autoLoad || projectId.trim().length === 0 || accessToken.trim().length === 0) {
       return;
     }
@@ -1642,6 +1650,27 @@ watch(
 
   {
     immediate: true,
+  },
+);
+
+let teamApprovedBefore: boolean | null = null;
+
+watchUpstream(
+  () => props.upstream,
+  (changed) => {
+    const approvedNow = teamApproved.value;
+
+    if (changed) {
+      proposalFollowsApproval.value = teamApprovedBefore === false && approvedNow;
+
+      if (props.autoLoad) {
+        loadedProjectId.value = null;
+
+        void loadProject();
+      }
+    }
+
+    teamApprovedBefore = approvedNow;
   },
 );
 </script>

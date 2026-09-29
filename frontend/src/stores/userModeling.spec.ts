@@ -159,6 +159,35 @@ describe("User Modeling frontend state", () => {
     expect(store.currentPersonas).toEqual([personaVersion]);
   });
 
+  it("stays loading until the last of two loads that overlap has finished", async () => {
+    let release: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue(readinessWithoutSnapshot);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas")
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(async () => {
+        await waiting;
+        return [personaVersion];
+      });
+    const store = useUserModelingStore();
+
+    const earlier = store.load(PROJECT_ID, ACCESS_TOKEN);
+    const later = store.load(PROJECT_ID, ACCESS_TOKEN);
+    await earlier;
+
+    expect(store.pending.load).toBe(true);
+    expect(store.isBusy).toBe(true);
+
+    release();
+    await later;
+
+    expect(store.pending.load).toBe(false);
+    expect(store.currentPersonas).toEqual([personaVersion]);
+  });
+
   it("preserves a submitted gate when a token-refresh load finishes afterward", async () => {
     const submitted: HumanGatePayload = {
       id: "gate-three",

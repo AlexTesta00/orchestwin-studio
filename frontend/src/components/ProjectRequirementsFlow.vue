@@ -27,6 +27,7 @@ import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import type { DiagramLink } from "./mermaidRenderer";
 import { generationProgress, modelFeedback } from "./modelFeedback";
+import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
 import {
   GENERATION_FAILED,
@@ -81,12 +82,14 @@ const props = withDefaults(
     prerequisiteReady?: boolean;
     authorize?: AuthorizedRequest;
     api?: RequirementsApi;
+    upstream?: UpstreamValue;
     active?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
     prerequisiteReady: true,
+    upstream: null,
     active: true,
   },
 );
@@ -116,6 +119,7 @@ const changeSection = ref<HTMLElement | null>(null);
 const changeText = ref<string | null>(null);
 const changeFailure = ref<GenerationResumeFailure | null>(null);
 const changeUnavailable = ref(false);
+const upstreamReloads = ref(0);
 const edit = reactive({
   title: "",
   statement: "",
@@ -1338,6 +1342,15 @@ watch(
   },
 );
 
+watchUpstream(
+  () => props.upstream,
+  (changed) => {
+    if (!changed) return;
+    upstreamReloads.value += 1;
+    if (props.autoLoad) void load();
+  },
+);
+
 onMounted(() => {
   refreshBarTarget();
   void refreshAfterRender();
@@ -1378,7 +1391,7 @@ onBeforeUnmount(() => {
       v-if="current !== null"
       :project-id="projectId"
       :locale="locale"
-      :refresh-key="`${current.content_hash}:${store.pendingDiffs.length}`"
+      :refresh-key="`${current.content_hash}:${store.pendingDiffs.length}:${upstreamReloads}`"
       :authorize="authorize"
       @realigned="load"
     />

@@ -1120,6 +1120,28 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.findAll('[data-testid="design-evaluation-run"]')).toHaveLength(1);
   });
 
+  it("reads the design and its next step again once when the requirements before it change", async () => {
+    const api = new FakeDesignApi(SELECTED_DESIGN_VERSION);
+    const readiness = vi.spyOn(api, "readiness");
+    const requirementsApi = new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1));
+    const wrapper = mountFlow(api, { requirementsApi });
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(1);
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "requirements-1:APPROVED" });
+    await wrapper.setProps({ upstream: null });
+    await wrapper.setProps({ upstream: "requirements-1:APPROVED" });
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(1);
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "requirements-2:APPROVED" });
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(requirementsApi.readiness).toHaveBeenCalledTimes(2);
+  });
+
   it("never asks the twins for a review when an existing design is opened", async () => {
     const api = new FakeDesignApi(SELECTED_DESIGN_VERSION);
     const loop = reviewingLoopApi();
@@ -2630,6 +2652,135 @@ describe("ProjectDesignFlow and a long generation", () => {
 
     await wrapper.get('[data-testid="generation-job-dismiss"]').trigger("click");
     expect(wrapper.find('[data-testid="generation-job-failure"]').exists()).toBe(false);
+  });
+});
+
+describe("ProjectDesignFlow and a refused first proposal", () => {
+  const NO_DESIGNER = { code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" };
+  const NO_REASON = { code: "PROPOSAL_REJECTED" };
+  const DESIGNER_MISSING = {
+    en: "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
+    it: "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+  };
+  const NOT_PREPARED = {
+    en: "The model could not prepare this proposal from the approved steps. Your project is unchanged. You can try again.",
+    it: "Il modello non è riuscito a preparare questa proposta a partire dai passi approvati. Il progetto è invariato. Puoi riprovare.",
+  };
+
+  function proposalJob(detail: Record<string, string> | null): GenerationRequestJob {
+    return {
+      job_id: "00000000-0000-4000-8000-0000000009ab",
+      kind: "REQUEST",
+      operation: "DESIGN_PROPOSAL",
+      status: detail === null ? "RUNNING" : "FAILED",
+      stage: detail === null ? "GENERATING" : null,
+      attempt: 1,
+      started_at: STARTED_AT,
+      finished_at: detail === null ? null : STARTED_AT,
+      alternative_id: null,
+      failure: null,
+      response: detail === null ? null : { status_code: 409, body: { detail } },
+    };
+  }
+
+  function refusing(detail: Record<string, string>, background: boolean) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      if (!background) {
+        return new Response(JSON.stringify({ detail }), { status: 409 });
+      }
+      const posted = init?.method === "POST";
+      return new Response(JSON.stringify(proposalJob(posted ? null : detail)), {
+        status: posted ? 202 : 200,
+      });
+    });
+  }
+
+  function refusedDesign(fetchImpl: typeof fetch): FakeDesignApi {
+    const api = designToPrepare(UNSELECTED_DESIGN_VERSION);
+    const real = createDesignApi({ fetchImpl });
+    vi.spyOn(api, "generate").mockImplementation(((projectId: string, token: string) =>
+      real.generate(projectId, token)) as unknown as FakeDesignApi["generate"]);
+    return api;
+  }
+
+  async function generateRefused(
+    detail: Record<string, string>,
+    background: boolean,
+    locale: "en" | "it",
+  ) {
+    const fetchImpl = refusing(detail, background);
+    const wrapper = mountFlow(refusedDesign(fetchImpl), { locale });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await wrapper.get('[data-testid="generate-design"]').trigger("click");
+    await vi.advanceTimersByTimeAsync(2050);
+
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(wrapper.find('[data-testid="design-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="generation-job-notice"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
+    return wrapper;
+  }
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    setActivePinia(createPinia());
+    clearFollowedGenerations();
+    vi.useFakeTimers();
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    while (mounted.length > 0) {
+      mounted.pop()?.unmount();
+    }
+    document.body.innerHTML = "";
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it.each([
+    { how: "at once", background: false, locale: "en" },
+    { how: "at once", background: false, locale: "it" },
+    { how: "through a job", background: true, locale: "en" },
+    { how: "through a job", background: true, locale: "it" },
+  ] as const)(
+    "says that the team has no designer when the proposal is refused $how ($locale)",
+    async ({ background, locale }) => {
+      const wrapper = await generateRefused(NO_DESIGNER, background, locale);
+
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(DESIGNER_MISSING[locale]);
+      expect(wrapper.text()).not.toContain("UX_DESIGNER_REQUIRED");
+    },
+  );
+
+  it.each([
+    { how: "at once", background: false, locale: "en" },
+    { how: "through a job", background: true, locale: "it" },
+  ] as const)(
+    "says that the proposal could not be prepared when it is refused $how without a reason",
+    async ({ background, locale }) => {
+      const wrapper = await generateRefused(NO_REASON, background, locale);
+
+      expect(wrapper.get('[data-testid="design-error"]').text()).toBe(NOT_PREPARED[locale]);
+    },
+  );
+
+  it("says why a proposal still running before a reload was refused", async () => {
+    const api = designToPrepare(UNSELECTED_DESIGN_VERSION);
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([proposalJob(null)]);
+    vi.spyOn(generationJobsApi, "job").mockResolvedValue(proposalJob(NO_DESIGNER));
+    const wrapper = mountFlow(api, { locale: "it" });
+    await vi.advanceTimersByTimeAsync(2050);
+
+    const failure = wrapper.get('[data-testid="generation-job-failure"]');
+    expect(failure.text()).toContain("La generazione delle alternative di design non è riuscita.");
+    expect(failure.text()).toContain(DESIGNER_MISSING.it);
+    expect(wrapper.text()).not.toContain("UX_DESIGNER_REQUIRED");
+    expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
+    expect(wrapper.find('[data-testid="design-error"]').exists()).toBe(false);
+    expect(api.generate).not.toHaveBeenCalled();
   });
 });
 
