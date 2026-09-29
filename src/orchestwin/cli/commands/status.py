@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import projects as project_api
 from orchestwin.cli.api import usage
 from orchestwin.cli.costs import usd_text
@@ -17,12 +18,14 @@ from orchestwin.cli.project import STEP_STAGES
 if TYPE_CHECKING:
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
-    from orchestwin.cli.folder import FolderSummary
+    from orchestwin.cli.folder import FolderSummary, StateSummary
     from orchestwin.cli.project import ProjectFolder, ProjectLink
 
 NAME = "status"
 SCHEMA_VERSION: Final = 1
 HEALTHY: Final = 200
+SHORT_COMMIT: Final = 7
+DESIGN_STAGE: Final = "design"
 FROM_STUDIO: Final = "studio"
 FROM_FOLDER: Final = "folder"
 REQUESTED: Final = "requested"
@@ -67,6 +70,14 @@ class Report:
     has_budget: bool
     spent_usd: float | None
     remaining_usd: float | None
+    alignment: StateSummary | None = None
+    local_complete: bool = False
+
+    @property
+    def folder_current(self) -> bool:
+        if self.studio_version is not None:
+            return self.local_version is not None and self.local_version == self.studio_version
+        return self.source == FROM_FOLDER and self.local_complete
 
     def document(self) -> dict[str, object]:
         return {
@@ -84,7 +95,9 @@ class Report:
             },
             "current_stage": self.current_stage,
             "next_action": self.next_action,
-            "next_command": project_api.NEXT_COMMANDS.get(self.next_action),
+            "next_command": project_api.next_command(
+                self.next_action, folder_current=self.folder_current
+            ),
             "steps": [
                 {
                     "stage": step.stage,
@@ -108,6 +121,16 @@ class Report:
                 if self.has_budget
                 else None
             ),
+            "alignment": (
+                None
+                if self.alignment is None
+                else {
+                    "recorded": self.alignment.changes,
+                    "pending": self.alignment.pending_changes,
+                    "aligned_commit": self.alignment.aligned_commit,
+                    "open_tasks": self.alignment.open_tasks,
+                }
+            ),
         }
 
 
@@ -118,6 +141,7 @@ class _Studio:
     has_budget: bool
     spent_usd: float | None
     remaining_usd: float | None
+    alignment: StateSummary | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -172,6 +196,7 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         has_budget=found.has_budget,
         spent_usd=found.spent_usd,
         remaining_usd=found.remaining_usd,
+        alignment=found.alignment,
     )
 
 
@@ -200,9 +225,35 @@ def show(context: CommandContext, report: Report) -> None:
         ],
     )
     console.write()
-    console.say("status.next", action=next_action_text(context, report.next_action))
+    if report.next_action == project_api.DOWNLOAD_FOLDER and report.folder_current:
+        console.say("status.next", action=context.text("status.next_folder_current"))
+    else:
+        console.say("status.next", action=next_action_text(context, report.next_action))
     _folder_lines(context, report)
+    if report.alignment is not None:
+        show_alignment(context, report.alignment)
     _spending_line(context, report)
+
+
+def show_alignment(context: CommandContext, summary: StateSummary) -> None:
+    console = context.console
+    if summary.changes == 0:
+        console.say("status.alignment_none")
+    elif summary.aligned_commit is None:
+        console.say(
+            "status.alignment_not_aligned",
+            recorded=summary.changes,
+            pending=summary.pending_changes,
+            tasks=summary.open_tasks,
+        )
+    else:
+        console.say(
+            "status.alignment",
+            recorded=summary.changes,
+            pending=summary.pending_changes,
+            commit=summary.aligned_commit[:SHORT_COMMIT],
+            tasks=summary.open_tasks,
+        )
 
 
 def next_action_text(context: CommandContext, code: str) -> str:
@@ -285,13 +336,20 @@ def _studio_facts(
             return UNREACHABLE
         found = project_api.get_project(client, link.project_id)
         steps = project_api.step_states(client, link.project_id)
+        alignment = (
+            changes_api.summary(client, link.project_id) if _design_approved(steps) else None
+        )
         has_budget, spent, remaining = _spending(client, link.project_id)
     except CliError as error:
         reason = _offline_reason(error)
         if reason is None:
             raise
         return reason
-    return _Studio(found, steps, has_budget, spent, remaining)
+    return _Studio(found, steps, has_budget, spent, remaining, alignment)
+
+
+def _design_approved(steps: tuple[project_api.StepState, ...]) -> bool:
+    return any(step.stage == DESIGN_STAGE and step.approved for step in steps)
 
 
 def _offline_reason(error: CliError) -> str | None:
@@ -337,6 +395,7 @@ def _folder_report(
 ) -> Report:
     steps = folder_steps(project, local)
     current = project_api.current_stage(steps)
+    state = None if local is None else local.state
     return Report(
         source=FROM_FOLDER,
         reason=reason,
@@ -355,6 +414,10 @@ def _folder_report(
         has_budget=False,
         spent_usd=None,
         remaining_usd=None,
+        alignment=state if _design_approved(steps) else None,
+        local_complete=local is not None
+        and local.complete
+        and set(knowledge.FOLDER_STAGES) <= set(local.progress),
     )
 
 
@@ -364,7 +427,7 @@ def folder_steps(
     saved = project.steps()
     facts: list[tuple[str, int | None, bool]] = []
     for stage in STEP_STAGES:
-        entry = None if local is None else local.stage(stage)
+        entry = None if local is None or stage not in local.progress else local.stage(stage)
         if entry is not None and entry.version_number is not None:
             facts.append((stage, entry.version_number, entry.gate_status == project_api.APPROVED))
             continue

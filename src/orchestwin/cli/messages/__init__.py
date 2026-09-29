@@ -5,6 +5,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.messages import (
+    align,
     common,
     costs,
     design,
@@ -13,9 +14,11 @@ from orchestwin.cli.messages import (
     jobs,
     login,
     logout,
+    mcp,
     package,
     status,
     twins,
+    watch,
 )
 
 if TYPE_CHECKING:
@@ -28,6 +31,7 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
     {
         module.__name__.rsplit(".", 1)[1]: module.MESSAGES
         for module in (
+            align,
             common,
             costs,
             design,
@@ -36,9 +40,11 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
             jobs,
             login,
             logout,
+            mcp,
             package,
             status,
             twins,
+            watch,
         )
     }
 )

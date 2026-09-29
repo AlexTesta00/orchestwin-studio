@@ -53,6 +53,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Cartella di conoscenza: non ancora pubblicata.",
         "en": "Knowledge folder: not published yet.",
     },
+    "status.next_folder_current": {
+        "it": "La cartella di conoscenza è aggiornata: lo sviluppo continua con `ut align` e "
+        "`ut watch`.",
+        "en": "The knowledge folder is up to date: the development goes on with `ut align` and "
+        "`ut watch`.",
+    },
+    "status.alignment": {
+        "it": "Sviluppo: commit registrati: {recorded}; dopo il punto allineato: {pending}; "
+        "commit allineato: {commit}; compiti aperti per il codice: {tasks}.",
+        "en": "Development: commits recorded: {recorded}; after the aligned point: {pending}; "
+        "aligned commit: {commit}; open tasks for the code: {tasks}.",
+    },
+    "status.alignment_not_aligned": {
+        "it": "Sviluppo: commit registrati: {recorded}; nessuno ancora allineato (in attesa: "
+        "{pending}); compiti aperti per il codice: {tasks}.",
+        "en": "Development: commits recorded: {recorded}; none aligned yet (waiting: {pending}); "
+        "open tasks for the code: {tasks}.",
+    },
+    "status.alignment_none": {
+        "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
+        "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
+    },
     "status.folder_unreadable": {
         "it": "La cartella di conoscenza qui non si legge ({code}): controllala con "
         "`ut package verify`.",

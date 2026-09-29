@@ -14,6 +14,26 @@ if TYPE_CHECKING:
     from orchestwin.cli.project import ProjectFolder
 
 HASH_HEADER: Final = "x-content-sha256"
+APPROVAL_REQUIRED: Final = "_APPROVAL_REQUIRED"
+CONFLICT: Final = 409
+
+
+def publish_approved(
+    context: CommandContext,
+    client: StudioClient,
+    project: ProjectFolder,
+) -> FolderSummary | None:
+    link = project.link()
+    try:
+        publication = packages.publish(client, link.project_id)
+    except ApiFailure as failure:
+        if failure.http_status == CONFLICT and failure.code.endswith(APPROVAL_REQUIRED):
+            return None
+        raise
+    number = publication["version"].get("version_number")
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise ApiFailure("API_FAILURE", http_status=200)
+    return _download(context, client, project, link.project_id, number)
 
 
 def publish_and_pull(
