@@ -8,6 +8,7 @@ from pathlib import Path
 from types import ModuleType
 from uuid import UUID
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -40,9 +41,12 @@ from orchestwin.artifacts.design_revisions import (
 )
 from orchestwin.config import ApplicationSettings, LogLevel, RuntimeEnvironment
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.projects.design_application import (
+    DesignGenerationIssueCode,
     DesignGenerationResult,
     DesignGenerationStatus,
+    DesignVersionAppendStatus,
 )
 from orchestwin.workflow.gates import (
     HumanGate,
@@ -162,6 +166,7 @@ class FakeGenerationService:
     def __init__(self, version: DesignPackageVersion) -> None:
         self.version = version
         self.calls: list[tuple[UUID, UUID]] = []
+        self.refusal: DesignGenerationResult | None = None
 
     async def generate(
         self,
@@ -170,6 +175,9 @@ class FakeGenerationService:
         project_id: UUID,
     ) -> DesignGenerationResult:
         self.calls.append((owner_user_id, project_id))
+
+        if self.refusal is not None:
+            return self.refusal
 
         return DesignGenerationResult(
             status=DesignGenerationStatus.CREATED,
@@ -421,6 +429,61 @@ def test_generation_and_current_version_are_owner_scoped() -> None:
     assert current.status_code == 200
     assert current.json()["ready_for_gate"] is True
     assert current.json()["package"]["prototype"]["code"] == "PRT-001"
+    assert generation.calls == [(OWNER_ID, PROJECT_ID)]
+
+
+def refused(issue: DesignGenerationIssueCode | None, **reasons) -> DesignGenerationResult:
+    return DesignGenerationResult(status=DesignGenerationStatus.REJECTED, issue=issue, **reasons)
+
+
+@pytest.mark.parametrize(
+    ("result", "status_code", "detail"),
+    [
+        (
+            refused(
+                DesignGenerationIssueCode.PROPOSAL_REJECTED,
+                proposal_issue=DesignProposalIssueCode.UX_DESIGNER_REQUIRED,
+            ),
+            409,
+            {"code": "PROPOSAL_REJECTED", "proposal_issue": "UX_DESIGNER_REQUIRED"},
+        ),
+        (
+            refused(
+                DesignGenerationIssueCode.PROPOSAL_REJECTED,
+                proposal_issue=DesignProposalIssueCode.INVALID_PROVIDER_OUTPUT,
+            ),
+            409,
+            {"code": "PROPOSAL_REJECTED", "proposal_issue": "INVALID_PROVIDER_OUTPUT"},
+        ),
+        (refused(DesignGenerationIssueCode.PROPOSAL_REJECTED), 409, {"code": "PROPOSAL_REJECTED"}),
+        (
+            refused(
+                DesignGenerationIssueCode.PERSISTENCE_REJECTED,
+                persistence_status=DesignVersionAppendStatus.VERSION_CONFLICT,
+            ),
+            409,
+            {"code": "PERSISTENCE_REJECTED"},
+        ),
+        (
+            refused(DesignGenerationIssueCode.REQUIREMENTS_APPROVAL_REQUIRED),
+            409,
+            {"code": "REQUIREMENTS_APPROVAL_REQUIRED"},
+        ),
+        (refused(DesignGenerationIssueCode.PROJECT_NOT_FOUND), 404, {"code": "PROJECT_NOT_FOUND"}),
+        (refused(None), 409, {"code": "DESIGN_GENERATION_REJECTED"}),
+    ],
+    ids=["designer", "provider", "no-reason", "persistence", "approval", "project", "unknown"],
+)
+def test_a_refused_proposal_names_the_reason_of_the_generator_only_when_it_has_one(
+    result, status_code, detail
+) -> None:
+    client, generation, _queries, _revisions, _gates = client_fixture()
+    generation.refusal = result
+
+    response = client.post(path("/proposals"))
+
+    assert response.status_code == status_code
+    assert response.json() == {"detail": detail}
     assert generation.calls == [(OWNER_ID, PROJECT_ID)]
 
 

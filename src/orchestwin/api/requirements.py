@@ -23,7 +23,10 @@ from orchestwin.api.clarification import (
 from orchestwin.api.generation_jobs import GenerationOperation
 from orchestwin.api.generation_requests import generation_request
 from orchestwin.identity.domain import UserAccount
-from orchestwin.models.requirements import MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH
+from orchestwin.models.requirements import (
+    MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH,
+    RequirementsProposalIssueCode,
+)
 from orchestwin.projects.requirements import (
     Requirement,
     RequirementKind,
@@ -1696,7 +1699,8 @@ def _raise_generation_failure(result: RequirementsGenerationResult) -> None:
         raise _not_found("PROJECT_NOT_FOUND")
 
     raise _conflict(
-        result.issue.value if result.issue is not None else "REQUIREMENTS_GENERATION_REJECTED"
+        result.issue.value if result.issue is not None else "REQUIREMENTS_GENERATION_REJECTED",
+        proposal_issue=result.proposal_issue,
     )
 
 
@@ -1734,7 +1738,7 @@ def _changed_revision(result: RequirementsChangeResult) -> RequirementsRevisionR
     }:
         raise _not_found(code)
 
-    raise _conflict(code)
+    raise _conflict(code, proposal_issue=result.proposal_issue)
 
 
 def _raise_gate_submission_failure(
@@ -1778,11 +1782,20 @@ def _not_found(code: str) -> HTTPException:
     )
 
 
-def _conflict(code: str) -> HTTPException:
+def _conflict(
+    code: str,
+    *,
+    proposal_issue: RequirementsProposalIssueCode | None = None,
+) -> HTTPException:
     """Return one typed state or governance conflict."""
+    detail = {"code": code}
+
+    if proposal_issue is not None:
+        detail["proposal_issue"] = proposal_issue.value
+
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
-        detail={"code": code},
+        detail=detail,
     )
 
 

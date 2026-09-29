@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ from orchestwin.api.requirements import (
     create_requirements_router,
 )
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.models.requirements import RequirementsProposalIssueCode
 from orchestwin.projects.requirements import (
     RequirementKind,
     RequirementPriority,
@@ -20,8 +22,10 @@ from orchestwin.projects.requirements import (
     create_user_story,
 )
 from orchestwin.projects.requirements_application import (
+    RequirementsGenerationIssueCode,
     RequirementsGenerationResult,
     RequirementsGenerationStatus,
+    RequirementsVersionAppendStatus,
 )
 from orchestwin.projects.requirements_gate import (
     RequirementsGateDecisionResult,
@@ -250,6 +254,7 @@ class FakeGenerationService:
     def __init__(self, version: RequirementsSpecificationVersion) -> None:
         self.version = version
         self.calls: list[tuple[UUID, UUID]] = []
+        self.refusal: RequirementsGenerationResult | None = None
 
     async def generate(
         self,
@@ -258,6 +263,9 @@ class FakeGenerationService:
         project_id: UUID,
     ) -> RequirementsGenerationResult:
         self.calls.append((owner_user_id, project_id))
+
+        if self.refusal is not None:
+            return self.refusal
 
         return RequirementsGenerationResult(
             status=RequirementsGenerationStatus.CREATED,
@@ -444,6 +452,57 @@ def test_generation_and_current_version_are_owner_scoped() -> None:
     assert generated.json()["version"]["id"] == str(VERSION_ID)
     assert current.status_code == 200
     assert current.json()["version_number"] == 1
+    assert generation.calls == [(USER_ID, PROJECT_ID)]
+
+
+def refused(issue: RequirementsGenerationIssueCode, **reasons) -> RequirementsGenerationResult:
+    return RequirementsGenerationResult(
+        status=RequirementsGenerationStatus.REJECTED, issue=issue, **reasons
+    )
+
+
+@pytest.mark.parametrize(
+    ("result", "status_code", "detail"),
+    [
+        (
+            refused(
+                RequirementsGenerationIssueCode.PROPOSAL_REJECTED,
+                proposal_issue=RequirementsProposalIssueCode.REQUIREMENTS_ANALYST_REQUIRED,
+            ),
+            409,
+            {"code": "PROPOSAL_REJECTED", "proposal_issue": "REQUIREMENTS_ANALYST_REQUIRED"},
+        ),
+        (
+            refused(RequirementsGenerationIssueCode.PROPOSAL_REJECTED),
+            409,
+            {"code": "PROPOSAL_REJECTED"},
+        ),
+        (
+            refused(
+                RequirementsGenerationIssueCode.PERSISTENCE_REJECTED,
+                persistence_status=RequirementsVersionAppendStatus.VERSION_CONFLICT,
+            ),
+            409,
+            {"code": "PERSISTENCE_REJECTED"},
+        ),
+        (
+            refused(RequirementsGenerationIssueCode.PROJECT_NOT_FOUND),
+            404,
+            {"code": "PROJECT_NOT_FOUND"},
+        ),
+    ],
+    ids=["analyst", "no-reason", "persistence", "project"],
+)
+def test_a_refused_proposal_names_the_reason_of_the_generator_only_when_it_has_one(
+    result, status_code, detail
+) -> None:
+    client, generation, _queries, _revisions, _gates = client_fixture()
+    generation.refusal = result
+
+    response = client.post(path("/proposals"))
+
+    assert response.status_code == status_code
+    assert response.json() == {"detail": detail}
     assert generation.calls == [(USER_ID, PROJECT_ID)]
 
 
