@@ -38,6 +38,8 @@ from src.test.python.models.test_hosted_support import (
 )
 from src.test.python.models.test_model_proposals import make_generator
 
+LOCAL_CONFIG_FILE = (EXAMPLE_PROVIDERS.parent / "proposal.json").as_posix()
+
 
 @pytest.fixture(autouse=True)
 def isolated_environment(tmp_path, monkeypatch):
@@ -251,13 +253,13 @@ REJECTIONS = {
     ),
     "local provider with a price": lambda d: (
         d["providers"].append(
-            {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": "C:/models/p.json"}
+            {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": LOCAL_CONFIG_FILE}
         )
         or d["models"].append({"id": "tunnel", "provider": "local", "prices": dict(PRICES_ANY)})
     ),
     "hosted entry on a local provider": lambda d: (
         d["providers"].append(
-            {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": "C:/models/p.json"}
+            {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": LOCAL_CONFIG_FILE}
         )
         or d["models"].append(dict(d["models"][0], id="tunnel", provider="local"))
     ),
@@ -280,7 +282,7 @@ def test_every_invalid_file_is_rejected_with_one_fixed_code(name):
 def test_a_local_provider_entry_is_accepted_with_an_absolute_file():
     document = providers_document()
     document["providers"].append(
-        {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": "C:/models/proposal.json"}
+        {"id": "local", "kind": "OPENAI_COMPATIBLE_LOCAL", "config_file": LOCAL_CONFIG_FILE}
     )
     document["models"].append({"id": "tunnel", "provider": "local"})
     document["routes"]["tasks"]["team"] = "tunnel"
