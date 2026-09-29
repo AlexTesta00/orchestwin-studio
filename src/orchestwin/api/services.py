@@ -82,6 +82,7 @@ from orchestwin.projects.clarification_application import (
     LocalProjectClarificationApplicationService,
     ProjectClarificationApplicationService,
 )
+from orchestwin.projects.code_change_state import SqlAlchemyProjectStateQueryService
 from orchestwin.projects.design_runtime import build_design_services
 from orchestwin.projects.persistence import (
     SqlAlchemyProjectBriefGateUnitOfWorkFactory,
@@ -311,6 +312,9 @@ def create_default_runtime(
             design_query_service=design.queries,
             design_gate_service=design.gate,
             feedback_query_service=SqlAlchemyKnowledgeFeedbackQueryService(
+                database_runtime.session_factory
+            ),
+            state_query_service=SqlAlchemyProjectStateQueryService(
                 database_runtime.session_factory
             ),
         ),
