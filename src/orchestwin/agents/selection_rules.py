@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Final
 
 from orchestwin.agents.catalog import (
@@ -86,6 +87,7 @@ class TeamSelectionReasonCode(StrEnum):
     CORE_USER_CENTERED_DESIGN = "CORE_USER_CENTERED_DESIGN"
     CORE_ARCHITECTURE_DISCIPLINE = "CORE_ARCHITECTURE_DISCIPLINE"
     CORE_QUALITY_DISCIPLINE = "CORE_QUALITY_DISCIPLINE"
+    CORE_ACCESSIBILITY_DISCIPLINE = "CORE_ACCESSIBILITY_DISCIPLINE"
 
     BROWNFIELD_INTEGRATION = "BROWNFIELD_INTEGRATION"
 
@@ -393,6 +395,18 @@ _BASELINE_MANDATORY_REASONS: Final[
         AgentIdentifier.QA_TEST_ENGINEER,
         TeamSelectionReasonCode.CORE_QUALITY_DISCIPLINE,
     ),
+)
+
+
+_DESIGN_STEP_MANDATORY_REASONS: Final[Mapping[AgentIdentifier, TeamSelectionReasonCode]] = (
+    MappingProxyType(
+        {
+            AgentIdentifier.UX_UI_DESIGNER: (TeamSelectionReasonCode.CORE_USER_CENTERED_DESIGN),
+            AgentIdentifier.ACCESSIBILITY_REVIEWER: (
+                TeamSelectionReasonCode.CORE_ACCESSIBILITY_DISCIPLINE
+            ),
+        }
+    )
 )
 
 
@@ -818,13 +832,22 @@ def determine_team_constraints(
         if entry.is_always_present:
             mandatory_reasons.append(_reason(TeamSelectionReasonCode.CATALOG_ALWAYS_PRESENT))
 
-        if project_mode not in entry.supported_project_modes:
+        mode_supported = project_mode in entry.supported_project_modes
+
+        if not mode_supported:
             impossible_reasons.append(_reason(TeamSelectionReasonCode.CATALOG_MODE_INCOMPATIBLE))
 
         baseline_reason = _baseline_reason_code(entry.agent_id)
 
         if baseline_reason is not None:
             mandatory_reasons.append(_reason(baseline_reason))
+
+        design_step_reason = (
+            _DESIGN_STEP_MANDATORY_REASONS.get(entry.agent_id) if mode_supported else None
+        )
+
+        if design_step_reason is not None:
+            mandatory_reasons.append(_reason(design_step_reason))
 
         brownfield_integration = (
             project_mode is ProjectMode.BROWNFIELD_ASSESSMENT
@@ -855,7 +878,9 @@ def determine_team_constraints(
                     )
                 )
 
-            if exclusion_evidence.fields and not brownfield_integration:
+            excludable = not brownfield_integration and design_step_reason is None
+
+            if exclusion_evidence.fields and excludable:
                 impossible_reasons.append(
                     _reason(
                         TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
