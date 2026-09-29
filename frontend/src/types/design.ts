@@ -1,3 +1,5 @@
+import type { BoundGeneratedMockupPayload } from "./designMockups";
+
 export type UUID = string;
 export type IsoDateTime = string;
 
@@ -39,7 +41,18 @@ export type PrototypeScreenState = "DEFAULT" | "EMPTY" | "ERROR" | "SUCCESS";
 
 export type DesignChangeKind = "ADD" | "REPLACE" | "REMOVE";
 export type DesignArtifactKind =
-  "ALTERNATIVE" | "CRITIQUE" | "CONCERN" | "PROTOTYPE" | "SELECTION" | "OPEN_QUESTIONS";
+  | "ALTERNATIVE"
+  | "CRITIQUE"
+  | "CONCERN"
+  | "PROTOTYPE"
+  | "SELECTION"
+  | "OPEN_QUESTIONS"
+  | "CRITIQUE_VERDICT"
+  | "GENERATED_MOCKUP"
+  | "GENERATED_SCREEN"
+  | "GENERATED_STYLES"
+  | "OWNER_ASSERTION"
+  | "OWNER_ASSERTION_ORDER";
 export type DesignPackageDiffStatus = "PROPOSED" | "APPROVED" | "REJECTED";
 export type DesignRevisionDecision = "APPROVE" | "REJECT";
 
@@ -257,6 +270,8 @@ export interface SyntheticDesignCritiquePayload {
   epistemic_status: EpistemicStatus;
   human_validation: HumanValidationRequirement;
   rationale: string;
+  verdict?: string | null;
+  quote?: string | null;
 }
 
 export interface PrototypeElementPayload {
@@ -324,6 +339,8 @@ export interface DesignPackagePayload {
   prototype: DeclarativePrototypePayload | null;
   concerns: DesignConcernPayload[];
   open_questions: string[];
+  generated_mockup?: BoundGeneratedMockupPayload | null;
+  owner_assertions?: string[];
 }
 
 export interface DesignPackageVersionPayload {

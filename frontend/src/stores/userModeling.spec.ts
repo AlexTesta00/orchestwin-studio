@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { clearFollowedGenerations } from "../api/generationJobs";
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 import { useUserModelingStore } from "./userModeling";
 import type {
@@ -434,5 +435,123 @@ describe("User Modeling frontend state", () => {
     expect(store.readiness?.workflow_state).toBe("USER_MODELING_REVIEW_REQUIRED");
 
     expect(store.error).toBeNull();
+  });
+});
+
+describe("User Modeling generations in the background", () => {
+  const JOB_ID = "00000000-0000-4000-8000-0000000000aa";
+
+  function job(operation: string, answer: { status_code: number; body: unknown } | null) {
+    return {
+      job_id: JOB_ID,
+      kind: "REQUEST",
+      operation,
+      status: answer === null ? "RUNNING" : answer.status_code < 400 ? "SUCCEEDED" : "FAILED",
+      stage: answer === null ? "GENERATING" : null,
+      attempt: 1,
+      started_at: "2026-09-28T10:00:00+00:00",
+      finished_at: answer === null ? null : "2026-09-28T10:01:00+00:00",
+      alternative_id: null,
+      result: null,
+      failure: null,
+      response: answer,
+    };
+  }
+
+  function background(operation: string, answer: { status_code: number; body: unknown }) {
+    return vi.fn(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = requestUrl(input);
+
+      if (init?.method === "POST") {
+        return fakeResponse(job(operation, null), 202);
+      }
+
+      if (url.endsWith(`/generation-jobs/${JOB_ID}`)) {
+        return fakeResponse(job(operation, answer));
+      }
+
+      return fakeResponse(readinessWithoutSnapshot);
+    });
+  }
+
+  async function settle<T>(promise: Promise<T>): Promise<T | unknown> {
+    const settled = promise.catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+    return settled;
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    clearFollowedGenerations();
+  });
+
+  it("proposes the profiles through a job and keeps them like a direct answer", async () => {
+    const proposal = {
+      status: "CREATED",
+      issue: null,
+      candidate_issue: null,
+      proposal_issue: null,
+      versions: [personaVersion],
+    };
+    const fetchMock = background("PERSONA_PROPOSAL", { status_code: 200, body: proposal });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = useUserModelingStore();
+
+    const result = await settle(store.proposePersonas(PROJECT_ID, ACCESS_TOKEN));
+
+    expect(result).toEqual(proposal);
+    expect(store.personaVersions).toEqual([personaVersion]);
+    const [, postInit] = fetchMock.mock.calls[0] ?? [];
+    expect(postInit?.headers).toMatchObject({ Prefer: "respond-async" });
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("rejects a refused proposal of the job with the same error as a direct answer", async () => {
+    const rejected = {
+      status: "REJECTED",
+      issue: null,
+      candidate_issue: null,
+      proposal_issue: "INVALID_PROVIDER_OUTPUT",
+      versions: [],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(fakeResponse(rejected)));
+    const expected = await userModelingApi
+      .proposePersonas(PROJECT_ID, ACCESS_TOKEN)
+      .catch((error: unknown) => error);
+    vi.stubGlobal("fetch", background("PERSONA_PROPOSAL", { status_code: 200, body: rejected }));
+    const store = useUserModelingStore();
+
+    const actual = await settle(store.proposePersonas(PROJECT_ID, ACCESS_TOKEN));
+
+    expect(expected).toBeInstanceOf(UserModelingApiError);
+    expect(actual).toBeInstanceOf(UserModelingApiError);
+    expect(actual).toMatchObject({
+      message: (expected as UserModelingApiError).message,
+      status: (expected as UserModelingApiError).status,
+      code: "INVALID_PROVIDER_OUTPUT",
+    });
+    expect(store.error?.code).toBe("INVALID_PROVIDER_OUTPUT");
+  });
+
+  it("reports a refused generation of the twins like a direct answer", async () => {
+    const refusal = { detail: { code: "PERSONA_CONFIRMATION_REQUIRED" } };
+    vi.stubGlobal("fetch", background("USER_TWIN_GENERATION", { status_code: 409, body: refusal }));
+    const store = useUserModelingStore();
+
+    const actual = await settle(store.generateSnapshot(PROJECT_ID, ACCESS_TOKEN));
+
+    expect(actual).toBeInstanceOf(UserModelingApiError);
+    expect(store.error).toEqual({
+      message: "PERSONA_CONFIRMATION_REQUIRED",
+      code: "PERSONA_CONFIRMATION_REQUIRED",
+      status: 409,
+    });
+    expect(store.pending["generate-snapshot"]).toBe(false);
   });
 });

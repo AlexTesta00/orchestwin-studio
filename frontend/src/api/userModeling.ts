@@ -1,3 +1,4 @@
+import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type {
@@ -26,6 +27,7 @@ interface RequestOptions {
   method: HttpMethod;
   accessToken: string;
   body?: unknown;
+  generationProjectId?: string;
 }
 
 export interface UserModelingApiOptions {
@@ -189,7 +191,14 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
 
     const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
-    const response = await fetchImpl(path, requestInit);
+    const response =
+      requestOptions.generationProjectId === undefined
+        ? await fetchImpl(path, requestInit)
+        : await sendGeneration(path, requestInit, {
+            fetchImpl,
+            basePath,
+            projectId: requestOptions.generationProjectId,
+          });
 
     const payload = await readJson(response);
 
@@ -238,6 +247,7 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
       return requestJson(`${baseProjectPath(projectId)}/personas/proposals`, {
         method: "POST",
         accessToken,
+        generationProjectId: projectId,
       });
     },
 
@@ -256,6 +266,7 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
       return requestJson(`${baseProjectPath(projectId)}/snapshots/generate`, {
         method: "POST",
         accessToken,
+        generationProjectId: projectId,
       });
     },
 
