@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { useSurface, type SurfaceContext } from "./UiSurface.vue";
 import type { ProfileObservationPayload } from "../types/userModeling";
 
 type Locale = "en" | "it";
@@ -9,11 +10,38 @@ const props = withDefaults(
   defineProps<{
     observation: ProfileObservationPayload;
     locale?: Locale;
+    surface?: SurfaceContext | undefined;
   }>(),
   {
     locale: "en",
+    surface: undefined,
   },
 );
+
+const context = useSurface(() => props.surface);
+
+const palettes = {
+  light: {
+    box: "border-line bg-surface-2",
+    summary: "text-ink-2 hover:text-ink",
+    divider: "border-line",
+    card: "border-line bg-white",
+    strong: "text-ink-2",
+    text: "text-ink-2",
+    muted: "text-ink-3",
+  },
+  night: {
+    box: "border-night-line bg-night-raised",
+    summary: "text-on-night-2 hover:text-on-night",
+    divider: "border-night-line",
+    card: "border-night-line bg-night-panel",
+    strong: "text-on-night",
+    text: "text-on-night-2",
+    muted: "text-on-night-3",
+  },
+};
+
+const palette = computed(() => palettes[context.value]);
 
 const copy = computed(() => {
   if (props.locale === "it") {
@@ -40,45 +68,51 @@ const copy = computed(() => {
 
 <template>
   <details
-    class="rounded-control border border-line bg-surface-2"
+    class="rounded-field border"
+    :class="palette.box"
+    :data-surface-context="context"
     data-testid="provenance-inspector"
   >
-    <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-ink-2">
+    <summary
+      class="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold transition-colors duration-150"
+      :class="palette.summary"
+    >
       {{ copy.provenance }}
       ({{ observation.provenance.length }})
     </summary>
 
-    <div class="space-y-3 border-t border-line px-3 py-3">
-      <p v-if="observation.provenance.length === 0" class="text-sm text-ink-2">
+    <div class="grid gap-3 border-t px-3 py-3" :class="palette.divider">
+      <p v-if="observation.provenance.length === 0" class="m-0 text-sm" :class="palette.text">
         {{ copy.noEvidence }}
       </p>
 
       <article
         v-for="(reference, index) in observation.provenance"
         :key="`${reference.source_kind}-${reference.source_id}-${index}`"
-        class="rounded-md border border-line bg-white p-3"
+        class="grid gap-2 rounded-field border p-3"
+        :class="palette.card"
       >
         <div class="flex flex-wrap items-center gap-2">
-          <strong class="text-xs font-semibold tracking-wide text-ink-2 uppercase">
+          <strong class="text-xs font-semibold tracking-wide uppercase" :class="palette.strong">
             {{ reference.source_kind }}
           </strong>
 
-          <code class="text-xs break-all text-ink-3">
+          <code class="font-mono text-xs break-all" :class="palette.muted">
             {{ reference.source_id }}
           </code>
         </div>
 
-        <p v-if="reference.summary" class="mt-2 text-sm text-ink-2">
+        <p v-if="reference.summary" class="m-0 text-sm" :class="palette.text">
           {{ reference.summary }}
         </p>
 
-        <dl class="mt-2 grid gap-1 text-xs text-ink-3">
+        <dl class="m-0 grid gap-1 text-xs" :class="palette.muted">
           <div v-if="reference.source_version !== null" class="flex gap-2">
             <dt class="font-medium">
               {{ copy.version }}
             </dt>
 
-            <dd>
+            <dd class="m-0">
               {{ reference.source_version }}
             </dd>
           </div>
@@ -88,7 +122,7 @@ const copy = computed(() => {
               {{ copy.locator }}
             </dt>
 
-            <dd class="break-all">
+            <dd class="m-0 break-all">
               {{ reference.locator }}
             </dd>
           </div>
@@ -98,19 +132,23 @@ const copy = computed(() => {
               {{ copy.hash }}
             </dt>
 
-            <dd class="font-mono break-all">
+            <dd class="m-0 font-mono break-all">
               {{ reference.content_hash }}
             </dd>
           </div>
         </dl>
       </article>
 
-      <div v-if="observation.rationale" class="rounded-md border border-line bg-white p-3">
-        <strong class="text-xs font-semibold tracking-wide text-ink-2 uppercase">
+      <div
+        v-if="observation.rationale"
+        class="grid gap-1 rounded-field border p-3"
+        :class="palette.card"
+      >
+        <strong class="text-xs font-semibold tracking-wide uppercase" :class="palette.strong">
           {{ copy.rationale }}
         </strong>
 
-        <p class="mt-1 text-sm text-ink-2">
+        <p class="m-0 text-sm" :class="palette.text">
           {{ observation.rationale }}
         </p>
       </div>

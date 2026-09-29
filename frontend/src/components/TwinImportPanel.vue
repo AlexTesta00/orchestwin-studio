@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId } from "vue";
 
 import UiButton from "./UiButton.vue";
+import { useSurface } from "./UiSurface.vue";
 
 import { ApiError, apiClient } from "../api/client";
 import { ApiRequestError } from "../api/requestError";
@@ -63,7 +64,7 @@ const messages = {
     title: "Add a twin from another project",
     intro:
       "A twin you already refined elsewhere can be reused here: it keeps its profile and the record of where it comes from.",
-    open: "Choose a twin",
+    open: "Reuse a twin from another project",
     cancel: "Cancel",
     stepProject: "Choose the project",
     stepTwin: "Choose the twin",
@@ -141,7 +142,7 @@ const messages = {
     title: "Aggiungi un twin da un altro progetto",
     intro:
       "Un twin che hai già messo a punto altrove si può riusare qui: mantiene il suo profilo e la traccia di dove arriva.",
-    open: "Scegli un twin",
+    open: "Riusa un twin da un altro progetto",
     cancel: "Annulla",
     stepProject: "Scegli il progetto",
     stepTwin: "Scegli il twin",
@@ -168,7 +169,7 @@ const messages = {
     projectSummary: "Progetto: {project}",
     fileSummary: "File del twin: {file}",
     twinSummary: "Twin: {twin}",
-    fileTwinSummary: "{twin}, letto dal file",
+    fileTwinSummary: "Twin letto dal file: {twin}",
     twinsOf: "Twin di {project}",
     approvedOn:
       "Approvati il {date}. Se un twin non si può aggiungere qui, il motivo è scritto sotto il suo nome.",
@@ -177,9 +178,10 @@ const messages = {
       "Nessuno di questi twin si può aggiungere a questo progetto. Scegli un altro progetto.",
     continue: "Continua",
     confirmation:
-      "{twin} sarà aggiunto a questo progetto come nuovo twin. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da {project}. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
+      "Il twin «{twin}» sarà aggiunto a questo progetto. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da {project}. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
     add: "Aggiungi il twin",
-    added: "{twin} è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+    added:
+      "Il twin «{twin}» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
     loadingProjects: "Carico i tuoi progetti…",
     loadingTwins: "Carico i twin di {project}…",
     readingFile: "Leggo il file…",
@@ -244,10 +246,58 @@ const fileProblem = ref<FileProblem | null>(null);
 const importProblem = ref<string | null>(null);
 const addedTwin = ref<string | null>(null);
 
-const titleHeading = ref<HTMLElement | null>(null);
+const root = ref<HTMLElement | null>(null);
 const projectHeading = ref<HTMLElement | null>(null);
 const twinHeading = ref<HTMLElement | null>(null);
 const confirmHeading = ref<HTMLElement | null>(null);
+
+const context = useSurface(() => undefined);
+
+const palettes = {
+  light: {
+    panel: "border-line bg-surface-2",
+    heading: "text-ink",
+    text: "text-ink-2",
+    muted: "text-ink-3",
+    step: "border-line bg-white",
+    current: "border-action-soft-line bg-white",
+    badge: "border-line bg-surface-3 text-ink",
+    link: "text-action hover:text-action-hover disabled:text-ink-3",
+    field: "border-field bg-white text-ink",
+    file: "text-ink-2 file:border-button-line file:bg-surface file:text-ink",
+    option: "border-line bg-white",
+    optionDisabled: "border-line bg-surface-3",
+    error: "border-fail-line bg-fail-bg text-fail-dark",
+    success: "border-ok-line bg-ok-bg text-ok-dark",
+    issue: "text-warn",
+    radio: "accent-action",
+  },
+  night: {
+    panel: "border-night-line bg-night-raised",
+    heading: "text-on-night",
+    text: "text-on-night-2",
+    muted: "text-on-night-3",
+    step: "border-night-line bg-night-panel",
+    current: "border-petrol-on-night/60 bg-night-panel",
+    badge: "border-night-line-strong bg-night-raised text-on-night",
+    link: "text-petrol-on-night-2 hover:text-on-night disabled:text-on-night-3",
+    field: "border-night-line-strong bg-night-raised text-on-night",
+    file: "text-on-night-2 file:border-night-line-strong file:bg-night-raised file:text-on-night",
+    option: "border-night-line bg-night-raised",
+    optionDisabled: "border-night-line bg-night-deep",
+    error: "border-fail-on-night/40 bg-fail-on-night/10 text-fail-on-night",
+    success: "border-petrol-on-night/50 bg-petrol-on-night/10 text-petrol-on-night-2",
+    issue: "text-warn-on-night",
+    radio: "accent-petrol-on-night",
+  },
+};
+
+const palette = computed(() => palettes[context.value]);
+
+async function focusOpenButton(): Promise<void> {
+  await nextTick();
+  root.value?.querySelector<HTMLElement>('[data-testid="twin-import-open"]')?.focus();
+}
 
 const selectedCandidate = computed(
   () =>
@@ -481,8 +531,7 @@ async function closePanel(): Promise<void> {
   if (busy.value !== null) return;
   resetChoices();
   opened.value = false;
-  await nextTick();
-  titleHeading.value?.focus();
+  await focusOpenButton();
 }
 
 async function goBack(target: Step): Promise<void> {
@@ -564,8 +613,7 @@ async function addTwin(): Promise<void> {
     addedTwin.value = result.twin.name;
     busy.value = null;
     emit("imported", result);
-    await nextTick();
-    titleHeading.value?.focus();
+    await focusOpenButton();
   } catch (error) {
     importProblem.value = failureCode(error);
   } finally {
@@ -576,35 +624,33 @@ async function addTwin(): Promise<void> {
 
 <template>
   <section
-    class="grid gap-4 rounded-card border border-line bg-surface-2 p-5"
+    ref="root"
+    :class="[
+      'grid gap-3',
+      opened ? ['basis-full rounded-tile border p-5', palette.panel] : 'justify-items-start',
+    ]"
     :aria-labelledby="titleId"
+    :data-opened="opened ? 'true' : 'false'"
     data-testid="twin-import"
   >
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div class="grid gap-1">
-        <h4
-          :id="titleId"
-          ref="titleHeading"
-          tabindex="-1"
-          class="m-0 text-base font-bold text-ink outline-none"
-        >
-          {{ copy.title }}
-        </h4>
-        <p class="m-0 max-w-2xl text-sm leading-6 text-ink-2">{{ copy.intro }}</p>
-      </div>
-      <UiButton
-        v-if="!opened"
-        variant="secondary"
-        data-testid="twin-import-open"
-        @click="openPanel"
+    <div :class="opened ? 'grid gap-1' : 'contents'">
+      <h2
+        :id="titleId"
+        :class="opened ? ['m-0 text-[17px] font-semibold', palette.heading] : 'sr-only'"
       >
-        {{ copy.open }}
-      </UiButton>
+        {{ copy.title }}
+      </h2>
+      <p v-if="opened" :class="['m-0 max-w-2xl text-sm leading-6', palette.text]">
+        {{ copy.intro }}
+      </p>
     </div>
+    <UiButton v-if="!opened" variant="secondary" data-testid="twin-import-open" @click="openPanel">
+      {{ copy.open }}
+    </UiButton>
 
     <p
       v-if="addedTwin !== null"
-      class="m-0 rounded-panel border border-ok-line bg-ok-bg p-3 text-sm font-semibold text-ok-dark"
+      :class="['m-0 max-w-md rounded-panel border p-3 text-sm font-semibold', palette.success]"
       role="status"
       data-testid="twin-import-success"
     >
@@ -614,27 +660,38 @@ async function addTwin(): Promise<void> {
     <template v-if="opened">
       <ol class="m-0 grid list-none gap-3 p-0">
         <li
-          class="grid gap-3 rounded-panel border bg-white p-4"
-          :class="step === 1 ? 'border-action-soft-line' : 'border-line'"
+          :class="[
+            'grid gap-3 rounded-panel border p-4',
+            step === 1 ? palette.current : palette.step,
+          ]"
           :aria-current="step === 1 ? 'step' : undefined"
           data-testid="twin-import-step-1"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h5
+            <h3
               ref="projectHeading"
               tabindex="-1"
-              class="m-0 flex items-center gap-2 text-sm font-semibold text-ink outline-none"
+              :class="[
+                'm-0 flex items-center gap-2 text-sm font-semibold outline-none',
+                palette.heading,
+              ]"
             >
               <span
-                class="inline-flex size-6 items-center justify-center rounded-pill border border-line bg-surface-3 font-mono text-xs"
+                :class="[
+                  'inline-flex size-6 items-center justify-center rounded-pill border font-mono text-xs',
+                  palette.badge,
+                ]"
                 >1</span
               >
               {{ copy.stepProject }}
-            </h5>
+            </h3>
             <button
               v-if="step > 1"
               type="button"
-              class="text-sm font-semibold text-action underline underline-offset-2 hover:text-action-hover disabled:cursor-not-allowed disabled:text-ink-3"
+              :class="[
+                'inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-2 disabled:cursor-not-allowed',
+                palette.link,
+              ]"
               :aria-label="path === 'file' ? copy.changeFile : copy.changeProject"
               :disabled="busy !== null"
               data-testid="twin-import-change-project"
@@ -645,20 +702,23 @@ async function addTwin(): Promise<void> {
           </div>
           <p
             v-if="step > 1"
-            class="m-0 text-sm text-ink-2"
+            :class="['m-0 text-sm', palette.text]"
             data-testid="twin-import-project-summary"
           >
             <span aria-hidden="true">✓</span> {{ projectSummary }}
           </p>
           <template v-else>
             <form v-if="candidates.length > 0" class="grid gap-2" @submit.prevent="showTwins">
-              <label :for="selectId" class="text-sm font-semibold text-ink-2">
+              <label :for="selectId" :class="['text-sm font-semibold', palette.text]">
                 {{ copy.projectLabel }}
               </label>
               <select
                 :id="selectId"
                 v-model="selectedProjectId"
-                class="min-h-11 w-full max-w-md rounded-control border border-field bg-white px-3 py-2 text-sm text-ink"
+                :class="[
+                  'min-h-11 w-full max-w-md rounded-control border px-3 py-2 text-sm',
+                  palette.field,
+                ]"
                 :disabled="busy !== null"
                 :aria-describedby="selectedCandidate !== null ? sourceTwinsId : undefined"
                 data-testid="twin-import-project"
@@ -675,7 +735,7 @@ async function addTwin(): Promise<void> {
               <p
                 v-if="selectedCandidate !== null"
                 :id="sourceTwinsId"
-                class="m-0 text-sm leading-6 text-ink-2"
+                :class="['m-0 text-sm leading-6', palette.text]"
                 data-testid="twin-import-source-twins"
               >
                 {{ selectedCandidateTwins }}
@@ -692,13 +752,15 @@ async function addTwin(): Promise<void> {
             </form>
             <div
               v-else-if="candidatesFailure"
-              class="grid gap-2 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+              :class="['grid gap-2 rounded-panel border p-3 text-sm', palette.error]"
               role="alert"
               data-testid="twin-import-projects-error"
             >
               <p class="m-0 font-semibold">{{ candidatesFailure.text }}</p>
               <details v-if="candidatesFailure.code !== null" class="text-xs">
-                <summary class="cursor-pointer">{{ copy.details }}</summary>
+                <summary class="flex min-h-11 cursor-pointer items-center">
+                  {{ copy.details }}
+                </summary>
                 <code class="break-all">{{ candidatesFailure.code }}</code>
               </details>
               <div class="flex">
@@ -714,46 +776,56 @@ async function addTwin(): Promise<void> {
             </div>
             <p
               v-else-if="candidatesLoaded"
-              class="m-0 text-sm leading-6 text-ink-2"
+              :class="['m-0 text-sm leading-6', palette.text]"
               data-testid="twin-import-no-sources"
             >
               {{ copy.noSources }}
             </p>
             <div
               v-if="sourceFailure"
-              class="grid gap-1 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+              :class="['grid gap-1 rounded-panel border p-3 text-sm', palette.error]"
               role="alert"
               data-testid="twin-import-source-error"
             >
               <p class="m-0 font-semibold">{{ sourceFailure.text }}</p>
               <details v-if="sourceFailure.code !== null" class="text-xs">
-                <summary class="cursor-pointer">{{ copy.details }}</summary>
+                <summary class="flex min-h-11 cursor-pointer items-center">
+                  {{ copy.details }}
+                </summary>
                 <code class="break-all">{{ sourceFailure.code }}</code>
               </details>
             </div>
-            <div class="grid gap-2 border-t border-line pt-3">
+            <div
+              :class="[
+                'grid gap-2 border-t pt-3',
+                context === 'night' ? 'border-night-line' : 'border-line',
+              ]"
+            >
               <p
                 v-if="candidates.length > 0"
-                class="m-0 text-sm text-ink-2"
+                :class="['m-0 text-sm', palette.text]"
                 data-testid="twin-import-file-alternative"
               >
                 {{ copy.fileAlternative }}
               </p>
-              <label :for="fileId" class="text-sm font-semibold text-ink-2">
+              <label :for="fileId" :class="['text-sm font-semibold', palette.text]">
                 {{ copy.fileLabel }}
               </label>
               <input
                 :id="fileId"
                 type="file"
                 accept=".json,application/json"
-                class="text-sm text-ink-2 file:mr-3 file:rounded-control file:border file:border-button-line file:bg-surface file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ink"
+                :class="[
+                  'min-h-11 w-full max-w-md min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-pill file:border file:px-4 file:py-2 file:text-sm file:font-semibold',
+                  palette.file,
+                ]"
                 :disabled="busy !== null"
                 data-testid="twin-import-file"
                 @change="chooseFile"
               />
               <p
                 v-if="fileProblemText"
-                class="m-0 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+                :class="['m-0 rounded-panel border p-3 text-sm', palette.error]"
                 role="alert"
                 data-testid="twin-import-file-error"
               >
@@ -764,28 +836,38 @@ async function addTwin(): Promise<void> {
         </li>
 
         <li
-          class="grid gap-3 rounded-panel border bg-white p-4"
-          :class="step === 2 ? 'border-action-soft-line' : 'border-line'"
+          :class="[
+            'grid gap-3 rounded-panel border p-4',
+            step === 2 ? palette.current : palette.step,
+          ]"
           :aria-current="step === 2 ? 'step' : undefined"
           data-testid="twin-import-step-2"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h5
+            <h3
               ref="twinHeading"
               tabindex="-1"
-              class="m-0 flex items-center gap-2 text-sm font-semibold outline-none"
-              :class="step >= 2 ? 'text-ink' : 'text-ink-3'"
+              :class="[
+                'm-0 flex items-center gap-2 text-sm font-semibold outline-none',
+                step >= 2 ? palette.heading : palette.muted,
+              ]"
             >
               <span
-                class="inline-flex size-6 items-center justify-center rounded-pill border border-line bg-surface-3 font-mono text-xs"
+                :class="[
+                  'inline-flex size-6 items-center justify-center rounded-pill border font-mono text-xs',
+                  palette.badge,
+                ]"
                 >2</span
               >
               {{ copy.stepTwin }}
-            </h5>
+            </h3>
             <button
               v-if="step > 2"
               type="button"
-              class="text-sm font-semibold text-action underline underline-offset-2 hover:text-action-hover disabled:cursor-not-allowed disabled:text-ink-3"
+              :class="[
+                'inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-2 disabled:cursor-not-allowed',
+                palette.link,
+              ]"
               :aria-label="copy.changeTwin"
               :disabled="busy !== null"
               data-testid="twin-import-change-twin"
@@ -794,7 +876,11 @@ async function addTwin(): Promise<void> {
               {{ copy.change }}
             </button>
           </div>
-          <p v-if="step > 2" class="m-0 text-sm text-ink-2" data-testid="twin-import-twin-summary">
+          <p
+            v-if="step > 2"
+            :class="['m-0 text-sm', palette.text]"
+            data-testid="twin-import-twin-summary"
+          >
             <span aria-hidden="true">✓</span> {{ twinSummary }}
           </p>
           <form
@@ -803,27 +889,27 @@ async function addTwin(): Promise<void> {
             @submit.prevent="continueToConfirm"
           >
             <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
-              <legend class="mb-1 p-0 text-sm font-semibold text-ink-2">
+              <legend :class="['mb-1 p-0 text-sm font-semibold', palette.text]">
                 {{ fill(copy.twinsOf, { project: selectedProjectName || source.project_name }) }}
               </legend>
-              <p class="m-0 text-xs leading-5 text-ink-3">
+              <p :class="['m-0 text-xs leading-5', palette.muted]">
                 {{ fill(copy.approvedOn, { date: approvedOn }) }}
               </p>
               <label
                 v-for="(twin, index) in source.twins"
                 :key="twin.twin_id"
-                class="flex items-start gap-3 rounded-panel border border-line p-3"
-                :class="
+                :class="[
+                  'flex items-start gap-3 rounded-panel border p-3',
                   twin.issue === null
-                    ? 'cursor-pointer bg-white'
-                    : 'cursor-not-allowed bg-surface-3'
-                "
+                    ? ['cursor-pointer', palette.option]
+                    : ['cursor-not-allowed', palette.optionDisabled],
+                ]"
                 data-testid="twin-import-option"
               >
                 <input
                   v-model="selectedTwinId"
                   type="radio"
-                  class="mt-1 size-4 shrink-0 accent-action"
+                  :class="['mt-1 size-4 shrink-0', palette.radio]"
                   :name="twinGroup"
                   :value="twin.twin_id"
                   :disabled="twin.issue !== null || busy !== null"
@@ -832,18 +918,18 @@ async function addTwin(): Promise<void> {
                   data-testid="twin-import-twin"
                 />
                 <span class="grid min-w-0 gap-1">
-                  <span class="text-sm font-semibold text-ink">{{ twin.name }}</span>
+                  <span :class="['text-sm font-semibold', palette.heading]">{{ twin.name }}</span>
                   <span
                     v-if="summaryOf(twin) !== null"
                     :id="`${twinGroup}-${index}-summary`"
-                    class="text-sm leading-6 text-ink-2"
+                    :class="['text-sm leading-6', palette.text]"
                   >
                     {{ summaryOf(twin) }}
                   </span>
                   <span
                     v-if="twin.issue !== null"
                     :id="`${twinGroup}-${index}-issue`"
-                    class="text-sm leading-6 text-warn"
+                    :class="['text-sm leading-6', palette.issue]"
                     data-testid="twin-import-issue"
                   >
                     <strong>{{ copy.unavailable }}</strong> {{ issueText(twin.issue) }}
@@ -851,7 +937,11 @@ async function addTwin(): Promise<void> {
                 </span>
               </label>
             </fieldset>
-            <p v-if="!anyAvailable" class="m-0 text-sm text-ink-2" data-testid="twin-import-none">
+            <p
+              v-if="!anyAvailable"
+              :class="['m-0 text-sm', palette.text]"
+              data-testid="twin-import-none"
+            >
               {{ copy.noneAvailable }}
             </p>
             <div class="flex">
@@ -867,25 +957,35 @@ async function addTwin(): Promise<void> {
         </li>
 
         <li
-          class="grid gap-3 rounded-panel border bg-white p-4"
-          :class="step === 3 ? 'border-action-soft-line' : 'border-line'"
+          :class="[
+            'grid gap-3 rounded-panel border p-4',
+            step === 3 ? palette.current : palette.step,
+          ]"
           :aria-current="step === 3 ? 'step' : undefined"
           data-testid="twin-import-step-3"
         >
-          <h5
+          <h3
             ref="confirmHeading"
             tabindex="-1"
-            class="m-0 flex items-center gap-2 text-sm font-semibold outline-none"
-            :class="step === 3 ? 'text-ink' : 'text-ink-3'"
+            :class="[
+              'm-0 flex items-center gap-2 text-sm font-semibold outline-none',
+              step === 3 ? palette.heading : palette.muted,
+            ]"
           >
             <span
-              class="inline-flex size-6 items-center justify-center rounded-pill border border-line bg-surface-3 font-mono text-xs"
+              :class="[
+                'inline-flex size-6 items-center justify-center rounded-pill border font-mono text-xs',
+                palette.badge,
+              ]"
               >3</span
             >
             {{ copy.stepConfirm }}
-          </h5>
+          </h3>
           <template v-if="step === 3 && choice !== null">
-            <p class="m-0 text-sm leading-6 text-ink" data-testid="twin-import-confirmation">
+            <p
+              :class="['m-0 text-sm leading-6', palette.heading]"
+              data-testid="twin-import-confirmation"
+            >
               {{ fill(copy.confirmation, { twin: choice.twin, project: choice.project }) }}
             </p>
             <div class="flex">
@@ -895,13 +995,15 @@ async function addTwin(): Promise<void> {
             </div>
             <div
               v-if="importFailure"
-              class="grid gap-1 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+              :class="['grid gap-1 rounded-panel border p-3 text-sm', palette.error]"
               role="alert"
               data-testid="twin-import-error"
             >
               <p class="m-0 font-semibold">{{ importFailure.text }}</p>
               <details v-if="importFailure.code !== null" class="text-xs">
-                <summary class="cursor-pointer">{{ copy.details }}</summary>
+                <summary class="flex min-h-11 cursor-pointer items-center">
+                  {{ copy.details }}
+                </summary>
                 <code class="break-all">{{ importFailure.code }}</code>
               </details>
             </div>
@@ -911,7 +1013,7 @@ async function addTwin(): Promise<void> {
 
       <p
         v-if="busy !== null"
-        class="m-0 text-sm font-medium text-ink-2"
+        :class="['m-0 text-sm font-medium', palette.text]"
         role="status"
         data-testid="twin-import-busy"
       >

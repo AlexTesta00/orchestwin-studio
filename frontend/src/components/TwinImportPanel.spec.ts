@@ -191,16 +191,27 @@ describe("TwinImportPanel", () => {
     const api = new FakeTwinImports();
     const wrapper = mountPanel(api);
 
-    expect(wrapper.get("h4").text()).toBe("Add a twin from another project");
-    expect(wrapper.text()).toContain(
-      "A twin you already refined elsewhere can be reused here: it keeps its profile and the record of where it comes from.",
+    const title = wrapper.get("h2");
+    expect(title.text()).toBe("Add a twin from another project");
+    expect(title.classes()).toContain("sr-only");
+    expect(wrapper.get('[data-testid="twin-import"]').attributes("data-opened")).toBe("false");
+    expect(wrapper.text()).not.toContain("A twin you already refined elsewhere");
+    expect(wrapper.get('[data-testid="twin-import-open"]').text()).toBe(
+      "Reuse a twin from another project",
     );
-    expect(wrapper.get('[data-testid="twin-import-open"]').text()).toBe("Choose a twin");
     expect(wrapper.find('[data-testid="twin-import-step-1"]').exists()).toBe(false);
     expect(wrapper.find("select").exists()).toBe(false);
     expect(wrapper.find('[data-testid="twin-import-cancel"]').exists()).toBe(false);
     expect(api.sources).not.toHaveBeenCalled();
     expect(api.source).not.toHaveBeenCalled();
+
+    await openPanel(wrapper);
+
+    expect(wrapper.get('[data-testid="twin-import"]').attributes("data-opened")).toBe("true");
+    expect(wrapper.get("h2").classes()).not.toContain("sr-only");
+    expect(wrapper.text()).toContain(
+      "A twin you already refined elsewhere can be reused here: it keeps its profile and the record of where it comes from.",
+    );
   });
 
   it("lists the other projects with approved twins in the order given by the Studio", async () => {
@@ -342,7 +353,7 @@ describe("TwinImportPanel", () => {
       "✓ Giulia was added. Now approve the twins again at the end of this step.",
     );
     expect(wrapper.find('[data-testid="twin-import-step-1"]').exists()).toBe(false);
-    expect(focusedText()).toBe("Add a twin from another project");
+    expect(focusedText()).toBe("Reuse a twin from another project");
 
     await openPanel(wrapper);
 
@@ -599,7 +610,7 @@ describe("TwinImportPanel", () => {
     const error = () => wrapper.get('[data-testid="twin-import-error"]');
 
     expect(wrapper.get('[data-testid="twin-import-confirmation"]').text()).toBe(
-      "Giulia sarà aggiunto a questo progetto come nuovo twin. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da Alpha booking. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
+      "Il twin «Giulia» sarà aggiunto a questo progetto. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da Alpha booking. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
     );
 
     for (const [code, message] of Object.entries(failures)) {
@@ -646,9 +657,31 @@ describe("TwinImportPanel", () => {
     );
     expect(wrapper.find('[data-testid="twin-import-error"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="twin-import-success"]').text()).toBe(
-      "✓ Giulia è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+      "✓ Il twin «Giulia» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
     );
     expect(wrapper.emitted("imported")).toHaveLength(1);
+  });
+
+  it("names the twin read from a file in Italian without a participle that follows the name", async () => {
+    const api = new FakeTwinImports();
+    const readFile = vi.fn<(file: File) => Promise<string>>(async () => JSON.stringify(DOCUMENT));
+    const wrapper = mountPanel(api, { locale: "it", readFile });
+    await openPanel(wrapper);
+    await chooseFile(wrapper);
+
+    expect(wrapper.get('[data-testid="twin-import-twin-summary"]').text()).toBe(
+      "✓ Twin letto dal file: Sara",
+    );
+    expect(wrapper.get('[data-testid="twin-import-confirmation"]').text()).toBe(
+      "Il twin «Sara» sarà aggiunto a questo progetto. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da Beta pharmacy. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
+    );
+
+    await wrapper.get('[data-testid="twin-import-add"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="twin-import-success"]').text()).toBe(
+      "✓ Il twin «Sara» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+    );
   });
 
   it("explains in Italian why the twins of a project cannot be shown", async () => {
