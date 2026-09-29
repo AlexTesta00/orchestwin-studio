@@ -109,6 +109,9 @@ const { t, locale } = useI18n({
         openDialogue: "Back to the dialogue with the analyst",
         showSteps: "All steps",
         readyToDownload: "Ready to download",
+        partialFolder: "Partial folder",
+        packageAhead:
+          "The project goes on at the {step} step: the folder holds only the steps approved so far.",
         techVersion: "Version {number}",
         techApproved: "approved by you",
         techPending: "waiting for your decision",
@@ -155,6 +158,9 @@ const { t, locale } = useI18n({
         openDialogue: "Torna al dialogo con l'analista",
         showSteps: "Tutti i passi",
         readyToDownload: "Pronto da scaricare",
+        partialFolder: "Cartella parziale",
+        packageAhead:
+          "Il progetto continua dal passo {step}: la cartella contiene solo i passi approvati finora.",
         techVersion: "Versione {number}",
         techApproved: "approvata da te",
         techPending: "in attesa della tua decisione",
@@ -293,9 +299,13 @@ const currentStage = computed(() => {
   const incomplete = completedStages.value.findIndex((complete) => !complete);
   return incomplete < 0 ? 5 : incomplete;
 });
-const activeStage = computed(() =>
-  Math.min(selectedStage.value ?? currentStage.value, currentStage.value),
-);
+const packageOpen = computed(() => completedStages.value[0] === true);
+const activeStage = computed(() => {
+  if (selectedStage.value === 5 && packageOpen.value) {
+    return 5;
+  }
+  return Math.min(selectedStage.value ?? currentStage.value, currentStage.value);
+});
 const stageLabels = computed(() =>
   locale.value === "it"
     ? ["Brief", "Squadra", "User Twin", "Requisiti", "Design", "Pacchetto"]
@@ -330,12 +340,19 @@ const stepItems = computed<StepItem[]>(() =>
           : "pending";
     const item: StepItem = { key: `step-${index}`, label, index, status };
     if (index === 5 && status === "current") item.note = t("detail.readyToDownload");
+    if (index === 5 && status === "pending" && packageOpen.value) {
+      item.open = true;
+      item.note = t("detail.partialFolder");
+    }
     return item;
   }),
 );
-const headerStatus = computed<StepStatus>(() =>
-  activeStage.value < currentStage.value ? "approved" : "current",
-);
+const headerStatus = computed<StepStatus>(() => {
+  if (activeStage.value === currentStage.value) {
+    return "current";
+  }
+  return activeStage.value < currentStage.value ? "approved" : "pending";
+});
 const readOnlyText = computed(() =>
   t(
     [
@@ -471,6 +488,9 @@ const projectRows = computed(() => {
 
 watch(currentStage, (next, previous) => {
   // Follow progress unless the owner deliberately revisited an earlier stage.
+  if (selectedStage.value === 5 && packageOpen.value) {
+    return;
+  }
   if (
     selectedStage.value === previous ||
     (selectedStage.value !== null && selectedStage.value > next)
@@ -683,7 +703,7 @@ watch([stagesRoot, technicalRow], ([root, row]) => {
 watch(
   () =>
     [
-      activeStage.value === 5,
+      activeStage.value === 5 && designApproved.value,
       chosenGenerated.value?.version.content_hash,
       mockups.projectId === projectId.value,
       mockups.design?.contentHash,
@@ -797,6 +817,19 @@ onUnmounted(() => {
         >
           <p class="min-w-[min(100%,16rem)] flex-1 text-[15px] leading-normal text-on-night-3">
             {{ readOnlyText }}
+          </p>
+          <UiButton variant="outline" data-testid="back-to-current" @click="selectedStage = null">
+            {{ t("detail.backToCurrent") }}
+          </UiButton>
+        </div>
+        <div
+          v-else-if="activeStage > currentStage"
+          class="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-panel border border-night-line bg-night-raised py-3 pr-3 pl-5"
+          aria-live="polite"
+          data-testid="step-ahead"
+        >
+          <p class="min-w-[min(100%,16rem)] flex-1 text-[15px] leading-normal text-on-night-3">
+            {{ t("detail.packageAhead", { step: stageLabels[currentStage] ?? "" }) }}
           </p>
           <UiButton variant="outline" data-testid="back-to-current" @click="selectedStage = null">
             {{ t("detail.backToCurrent") }}

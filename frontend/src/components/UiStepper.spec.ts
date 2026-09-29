@@ -57,6 +57,45 @@ describe("stepper", () => {
     expect(wrapper.get("[data-testid='stepper']").attributes("aria-label")).toBe("Passi");
   });
 
+  it("lets a waiting step that is already open be chosen without marking it as current", async () => {
+    const wrapper = mount(UiStepper, {
+      props: {
+        steps: [
+          { key: "brief", label: "Brief", status: "approved" as const, index: 0 },
+          { key: "team", label: "Squadra", status: "current" as const, index: 1 },
+          { key: "twins", label: "User Twin", status: "pending" as const, index: 2 },
+          {
+            key: "package",
+            label: "Pacchetto",
+            status: "pending" as const,
+            index: 5,
+            open: true,
+            note: "Cartella parziale",
+          },
+        ],
+        active: "team",
+      },
+      ...plugins(),
+    });
+    const buttons = wrapper.findAll("button");
+    const opened = buttons[3]!;
+
+    expect(buttons[2]?.attributes("disabled")).toBeDefined();
+    expect(opened.attributes("disabled")).toBeUndefined();
+    expect(opened.attributes("data-status")).toBe("pending");
+    expect(opened.attributes("aria-current")).toBeUndefined();
+    expect(opened.classes()).toContain("cursor-pointer");
+    expect(opened.text()).toContain("Cartella parziale");
+    expect(opened.text()).not.toContain("In attesa");
+    expect(wrapper.findAll("[data-stage]").map((node) => node.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "5",
+    ]);
+    await opened.trigger("click");
+    expect(wrapper.emitted("select")).toEqual([["package"]]);
+  });
+
   it("lets a step replace its status line with a note", () => {
     const wrapper = mount(UiStepper, {
       props: {

@@ -39,7 +39,7 @@ function version(number: number): KnowledgePackageVersionPayload {
     project_id: PROJECT_ID,
     project_name: "Lista ospiti workshop",
     version_number: number,
-    schema_version: 2,
+    schema_version: 3,
     content_hash: String(number).repeat(64),
     archive_hash: "a".repeat(64),
     file_name: `orchestwin-${PROJECT_ID}-knowledge-v${number}.zip`,
@@ -47,6 +47,12 @@ function version(number: number): KnowledgePackageVersionPayload {
     archive_size: 150000,
     created_at: "2026-09-27T20:00:00Z",
     stages: [],
+    progress: {
+      approved: ["brief", "team", "twins", "requirements", "design"],
+      pending: null,
+      complete: true,
+    },
+    state: { changes: 0, pending_changes: 0, aligned_commit: null, open_tasks: 0 },
     twins: [
       {
         twin_id: "00000000-0000-4000-8000-0000000000a1",
@@ -56,11 +62,40 @@ function version(number: number): KnowledgePackageVersionPayload {
         document: "twins/addetti-all-accoglienza-00000000/twin.json",
       },
     ],
-    feedback: { reviews: 5, findings: 44, decisions: 2, discussions: 6, insights: 1 },
+    feedback: {
+      reviews: 5,
+      findings: 44,
+      decisions: 2,
+      discussions: 6,
+      insights: 1,
+      change_reviews: 0,
+    },
     diagram_count: 7,
     table_count: 14,
     entries: ["ORCHESTWIN.md"],
   };
+}
+
+function partialVersion(number: number): KnowledgePackageVersionPayload {
+  return {
+    ...version(number),
+    file_count: 27,
+    progress: { approved: ["brief", "team", "twins"], pending: "requirements", complete: false },
+    feedback: {
+      reviews: 0,
+      findings: 0,
+      decisions: 0,
+      discussions: 0,
+      insights: 0,
+      change_reviews: 0,
+    },
+    diagram_count: 0,
+    table_count: 0,
+  };
+}
+
+function approvedUpTo(count: number): typeof STAGES {
+  return STAGES.map((stage, index) => ({ ...stage, approved: index < count }));
 }
 
 function spoken(element: { text(): string }): string {
@@ -97,7 +132,10 @@ interface MountOptions {
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
   const saveExport = options.saveExport ?? vi.fn();
   const wrapper = mount(ProjectDesignPackagePanel, {
-    global: { plugins: [createAppI18n(options.locale ?? "en")] },
+    global: {
+      plugins: [createAppI18n(options.locale ?? "en")],
+      stubs: { ProjectDevelopmentPanel: true },
+    },
     props: {
       projectId: PROJECT_ID,
       stages: options.stages ?? STAGES,
@@ -185,6 +223,9 @@ describe("ProjectDesignPackagePanel", () => {
       wrapper.findAll('[data-testid="package-version-title"]').map((item) => item.text()),
     ).toEqual(["Versione 2", "Versione 1"]);
     expect(versions[0]!.text()).toContain("54 file");
+    expect(
+      wrapper.findAll('[data-testid="package-version-progress"]').map((item) => item.text()),
+    ).toEqual(["5 passi su 5", "5 passi su 5"]);
     expect(versions[0]!.get("button").attributes("aria-label")).toBe("Scarica la versione 2");
     expect(wrapper.get('[data-testid="package-history"] details summary').text()).toBe(
       "Versioni precedenti (1)",
@@ -206,7 +247,14 @@ describe("ProjectDesignPackagePanel", () => {
       ...version(1),
       diagram_count: 1,
       table_count: 1,
-      feedback: { reviews: 1, findings: 1, decisions: 0, discussions: 0, insights: 0 },
+      feedback: {
+        reviews: 1,
+        findings: 1,
+        decisions: 0,
+        discussions: 0,
+        insights: 0,
+        change_reviews: 0,
+      },
     };
     useUserModelingStore().$patch({ twinVersions: [twin("Receptionist")] });
     const api = knowledgeApi({
@@ -317,23 +365,23 @@ describe("ProjectDesignPackagePanel", () => {
     wrapper.unmount();
   });
 
-  it("waits for the five approvals before preparing the folder", async () => {
-    const stages = STAGES.map((stage, index) => ({ ...stage, approved: index < 3 }));
+  it("publishes the approved steps before the others and says which ones are missing", async () => {
     const api = knowledgeApi({
       history: vi.fn(() => Promise.resolve({ project_id: PROJECT_ID, versions: [] })),
+      publish: vi.fn(() => Promise.resolve({ reused: false, version: partialVersion(1) })),
     });
-    const { wrapper } = mountPanel(api, { stages, locale: "it" });
+    const { wrapper, saveExport } = mountPanel(api, { stages: approvedUpTo(3), locale: "it" });
     await flushPromises();
 
-    expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeDefined();
-    const notReady = wrapper.get('[data-testid="package-not-ready"]').text();
-    expect(notReady).toContain("quando tutti e cinque i passi sono approvati");
-    expect(notReady).toContain("Sono ancora in attesa: Requirements e Design.");
-    expect(wrapper.get('[data-testid="package-hero"] h2').text()).toBe(
-      "La cartella non è ancora pronta",
+    const action = wrapper.get('[data-testid="download-package"]');
+    expect(action.attributes("disabled")).toBeUndefined();
+    expect(spoken(wrapper.get('[data-testid="package-partial"]'))).toBe(
+      "La cartella contiene 3 passi su 5: restano da approvare Requirements e Design. Ogni passo entra nella cartella quando lo approvi.",
     );
+    expect(wrapper.find('[data-testid="package-not-ready"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="package-hero"] h2').text()).toBe("La cartella prende forma");
     expect(wrapper.get('[data-testid="agent-message"]').text()).toContain(
-      "Quando i cinque passi saranno approvati",
+      "Raccolgo i passi approvati finora",
     );
     expect(wrapper.get('[data-testid="package-path"]').attributes("open")).toBeDefined();
     expect(wrapper.findAll('[data-testid="package-stage"]')[4]?.text()).toContain("in attesa");
@@ -345,7 +393,172 @@ describe("ProjectDesignPackagePanel", () => {
       "si contano quando prepari la cartella",
     );
     expect(wrapper.find('[data-testid="package-latest"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="package-twin"]').map((item) => item.text())).toEqual([
+      "Receptionist",
+      "Manager",
+    ]);
+    expect(wrapper.find('[data-testid="package-design"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="package-no-design"]').text()).toContain(
+      "dopo l'approvazione del passo Design",
+    );
+
+    await action.trigger("click");
+    await flushPromises();
+
+    expect(api.publish).toHaveBeenCalledWith(PROJECT_ID, "access-token");
+    expect(saveExport).toHaveBeenCalledWith(
+      expect.any(Blob),
+      `orchestwin-${PROJECT_ID}-knowledge-v1.zip`,
+    );
+    expect(wrapper.get('[data-testid="package-latest"]').text()).toBe("27 file · versione 1");
+    expect(wrapper.get('[data-testid="package-version-progress"]').text()).toBe(
+      "3 passi su 5, il prossimo è Requirements",
+    );
     wrapper.unmount();
+  });
+
+  it("lists only the twins that the folder holds while the twins are not approved", async () => {
+    const folder: KnowledgePackageVersionPayload = {
+      ...partialVersion(1),
+      twins: [],
+      progress: { approved: ["brief", "team"], pending: "twins", complete: false },
+    };
+    const api = knowledgeApi({
+      history: vi.fn(() => Promise.resolve({ project_id: PROJECT_ID, versions: [folder] })),
+    });
+    const { wrapper } = mountPanel(api, { stages: approvedUpTo(2) });
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-testid="package-twin"]')).toHaveLength(0);
+    expect(spoken(wrapper.get('[data-testid="package-summary"]'))).toContain(
+      "0 twins, each in its own reusable file",
+    );
+    expect(wrapper.get('[data-testid="package-version-progress"]').text()).toBe(
+      "2 of 5 steps, next: User Twins",
+    );
+    wrapper.unmount();
+  });
+
+  it("waits for the brief before preparing the folder", async () => {
+    const api = knowledgeApi({
+      history: vi.fn(() => Promise.resolve({ project_id: PROJECT_ID, versions: [] })),
+    });
+    const { wrapper } = mountPanel(api, { stages: approvedUpTo(0), locale: "it" });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[data-testid="package-not-ready"]').text()).toBe(
+      "La cartella si può preparare appena il brief è approvato.",
+    );
+    expect(wrapper.find('[data-testid="package-partial"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="package-hero"] h2').text()).toBe(
+      "La cartella non è ancora pronta",
+    );
+    expect(wrapper.get('[data-testid="agent-message"]').text()).toContain(
+      "Appena il brief è approvato",
+    );
+    expect(wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      4,
+      "The folder holds 4 of 5 steps: Design is still to approve. Each step joins the folder when you approve it.",
+    ],
+    [
+      "en",
+      3,
+      "The folder holds 3 of 5 steps: Requirements and Design are still to approve. Each step joins the folder when you approve it.",
+    ],
+    [
+      "it",
+      4,
+      "La cartella contiene 4 passi su 5: resta da approvare Design. Ogni passo entra nella cartella quando lo approvi.",
+    ],
+    [
+      "it",
+      1,
+      "La cartella contiene 1 passo su 5: restano da approvare Team, User Twins, Requirements e Design. Ogni passo entra nella cartella quando lo approvi.",
+    ],
+  ] as const)(
+    "says in %s which steps a folder of %i approved steps still misses",
+    async (locale, count, expected) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { stages: approvedUpTo(count), locale });
+      await flushPromises();
+
+      expect(spoken(wrapper.get('[data-testid="package-partial"]'))).toBe(expected);
+      wrapper.unmount();
+    },
+  );
+
+  it("shows the progress of an earlier partial version next to the complete one", async () => {
+    const api = knowledgeApi({
+      history: vi.fn(() =>
+        Promise.resolve({ project_id: PROJECT_ID, versions: [version(2), partialVersion(1)] }),
+      ),
+    });
+    const { wrapper } = mountPanel(api);
+    await flushPromises();
+
+    expect(
+      wrapper.findAll('[data-testid="package-version-progress"]').map((item) => item.text()),
+    ).toEqual(["5 of 5 steps", "3 of 5 steps, next: Requirements"]);
+    expect(wrapper.find('[data-testid="package-partial"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "Development goes on from the terminal: ut align checks the commits against the design and ut watch follows them.",
+    ],
+    [
+      "it",
+      "Lo sviluppo continua dal terminale: ut align confronta i commit con il design e ut watch li segue.",
+    ],
+  ] as const)(
+    "names the commands of the terminal in %s after the versions once the design is approved",
+    async (locale, expected) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+
+      const sentence = wrapper.get('[data-testid="package-terminal"]');
+      expect(spoken(sentence)).toBe(expected);
+      expect(sentence.findAll("code").map((item) => item.text())).toEqual(["ut align", "ut watch"]);
+      expect(
+        wrapper.get('[data-testid="package-history"]').element.contains(sentence.element),
+      ).toBe(true);
+      wrapper.unmount();
+    },
+  );
+
+  it("opens the development outside the Studio below the versions once the design is approved", async () => {
+    const approved = mountPanel(knowledgeApi(), { locale: "it" });
+    await flushPromises();
+
+    const panel = approved.wrapper.findComponent({ name: "ProjectDevelopmentPanel" });
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("projectId")).toBe(PROJECT_ID);
+    expect(panel.props("locale")).toBe("it");
+    const authorize = panel.props("authorize") as <T>(
+      operation: (accessToken: string) => Promise<T>,
+    ) => Promise<T>;
+    await expect(authorize(async (accessToken) => accessToken)).resolves.toBe("access-token");
+    const history = approved.wrapper.get('[data-testid="package-history"]').element;
+    expect(history.compareDocumentPosition(panel.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    approved.wrapper.unmount();
+
+    const waiting = mountPanel(knowledgeApi(), { stages: approvedUpTo(4) });
+    await flushPromises();
+    expect(waiting.wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
+    expect(waiting.wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
+    waiting.wrapper.unmount();
   });
 
   it("shows that the versions are loading", async () => {
@@ -359,13 +572,13 @@ describe("ProjectDesignPackagePanel", () => {
     wrapper.unmount();
   });
 
-  it("explains a missing approval reported by the server and other failures", async () => {
+  it("explains a missing approval of the brief reported by the server and other failures", async () => {
     const refused = knowledgeApi({
       publish: vi.fn(() =>
         Promise.reject(
           new KnowledgePackagesApiError("The knowledge package request failed", {
             status: 409,
-            code: "DESIGN_APPROVAL_REQUIRED",
+            code: "BRIEF_APPROVAL_REQUIRED",
             payload: null,
           }),
         ),
@@ -386,13 +599,37 @@ describe("ProjectDesignPackagePanel", () => {
     await second.wrapper.get('[data-testid="download-package"]').trigger("click");
     await flushPromises();
 
-    expect(refusedText).toContain("when all five steps are approved");
+    expect(refusedText).toBe("The folder can be prepared as soon as the brief is approved.");
     expect(first.saveExport).not.toHaveBeenCalled();
     expect(second.wrapper.get('[data-testid="download-error"]').text()).toBe(
       "The folder could not be prepared.",
     );
     expect(second.wrapper.get('[data-testid="download-error"]').attributes("role")).toBe("alert");
     second.wrapper.unmount();
+  });
+
+  it("keeps the copy of a missing approval for the brief only", async () => {
+    const api = knowledgeApi({
+      publish: vi.fn(() =>
+        Promise.reject(
+          new KnowledgePackagesApiError("The knowledge package request failed", {
+            status: 409,
+            code: "DESIGN_APPROVAL_REQUIRED",
+            payload: null,
+          }),
+        ),
+      ),
+    });
+    const { wrapper } = mountPanel(api, { locale: "it" });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="download-package"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="download-error"]').text()).toBe(
+      "Non è stato possibile preparare la cartella.",
+    );
+    wrapper.unmount();
   });
 
   it("explains an earlier version that cannot be downloaded", async () => {

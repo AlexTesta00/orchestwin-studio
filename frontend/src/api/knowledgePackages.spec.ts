@@ -34,6 +34,8 @@ const VERSION: KnowledgePackageVersionPayload = {
       content_hash: "e".repeat(64),
     },
   ],
+  progress: { approved: ["brief"], pending: "team", complete: false },
+  state: { changes: 2, pending_changes: 1, aligned_commit: "a".repeat(40), open_tasks: 1 },
   twins: [
     {
       twin_id: "44444444-4444-4444-8444-444444444444",
@@ -49,6 +51,7 @@ const VERSION: KnowledgePackageVersionPayload = {
     decisions: 2,
     discussions: 1,
     insights: 3,
+    change_reviews: 1,
   },
   diagram_count: 6,
   table_count: 4,
