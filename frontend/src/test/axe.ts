@@ -6,6 +6,7 @@ const PAGE_RULES = ["page-has-heading-one", "landmark-one-main", "region", "bypa
 export interface AccessibilityOptions {
   page?: boolean;
   disabledRules?: string[];
+  iframes?: boolean;
 }
 
 function describeViolations(results: AxeResults): string[] {
@@ -27,6 +28,7 @@ export async function expectAccessible(
     ...(options.disabledRules ?? []),
   ];
   const runOptions: RunOptions = {
+    iframes: options.iframes ?? true,
     runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] },
     rules: Object.fromEntries(disabled.map((rule) => [rule, { enabled: false }])),
   };
