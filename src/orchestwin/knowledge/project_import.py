@@ -11,7 +11,14 @@ from orchestwin.agents.persistence.repositories import proposal_from_snapshot
 from orchestwin.agents.proposals import TeamProposalRevisionKind, TeamProposalVersion
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.design_serialization import design_package_from_snapshot
-from orchestwin.knowledge.archive import KnowledgeArchiveError, VerifiedFolder
+from orchestwin.knowledge.archive import (
+    MOCKUP_PROTOTYPE,
+    KnowledgeArchiveError,
+    VerifiedFolder,
+    derived_prototype_snapshot,
+    folder_generated_mockup,
+    mockup_failure,
+)
 from orchestwin.knowledge.layout import STAGES
 from orchestwin.knowledge.sources import StageIdentity, stage_consistency_issue
 from orchestwin.projects.briefs import ProjectBrief
@@ -34,6 +41,7 @@ _VERSION_KEYS: Final = frozenset({"version_number"})
 _LINEAGE_KEYS: Final = frozenset({"based_on_version_number"})
 _TWIN_REFERENCE_KEYS: Final = frozenset({"twin_id", "version_number", "content_hash", "name"})
 _SOURCE_KEYS: Final = frozenset({"kind", "source_id", "source_version", "content_hash", "locator"})
+_MOCKUP_KEYS: Final = ("owner_selected_alternative_id", "alternatives", "generated_mockup")
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +199,40 @@ class _Rewriter:
             self.hashes[old] = new
 
 
+def _prototype_identities(prototype: object) -> list[tuple[str, str]]:
+    if not isinstance(prototype, Mapping):
+        return []
+    entries = [(str(prototype["code"]), str(prototype["id"]))]
+    for screen in prototype["screens"]:
+        entries.append((str(screen["code"]), str(screen["id"])))
+        entries.extend(
+            (f"{screen['code']}/{element['code']}", str(element["id"]))
+            for element in screen["elements"]
+        )
+    entries.extend(
+        (str(transition["code"]), str(transition["id"])) for transition in prototype["transitions"]
+    )
+    return entries
+
+
+def _derived_prototype(
+    rewriter: _Rewriter, package: Mapping[str, object]
+) -> dict[str, object] | None:
+    bound = folder_generated_mockup(
+        rewriter.rewrite({key: package.get(key) for key in _MOCKUP_KEYS})
+    )
+    if bound is None:
+        return None
+    derived = derived_prototype_snapshot(bound)
+    before = _prototype_identities(package.get("prototype"))
+    after = _prototype_identities(derived)
+    if [code for code, _ in before] != [code for code, _ in after]:
+        raise mockup_failure(MOCKUP_PROTOTYPE)
+    for (_code, old), (_same, new) in zip(before, after, strict=True):
+        rewriter.identities[old] = new
+    return derived
+
+
 def _parsed(stage: str, parser: Callable[[Mapping[str, object]], object], payload: object):
     try:
         return parser(payload)
@@ -316,7 +358,10 @@ def _plan(
         created_at=created_at,
     )
 
+    prototype = _derived_prototype(rewriter, documents["design"]["package"])
     design_document = rewriter.rewrite(documents["design"])
+    if prototype is not None:
+        design_document["package"]["prototype"] = prototype
     package = _parsed("design", design_package_from_snapshot, design_document["package"])
     rewriter.learn(documents["design"]["content_hash"], package.content_hash)
     design = DesignPackageVersion(

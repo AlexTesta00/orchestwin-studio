@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Annotated, Final, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, Strict, ValidationError
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    Strict,
+    ValidationError,
+    model_validator,
+)
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
 from pydantic_core import core_schema
 
@@ -15,7 +24,12 @@ from orchestwin.agents.selection_rules import (
     TeamSelectionIssueCode,
     TeamSelectionReasonCode,
 )
-from orchestwin.artifacts.design import DesignApproach, DesignCritiqueKind
+from orchestwin.artifacts.design import (
+    MAX_CRITIQUE_QUOTE_LENGTH,
+    MAX_CRITIQUE_VERDICT_LENGTH,
+    DesignApproach,
+    DesignCritiqueKind,
+)
 from orchestwin.artifacts.design_discussion import (
     PROPOSAL_CODE_PREFIX,
     DiscussionProposalTarget,
@@ -25,7 +39,19 @@ from orchestwin.artifacts.design_discussion import (
 )
 from orchestwin.artifacts.design_evaluation import DESIGN_EVALUATION_SCHEMA_VERSION
 from orchestwin.artifacts.design_finding_validations import FindingDecision
-from orchestwin.artifacts.design_packages import DESIGN_PACKAGE_SCHEMA_VERSION
+from orchestwin.artifacts.design_packages import (
+    DESIGN_PACKAGE_SCHEMA_VERSION,
+    MAX_OWNER_ASSERTION_LENGTH,
+    MAX_OWNER_ASSERTIONS,
+)
+from orchestwin.artifacts.generated_mockups import (
+    MAX_MARKUP_LENGTH,
+    MAX_SCREENS,
+    MAX_STYLES_LENGTH,
+    MAX_TITLE_LENGTH,
+    MIN_SCREENS,
+    MOCKUP_CONTRACT_VERSION,
+)
 from orchestwin.artifacts.prototypes import (
     PrototypeElementKind,
     PrototypeScreenState,
@@ -130,6 +156,14 @@ _IDENTIFIER_KIND_PATTERN: Final = r"^[A-Z][A-Z_]*$"
 _ANY_CODE_PATTERN: Final = r"^[A-Z]+-[0-9]{3,6}$"
 _SLUG_PATTERN: Final = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 _SCHEMA_PATH_PATTERN: Final = r"^schema/[a-z]+\.schema\.json$"
+_MOCKUP_SCREEN_CODE_PATTERN: Final = r"^SCR-[0-9]{3}$"
+_MARKUP_REQUIREMENT_CODE_PATTERN: Final = r"^[A-Z]{2,5}-[0-9]{3}$"
+_DESIGN_ADDITIONS: Final = {
+    "DesignCritique": ("verdict", "quote"),
+    "DesignPackageSnapshot": ("generated_mockup", "owner_assertions"),
+}
+_DESIGN_ADDITION_KEYWORDS: Final = {"DesignCritique": ("dependentRequired",)}
+_DEFINITION_PREFIX: Final = "#/$defs/"
 
 
 def _code(prefix: str) -> str:
@@ -174,6 +208,13 @@ _Count = Annotated[int, Field(ge=0)]
 _Confidence = Annotated[float, Field(ge=0, le=1)]
 _AnyCode = Annotated[str, Field(pattern=_ANY_CODE_PATTERN)]
 _BriefFieldName = Annotated[BriefField, _BY_VALUE]
+_Verdict = Annotated[str, Field(min_length=1, max_length=MAX_CRITIQUE_VERDICT_LENGTH)]
+_Quote = Annotated[str, Field(min_length=1, max_length=MAX_CRITIQUE_QUOTE_LENGTH)]
+_OwnerAssertion = Annotated[str, Field(min_length=1, max_length=MAX_OWNER_ASSERTION_LENGTH)]
+_OwnerAssertions = Annotated[
+    list[_OwnerAssertion], Field(min_length=1, max_length=MAX_OWNER_ASSERTIONS)
+]
+_MarkupRequirementCode = Annotated[str, Field(pattern=_MARKUP_REQUIREMENT_CODE_PATTERN)]
 
 
 class KnowledgeSchemaError(Exception):
@@ -833,6 +874,10 @@ class DesignAlternative(_Record):
 
 
 class DesignCritique(_Record):
+    model_config = ConfigDict(
+        json_schema_extra={"dependentRequired": {"quote": ["verdict"], "verdict": ["quote"]}}
+    )
+
     id: Uuid = Field(description="Stable identifier of the critique.")
     code: str = Field(
         pattern=_code("CRQ"), description="Human-readable code of the critique, like CRQ-001."
@@ -858,6 +903,26 @@ class DesignCritique(_Record):
         description="Whether a person still has to validate the critique."
     )
     rationale: str = Field(description="Reasoning behind the critique.")
+    verdict: Annotated[_Verdict | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Short verdict of the user twin on the alternative, written together with quote; "
+            "both are left out when the twin gave none."
+        ),
+    )
+    quote: Annotated[_Quote | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Sentence in which the user twin states the verdict in its own words, written "
+            "together with verdict; both are left out when the twin gave none."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _verdict_with_quote(self) -> DesignCritique:
+        if (self.verdict is None) != (self.quote is None):
+            raise ValueError("verdict and quote are written together or both left out")
+        return self
 
 
 class PrototypeElement(_Record):
@@ -944,6 +1009,62 @@ class DesignConcern(_Record):
     )
 
 
+class GeneratedMockupScreen(_Record):
+    code: str = Field(
+        pattern=_MOCKUP_SCREEN_CODE_PATTERN,
+        description="Code of the screen, SCR-001 for the first and then without gaps.",
+    )
+    title: str = Field(
+        min_length=1, max_length=MAX_TITLE_LENGTH, description="Title of the screen."
+    )
+    state: Annotated[PrototypeScreenState, _BY_VALUE] = Field(
+        description="Representative state the screen shows."
+    )
+    markup: str = Field(
+        max_length=MAX_MARKUP_LENGTH,
+        description=(
+            "HTML fragment of the screen in the stored form of the mockup contract: only the "
+            "allowed elements and attributes, links only to #SCR-nnn of this mockup, no script, "
+            "no style attribute, no event handler and no address of another origin."
+        ),
+    )
+
+
+class GeneratedMockup(_Record):
+    contract_version: Literal[MOCKUP_CONTRACT_VERSION] = Field(
+        description="Version of the contract of the generated mockup."
+    )
+    design_alternative_id: Uuid = Field(
+        description="Owner-selected design alternative the mockup represents."
+    )
+    title: str = Field(
+        min_length=1, max_length=MAX_TITLE_LENGTH, description="Title of the mockup."
+    )
+    styles: str = Field(
+        max_length=MAX_STYLES_LENGTH,
+        description=(
+            "CSS of the mockup without comments; colours and fonts come only from the --vl-* "
+            "tokens of the visual language of the alternative."
+        ),
+    )
+    screens: list[GeneratedMockupScreen] = Field(
+        min_length=MIN_SCREENS, max_length=MAX_SCREENS, description="Screens in code order."
+    )
+
+
+class BoundGeneratedMockup(_Record):
+    mockup: GeneratedMockup = Field(
+        description="Mockup generated as HTML and CSS and validated by the Studio."
+    )
+    requirement_ids_by_code: dict[_MarkupRequirementCode, Uuid] = Field(
+        json_schema_extra={"additionalProperties": False},
+        description=(
+            "Identifier of every requirement code that the data-req attributes of the markup "
+            "name, keyed by code in code order."
+        ),
+    )
+
+
 class DesignPackageSnapshot(_Record):
     schema_version: Literal[DESIGN_PACKAGE_SCHEMA_VERSION] = Field(
         description="Version of the design package format."
@@ -965,6 +1086,21 @@ class DesignPackageSnapshot(_Record):
     )
     concerns: list[DesignConcern] = Field(description="Design concerns in code order.")
     open_questions: list[str] = Field(description="Questions still open for the whole design.")
+    generated_mockup: Annotated[BoundGeneratedMockup | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Mockup generated for the owner-selected alternative, bound to the identifiers of "
+            "the requirements it names; the prototype is derived from it. Left out when the "
+            "mockup is only the declarative prototype."
+        ),
+    )
+    owner_assertions: Annotated[_OwnerAssertions | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Statements of the owner that the design must respect, in the order the owner gave "
+            "them; left out when there is none."
+        ),
+    )
 
 
 class _StageDocument(_Record):
@@ -1557,9 +1693,60 @@ _DOCUMENT_PATHS: Final = {
 }
 
 
-def _published_schema(name: str) -> dict[str, object]:
+def has_design_additions(package: Mapping[str, object]) -> bool:
+    critiques = package.get("critiques") or ()
+    return (
+        package.get("generated_mockup") is not None
+        or bool(package.get("owner_assertions"))
+        or any(
+            isinstance(item, Mapping)
+            and (item.get("verdict") is not None or item.get("quote") is not None)
+            for item in critiques
+        )
+    )
+
+
+def _referenced_definitions(node: object) -> set[str]:
+    found: set[str] = set()
+    pending = [node]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            reference = current.get("$ref")
+            if isinstance(reference, str) and reference.startswith(_DEFINITION_PREFIX):
+                found.add(reference.removeprefix(_DEFINITION_PREFIX))
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return found
+
+
+def _without_design_additions(schema: dict[str, object]) -> dict[str, object]:
+    stripped = deepcopy(schema)
+    definitions = stripped["$defs"]
+    for model, fields in _DESIGN_ADDITIONS.items():
+        for field in fields:
+            del definitions[model]["properties"][field]
+    for model, keywords in _DESIGN_ADDITION_KEYWORDS.items():
+        for keyword in keywords:
+            del definitions[model][keyword]
+    kept = _referenced_definitions(
+        {key: value for key, value in stripped.items() if key != "$defs"}
+    )
+    pending = list(kept)
+    while pending:
+        for name in _referenced_definitions(definitions[pending.pop()]) - kept:
+            kept.add(name)
+            pending.append(name)
+    stripped["$defs"] = {name: value for name, value in definitions.items() if name in kept}
+    return stripped
+
+
+def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]:
     title, description = _SCHEMA_TEXTS[name]
     schema = _MODELS[name].model_json_schema(schema_generator=_KnowledgeJsonSchema)
+    if name == "design" and not design_additions:
+        schema = _without_design_additions(schema)
     return {
         **schema,
         "$schema": SCHEMA_DIALECT,
@@ -1569,15 +1756,17 @@ def _published_schema(name: str) -> dict[str, object]:
     }
 
 
-def knowledge_schemas() -> dict[str, dict[str, object]]:
-    return {name: _published_schema(name) for name in SCHEMA_NAMES}
+def knowledge_schemas(*, design_additions: bool = False) -> dict[str, dict[str, object]]:
+    return {
+        name: _published_schema(name, design_additions=design_additions) for name in SCHEMA_NAMES
+    }
 
 
-def schema_files() -> dict[str, str]:
+def schema_files(*, design_additions: bool = False) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
         + "\n"
-        for name, schema in knowledge_schemas().items()
+        for name, schema in knowledge_schemas(design_additions=design_additions).items()
     }
 
 
@@ -1679,6 +1868,7 @@ __all__ = [
     "SCHEMA_DIALECT",
     "SCHEMA_NAMES",
     "KnowledgeSchemaError",
+    "has_design_additions",
     "knowledge_schemas",
     "schema_files",
     "schema_name_for_path",
