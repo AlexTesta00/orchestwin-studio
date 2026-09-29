@@ -3,9 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import urllib.parse
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -13,44 +11,42 @@ import pytest
 
 from src.test.python.integration.cli_journey_support import (
     API_PREFIX,
+    BRIEF_ANSWERS,
     DATABASE_VARIABLE,
-    FORBIDDEN_PORTS,
+    IDEA,
+    KNOWLEDGE,
+    PROJECT_NAME,
     TEST_EMAIL,
     TEST_PASSWORD,
     Journey,
     Run,
+    Scene,
     StudioApi,
     StudioProcess,
-    Terminal,
-    chosen_package,
+    choose_through_the_api,
     dash_rows,
     date_text,
     flat,
+    journey_scene,
     read_json,
     say,
+    stay_on_the_studio,
     table_rows,
-    write_json,
 )
 
 pytestmark = pytest.mark.integration
 
-PROJECT_NAME = "Tip splitter"
-IDEA = "A small web app that splits a restaurant bill and the tip among friends."
-BRIEF_ANSWERS: Mapping[str, object] = {
-    "problem": "Friends waste time working out who owes what after a dinner.",
-    "target_users": ["Groups of friends who eat out together"],
-    "goals": ["Split a bill fairly in less than a minute"],
-    "functional_requirements": [
-        "Enter the total of the bill",
-        "Choose the tip percentage",
-        "Show how much each person pays",
-    ],
-}
 INIT_STAGES = ("brief", "team", "twins", "requirements")
+STAGES = (*INIT_STAGES, "design")
+INIT_FOLDER = len(INIT_STAGES)
+COMPLETE_FOLDER = len(STAGES)
+SCHEMA_VERSION = 3
+EMPTY_STATE = {"changes": 0, "pending_changes": 0, "aligned_commit": None, "open_tasks": 0}
+STATE_KIND = "orchestwin.project-state"
+CHANGES_KIND = "orchestwin.change-reviews"
 DESIGN_ANSWERS = ("choose", "1", "approve", "leave")
 APPROVAL_ANSWERS = ("approve", "leave")
-KNOWLEDGE = "orchestwin"
-KNOWLEDGE_LABEL = "orchestwin/"
+KNOWLEDGE_LABEL = f"{KNOWLEDGE}/"
 TAMPERED_FILE = "brief/brief.md"
 APPROVED = "APPROVED"
 MANDATORY = "MANDATORY"
@@ -78,53 +74,6 @@ REFUSALS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
-@dataclass
-class Scene:
-    origin: str
-    port: int
-    api: StudioApi
-    terminal: Terminal
-    outside: Path
-    project: Path
-    answers: Path
-    project_id: str = ""
-
-    @property
-    def base(self) -> str:
-        return f"/projects/{self.project_id}"
-
-    @property
-    def local(self) -> Path:
-        return self.project / ".orchestwin"
-
-    @property
-    def knowledge(self) -> Path:
-        return self.project / KNOWLEDGE
-
-    def ut(
-        self,
-        *arguments: str,
-        directory: Path | None = None,
-        answers: Sequence[str] = (),
-        offline: bool = False,
-    ) -> Run:
-        return self.terminal.run(
-            arguments,
-            directory=self.project if directory is None else directory,
-            answers=answers,
-            offline=offline,
-        )
-
-    def document(self, path: str) -> object:
-        return self.api.document(f"{self.base}{path}")
-
-    def folders(self) -> list[Mapping]:
-        return self.document("/knowledge-packages")["versions"]
-
-    def folder_numbers(self) -> list[int]:
-        return [item["version_number"] for item in self.folders()]
-
-
 def test_ut_walks_the_whole_path_against_the_real_studio(tmp_path: Path) -> None:
     database_url = os.environ.get(DATABASE_VARIABLE, "")
     assert database_url, "the integration fixture gives this test a database schema of its own"
@@ -133,24 +82,15 @@ def test_ut_walks_the_whole_path_against_the_real_studio(tmp_path: Path) -> None
         api = StudioApi(studio.origin)
         registered = api.register(TEST_EMAIL, TEST_PASSWORD)
         assert registered.status == 201, f"registration answered {registered.status}"
-        scene = Scene(
-            origin=studio.origin,
-            port=studio.port,
-            api=api,
-            terminal=Terminal(tmp_path, studio.origin),
-            outside=tmp_path / "outside",
-            project=tmp_path / "project",
-            answers=write_json(
-                tmp_path / "answers.json",
-                {"name": PROJECT_NAME, "idea": IDEA, "answers": dict(BRIEF_ANSWERS)},
-            ),
-        )
+        scene = journey_scene(tmp_path, studio.origin, studio.port, api)
         with journey.step("1 ut login --password-stdin"):
             sign_in(scene)
         with journey.step("2 ut status outside a project"):
             list_without_projects(scene)
         with journey.step("3 ut --yes init --answers"):
             create_the_project(scene)
+        with journey.step("3 a partial folder after every approved step"):
+            follow_the_partial_folders(scene)
         with journey.step("4 ut status, --offline and --json"):
             show_the_state(scene)
         with journey.step("5 ut --yes design without a model shows the design and chooses nothing"):
@@ -160,7 +100,7 @@ def test_ut_walks_the_whole_path_against_the_real_studio(tmp_path: Path) -> None
                 refuse_without_a_model(scene, arguments, key)
         with journey.step("5 continued from a choice prepared through the API"):
             continue_from_a_prepared_choice(scene)
-        with journey.step("6 ut package verify, history and publish"):
+        with journey.step("6 ut package verify, history and publish on the complete folder"):
             check_the_folder(scene)
         with journey.step("7 ut twins list and show, with the Studio and offline"):
             read_the_twins(scene)
@@ -255,17 +195,28 @@ def create_the_project(scene: Scene) -> None:
         say("init.manual_saved", version=1),
         say("init.done", name=PROJECT_NAME),
         say("init.next_design"),
-        *(
-            say(
-                "init.step_approved",
-                step=say(f"common.stage_{stage}"),
-                version=1,
-                path=f".orchestwin/steps/{stage}.json",
-            )
-            for stage in INIT_STAGES
-        ),
     ):
         assert sentence in run.output, f"missing: {sentence}\n{run.transcript()}"
+    gaps = run.order_gaps(
+        *(
+            sentence
+            for number, stage in enumerate(INIT_STAGES, start=1)
+            for sentence in (
+                say(
+                    "init.step_approved",
+                    step=say(f"common.stage_{stage}"),
+                    version=1,
+                    path=f".orchestwin/steps/{stage}.json",
+                ),
+                say("init.folder_updated", version=number),
+            )
+        )
+    )
+    assert gaps == [], "\n".join([*gaps, run.transcript()])
+    published = run.requests("POST", "/knowledge-packages")
+    assert [item.status for item in published] == [201] * INIT_FOLDER, run.transcript()
+    downloaded = run.requests("GET", "/archive")
+    assert [item.status for item in downloaded] == [200] * INIT_FOLDER, run.transcript()
     project = scene.document("")
     assert (project["display_name"], project["current_stage"], project["next_action"]) == (
         PROJECT_NAME,
@@ -310,6 +261,94 @@ def assert_mandatory_specialists(team: Mapping) -> None:
         assert code in justified, f"{agent}: justified by {justified}"
 
 
+def follow_the_partial_folders(scene: Scene) -> None:
+    versions = scene.folders()
+    assert [item["version_number"] for item in versions] == list(range(INIT_FOLDER, 0, -1))
+    for version in versions:
+        approved = list(STAGES[: version["version_number"]])
+        number = version["version_number"]
+        assert version["schema_version"] == SCHEMA_VERSION, number
+        assert [item["stage"] for item in version["stages"]] == approved, number
+        assert version["progress"] == {
+            "approved": approved,
+            "pending": STAGES[len(approved)],
+            "complete": False,
+        }, number
+        assert version["state"] == EMPTY_STATE, number
+        assert version["feedback"]["change_reviews"] == 0, number
+    latest = versions[0]
+    manifest = read_json(scene.knowledge / "orchestwin.json")
+    assert (
+        manifest["schema_version"],
+        manifest["package"]["version_number"],
+        manifest["package"]["content_hash"],
+    ) == (SCHEMA_VERSION, INIT_FOLDER, latest["content_hash"])
+    assert manifest["progress"] == {
+        "approved": list(INIT_STAGES),
+        "pending": "design",
+        "complete": False,
+    }
+    assert sorted(manifest["stages"]) == sorted(INIT_STAGES)
+    assert not (scene.knowledge / "design").exists()
+    assert_empty_state(scene, design=None)
+    history = scene.ut("package", "history")
+    assert history.status == 0, history.transcript()
+    assert say("package.history_heading", project=PROJECT_NAME) in history.output
+    assert table_rows(history.output) == history_rows(versions), history.transcript()
+    verify = scene.ut("package", "verify")
+    assert verify.status == 0, verify.transcript()
+    assert verify.exchanges == (), verify.transcript()
+    assert (
+        say(
+            "package.verified",
+            path=KNOWLEDGE_LABEL,
+            version=INIT_FOLDER,
+            project=PROJECT_NAME,
+            files=latest["file_count"],
+            hash=latest["content_hash"][:12],
+        )
+        in verify.output
+    ), verify.transcript()
+
+
+def assert_empty_state(scene: Scene, *, design: Mapping | None) -> None:
+    requirements = scene.document("/requirements/current")
+    state = read_json(scene.knowledge / "state" / "state.json")
+    assert (state["schema_version"], state["kind"], state["project_id"]) == (
+        SCHEMA_VERSION,
+        STATE_KIND,
+        scene.project_id,
+    )
+    assert (state["aligned"], state["changes"], state["tasks"]) == (None, [], [])
+    assert state["reference"]["requirements"] == {
+        "version_id": requirements["id"],
+        "version_number": requirements["version_number"],
+        "content_hash": requirements["content_hash"],
+    }
+    assert state["reference"]["design"] == design
+    assert (scene.knowledge / "state" / "state.md").is_file()
+    reviews = read_json(scene.knowledge / "twins" / "feedback" / "changes.json")
+    assert (reviews["kind"], reviews["project_id"], reviews["runs"]) == (
+        CHANGES_KIND,
+        scene.project_id,
+        [],
+    )
+
+
+def history_rows(versions: Sequence[Mapping]) -> list[list[str]]:
+    return [
+        [
+            say("package.history_here", version=item["version_number"])
+            if position == 0
+            else str(item["version_number"]),
+            date_text(item["created_at"]),
+            item["content_hash"][:12],
+            str(item["file_count"]),
+        ]
+        for position, item in enumerate(versions)
+    ]
+
+
 def show_the_state(scene: Scene) -> None:
     project = scene.document("")
     versions = {
@@ -321,25 +360,31 @@ def show_the_state(scene: Scene) -> None:
             for stage in INIT_STAGES
         ),
         [say("common.stage_design"), say("status.state_todo"), "-"],
-        [say("common.stage_package"), say("status.state_later"), "-"],
+        [say("common.stage_package"), say("status.state_later"), str(INIT_FOLDER)],
     ]
     next_step = say("status.next", action=say("common.next_approve_design"))
     run = scene.ut("status")
     assert run.status == 0, run.transcript()
     assert table_rows(run.output) == rows, run.transcript()
     assert next_step in run.output, run.transcript()
-    assert say("status.folder_none") in run.output, run.transcript()
+    assert say("status.folder_both", local=INIT_FOLDER, studio=INIT_FOLDER) in run.output, (
+        run.transcript()
+    )
+    assert say("status.alignment_none") not in run.output, run.transcript()
     offline = scene.ut("status", "--offline")
     assert offline.status == 0, offline.transcript()
     assert offline.exchanges == (), offline.transcript()
     assert say("status.offline_requested") in offline.output, offline.transcript()
     assert table_rows(offline.output) == rows, offline.transcript()
     assert next_step in offline.output, offline.transcript()
+    assert say("status.folder_only_local", local=INIT_FOLDER) in offline.output, (
+        offline.transcript()
+    )
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     budget = scene.api.request("GET", "/model-runtime/budget")
     assert (budget.status, budget.code) == (503, "REAL_MODEL_RUNTIME_NOT_CONFIGURED")
-    assert scene.folders() == []
+    assert scene.folder_numbers() == list(range(INIT_FOLDER, 0, -1))
     assert json.loads(as_json.output) == {
         "schema_version": 1,
         "kind": "project",
@@ -362,10 +407,15 @@ def show_the_state(scene: Scene) -> None:
                 for stage in INIT_STAGES
             ),
             {"stage": "design", "state": "TODO", "version": None, "approved": False},
-            {"stage": "package", "state": "LATER", "version": None, "approved": False},
+            {"stage": "package", "state": "LATER", "version": INIT_FOLDER, "approved": False},
         ],
-        "knowledge_folder": {"local_version": None, "studio_version": None, "local_error": None},
+        "knowledge_folder": {
+            "local_version": INIT_FOLDER,
+            "studio_version": INIT_FOLDER,
+            "local_error": None,
+        },
         "spending": None,
+        "alignment": None,
     }, as_json.transcript()
 
 
@@ -393,12 +443,17 @@ def show_the_design_without_a_model(scene: Scene) -> None:
     proposals = run.requests("POST", "/design/proposals")
     assert [item.status for item in proposals] == [202], run.transcript()
     assert design_writes(run) == [], run.transcript()
+    assert run.requests("POST", "/knowledge-packages") == [], run.transcript()
     assert run.opened == (), run.transcript()
     assert not (scene.local / "previews").exists(), run.transcript()
     assert not (scene.local / "steps" / "design.json").exists(), run.transcript()
-    assert not scene.knowledge.exists(), run.transcript()
+    manifest = read_json(scene.knowledge / "orchestwin.json")
+    assert (manifest["package"]["version_number"], manifest["progress"]["pending"]) == (
+        INIT_FOLDER,
+        "design",
+    ), run.transcript()
     assert scene.document("/design/readiness")["approved_current_package"] is False
-    assert scene.folders() == []
+    assert scene.folder_numbers() == list(range(INIT_FOLDER, 0, -1))
 
 
 def refuse_without_a_model(scene: Scene, arguments: Sequence[str], key: str) -> None:
@@ -496,18 +551,6 @@ def continue_from_a_prepared_choice(scene: Scene) -> None:
     assert_design_approved(scene, approval, first)
 
 
-def choose_through_the_api(scene: Scene, design: Mapping, alternative_id: str) -> None:
-    requirements = scene.document("/requirements/current")
-    package = chosen_package(design, requirements, alternative_id)
-    proposed = scene.api.request("POST", f"{scene.base}/design/revisions", {"package": package})
-    assert proposed.status == 201, f"the prepared choice answered {proposed.status} {proposed.code}"
-    diff = proposed.json()["diff"]["id"]
-    decided = scene.api.request(
-        "POST", f"{scene.base}/design/revisions/{diff}/decision", {"decision": "APPROVE"}
-    )
-    assert decided.status == 200, f"the prepared choice answered {decided.status} {decided.code}"
-
-
 def assert_design_approved(scene: Scene, run: Run, alternative: Mapping) -> None:
     design = scene.document("/design/current")
     readiness = scene.document("/design/readiness")
@@ -519,7 +562,9 @@ def assert_design_approved(scene: Scene, run: Run, alternative: Mapping) -> None
     project = scene.document("")
     assert (project["current_stage"], project["next_action"]) == ("PACKAGE", "DOWNLOAD_FOLDER")
     versions = scene.folders()
-    assert [item["version_number"] for item in versions] == [1], run.transcript()
+    assert [item["version_number"] for item in versions] == list(range(COMPLETE_FOLDER, 0, -1)), (
+        run.transcript()
+    )
     for sentence in (
         say(
             "design.approved",
@@ -530,7 +575,7 @@ def assert_design_approved(scene: Scene, run: Run, alternative: Mapping) -> None
         say(
             "design.folder_ready",
             path=str(scene.knowledge),
-            version=1,
+            version=COMPLETE_FOLDER,
             files=versions[0]["file_count"],
         ),
         say("design.folder_contents"),
@@ -547,11 +592,42 @@ def assert_design_approved(scene: Scene, run: Run, alternative: Mapping) -> None
 
 def check_the_folder(scene: Scene) -> None:
     versions = scene.folders()
-    assert len(versions) == 1
+    assert [item["version_number"] for item in versions] == list(range(COMPLETE_FOLDER, 0, -1))
     latest = versions[0]
+    assert latest["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
+    assert latest["state"] == EMPTY_STATE
+    assert latest["feedback"]["change_reviews"] == 0
     manifest = read_json(scene.knowledge / "orchestwin.json")
     assert manifest["project"]["id"] == scene.project_id
     assert manifest["package"]["content_hash"] == latest["content_hash"]
+    assert (manifest["schema_version"], manifest["progress"]) == (
+        SCHEMA_VERSION,
+        {"approved": list(STAGES), "pending": None, "complete": True},
+    )
+    assert manifest["state"] == {
+        "document": "state/state.json",
+        "text": "state/state.md",
+        **EMPTY_STATE,
+    }
+    assert (manifest["feedback"]["changes"], manifest["feedback"]["change_reviews"]) == (
+        "twins/feedback/changes.json",
+        0,
+    )
+    design = scene.document("/design/current")
+    chosen = next(
+        item
+        for item in design["package"]["alternatives"]
+        if item["id"] == design["package"]["owner_selected_alternative_id"]
+    )
+    assert_empty_state(
+        scene,
+        design={
+            "version_id": design["id"],
+            "version_number": design["version_number"],
+            "content_hash": design["content_hash"],
+            "alternative_code": chosen["code"],
+        },
+    )
     assert (scene.knowledge / ".gitattributes").read_bytes() == b"* -text\n"
     verify = scene.ut("package", "verify")
     assert verify.status == 0, verify.transcript()
@@ -560,7 +636,7 @@ def check_the_folder(scene: Scene) -> None:
         say(
             "package.verified",
             path=KNOWLEDGE_LABEL,
-            version=1,
+            version=COMPLETE_FOLDER,
             project=PROJECT_NAME,
             files=latest["file_count"],
             hash=latest["content_hash"][:12],
@@ -570,22 +646,15 @@ def check_the_folder(scene: Scene) -> None:
     history = scene.ut("package", "history")
     assert history.status == 0, history.transcript()
     assert say("package.history_heading", project=PROJECT_NAME) in history.output
-    assert table_rows(history.output) == [
-        [
-            say("package.history_here", version=1),
-            date_text(latest["created_at"]),
-            latest["content_hash"][:12],
-            str(latest["file_count"]),
-        ]
-    ], history.transcript()
+    assert table_rows(history.output) == history_rows(versions), history.transcript()
     publish = scene.ut("package", "publish")
     assert publish.status == 0, publish.transcript()
-    assert say("package.up_to_date", version=1, path=KNOWLEDGE_LABEL) in publish.output, (
-        publish.transcript()
-    )
+    assert (
+        say("package.up_to_date", version=COMPLETE_FOLDER, path=KNOWLEDGE_LABEL) in publish.output
+    ), publish.transcript()
     assert [item.status for item in publish.requests("POST", "/knowledge-packages")] == [200]
     assert publish.requests("GET", "/archive") == [], publish.transcript()
-    assert scene.folder_numbers() == [1]
+    assert scene.folder_numbers() == list(range(COMPLETE_FOLDER, 0, -1))
 
 
 def read_the_twins(scene: Scene) -> None:
@@ -615,7 +684,7 @@ def read_the_twins(scene: Scene) -> None:
     notice = say(
         "twins.offline_unreachable",
         studio=scene.origin,
-        source=say("twins.source_folder", path=KNOWLEDGE_LABEL, version=1),
+        source=say("twins.source_folder", path=KNOWLEDGE_LABEL, version=COMPLETE_FOLDER),
     )
     offline_listing = scene.ut("twins", "list", offline=True)
     assert offline_listing.status == 0, offline_listing.transcript()
@@ -658,14 +727,19 @@ def restore_a_changed_file(scene: Scene) -> None:
             code="FOLDER_TAMPERED",
         ),
         say("package.replace_anyway"),
-        say("package.pulled", version=1, path=KNOWLEDGE_LABEL, files=latest["file_count"]),
+        say(
+            "package.pulled",
+            version=COMPLETE_FOLDER,
+            path=KNOWLEDGE_LABEL,
+            files=latest["file_count"],
+        ),
     ):
         assert sentence in pull.output, f"missing: {sentence}\n{pull.transcript()}"
     assert pull.requests("POST", "/knowledge-packages") == [], pull.transcript()
     assert target.read_bytes() == original
     again = scene.ut("package", "verify")
     assert again.status == 0, again.transcript()
-    assert scene.folder_numbers() == [1]
+    assert scene.folder_numbers() == list(range(COMPLETE_FOLDER, 0, -1))
 
 
 def import_the_folder(scene: Scene) -> None:
@@ -673,7 +747,7 @@ def import_the_folder(scene: Scene) -> None:
     run = scene.ut("package", "import", KNOWLEDGE)
     assert run.status == 0, run.transcript()
     for sentence in (
-        say("package.imported", name=PROJECT_NAME, origin=PROJECT_NAME, version=1),
+        say("package.imported", name=PROJECT_NAME, origin=PROJECT_NAME, version=COMPLETE_FOLDER),
         say("package.import_approval", count=IMPORTED_STAGES),
         say("package.import_kept_link", linked=PROJECT_NAME, name=PROJECT_NAME),
     ):
@@ -690,7 +764,7 @@ def import_the_folder(scene: Scene) -> None:
     origin = scene.api.document(f"/projects/{imported['id']}/import")["origin"]
     assert (origin["project_id"], origin["package_version"], origin["package_content_hash"]) == (
         scene.project_id,
-        1,
+        COMPLETE_FOLDER,
         latest["content_hash"],
     )
     assert read_json(scene.local / "project.json")["project_id"] == scene.project_id
@@ -737,20 +811,12 @@ def sign_out(scene: Scene) -> None:
     assert table_rows(status.output) == [
         *([say(f"common.stage_{stage}"), approved, "1"] for stage in INIT_STAGES),
         [say("common.stage_design"), approved, str(design["version_number"])],
-        [say("common.stage_package"), say("status.state_ready"), "1"],
+        [say("common.stage_package"), say("status.state_ready"), str(COMPLETE_FOLDER)],
     ], status.transcript()
-    assert say("status.folder_only_local", local=1) in status.output, status.transcript()
-
-
-def stay_on_the_studio(scene: Scene) -> None:
-    assert scene.terminal.refused == []
-    ports = {
-        urllib.parse.urlsplit(exchange.url).port
-        for run in scene.terminal.runs
-        for exchange in run.exchanges
-    }
-    assert ports == {scene.port}
-    assert not ports & FORBIDDEN_PORTS
+    assert say("status.folder_only_local", local=COMPLETE_FOLDER) in status.output, (
+        status.transcript()
+    )
+    assert say("status.alignment_none") in status.output, status.transcript()
 
 
 def approved_versions(scene: Scene) -> dict[str, tuple[Mapping, Mapping]]:
