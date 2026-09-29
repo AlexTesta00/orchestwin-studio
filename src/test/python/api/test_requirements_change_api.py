@@ -15,6 +15,7 @@ from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.requirements import RequirementsProposalIssueCode
 from orchestwin.projects.requirements_change_application import (
     RequirementsChangeIssueCode,
     RequirementsChangeResult,
@@ -213,6 +214,41 @@ def test_the_job_answers_exactly_as_the_synchronous_request(outcome, status_code
         assert detail == {"code": code}
     else:
         assert set(synchronous.json()) == PAYLOAD_KEYS
+
+
+def test_a_refused_change_request_gives_the_reason_of_the_model_with_and_without_the_preference():
+    service = ScriptedChanges(
+        RequirementsChangeResult(
+            status=RequirementsChangeStatus.REJECTED,
+            issue=RequirementsChangeIssueCode.PROPOSAL_REJECTED,
+            proposal_issue=RequirementsProposalIssueCode.REQUIREMENTS_ANALYST_REQUIRED,
+        )
+    )
+    app = application(service)
+
+    with TestClient(app) as client:
+        synchronous = client.post(CHANGES, json={"request": OWNER_REQUEST})
+        started = client.post(CHANGES, json={"request": OWNER_REQUEST}, headers=ASYNC)
+        job_id = started.json()["job_id"]
+        client.portal.call(app.state.generation_jobs.wait, UUID(job_id))
+        job = client.get(f"{JOBS}/{job_id}").json()
+    refusal = {
+        "status_code": 409,
+        "body": {
+            "detail": {
+                "code": "PROPOSAL_REJECTED",
+                "proposal_issue": "REQUIREMENTS_ANALYST_REQUIRED",
+            }
+        },
+    }
+
+    assert answered(synchronous) == refusal
+    assert (job["operation"], job["status"], job["response"]) == (
+        "REQUIREMENTS_CHANGE",
+        "FAILED",
+        refusal,
+    )
+    assert service.calls == [CALL, CALL]
 
 
 @pytest.mark.parametrize(
