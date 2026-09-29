@@ -1,3 +1,4 @@
+import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type { DesignGenerationPayload } from "../types/design";
@@ -137,6 +138,7 @@ export function createDesignLoopApi(
     accessToken: string,
     method: "GET" | "POST",
     body?: unknown,
+    generationProjectId?: string,
   ): Promise<unknown> {
     const headers = new Headers();
     headers.set("Accept", "application/json");
@@ -146,7 +148,14 @@ export function createDesignLoopApi(
       headers.set("Content-Type", "application/json");
       init.body = JSON.stringify(body);
     }
-    const response = await fetchImpl(path, init);
+    const response =
+      generationProjectId === undefined
+        ? await fetchImpl(path, init)
+        : await sendGeneration(path, init, {
+            fetchImpl,
+            basePath,
+            projectId: generationProjectId,
+          });
     const payload = await responsePayload(response);
     if (!response.ok) {
       throw new DesignLoopApiError("The design loop request failed", {
@@ -165,6 +174,7 @@ export function createDesignLoopApi(
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignEvaluationRunPayload;
     },
 
@@ -197,6 +207,7 @@ export function createDesignLoopApi(
         accessToken,
         "POST",
         {},
+        projectId,
       )) as DesignGenerationPayload;
     },
 
@@ -257,6 +268,7 @@ export function createDesignLoopApi(
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignDiscussionPayload;
     },
 
@@ -266,6 +278,7 @@ export function createDesignLoopApi(
         accessToken,
         "POST",
         body,
+        projectId,
       )) as DesignDiscussionPayload;
     },
 

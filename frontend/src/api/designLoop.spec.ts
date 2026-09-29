@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDesignLoopApi, DesignLoopApiError } from "./designLoop";
+import { createDesignLoopApi, DesignLoopApiError, type DesignLoopApi } from "./designLoop";
+import { clearFollowedGenerations } from "./generationJobs";
+
+const JOB_ID = "00000000-0000-4000-8000-0000000000aa";
 
 function response(status: number, body: unknown): Response {
   return new Response(body === null ? "" : JSON.stringify(body), {
@@ -8,6 +11,117 @@ function response(status: number, body: unknown): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+function job(operation: string, answer: { status_code: number; body: unknown } | null) {
+  return {
+    job_id: JOB_ID,
+    kind: "REQUEST",
+    operation,
+    status: answer === null ? "RUNNING" : answer.status_code < 400 ? "SUCCEEDED" : "FAILED",
+    stage: answer === null ? "GENERATING" : null,
+    attempt: 1,
+    started_at: "2026-09-28T10:00:00+00:00",
+    finished_at: answer === null ? null : "2026-09-28T10:00:40+00:00",
+    alternative_id: null,
+    result: null,
+    failure: null,
+    response: answer,
+  };
+}
+
+function background(operation: string, answer: { status_code: number; body: unknown }) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    return init?.method === "POST"
+      ? response(202, job(operation, null))
+      : response(200, job(operation, answer));
+  });
+}
+
+const evaluation = { design_version_id: "v", design_content_hash: "a".repeat(64) };
+
+const operations: [string, string, (api: DesignLoopApi) => Promise<unknown>][] = [
+  [
+    "DESIGN_EVALUATION",
+    "/api/v1/projects/p/design/evaluations",
+    (api) => api.evaluate("p", evaluation, "token"),
+  ],
+  [
+    "DESIGN_REGENERATION",
+    "/api/v1/projects/p/design/regenerations",
+    (api) => api.regenerate("p", "token"),
+  ],
+  [
+    "DISCUSSION_START",
+    "/api/v1/projects/p/design/discussions",
+    (api) => api.startDiscussion("p", evaluation, "token"),
+  ],
+  [
+    "DISCUSSION_ROUND",
+    "/api/v1/projects/p/design/discussions/discussion%201/rounds",
+    (api) =>
+      api.nextDiscussionRound(
+        "p",
+        "discussion 1",
+        { expected_round_count: 1, owner_note: null },
+        "token",
+      ),
+  ],
+];
+
+describe("designLoop api in the background", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+  });
+
+  it.each(operations)(
+    "follows the job of %s and resolves with its answer",
+    async (operation, path, call) => {
+      vi.useFakeTimers();
+      const body = { id: "answer-1", status: "CREATED" };
+      const fetchImpl = background(operation, { status_code: 201, body });
+      const api = createDesignLoopApi({ fetchImpl });
+
+      const pending = call(api);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(pending).resolves.toEqual(body);
+      const posts = fetchImpl.mock.calls.filter(([, init]) => init?.method === "POST");
+      expect(posts).toHaveLength(1);
+      expect(String(posts[0]?.[0])).toBe(path);
+      expect(new Headers(posts[0]?.[1]?.headers).get("Prefer")).toBe("respond-async");
+      expect(new Headers(posts[0]?.[1]?.headers).get("Authorization")).toBe("Bearer token");
+      expect(String(fetchImpl.mock.calls[1]?.[0])).toBe(
+        `/api/v1/projects/p/generation-jobs/${JOB_ID}`,
+      );
+    },
+  );
+
+  it("throws for a refused job the same error as the synchronous answer", async () => {
+    const refusal = { detail: { code: "DESIGN_DISCUSSION_OPEN" } };
+    const synchronous = createDesignLoopApi({ fetchImpl: async () => response(409, refusal) });
+    const expected = await synchronous
+      .startDiscussion("p", evaluation, "token")
+      .catch((error) => error);
+    vi.useFakeTimers();
+    const api = createDesignLoopApi({
+      fetchImpl: background("DISCUSSION_START", { status_code: 409, body: refusal }),
+    });
+
+    const pending = api.startDiscussion("p", evaluation, "token").catch((error) => error);
+    await vi.advanceTimersByTimeAsync(2000);
+    const actual = await pending;
+
+    expect(actual).toBeInstanceOf(DesignLoopApiError);
+    expect(actual).toMatchObject({
+      message: expected.message,
+      status: expected.status,
+      code: expected.code,
+      payload: expected.payload,
+    });
+  });
+});
 
 describe("designLoop api", () => {
   it("posts evaluations and insight applications with the bearer token", async () => {
