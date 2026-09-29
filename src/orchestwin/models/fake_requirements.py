@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 from uuid import UUID, uuid5
 
@@ -77,6 +77,9 @@ class FakeDeterministicRequirementsAdapter:
         if AgentIdentifier.REQUIREMENTS_ANALYST not in request.team.selected_agent_ids:
             return _rejected(RequirementsProposalIssueCode.REQUIREMENTS_ANALYST_REQUIRED)
 
+        if request.current_specification is not None and request.owner_request is not None:
+            return _changed(request.current_specification, request.owner_request)
+
         seeds = _requirement_seeds(request)
 
         if not seeds:
@@ -97,6 +100,30 @@ class FakeDeterministicRequirementsAdapter:
             provider_version=(FAKE_REQUIREMENTS_PROVIDER_VERSION),
             specification=specification,
         )
+
+
+def _changed(
+    specification: RequirementsSpecification,
+    owner_request: str,
+) -> RequirementsProposalResult:
+    first, *others = specification.requirements
+    statement = " ".join(f"{first.statement} ({owner_request})".split())
+
+    try:
+        changed = replace(
+            specification,
+            requirements=(replace(first, statement=statement), *others),
+        )
+    except ValueError:
+        return _rejected(RequirementsProposalIssueCode.INVALID_PROVIDER_OUTPUT)
+
+    return RequirementsProposalResult(
+        status=RequirementsProposalStatus.PROPOSED,
+        provider_kind=RequirementsProposalProviderKind.FAKE_DETERMINISTIC,
+        provider_id=FAKE_REQUIREMENTS_PROVIDER_ID,
+        provider_version=FAKE_REQUIREMENTS_PROVIDER_VERSION,
+        specification=changed,
+    )
 
 
 def _requirement_seeds(

@@ -29,7 +29,9 @@ class FakeDatabaseRuntime:
 
 
 def stage_services() -> SimpleNamespace:
-    return SimpleNamespace(generation=object(), revisions=object(), queries=object(), gate=object())
+    return SimpleNamespace(
+        generation=object(), revisions=object(), queries=object(), gate=object(), changes=object()
+    )
 
 
 def user_modeling_services() -> SimpleNamespace:

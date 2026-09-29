@@ -73,6 +73,7 @@ def test_default_runtime_composes_design_services_with_the_database_factory(
         revisions=object(),
         queries=object(),
         gate=object(),
+        changes=object(),
     )
     captured_session_factories: list[object] = []
 

@@ -11,11 +11,14 @@ import pytest
 from pydantic import ValidationError
 
 from orchestwin.artifacts.design_evaluation import (
+    AnchoredSyntheticFinding,
     design_review_anchors,
     design_review_view,
     evaluation_bundle,
     evaluation_document,
     evaluation_reference,
+    evaluation_response_from_snapshot,
+    finding_anchor_key,
 )
 from orchestwin.evaluation.artifacts import (
     EvaluationArtifactKind,
@@ -29,6 +32,8 @@ from orchestwin.evaluation.findings import (
 )
 from orchestwin.evaluation.proposer_evaluator import (
     CRITERIA,
+    HOSTED_INSTRUCTION,
+    HOSTED_TWIN_REVIEW_PROMPT_VERSION,
     INSTRUCTION,
     INVALID_TWIN_REVIEW_OUTPUT,
     MAX_FINDINGS,
@@ -41,11 +46,17 @@ from orchestwin.evaluation.proposer_evaluator import (
     TWIN_REVIEW_PURPOSE,
     TWIN_REVIEW_TASK,
     ProposerDesignTwinReviewer,
+    hosted_twin_review,
     twin_review_output_type,
+    twin_review_route,
     twin_review_view,
 )
+from orchestwin.models.generation_routing import RoutingProposalGenerator
+from orchestwin.models.hosted_configuration import ModelRoutes
 from orchestwin.models.proposal_evidence import _SCOPE, ProposalEvidenceScope
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.structured_generation import StructuredGenerationProviderKind
+from orchestwin.models.twin_discussion import NAMES_INSTEAD_OF_CODES
 from orchestwin.projects.requirements_primitives import canonical_json
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
@@ -68,6 +79,12 @@ MODEL_HASH = "c" * 64
 ANCHORS = ("SCR-001", "SCR-001/ELM-001")
 TWIN_REFERENCE = f"user-twin:{design_fixtures.TWIN_ID}:v2"
 ARTIFACT_REFERENCE = f"artifact:{design_fixtures.PROTOTYPE_ID}:v1"
+LOCAL_INSTRUCTION_SHA256 = "8d26c8f0fd48ca720fc0cf776f988fe24bf47db56e7218fb3422cfbf59a15176"
+TITLES_NOT_CODES = (
+    "In every text name a screen by its title between quotation marks, an element by the text "
+    "that it shows and a workflow by its name: never write a code such as SCR-004, ELM-012 or "
+    "FLOW-002."
+)
 
 
 def observation(key, value, status=EpistemicStatus.USER_PROVIDED):
@@ -148,8 +165,13 @@ class FakeGenerator:
         self.outputs = list(outputs)
         self.calls = []
         self.configuration = SimpleNamespace(
-            identity=SimpleNamespace(content_hash=MODEL_HASH), max_output_tokens=max_output_tokens
+            identity=SimpleNamespace(content_hash=MODEL_HASH),
+            max_output_tokens=max_output_tokens,
+            provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL,
         )
+
+    def route(self, task, purpose=None):
+        return self
 
     async def generate(self, **kwargs):
         self.calls.append(kwargs)
@@ -569,6 +591,57 @@ def test_reviewer_records_a_rejected_review_and_ignores_an_idle_scope():
     assert idle.store.events == []
 
 
+class RoutedReviewer(FakeGenerator):
+    def __init__(self, *outputs, max_output_tokens, content_hash, provider_kind):
+        super().__init__(*outputs, max_output_tokens=max_output_tokens)
+        self.configuration = SimpleNamespace(
+            identity=SimpleNamespace(content_hash=content_hash),
+            max_output_tokens=max_output_tokens,
+            provider_kind=provider_kind,
+        )
+
+
+@pytest.mark.parametrize(
+    "routes",
+    [
+        {"default": "general", "purposes": {TWIN_REVIEW_PURPOSE: "review"}},
+        {"default": "general", "tasks": {TWIN_REVIEW_TASK: "review"}},
+    ],
+)
+def test_the_reviewer_reads_the_configuration_of_the_route_of_the_twin_review(routes):
+    general = FakeGenerator(max_output_tokens=8192)
+    review = RoutedReviewer(
+        output(finding()),
+        max_output_tokens=2048,
+        content_hash="d" * 64,
+        provider_kind=StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
+    )
+    router = RoutingProposalGenerator({"general": general, "review": review}, ModelRoutes(**routes))
+    assert twin_review_route(router) is review
+    assert hosted_twin_review(router) is True
+    assert hosted_twin_review(general) is False
+    assert reviewer(router).configuration.model_config_ref == "d" * 64
+    response = evaluate(router)
+    [call] = review.calls
+    assert general.calls == []
+    assert call["max_output_tokens"] == 2048
+    assert call["retry_schema_errors"] is False
+    assert call["context"]["purpose"] == TWIN_REVIEW_PURPOSE
+    assert [item.model_config_ref for item in response.findings] == ["d" * 64]
+    assert response.evaluator.model_config_ref == "d" * 64
+
+
+def test_every_finding_keeps_the_anchor_it_was_generated_with():
+    response = evaluate(FakeGenerator(output(finding(), finding(anchor="SCR-002"))))
+    first, second = response.findings
+    assert all(isinstance(item, AnchoredSyntheticFinding) for item in response.findings)
+    assert (finding_anchor_key(first), finding_anchor_key(second)) == ("SCR-001/ELM-001", "SCR-002")
+    assert first.location == "SCR-001 Create reservation · ELM-001 Guest name"
+    snapshot = response.to_snapshot()
+    assert [item["anchor_key"] for item in snapshot["findings"]] == ["SCR-001/ELM-001", "SCR-002"]
+    assert evaluation_response_from_snapshot(json.loads(json.dumps(snapshot))) == response
+
+
 def test_output_contract_passes_the_audited_proposal_generator(tmp_path):
     generator, transport = make_generator(
         tmp_path, output(finding(), gaps=("Colours are hidden.",))
@@ -591,3 +664,49 @@ def test_output_contract_passes_the_audited_proposal_generator(tmp_path):
     context = json.loads(payload["messages"][1]["content"])["context"]
     assert context["purpose"] == TWIN_REVIEW_PURPOSE
     assert sorted(context["user_twin"]["observations"]) == ["user_twin.goals", "user_twin.role"]
+
+
+def hosted_reviewer(*outputs):
+    return RoutedReviewer(
+        *outputs,
+        max_output_tokens=8192,
+        content_hash=MODEL_HASH,
+        provider_kind=StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
+    )
+
+
+def test_the_local_route_keeps_the_instruction_and_the_prompt_version_of_sprint_22():
+    generator = FakeGenerator(output(finding()))
+    response = evaluate(generator)
+    [call] = generator.calls
+    assert call["instruction"] == INSTRUCTION
+    assert hashlib.sha256(INSTRUCTION.encode("utf-8")).hexdigest() == LOCAL_INSTRUCTION_SHA256
+    assert NAMES_INSTEAD_OF_CODES not in call["instruction"]
+    assert TWIN_REVIEW_PROMPT_VERSION == "s22-design-twin-review-v2"
+    assert response.evaluator.prompt_version_ref == TWIN_REVIEW_PROMPT_VERSION
+    assert [item.prompt_version_ref for item in response.findings] == [TWIN_REVIEW_PROMPT_VERSION]
+
+
+def test_the_hosted_route_names_screens_by_their_titles_with_prompt_version_three():
+    generator = hosted_reviewer(output(finding(), finding(anchor="SCR-002")))
+    response = evaluate(generator)
+    [call] = generator.calls
+    assert NAMES_INSTEAD_OF_CODES == TITLES_NOT_CODES
+    assert call["instruction"] == HOSTED_INSTRUCTION == f"{INSTRUCTION} {TITLES_NOT_CODES}"
+    assert call["instruction"].count(TITLES_NOT_CODES) == 1
+    assert HOSTED_TWIN_REVIEW_PROMPT_VERSION == "s24-design-twin-review-v3"
+    assert reviewer(generator).configuration.prompt_version_ref == HOSTED_TWIN_REVIEW_PROMPT_VERSION
+    assert response.evaluator.prompt_version_ref == HOSTED_TWIN_REVIEW_PROMPT_VERSION
+    assert [item.prompt_version_ref for item in response.findings] == [
+        HOSTED_TWIN_REVIEW_PROMPT_VERSION
+    ] * 2
+    assert [item.location for item in response.findings] == [
+        "SCR-001 Create reservation · ELM-001 Guest name",
+        "SCR-002 Reservation confirmation",
+    ]
+    design = call["context"]["design"]
+    assert [(item["code"], item["title"]) for item in design["screens"]] == [
+        ("SCR-001", "Create reservation"),
+        ("SCR-002", "Reservation confirmation"),
+    ]
+    assert all(item["code"] and item["title"] for item in design["alternative"]["workflows"])

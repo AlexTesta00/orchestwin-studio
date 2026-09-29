@@ -7,6 +7,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from orchestwin.artifacts.design_evaluation import anchor_finding
 from orchestwin.evaluation.artifacts import EvaluationArtifactKind
 from orchestwin.evaluation.evaluator import (
     UserTwinEvaluationRequest,
@@ -20,14 +21,17 @@ from orchestwin.evaluation.findings import (
     SyntheticFindingSeverity,
     create_synthetic_finding,
 )
+from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
 from orchestwin.models.proposal_evidence import current_proposal_evidence, retain_adapter_result
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.twin_discussion import NAMES_INSTEAD_OF_CODES
 
 TWIN_REVIEW_TASK: Final = "user-twin-evaluation"
 TWIN_REVIEW_PURPOSE: Final = "DESIGN_TWIN_REVIEW"
 TWIN_REVIEW_EVALUATOR_ID: Final = "proposer-design-twin-review"
 TWIN_REVIEW_EVALUATOR_VERSION: Final = "1.0.0"
 TWIN_REVIEW_PROMPT_VERSION: Final = "s22-design-twin-review-v2"
+HOSTED_TWIN_REVIEW_PROMPT_VERSION: Final = "s24-design-twin-review-v3"
 TWIN_REVIEW_OUTPUT_TOKENS: Final = 3072
 INVALID_TWIN_REVIEW_OUTPUT: Final = "INVALID_TWIN_REVIEW_OUTPUT"
 MAX_FINDINGS: Final = 6
@@ -81,6 +85,7 @@ INSTRUCTION: Final = (
     "findings is empty and evidence_gaps explains why. Findings are design hypotheses for the "
     "team to verify with real users."
 )
+HOSTED_INSTRUCTION: Final = f"{INSTRUCTION} {NAMES_INSTEAD_OF_CODES}"
 
 
 class _Output(BaseModel):
@@ -90,6 +95,14 @@ class _Output(BaseModel):
 def _normalized(value: object, *, maximum: int) -> str:
     text = " ".join(str(value).split())
     return text[:maximum].rstrip() if len(text) > maximum else text
+
+
+def twin_review_route(generator):
+    return generator.route(TWIN_REVIEW_TASK, TWIN_REVIEW_PURPOSE)
+
+
+def hosted_twin_review(generator) -> bool:
+    return twin_review_route(generator).configuration.provider_kind in HOSTED_PROVIDER_KINDS
 
 
 def twin_review_view(request: UserTwinEvaluationRequest) -> dict[str, object]:
@@ -160,6 +173,7 @@ class ProposerDesignTwinReviewer:
         if not anchors:
             raise ValueError("twin review requires the anchors of the mockup")
         self._generator = generator
+        self._hosted = hosted_twin_review(generator)
         self._design_view = dict(design_view)
         self._anchors = dict(anchors)
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -169,8 +183,10 @@ class ProposerDesignTwinReviewer:
         return UserTwinEvaluatorConfiguration(
             evaluator_id=TWIN_REVIEW_EVALUATOR_ID,
             evaluator_version=TWIN_REVIEW_EVALUATOR_VERSION,
-            model_config_ref=self._generator.configuration.identity.content_hash,
-            prompt_version_ref=TWIN_REVIEW_PROMPT_VERSION,
+            model_config_ref=twin_review_route(self._generator).configuration.identity.content_hash,
+            prompt_version_ref=HOSTED_TWIN_REVIEW_PROMPT_VERSION
+            if self._hosted
+            else TWIN_REVIEW_PROMPT_VERSION,
         )
 
     def context(self, request: UserTwinEvaluationRequest) -> dict[str, object]:
@@ -201,14 +217,14 @@ class ProposerDesignTwinReviewer:
     async def evaluate(self, request: UserTwinEvaluationRequest) -> UserTwinEvaluationResponse:
         context = self.context(request)
         profile_keys = tuple(context["user_twin"]["observations"])
+        ceiling = twin_review_route(self._generator).configuration.max_output_tokens
         output = await self._generator.generate(
             task=TWIN_REVIEW_TASK,
             context=context,
             output_type=twin_review_output_type(tuple(self._anchors), profile_keys),
-            max_output_tokens=min(
-                TWIN_REVIEW_OUTPUT_TOKENS, self._generator.configuration.max_output_tokens
-            ),
-            instruction=INSTRUCTION,
+            max_output_tokens=min(TWIN_REVIEW_OUTPUT_TOKENS, ceiling),
+            instruction=HOSTED_INSTRUCTION if self._hosted else INSTRUCTION,
+            retry_schema_errors=False,
         )
         try:
             response = self._bind(request, output)
@@ -223,7 +239,7 @@ class ProposerDesignTwinReviewer:
                     "result": response.to_snapshot(),
                     "generated_content_hashes": {"DESIGN_TWIN_REVIEW": [response.content_hash]},
                     **(
-                        {"related_generations": scope.related_generations}
+                        {"related_generations": list(scope.related_generations)}
                         if scope.related_generations
                         else {}
                     ),
@@ -250,34 +266,37 @@ class ProposerDesignTwinReviewer:
         twin = request.twin
         artifact_reference = f"artifact:{document.artifact_id}:v{document.version_number}"
         findings = tuple(
-            create_synthetic_finding(
-                finding_id=f"UTF-{index:03d}",
-                twin_id=twin.twin_id,
-                twin_version=twin.version_number,
-                artifact_id=document.artifact_id,
-                artifact_version=document.version_number,
-                location=_normalized(self._anchors[item.anchor], maximum=500),
-                summary=_normalized(item.concern, maximum=1000),
-                rationale=_normalized(item.grounds, maximum=4000),
-                criterion=SyntheticFindingCriterion(item.quality_criterion),
-                severity=SyntheticFindingSeverity(item.severity),
-                epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
-                evidence_refs=tuple(
-                    sorted(
-                        {
-                            artifact_reference,
-                            *(
-                                f"user-twin:{twin.twin_id}:v{twin.version_number}#{key}"
-                                for key in item.profile_keys
-                            ),
-                        }
-                    )
+            anchor_finding(
+                create_synthetic_finding(
+                    finding_id=f"UTF-{index:03d}",
+                    twin_id=twin.twin_id,
+                    twin_version=twin.version_number,
+                    artifact_id=document.artifact_id,
+                    artifact_version=document.version_number,
+                    location=_normalized(self._anchors[item.anchor], maximum=500),
+                    summary=_normalized(item.concern, maximum=1000),
+                    rationale=_normalized(item.grounds, maximum=4000),
+                    criterion=SyntheticFindingCriterion(item.quality_criterion),
+                    severity=SyntheticFindingSeverity(item.severity),
+                    epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
+                    evidence_refs=tuple(
+                        sorted(
+                            {
+                                artifact_reference,
+                                *(
+                                    f"user-twin:{twin.twin_id}:v{twin.version_number}#{key}"
+                                    for key in item.profile_keys
+                                ),
+                            }
+                        )
+                    ),
+                    confidence=round(float(item.self_confidence), 2),
+                    recommended_action=_normalized(item.recommended_action, maximum=2000),
+                    requires_human_validation=True,
+                    model_config_ref=configuration.model_config_ref,
+                    prompt_version_ref=configuration.prompt_version_ref,
                 ),
-                confidence=round(float(item.self_confidence), 2),
-                recommended_action=_normalized(item.recommended_action, maximum=2000),
-                requires_human_validation=True,
-                model_config_ref=configuration.model_config_ref,
-                prompt_version_ref=configuration.prompt_version_ref,
+                item.anchor,
             )
             for index, item in enumerate(output.findings, 1)
         )
@@ -312,6 +331,8 @@ class ProposerDesignTwinReviewer:
 
 __all__ = [
     "CRITERIA",
+    "HOSTED_INSTRUCTION",
+    "HOSTED_TWIN_REVIEW_PROMPT_VERSION",
     "INSTRUCTION",
     "INVALID_TWIN_REVIEW_OUTPUT",
     "MAX_FINDINGS",
@@ -324,6 +345,8 @@ __all__ = [
     "TWIN_REVIEW_PURPOSE",
     "TWIN_REVIEW_TASK",
     "ProposerDesignTwinReviewer",
+    "hosted_twin_review",
     "twin_review_output_type",
+    "twin_review_route",
     "twin_review_view",
 ]

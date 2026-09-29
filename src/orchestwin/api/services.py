@@ -91,6 +91,7 @@ from orchestwin.projects.persistence import (
 from orchestwin.projects.requirements_application import (
     LocalRequirementsGenerationService,
 )
+from orchestwin.projects.requirements_change_application import LocalRequirementsChangeService
 from orchestwin.projects.requirements_gate import LocalRequirementsGateService
 from orchestwin.projects.requirements_realignment_service import (
     RequirementsRealignmentService,
@@ -192,6 +193,7 @@ class ApplicationRuntime:
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
     requirements_gate_service: LocalRequirementsGateService | None = None
+    requirements_change_service: LocalRequirementsChangeService | None = None
     design_generation_service: DesignGenerationService | None = None
     design_revision_service: DesignRevisionService | None = None
     design_query_service: DesignQueryService | None = None
@@ -206,8 +208,13 @@ class ApplicationRuntime:
 
     async def close(self) -> None:
         """Dispose process-level resources."""
-        if self.database_runtime is not None:
-            await self.database_runtime.dispose()
+        closing = getattr(self.real_model_runtime, "close", None)
+        try:
+            if closing is not None:
+                await closing()
+        finally:
+            if self.database_runtime is not None:
+                await self.database_runtime.dispose()
 
 
 def create_default_runtime(
@@ -340,6 +347,7 @@ def create_default_runtime(
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,
         requirements_gate_service=requirements.gate,
+        requirements_change_service=requirements.changes,
         design_generation_service=design.generation,
         design_revision_service=design.revisions,
         design_query_service=design.queries,

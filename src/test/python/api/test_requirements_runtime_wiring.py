@@ -30,6 +30,7 @@ def test_application_registers_requirements_routes_and_runtime_state() -> None:
         requirements_revision_service=marker,
         requirements_query_service=marker,
         requirements_gate_service=marker,
+        requirements_change_service=marker,
     )
 
     app = create_app(
@@ -58,3 +59,7 @@ def test_application_registers_requirements_routes_and_runtime_state() -> None:
     assert app.state.requirements_query_service is marker
 
     assert app.state.requirements_gate_service is marker
+
+    assert app.state.requirements_change_service is marker
+
+    assert "post" in openapi_paths["/api/v1/projects/{project_id}/requirements/change-requests"]

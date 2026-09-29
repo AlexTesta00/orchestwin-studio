@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignGenerationPayload
+from orchestwin.api.generation_jobs import GenerationOperation
+from orchestwin.api.generation_requests import generation_request
 from orchestwin.artifacts.design_evaluation import (
     DesignEvaluationError,
     DesignEvaluationRun,
@@ -46,6 +48,7 @@ from orchestwin.evaluation.evaluator import EvaluationUserTwinProfile, UserTwinE
 from orchestwin.evaluation.proposer_evaluator import (
     INVALID_TWIN_REVIEW_OUTPUT,
     ProposerDesignTwinReviewer,
+    hosted_twin_review,
 )
 from orchestwin.identity.domain import UserAccount
 from orchestwin.models.proposal_evidence import current_proposal_evidence, evidence_application
@@ -55,7 +58,12 @@ from orchestwin.twins.persistence.repositories import SqlAlchemyUserTwinVersionR
 DESIGN_LOOP_API_PREFIX = "/projects/{project_id}/design"
 TWIN_REVIEW_ATTEMPTS: Final = 2
 RETRYABLE_REVIEW_CODES: Final = frozenset(
-    {INVALID_TWIN_REVIEW_OUTPUT, "INVALID_PROVIDER_OUTPUT", "INCOMPLETE_OUTPUT"}
+    {
+        INVALID_TWIN_REVIEW_OUTPUT,
+        "INVALID_PROVIDER_OUTPUT",
+        "INCOMPLETE_OUTPUT",
+        "RESPONSE_SCHEMA_ERROR",
+    }
 )
 
 
@@ -165,12 +173,12 @@ class DesignLoopApplication:
                 await self._retire("TWIN_REVIEW_REJECTED", request.evaluation_run_id)
         raise RuntimeError("twin review attempts are exhausted")
 
-    async def _twin_review(self, generator, version, twins, bundle, run_id):
+    async def _twin_review(self, generator, version, twins, bundle, run_id, *, hosted, language):
         try:
             reviewer = ProposerDesignTwinReviewer(
                 generator,
-                design_view=design_review_view(version),
-                anchors=design_review_anchors(version),
+                design_view=design_review_view(version, hosted=hosted, language=language),
+                anchors=design_review_anchors(version, hosted=hosted, language=language),
             )
         except DesignEvaluationError as error:
             raise HTTPException(409, detail={"code": error.code}) from error
@@ -235,9 +243,11 @@ class DesignLoopApplication:
         mode, engine = self._mode(body.mode)
         started_at = datetime.now(UTC)
         run_id = uuid4()
+        language = body.locale.split("-")[0]
+        hosted = mode is DesignEvaluationMode.TWIN_REVIEW and hosted_twin_review(engine)
         try:
             if mode is DesignEvaluationMode.TWIN_REVIEW:
-                document = evaluation_document(version, language=body.locale.split("-")[0])
+                document = evaluation_document(version, language=language, hosted=hosted)
                 bundle = evaluation_bundle(
                     version, document, locale=body.locale, created_at=started_at
                 )
@@ -250,7 +260,9 @@ class DesignLoopApplication:
             raise HTTPException(409, detail={"code": error.code}) from error
         twins = await self._twins(owner_user_id, project_id, version)
         if mode is DesignEvaluationMode.TWIN_REVIEW:
-            responses = await self._twin_review(engine, version, twins, bundle, run_id)
+            responses = await self._twin_review(
+                engine, version, twins, bundle, run_id, hosted=hosted, language=language
+            )
         else:
             responses = await self._static_check(
                 engine, version, twins, bundle, document, target, run_id
@@ -359,10 +371,20 @@ def create_design_loop_router():
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
     ):
-        result = await DesignLoopApplication(request.app.state.application_runtime).evaluate(
-            owner_user_id=user.id, project_id=project_id, body=body
+        async def evaluation():
+            result = await DesignLoopApplication(request.app.state.application_runtime).evaluate(
+                owner_user_id=user.id, project_id=project_id, body=body
+            )
+            return result.run.to_snapshot()
+
+        return await generation_request(
+            request,
+            GenerationOperation.DESIGN_EVALUATION,
+            evaluation,
+            owner_user_id=user.id,
+            project_id=project_id,
+            body=body,
         )
-        return result.run.to_snapshot()
 
     @router.get("/evaluations")
     async def runs(
@@ -416,10 +438,19 @@ def create_design_loop_router():
         request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
     ):
-        result = await DesignLoopApplication(request.app.state.application_runtime).regenerate(
-            owner_user_id=user.id, project_id=project_id
+        async def regeneration():
+            result = await DesignLoopApplication(request.app.state.application_runtime).regenerate(
+                owner_user_id=user.id, project_id=project_id
+            )
+            return DesignGenerationPayload.from_domain(result)
+
+        return await generation_request(
+            request,
+            GenerationOperation.DESIGN_REGENERATION,
+            regeneration,
+            owner_user_id=user.id,
+            project_id=project_id,
         )
-        return DesignGenerationPayload.from_domain(result)
 
     return router
 

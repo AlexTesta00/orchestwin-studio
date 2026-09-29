@@ -253,7 +253,7 @@ class LocalRequirementsGenerationService:
             owner_user_id=owner_user_id,
             project_id=project_id,
         )
-        issue = _governance_issue(context)
+        issue = requirements_governance_issue(context)
 
         if issue is not None:
             return RequirementsGenerationResult(
@@ -285,7 +285,7 @@ class LocalRequirementsGenerationService:
                 proposal_issue=proposal.issue,
             )
 
-        if proposal.specification is None or not _proposal_matches_context(
+        if proposal.specification is None or not specification_matches_context(
             proposal.specification,
             context,
         ):
@@ -363,12 +363,12 @@ class LocalRequirementsGenerationService:
 
         return (
             current is not None
-            and _governance_issue(current) is None
+            and requirements_governance_issue(current) is None
             and current.fingerprint == previous.fingerprint
         )
 
 
-def _governance_issue(
+def requirements_governance_issue(
     context: GovernedRequirementsContext | None,
 ) -> RequirementsGenerationIssueCode | None:
     """Return the first approval blocker for requirements generation."""
@@ -429,7 +429,7 @@ def _gate_approves(
     return gate.status is HumanGateStatus.APPROVED and gate.artifact == expected
 
 
-def _proposal_matches_context(
+def specification_matches_context(
     specification: RequirementsSpecification,
     context: GovernedRequirementsContext,
 ) -> bool:
@@ -478,4 +478,6 @@ __all__ = [
     "RequirementsGovernancePort",
     "RequirementsSpecificationRepository",
     "RequirementsVersionAppendStatus",
+    "requirements_governance_issue",
+    "specification_matches_context",
 ]

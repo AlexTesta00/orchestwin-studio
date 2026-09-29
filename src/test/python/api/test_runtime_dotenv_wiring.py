@@ -39,7 +39,7 @@ def factory_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNa
     token_settings = []
     token_service = services.JwtAccessTokenService
     stage = SimpleNamespace(
-        generation=object(), revisions=object(), queries=object(), gate=object()
+        generation=object(), revisions=object(), queries=object(), gate=object(), changes=object()
     )
 
     def build_database(settings):
@@ -82,6 +82,7 @@ def test_standard_factory_composes_services_with_dotenv_only(factory_context) ->
     assert runtime.identity_service is not None
     assert runtime.project_service is not None
     assert runtime.requirements_generation_service is factory_context.stage.generation
+    assert runtime.requirements_change_service is factory_context.stage.changes
     assert len(factory_context.database_settings) == 1
     assert factory_context.database_settings[0].url.get_secret_value() == DATABASE_URL
     assert factory_context.token_settings[0].signing_secret == JWT_SECRET

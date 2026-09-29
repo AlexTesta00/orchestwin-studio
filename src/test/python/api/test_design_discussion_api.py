@@ -41,7 +41,17 @@ from orchestwin.evaluation.findings import (
 )
 from orchestwin.models.proposal_evidence import begin_model_generation
 from orchestwin.models.proposal_generation import ProposalGenerationError
-from orchestwin.models.twin_discussion import FOLLOW_UP_INSTRUCTION, STATEMENT_INSTRUCTION
+from orchestwin.models.structured_generation import StructuredGenerationProviderKind
+from orchestwin.models.twin_discussion import (
+    FOLLOW_UP_INSTRUCTION,
+    HOSTED_FOLLOW_UP_INSTRUCTION,
+    HOSTED_STATEMENT_INSTRUCTION,
+    HOSTED_SYNTHESIS_INSTRUCTION,
+    NAMES_INSTEAD_OF_CODES,
+    STATEMENT_INSTRUCTION,
+    SYNTHESIS_INSTRUCTION,
+    screen_titles,
+)
 from orchestwin.projects.requirements_primitives import (
     UserTwinVersionReference,
     canonical_user_twin_references,
@@ -57,7 +67,10 @@ from orchestwin.twins.epistemics import (
     ProfileObservation,
 )
 from src.test.python.artifacts import design_fixtures
+from src.test.python.artifacts.test_design_package_extension import extended_package, large_bound
 
+LOCAL = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
+HOSTED = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 OWNER_ID = design_fixtures.OWNER_ID
 PROJECT_ID = design_fixtures.PROJECT_ID
 TWIN_ID = design_fixtures.TWIN_ID
@@ -241,10 +254,15 @@ class MemoryEvidence:
 
 
 class FakeGenerator:
-    def __init__(self, *outcomes):
+    def __init__(self, *outcomes, provider_kind=LOCAL):
         self.outcomes = list(outcomes)
         self.calls = []
-        self.configuration = SimpleNamespace(max_output_tokens=8192)
+        self.routes = []
+        self.configuration = SimpleNamespace(max_output_tokens=8192, provider_kind=provider_kind)
+
+    def route(self, task, purpose=None):
+        self.routes.append((task, purpose))
+        return self
 
     async def generate(self, **kwargs):
         self.calls.append(kwargs)
@@ -390,8 +408,8 @@ def application(
     return DesignDiscussionApplication(runtime), current
 
 
-def discussing(monkeypatch, *outcomes, version=None, **options):
-    generator = FakeGenerator(*outcomes)
+def discussing(monkeypatch, *outcomes, version=None, provider_kind=LOCAL, **options):
+    generator = FakeGenerator(*outcomes, provider_kind=provider_kind)
     evidence = MemoryEvidence()
     app, current = application(
         monkeypatch, version=version, generator=generator, evidence=evidence, **options
@@ -557,10 +575,15 @@ def test_start_records_one_statement_per_twin_a_synthesis_and_the_evidence(monke
     ]
     accepted = evidence.payloads("ADAPTER_ACCEPTED")
     for payload, item in zip(accepted, opening.statements, strict=False):
-        assert payload == {
+        assert {key: payload[key] for key in ("result", "generated_content_hashes")} == {
             "result": item.to_snapshot(),
             "generated_content_hashes": {"TWIN_STATEMENT": [item.content_hash]},
         }
+    assert "related_generations" not in accepted[0]
+    assert [
+        (item["role"], item["generation_id"], item["code"])
+        for item in accepted[1]["related_generations"]
+    ] == [("TWIN_DISCUSSION", str(evidence.generations[0]), "TWIN_STATEMENT_RECORDED")]
     assert accepted[2]["result"] == opening.to_snapshot()
     assert accepted[2]["generated_content_hashes"] == {"DISCUSSION_ROUND": [opening.content_hash]}
     assert [
@@ -757,6 +780,118 @@ def test_findings_come_from_the_latest_run_of_this_design_without_owner_dismissa
     assert generator.calls[0]["context"]["findings"] == []
 
 
+def large_version():
+    return design_fixtures.design_version(package=extended_package(large_bound()))
+
+
+def test_a_hosted_discussion_hears_the_reduced_view_of_a_large_generated_mockup(monkeypatch):
+    version = large_version()
+    app, _, generator, _ = discussing(
+        monkeypatch,
+        statement("Il registro è troppo lungo per il banco prestiti."),
+        synthesis(("T1",)),
+        statement("Dopo la sintesi chiedo ancora un elenco più corto."),
+        synthesis(("T1",)),
+        version=version,
+        provider_kind=HOSTED,
+    )
+    opened = start(app, version).discussion
+    continue_discussion(app, opened.id, 1)
+    hosted = design_review_view(version, hosted=True, language="it")
+    local = design_review_view(version)
+    assert [
+        call["context"]["design"]
+        for call in generator.calls
+        if call["context"]["purpose"] == "TWIN_STATEMENT"
+    ] == [hosted, hosted]
+    assert generator.routes == [("twin-discussion", "TWIN_STATEMENT")] * 2
+    assert hosted != design_review_view(version, hosted=True)
+    assert "… e altre 29 righe della tabella" in json.dumps(hosted, ensure_ascii=False)
+    assert len(json.dumps(hosted).encode()) < len(json.dumps(local).encode())
+
+
+@pytest.mark.parametrize("locale", ["it-IT", "en-US"])
+@pytest.mark.parametrize(
+    ("version", "outcomes"),
+    [
+        (large_version(), (statement("One."), synthesis(("T1",)))),
+        (two_twin_version(), (statement("One."), statement("Two."), synthesis())),
+    ],
+    ids=["large", "plain"],
+)
+def test_a_local_discussion_keeps_the_design_view_byte_for_byte(
+    monkeypatch, locale, version, outcomes
+):
+    app, _, generator, _ = discussing(monkeypatch, *outcomes, version=version)
+    start(app, version, locale=locale)
+    designs = {
+        json.dumps(call["context"]["design"], ensure_ascii=False).encode()
+        for call in generator.calls
+        if call["context"]["purpose"] == "TWIN_STATEMENT"
+    }
+    assert designs == {json.dumps(design_review_view(version), ensure_ascii=False).encode()}
+    assert generator.routes == [("twin-discussion", "TWIN_STATEMENT")]
+
+
+@pytest.mark.parametrize(
+    ("provider_kind", "instructions"),
+    [
+        (
+            LOCAL,
+            [
+                STATEMENT_INSTRUCTION,
+                SYNTHESIS_INSTRUCTION,
+                FOLLOW_UP_INSTRUCTION,
+                SYNTHESIS_INSTRUCTION,
+            ],
+        ),
+        (
+            HOSTED,
+            [
+                HOSTED_STATEMENT_INSTRUCTION,
+                HOSTED_SYNTHESIS_INSTRUCTION,
+                HOSTED_FOLLOW_UP_INSTRUCTION,
+                HOSTED_SYNTHESIS_INSTRUCTION,
+            ],
+        ),
+    ],
+    ids=["local", "hosted"],
+)
+def test_only_a_hosted_discussion_names_the_screens_by_their_titles(
+    monkeypatch, provider_kind, instructions
+):
+    version = large_version()
+    app, _, generator, _ = discussing(
+        monkeypatch,
+        statement("Il registro è troppo lungo per il banco prestiti."),
+        synthesis(("T1",)),
+        statement("Dopo la sintesi chiedo ancora un elenco più corto."),
+        synthesis(("T1",)),
+        version=version,
+        provider_kind=provider_kind,
+    )
+    opened = start(app, version).discussion
+    continue_discussion(app, opened.id, 1)
+    hosted = provider_kind is HOSTED
+    assert [call["instruction"] for call in generator.calls] == instructions
+    assert [call["instruction"].count(NAMES_INSTEAD_OF_CODES) for call in generator.calls] == [
+        int(hosted)
+    ] * 4
+    contexts = [call["context"] for call in generator.calls]
+    view = design_review_view(version, hosted=True, language="it") if hosted else None
+    for context in contexts:
+        if context["purpose"] == "TWIN_STATEMENT":
+            assert all(item["code"] and item["title"] for item in context["design"]["screens"])
+        elif hosted:
+            assert context["screens"] == screen_titles(view)
+            assert [item["code"] for item in context["screens"]] == [
+                f"SCR-{index:03d}" for index in range(1, 6)
+            ]
+        else:
+            assert "screens" not in context
+    assert generator.routes == [("twin-discussion", "TWIN_STATEMENT")] * 2
+
+
 def test_start_refuses_invalid_notes_missing_models_and_stale_design_context(monkeypatch):
     version = two_twin_version()
     bare = design_fixtures.design_version(
@@ -948,6 +1083,7 @@ def test_decisions_approve_or_close_an_open_discussion_once(monkeypatch):
         (statement("One.", reactions=(("T2", "AGREE", "Too early."),)), False),
         (ProposalGenerationError("INVALID_PROVIDER_OUTPUT"), False),
         (ProposalGenerationError("INCOMPLETE_OUTPUT"), False),
+        (ProposalGenerationError("RESPONSE_SCHEMA_ERROR"), False),
     ],
 )
 def test_a_rejected_twin_statement_is_generated_once_more_and_then_recorded(
@@ -965,6 +1101,7 @@ def test_a_rejected_twin_statement_is_generated_once_more_and_then_recorded(
     result = start(app, version)
     discussion = result.discussion
     assert result.status is DesignDiscussionCommandStatus.STARTED
+    assert {call["retry_schema_errors"] for call in generator.calls} == {False}
     assert [
         (call["context"]["purpose"], call["context"].get("speaker")) for call in generator.calls
     ] == [
@@ -1232,6 +1369,7 @@ def test_a_second_rejected_statement_returns_the_error(monkeypatch, first, secon
         (REPEATED_TWIN, False),
         (ProposalGenerationError("INVALID_PROVIDER_OUTPUT"), False),
         (ProposalGenerationError("INCOMPLETE_OUTPUT"), False),
+        (ProposalGenerationError("RESPONSE_SCHEMA_ERROR"), False),
     ],
 )
 def test_a_rejected_synthesis_is_generated_once_more_and_then_recorded(

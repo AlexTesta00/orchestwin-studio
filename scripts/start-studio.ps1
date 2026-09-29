@@ -9,10 +9,45 @@ if (-not (Test-Path -LiteralPath $node -PathType Leaf)) { throw 'Configure the N
 $node = (Resolve-Path -LiteralPath $node).ProviderPath
 # The API uses this same selected Node binary for syntax-only source validation.
 $env:PATH = [IO.Path]::GetDirectoryName($node) + [IO.Path]::PathSeparator + $env:PATH
+function Test-DotenvKey([string]$path, [string]$name) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+    $present = $false
+    $pattern = '^\s*(?:export\s+)?' + [regex]::Escape($name) + '\s*=(.*)$'
+    foreach ($line in [IO.File]::ReadLines($path)) {
+        if ($line -match $pattern) {
+            $present = $Matches[1].Trim().Trim('"').Trim("'").Trim().Length -gt 0
+        }
+    }
+    return $present
+}
+$providersConfig = $settings.providers_config_file
+$hosted = -not [string]::IsNullOrWhiteSpace($providersConfig)
+$providers = $null
+if ($hosted) {
+    if ($providersConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $providersConfig -PathType Leaf)) { throw 'The providers configuration must be an existing absolute file path.' }
+    $providersConfig = [IO.Path]::GetFullPath($providersConfig)
+    $providers = Get-Content -LiteralPath $providersConfig -Raw | ConvertFrom-Json
+    $dotenv = Join-Path $repo '.env'
+    $keyNames = @($providers.providers | Where-Object { $_.kind -ne 'OPENAI_COMPATIBLE_LOCAL' } | ForEach-Object { [string]$_.api_key_env } | Sort-Object -Unique)
+    foreach ($name in $keyNames) {
+        if ($name -cnotmatch '^ORCHESTWIN_[A-Z0-9_]{1,48}_API_KEY$') { throw 'The providers configuration names an invalid API key variable.' }
+        if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'Process'))) { continue }
+        if (Test-DotenvKey $dotenv $name) { continue }
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'User'))) {
+            throw "Missing API key $name. Add it to the .env file of the repository or to the user environment variables."
+        }
+        [Environment]::SetEnvironmentVariable($name, [Environment]::GetEnvironmentVariable($name, 'User'), 'Process')
+    }
+}
 $tunnelPort = $null
 $remoteConfig = $settings.remote_proposal_config_file
 $remotePod = $settings.remote_pod
-if (-not [string]::IsNullOrWhiteSpace($remoteConfig)) {
+$useTunnel = -not [string]::IsNullOrWhiteSpace($remoteConfig)
+if ($hosted -and $useTunnel) {
+    $remoteFull = [IO.Path]::GetFullPath($remoteConfig)
+    $useTunnel = @($providers.providers | Where-Object { $_.kind -eq 'OPENAI_COMPATIBLE_LOCAL' -and [IO.Path]::GetFullPath([string]$_.config_file) -eq $remoteFull }).Count -gt 0
+}
+if ($useTunnel) {
     if ($remoteConfig -notmatch '^[A-Za-z]:[\\/]' -or -not (Test-Path -LiteralPath $remoteConfig -PathType Leaf)) { throw 'The remote proposal configuration must be an existing absolute file path.' }
     if ([string]::IsNullOrWhiteSpace($remotePod) -or $remotePod -notmatch '^[A-Za-z0-9_-]+$') { throw 'The remote proposal configuration requires the pod identifier.' }
     $remoteRuntime = Get-Content -LiteralPath $remoteConfig -Raw | ConvertFrom-Json
@@ -20,6 +55,7 @@ if (-not [string]::IsNullOrWhiteSpace($remoteConfig)) {
     $tunnelPort = [int]$Matches[1]
     if ($tunnelPort -in @(8000, 8080, 8787, 8788)) { throw 'The tunnel port must not collide with Studio ports.' }
 }
+$useModels = (-not $hosted) -or (-not [string]::IsNullOrWhiteSpace($settings.adapter))
 $ports = @(8000, 8080, 8787, 8788)
 if ($null -ne $tunnelPort) { $ports += $tunnelPort }
 foreach ($port in $ports) {
@@ -57,25 +93,29 @@ try {
     & $node node_modules/vite/bin/vite.js build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
 } finally { Pop-Location }
-$modelArgs = @('--exec', (Quote-Argument "$linuxRepo/environments/training/.venv/bin/python"), (Quote-Argument "$linuxRepo/environments/training/serve_studio_models.py"), '--adapter', (Quote-Argument (Convert-ToWslPath $settings.adapter)), '--weights-sha256', $settings.weights_sha256, '--config-sha256', $settings.config_sha256, '--output', (Quote-Argument $linuxSession))
-if ($settings.weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.config_sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Expected adapter hashes are required.' }
-$proposerFields = @($settings.proposer_adapter, $settings.proposer_weights_sha256, $settings.proposer_config_sha256)
-if (@($proposerFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
-    if ([string]::IsNullOrWhiteSpace($settings.proposer_adapter) -or $settings.proposer_weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.proposer_config_sha256 -notmatch '^[0-9a-f]{64}$') {
-        throw 'The optional proposer adapter requires an explicit path and both SHA-256 hashes.'
+if ($useModels) {
+    $modelArgs = @('--exec', (Quote-Argument "$linuxRepo/environments/training/.venv/bin/python"), (Quote-Argument "$linuxRepo/environments/training/serve_studio_models.py"), '--adapter', (Quote-Argument (Convert-ToWslPath $settings.adapter)), '--weights-sha256', $settings.weights_sha256, '--config-sha256', $settings.config_sha256, '--output', (Quote-Argument $linuxSession))
+    if ($settings.weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.config_sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Expected adapter hashes are required.' }
+    $proposerFields = @($settings.proposer_adapter, $settings.proposer_weights_sha256, $settings.proposer_config_sha256)
+    if (@($proposerFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+        if ([string]::IsNullOrWhiteSpace($settings.proposer_adapter) -or $settings.proposer_weights_sha256 -notmatch '^[0-9a-f]{64}$' -or $settings.proposer_config_sha256 -notmatch '^[0-9a-f]{64}$') {
+            throw 'The optional proposer adapter requires an explicit path and both SHA-256 hashes.'
+        }
+        if (-not (Test-Path -LiteralPath $settings.proposer_adapter -PathType Container)) { throw 'The selected proposer adapter directory does not exist.' }
+        $modelArgs += @('--proposer-adapter', (Quote-Argument (Convert-ToWslPath $settings.proposer_adapter)), '--proposer-weights-sha256', $settings.proposer_weights_sha256, '--proposer-config-sha256', $settings.proposer_config_sha256)
     }
-    if (-not (Test-Path -LiteralPath $settings.proposer_adapter -PathType Container)) { throw 'The selected proposer adapter directory does not exist.' }
-    $modelArgs += @('--proposer-adapter', (Quote-Argument (Convert-ToWslPath $settings.proposer_adapter)), '--proposer-weights-sha256', $settings.proposer_weights_sha256, '--proposer-config-sha256', $settings.proposer_config_sha256)
 }
 try {
-    $model = Start-StudioProcess 'wsl.exe' $modelArgs 'models' $repo
-    $children += $model
-    Write-Host 'Loading real local models. This can take several minutes; logs: var/studio/logs.'
-    $deadline = (Get-Date).AddMinutes(15)
-    while (-not (Test-Path -LiteralPath $models)) {
-        if ($model.HasExited) { throw 'Model startup failed. See models.stderr.log.' }
-        if ((Get-Date) -gt $deadline) { throw 'Model startup timed out.' }
-        Start-Sleep -Seconds 3
+    if ($useModels) {
+        $model = Start-StudioProcess 'wsl.exe' $modelArgs 'models' $repo
+        $children += $model
+        Write-Host 'Loading real local models. This can take several minutes; logs: var/studio/logs.'
+        $deadline = (Get-Date).AddMinutes(15)
+        while (-not (Test-Path -LiteralPath $models)) {
+            if ($model.HasExited) { throw 'Model startup failed. See models.stderr.log.' }
+            if ((Get-Date) -gt $deadline) { throw 'Model startup timed out.' }
+            Start-Sleep -Seconds 3
+        }
     }
     if ($null -ne $tunnelPort) {
         $children += Start-StudioProcess $python @('scripts/cloud_proposer.py', 'tunnel', '--pod', $remotePod) 'tunnel' $repo
@@ -86,14 +126,29 @@ try {
             if ((Get-Date) -gt $deadline) { throw 'The proposer tunnel did not open.' }
             Start-Sleep -Seconds 2
         }
-        $manifest = Get-Content -LiteralPath $models -Raw | ConvertFrom-Json
-        $models = Join-Path $session 'models-remote.json'
-        $remoteManifest = [ordered]@{
-            schema_version = 1
-            proposal_config_file = $remoteConfig.Replace('\', '/')
-            final_evaluator_config_file = $manifest.final_evaluator_config_file
+        if (-not $hosted) {
+            $manifest = Get-Content -LiteralPath $models -Raw | ConvertFrom-Json
+            $models = Join-Path $session 'models-remote.json'
+            $remoteManifest = [ordered]@{
+                schema_version = 1
+                proposal_config_file = $remoteConfig.Replace('\', '/')
+                final_evaluator_config_file = $manifest.final_evaluator_config_file
+            }
+            $remoteManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
         }
-        $remoteManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
+    }
+    if ($hosted) {
+        New-Item -ItemType Directory -Force -Path $session | Out-Null
+        $evaluatorConfig = $null
+        if ($useModels) { $evaluatorConfig = (Get-Content -LiteralPath $models -Raw | ConvertFrom-Json).final_evaluator_config_file }
+        $models = Join-Path $session 'models-hosted.json'
+        $hostedManifest = [ordered]@{
+            schema_version = 2
+            providers_config_file = $providersConfig.Replace('\', '/')
+            final_evaluator_config_file = $evaluatorConfig
+        }
+        $hostedManifest | ConvertTo-Json | Set-Content -LiteralPath $models -Encoding ascii
+        Write-Host 'Hosted model providers selected; no local proposer is required.'
     }
     & $python scripts/studio_runtime.py check --models $models | Out-File -LiteralPath (Join-Path $session 'readiness.json') -Encoding ascii
     if ($LASTEXITCODE -ne 0) { throw 'Real model readiness failed.' }

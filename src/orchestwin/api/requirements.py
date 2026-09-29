@@ -13,14 +13,17 @@ from fastapi import (
     Request,
     status,
 )
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.clarification import (
     HumanGateEventResponse,
     HumanGateResponse,
 )
+from orchestwin.api.generation_jobs import GenerationOperation
+from orchestwin.api.generation_requests import generation_request
 from orchestwin.identity.domain import UserAccount
+from orchestwin.models.requirements import MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH
 from orchestwin.projects.requirements import (
     Requirement,
     RequirementKind,
@@ -31,6 +34,11 @@ from orchestwin.projects.requirements_application import (
     RequirementsGenerationIssueCode,
     RequirementsGenerationResult,
     RequirementsGenerationStatus,
+)
+from orchestwin.projects.requirements_change_application import (
+    RequirementsChangeIssueCode,
+    RequirementsChangeResult,
+    RequirementsChangeStatus,
 )
 from orchestwin.projects.requirements_gate import (
     RequirementsGateDecisionResult,
@@ -914,6 +922,22 @@ class RequirementsRevisionRequest(ApiModel):
     specification: RequirementsSpecificationPayload
 
 
+class RequirementsChangeRequest(ApiModel):
+    request: str
+
+    @field_validator("request")
+    @classmethod
+    def trimmed_request(cls, value: str) -> str:
+        text = value.strip()
+
+        if not 1 <= len(text) <= MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH:
+            raise ValueError(
+                f"request must hold 1 to {MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH} characters"
+            )
+
+        return text
+
+
 class RequirementsRevisionDecisionRequest(ApiModel):
     """Owner decision on one proposed requirements diff."""
 
@@ -1094,6 +1118,16 @@ class RequirementsRevisionService(Protocol):
         """Approve or reject one requirements diff."""
 
 
+class RequirementsChangeService(Protocol):
+    async def request_change(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        owner_request: str,
+    ) -> RequirementsChangeResult: ...
+
+
 class RequirementsQueryService(Protocol):
     """Owner-scoped Requirements read boundary."""
 
@@ -1222,6 +1256,16 @@ def requirements_revision_service_dependency(
     )
 
 
+def requirements_change_service_dependency(
+    request: Request,
+) -> RequirementsChangeService:
+    return _state_service(
+        request,
+        attribute="requirements_change_service",
+        unavailable_detail="requirements_change_service_unavailable",
+    )
+
+
 def requirements_query_service_dependency(
     request: Request,
 ) -> RequirementsQueryService:
@@ -1259,19 +1303,29 @@ def create_requirements_router() -> APIRouter:
     )
     async def generate_requirements_endpoint(
         project_id: UUID,
+        request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
             RequirementsGenerationService,
             Depends(requirements_generation_service_dependency),
         ],
     ) -> RequirementsGenerationPayload:
-        result = await service.generate(
+        async def generation() -> RequirementsGenerationPayload:
+            result = await service.generate(
+                owner_user_id=user.id,
+                project_id=project_id,
+            )
+            _raise_generation_failure(result)
+
+            return RequirementsGenerationPayload.from_domain(result)
+
+        return await generation_request(
+            request,
+            GenerationOperation.REQUIREMENTS_PROPOSAL,
+            generation,
             owner_user_id=user.id,
             project_id=project_id,
         )
-        _raise_generation_failure(result)
-
-        return RequirementsGenerationPayload.from_domain(result)
 
     @router.get(
         "/current",
@@ -1349,6 +1403,40 @@ def create_requirements_router() -> APIRouter:
         _raise_revision_failure(result)
 
         return RequirementsRevisionPayload.from_domain(result)
+
+    @router.post(
+        "/change-requests",
+        response_model=RequirementsRevisionPayload,
+        status_code=status.HTTP_201_CREATED,
+        operation_id="requestRequirementsChange",
+    )
+    async def request_change_endpoint(
+        project_id: UUID,
+        payload: RequirementsChangeRequest,
+        request: Request,
+        user: Annotated[UserAccount, Depends(current_user_dependency)],
+        service: Annotated[
+            RequirementsChangeService,
+            Depends(requirements_change_service_dependency),
+        ],
+    ) -> RequirementsRevisionPayload:
+        async def change() -> RequirementsRevisionPayload:
+            result = await service.request_change(
+                owner_user_id=user.id,
+                project_id=project_id,
+                owner_request=payload.request,
+            )
+
+            return RequirementsRevisionPayload.from_domain(_changed_revision(result))
+
+        return await generation_request(
+            request,
+            GenerationOperation.REQUIREMENTS_CHANGE,
+            change,
+            owner_user_id=user.id,
+            project_id=project_id,
+            body=payload,
+        )
 
     @router.get(
         "/revisions",
@@ -1634,6 +1722,21 @@ def _raise_revision_failure(result: RequirementsRevisionResult) -> None:
     )
 
 
+def _changed_revision(result: RequirementsChangeResult) -> RequirementsRevisionResult:
+    if result.status is RequirementsChangeStatus.CREATED and result.revision is not None:
+        return result.revision
+
+    code = "REQUIREMENTS_CHANGE_REJECTED" if result.issue is None else result.issue.value
+
+    if result.issue in {
+        RequirementsChangeIssueCode.PROJECT_NOT_FOUND,
+        RequirementsChangeIssueCode.SPECIFICATION_NOT_FOUND,
+    }:
+        raise _not_found(code)
+
+    raise _conflict(code)
+
+
 def _raise_gate_submission_failure(
     result: RequirementsGateSubmissionResult,
 ) -> None:
@@ -1693,6 +1796,8 @@ def _unprocessable(code: str) -> HTTPException:
 
 __all__ = [
     "REQUIREMENTS_API_PREFIX",
+    "RequirementsChangeRequest",
+    "RequirementsChangeService",
     "RequirementsCoveragePayload",
     "RequirementsGenerationPayload",
     "RequirementsQueryService",

@@ -158,6 +158,14 @@ async def retain_provider_result(result):
         scope.result = result
 
 
+async def retire_model_generation(*, role, code):
+    scope = current_proposal_evidence()
+    if scope is None or scope.request is None:
+        return
+    await scope.event("APPLICATION_RESULT", {"status": code, "role": role})
+    scope.retire(role=role, code=code)
+
+
 def _generated_hashes(result):
     if getattr(result, "source_binding", None) is not None:
         return {result.kind: (snapshot_content_hash(result.source_binding),)}
@@ -282,8 +290,9 @@ async def bind_model_artifacts(unit, kind, versions, *, relation="GENERATED"):
 class AuditedProposalTransport:
     """Keep exact HTTP bytes before schema validation; never retain auth headers."""
 
-    def __init__(self, transport):
+    def __init__(self, transport, credential=None):
         self.transport = transport
+        self._credential = credential
 
     async def post_json(self, **kwargs):
         scope = current_proposal_evidence()
@@ -299,8 +308,10 @@ class AuditedProposalTransport:
                 await scope.event("TRANSPORT_ERROR", {"code": type(error).__name__})
             raise
         authorization = kwargs.get("headers", {}).get("Authorization", "")
-        credential = authorization.removeprefix("Bearer ").encode("utf-8")
-        reflected = bool(credential and credential in response.body)
+        credentials = (authorization.removeprefix("Bearer "), self._credential or "")
+        reflected = any(
+            credential and credential.encode("utf-8") in response.body for credential in credentials
+        )
         await scope.event(
             "HTTP_RESPONSE",
             {
