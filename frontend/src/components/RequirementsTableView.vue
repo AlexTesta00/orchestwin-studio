@@ -2,6 +2,7 @@
 import { computed } from "vue";
 
 import ArtifactTable, { type ArtifactTableColumn } from "./ArtifactTable.vue";
+import { useSurface } from "./UiSurface.vue";
 import type {
   DefinitionOfDoneItemPayload,
   RequirementPriority,
@@ -77,6 +78,9 @@ const messages = {
       title: "When the work is done",
       description: "Each row is a check the work must pass before it can be called finished.",
     },
+    otherTables: "Other tables",
+    oneRow: "1 row",
+    manyRows: "{count} rows",
     code: "Code",
     title: "Title",
     type: "Type",
@@ -85,6 +89,8 @@ const messages = {
     for: "For",
     storiesColumn: "Stories",
     criteriaColumn: "Criteria",
+    verification: "Verification",
+    missing: "Missing",
     who: "Who",
     goal: "Goal",
     benefit: "Benefit",
@@ -105,15 +111,15 @@ const messages = {
     onlyIf: "Only if {condition}",
     someCases: "Only in some cases",
     kinds: {
-      FUNCTIONAL: "Functional",
-      NON_FUNCTIONAL: "Non functional",
+      FUNCTIONAL: "Feature",
+      NON_FUNCTIONAL: "Quality",
       CONSTRAINT: "Constraint",
     },
     priorities: {
-      MUST: "Must",
-      SHOULD: "Should",
-      COULD: "Could",
-      WONT_FOR_NOW: "Not for now",
+      MUST: "Essential",
+      SHOULD: "Important",
+      COULD: "Optional",
+      WONT_FOR_NOW: "For later",
     },
     methods: {
       AUTOMATED_TEST: "Automated test",
@@ -171,6 +177,9 @@ const messages = {
       description:
         "Ogni riga è un controllo che il lavoro deve superare prima di poterlo considerare concluso.",
     },
+    otherTables: "Altre tabelle",
+    oneRow: "1 riga",
+    manyRows: "{count} righe",
     code: "Codice",
     title: "Titolo",
     type: "Tipo",
@@ -179,6 +188,8 @@ const messages = {
     for: "Per chi",
     storiesColumn: "Storie",
     criteriaColumn: "Criteri",
+    verification: "Verifica",
+    missing: "Mancante",
     who: "Chi",
     goal: "Obiettivo",
     benefit: "Beneficio",
@@ -199,15 +210,15 @@ const messages = {
     onlyIf: "Solo se {condition}",
     someCases: "Solo in alcuni casi",
     kinds: {
-      FUNCTIONAL: "Funzionale",
-      NON_FUNCTIONAL: "Non funzionale",
+      FUNCTIONAL: "Funzionalità",
+      NON_FUNCTIONAL: "Qualità",
       CONSTRAINT: "Vincolo",
     },
     priorities: {
-      MUST: "Indispensabile",
+      MUST: "Essenziale",
       SHOULD: "Importante",
-      COULD: "Utile",
-      WONT_FOR_NOW: "Non ora",
+      COULD: "Facoltativo",
+      WONT_FOR_NOW: "Per il futuro",
     },
     methods: {
       AUTOMATED_TEST: "Test automatico",
@@ -252,13 +263,13 @@ const sections = computed<TableSection[]>(() => {
       ...text.requirements,
       columns: [
         { key: "code", label: text.code, sortable: true },
-        { key: "title", label: text.title, sortable: true },
+        { key: "title", label: text.title, sortable: true, strong: true },
         { key: "kind", label: text.type, sortable: true },
         { key: "priority", label: text.priority, sortable: true, sortKey: "priorityOrder" },
         { key: "statement", label: text.requirement },
-        { key: "twins", label: text.for },
-        { key: "stories", label: text.storiesColumn },
-        { key: "criteria", label: text.criteriaColumn },
+        { key: "criteria", label: text.verification, missing: text.missing },
+        { key: "twins", label: text.for, nowrap: true },
+        { key: "stories", label: text.storiesColumn, nowrap: true },
       ],
       rows: specification.requirements.map((requirement) => ({
         code: requirement.code,
@@ -375,6 +386,38 @@ const sections = computed<TableSection[]>(() => {
   ];
 });
 
+const palettes = {
+  light: {
+    description: "text-ink-2",
+    kicker: "text-ink-3",
+    panel: "border-line bg-surface",
+    line: "border-line",
+    title: "text-ink",
+    count: "text-ink-3",
+    chevron: "text-ink-3",
+  },
+  night: {
+    description: "text-on-night-3",
+    kicker: "text-on-night-3",
+    panel: "border-night-line bg-night-raised",
+    line: "border-night-line",
+    title: "text-on-night",
+    count: "text-on-night-3",
+    chevron: "text-on-night-3",
+  },
+};
+
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
+const primary = computed(() => sections.value[0]);
+const others = computed(() => sections.value.slice(1));
+
+function rowCount(section: TableSection): string {
+  return section.rows.length === 1
+    ? copy.value.oneRow
+    : copy.value.manyRows.replace("{count}", String(section.rows.length));
+}
+
 function codeLookup(items: readonly CodedItem[]): Map<string, string> {
   return new Map(items.map((item) => [item.id, item.code]));
 }
@@ -426,24 +469,57 @@ function applicability(item: DefinitionOfDoneItemPayload): string {
 </script>
 
 <template>
-  <div class="grid gap-8" data-testid="requirements-table-view">
-    <section
-      v-for="section in sections"
-      :key="section.key"
-      class="grid gap-3"
-      :data-testid="`requirements-section-${section.key}`"
-    >
-      <div class="grid gap-1">
-        <h4 class="m-0 text-base font-semibold tracking-block text-ink">{{ section.title }}</h4>
-        <p class="m-0 text-sm leading-6 text-ink-2">{{ section.description }}</p>
-      </div>
+  <div class="grid gap-6" data-testid="requirements-table-view">
+    <section v-if="primary" class="grid gap-2" :data-testid="`requirements-section-${primary.key}`">
+      <h2 class="sr-only">{{ primary.title }}</h2>
+      <p :class="['m-0 text-[13px] leading-normal', palette.description]">
+        {{ primary.description }}
+      </p>
       <ArtifactTable
-        :caption="section.title"
-        :columns="section.columns"
-        :rows="section.rows"
+        :caption="primary.title"
+        :columns="primary.columns"
+        :rows="primary.rows"
         row-key="code"
         :locale="locale"
       />
     </section>
+
+    <div class="grid gap-2">
+      <p :class="['m-0 font-mono text-[11px] tracking-[0.06em] uppercase', palette.kicker]">
+        {{ copy.otherTables }}
+      </p>
+      <details
+        v-for="section in others"
+        :key="section.key"
+        :class="['group rounded-tile border', palette.panel]"
+        :data-testid="`requirements-section-${section.key}`"
+      >
+        <summary
+          class="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5 px-5 py-3 [&::-webkit-details-marker]:hidden"
+        >
+          <span
+            :class="['inline-block text-xs group-open:rotate-90', palette.chevron]"
+            aria-hidden="true"
+            >▸</span
+          >
+          <h2 :class="['m-0 text-[15px] font-semibold', palette.title]">{{ section.title }}</h2>
+          <span :class="['ml-auto text-[13px] whitespace-nowrap', palette.count]">
+            {{ rowCount(section) }}
+          </span>
+        </summary>
+        <div :class="['grid gap-3 border-t px-5 py-4', palette.line]">
+          <p :class="['m-0 text-[13px] leading-normal', palette.description]">
+            {{ section.description }}
+          </p>
+          <ArtifactTable
+            :caption="section.title"
+            :columns="section.columns"
+            :rows="section.rows"
+            row-key="code"
+            :locale="locale"
+          />
+        </div>
+      </details>
+    </div>
   </div>
 </template>

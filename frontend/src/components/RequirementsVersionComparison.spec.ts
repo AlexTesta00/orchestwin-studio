@@ -79,6 +79,16 @@ describe("RequirementsVersionComparison", () => {
 
     expect(table.text()).toContain("REQ-001");
     expect(table.text()).toContain("Changed");
+    expect(table.findAll("tbody td").map((cell) => cell.text())).toEqual([
+      "REQ-001",
+      "Requirement",
+      "Changed",
+    ]);
+    const region = wrapper.get('[role="region"]');
+    expect(region.attributes("tabindex")).toBe("0");
+    expect(wrapper.get(`#${region.attributes("aria-labelledby")}`).text()).toBe(
+      "Version comparison",
+    );
   });
 
   it("explains when fewer than two versions exist", () => {

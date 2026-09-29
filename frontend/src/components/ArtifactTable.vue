@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, useId } from "vue";
 
+import { useSurface } from "./UiSurface.vue";
+
 export interface ArtifactTableColumn {
   key: string;
   label: string;
   numeric?: boolean | undefined;
   sortable?: boolean | undefined;
   sortKey?: string | undefined;
+  strong?: boolean | undefined;
+  missing?: string | undefined;
+  nowrap?: boolean | undefined;
 }
 
 type Locale = "en" | "it";
@@ -44,8 +49,39 @@ const messages = {
   },
 } as const;
 
+const palettes = {
+  light: {
+    empty: "rounded-panel border-line-soft bg-surface-2 text-ink-2",
+    region: "rounded-panel border-line bg-surface",
+    head: "border-line bg-surface-3",
+    heading: "text-ink",
+    sort: "text-ink hover:text-action",
+    symbol: "text-ink-3",
+    row: "border-line-soft even:bg-row-alt",
+    key: "text-ink",
+    cell: "text-ink-2",
+    missing: "font-medium text-warn",
+    count: "text-ink-3",
+  },
+  night: {
+    empty: "rounded-tile border-night-line bg-night-raised text-on-night-2",
+    region: "rounded-tile border-night-line bg-night-raised",
+    head: "border-night-line bg-on-night/3",
+    heading: "text-on-night-2",
+    sort: "text-on-night-2 hover:text-on-night",
+    symbol: "text-on-night-3",
+    row: "border-on-night/8",
+    key: "text-on-night",
+    cell: "text-on-night",
+    missing: "font-medium text-warn-on-night",
+    count: "text-on-night-3",
+  },
+};
+
 const captionId = `artifact-table-${useId()}`;
 const copy = computed(() => messages[props.locale]);
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const activeSort = ref<ActiveSort | null>(null);
 
 const headerKey = computed(
@@ -91,18 +127,22 @@ function widthClass(column: ArtifactTableColumn): string {
     return "whitespace-nowrap";
   }
 
+  if (column.nowrap === true) {
+    return "whitespace-pre";
+  }
+
   const longest = Math.max(0, ...props.rows.map((row) => longestLine(row[column.key] ?? "")));
 
   if (longest > 80) {
-    return "min-w-72 whitespace-pre-line";
+    return "min-w-60 whitespace-pre-line";
   }
 
   if (longest > 40) {
-    return "min-w-56 whitespace-pre-line";
+    return "min-w-44 whitespace-pre-line";
   }
 
   if (longest > 24) {
-    return "min-w-40 whitespace-pre-line";
+    return "min-w-36 whitespace-pre-line";
   }
 
   return "whitespace-pre";
@@ -146,10 +186,10 @@ function isEmpty(value: string | undefined): boolean {
 </script>
 
 <template>
-  <div class="grid gap-2" data-testid="artifact-table">
+  <div class="grid gap-2" data-testid="artifact-table" :data-surface-context="surface">
     <p
       v-if="rows.length === 0"
-      class="m-0 rounded-panel border border-line-soft bg-surface-2 p-4 text-sm text-ink-2"
+      :class="['m-0 border p-4 text-sm', palette.empty]"
       data-testid="artifact-table-empty"
     >
       {{ emptyText ?? copy.empty }}
@@ -157,7 +197,7 @@ function isEmpty(value: string | undefined): boolean {
 
     <template v-else>
       <div
-        class="overflow-x-auto rounded-panel border border-line bg-surface"
+        :class="['overflow-x-auto border', palette.region]"
         role="region"
         tabindex="0"
         :aria-labelledby="captionId"
@@ -169,26 +209,32 @@ function isEmpty(value: string | undefined): boolean {
               caption
             }}
           </caption>
-          <thead class="bg-surface-3">
+          <thead :class="['border-b', palette.head]">
             <tr>
               <th
                 v-for="column in columns"
                 :key="column.key"
                 scope="col"
-                class="px-3 py-2.5 align-bottom text-[13px] font-semibold whitespace-nowrap text-ink"
-                :class="column.numeric ? 'text-right' : ''"
+                :class="[
+                  'px-3 py-3 align-bottom text-[13px] font-semibold whitespace-nowrap first:pl-5 last:pr-5',
+                  palette.heading,
+                  column.numeric ? 'text-right' : '',
+                ]"
                 :aria-sort="ariaSort(column)"
                 :data-column="column.key"
               >
                 <button
                   v-if="column.sortable"
                   type="button"
-                  class="-mx-1 inline-flex items-center gap-1.5 rounded-control px-1 py-0.5 font-semibold text-ink hover:text-action"
+                  :class="[
+                    '-mx-1 -my-2 inline-flex min-h-11 items-center gap-1.5 rounded-control px-1 font-semibold transition-colors duration-150',
+                    palette.sort,
+                  ]"
                   :data-testid="`sort-${column.key}`"
                   @click="toggleSort(column.key)"
                 >
                   {{ column.label }}
-                  <span class="text-ink-3" aria-hidden="true">{{ sortSymbol(column) }}</span>
+                  <span :class="palette.symbol" aria-hidden="true">{{ sortSymbol(column) }}</span>
                 </button>
                 <template v-else>{{ column.label }}</template>
               </th>
@@ -198,15 +244,18 @@ function isEmpty(value: string | undefined): boolean {
             <tr
               v-for="(row, index) in sortedRows"
               :key="row[rowKey] ?? index"
-              class="border-t border-line-soft align-top even:bg-row-alt"
+              :class="['border-t align-top first:border-t-0', palette.row]"
               :data-row-key="row[rowKey]"
             >
               <template v-for="column in columns" :key="column.key">
                 <th
                   v-if="column.key === headerKey"
                   scope="row"
-                  class="px-3 py-2.5 font-mono text-xs leading-6 font-semibold text-ink"
-                  :class="widthClasses[column.key]"
+                  :class="[
+                    'px-3 py-3.5 font-mono text-xs leading-6 font-medium first:pl-5 last:pr-5',
+                    palette.key,
+                    widthClasses[column.key],
+                  ]"
                   :data-column="column.key"
                 >
                   <span v-if="isEmpty(row[column.key])" role="img" :aria-label="copy.emptyCell"
@@ -216,16 +265,21 @@ function isEmpty(value: string | undefined): boolean {
                 </th>
                 <td
                   v-else
-                  class="px-3 py-2.5 leading-6 text-ink-2"
                   :class="[
+                    'px-3 py-3.5 leading-normal first:pl-5 last:pr-5',
+                    palette.cell,
                     widthClasses[column.key],
                     column.numeric ? 'text-right tabular-nums' : '',
+                    column.strong ? 'font-semibold' : '',
                   ]"
                   :data-column="column.key"
                 >
-                  <span v-if="isEmpty(row[column.key])" role="img" :aria-label="copy.emptyCell"
-                    >—</span
-                  >
+                  <template v-if="isEmpty(row[column.key])">
+                    <span v-if="column.missing" :class="palette.missing" data-missing>{{
+                      column.missing
+                    }}</span>
+                    <span v-else role="img" :aria-label="copy.emptyCell">—</span>
+                  </template>
                   <template v-else>{{ row[column.key] }}</template>
                 </td>
               </template>
@@ -233,7 +287,9 @@ function isEmpty(value: string | undefined): boolean {
           </tbody>
         </table>
       </div>
-      <p class="m-0 text-xs text-ink-3" data-testid="artifact-table-count">{{ countLabel }}</p>
+      <p :class="['m-0 text-xs', palette.count]" data-testid="artifact-table-count">
+        {{ countLabel }}
+      </p>
     </template>
   </div>
 </template>

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useId } from "vue";
 
+import { useSurface } from "./UiSurface.vue";
 import type {
   RequirementsCoveragePayload,
   RequirementsTraceabilityPayload,
+  TraceabilityLinkKind,
   TraceabilityNodeReferencePayload,
 } from "../types/requirements";
 
@@ -23,38 +25,78 @@ const props = withDefaults(
 const messages = {
   en: {
     title: "Traceability and coverage",
-    nodes: "Artifacts",
-    links: "Traceability links",
-    source: "Source",
+    nodes: "items",
+    links: "links",
+    source: "From",
     relation: "Relation",
-    target: "Target",
+    target: "To",
     coverage: "Coverage",
-    full: "All requirements and user stories have acceptance criteria.",
-    incomplete: "The specification contains uncovered artifacts.",
+    full: "Every requirement and user story has an acceptance criterion.",
+    incomplete: "Some items are not covered yet.",
     requirementsWithoutStories: "Requirements without user stories",
     requirementsWithoutCriteria: "Requirements without acceptance criteria",
     storiesWithoutCriteria: "User stories without acceptance criteria",
     criteriaWithoutScenarios: "Acceptance criteria without scenarios",
     none: "None",
+    kinds: {
+      ACTS_AS: "acts as",
+      MOTIVATES: "motivates",
+      VERIFIED_BY: "is verified by",
+      EXERCISES: "exercises",
+      AFFECTS: "affects",
+      GOVERNS: "governs",
+    },
   },
   it: {
     title: "Tracciabilità e copertura",
-    nodes: "Artefatti",
-    links: "Collegamenti di tracciabilità",
-    source: "Origine",
+    nodes: "elementi",
+    links: "collegamenti",
+    source: "Da",
     relation: "Relazione",
-    target: "Destinazione",
+    target: "A",
     coverage: "Copertura",
-    full: "Tutti i requisiti e le user story hanno criteri di accettazione.",
-    incomplete: "La specifica contiene artefatti non coperti.",
-    requirementsWithoutStories: "Requisiti senza user story",
+    full: "Ogni requisito e ogni storia dell'utente hanno un criterio di accettazione.",
+    incomplete: "Alcuni elementi non sono ancora coperti.",
+    requirementsWithoutStories: "Requisiti senza storie dell'utente",
     requirementsWithoutCriteria: "Requisiti senza criteri di accettazione",
-    storiesWithoutCriteria: "User story senza criteri di accettazione",
+    storiesWithoutCriteria: "Storie dell'utente senza criteri di accettazione",
     criteriaWithoutScenarios: "Criteri di accettazione senza scenari",
     none: "Nessuno",
+    kinds: {
+      ACTS_AS: "interpreta",
+      MOTIVATES: "motiva",
+      VERIFIED_BY: "è verificato da",
+      EXERCISES: "mette alla prova",
+      AFFECTS: "riguarda",
+      GOVERNS: "regola",
+    },
   },
 } as const;
 
+const palettes = {
+  light: {
+    title: "text-ink",
+    muted: "text-ink-3",
+    line: "border-line",
+    code: "text-ink",
+    cell: "text-ink-2",
+    full: "text-ok-dark",
+    incomplete: "text-warn",
+  },
+  night: {
+    title: "text-on-night",
+    muted: "text-on-night-3",
+    line: "border-night-line",
+    code: "text-on-night",
+    cell: "text-on-night-2",
+    full: "text-petrol-on-night-2",
+    incomplete: "text-warn-on-night",
+  },
+};
+
+const titleId = `requirements-traceability-${useId()}`;
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const copy = computed(() => messages[props.locale]);
 const codeByReference = computed(() => {
   const values = new Map<string, string>();
@@ -72,6 +114,10 @@ function referenceKey(reference: TraceabilityNodeReferencePayload): string {
 
 function displayCode(reference: TraceabilityNodeReferencePayload): string {
   return codeByReference.value.get(referenceKey(reference)) ?? reference.artifact_id;
+}
+
+function relation(kind: TraceabilityLinkKind): string {
+  return copy.value.kinds[kind];
 }
 
 function displayIds(values: string[]): string {
@@ -92,45 +138,40 @@ function displayIds(values: string[]): string {
 </script>
 
 <template>
-  <section
-    class="grid gap-5 rounded-card border border-line bg-white p-5 shadow-sm"
-    aria-labelledby="requirements-traceability-title"
-  >
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h3 id="requirements-traceability-title" class="text-xl font-semibold text-ink">
-          {{ copy.title }}
-        </h3>
-        <p class="m-0 text-sm text-ink-2">
-          {{ traceability.nodes.length }} {{ copy.nodes.toLowerCase() }} ·
-          {{ traceability.links.length }} {{ copy.links.toLowerCase() }}
-        </p>
-      </div>
-      <code class="max-w-full rounded bg-surface-3 px-2 py-1 text-xs break-all text-ink-3">
+  <section class="grid gap-4">
+    <div class="grid gap-1">
+      <h2 :id="titleId" :class="['m-0 text-sm font-semibold', palette.title]">
+        {{ copy.title }}
+      </h2>
+      <p :class="['m-0 text-[13px]', palette.muted]">
+        {{ traceability.nodes.length }} {{ copy.nodes }} · {{ traceability.links.length }}
+        {{ copy.links }}
+      </p>
+      <code :class="['font-mono text-xs break-all', palette.muted]">
         {{ traceability.content_hash }}
       </code>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full border-collapse text-left text-sm" data-testid="traceability-links">
+    <div class="overflow-x-auto" role="region" tabindex="0" :aria-labelledby="titleId">
+      <table class="w-full border-collapse text-left text-[13px]" data-testid="traceability-links">
         <thead>
-          <tr class="border-b border-line text-xs tracking-wide text-ink-3 uppercase">
-            <th class="px-2 py-2">{{ copy.source }}</th>
-            <th class="px-2 py-2">{{ copy.relation }}</th>
-            <th class="px-2 py-2">{{ copy.target }}</th>
+          <tr :class="['border-b', palette.line, palette.muted]">
+            <th scope="col" class="px-2 py-2 font-medium">{{ copy.source }}</th>
+            <th scope="col" class="px-2 py-2 font-medium">{{ copy.relation }}</th>
+            <th scope="col" class="px-2 py-2 font-medium">{{ copy.target }}</th>
           </tr>
         </thead>
         <tbody>
           <tr
             v-for="link in traceability.links"
             :key="`${referenceKey(link.source)}:${link.kind}:${referenceKey(link.target)}`"
-            class="border-b border-line-soft"
+            :class="['border-b', palette.line]"
           >
-            <td class="px-2 py-2 font-bold text-ink">
+            <td :class="['px-2 py-2 font-mono text-xs', palette.code]">
               {{ displayCode(link.source) }}
             </td>
-            <td class="px-2 py-2 text-ink-2">{{ link.kind }}</td>
-            <td class="px-2 py-2 font-bold text-ink">
+            <td :class="['px-2 py-2', palette.cell]">{{ relation(link.kind) }}</td>
+            <td :class="['px-2 py-2 font-mono text-xs', palette.code]">
               {{ displayCode(link.target) }}
             </td>
           </tr>
@@ -138,41 +179,43 @@ function displayIds(values: string[]): string {
       </table>
     </div>
 
-    <section class="grid gap-3 rounded-panel border border-line bg-surface-2 p-4">
-      <h4 class="font-semibold text-ink">{{ copy.coverage }}</h4>
+    <div class="grid gap-2">
+      <h3 :class="['m-0 text-[13px] font-semibold', palette.title]">{{ copy.coverage }}</h3>
       <p
-        class="m-0 text-sm font-bold"
-        :class="coverage.has_full_acceptance_coverage ? 'text-ok-dark' : 'text-warn'"
+        :class="[
+          'm-0 text-[13px] font-semibold',
+          coverage.has_full_acceptance_coverage ? palette.full : palette.incomplete,
+        ]"
         data-testid="coverage-status"
       >
         {{ coverage.has_full_acceptance_coverage ? copy.full : copy.incomplete }}
       </p>
-      <dl class="grid gap-2 text-sm text-ink-2">
+      <dl :class="['m-0 grid gap-2 text-[13px]', palette.cell]">
         <div>
-          <dt class="font-bold">{{ copy.requirementsWithoutStories }}</dt>
-          <dd class="m-0 break-all">
+          <dt class="font-medium">{{ copy.requirementsWithoutStories }}</dt>
+          <dd class="m-0 font-mono text-xs break-all">
             {{ displayIds(coverage.requirement_ids_without_user_stories) }}
           </dd>
         </div>
         <div>
-          <dt class="font-bold">{{ copy.requirementsWithoutCriteria }}</dt>
-          <dd class="m-0 break-all">
+          <dt class="font-medium">{{ copy.requirementsWithoutCriteria }}</dt>
+          <dd class="m-0 font-mono text-xs break-all">
             {{ displayIds(coverage.requirement_ids_without_acceptance_criteria) }}
           </dd>
         </div>
         <div>
-          <dt class="font-bold">{{ copy.storiesWithoutCriteria }}</dt>
-          <dd class="m-0 break-all">
+          <dt class="font-medium">{{ copy.storiesWithoutCriteria }}</dt>
+          <dd class="m-0 font-mono text-xs break-all">
             {{ displayIds(coverage.user_story_ids_without_acceptance_criteria) }}
           </dd>
         </div>
         <div>
-          <dt class="font-bold">{{ copy.criteriaWithoutScenarios }}</dt>
-          <dd class="m-0 break-all">
+          <dt class="font-medium">{{ copy.criteriaWithoutScenarios }}</dt>
+          <dd class="m-0 font-mono text-xs break-all">
             {{ displayIds(coverage.acceptance_criterion_ids_without_scenarios) }}
           </dd>
         </div>
       </dl>
-    </section>
+    </div>
   </section>
 </template>

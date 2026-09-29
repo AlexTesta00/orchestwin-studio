@@ -1,10 +1,12 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { RequirementsApi } from "../api/requirements";
+import { RequirementsApiError, type RequirementsApi } from "../api/requirements";
 import type {
   RequirementsCoveragePayload,
   RequirementsReadinessPayload,
+  RequirementsRevisionPayload,
+  RequirementsSpecificationDiffPayload,
   RequirementsSpecificationVersionPayload,
   RequirementsTraceabilityPayload,
 } from "../types/requirements";
@@ -55,6 +57,37 @@ const VERSION: RequirementsSpecificationVersionPayload = {
     definition_of_done: [],
   },
 };
+
+const DIFF: RequirementsSpecificationDiffPayload = {
+  id: "00000000-0000-4000-8000-000000000060",
+  project_id: PROJECT_ID,
+  base_version_id: VERSION_ID,
+  base_version_number: 1,
+  base_content_hash: VERSION.content_hash,
+  proposed_content_hash: "1".repeat(64),
+  proposal_hash: "2".repeat(64),
+  status: "PROPOSED",
+  proposed_specification: VERSION.specification,
+  operations: [],
+  created_by_user_id: OWNER_ID,
+  created_at: CREATED_AT,
+  decided_by_user_id: null,
+  decided_at: null,
+  decision_reason: null,
+  applied_specification_version_id: null,
+};
+
+const PROPOSED_CHANGE: RequirementsRevisionPayload = {
+  status: "CREATED",
+  diff: DIFF,
+  version: null,
+  issue: null,
+  proposal_issue: null,
+  diff_persistence_status: "APPENDED",
+  version_persistence_status: null,
+};
+
+const REQUEST = "Add the search by the name of the guest.";
 
 const READINESS_EMPTY: RequirementsReadinessPayload = {
   status: "REQUIREMENTS_REQUIRED",
@@ -131,6 +164,21 @@ class FakeRequirementsApi implements RequirementsApi {
       diff_persistence_status: null,
       version_persistence_status: null,
     };
+  }
+
+  changeRequests: string[] = [];
+  changeResult: RequirementsRevisionPayload | Error = PROPOSED_CHANGE;
+
+  async requestChange(projectId: string, request: string, accessToken: string) {
+    void projectId;
+    void accessToken;
+    this.changeRequests.push(request);
+
+    if (this.changeResult instanceof Error) {
+      throw this.changeResult;
+    }
+
+    return this.changeResult;
   }
 
   async revisionHistory(projectId: string, accessToken: string) {
@@ -322,5 +370,73 @@ describe("Requirements store", () => {
     expect(store.projectId).toBe(SECOND_PROJECT_ID);
     expect(store.readiness).toEqual(READINESS_EMPTY);
     expect(store.error).toBeNull();
+  });
+
+  it("keeps the requirements written from a request as a proposed revision", async () => {
+    const store = useRequirementsStore();
+    const api = new FakeRequirementsApi();
+    let release!: (value: RequirementsRevisionPayload) => void;
+    api.requestChange = async (projectId: string, request: string) => {
+      void projectId;
+      api.changeRequests.push(request);
+      return new Promise<RequirementsRevisionPayload>((resolve) => {
+        release = resolve;
+      });
+    };
+
+    const pending = store.requestChange(PROJECT_ID, REQUEST, authorize, api);
+
+    expect(store.pending["request-change"]).toBe(true);
+    expect(store.isBusy).toBe(true);
+    release(PROPOSED_CHANGE);
+    await expect(pending).resolves.toEqual(PROPOSED_CHANGE);
+
+    expect(api.changeRequests).toEqual([REQUEST]);
+    expect(store.pendingDiffs).toEqual([DIFF]);
+    expect(store.changeRequests).toEqual({ [DIFF.id]: REQUEST });
+    expect(store.current).toBeNull();
+    expect(store.isBusy).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it("keeps the code of a refused request and hands the error back", async () => {
+    const store = useRequirementsStore();
+    const api = new FakeRequirementsApi();
+    const refusal = new RequirementsApiError("REQUIREMENTS_UNCHANGED", {
+      status: 409,
+      code: "REQUIREMENTS_UNCHANGED",
+      payload: { detail: { code: "REQUIREMENTS_UNCHANGED" } },
+    });
+    api.changeResult = refusal;
+
+    await expect(store.requestChange(PROJECT_ID, REQUEST, authorize, api)).rejects.toBe(refusal);
+
+    expect(store.error).toEqual({
+      message: "REQUIREMENTS_UNCHANGED",
+      code: "REQUIREMENTS_UNCHANGED",
+      status: 409,
+    });
+    expect(store.pendingDiffs).toEqual([]);
+    expect(store.changeRequests).toEqual({});
+    expect(store.isBusy).toBe(false);
+  });
+
+  it("drops a revision that arrives after another project became active", async () => {
+    const store = useRequirementsStore();
+    const api = new FakeRequirementsApi();
+    let release!: (value: RequirementsRevisionPayload) => void;
+    api.requestChange = async () =>
+      new Promise<RequirementsRevisionPayload>((resolve) => {
+        release = resolve;
+      });
+
+    const pending = store.requestChange(PROJECT_ID, REQUEST, authorize, api);
+    store.activateProject(SECOND_PROJECT_ID);
+    release(PROPOSED_CHANGE);
+    await pending;
+
+    expect(store.projectId).toBe(SECOND_PROJECT_ID);
+    expect(store.diffs).toEqual({});
+    expect(store.changeRequests).toEqual({});
   });
 });

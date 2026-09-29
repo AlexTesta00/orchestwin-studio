@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
+import { h } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -12,6 +13,7 @@ import type {
   RequirementsRealignmentPayload,
 } from "@/types/requirementsAlignment";
 import RequirementsTwinAlignment from "./RequirementsTwinAlignment.vue";
+import UiSurface from "./UiSurface.vue";
 
 const PROJECT_ID = "project-1";
 
@@ -106,7 +108,7 @@ describe("RequirementsTwinAlignment", () => {
     const api = new FakeAlignmentApi(status());
     const wrapper = mountAlignment(api);
     await flushPromises();
-    expect(wrapper.get(card).find("h3").text()).toBe("I twin sono cambiati");
+    expect(wrapper.get(card).find("h2").text()).toBe("I twin sono cambiati");
     expect(wrapper.get(text).text()).toBe(
       "Questi requisiti sono stati scritti per i twin precedenti. Aggiornali perché seguano i twin attuali: il contenuto resta lo stesso, poi li approvi di nuovo.",
     );
@@ -120,7 +122,7 @@ describe("RequirementsTwinAlignment", () => {
     expect(done.text()).toContain(
       "La versione 3 dei requisiti è pronta con lo stesso contenuto. Approvala di nuovo qui sotto.",
     );
-    expect(wrapper.get(card).find("h3").text()).toBe("I requisiti seguono i twin attuali");
+    expect(wrapper.get(card).find("h2").text()).toBe("I requisiti seguono i twin attuali");
     expect(wrapper.find(update).exists()).toBe(false);
     await wrapper.setProps({ refreshKey: REALIGNMENT.content_hash });
     await flushPromises();
@@ -252,6 +254,23 @@ describe("RequirementsTwinAlignment", () => {
     await flushPromises();
     expect(api.status).toHaveBeenLastCalledWith("project-2", "token");
     expect(wrapper.find(card).exists()).toBe(false);
+  });
+
+  it("takes the petrol notice of a dark surface and keeps its action secondary", async () => {
+    const api = new FakeAlignmentApi(status());
+    const wrapper = mount({
+      render: () =>
+        h(UiSurface, { tone: "night" }, () =>
+          h(RequirementsTwinAlignment, { projectId: PROJECT_ID, locale: "it", authorize, api }),
+        ),
+    });
+    await flushPromises();
+
+    expect(wrapper.get(card).classes()).toEqual(
+      expect.arrayContaining(["border-petrol-on-night/40", "bg-petrol-on-night/8"]),
+    );
+    expect(wrapper.get(update).attributes("data-variant")).toBe("outline");
+    expect(wrapper.get(text).classes()).toContain("text-on-night-2");
   });
 
   it("has no axe violations", async () => {
