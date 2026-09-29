@@ -7,7 +7,9 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
+from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup, bound_mockup_from_snapshot
 from orchestwin.artifacts.design import (
+    DesignAlternative,
     DesignApproach,
     DesignCritiqueKind,
     create_design_alternative,
@@ -95,6 +97,10 @@ def design_package_from_snapshot(
             )
         )
     )
+    owner_selected_alternative_id = _optional_uuid(
+        payload.get("owner_selected_alternative_id"),
+        label="owner-selected Design Alternative ID",
+    )
     package = create_design_exploration_package(
         project_id=_uuid(
             _required(payload, "project_id"),
@@ -107,10 +113,7 @@ def design_package_from_snapshot(
             payload.get("recommended_alternative_id"),
             label="recommended Design Alternative ID",
         ),
-        owner_selected_alternative_id=_optional_uuid(
-            payload.get("owner_selected_alternative_id"),
-            label="owner-selected Design Alternative ID",
-        ),
+        owner_selected_alternative_id=owner_selected_alternative_id,
         prototype=prototype,
         concerns=tuple(
             _concern_from_snapshot(item)
@@ -122,6 +125,15 @@ def design_package_from_snapshot(
         open_questions=_string_sequence(
             _required(payload, "open_questions"),
             label="Design Package open questions",
+        ),
+        generated_mockup=_generated_mockup(
+            payload.get("generated_mockup"),
+            alternatives=alternatives,
+            owner_selected_alternative_id=owner_selected_alternative_id,
+        ),
+        owner_assertions=_string_sequence(
+            payload.get("owner_assertions", ()),
+            label="Design Package owner assertions",
         ),
     )
 
@@ -377,6 +389,35 @@ def _visual_language(payload: object):
     )
 
 
+def _generated_mockup(
+    value: object,
+    *,
+    alternatives: Sequence[DesignAlternative],
+    owner_selected_alternative_id: UUID | None,
+) -> BoundGeneratedMockup | None:
+    if value is None:
+        return None
+
+    selected = next(
+        (
+            alternative
+            for alternative in alternatives
+            if alternative.id == owner_selected_alternative_id
+        ),
+        None,
+    )
+
+    if selected is None or selected.visual_language is None:
+        raise ValueError(
+            "a generated mockup requires the visual language of the owner-selected alternative"
+        )
+
+    return bound_mockup_from_snapshot(
+        _mapping(value, label="Design Package generated mockup"),
+        token_names=tuple(name for name, _value in selected.visual_language.tokens),
+    )
+
+
 def _workflow_from_snapshot(payload: Mapping[str, object]):
     return create_design_workflow(
         workflow_id=_uuid(
@@ -492,6 +533,14 @@ def _critique_from_snapshot(payload: Mapping[str, object]):
         rationale=_string(
             _required(payload, "rationale"),
             label="Design critique rationale",
+        ),
+        verdict=_optional_string(
+            payload.get("verdict"),
+            label="Design critique verdict",
+        ),
+        quote=_optional_string(
+            payload.get("quote"),
+            label="Design critique quote",
         ),
     )
 
