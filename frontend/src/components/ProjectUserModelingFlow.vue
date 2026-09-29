@@ -1,20 +1,40 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  onUpdated,
+  provide,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import UserModelingProvenanceInspector from "./UserModelingProvenanceInspector.vue";
 import TwinIdentity from "./TwinIdentity.vue";
 import TwinImportPanel from "./TwinImportPanel.vue";
+import GenerationJobNotice from "./GenerationJobNotice.vue";
 import { workflowStatusLabel } from "./workflowLabels";
 import UiButton from "./UiButton.vue";
-import UiCard from "./UiCard.vue";
-import UiClaimLabel from "./UiClaimLabel.vue";
+import UiClaimFrame from "./UiClaimFrame.vue";
+import UiDecisionBar from "./UiDecisionBar.vue";
+import UiSidePanel from "./UiSidePanel.vue";
+import UiStateBlock from "./UiStateBlock.vue";
+import UiStatusChip from "./UiStatusChip.vue";
+import UiTechnicalDetails from "./UiTechnicalDetails.vue";
+import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
+import { twinPeers } from "./twinIdentity";
 
+import { isGenerationInterrupted } from "../api/generationJobs";
+import { useGenerationResume } from "../stores/generationJobs";
 import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
   GateDecisionAction,
+  HumanGateEventPayload,
   ObservationValueKind,
   PersonaOwnerDecision,
   PersonaVersionPayload,
@@ -27,6 +47,9 @@ import type {
 } from "../types/userModeling";
 
 type Locale = "en" | "it";
+type Phase = "empty" | "profiles" | "twins";
+type TwinsDecision = "generate" | "approve" | "resume";
+type ProfileTarget = { kind: "persona" | "twin"; id: string };
 
 const props = withDefaults(
   defineProps<{
@@ -35,16 +58,23 @@ const props = withDefaults(
     authorize?: <T>(operation: (token: string) => Promise<T>) => Promise<T>;
     locale?: Locale;
     autoLoad?: boolean;
+    active?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
+    active: true,
   },
 );
 
 const store = useUserModelingStore();
 
 const team = useTeamStore();
+
+provide(
+  surfaceKey,
+  computed<SurfaceContext>(() => "night"),
+);
 
 const loadedProjectId = ref<string | null>(null);
 
@@ -69,6 +99,42 @@ const editingOriginalKind = ref<ObservationValueKind>("TEXT");
 const editingValue = ref("");
 
 const revisionEpistemicStatus = ref<"USER_PROVIDED" | "HUMAN_VALIDATED">("USER_PROVIDED");
+
+const rejectingPersonaId = ref<string | null>(null);
+
+const profileTarget = ref<ProfileTarget | null>(null);
+
+const root = ref<HTMLElement | null>(null);
+
+const barTarget = ref<HTMLElement | null>(null);
+
+const rowTarget = ref<HTMLElement | null>(null);
+
+const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
+
+const approving = ref(false);
+
+const generationSeen = new Set<string>();
+
+const {
+  job: modelingJob,
+  checked: modelingChecked,
+  failure: modelingJobFailure,
+  dismiss: dismissModelingJob,
+} = useGenerationResume({
+  projectId: () => props.projectId,
+  operations: ["PERSONA_PROPOSAL", "USER_TWIN_GENERATION"],
+  authorize: authorizedJobs,
+  onSettled: loadProject,
+});
+
+watch(modelingJob, (running) => {
+  if (running !== null) {
+    generationSeen.add(props.projectId);
+  }
+});
+
+let visibilityObserver: ResizeObserver | null = null;
 
 const userTwinFields = new Set<UserTwinField>([
   "role",
@@ -104,6 +170,22 @@ const multiValueFields = new Set<UserTwinField>([
   "operational_constraints",
   "assumptions",
 ]);
+
+const APPROVED_LIFECYCLES = new Set([
+  "OWNER_APPROVED_UT",
+  "EMPIRICALLY_GROUNDED_UT",
+  "EMPIRICALLY_VALIDATED_UT",
+]);
+
+const disclosureSummary =
+  "inline-flex min-h-11 cursor-pointer list-none items-center gap-2.5 text-sm font-medium text-on-night-3 transition-colors duration-150 hover:text-on-night [&::-webkit-details-marker]:hidden";
+
+const disclosureChevron =
+  "inline-block size-2 rotate-45 border-r-[1.5px] border-b-[1.5px] border-current transition-transform duration-150 group-open:-rotate-135";
+
+const IMPORTED_PREFIX = "user-twin:";
+
+const IMPORTED_SUMMARY = "Imported from the project ";
 
 const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
   en: {
@@ -149,68 +231,127 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
 
 const messages = {
   en: {
-    eyebrow: "Understand your users",
-
-    title: "Who will use your product?",
-
-    intro:
-      "Review the proposed user profiles. Their digital representatives, called User Twins, will help explore the product from different perspectives.",
+    region: "User Twins",
 
     loading: "Updating user profiles…",
     generating: "Preparing the profiles. This may take a few minutes; keep this page open.",
 
     error: "User Modeling operation failed.",
 
-    personas: "Proposed user profiles",
+    personasHeading: "Proposed user profiles",
+
+    twinsHeading: "The twins of your project",
+
+    profilesCount: "{confirmed} of {total} profiles confirmed",
+
+    profilesSentence:
+      "They are proposals of the AI: confirm the profiles that truly describe who will use the product.",
+
+    twinsCountOne: "1 twin to approve",
+
+    twinsCountOther: "{n} twins to approve",
+
+    twinsApprovedOne: "1 twin approved by you",
+
+    twinsApprovedOther: "{n} twins approved by you",
+
+    twinsSentence:
+      "The twins' answers are simulated: hypotheses to weigh, not opinions of real people.",
 
     proposePersonas: "Suggest user profiles",
 
+    noPersonasTitle: "No user profile yet",
+
     noPersonas: "No personas have been proposed yet.",
 
-    protoWarning:
-      "These profiles are suggestions. Confirm that they represent your audience before continuing.",
+    noTwins: "No twin in this version.",
 
-    confirm: "Confirm this profile",
+    fromBrief: "From the brief",
 
-    reject: "Reject this profile",
+    fromOwner: "Described by you",
 
-    rejectionReason: "Reason for rejection",
+    reused: "Reused from “{project}”",
 
-    reasonPlaceholder: "Explain the requested correction…",
+    reusedElsewhere: "Reused from another project",
 
-    confirmed: "Confirmed",
+    hypothesesOne: "1 hypothesis to verify",
 
-    rejected: "Rejected",
+    hypothesesOther: "{n} hypotheses to verify",
+
+    confirmedByYou: "Confirmed by you",
+
+    rejectedChip: "Set aside",
 
     pending: "Pending confirmation",
 
-    generateTwins: "Create their User Twins",
+    awaitingApproval: "To approve",
 
-    generationHint:
-      "Confirm at least one profile and review every remaining suggestion before continuing.",
+    goals: "Goals",
 
-    twins: "Your users' digital representatives",
-    talk: "Talk to",
+    context: "Context of use",
 
-    snapshot: "User profiles",
-    technicalDetails: "Technical details and sources",
+    holdsBack: "What holds them back",
+
+    fullProfile: "See the full profile",
+
+    confirm: "Confirm",
+
+    reject: "Set aside",
+
+    rejectConfirm: "Set the profile aside",
+
+    rejectionReason: "Why do you set it aside?",
+
+    reasonPlaceholder: "Explain why this profile does not describe who will use the product…",
+
+    rejectedBecause: "Set aside: {reason}",
+
+    cancel: "Cancel",
+
+    talk: "Talk to the twin",
+
+    pendingDiffsOne: "1 change to approve in the profile",
+
+    pendingDiffsOther: "{n} changes to approve in the profile",
+
+    startingProfiles: "Starting profiles",
+
+    profileTitle: "Profile of {name}",
+
+    staleContext:
+      "The brief or team changed: generate and approve a new User Twin version before continuing.",
+
+    generateTwins: "Create the twins",
+
+    regenerateTwins: "Create the twins again",
+
+    decideProfiles:
+      "Confirm or set aside every proposed profile: the twins are born from the confirmed profiles.",
+
+    confirmOne: "Confirm at least one profile to create the twins.",
+
+    readyToGenerate:
+      "Confirmed profiles: {n}. Create their twins: you will be able to talk to them and correct them.",
+
+    submitFailed:
+      "The twins could not be brought to your approval. Refresh the page and try again.",
+
+    requestPlaceholder:
+      "Write what does not convince you in the profiles: the note stays in the history of the decisions.",
+
+    decisionResume: "You paused this decision. Resume it when you are ready.",
+
     profileDetails: "View profile",
+
     evidenceDetails: "Why we think this",
+
     knowledgeSource: "Where does this information come from?",
 
-    version: "Version",
+    edit: "Correct",
 
-    persistedLifecycle: "Persisted lifecycle",
-
-    effectiveLifecycle: "Effective lifecycle",
-
-    edit: "Propose revision",
+    editField: "Correct {field}",
 
     observationUnavailable: "This information is read-only.",
-
-    revision: "Profile revision",
-
-    revisionField: "Field",
 
     revisionValue: "New value",
 
@@ -224,8 +365,6 @@ const messages = {
       "Choose Human validated only if a person has checked this information. Approving a profile alone does not verify its assumptions.",
 
     proposeRevision: "Propose this change",
-
-    cancel: "Cancel",
 
     diffs: "Suggested profile changes",
 
@@ -245,19 +384,11 @@ const messages = {
 
     diffReason: "Decision reason",
 
-    gate: "Confirm your user profiles",
+    otherDecisions: "Other decisions",
 
-    gateStatus: "Approval",
-
-    submitGate: "Review these profiles for approval",
-    decisionCounter: "Decision {n} of {max}",
-    moreActions: "Other actions",
-
-    approveGate: "Approve user profiles",
+    approveGate: "Confirm the twins and continue",
 
     rejectGate: "Reject",
-
-    requestRevision: "Request revision",
 
     pause: "Pause",
 
@@ -266,6 +397,8 @@ const messages = {
     cancelGate: "Cancel approval",
 
     gateReason: "Reason for your decision",
+
+    gateReasonHint: "Needed to reject the profiles.",
 
     gateMethodology:
       "Your approval allows the project to use these profiles. It does not mean their assumptions have been verified with real users.",
@@ -277,6 +410,45 @@ const messages = {
     notReady: "Review and approve your user profiles to continue.",
 
     stale: "The profiles have changed since your last approval. Review them again.",
+
+    revisionRequested:
+      "You asked for changes. Correct the twins: the new version comes back for your approval.",
+
+    revisionNote: "Your note: “{note}”",
+
+    cancelled: "You cancelled this decision. Correct a twin to prepare a new version.",
+
+    rejected: "You rejected these profiles. Correct a twin to prepare a new version.",
+
+    pausedNeedsHuman: "The decision is stopped and needs your intervention.",
+
+    technicalSummary: "Version {number} · {state}",
+
+    technicalProfiles: "Proposed profiles · twins not created yet",
+
+    technicalEmpty: "No profile yet",
+
+    stateApproved: "approved",
+
+    statePending: "waiting for your decision",
+
+    stateDraft: "being prepared",
+
+    contentHash: "Content hash",
+
+    gateStatus: "Approval",
+
+    workflow: "Workflow state",
+
+    decisionCounter: "Decision {n} of {max}",
+
+    technicalTwins: "Twins",
+
+    technicalPersonas: "Starting profiles",
+
+    persistedLifecycle: "Persisted lifecycle",
+
+    effectiveLifecycle: "Effective lifecycle",
 
     unknown: "Unknown",
 
@@ -291,15 +463,12 @@ const messages = {
     invalidField: "The selected observation is not mapped to a User Twin field.",
 
     projectMissing: "Project and access token are required.",
+
+    profileInformation: "Profile information",
   },
 
   it: {
-    eyebrow: "Conosci i tuoi utenti",
-
-    title: "Chi userà il tuo prodotto?",
-
-    intro:
-      "Controlla i profili proposti. I loro rappresentanti digitali, chiamati User Twin, aiuteranno a esplorare il prodotto da punti di vista diversi.",
+    region: "User Twin",
 
     loading: "Aggiornamento dei profili…",
     generating:
@@ -307,56 +476,119 @@ const messages = {
 
     error: "Operazione User Modeling non riuscita.",
 
-    personas: "Profili degli utenti proposti",
+    personasHeading: "Profili degli utenti proposti",
+
+    twinsHeading: "I twin del progetto",
+
+    profilesCount: "{confirmed} di {total} profili confermati",
+
+    profilesSentence:
+      "Sono proposte dell'AI: conferma i profili che descrivono davvero chi userà il prodotto.",
+
+    twinsCountOne: "1 twin da approvare",
+
+    twinsCountOther: "{n} twin da approvare",
+
+    twinsApprovedOne: "1 twin approvato da te",
+
+    twinsApprovedOther: "{n} twin approvati da te",
+
+    twinsSentence:
+      "Le risposte dei twin sono simulate: ipotesi da pesare, non opinioni di persone reali.",
 
     proposePersonas: "Proponi i profili degli utenti",
 
+    noPersonasTitle: "Ancora nessun profilo degli utenti",
+
     noPersonas: "Non è stata ancora proposta alcuna persona.",
 
-    protoWarning:
-      "Questi profili sono proposte. Conferma che rappresentino il tuo pubblico prima di proseguire.",
+    noTwins: "Nessun twin in questa versione.",
 
-    confirm: "Conferma questo profilo",
+    fromBrief: "Dal brief",
 
-    reject: "Rifiuta questo profilo",
+    fromOwner: "Descritto da te",
 
-    rejectionReason: "Motivo del rifiuto",
+    reused: "Riusato da «{project}»",
 
-    reasonPlaceholder: "Spiega la correzione richiesta…",
+    reusedElsewhere: "Riusato da un altro progetto",
 
-    confirmed: "Confermata",
+    hypothesesOne: "1 ipotesi da verificare",
 
-    rejected: "Rifiutata",
+    hypothesesOther: "{n} ipotesi da verificare",
+
+    confirmedByYou: "Confermato da te",
+
+    rejectedChip: "Scartato",
 
     pending: "In attesa di conferma",
 
-    generateTwins: "Crea i loro User Twin",
+    awaitingApproval: "Da approvare",
 
-    generationHint:
-      "Conferma almeno un profilo e valuta tutte le altre proposte prima di proseguire.",
+    goals: "Obiettivi",
 
-    twins: "I rappresentanti digitali dei tuoi utenti",
-    talk: "Parla con",
+    context: "Contesto d'uso",
 
-    snapshot: "Profili degli utenti",
-    technicalDetails: "Dettagli tecnici e fonti",
+    holdsBack: "Che cosa è di ostacolo",
+
+    fullProfile: "Vedi il profilo completo",
+
+    confirm: "Conferma",
+
+    reject: "Scarta",
+
+    rejectConfirm: "Scarta il profilo",
+
+    rejectionReason: "Perché lo scarti?",
+
+    reasonPlaceholder: "Spiega perché questo profilo non descrive chi userà il prodotto…",
+
+    rejectedBecause: "Scartato: {reason}",
+
+    cancel: "Annulla",
+
+    talk: "Parla con il twin",
+
+    pendingDiffsOne: "1 modifica al profilo da approvare",
+
+    pendingDiffsOther: "{n} modifiche al profilo da approvare",
+
+    startingProfiles: "Profili di partenza",
+
+    profileTitle: "Il profilo di {name}",
+
+    staleContext:
+      "Brief o team sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+
+    generateTwins: "Crea i twin",
+
+    regenerateTwins: "Crea di nuovo i twin",
+
+    decideProfiles:
+      "Conferma o scarta ogni profilo proposto: i twin nascono dai profili confermati.",
+
+    confirmOne: "Conferma almeno un profilo per creare i twin.",
+
+    readyToGenerate: "Profili confermati: {n}. Crea i loro twin: potrai parlarci e correggerli.",
+
+    submitFailed:
+      "Non è stato possibile portare i twin alla tua approvazione. Ricarica la pagina e riprova.",
+
+    requestPlaceholder:
+      "Scrivi che cosa non ti convince nei profili: la nota resta nella cronologia delle decisioni.",
+
+    decisionResume: "Hai messo in pausa questa decisione. Riprendila quando sei pronto.",
+
     profileDetails: "Vedi il profilo",
+
     evidenceDetails: "Da dove nasce questa informazione",
+
     knowledgeSource: "Da dove proviene questa informazione?",
 
-    version: "Versione",
+    edit: "Correggi",
 
-    persistedLifecycle: "Lifecycle persistito",
-
-    effectiveLifecycle: "Lifecycle effettivo",
-
-    edit: "Proponi revisione",
+    editField: "Correggi {field}",
 
     observationUnavailable: "Questa informazione è di sola lettura.",
-
-    revision: "Revisione del profilo",
-
-    revisionField: "Campo",
 
     revisionValue: "Nuovo valore",
 
@@ -370,8 +602,6 @@ const messages = {
       "Scegli Validato da una persona solo se qualcuno ha verificato questa informazione. Approvare il profilo, da solo, non conferma le sue ipotesi.",
 
     proposeRevision: "Proponi questa modifica",
-
-    cancel: "Annulla",
 
     diffs: "Modifiche proposte ai profili",
 
@@ -391,19 +621,11 @@ const messages = {
 
     diffReason: "Motivazione della decisione",
 
-    gate: "Conferma i profili degli utenti",
+    otherDecisions: "Altre decisioni",
 
-    gateStatus: "Approvazione",
-
-    submitGate: "Porta questi profili all'approvazione",
-    decisionCounter: "Decisione {n} di {max}",
-    moreActions: "Altre azioni",
-
-    approveGate: "Approva i profili degli utenti",
+    approveGate: "Conferma i twin e continua",
 
     rejectGate: "Rifiuta",
-
-    requestRevision: "Richiedi revisione",
 
     pause: "Pausa",
 
@@ -412,6 +634,8 @@ const messages = {
     cancelGate: "Annulla approvazione",
 
     gateReason: "Motivazione della decisione",
+
+    gateReasonHint: "Serve per rifiutare i profili.",
 
     gateMethodology:
       "La tua approvazione permette al progetto di usare questi profili. Non significa che le loro ipotesi siano state verificate con utenti reali.",
@@ -423,6 +647,46 @@ const messages = {
     notReady: "Controlla e approva i profili degli utenti per proseguire.",
 
     stale: "I profili sono cambiati dalla tua ultima approvazione. Controllali di nuovo.",
+
+    revisionRequested:
+      "Hai chiesto modifiche. Correggi i twin: la nuova versione tornerà alla tua approvazione.",
+
+    revisionNote: "La tua nota: «{note}»",
+
+    cancelled:
+      "Hai annullato questa decisione. Correggi un twin per prepararne una nuova versione.",
+
+    rejected: "Hai rifiutato questi profili. Correggi un twin per prepararne una nuova versione.",
+
+    pausedNeedsHuman: "La decisione è ferma e serve il tuo intervento.",
+
+    technicalSummary: "Versione {number} · {state}",
+
+    technicalProfiles: "Profili proposti · twin non ancora creati",
+
+    technicalEmpty: "Ancora nessun profilo",
+
+    stateApproved: "approvata",
+
+    statePending: "in attesa della tua decisione",
+
+    stateDraft: "in preparazione",
+
+    contentHash: "Hash del contenuto",
+
+    gateStatus: "Approvazione",
+
+    workflow: "Stato del flusso",
+
+    decisionCounter: "Decisione {n} di {max}",
+
+    technicalTwins: "Twin",
+
+    technicalPersonas: "Profili di partenza",
+
+    persistedLifecycle: "Lifecycle persistito",
+
+    effectiveLifecycle: "Lifecycle effettivo",
 
     unknown: "Sconosciuto",
 
@@ -437,14 +701,20 @@ const messages = {
     invalidField: "L'osservazione selezionata non corrisponde a un campo User Twin.",
 
     projectMissing: "Sono richiesti progetto e access token.",
+
+    profileInformation: "Informazione sul profilo",
   },
 } as const;
 
 const copy = computed(() => messages[props.locale]);
 
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/gu, (_match, key: string) => String(values[key] ?? ""));
+}
+
 const errorMessage = computed(() => {
   const code = localError.value ?? store.error?.code ?? store.error?.message;
-  if (!code) return null;
+  if (!code || isGenerationInterrupted(code)) return null;
   const errors: Record<string, [string, string]> = {
     INVALID_PROVIDER_OUTPUT: [
       "The model returned an incomplete or invalid proposal. No artifact was accepted. You can try again.",
@@ -473,6 +743,8 @@ const errorMessage = computed(() => {
 const personas = computed(() => store.currentPersonas);
 
 const twins = computed(() => store.currentTwins);
+
+const peers = computed(() => twinPeers(personas.value.map((persona) => persona.persona_id)));
 
 const pendingPersonas = computed(() =>
   personas.value.filter(
@@ -535,11 +807,184 @@ const gatePendingApproval = computed(
 const gatePaused = computed(
   () => gateTargetsCurrentSnapshot.value && store.currentGate?.status === "PAUSED",
 );
+
 const decisionCounter = computed(() =>
-  copy.value.decisionCounter
-    .replace("{n}", String(store.currentGate?.iteration ?? 1))
-    .replace("{max}", String(store.currentGate?.max_iterations ?? 1)),
+  fill(messages[props.locale].decisionCounter, {
+    n: store.currentGate?.iteration ?? 1,
+    max: store.currentGate?.max_iterations ?? 1,
+  }),
 );
+
+const contextStale = computed(() => store.readiness?.context_current === false);
+
+const phase = computed<Phase>(() => {
+  if (store.currentSnapshot !== null) return "twins";
+  return personas.value.length > 0 ? "profiles" : "empty";
+});
+
+const longOperation = computed(
+  () => store.pending["propose-personas"] || store.pending["generate-snapshot"],
+);
+
+const snapshotApproved = computed(() => store.readiness?.approved_current_snapshot === true);
+
+const showPersonaCards = computed(
+  () =>
+    phase.value === "profiles" ||
+    (phase.value === "twins" && contextStale.value && pendingPersonas.value.length > 0),
+);
+
+const decision = computed<TwinsDecision | null>(() => {
+  if (phase.value === "profiles") return "generate";
+  if (phase.value !== "twins") return null;
+  if (contextStale.value) return "generate";
+  if (gatePendingApproval.value) return "approve";
+  if (gatePaused.value) return "resume";
+  return canSubmitGate.value ? "approve" : null;
+});
+
+const requestAvailable = computed(() => decision.value === "approve" && gatePendingApproval.value);
+
+const otherDecisionsAvailable = computed(
+  () =>
+    (decision.value === "approve" || decision.value === "resume") &&
+    (gatePendingApproval.value || gatePaused.value),
+);
+
+const barBusy = computed(() => store.isBusy || approving.value || modelingJob.value !== null);
+
+const decisionCopy = computed(() => {
+  const text = copy.value;
+  switch (decision.value) {
+    case "generate": {
+      const description =
+        pendingPersonas.value.length > 0
+          ? text.decideProfiles
+          : confirmedPersonas.value.length === 0
+            ? text.confirmOne
+            : fill(text.readyToGenerate, { n: confirmedPersonas.value.length });
+      return {
+        primary: contextStale.value ? text.regenerateTwins : text.generateTwins,
+        description: contextStale.value ? `${text.staleContext} ${description}` : description,
+        disabled: !canGenerateTwins.value,
+      };
+    }
+    case "resume":
+      return { primary: text.resume, description: text.decisionResume, disabled: false };
+    default:
+      return {
+        primary: text.approveGate,
+        description:
+          store.currentGate !== null && !gateTargetsCurrentSnapshot.value
+            ? `${text.stale} ${text.gateMethodology}`
+            : text.gateMethodology,
+        disabled: false,
+      };
+  }
+});
+
+const gateNotice = computed(() => {
+  const gate = store.currentGate;
+  if (
+    gate === null ||
+    !gateTargetsCurrentSnapshot.value ||
+    decision.value !== null ||
+    phase.value !== "twins"
+  ) {
+    return null;
+  }
+  const text = copy.value;
+  const notices: Record<string, string> = {
+    REVISION_REQUESTED: text.revisionRequested,
+    CANCELLED: text.cancelled,
+    REJECTED: text.rejected,
+    PAUSED_NEEDS_HUMAN: text.pausedNeedsHuman,
+  };
+  return notices[gate.status] ?? null;
+});
+
+const revisionNote = computed(() => {
+  if (store.currentGate?.status !== "REVISION_REQUESTED") return null;
+  const event = [...store.gateEvents]
+    .reverse()
+    .find((item: HumanGateEventPayload) => item.kind === "REQUEST_REVISION");
+  return event?.reason ?? null;
+});
+
+const countLabel = computed(() => {
+  const text = copy.value;
+  if (phase.value === "profiles") {
+    return fill(text.profilesCount, {
+      confirmed: confirmedPersonas.value.length,
+      total: personas.value.length,
+    });
+  }
+  const n = twins.value.length;
+  if (snapshotApproved.value) {
+    return n === 1 ? text.twinsApprovedOne : fill(text.twinsApprovedOther, { n });
+  }
+  return n === 1 ? text.twinsCountOne : fill(text.twinsCountOther, { n });
+});
+
+const technicalSummary = computed(() => {
+  const text = copy.value;
+  const snapshot = store.currentSnapshot;
+  if (snapshot === null) {
+    return personas.value.length > 0 ? text.technicalProfiles : text.technicalEmpty;
+  }
+  const state = snapshotApproved.value
+    ? text.stateApproved
+    : decision.value === "approve" || decision.value === "resume"
+      ? text.statePending
+      : text.stateDraft;
+  return fill(text.technicalSummary, { number: snapshot.version_number, state });
+});
+
+const technicalRows = computed(() => {
+  const text = copy.value;
+  const snapshot = store.currentSnapshot;
+  const rows: { label: string; value: string }[] = [];
+  if (snapshot !== null) {
+    rows.push({ label: text.contentHash, value: snapshot.content_hash });
+  }
+  if (store.currentGate !== null) {
+    rows.push({
+      label: text.gateStatus,
+      value: `${workflowStatusLabel(store.currentGate.status, props.locale)} · ${decisionCounter.value}`,
+    });
+  }
+  rows.push({
+    label: text.workflow,
+    value: `${store.currentGate?.status ?? "—"} · ${store.readiness?.workflow_state ?? "—"}`,
+  });
+  return rows;
+});
+
+const profilePersona = computed(() => {
+  const target = profileTarget.value;
+  if (target === null || target.kind !== "persona") return null;
+  return personas.value.find((persona) => persona.persona_id === target.id) ?? null;
+});
+
+const profileTwin = computed(() => {
+  const target = profileTarget.value;
+  if (target === null || target.kind !== "twin") return null;
+  return twins.value.find((twin) => twin.twin_id === target.id) ?? null;
+});
+
+const profileTitle = computed(() => {
+  const name = profileTwin.value?.profile.name ?? profilePersona.value?.profile.name ?? "";
+  return fill(copy.value.profileTitle, { name });
+});
+
+const profileObservations = computed(
+  () => profileTwin.value?.profile.observations ?? profilePersona.value?.profile.observations ?? [],
+);
+
+const profileDiffsForTwin = computed(() => {
+  const twin = profileTwin.value;
+  return twin === null ? [] : profileDiffs.value.filter((diff) => diff.twin_id === twin.twin_id);
+});
 
 function fieldLabel(field: UserTwinField): string {
   return fieldLabels[props.locale][field];
@@ -548,10 +993,10 @@ function fieldLabel(field: UserTwinField): string {
 function personaStatusLabel(persona: PersonaVersionPayload): string {
   switch (persona.profile.confirmation_status) {
     case "CONFIRMED":
-      return copy.value.confirmed;
+      return copy.value.confirmedByYou;
 
     case "REJECTED":
-      return copy.value.rejected;
+      return copy.value.rejectedChip;
 
     case "PENDING_CONFIRMATION":
       return copy.value.pending;
@@ -594,6 +1039,11 @@ function formatObservation(observation: ProfileObservationPayload | null): strin
   }
 }
 
+function observationLabel(observation: ProfileObservationPayload): string {
+  const field = observationField(observation);
+  return field !== null ? fieldLabel(field) : copy.value.profileInformation;
+}
+
 function effectiveLifecycle(twin: UserTwinVersionPayload): string {
   const lifecycle = store.readiness?.twins.find(
     (item) => item.twin_id === twin.twin_id && item.version_number === twin.version_number,
@@ -602,29 +1052,107 @@ function effectiveLifecycle(twin: UserTwinVersionPayload): string {
   return lifecycle?.effective_status ?? twin.profile.validation_status;
 }
 
-function profileDescription(observations: ProfileObservationPayload[]): string | undefined {
-  const role = observations.find((observation) => observationField(observation) === "role");
-  return role && ["TEXT", "ITEMS"].includes(role.value.kind) ? formatObservation(role) : undefined;
+function knownValue(observation: ProfileObservationPayload | undefined): string | null {
+  if (observation === undefined) return null;
+  if (observation.value.kind === "TEXT") {
+    const text = observation.value.text?.trim() ?? "";
+    return text.length > 0 ? text : null;
+  }
+  if (observation.value.kind === "ITEMS") {
+    return observation.value.items.length > 0 ? observation.value.items.join(", ") : null;
+  }
+  return null;
 }
 
-const keyFactFields: readonly UserTwinField[] = [
-  "goals",
-  "frustrations",
-  "context_of_use",
-  "accessibility_needs",
-];
+function observationBySuffix(
+  observations: ProfileObservationPayload[],
+  suffix: string,
+): ProfileObservationPayload | undefined {
+  return observations.find((item) => item.observation_key.split(".").pop() === suffix);
+}
 
-function keyFacts(observations: ProfileObservationPayload[]): ProfileObservationPayload[] {
-  const preferred = keyFactFields.flatMap((field) => {
-    const observation = observations.find((item) => observationField(item) === field);
-    return observation ? [observation] : [];
-  });
-  if (preferred.length > 0) {
-    return preferred;
+function summaryOf(
+  observations: ProfileObservationPayload[],
+  personaId: string,
+  name: string,
+): string | null {
+  const persona = personas.value.find((item) => item.persona_id === personaId);
+  const sources = [observations, persona?.profile.observations ?? []];
+  for (const suffix of ["summary", "role"]) {
+    for (const source of sources) {
+      const value = knownValue(observationBySuffix(source, suffix));
+      if (value !== null && value.trim().toLocaleLowerCase() !== name.trim().toLocaleLowerCase()) {
+        return value;
+      }
+    }
   }
-  return observations
-    .filter((item) => observationField(item) !== null && observationField(item) !== "role")
-    .slice(0, 4);
+  return null;
+}
+
+function twinSummary(twin: UserTwinVersionPayload): string | null {
+  return summaryOf(
+    twin.profile.observations,
+    twin.profile.persona_reference.persona_id,
+    twin.profile.name,
+  );
+}
+
+function cardFacts(observations: ProfileObservationPayload[]): { label: string; value: string }[] {
+  const text = copy.value;
+  const facts = [
+    { label: text.goals, value: knownValue(observationBySuffix(observations, "goals")) },
+    { label: text.context, value: knownValue(observationBySuffix(observations, "context_of_use")) },
+    {
+      label: text.holdsBack,
+      value:
+        knownValue(observationBySuffix(observations, "frustrations")) ??
+        knownValue(observationBySuffix(observations, "pain_points")),
+    },
+  ];
+  return facts.flatMap((fact) => (fact.value === null ? [] : [{ ...fact, value: fact.value }]));
+}
+
+function hypothesisCount(observations: ProfileObservationPayload[]): number {
+  return observations.filter((item) => item.human_validation === "REQUIRED").length;
+}
+
+function hypothesisLabel(observations: ProfileObservationPayload[]): string | null {
+  const n = hypothesisCount(observations);
+  if (n === 0) return null;
+  return n === 1 ? copy.value.hypothesesOne : fill(copy.value.hypothesesOther, { n });
+}
+
+function isHypothesis(observation: ProfileObservationPayload): boolean {
+  return (
+    observation.human_validation === "REQUIRED" ||
+    observation.epistemic_status === "MODEL_INFERRED" ||
+    observation.epistemic_status === "UNSUPPORTED_ASSUMPTION"
+  );
+}
+
+function sourceOrigin(source: PersonaVersionPayload["profile"]["source"]): string {
+  return source === "OWNER_PROVIDED" ? copy.value.fromOwner : copy.value.fromBrief;
+}
+
+function twinOrigin(twin: UserTwinVersionPayload): string {
+  for (const observation of twin.profile.observations) {
+    for (const reference of observation.provenance) {
+      if (reference.source_id.startsWith(IMPORTED_PREFIX)) {
+        const summary = reference.summary ?? "";
+        const project = summary.startsWith(IMPORTED_SUMMARY)
+          ? summary.slice(IMPORTED_SUMMARY.length).replace(/…$/u, "").trim()
+          : "";
+        return project.length > 0
+          ? fill(copy.value.reused, { project })
+          : copy.value.reusedElsewhere;
+      }
+    }
+  }
+  return sourceOrigin(twin.profile.persona_reference.source);
+}
+
+function twinConfirmed(twin: UserTwinVersionPayload): boolean {
+  return APPROVED_LIFECYCLES.has(effectiveLifecycle(twin));
 }
 
 function observationSummary(observation: ProfileObservationPayload): string {
@@ -653,6 +1181,22 @@ function lifecycleLabel(twin: UserTwinVersionPayload): string {
     ],
   };
   return labels[effectiveLifecycle(twin)]?.[props.locale === "it" ? 0 : 1] ?? copy.value.unknown;
+}
+
+function pendingDiffsLabel(twin: UserTwinVersionPayload): string | null {
+  const n = profileDiffs.value.filter(
+    (diff) => diff.twin_id === twin.twin_id && diff.status === "PROPOSED",
+  ).length;
+  if (n === 0) return null;
+  return n === 1 ? copy.value.pendingDiffsOne : fill(copy.value.pendingDiffsOther, { n });
+}
+
+function diffStatusLabel(diff: UserTwinProfileDiffPayload): string {
+  return diff.status === "PROPOSED"
+    ? copy.value.proposedDiff
+    : diff.status === "APPROVED"
+      ? copy.value.approvedDiff
+      : copy.value.rejectedDiff;
 }
 
 function personaReason(personaId: string): string {
@@ -699,7 +1243,13 @@ async function loadProject(): Promise<void> {
   }
 }
 
+function authorizedJobs<T>(operation: (token: string) => Promise<T>): Promise<T> {
+  return props.authorize ? props.authorize(operation) : operation(props.accessToken);
+}
+
 async function proposePersonas(): Promise<void> {
+  if (modelingJob.value !== null) return;
+  dismissModelingJob();
   await runAction((token) => store.proposePersonas(props.projectId, token));
 }
 
@@ -712,6 +1262,9 @@ const shouldProposeAutomatically = computed(
     props.autoLoad &&
     teamApproved.value &&
     loadedProjectId.value === props.projectId &&
+    modelingChecked.value &&
+    modelingJob.value === null &&
+    !generationSeen.has(props.projectId) &&
     personas.value.length === 0 &&
     store.currentSnapshot === null &&
     !store.isBusy &&
@@ -736,6 +1289,19 @@ watch(
   },
 );
 
+async function startRejection(persona: PersonaVersionPayload): Promise<void> {
+  localError.value = null;
+  rejectingPersonaId.value = persona.persona_id;
+  await nextTick();
+  document.getElementById(`persona-reason-${persona.persona_id}`)?.focus();
+}
+
+async function cancelRejection(persona: PersonaVersionPayload): Promise<void> {
+  rejectingPersonaId.value = null;
+  await nextTick();
+  document.getElementById(`persona-reject-${persona.persona_id}`)?.focus();
+}
+
 async function decidePersona(
   persona: PersonaVersionPayload,
   decision: PersonaOwnerDecision,
@@ -748,7 +1314,7 @@ async function decidePersona(
     return;
   }
 
-  await runAction((token) =>
+  const applied = await runAction((token) =>
     store.decidePersona(
       props.projectId,
       persona.persona_id,
@@ -757,10 +1323,25 @@ async function decidePersona(
       reason.length > 0 ? reason : null,
     ),
   );
+
+  if (applied && rejectingPersonaId.value === persona.persona_id) {
+    rejectingPersonaId.value = null;
+  }
 }
 
 async function generateTwins(): Promise<void> {
+  if (modelingJob.value !== null) return;
+  dismissModelingJob();
   await runAction((token) => store.generateSnapshot(props.projectId, token));
+}
+
+function openProfile(kind: ProfileTarget["kind"], id: string): void {
+  profileTarget.value = { kind, id };
+}
+
+function closeProfile(): void {
+  profileTarget.value = null;
+  cancelRevision();
 }
 
 function startRevision(twin: UserTwinVersionPayload, observation: ProfileObservationPayload): void {
@@ -801,6 +1382,14 @@ function cancelRevision(): void {
   editingOriginalKind.value = "TEXT";
   editingValue.value = "";
   revisionEpistemicStatus.value = "USER_PROVIDED";
+}
+
+function isEditing(twin: UserTwinVersionPayload, observation: ProfileObservationPayload): boolean {
+  return (
+    editingTwinId.value === twin.twin_id &&
+    editingField.value !== null &&
+    editingField.value === observationField(observation)
+  );
 }
 
 function replacementValue(field: UserTwinField) {
@@ -930,23 +1519,111 @@ async function decideDiff(
   );
 }
 
-async function submitGate(): Promise<void> {
-  await runAction((token) => store.submitGate(props.projectId, token));
+async function submitGate(): Promise<boolean> {
+  const submitted = await runAction((token) => store.submitGate(props.projectId, token));
+  if (submitted && !gatePendingApproval.value) {
+    localError.value = copy.value.submitFailed;
+    return false;
+  }
+  return submitted;
 }
 
-async function decideGate(action: GateDecisionAction): Promise<void> {
-  const reason = gateReason.value.trim();
+async function decideGate(action: GateDecisionAction, note?: string): Promise<boolean> {
+  const reason = (note ?? gateReason.value).trim();
 
   if (gateActionRequiresReason(action) && reason.length === 0) {
     localError.value = copy.value.requiredReason;
 
-    return;
+    return false;
   }
 
-  await runAction((token) =>
+  const applied = await runAction((token) =>
     store.decideGate(props.projectId, action, token, reason.length > 0 ? reason : null),
   );
+
+  if (applied && note === undefined) {
+    gateReason.value = "";
+  }
+
+  return applied;
 }
+
+async function approveTwins(): Promise<void> {
+  if (approving.value || store.isBusy) return;
+  approving.value = true;
+  try {
+    if (!gatePendingApproval.value && !(await submitGate())) return;
+    await decideGate("APPROVE");
+  } finally {
+    approving.value = false;
+  }
+}
+
+async function onPrimary(): Promise<void> {
+  switch (decision.value) {
+    case "generate":
+      await generateTwins();
+      return;
+    case "approve":
+      await approveTwins();
+      return;
+    case "resume":
+      await decideGate("RESUME");
+      return;
+  }
+}
+
+async function onRequest(text: string): Promise<void> {
+  if (!requestAvailable.value) return;
+  if (await decideGate("REQUEST_REVISION", text)) {
+    await decisionBar.value?.completeRequest();
+  }
+}
+
+function visibleTarget(id: string): HTMLElement | null {
+  const candidates = document.querySelectorAll<HTMLElement>(`#${id}`);
+  for (const candidate of candidates) {
+    if (typeof candidate.checkVisibility !== "function" || candidate.checkVisibility()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function refreshBarTarget(): void {
+  const element = root.value;
+  const shown =
+    element !== null &&
+    element.isConnected &&
+    (typeof element.checkVisibility !== "function" || element.checkVisibility());
+  const target = shown ? visibleTarget("step-decision-bar") : null;
+  const row = shown ? visibleTarget("step-technical-row") : null;
+  if (barTarget.value !== target) barTarget.value = target;
+  if (rowTarget.value !== row) rowTarget.value = row;
+}
+
+async function refreshAfterRender(): Promise<void> {
+  await nextTick();
+  refreshBarTarget();
+}
+
+onMounted(() => {
+  refreshBarTarget();
+  void refreshAfterRender();
+  if (typeof ResizeObserver !== "undefined" && root.value !== null) {
+    visibilityObserver = new ResizeObserver(refreshBarTarget);
+    visibilityObserver.observe(root.value);
+  }
+});
+
+onUpdated(refreshBarTarget);
+
+watch(() => props.active, refreshAfterRender);
+
+onBeforeUnmount(() => {
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
+});
 
 watch(
   () => [props.projectId, props.accessToken, props.autoLoad] as const,
@@ -970,704 +1647,795 @@ watch(
 </script>
 
 <template>
-  <section class="space-y-8" aria-labelledby="user-modeling-title">
-    <header class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6">
-      <p class="text-xs font-semibold tracking-[0.16em] text-ink-3 uppercase">
-        {{ copy.eyebrow }}
-      </p>
+  <section
+    ref="root"
+    class="grid gap-6 text-on-night"
+    data-surface="night"
+    :aria-label="copy.region"
+    data-testid="user-modeling-step"
+  >
+    <GenerationJobNotice
+      v-if="modelingJob !== null || modelingJobFailure !== null"
+      :job="modelingJob"
+      :failure="modelingJobFailure"
+      :locale="locale"
+      @dismiss="dismissModelingJob"
+    />
+    <UiStateBlock
+      v-else-if="longOperation"
+      kind="loading"
+      :title="copy.generating"
+      data-testid="user-modeling-busy"
+    />
+    <p v-else class="sr-only" role="status">{{ store.isBusy ? copy.loading : "" }}</p>
 
-      <h2 id="user-modeling-title" class="mt-2 text-2xl font-bold tracking-tight text-ink">
-        {{ copy.title }}
-      </h2>
+    <UiStateBlock v-if="errorMessage !== null" kind="error" :text="errorMessage" />
 
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-ink-2">
-        {{ copy.intro }}
-      </p>
-
-      <p v-if="store.isBusy" class="mt-4 text-sm font-medium text-ink-2" role="status">
-        {{
-          store.pending["propose-personas"] || store.pending["generate-snapshot"]
-            ? copy.generating
-            : copy.loading
-        }}
-      </p>
-
-      <div
-        v-if="localError !== null || store.error !== null"
-        class="mt-4 rounded-control border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
-        role="alert"
-      >
-        {{ errorMessage }}
-      </div>
-    </header>
-
-    <details
-      class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6"
-      aria-labelledby="personas-heading"
-      data-testid="starting-personas"
-      :open="
-        twins.length === 0 ||
-        store.readiness?.context_current === false ||
-        personas.some((persona) => persona.profile.confirmation_status === 'PENDING_CONFIRMATION')
-      "
+    <UiStateBlock
+      v-if="phase === 'empty' && !longOperation"
+      kind="empty"
+      :title="copy.noPersonasTitle"
+      :text="copy.noPersonas"
     >
-      <summary id="personas-heading" class="cursor-pointer text-base font-semibold text-ink">
-        {{
-          twins.length > 0
-            ? locale === "it"
-              ? "Profili di partenza"
-              : "Starting profiles"
-            : copy.personas
-        }}
-      </summary>
-      <div class="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p class="mt-1 max-w-2xl text-sm leading-6 text-ink-2">
-            {{ copy.protoWarning }}
-          </p>
-        </div>
-
-        <UiButton
-          v-if="personas.length === 0 && store.currentSnapshot === null"
-          :disabled="store.isBusy"
-          data-testid="propose-personas"
-          @click="proposePersonas"
-        >
-          {{ copy.proposePersonas }}
-        </UiButton>
-      </div>
-
-      <p v-if="personas.length === 0" class="mt-5 text-sm text-ink-3">
-        {{ copy.noPersonas }}
-      </p>
-
-      <div v-else class="mt-5 grid gap-5 md:grid-cols-2">
-        <article
-          v-for="persona in personas"
-          :key="persona.id"
-          class="grid content-start gap-4 rounded-card border border-line p-5 shadow-card"
-          :class="
-            persona.profile.confirmation_status === 'REJECTED' ? 'bg-surface-3' : 'bg-surface'
-          "
-        >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <h3 class="m-0 min-w-0">
-              <TwinIdentity
-                :identity-key="persona.persona_id"
-                :name="persona.profile.name"
-                :description="profileDescription(persona.profile.observations)"
-                :locale="locale"
-              />
-            </h3>
-
-            <div class="flex flex-wrap items-center gap-2">
-              <UiClaimLabel kind="hypothesis" />
-              <span
-                class="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2"
-              >
-                {{ personaStatusLabel(persona) }} · v{{ persona.version_number }}
-              </span>
-            </div>
-          </div>
-
-          <dl v-if="keyFacts(persona.profile.observations).length > 0" class="m-0 grid gap-2.5">
-            <div
-              v-for="observation in keyFacts(persona.profile.observations)"
-              :key="observation.observation_key"
-              class="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-3"
-            >
-              <dt class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-                {{ fieldLabel(observationField(observation) as UserTwinField) }}
-              </dt>
-              <dd class="m-0 text-sm leading-6 text-ink-2">{{ formatObservation(observation) }}</dd>
-            </div>
-          </dl>
-
-          <details>
-            <summary class="cursor-pointer text-sm font-semibold text-ink-2">
-              {{ copy.profileDetails }}
-            </summary>
-            <div class="mt-3 grid gap-3">
-              <div
-                v-for="observation in persona.profile.observations"
-                :key="observation.observation_key"
-                class="rounded-control bg-surface-2 p-3"
-              >
-                <p class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-                  {{
-                    observationField(observation)
-                      ? fieldLabel(observationField(observation) as UserTwinField)
-                      : locale === "it"
-                        ? "Informazione sul profilo"
-                        : "Profile information"
-                  }}
-                </p>
-
-                <p class="m-0 mt-1 text-sm text-ink">
-                  {{ formatObservation(observation) }}
-                </p>
-
-                <p class="m-0 mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
-                <details class="mt-3">
-                  <summary class="cursor-pointer text-xs font-medium text-ink-3">
-                    {{ copy.evidenceDetails }}
-                  </summary>
-                  <div class="mt-3">
-                    <UserModelingEpistemicBadge
-                      :status="observation.epistemic_status"
-                      :confidence="observation.confidence"
-                      :human-validation="observation.human_validation"
-                      :locale="locale"
-                    />
-                  </div>
-
-                  <div class="mt-3">
-                    <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
-                  </div>
-                </details>
-              </div>
-            </div>
-          </details>
-          <details class="text-xs text-ink-3" data-testid="persona-technical-details">
-            <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-            <p class="mt-2">{{ persona.profile.kind }} · {{ persona.persona_id }}</p>
-          </details>
-
-          <div
-            v-if="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'"
-            class="grid gap-3 border-t border-line pt-4"
-          >
-            <label
-              class="grid gap-2 text-sm font-medium text-ink-2"
-              :for="`persona-reason-${persona.persona_id}`"
-            >
-              {{ copy.rejectionReason }}
-              <textarea
-                :id="`persona-reason-${persona.persona_id}`"
-                v-model="personaReasons[persona.persona_id]"
-                rows="2"
-                class="w-full rounded-control border border-field bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none"
-                :placeholder="copy.reasonPlaceholder"
-              />
-            </label>
-
-            <div class="flex flex-wrap gap-2">
-              <UiButton
-                :disabled="store.isBusy"
-                data-testid="confirm-persona"
-                @click="decidePersona(persona, 'CONFIRM')"
-              >
-                {{ copy.confirm }}
-              </UiButton>
-
-              <UiButton
-                variant="secondary"
-                :disabled="store.isBusy || personaReason(persona.persona_id).trim().length === 0"
-                data-testid="reject-persona"
-                @click="decidePersona(persona, 'REJECT')"
-              >
-                {{ copy.reject }}
-              </UiButton>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div
-        v-if="store.currentSnapshot === null || store.readiness?.context_current === false"
-        class="mt-5"
+      <UiButton
+        variant="pill"
+        :disabled="store.isBusy || modelingJob !== null"
+        data-testid="propose-personas"
+        @click="proposePersonas"
       >
-        <p v-if="store.readiness?.context_current === false" role="status">
-          {{
-            locale === "it"
-              ? "Brief o team sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire."
-              : "The brief or team changed: generate and approve a new User Twin version before continuing."
-          }}
+        {{ copy.proposePersonas }}
+      </UiButton>
+    </UiStateBlock>
+
+    <div v-if="phase !== 'empty'" class="flex flex-wrap items-start gap-x-6 gap-y-3">
+      <div class="grid min-w-[min(100%,220px)] flex-1 gap-1.5">
+        <p class="m-0 text-base leading-normal text-on-night-3" data-testid="user-modeling-count">
+          <strong class="font-semibold text-on-night">{{ countLabel }}.</strong>
+          {{ phase === "profiles" ? copy.profilesSentence : copy.twinsSentence }}
         </p>
-        <UiButton
-          :disabled="!canGenerateTwins || store.isBusy"
-          data-testid="generate-twins"
-          @click="generateTwins"
-        >
-          {{ copy.generateTwins }}
-        </UiButton>
-
-        <p class="mt-2 text-xs text-ink-3">
-          {{ copy.generationHint }}
-        </p>
-      </div>
-    </details>
-
-    <section
-      v-if="store.currentSnapshot !== null"
-      class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6"
-      aria-labelledby="twins-heading"
-    >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 id="twins-heading" class="text-lg font-bold text-ink">
-            {{ copy.twins }}
-          </h3>
-
-          <p class="mt-1 text-sm text-ink-3">
-            {{ copy.snapshot }}
-            ·
-            {{ copy.version }}
-            {{ store.currentSnapshot.version_number }}
-          </p>
-        </div>
-
-        <details class="max-w-full text-xs text-ink-3" data-testid="profiles-technical-details">
-          <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-          <code class="mt-2 block break-all">
-            {{ store.currentSnapshot.content_hash }}
-          </code>
-        </details>
-      </div>
-
-      <div class="mt-5 grid gap-5 md:grid-cols-2">
-        <article
-          v-for="twin in twins"
-          :key="twin.id"
-          class="grid content-start gap-4 rounded-card border border-line bg-surface p-5 shadow-card"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <h4 class="m-0 min-w-0">
-              <TwinIdentity
-                :identity-key="twin.profile.persona_reference.persona_id"
-                :name="twin.profile.name"
-                :description="profileDescription(twin.profile.observations)"
-                :locale="locale"
-              />
-            </h4>
-
-            <div class="flex flex-wrap items-center gap-2">
-              <UiClaimLabel kind="hypothesis" />
-              <span
-                class="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2"
-              >
-                {{ lifecycleLabel(twin) }}
-              </span>
-            </div>
-          </div>
-
-          <div class="flex">
-            <UiButton
-              variant="secondary"
-              data-testid="open-twin-chat"
-              @click="emit('open-chat', twin)"
-            >
-              {{ copy.talk }} {{ twin.profile.name }}
-            </UiButton>
-          </div>
-
-          <dl v-if="keyFacts(twin.profile.observations).length > 0" class="m-0 grid gap-2.5">
-            <div
-              v-for="observation in keyFacts(twin.profile.observations)"
-              :key="observation.observation_key"
-              class="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-3"
-            >
-              <dt class="font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-                {{ fieldLabel(observationField(observation) as UserTwinField) }}
-              </dt>
-              <dd class="m-0 text-sm leading-6 text-ink-2">{{ formatObservation(observation) }}</dd>
-            </div>
-          </dl>
-
-          <details class="text-xs text-ink-3" data-testid="twin-technical-details">
-            <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-            <dl class="mt-2 grid gap-1 text-xs text-ink-2">
-              <div>
-                <dt class="inline font-semibold">{{ copy.persistedLifecycle }}:</dt>
-
-                <dd class="inline">
-                  {{ twin.profile.validation_status }}
-                </dd>
-              </div>
-
-              <div>
-                <dt class="inline font-semibold">{{ copy.effectiveLifecycle }}:</dt>
-
-                <dd class="inline" data-testid="effective-lifecycle">
-                  {{ effectiveLifecycle(twin) }}
-                </dd>
-              </div>
-            </dl>
-          </details>
-
-          <details
-            :open="!store.readiness?.approved_current_snapshot"
-            data-testid="twin-profile-details"
+        <template v-if="phase === 'twins'">
+          <p
+            v-if="snapshotApproved"
+            class="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-petrol-on-night-2"
           >
-            <summary class="cursor-pointer text-sm font-semibold text-ink-2">
-              {{ copy.profileDetails }}
-            </summary>
-            <div class="mt-3 grid gap-3">
-              <article
-                v-for="observation in twin.profile.observations"
-                :key="observation.observation_key"
-                class="rounded-control bg-surface-2 p-3"
-              >
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div class="min-w-0">
-                    <h5 class="m-0 font-mono text-[11px] tracking-wide text-ink-3 uppercase">
-                      {{
-                        observationField(observation) !== null
-                          ? fieldLabel(observationField(observation) as UserTwinField)
-                          : observation.observation_key
-                      }}
-                    </h5>
-
-                    <p class="m-0 mt-1 text-sm leading-6 whitespace-pre-line text-ink">
-                      {{ formatObservation(observation) }}
-                    </p>
-                  </div>
-
-                  <UiButton
-                    v-if="observationField(observation) !== null"
-                    variant="secondary"
-                    :disabled="store.isBusy"
-                    data-testid="edit-twin-observation"
-                    @click="startRevision(twin, observation)"
-                  >
-                    {{ copy.edit }}
-                  </UiButton>
-
-                  <span v-else class="text-xs text-ink-3">
-                    {{ copy.observationUnavailable }}
-                  </span>
-                </div>
-
-                <p class="m-0 mt-2 text-xs text-ink-2">{{ observationSummary(observation) }}</p>
-                <details class="mt-3">
-                  <summary class="cursor-pointer text-xs font-medium text-ink-3">
-                    {{ copy.evidenceDetails }}
-                  </summary>
-                  <div class="mt-3">
-                    <UserModelingEpistemicBadge
-                      :status="observation.epistemic_status"
-                      :confidence="observation.confidence"
-                      :human-validation="observation.human_validation"
-                      :locale="locale"
-                    />
-                  </div>
-
-                  <div class="mt-3">
-                    <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
-                  </div>
-                </details>
-              </article>
-            </div>
-          </details>
-        </article>
+            <span class="size-2 shrink-0 rounded-full bg-petrol-on-night" aria-hidden="true" />
+            <span>{{ copy.currentSnapshotApproved }}</span>
+            <span data-testid="requirements-readiness">
+              {{ store.isReadyForRequirements ? copy.ready : copy.notReady }}
+            </span>
+          </p>
+          <p v-else class="sr-only" data-testid="requirements-readiness">
+            {{ store.isReadyForRequirements ? copy.ready : copy.notReady }}
+          </p>
+        </template>
       </div>
-
-      <form
-        v-if="editingTwinId !== null && editingField !== null"
-        class="mt-6 rounded-panel border border-field bg-surface-2 p-4"
-        @submit.prevent="submitRevision"
-      >
-        <h4 class="font-bold text-ink">
-          {{ copy.revision }}
-        </h4>
-
-        <p class="mt-2 text-sm text-ink-2">
-          {{ copy.revisionField }}:
-          <strong>
-            {{ fieldLabel(editingField) }}
-          </strong>
-        </p>
-
-        <label for="user-twin-revision-value" class="mt-4 block text-sm font-medium text-ink-2">
-          {{ copy.revisionValue }}
-        </label>
-
-        <textarea
-          id="user-twin-revision-value"
-          v-model="editingValue"
-          rows="5"
-          class="mt-2 w-full rounded-control border border-field px-3 py-2 text-sm text-ink shadow-sm focus:border-action focus:ring-2 focus:ring-action-soft-line focus:outline-none"
-          data-testid="revision-value"
-        />
-
-        <p
-          v-if="
-            editingOriginalKind === 'ITEMS' ||
-            (editingField !== null && multiValueFields.has(editingField))
-          "
-          class="mt-1 text-xs text-ink-3"
-        >
-          {{ copy.revisionItemsHint }}
-        </p>
-
-        <fieldset class="mt-4 space-y-2">
-          <legend class="text-sm font-semibold text-ink-2">{{ copy.knowledgeSource }}</legend>
-
-          <label class="flex items-center gap-2 text-sm text-ink-2">
-            <input v-model="revisionEpistemicStatus" type="radio" value="USER_PROVIDED" />
-
-            {{ copy.userProvided }}
-          </label>
-
-          <label class="flex items-center gap-2 text-sm text-ink-2">
-            <input v-model="revisionEpistemicStatus" type="radio" value="HUMAN_VALIDATED" />
-
-            {{ copy.humanValidated }}
-          </label>
-        </fieldset>
-
-        <p
-          class="mt-3 rounded-control border border-line-strong bg-surface-2 p-3 text-xs leading-5 text-warn"
-        >
-          {{ copy.humanValidatedWarning }}
-        </p>
-
-        <div class="mt-4 flex flex-wrap gap-2">
-          <UiButton type="submit" :disabled="store.isBusy" data-testid="submit-revision">
-            {{ copy.proposeRevision }}
-          </UiButton>
-
-          <UiButton variant="secondary" @click="cancelRevision">
-            {{ copy.cancel }}
-          </UiButton>
-        </div>
-      </form>
-
       <TwinImportPanel
-        v-if="twins.length > 0"
-        class="mt-6"
+        v-if="phase === 'twins' && twins.length > 0"
         :project-id="projectId"
         :locale="locale"
         :authorize="authorize"
         @imported="loadProject"
       />
-    </section>
+    </div>
+
+    <div
+      v-if="phase === 'twins' && contextStale"
+      class="rounded-panel border border-warn-on-night/40 bg-warn-on-night/8 px-5 py-4 text-[15px] leading-normal font-semibold text-warn-on-night"
+      role="status"
+      data-testid="user-modeling-stale-context"
+    >
+      {{ copy.staleContext }}
+    </div>
+
+    <div
+      v-if="gateNotice !== null"
+      class="grid gap-1 rounded-panel border border-warn-on-night/40 bg-warn-on-night/8 px-5 py-4 text-[15px] leading-normal"
+      role="status"
+      data-testid="user-modeling-gate-notice"
+    >
+      <p class="m-0 font-semibold text-warn-on-night">{{ gateNotice }}</p>
+      <p v-if="revisionNote" class="m-0 text-on-night-2">
+        {{ fill(copy.revisionNote, { note: revisionNote }) }}
+      </p>
+    </div>
 
     <section
-      v-if="profileDiffs.length > 0"
-      class="rounded-card border border-line bg-white p-5 shadow-sm sm:p-6"
-      aria-labelledby="diffs-heading"
+      v-if="showPersonaCards"
+      aria-labelledby="personas-heading"
+      data-testid="starting-personas"
     >
-      <h3 id="diffs-heading" class="text-lg font-bold text-ink">
-        {{ copy.diffs }}
-      </h3>
-
-      <div class="mt-5 grid gap-4">
-        <article
-          v-for="diff in profileDiffs"
-          :key="diff.id"
-          class="rounded-panel border border-line p-4"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <details class="text-xs text-ink-3">
-              <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-              <code class="mt-2 block break-all">
-                {{ diff.id }}
-              </code>
-            </details>
-
-            <span class="rounded-full bg-surface-3 px-2.5 py-1 text-xs font-semibold text-ink-2">
-              {{
-                diff.status === "PROPOSED"
-                  ? copy.proposedDiff
-                  : diff.status === "APPROVED"
-                    ? copy.approvedDiff
-                    : copy.rejectedDiff
-              }}
-            </span>
-          </div>
-
-          <div class="mt-4 grid gap-4">
-            <div
-              v-for="operation in diff.operations"
-              :key="operation.field"
-              class="grid gap-3 rounded-control bg-surface-2 p-3 md:grid-cols-2"
-            >
-              <div>
-                <p class="text-xs font-semibold tracking-wide text-ink-3 uppercase">
-                  {{ copy.before }}
-                  ·
-                  {{ fieldLabel(operation.field) }}
-                </p>
-
-                <p class="mt-1 text-sm text-ink-2">
-                  {{ formatObservation(operation.before) }}
-                </p>
-              </div>
-
-              <div>
-                <p class="text-xs font-semibold tracking-wide text-ink-3 uppercase">
-                  {{ copy.after }}
-                  ·
-                  {{ fieldLabel(operation.field) }}
-                </p>
-
-                <p class="mt-1 text-sm text-ink">
-                  {{ formatObservation(operation.after) }}
-                </p>
-
-                <div class="mt-3">
-                  <UserModelingEpistemicBadge
-                    :status="operation.after.epistemic_status"
-                    :confidence="operation.after.confidence"
-                    :human-validation="operation.after.human_validation"
-                    :locale="locale"
-                  />
-                </div>
-
-                <div class="mt-3">
-                  <UserModelingProvenanceInspector
-                    :observation="operation.after"
-                    :locale="locale"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="diff.status === 'PROPOSED'" class="mt-4 border-t border-line pt-4">
-            <label :for="`diff-reason-${diff.id}`" class="block text-sm font-medium text-ink-2">
-              {{ copy.diffReason }}
-            </label>
-
-            <textarea
-              :id="`diff-reason-${diff.id}`"
-              v-model="diffReasons[diff.id]"
-              rows="2"
-              class="mt-2 w-full rounded-control border border-field px-3 py-2 text-sm"
+      <h2 id="personas-heading" class="sr-only">{{ copy.personasHeading }}</h2>
+      <ul
+        class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-4 p-0"
+      >
+        <li v-for="persona in personas" :key="persona.id" class="flex">
+          <component
+            :is="persona.profile.confirmation_status === 'REJECTED' ? 'article' : UiClaimFrame"
+            v-bind="
+              persona.profile.confirmation_status === 'REJECTED'
+                ? {}
+                : {
+                    status:
+                      persona.profile.confirmation_status === 'CONFIRMED'
+                        ? 'confirmed'
+                        : 'hypothesis',
+                    as: 'article',
+                    radius: 'tile',
+                    padded: false,
+                  }
+            "
+            :class="[
+              'flex w-full min-w-0 flex-col gap-3.5 p-[22px]',
+              persona.profile.confirmation_status === 'REJECTED'
+                ? 'rounded-tile border border-night-line bg-night-raised'
+                : '',
+            ]"
+            data-testid="persona-card"
+            :data-persona-id="persona.persona_id"
+            :data-confirmation="persona.profile.confirmation_status"
+          >
+            <TwinIdentity
+              size="lg"
+              name-as="h3"
+              :identity-key="persona.persona_id"
+              :peers="peers"
+              :name="persona.profile.name"
+              :description="sourceOrigin(persona.profile.source)"
+              :status="
+                persona.profile.confirmation_status === 'CONFIRMED' ? 'confirmed' : 'hypothesis'
+              "
+              :locale="locale"
             />
-
-            <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-control bg-ok px-3 py-2 text-sm font-semibold text-white hover:bg-ok-dark disabled:opacity-50"
-                :disabled="store.isBusy"
-                data-testid="approve-diff"
-                @click="decideDiff(diff, 'APPROVE')"
+            <div class="flex flex-wrap gap-2">
+              <UiStatusChip
+                v-if="persona.profile.confirmation_status === 'CONFIRMED'"
+                status="approved"
+                :label="copy.confirmedByYou"
+              />
+              <UiStatusChip
+                v-else-if="persona.profile.confirmation_status === 'REJECTED'"
+                status="rejected"
+                :label="copy.rejectedChip"
+              />
+              <span
+                v-else
+                class="inline-flex min-h-[26px] items-center gap-1.5 rounded-pill border border-dashed border-violet-on-night bg-night-raised px-2.5 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
+                data-testid="hypothesis-chip"
               >
-                {{ copy.approveDiff }}
-              </button>
-
-              <button
-                type="button"
-                class="rounded-control border border-fail-line px-3 py-2 text-sm font-semibold text-fail-dark hover:bg-fail-bg disabled:opacity-50"
-                :disabled="store.isBusy || diffReason(diff.id).trim().length === 0"
-                data-testid="reject-diff"
-                @click="decideDiff(diff, 'REJECT')"
-              >
-                {{ copy.rejectDiff }}
-              </button>
+                <span
+                  class="inline-block size-2 shrink-0 rounded-full border-[1.5px] border-violet-on-night"
+                  aria-hidden="true"
+                />
+                {{ hypothesisLabel(persona.profile.observations) ?? personaStatusLabel(persona) }}
+              </span>
             </div>
-          </div>
-        </article>
-      </div>
+            <p
+              v-if="
+                summaryOf(persona.profile.observations, persona.persona_id, persona.profile.name)
+              "
+              class="m-0 text-[15px] leading-[1.55]"
+            >
+              {{
+                summaryOf(persona.profile.observations, persona.persona_id, persona.profile.name)
+              }}
+            </p>
+            <dl
+              v-if="cardFacts(persona.profile.observations).length > 0"
+              class="m-0 flex flex-col gap-2.5 text-sm leading-normal"
+            >
+              <div v-for="fact in cardFacts(persona.profile.observations)" :key="fact.label">
+                <dt class="font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ fact.label }}
+                </dt>
+                <dd class="m-0 mt-0.5 line-clamp-3">{{ fact.value }}</dd>
+              </div>
+            </dl>
+            <p
+              v-if="
+                persona.profile.confirmation_status === 'REJECTED' &&
+                persona.profile.rejection_reason
+              "
+              class="m-0 text-sm leading-normal text-on-night-3"
+            >
+              {{ fill(copy.rejectedBecause, { reason: persona.profile.rejection_reason }) }}
+            </p>
+            <div class="mt-auto grid gap-2 pt-1">
+              <button
+                type="button"
+                class="inline-flex min-h-11 items-center justify-self-start text-sm font-medium text-on-night-2 underline underline-offset-[3px] transition-colors duration-150 hover:text-on-night"
+                data-testid="open-persona-profile"
+                @click="openProfile('persona', persona.persona_id)"
+              >
+                {{ copy.fullProfile }}<span class="sr-only">: {{ persona.profile.name }}</span>
+              </button>
+              <template v-if="persona.profile.confirmation_status === 'PENDING_CONFIRMATION'">
+                <div
+                  v-if="rejectingPersonaId !== persona.persona_id"
+                  class="grid grid-cols-2 gap-2"
+                >
+                  <UiButton
+                    :disabled="store.isBusy"
+                    full
+                    data-testid="confirm-persona"
+                    @click="decidePersona(persona, 'CONFIRM')"
+                  >
+                    {{ copy.confirm }}<span class="sr-only">: {{ persona.profile.name }}</span>
+                  </UiButton>
+                  <UiButton
+                    :id="`persona-reject-${persona.persona_id}`"
+                    variant="secondary"
+                    :disabled="store.isBusy"
+                    full
+                    data-testid="reject-persona-start"
+                    @click="startRejection(persona)"
+                  >
+                    {{ copy.reject }}<span class="sr-only">: {{ persona.profile.name }}</span>
+                  </UiButton>
+                </div>
+                <div v-else class="grid gap-2">
+                  <label
+                    class="text-sm font-semibold text-on-night-2"
+                    :for="`persona-reason-${persona.persona_id}`"
+                  >
+                    {{ copy.rejectionReason }}
+                  </label>
+                  <textarea
+                    :id="`persona-reason-${persona.persona_id}`"
+                    v-model="personaReasons[persona.persona_id]"
+                    rows="2"
+                    class="w-full rounded-field border border-night-line-strong bg-night-raised px-3 py-2 text-[15px] text-on-night placeholder:text-on-night-3"
+                    :placeholder="copy.reasonPlaceholder"
+                  />
+                  <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+                    <UiButton variant="quiet" @click="cancelRejection(persona)">
+                      {{ copy.cancel }}
+                    </UiButton>
+                    <UiButton
+                      variant="danger"
+                      full
+                      :disabled="
+                        store.isBusy || personaReason(persona.persona_id).trim().length === 0
+                      "
+                      data-testid="reject-persona"
+                      @click="decidePersona(persona, 'REJECT')"
+                    >
+                      {{ copy.rejectConfirm }}
+                    </UiButton>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </component>
+        </li>
+      </ul>
     </section>
 
-    <section
-      v-if="store.currentSnapshot !== null"
-      class="grid gap-4"
-      aria-labelledby="gate-three-heading"
+    <section v-if="phase === 'twins'" aria-labelledby="twins-heading">
+      <h2 id="twins-heading" class="sr-only">{{ copy.twinsHeading }}</h2>
+      <p v-if="twins.length === 0" class="m-0 text-[15px] text-on-night-3">{{ copy.noTwins }}</p>
+      <ul
+        v-else
+        class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-4 p-0"
+      >
+        <li v-for="twin in twins" :key="twin.id" class="flex">
+          <UiClaimFrame
+            :status="twinConfirmed(twin) ? 'confirmed' : 'hypothesis'"
+            as="article"
+            radius="tile"
+            :padded="false"
+            class="flex w-full min-w-0 flex-col gap-3.5 p-[22px]"
+            data-testid="twin-card"
+            :data-twin-id="twin.twin_id"
+          >
+            <TwinIdentity
+              size="lg"
+              name-as="h3"
+              :identity-key="twin.profile.persona_reference.persona_id"
+              :peers="peers"
+              :name="twin.profile.name"
+              :description="twinOrigin(twin)"
+              :status="twinConfirmed(twin) ? 'confirmed' : 'hypothesis'"
+              :locale="locale"
+            />
+            <div class="flex flex-wrap gap-2">
+              <UiStatusChip
+                v-if="twinConfirmed(twin)"
+                status="approved"
+                :label="lifecycleLabel(twin)"
+              />
+              <span
+                v-else
+                class="inline-flex min-h-[26px] items-center gap-1.5 rounded-pill border border-dashed border-violet-on-night bg-night-raised px-2.5 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
+                data-testid="hypothesis-chip"
+              >
+                <span
+                  class="inline-block size-2 shrink-0 rounded-full border-[1.5px] border-violet-on-night"
+                  aria-hidden="true"
+                />
+                {{ hypothesisLabel(twin.profile.observations) ?? copy.awaitingApproval }}
+              </span>
+            </div>
+            <p v-if="twinSummary(twin)" class="m-0 text-[15px] leading-[1.55]">
+              {{ twinSummary(twin) }}
+            </p>
+            <dl
+              v-if="cardFacts(twin.profile.observations).length > 0"
+              class="m-0 flex flex-col gap-2.5 text-sm leading-normal"
+            >
+              <div v-for="fact in cardFacts(twin.profile.observations)" :key="fact.label">
+                <dt class="font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ fact.label }}
+                </dt>
+                <dd class="m-0 mt-0.5 line-clamp-3">{{ fact.value }}</dd>
+              </div>
+            </dl>
+            <p
+              v-if="pendingDiffsLabel(twin)"
+              class="m-0 text-sm font-medium text-violet-on-night-2"
+              data-testid="twin-pending-diffs"
+            >
+              {{ pendingDiffsLabel(twin) }}
+            </p>
+            <div class="mt-auto grid gap-2 pt-1">
+              <button
+                type="button"
+                class="inline-flex min-h-11 items-center justify-self-start text-sm font-medium text-on-night-2 underline underline-offset-[3px] transition-colors duration-150 hover:text-on-night"
+                data-testid="open-twin-profile"
+                @click="openProfile('twin', twin.twin_id)"
+              >
+                {{ copy.fullProfile }}<span class="sr-only">: {{ twin.profile.name }}</span>
+              </button>
+              <UiButton
+                variant="secondary"
+                full
+                data-testid="open-twin-chat"
+                @click="emit('open-chat', twin)"
+              >
+                {{ copy.talk }}<span class="sr-only">: {{ twin.profile.name }}</span>
+              </UiButton>
+            </div>
+          </UiClaimFrame>
+        </li>
+      </ul>
+    </section>
+
+    <div
+      v-if="
+        (phase === 'twins' && !showPersonaCards && personas.length > 0) || otherDecisionsAvailable
+      "
+      class="-mt-2 flex flex-wrap items-start gap-x-8"
     >
-      <UiCard tone="elevated">
-        <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <h3 id="gate-three-heading" class="m-0 text-2xl font-semibold tracking-card">
-            {{ copy.gate }}
-          </h3>
-          <span v-if="store.currentGate" class="font-mono text-xs text-ink-3">
-            {{ decisionCounter }}
-          </span>
-        </div>
-        <p class="mt-2 mb-0 text-sm text-ink-2">{{ copy.gateMethodology }}</p>
-        <p class="mt-2 mb-0 text-sm text-ink-2">
-          {{ copy.gateStatus }}:
-          <strong>{{ workflowStatusLabel(store.currentGate?.status, locale) }}</strong>
-        </p>
-        <p
-          v-if="store.readiness?.approved_current_snapshot"
-          class="mt-3 mb-0 rounded-panel border border-ok-line bg-ok-bg px-3 py-2 text-sm font-medium text-ok-dark"
+      <details
+        v-if="phase === 'twins' && !showPersonaCards && personas.length > 0"
+        class="group open:basis-full"
+        data-testid="starting-personas"
+      >
+        <summary :class="disclosureSummary">
+          <span aria-hidden="true" :class="disclosureChevron" />
+          {{ copy.startingProfiles }} ({{ personas.length }})
+        </summary>
+        <ul
+          class="m-0 mt-2 grid list-none gap-3 rounded-field border border-night-line bg-night-raised px-5 py-4"
         >
-          {{ copy.currentSnapshotApproved }}
-        </p>
-        <p
-          v-else-if="store.currentGate !== null && !gateTargetsCurrentSnapshot"
-          class="mt-3 mb-0 rounded-panel border border-line-strong bg-surface-2 px-3 py-2 text-sm text-warn"
+          <li
+            v-for="persona in personas"
+            :key="persona.id"
+            class="flex flex-wrap items-center justify-between gap-3"
+          >
+            <TwinIdentity
+              :identity-key="persona.persona_id"
+              :peers="peers"
+              :name="persona.profile.name"
+              :description="sourceOrigin(persona.profile.source)"
+              :status="
+                persona.profile.confirmation_status === 'CONFIRMED' ? 'confirmed' : 'hypothesis'
+              "
+              :locale="locale"
+            />
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs text-on-night-3">
+                {{ personaStatusLabel(persona) }} · v{{ persona.version_number }}
+              </span>
+              <button
+                type="button"
+                class="inline-flex min-h-11 items-center text-sm font-medium text-on-night-2 underline underline-offset-[3px] hover:text-on-night"
+                @click="openProfile('persona', persona.persona_id)"
+              >
+                {{ copy.profileDetails }}<span class="sr-only">: {{ persona.profile.name }}</span>
+              </button>
+            </div>
+          </li>
+        </ul>
+      </details>
+
+      <details
+        v-if="otherDecisionsAvailable"
+        class="group open:basis-full"
+        data-testid="twins-other-decisions"
+      >
+        <summary :class="disclosureSummary">
+          <span aria-hidden="true" :class="disclosureChevron" />
+          {{ copy.otherDecisions }}
+        </summary>
+        <div
+          class="mt-2 grid gap-3 rounded-field border border-night-line bg-night-raised px-5 py-4"
         >
-          {{ copy.stale }}
-        </p>
-        <p
-          class="mt-3 mb-0 text-[15px] font-semibold"
-          :class="store.isReadyForRequirements ? 'text-ok-dark' : 'text-warn'"
-          data-testid="requirements-readiness"
-        >
-          {{ store.isReadyForRequirements ? copy.ready : copy.notReady }}
-        </p>
-        <div v-if="canSubmitGate" class="mt-5">
-          <UiButton :disabled="store.isBusy" data-testid="submit-gate" @click="submitGate">
-            {{ copy.submitGate }}
-          </UiButton>
-        </div>
-        <div v-if="gatePendingApproval || gatePaused" class="mt-5 grid gap-3">
-          <div v-if="gatePendingApproval" class="flex flex-wrap gap-3">
-            <UiButton
-              :disabled="store.isBusy"
-              data-testid="approve-gate"
-              @click="decideGate('APPROVE')"
-            >
-              {{ copy.approveGate }}
-            </UiButton>
-            <UiButton
-              variant="secondary"
-              :disabled="store.isBusy || gateReason.trim().length === 0"
-              @click="decideGate('REQUEST_REVISION')"
-            >
-              {{ copy.requestRevision }}
-            </UiButton>
-          </div>
-          <div v-else class="flex flex-wrap gap-3">
-            <UiButton :disabled="store.isBusy" @click="decideGate('RESUME')">{{
-              copy.resume
-            }}</UiButton>
-            <UiButton variant="secondary" :disabled="store.isBusy" @click="decideGate('CANCEL')">
-              {{ copy.cancelGate }}
-            </UiButton>
-          </div>
-          <label for="gate-three-reason" class="block text-sm font-semibold">
+          <label for="gate-three-reason" class="text-sm font-semibold text-on-night-2">
             {{ copy.gateReason }}
           </label>
           <textarea
             id="gate-three-reason"
             v-model="gateReason"
             rows="2"
-            class="min-h-20 w-full rounded-control border border-field bg-surface px-3 py-2 text-[15px]"
+            class="min-h-20 w-full rounded-field border border-night-line-strong bg-night-raised px-3 py-2 text-[15px] text-on-night"
           />
-          <details v-if="gatePendingApproval" class="text-sm">
-            <summary class="cursor-pointer font-semibold text-ink-2">
-              {{ copy.moreActions }}
-            </summary>
-            <div class="mt-3 flex flex-wrap gap-3">
-              <UiButton
-                variant="danger"
-                :disabled="store.isBusy || gateReason.trim().length === 0"
-                @click="decideGate('REJECT')"
-              >
-                {{ copy.rejectGate }}
-              </UiButton>
-              <UiButton variant="secondary" :disabled="store.isBusy" @click="decideGate('PAUSE')">
-                {{ copy.pause }}
-              </UiButton>
-              <UiButton variant="secondary" :disabled="store.isBusy" @click="decideGate('CANCEL')">
-                {{ copy.cancelGate }}
-              </UiButton>
-            </div>
-          </details>
+          <p class="m-0 text-xs text-on-night-3">{{ copy.gateReasonHint }}</p>
+          <div class="flex flex-wrap gap-3">
+            <UiButton
+              v-if="gatePendingApproval"
+              variant="danger"
+              :disabled="store.isBusy || gateReason.trim().length === 0"
+              data-testid="twins-reject"
+              @click="decideGate('REJECT')"
+            >
+              {{ copy.rejectGate }}
+            </UiButton>
+            <UiButton
+              v-if="gatePendingApproval"
+              variant="secondary"
+              :disabled="store.isBusy"
+              data-testid="twins-pause"
+              @click="decideGate('PAUSE')"
+            >
+              {{ copy.pause }}
+            </UiButton>
+            <UiButton
+              variant="secondary"
+              :disabled="store.isBusy"
+              data-testid="twins-cancel"
+              @click="decideGate('CANCEL')"
+            >
+              {{ copy.cancelGate }}
+            </UiButton>
+          </div>
         </div>
-        <details class="mt-4 text-xs text-ink-3">
-          <summary class="cursor-pointer">{{ copy.technicalDetails }}</summary>
-          <p class="mt-2 font-mono">
-            {{ store.currentGate?.status ?? "—" }} · {{ store.readiness?.workflow_state ?? "—" }}
-          </p>
-        </details>
-      </UiCard>
-    </section>
+      </details>
+    </div>
+
+    <Teleport :to="barTarget" :disabled="barTarget === null">
+      <div
+        v-if="decision !== null"
+        class="contents"
+        data-testid="twins-decision"
+        :data-decision="decision"
+        :data-gate-pending="gatePendingApproval ? 'true' : 'false'"
+      >
+        <UiDecisionBar
+          ref="decisionBar"
+          :primary-label="decisionCopy.primary"
+          :description="decisionCopy.description"
+          :secondary-label="requestAvailable ? undefined : null"
+          :request-placeholder="copy.requestPlaceholder"
+          :busy="barBusy"
+          :disabled="decisionCopy.disabled"
+          @primary="onPrimary"
+          @request="onRequest"
+        />
+      </div>
+    </Teleport>
+
+    <Teleport :to="rowTarget" :disabled="rowTarget === null">
+      <div v-if="phase !== 'empty'" data-testid="user-modeling-technical-details">
+        <UiTechnicalDetails :summary="technicalSummary" :rows="technicalRows">
+          <div class="grid gap-4 text-on-night-2">
+            <section v-if="twins.length > 0" class="grid gap-1.5">
+              <h3 class="m-0 font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+                {{ copy.technicalTwins }}
+              </h3>
+              <dl
+                v-for="twin in twins"
+                :key="twin.id"
+                class="m-0 grid gap-0.5"
+                data-testid="twin-technical-details"
+              >
+                <dt class="font-semibold text-on-night">{{ twin.profile.name }}</dt>
+                <dd class="m-0 font-mono text-xs break-all text-on-night-3">
+                  {{ twin.twin_id }} · v{{ twin.version_number }}
+                </dd>
+                <dd class="m-0">
+                  {{ copy.persistedLifecycle }}: {{ twin.profile.validation_status }}
+                </dd>
+                <dd class="m-0">
+                  {{ copy.effectiveLifecycle }}:
+                  <span data-testid="effective-lifecycle">{{ effectiveLifecycle(twin) }}</span>
+                </dd>
+              </dl>
+            </section>
+            <section v-if="personas.length > 0" class="grid gap-1.5">
+              <h3 class="m-0 font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+                {{ copy.technicalPersonas }}
+              </h3>
+              <p
+                v-for="persona in personas"
+                :key="persona.id"
+                class="m-0"
+                data-testid="persona-technical-details"
+              >
+                <span class="font-semibold text-on-night">{{ persona.profile.name }}</span>
+                · {{ persona.profile.kind }} ·
+                <span class="font-mono text-xs break-all">{{ persona.persona_id }}</span>
+              </p>
+            </section>
+            <section v-if="profileDiffs.length > 0" class="grid gap-1.5">
+              <h3 class="m-0 font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+                {{ copy.diffs }}
+              </h3>
+              <p v-for="diff in profileDiffs" :key="diff.id" class="m-0">
+                {{ diffStatusLabel(diff) }} ·
+                <span class="font-mono text-xs break-all">{{ diff.id }}</span>
+              </p>
+            </section>
+          </div>
+        </UiTechnicalDetails>
+      </div>
+    </Teleport>
+
+    <UiSidePanel
+      :open="profileTarget !== null"
+      :title="profileTitle"
+      surface="night"
+      @close="closeProfile"
+    >
+      <div
+        v-if="profileTwin !== null || profilePersona !== null"
+        class="grid gap-5"
+        data-testid="twin-profile-details"
+        :data-profile-kind="profileTarget?.kind"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <TwinIdentity
+            size="lg"
+            :identity-key="
+              profileTwin?.profile.persona_reference.persona_id ?? profilePersona?.persona_id ?? ''
+            "
+            :peers="peers"
+            :name="profileTwin?.profile.name ?? profilePersona?.profile.name ?? ''"
+            :description="
+              profileTwin !== null
+                ? twinOrigin(profileTwin)
+                : profilePersona !== null
+                  ? sourceOrigin(profilePersona.profile.source)
+                  : ''
+            "
+            :status="
+              (profileTwin !== null && twinConfirmed(profileTwin)) ||
+              profilePersona?.profile.confirmation_status === 'CONFIRMED'
+                ? 'confirmed'
+                : 'hypothesis'
+            "
+            :locale="locale"
+          />
+          <span class="text-xs text-on-night-3">
+            {{
+              profileTwin !== null
+                ? lifecycleLabel(profileTwin)
+                : profilePersona !== null
+                  ? personaStatusLabel(profilePersona)
+                  : ""
+            }}
+          </span>
+        </div>
+
+        <section
+          v-if="profileDiffsForTwin.length > 0"
+          class="grid gap-3"
+          aria-labelledby="profile-diffs-heading"
+        >
+          <h3 id="profile-diffs-heading" class="m-0 text-base font-semibold">
+            {{ copy.diffs }}
+          </h3>
+          <article
+            v-for="diff in profileDiffsForTwin"
+            :key="diff.id"
+            class="grid gap-3 rounded-field border-[1.5px] border-dashed border-violet-on-night/70 bg-violet-on-night/6 p-4"
+            data-testid="profile-diff"
+            :data-diff-status="diff.status"
+          >
+            <UiStatusChip
+              :status="
+                diff.status === 'APPROVED'
+                  ? 'approved'
+                  : diff.status === 'REJECTED'
+                    ? 'rejected'
+                    : 'pending'
+              "
+              :label="diffStatusLabel(diff)"
+              class="justify-self-start"
+            />
+            <div
+              v-for="operation in diff.operations"
+              :key="operation.field"
+              class="grid gap-3 sm:grid-cols-2"
+            >
+              <div class="min-w-0">
+                <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ copy.before }} · {{ fieldLabel(operation.field) }}
+                </p>
+                <p class="m-0 mt-1 text-sm leading-normal text-on-night-2">
+                  {{ formatObservation(operation.before) }}
+                </p>
+              </div>
+              <div class="grid min-w-0 gap-2">
+                <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ copy.after }} · {{ fieldLabel(operation.field) }}
+                </p>
+                <p class="m-0 text-sm leading-normal">{{ formatObservation(operation.after) }}</p>
+                <UserModelingEpistemicBadge
+                  :status="operation.after.epistemic_status"
+                  :confidence="operation.after.confidence"
+                  :human-validation="operation.after.human_validation"
+                  :locale="locale"
+                />
+                <UserModelingProvenanceInspector :observation="operation.after" :locale="locale" />
+              </div>
+            </div>
+            <div v-if="diff.status === 'PROPOSED'" class="grid gap-2">
+              <label :for="`diff-reason-${diff.id}`" class="text-sm font-semibold text-on-night-2">
+                {{ copy.diffReason }}
+              </label>
+              <textarea
+                :id="`diff-reason-${diff.id}`"
+                v-model="diffReasons[diff.id]"
+                rows="2"
+                class="w-full rounded-field border border-night-line-strong bg-night-raised px-3 py-2 text-[15px] text-on-night"
+              />
+              <div class="flex flex-wrap gap-2">
+                <UiButton
+                  :disabled="store.isBusy"
+                  data-testid="approve-diff"
+                  @click="decideDiff(diff, 'APPROVE')"
+                >
+                  {{ copy.approveDiff }}
+                </UiButton>
+                <UiButton
+                  variant="secondary"
+                  :disabled="store.isBusy || diffReason(diff.id).trim().length === 0"
+                  data-testid="reject-diff"
+                  @click="decideDiff(diff, 'REJECT')"
+                >
+                  {{ copy.rejectDiff }}
+                </UiButton>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <ul class="m-0 grid list-none gap-3 p-0">
+          <li
+            v-for="observation in profileObservations"
+            :key="observation.observation_key"
+            class="grid gap-2 rounded-field border px-4 py-3"
+            :class="
+              isHypothesis(observation)
+                ? 'border-dashed border-violet-on-night/60 bg-violet-on-night/6'
+                : 'border-petrol-on-night/70 bg-night-raised'
+            "
+            data-testid="profile-observation"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <h3 class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ observationLabel(observation) }}
+                </h3>
+                <p class="m-0 mt-1 text-[15px] leading-normal whitespace-pre-line">
+                  {{ formatObservation(observation) }}
+                </p>
+              </div>
+              <UiButton
+                v-if="profileTwin !== null && observationField(observation) !== null"
+                variant="quiet"
+                :disabled="store.isBusy"
+                data-testid="edit-twin-observation"
+                @click="startRevision(profileTwin, observation)"
+              >
+                {{ copy.edit }}<span class="sr-only">: {{ observationLabel(observation) }}</span>
+              </UiButton>
+              <span v-else-if="profileTwin !== null" class="text-xs leading-5 text-on-night-3">
+                {{ copy.observationUnavailable }}
+              </span>
+            </div>
+            <p
+              class="m-0 text-xs"
+              :class="
+                isHypothesis(observation) ? 'text-violet-on-night-2' : 'text-petrol-on-night-2'
+              "
+            >
+              {{ observationSummary(observation) }}
+            </p>
+
+            <form
+              v-if="profileTwin !== null && isEditing(profileTwin, observation)"
+              class="grid gap-3 rounded-field border border-night-line-strong bg-night-panel p-4"
+              data-testid="twin-revision-form"
+              @submit.prevent="submitRevision"
+            >
+              <label for="user-twin-revision-value" class="text-sm font-semibold text-on-night">
+                {{ fill(copy.editField, { field: observationLabel(observation) }) }} ·
+                {{ copy.revisionValue }}
+              </label>
+              <textarea
+                id="user-twin-revision-value"
+                v-model="editingValue"
+                rows="4"
+                class="w-full rounded-field border border-night-line-strong bg-night-raised px-3 py-2 text-[15px] text-on-night"
+                data-testid="revision-value"
+              />
+              <p
+                v-if="
+                  editingOriginalKind === 'ITEMS' ||
+                  (editingField !== null && multiValueFields.has(editingField))
+                "
+                class="m-0 text-xs text-on-night-3"
+              >
+                {{ copy.revisionItemsHint }}
+              </p>
+              <fieldset class="m-0 grid gap-1 border-0 p-0">
+                <legend class="mb-1 p-0 text-sm font-semibold text-on-night-2">
+                  {{ copy.knowledgeSource }}
+                </legend>
+                <label class="flex min-h-11 items-center gap-3 text-sm text-on-night-2">
+                  <input
+                    v-model="revisionEpistemicStatus"
+                    type="radio"
+                    value="USER_PROVIDED"
+                    class="size-4 accent-petrol-on-night"
+                  />
+                  {{ copy.userProvided }}
+                </label>
+                <label class="flex min-h-11 items-center gap-3 text-sm text-on-night-2">
+                  <input
+                    v-model="revisionEpistemicStatus"
+                    type="radio"
+                    value="HUMAN_VALIDATED"
+                    class="size-4 accent-petrol-on-night"
+                  />
+                  {{ copy.humanValidated }}
+                </label>
+              </fieldset>
+              <p
+                class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 p-3 text-xs leading-5 text-warn-on-night"
+              >
+                {{ copy.humanValidatedWarning }}
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <UiButton type="submit" :disabled="store.isBusy" data-testid="submit-revision">
+                  {{ copy.proposeRevision }}
+                </UiButton>
+                <UiButton variant="quiet" @click="cancelRevision">
+                  {{ copy.cancel }}
+                </UiButton>
+              </div>
+            </form>
+
+            <details class="text-sm">
+              <summary
+                class="flex min-h-11 cursor-pointer items-center text-xs font-medium text-on-night-3 hover:text-on-night"
+              >
+                {{ copy.evidenceDetails }}
+              </summary>
+              <div class="grid gap-3 pt-1 pb-1">
+                <UserModelingEpistemicBadge
+                  :status="observation.epistemic_status"
+                  :confidence="observation.confidence"
+                  :human-validation="observation.human_validation"
+                  :locale="locale"
+                />
+                <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
+              </div>
+            </details>
+          </li>
+        </ul>
+      </div>
+    </UiSidePanel>
   </section>
 </template>

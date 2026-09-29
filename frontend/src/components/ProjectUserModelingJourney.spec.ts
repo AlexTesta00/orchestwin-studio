@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 
-import { flushPromises, mount } from "@vue/test-utils";
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -626,6 +626,23 @@ function mountJourney() {
   });
 }
 
+type JourneyWrapper = ReturnType<typeof mountJourney>;
+
+function decisionPrimary(wrapper: JourneyWrapper, decision: string) {
+  return wrapper.get(
+    `[data-testid="twins-decision"][data-decision="${decision}"] [data-testid="decision-primary"]`,
+  );
+}
+
+async function openTechnicalDetails(wrapper: JourneyWrapper): Promise<void> {
+  const toggle = wrapper.get(
+    '[data-testid="user-modeling-technical-details"] [data-testid="step-technical-details-toggle"]',
+  );
+  if (toggle.attributes("aria-expanded") !== "true") {
+    await toggle.trigger("click");
+  }
+}
+
 function requireValue<T>(value: T | null | undefined, label: string): T {
   if (value === null || value === undefined) {
     throw new Error(`${label} was expected but not found`);
@@ -637,6 +654,7 @@ function requireValue<T>(value: T | null | undefined, label: string): T {
 describe("governed User Modeling journey", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    document.body.innerHTML = "";
   });
 
   afterEach(() => {
@@ -728,7 +746,9 @@ describe("governed User Modeling journey", () => {
       issue: null,
     });
 
-    vi.spyOn(userModelingApi, "getReadiness").mockImplementation(async () => readinessResponse);
+    vi.spyOn(userModelingApi, "getReadiness").mockImplementation(async () =>
+      decideGate.mock.calls.length > 0 ? readinessApprovedGateTwo : readinessResponse,
+    );
 
     const store = useUserModelingStore();
 
@@ -740,11 +760,13 @@ describe("governed User Modeling journey", () => {
 
     expect(proposePersonas).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
 
+    await openTechnicalDetails(wrapper);
+
     expect(wrapper.text()).toContain("PROTO_PERSONA");
 
     expect(wrapper.text()).toContain("Pending confirmation");
 
-    expect(wrapper.get('[data-testid="generate-twins"]').attributes("disabled")).toBeDefined();
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
 
     await wrapper.get('[data-testid="confirm-persona"]').trigger("click");
 
@@ -769,7 +791,7 @@ describe("governed User Modeling journey", () => {
 
     readinessResponse = readinessSnapshotOne;
 
-    await wrapper.get('[data-testid="generate-twins"]').trigger("click");
+    await decisionPrimary(wrapper, "generate").trigger("click");
 
     await flushPromises();
 
@@ -797,13 +819,19 @@ describe("governed User Modeling journey", () => {
 
     expect(initialGoals.human_validation).toBe("REQUIRED");
 
-    await wrapper.get('[data-testid="edit-twin-observation"]').trigger("click");
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
 
-    await wrapper
+    const profile = new DOMWrapper(
+      requireValue(document.body.querySelector('[data-testid="side-panel"]'), "Open profile panel"),
+    );
+
+    await profile.get('[data-testid="edit-twin-observation"]').trigger("click");
+
+    await profile
       .get('[data-testid="revision-value"]')
       .setValue("Reduce booking errors\nReduce check-in delays");
 
-    await wrapper.get("form").trigger("submit");
+    await profile.get("form").trigger("submit");
 
     await flushPromises();
 
@@ -832,7 +860,7 @@ describe("governed User Modeling journey", () => {
 
     readinessResponse = readinessSnapshotTwo;
 
-    await wrapper.get('[data-testid="approve-diff"]').trigger("click");
+    await profile.get('[data-testid="approve-diff"]').trigger("click");
 
     await flushPromises();
 
@@ -883,25 +911,21 @@ describe("governed User Modeling journey", () => {
 
     readinessResponse = readinessPendingGateTwo;
 
-    await wrapper.get('[data-testid="submit-gate"]').trigger("click");
+    expect(
+      wrapper
+        .get('[data-testid="twins-decision"][data-decision="approve"]')
+        .attributes("data-gate-pending"),
+    ).toBe("false");
+
+    await decisionPrimary(wrapper, "approve").trigger("click");
 
     await flushPromises();
+
+    expect(submitGate).toHaveBeenCalledTimes(1);
 
     expect(submitGate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
 
-    expect(store.currentGate?.artifact.artifact_id).toBe(SNAPSHOT_TWO_ID);
-
-    expect(store.currentGate?.artifact.version).toBe(2);
-
-    expect(store.currentGate?.artifact.content_hash).toBe(snapshotTwo.content_hash);
-
-    expect(store.currentGate?.status).toBe("PENDING_APPROVAL");
-
-    readinessResponse = readinessApprovedGateTwo;
-
-    await wrapper.get('[data-testid="approve-gate"]').trigger("click");
-
-    await flushPromises();
+    expect(decideGate).toHaveBeenCalledTimes(1);
 
     expect(decideGate).toHaveBeenCalledWith(
       PROJECT_ID,
@@ -912,6 +936,16 @@ describe("governed User Modeling journey", () => {
       },
       ACCESS_TOKEN,
     );
+
+    expect(submitGate.mock.invocationCallOrder[0]!).toBeLessThan(
+      decideGate.mock.invocationCallOrder[0]!,
+    );
+
+    expect(store.currentGate?.artifact.artifact_id).toBe(SNAPSHOT_TWO_ID);
+
+    expect(store.currentGate?.artifact.version).toBe(2);
+
+    expect(store.currentGate?.artifact.content_hash).toBe(snapshotTwo.content_hash);
 
     expect(store.currentGate?.status).toBe("APPROVED");
 
@@ -940,7 +974,7 @@ describe("governed User Modeling journey", () => {
     );
   });
 
-  it("does not carry an approved Gate 3 decision across a newer User Modeling snapshot", () => {
+  it("does not carry an approved Gate 3 decision across a newer User Modeling snapshot", async () => {
     const store = useUserModelingStore();
 
     store.activateProject(PROJECT_ID);
@@ -964,6 +998,8 @@ describe("governed User Modeling journey", () => {
     expect(wrapper.text()).toContain(
       "The profiles have changed since your last approval. Review them again.",
     );
+
+    await openTechnicalDetails(wrapper);
 
     expect(wrapper.get('[data-testid="effective-lifecycle"]').text()).toContain(
       "PROJECT_GROUNDED_UT",
