@@ -114,6 +114,12 @@ function errorCode(payload: unknown): string | null {
     return null;
   }
 
+  const reason = payload.detail.proposal_issue;
+
+  if (typeof reason === "string" && reason.length > 0) {
+    return reason;
+  }
+
   return typeof payload.detail.code === "string" ? payload.detail.code : null;
 }
 
