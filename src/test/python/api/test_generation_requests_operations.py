@@ -12,6 +12,11 @@ from fastapi.testclient import TestClient
 
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
+from orchestwin.api.code_changes import (
+    ChangeReviewResult,
+    ChangeReviewStatus,
+    CodeChangeApplication,
+)
 from orchestwin.api.design_discussion import (
     DesignDiscussionApplication,
     DesignDiscussionCommandStatus,
@@ -53,6 +58,7 @@ from src.test.python.artifacts.test_design_package_extension import (
     extended_version,
     fixture_package,
 )
+from src.test.python.projects.test_code_changes import review_run
 from src.test.python.twins.test_user_modeling_persistence import (
     persona_version,
     snapshot_version,
@@ -80,6 +86,8 @@ OPENING = {
     "owner_note": "Parlate del modulo di registrazione.",
 }
 ROUND = {"expected_round_count": 1, "owner_note": "Siate concreti."}
+COMMIT = "a1" * 20
+CHANGE_REVIEW = {"locale": "it-IT", "again": False}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -89,6 +97,7 @@ ROUTES = {
     "DESIGN_EVALUATION": ("/design/evaluations", EVALUATION),
     "DISCUSSION_START": ("/design/discussions", OPENING),
     "DISCUSSION_ROUND": (f"/design/discussions/{DISCUSSION_ID}/rounds", ROUND),
+    "CODE_CHANGE_REVIEW": (f"/code-changes/{COMMIT}/reviews", CHANGE_REVIEW),
 }
 
 
@@ -131,6 +140,7 @@ def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(DesignLoopApplication, "evaluate", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "start", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "next_round", scripted)
+    monkeypatch.setattr(CodeChangeApplication, "review", scripted)
     commands = SimpleNamespace(
         propose_personas=scripted,
         generate_grounded_snapshot=scripted,
@@ -275,6 +285,20 @@ CASES = [
         "DISCUSSION_ROUND",
         lambda _: HTTPException(422, detail={"code": "DISCUSSION_NOTE_INVALID"}),
     ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: ChangeReviewResult(status=ChangeReviewStatus.REVIEWED, run=review_run()),
+    ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: HTTPException(409, detail={"code": "CODE_CHANGE_REVIEW_EXISTS"}),
+    ),
+    (
+        "CODE_CHANGE_REVIEW",
+        lambda _: HTTPException(503, detail={"code": "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
 ]
 
 
@@ -366,6 +390,8 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("DESIGN_EVALUATION", {**EVALUATION, "design_content_hash": "short"}),
         ("DISCUSSION_START", {**OPENING, "locale": "?"}),
         ("DISCUSSION_ROUND", {**ROUND, "expected_round_count": 0}),
+        ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "locale": "?"}),
+        ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "again": "maybe"}),
     ],
 )
 def test_an_invalid_body_is_refused_at_once_with_or_without_the_preference(
