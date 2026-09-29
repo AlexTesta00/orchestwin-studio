@@ -46,11 +46,12 @@ def entity_labels(documents: Mapping[str, Mapping[str, object]]) -> dict[str, st
             for item in node:
                 visit(item, scope)
 
-    for stage in STAGES:
+    present = [stage for stage in STAGES if stage in documents]
+    for stage in present:
         document = documents[stage]
         name(document.get("project_id"), PROJECT_LABEL)
         name(document.get("id"), f"version:{stage}")
-    for stage in STAGES:
+    for stage in present:
         visit(documents[stage], ())
     return labels
 
@@ -109,7 +110,7 @@ def comparable_documents(
     documents: Mapping[str, Mapping[str, object]],
 ) -> dict[str, object]:
     labels = entity_labels(documents)
-    return {stage: comparable(documents[stage], labels) for stage in STAGES}
+    return {stage: comparable(documents[stage], labels) for stage in STAGES if stage in documents}
 
 
 def comparable_views(files: Mapping[str, str]) -> dict[str, str]:

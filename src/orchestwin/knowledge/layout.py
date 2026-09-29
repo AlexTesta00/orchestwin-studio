@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Mapping
 from typing import Final
 from uuid import UUID
 
-KNOWLEDGE_SCHEMA_VERSION: Final = 2
+from orchestwin.knowledge.state import FEEDBACK_CHANGES, STATE_DOCUMENT, STATE_FOLDER, STATE_TEXT
+
+KNOWLEDGE_SCHEMA_VERSION: Final = 3
+SUPPORTED_SCHEMA_VERSIONS: Final = (2, 3)
 KNOWLEDGE_INDEX: Final = "ORCHESTWIN.md"
 KNOWLEDGE_MANIFEST: Final = "orchestwin.json"
 KNOWLEDGE_FOLDER_NAME: Final = "orchestwin"
@@ -72,8 +76,18 @@ def table_document(stage: str, name: str) -> str:
     return f"{stage}/{TABLE_FOLDER}/{name}.csv"
 
 
+def stage_present(manifest: Mapping[str, object], stage: str) -> bool:
+    stages = manifest.get("stages")
+    return isinstance(stages, Mapping) and isinstance(stages.get(stage), Mapping)
+
+
+def present_stages(manifest: Mapping[str, object]) -> tuple[str, ...]:
+    return tuple(stage for stage in STAGES if stage_present(manifest, stage))
+
+
 __all__ = [
     "DIAGRAM_FOLDER",
+    "FEEDBACK_CHANGES",
     "FEEDBACK_DISCUSSIONS",
     "FEEDBACK_FOLDER",
     "FEEDBACK_INSIGHTS",
@@ -88,12 +102,18 @@ __all__ = [
     "STAGES",
     "STAGE_LABELS",
     "STAGE_PAYLOAD_KEYS",
+    "STATE_DOCUMENT",
+    "STATE_FOLDER",
+    "STATE_TEXT",
+    "SUPPORTED_SCHEMA_VERSIONS",
     "TABLE_FOLDER",
     "TWIN_DOCUMENT_KIND",
     "TWIN_FOLDER",
     "VIEW_STAGES",
+    "present_stages",
     "schema_document",
     "stage_document",
+    "stage_present",
     "stage_text",
     "table_document",
     "twin_document",

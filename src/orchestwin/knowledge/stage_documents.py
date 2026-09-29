@@ -138,7 +138,11 @@ STAGE_READERS = {
 
 
 def stage_versions(documents: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
-    return {stage: reader(documents[stage]) for stage, reader in STAGE_READERS.items()}
+    return {
+        stage: reader(documents[stage])
+        for stage, reader in STAGE_READERS.items()
+        if stage in documents
+    }
 
 
 __all__ = [

@@ -6,7 +6,7 @@ from typing import Final
 from orchestwin.agents.proposals import TeamProposalVersion
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
-from orchestwin.knowledge.layout import STAGE_LABELS, STAGES, VIEW_STAGES
+from orchestwin.knowledge.layout import STAGE_LABELS, STAGES, VIEW_STAGES, present_stages
 from orchestwin.projects.briefs import ProjectBriefVersion
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion
@@ -647,14 +647,15 @@ def _stage_rows(manifest: Mapping[str, object]) -> list[tuple[object, ...]]:
             entry["gate"]["gate_type"],
             entry["gate"]["updated_at"],
         )
-        for entry in (manifest["stages"][stage] for stage in STAGES)
+        for entry in (manifest["stages"][stage] for stage in present_stages(manifest))
     ]
 
 
 def _view_rows(manifest: Mapping[str, object]) -> list[tuple[object, ...]]:
+    views = manifest["views"]
     return [
         (stage, form, f"`{entry['path']}`", entry["title"])
-        for stage, view in ((name, manifest["views"][name]) for name in VIEW_STAGES)
+        for stage, view in ((name, views[name]) for name in VIEW_STAGES if name in views)
         for form, key in (
             ("text", "text"),
             ("table", "tables"),
@@ -679,46 +680,68 @@ def feedback_counts(counts: Mapping[str, object]) -> str:
     )
 
 
-def index_markdown(manifest: Mapping[str, object]) -> str:
-    project = manifest["project"]
-    package = manifest["package"]
-    feedback = manifest["feedback"]
-    lines = [
-        f"# OrchesTwin knowledge folder: {project['name']}",
-        "",
-        f"Knowledge folder version {package['version_number']} of project {project['id']}, "
-        f"written on {package['created_at']} with folder schema version "
-        f"{manifest['schema_version']}. Content hash `{package['content_hash']}`.",
-        "",
-        "## What this folder is",
-        "",
-        "The brief, the agent team, the user twins, the requirements and the design of this "
-        "project, each approved by the owner through a human gate in OrchesTwin Studio. The "
-        "project is implemented outside the Studio: this folder travels with the source code "
-        "and tells people and coding agents what has to be built and for whom.",
-        "",
-        "## How to use it",
-        "",
-        "- Build against `requirements/requirements.md` and `design/design.md`: they are the "
-        "approved scope. Requirements, user stories, acceptance criteria, screens and elements "
-        "have stable codes (REQ-001, USR-001, AC-001, SCR-001, ELM-001): quote them in code "
-        "reviews, commits and tests.",
-        "- Judge every change from the point of view of the user twins in `twins/`: each twin "
-        "has a profile with goals, constraints and accessibility needs.",
-        "- Treat the twins as models: an observation or a finding is an assumption until a "
-        "person validates it.",
-        "- Do not edit the files of the approved stages: their hashes are listed below and in "
-        f"`{manifest['manifest']}`. A change of scope goes through the Studio and produces a "
-        "new version of this folder.",
-        f"- The feedback of the twins lives in `{feedback['folder']}/`.",
-        "",
-        "## Approved stages",
-        "",
-        *markdown_table(
-            ("Stage", "Text", "Exact snapshot", "Version", "Content hash", "Gate", "Approved at"),
-            _stage_rows(manifest),
-        ),
-        "",
+def progress_sentence(manifest: Mapping[str, object]) -> str:
+    present = present_stages(manifest)
+    held = f"This folder holds {len(present)} of {len(STAGES)} approved steps"
+    if len(present) == len(STAGES):
+        return f"{held}; every step is approved."
+    return f"{held}; next: {STAGE_LABELS[STAGES[len(present)]]}."
+
+
+def _scope_line(present: tuple[str, ...]) -> str:
+    if "design" in present:
+        return (
+            "- Build against `requirements/requirements.md` and `design/design.md`: they are the "
+            "approved scope. Requirements, user stories, acceptance criteria, screens and "
+            "elements have stable codes (REQ-001, USR-001, AC-001, SCR-001, ELM-001): quote them "
+            "in code reviews, commits and tests."
+        )
+    if "requirements" in present:
+        return (
+            "- The requirements are approved in `requirements/requirements.md`, with stable codes "
+            "(REQ-001, USR-001, AC-001); the design comes into this folder once the owner "
+            "approves it, and only then is the scope complete."
+        )
+    return (
+        "- The scope is not approved yet: the requirements and the design come into this folder "
+        "once the owner approves them, and only then is there an approved scope to build against."
+    )
+
+
+def _usage_lines(manifest: Mapping[str, object]) -> list[str]:
+    present = present_stages(manifest)
+    state = manifest.get("state")
+    lines = [_scope_line(present)]
+    if "twins" in present:
+        lines.extend(
+            [
+                "- Judge every change from the point of view of the user twins in `twins/`: each "
+                "twin has a profile with goals, constraints and accessibility needs.",
+                "- Treat the twins as models: an observation or a finding is an assumption until "
+                "a person validates it.",
+            ]
+        )
+    lines.extend(
+        [
+            "- Do not edit the files of the approved stages: their hashes are listed below and in "
+            f"`{manifest['manifest']}`. A change of scope goes through the Studio and produces a "
+            "new version of this folder.",
+            f"- The feedback of the twins lives in `{manifest['feedback']['folder']}/`.",
+        ]
+    )
+    if isinstance(state, Mapping):
+        lines.append(
+            f"- The state of the development is in `{state['text']}` and `{state['document']}`: "
+            "the commits recorded in the Studio, the critiques of the twins on them, the "
+            "decisions of the owner and the tasks for the code."
+        )
+    return lines
+
+
+def _twin_lines(manifest: Mapping[str, object]) -> list[str]:
+    if "twins" not in present_stages(manifest):
+        return []
+    return [
         "## User twins",
         "",
         *markdown_table(
@@ -735,19 +758,79 @@ def index_markdown(manifest: Mapping[str, object]) -> str:
             ),
         ),
         "",
+    ]
+
+
+def _views_lines(manifest: Mapping[str, object]) -> list[str]:
+    if not any(stage in manifest["views"] for stage in VIEW_STAGES):
+        return []
+    return [
         "## Views",
         "",
-        "Requirements and design are available in three forms: text (Markdown), tables (CSV) "
-        f"and diagrams (Mermaid {manifest['generator']['mermaid_version']}, also embedded in the "
-        "Markdown documents).",
+        "The approved requirements and design are available in three forms: text (Markdown), "
+        f"tables (CSV) and diagrams (Mermaid {manifest['generator']['mermaid_version']}, also "
+        "embedded in the Markdown documents).",
         "",
         *markdown_table(("Stage", "Form", "File", "Content"), _view_rows(manifest)),
         "",
-        "## Twin feedback",
+    ]
+
+
+def _feedback_lines(manifest: Mapping[str, object]) -> list[str]:
+    feedback = manifest["feedback"]
+    lines = ["## Twin feedback", ""]
+    if feedback.get("text"):
+        lines.append(
+            f"`{feedback['text']}` summarises {feedback_counts(feedback)} recorded in the Studio. "
+            "The exact records are in the JSON files of the same folder."
+        )
+    else:
+        lines.append(
+            "The feedback of the twins on the design comes into this folder once the design is "
+            "approved."
+        )
+    if feedback.get("changes"):
+        runs = counted(feedback.get("change_reviews") or 0, "review run", "review runs")
+        lines.extend(
+            ["", f"`{feedback['changes']}` holds {runs} of the twins on the code changes."]
+        )
+    return [*lines, ""]
+
+
+def index_markdown(manifest: Mapping[str, object], *, development: Sequence[str] = ()) -> str:
+    project = manifest["project"]
+    package = manifest["package"]
+    lines = [
+        f"# OrchesTwin knowledge folder: {project['name']}",
         "",
-        f"`{feedback['text']}` summarises {feedback_counts(feedback)} recorded in the Studio. "
-        "The exact records are in the JSON files of the same folder.",
+        f"Knowledge folder version {package['version_number']} of project {project['id']}, "
+        f"written on {package['created_at']} with folder schema version "
+        f"{manifest['schema_version']}. Content hash `{package['content_hash']}`.",
         "",
+        "## What this folder is",
+        "",
+        "The approved steps of this project (the brief, the agent team, the user twins, the "
+        "requirements and the design), each approved by the owner through a human gate in "
+        "OrchesTwin Studio: a step comes into this folder once it is approved. "
+        f"{progress_sentence(manifest)} The project is implemented outside the Studio: this "
+        "folder travels with the source code and tells people and coding agents what has to be "
+        "built and for whom.",
+        "",
+        "## How to use it",
+        "",
+        *_usage_lines(manifest),
+        "",
+        "## Approved stages",
+        "",
+        *markdown_table(
+            ("Stage", "Text", "Exact snapshot", "Version", "Content hash", "Gate", "Approved at"),
+            _stage_rows(manifest),
+        ),
+        "",
+        *_twin_lines(manifest),
+        *_views_lines(manifest),
+        *_feedback_lines(manifest),
+        *development,
         "## Schema",
         "",
         f"`{manifest['manifest']}` is the machine-readable index of this folder. Every JSON "
@@ -781,6 +864,7 @@ __all__ = [
     "mockups_markdown",
     "observation_table",
     "plain_text",
+    "progress_sentence",
     "reference_text",
     "requirements_markdown",
     "team_markdown",

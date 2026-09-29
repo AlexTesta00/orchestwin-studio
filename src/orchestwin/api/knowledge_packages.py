@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.identity.domain import UserAccount
 from orchestwin.knowledge.export import KnowledgeExportError
-from orchestwin.knowledge.layout import STAGES
+from orchestwin.knowledge.layout import STAGES, present_stages
 from orchestwin.knowledge.package_service import (
     DEFAULT_HISTORY_LIMIT,
     MAX_HISTORY_LIMIT,
@@ -49,6 +49,45 @@ class PackageFeedbackPayload(ApiModel):
     decisions: int
     discussions: int
     insights: int
+    change_reviews: int
+
+
+class PackageProgressPayload(ApiModel):
+    approved: tuple[str, ...]
+    pending: str | None
+    complete: bool
+
+    @classmethod
+    def from_manifest(cls, manifest: Mapping[str, object]) -> PackageProgressPayload:
+        progress = manifest.get("progress")
+        if isinstance(progress, Mapping):
+            return cls(
+                approved=tuple(progress["approved"]),
+                pending=progress["pending"],
+                complete=progress["complete"],
+            )
+        approved = present_stages(manifest)
+        pending = None if len(approved) == len(STAGES) else STAGES[len(approved)]
+        return cls(approved=approved, pending=pending, complete=pending is None)
+
+
+class PackageStatePayload(ApiModel):
+    changes: int
+    pending_changes: int
+    aligned_commit: str | None
+    open_tasks: int
+
+    @classmethod
+    def from_manifest(cls, manifest: Mapping[str, object]) -> PackageStatePayload:
+        state = manifest.get("state")
+        if not isinstance(state, Mapping):
+            return cls(changes=0, pending_changes=0, aligned_commit=None, open_tasks=0)
+        return cls(
+            changes=state["changes"],
+            pending_changes=state["pending_changes"],
+            aligned_commit=state["aligned_commit"],
+            open_tasks=state["open_tasks"],
+        )
 
 
 class KnowledgePackageVersionPayload(ApiModel):
@@ -64,6 +103,8 @@ class KnowledgePackageVersionPayload(ApiModel):
     archive_size: int
     created_at: datetime
     stages: tuple[PackageStagePayload, ...]
+    progress: PackageProgressPayload
+    state: PackageStatePayload
     twins: tuple[PackageTwinPayload, ...]
     feedback: PackageFeedbackPayload
     diagram_count: int
@@ -94,8 +135,12 @@ class KnowledgePackageVersionPayload(ApiModel):
                     version_number=entry["version_number"],
                     content_hash=entry["content_hash"],
                 )
-                for stage, entry in ((name, manifest["stages"][name]) for name in STAGES)
+                for stage, entry in (
+                    (name, manifest["stages"][name]) for name in present_stages(manifest)
+                )
             ),
+            progress=PackageProgressPayload.from_manifest(manifest),
+            state=PackageStatePayload.from_manifest(manifest),
             twins=tuple(
                 PackageTwinPayload(
                     twin_id=twin["twin_id"],
@@ -112,6 +157,7 @@ class KnowledgePackageVersionPayload(ApiModel):
                 decisions=feedback["decisions"],
                 discussions=feedback["discussions"],
                 insights=feedback["insights"],
+                change_reviews=feedback.get("change_reviews", 0),
             ),
             diagram_count=sum(len(view["diagrams"]) for view in views.values()),
             table_count=sum(len(view["tables"]) for view in views.values()),

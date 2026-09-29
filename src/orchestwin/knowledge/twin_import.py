@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from orchestwin.knowledge.layout import KNOWLEDGE_SCHEMA_VERSION, TWIN_DOCUMENT_KIND
+from orchestwin.knowledge.layout import SUPPORTED_SCHEMA_VERSIONS, TWIN_DOCUMENT_KIND
 from orchestwin.knowledge.schema import KnowledgeSchemaError, validate_document
 from orchestwin.twins.epistemics import (
     EvidenceReference,
@@ -102,11 +102,11 @@ class ImportedTwin:
 def parse_twin_document(document: object) -> PortableTwinDocument:
     if not isinstance(document, Mapping):
         raise TwinImportError("TWIN_DOCUMENT_INVALID")
-    for key, expected in (
-        ("kind", TWIN_DOCUMENT_KIND),
-        ("schema_version", KNOWLEDGE_SCHEMA_VERSION),
+    for key, accepted in (
+        ("kind", (TWIN_DOCUMENT_KIND,)),
+        ("schema_version", SUPPORTED_SCHEMA_VERSIONS),
     ):
-        if key in document and document[key] != expected:
+        if key in document and document[key] not in accepted:
             raise TwinImportError("TWIN_DOCUMENT_UNSUPPORTED", key)
     try:
         validate_document("twin", document)
