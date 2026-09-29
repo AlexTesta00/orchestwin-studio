@@ -1,0 +1,54 @@
+<header class="topbar" data-req="REQ-001">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+      <path d="M4 4h6v16H4z M14 4h6v16h-6z" fill="var(--vl-color-primary)"></path>
+    </svg>
+    <p class="brand-name">Biblioteca Sant'Ambrogio</p>
+  </div>
+  <nav class="main-nav" aria-label="Sezioni del registro">
+    <ul>
+      <li><a href="#SCR-001">Prestiti</a></li>
+      <li><a href="#SCR-002">Solleciti</a></li>
+      <li><a href="#SCR-003" aria-current="page">Esiti degli invii</a></li>
+    </ul>
+  </nav>
+  <p class="operator"><span class="avatar" aria-hidden="true">LM</span> Lucia Marchetti, banco prestiti</p>
+</header>
+<main class="page page-narrow">
+  <div class="result" data-req="REQ-006">
+    <svg class="result-icon" viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="11" fill="var(--vl-color-success-soft)"></circle>
+      <path d="M7 12.5l3 3 7-7" fill="none" stroke="var(--vl-color-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+    <h1>Sollecito inviato</h1>
+    <p class="notice notice-success" role="status">Il secondo sollecito è partito alle 10:46 per email e per SMS. Giulia Ferri riceverà anche un avviso nell'app della biblioteca.</p>
+  </div>
+  <div class="layout-two">
+    <section class="panel" aria-labelledby="summary-title" data-req="REQ-006">
+      <h2 id="summary-title">Riepilogo dell'invio</h2>
+      <dl class="facts">
+        <dt>Destinataria</dt>
+        <dd>Giulia Ferri, tessera 0412</dd>
+        <dt>Canali</dt>
+        <dd>Email e SMS</dd>
+        <dt>Sospensione automatica</dt>
+        <dd>Dal 4 ottobre 2026 se il volume non rientra</dd>
+      </dl>
+    </section>
+    <section class="panel" aria-labelledby="next-title" data-req="REQ-002">
+      <h2 id="next-title">Prossimi passi</h2>
+      <ol class="steps">
+        <li>Il prestito resta evidenziato nel registro fino alla restituzione.</li>
+        <li>Venerdì alle 18 il registro prepara l'elenco dei solleciti ancora aperti.</li>
+        <li>Alla restituzione la sospensione si toglie da sola e il lettore riceve una conferma.</li>
+      </ol>
+    </section>
+  </div>
+  <div class="actions" data-req="REQ-003">
+    <a class="button button-primary" href="#SCR-001">Torna ai prestiti in corso</a>
+    <a class="button button-quiet" href="#SCR-002">Invia un altro sollecito</a>
+  </div>
+</main>
+<footer class="site-footer">
+  <p>Biblioteca di quartiere Sant'Ambrogio · via Frigia 12, Milano · banco prestiti 02 8845 1203</p>
+</footer>

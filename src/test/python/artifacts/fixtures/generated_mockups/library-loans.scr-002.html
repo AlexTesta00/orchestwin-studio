@@ -1,0 +1,75 @@
+<header class="topbar" data-req="REQ-001">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+      <path d="M4 4h6v16H4z M14 4h6v16h-6z" fill="var(--vl-color-primary)"></path>
+    </svg>
+    <p class="brand-name">Biblioteca Sant'Ambrogio</p>
+  </div>
+  <nav class="main-nav" aria-label="Sezioni del registro">
+    <ul>
+      <li><a href="#SCR-001">Prestiti</a></li>
+      <li><a href="#SCR-002" aria-current="page">Solleciti</a></li>
+      <li><a href="#SCR-003">Esiti degli invii</a></li>
+    </ul>
+  </nav>
+  <p class="operator"><span class="avatar" aria-hidden="true">LM</span> Lucia Marchetti, banco prestiti</p>
+</header>
+<main class="page page-narrow">
+  <nav class="breadcrumb" aria-label="Percorso" data-req="REQ-001">
+    <ol>
+      <li><a href="#SCR-001">Prestiti in corso</a></li>
+      <li><span aria-current="page">Sollecito per Giulia Ferri</span></li>
+    </ol>
+  </nav>
+  <div class="page-intro">
+    <h1>Invia un sollecito</h1>
+    <p class="lead">Il messaggio parte subito per email; l'SMS arriva solo ai lettori che lo hanno autorizzato al momento dell'iscrizione.</p>
+  </div>
+  <div class="layout-two">
+    <section class="panel" aria-labelledby="reader-title" data-req="REQ-002">
+      <h2 id="reader-title">Prestito in ritardo</h2>
+      <dl class="facts">
+        <dt>Lettore</dt>
+        <dd>Giulia Ferri, tessera 0412</dd>
+        <dt>Volume</dt>
+        <dd>Il sistema periodico di Primo Levi</dd>
+        <dt>Scadenza</dt>
+        <dd><time datetime="2026-09-14">14 settembre 2026</time>, 15 giorni fa</dd>
+        <dt>Solleciti precedenti</dt>
+        <dd>Una email il 21 settembre, senza risposta</dd>
+      </dl>
+      <p class="notice notice-danger" role="alert">Dopo il secondo sollecito il prestito viene sospeso finché il volume non rientra.</p>
+    </section>
+    <form class="panel form" aria-labelledby="message-title" data-req="REQ-003">
+      <h2 id="message-title">Messaggio</h2>
+      <div class="field">
+        <label for="template">Modello</label>
+        <select id="template" name="modello" required>
+          <option value="primo">Primo sollecito cordiale</option>
+          <option value="secondo" selected>Secondo sollecito con sospensione</option>
+          <option value="ultimo">Ultimo avviso prima dell'addebito</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="subject">Oggetto</label>
+        <input id="subject" name="oggetto" type="text" value="Restituzione in ritardo: Il sistema periodico" required>
+      </div>
+      <div class="field">
+        <label for="message-body">Testo del messaggio</label>
+        <textarea id="message-body" name="testo" rows="6" required>Gentile Giulia, il volume «Il sistema periodico» doveva rientrare il 14 settembre. Ti chiediamo di riportarlo entro sabato 3 ottobre: dopo questa data il prestito verrà sospeso. Grazie, Biblioteca Sant'Ambrogio.</textarea>
+      </div>
+      <fieldset class="channels">
+        <legend>Canali di invio</legend>
+        <label class="check"><input type="checkbox" name="canali" value="email" checked> Email a g.ferri@esempio.it</label>
+        <label class="check"><input type="checkbox" name="canali" value="sms"> SMS al 347 551 2290</label>
+      </fieldset>
+      <div class="actions">
+        <a class="button button-primary" href="#SCR-003">Invia il sollecito</a>
+        <a class="button button-quiet" href="#SCR-001">Annulla</a>
+      </div>
+    </form>
+  </div>
+</main>
+<footer class="site-footer">
+  <p>Biblioteca di quartiere Sant'Ambrogio · via Frigia 12, Milano · banco prestiti 02 8845 1203</p>
+</footer>
