@@ -269,6 +269,117 @@ describe("design twin matrix", () => {
     expect(area.attributes("data-layout")).toBe("stack");
   });
 
+  it("lets the rows of the wide matrix grow with their content, without percentage heights", async () => {
+    areaWidth(900);
+    const wrapper = mountMatrix();
+    await flushPromises();
+    expect(wrapper.get("[data-testid='design-twin-matrix-area']").attributes("data-layout")).toBe(
+      "table",
+    );
+    expect(wrapper.get("table").classes()).toEqual(["grid", "w-full", "gap-2"]);
+    expect(wrapper.get("thead").classes()).toEqual(["block"]);
+    expect(wrapper.get("tbody").classes()).toEqual(["grid", "gap-2"]);
+    const cells = wrapper.findAll("[role='cell']");
+    expect(cells).toHaveLength(6);
+    expect(cells.every((cell) => cell.classes().join(" ") === "p-0 flex")).toBe(true);
+    const buttons = wrapper.findAll("[data-testid='design-twin-matrix-cell']");
+    expect(buttons.every((button) => button.classes().includes("min-h-24"))).toBe(true);
+    const heights = wrapper
+      .findAll("[role='cell'], [role='cell'] *")
+      .flatMap((element) => element.classes())
+      .filter((name) => name.startsWith("h-"));
+    expect(heights).toEqual([]);
+    const headers = wrapper.findAll("[role='rowheader']");
+    expect(
+      headers.every((header) => ["flex", "items-center"].every((name) => header.classes(name))),
+    ).toBe(true);
+    expect(wrapper.findAll("[role]").filter((element) => element.classes("contents"))).toEqual([]);
+  });
+
+  it("gives the header row and every body row the same columns for one, two and three alternatives", async () => {
+    const three = [...alternatives, { id: "alt-3", code: "DES-003", title: "Vista Elenco" }];
+    areaWidth(900);
+    for (const count of [1, 2, 3]) {
+      const chosen = three.slice(0, count);
+      const wrapper = mountMatrix({ alternatives: chosen });
+      await flushPromises();
+      expect(wrapper.get("[data-testid='design-twin-matrix-area']").attributes("data-layout")).toBe(
+        "table",
+      );
+      expect(
+        wrapper.get("table").element.style.getPropertyValue("--twin-matrix-alternatives"),
+      ).toBe(String(count));
+      const rows = wrapper.findAll("[role='row']");
+      expect(rows).toHaveLength(twins.length + 1);
+      for (const row of rows) {
+        expect(row.classes()).toEqual([
+          "grid",
+          "grid-cols-[170px_repeat(var(--twin-matrix-alternatives),minmax(0,1fr))]",
+          "gap-2",
+        ]);
+        expect(row.element.children).toHaveLength(count + 1);
+      }
+      const order = chosen.map((alternative) => alternative.id);
+      expect(
+        wrapper
+          .findAll("[role='columnheader'][data-alternative]")
+          .map((header) => header.attributes("data-alternative")),
+      ).toEqual(order);
+      for (const row of wrapper.findAll("[data-testid='design-twin-matrix-row']")) {
+        expect(
+          row
+            .findAll("[data-testid='design-twin-matrix-cell']")
+            .map((cell) => cell.attributes("data-alternative")),
+        ).toEqual(order);
+      }
+      wrapper.unmount();
+    }
+  });
+
+  it("keeps the stacked layout of a narrow space as it was", async () => {
+    areaWidth(420);
+    const wrapper = mountMatrix();
+    await flushPromises();
+    expect(wrapper.get("[data-testid='design-twin-matrix-area']").attributes("data-layout")).toBe(
+      "stack",
+    );
+    const table = wrapper.get("table");
+    expect(table.classes()).toEqual(["block", "w-full"]);
+    expect(table.attributes("style")).toBeUndefined();
+    expect(wrapper.get("thead").classes()).toEqual(["sr-only"]);
+    expect(wrapper.get("thead [role='row']").classes()).toEqual([]);
+    expect(wrapper.get("tbody").classes()).toEqual(["grid", "gap-3"]);
+    const rows = wrapper.findAll("[data-testid='design-twin-matrix-row']");
+    expect(rows).toHaveLength(3);
+    expect(
+      rows.every(
+        (row) =>
+          row.classes().join(" ") ===
+          "grid gap-2 rounded-tile border border-night-line bg-on-night/3 p-3",
+      ),
+    ).toBe(true);
+    expect(
+      wrapper
+        .findAll("[role='rowheader']")
+        .every((header) => header.classes().join(" ") === "p-0 text-left font-semibold pb-1"),
+    ).toBe(true);
+    expect(
+      wrapper
+        .findAll("[role='cell']")
+        .every((cell) => cell.classes().join(" ") === "p-0 align-top"),
+    ).toBe(true);
+    const heights = wrapper
+      .findAll("[role='cell'], [role='cell'] *")
+      .flatMap((element) => element.classes())
+      .filter((name) => name.startsWith("h-"));
+    expect(heights).toEqual([]);
+    expect(
+      wrapper
+        .findAll("[data-testid='design-twin-matrix-cell-alternative']")
+        .every((label) => !label.classes("sr-only")),
+    ).toBe(true);
+  });
+
   it("stays readable with eight twins", () => {
     const many = Array.from({ length: 8 }, (_, index) => ({
       id: `twin-${index}`,
