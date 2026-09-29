@@ -203,8 +203,8 @@ function submit(): void {
 
 <template>
   <form class="grid gap-5" @submit.prevent="submit">
-    <div
-      class="rounded-panel border border-line bg-surface-2 px-4 py-3 text-sm text-ink-2"
+    <p
+      class="rounded-field border border-night-line bg-night-raised px-4 py-3 text-sm leading-normal text-on-night-2"
       role="status"
     >
       {{
@@ -212,43 +212,55 @@ function submit(): void {
           count: missingCount,
         })
       }}
-    </div>
+    </p>
 
     <component
       :is="group.essential ? 'fieldset' : 'details'"
       v-for="group in fieldGroups"
       :key="group.title"
-      class="rounded-card border border-line bg-surface p-5 shadow-card"
+      :class="[
+        'rounded-tile border border-night-line',
+        group.essential ? 'px-5 pt-2 pb-5' : 'group px-5 py-1',
+      ]"
       :data-testid="group.essential ? 'brief-essentials' : 'brief-additional-details'"
     >
       <component
         :is="group.essential ? 'legend' : 'summary'"
-        class="px-1 text-lg font-semibold tracking-block"
-        :class="{ 'cursor-pointer': !group.essential }"
+        :class="[
+          'px-1 text-base font-semibold tracking-block text-on-night',
+          group.essential
+            ? ''
+            : 'flex min-h-11 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden',
+        ]"
       >
+        <span
+          v-if="!group.essential"
+          aria-hidden="true"
+          class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-on-night-3 transition-transform duration-150 group-open:rotate-45"
+        />
         {{ group.title }}
       </component>
-      <div class="mt-4 grid gap-5 sm:grid-cols-2">
-        <div v-for="field in group.fields" :key="field" class="grid gap-2">
-          <label class="text-sm font-semibold" :for="`brief-${field}`">
+      <div :class="['grid gap-5 sm:grid-cols-2', group.essential ? 'mt-3' : 'mt-3 mb-4']">
+        <div v-for="field in group.fields" :key="field" class="grid content-start gap-2">
+          <label class="text-sm font-semibold text-on-night" :for="`brief-${field}`">
             {{ t(`brief.fields.${field}`) }}
           </label>
           <textarea
             :id="`brief-${field}`"
             :value="fieldValue(field)"
             :rows="field === 'name' ? 1 : 3"
-            class="rounded-control border border-field bg-surface px-3 py-2 text-[15px] disabled:bg-surface-3 disabled:text-ink-3"
+            class="resize-y rounded-control border border-night-line-strong bg-night-raised px-3 py-2.5 text-[15px] leading-normal text-on-night disabled:cursor-not-allowed disabled:border-night-line disabled:text-on-night-3"
             :disabled="isUnknown(field)"
             :aria-describedby="isListField(field) ? `brief-${field}-hint` : undefined"
             @input="updateField(field, $event)"
           ></textarea>
-          <p v-if="isListField(field)" :id="`brief-${field}-hint`" class="m-0 text-xs text-ink-3">
+          <p v-if="isListField(field)" :id="`brief-${field}-hint`" class="text-xs text-on-night-3">
             {{ t("brief.oneItemPerLine") }}
           </p>
-          <label class="flex items-center gap-2 text-sm text-ink-2">
+          <label class="flex min-h-11 items-center gap-2.5 text-sm text-on-night-2">
             <input
               type="checkbox"
-              class="h-4 w-4 accent-action"
+              class="h-4 w-4 accent-petrol-on-night"
               :checked="isUnknown(field)"
               :data-testid="`brief-${field}-unknown`"
               @change="onUnknownChange(field, $event)"
@@ -260,7 +272,7 @@ function submit(): void {
     </component>
 
     <div>
-      <UiButton type="submit" :disabled="busy">
+      <UiButton type="submit" variant="pill" :disabled="busy">
         {{ busy ? t("brief.saving") : t("brief.saveVersion") }}
       </UiButton>
     </div>

@@ -20,7 +20,7 @@ let mounted = true;
 const copy = computed(() =>
   props.locale === "it"
     ? {
-        title: "Disponibilità degli assistenti",
+        title: "Assistenti AI",
         ready: "Gli assistenti AI sono collegati e pronti a ricevere richieste.",
         development:
           "Questo ambiente usa simulazioni di sviluppo. Gli assistenti AI reali non sono collegati.",
@@ -30,7 +30,7 @@ const copy = computed(() =>
         checking: "Verifica in corso…",
       }
     : {
-        title: "Assistant availability",
+        title: "AI assistants",
         ready: "The AI assistants are connected and ready for requests.",
         development:
           "This environment uses development simulations. Real AI assistants are not connected.",
@@ -71,19 +71,26 @@ onUnmounted(() => {
 
 <template>
   <section
-    class="rounded-panel border border-field bg-white p-4"
+    class="grid grid-cols-1 gap-x-5 gap-y-1 text-[13px] sm:grid-cols-[180px_minmax(0,1fr)]"
     aria-labelledby="model-runtime-status-title"
     :aria-busy="pending"
+    data-testid="model-runtime-status"
   >
-    <h2 id="model-runtime-status-title" class="font-bold">{{ copy.title }}</h2>
-    <p role="status">{{ pending ? copy.checking : description }}</p>
-    <button
-      class="rounded border border-line-strong px-3 py-2 font-semibold"
-      type="button"
-      :disabled="pending"
-      @click="refresh"
-    >
-      {{ copy.refresh }}
-    </button>
+    <h2 id="model-runtime-status-title" class="text-[13px] font-normal text-on-night-3">
+      {{ copy.title }}
+    </h2>
+    <div class="grid justify-items-start">
+      <p role="status" class="font-mono text-xs leading-[1.6] text-on-night">
+        {{ pending ? copy.checking : description }}
+      </p>
+      <button
+        class="inline-flex min-h-11 items-center text-[13px] font-semibold text-petrol-on-night-2 underline underline-offset-[3px] hover:text-on-night disabled:cursor-not-allowed disabled:text-on-night-3 disabled:no-underline"
+        type="button"
+        :disabled="pending"
+        @click="refresh"
+      >
+        {{ copy.refresh }}
+      </button>
+    </div>
   </section>
 </template>
