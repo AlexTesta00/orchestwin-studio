@@ -7,6 +7,7 @@ import email.policy
 import email.utils
 import hashlib
 import html
+import itertools
 import json
 import re
 import socketserver
@@ -75,6 +76,19 @@ from orchestwin.knowledge.archive import (
     read_verified_folder,
 )
 from orchestwin.knowledge.folder import folder_archive
+from orchestwin.knowledge.state import (
+    DECISIONS,
+    FILE_KINDS,
+    MAX_AUTHOR_LENGTH,
+    MAX_DIFF_LENGTH,
+    MAX_FILES,
+    MAX_MESSAGE_LENGTH,
+    MAX_NOTE_LENGTH,
+    MAX_PATH_LENGTH,
+    MAX_TASK_LENGTH,
+    MAX_TASKS,
+    ProjectStateSources,
+)
 from orchestwin.models.fake_design import (
     _ALTERNATIVE_TEMPLATES,
     FAKE_DESIGN_PROVIDER_ID,
@@ -145,7 +159,7 @@ from orchestwin.workflow.gates import (
     transition_human_gate,
 )
 
-from .folders import valid_folder
+from .folders import stage_folder
 
 PREFIX = "/api/v1"
 EPOCH = datetime(2026, 9, 29, 8, 0, tzinfo=UTC)
@@ -186,6 +200,7 @@ REQUEST_OPERATIONS = (
     "DESIGN_PROPOSAL",
     "DESIGN_REGENERATION",
     "DESIGN_EVALUATION",
+    "CODE_CHANGE_REVIEW",
 )
 OPERATIONS = ("MOCKUP", "ITERATION", *REQUEST_OPERATIONS)
 GATE_ACTIONS = ("SUBMIT", "APPROVE", "REJECT", "REQUEST_REVISION", "PAUSE", "RESUME", "CANCEL")
@@ -204,6 +219,8 @@ COSTS = {
     "MOCKUP": 1_450_000,
     "ITERATION": 1_100_000,
     "DESIGN_EVALUATION": 165_000,
+    "CODE_CHANGE_REVIEW": 200_000,
+    "CODE_ALIGNMENT": 250_000,
 }
 TASKS = {
     "BRIEF_QUESTION": "brief",
@@ -219,6 +236,8 @@ TASKS = {
     "MOCKUP": "design",
     "ITERATION": "design",
     "DESIGN_EVALUATION": "twin_review",
+    "CODE_CHANGE_REVIEW": "user-twin-evaluation",
+    "CODE_ALIGNMENT": "user-twin-evaluation",
 }
 PURPOSES = {
     "BRIEF_QUESTION": "BRIEF_QUESTION",
@@ -234,6 +253,8 @@ PURPOSES = {
     "MOCKUP": "DESIGN_MOCKUP_HTML",
     "ITERATION": "DESIGN_ITERATION",
     "DESIGN_EVALUATION": "DESIGN_TWIN_REVIEW",
+    "CODE_CHANGE_REVIEW": "CODE_CHANGE_REVIEW",
+    "CODE_ALIGNMENT": "CODE_ALIGNMENT",
 }
 GATE_TYPES = {
     "brief": HumanGateType.PROJECT_BRIEF,
@@ -256,7 +277,8 @@ APPROVAL_CODES = (
     ("requirements", "REQUIREMENTS_APPROVAL_REQUIRED"),
     ("design", "DESIGN_APPROVAL_REQUIRED"),
 )
-FEEDBACK_KEYS = ("reviews", "findings", "decisions", "discussions", "insights")
+FEEDBACK_KEYS = ("reviews", "findings", "decisions", "discussions", "insights", "change_reviews")
+STATE_KEYS = ("changes", "pending_changes", "aligned_commit", "open_tasks")
 AGENT_ORDER = tuple(entry.agent_id.value for entry in all_agent_catalog_entries())
 ALWAYS_PRESENT = frozenset(
     entry.agent_id.value for entry in all_agent_catalog_entries() if entry.is_always_present
@@ -292,6 +314,31 @@ ENTRY_SCREEN_PATTERN = re.compile(r"SCR-[0-9]{3}")
 LEADING_SCREEN = re.compile(r"(SCR-[0-9]{3,6})(?![0-9])")
 LANGUAGE_TAG = re.compile(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,7}")
 TEMPLATE_PARAMETER = re.compile(r"\{([a-z_]+)\}")
+COMMIT_PATTERN = re.compile(r"[0-9a-fA-F]{7,64}")
+REQUIREMENT_CODE = re.compile(r"\bREQ-[0-9]{3,6}\b")
+LOCALE_PATTERN = re.compile(r"[a-z]{2,3}(-[A-Z]{2})?")
+MAX_LOCALE_LENGTH = 20
+DEFAULT_LOCALE = "it-IT"
+LAX_BOOLEANS = {
+    "0": False,
+    "off": False,
+    "f": False,
+    "false": False,
+    "n": False,
+    "no": False,
+    "1": True,
+    "on": True,
+    "t": True,
+    "true": True,
+    "y": True,
+    "yes": True,
+}
+ALIGNMENT_WORDS = (
+    ("CODE_DRIFT", ("drift",)),
+    ("DESIGN_OUTDATED", ("design",)),
+    ("REQUIREMENTS_OUTDATED", ("requisit", "requirement")),
+)
+FIRST_LINE_LENGTH = 120
 DISCLAIMER = (
     "This is simulated feedback based on the available profile, evidence, and project "
     "artifacts. It is a design hypothesis and not empirical evidence of real-user behavior."
@@ -971,6 +1018,78 @@ CHAT = {
         "See the tip amount at once",
     ),
 }
+CHANGE_CRITIQUES = {
+    "it": {
+        "CONCERN": "Per «{goal}» la modifica «{line}» mi lascia qualche dubbio: ecco dove.",
+        "FINE": "Per «{goal}» la modifica «{line}» mi va bene.",
+        "requirement": (
+            "Nella pagina non ritrovo ancora quello che chiede il requisito {code}.",
+            "Mostrare nella pagina quello che chiede il requisito {code}.",
+        ),
+        "screen": (
+            "Nella schermata {code} le cifre restano piccole sul telefono.",
+            "Ingrandire le cifre della schermata {code}.",
+        ),
+        "check": (
+            "La modifica non cambia come uso la schermata {screen}, ma il requisito {code} "
+            "va provato.",
+            "Provare il requisito {code} sulla schermata {screen}.",
+        ),
+    },
+    "en": {
+        "CONCERN": "For “{goal}” the change “{line}” leaves me some doubts: here is where.",
+        "FINE": "For “{goal}” the change “{line}” works for me.",
+        "requirement": (
+            "On the page I still cannot find what requirement {code} asks for.",
+            "Show on the page what requirement {code} asks for.",
+        ),
+        "screen": (
+            "On screen {code} the digits stay small on the phone.",
+            "Make the digits of screen {code} larger.",
+        ),
+        "check": (
+            "The change does not alter how I use screen {screen}, but requirement {code} "
+            "needs a test.",
+            "Try requirement {code} on screen {screen}.",
+        ),
+    },
+}
+CHANGE_VERDICTS = {
+    "it": {
+        "ALIGNED": "La modifica «{line}» segue i requisiti e il design approvati.",
+        "CODE_DRIFT": "La modifica «{line}» si allontana dai requisiti o dal design approvati: "
+        "va corretto il codice.",
+        "DESIGN_OUTDATED": "La modifica «{line}» è un'evoluzione legittima: il design va "
+        "aggiornato con una nuova versione.",
+        "REQUIREMENTS_OUTDATED": "La modifica «{line}» è un'evoluzione legittima: i requisiti "
+        "vanno aggiornati con una nuova versione.",
+        "design_request": "Aggiornare il design perché descriva quello che la modifica «{line}» "
+        "ha introdotto nella schermata {screen}.",
+        "requirements_request": "Aggiornare i requisiti perché descrivano quello che la modifica "
+        "«{line}» ha introdotto, a partire dal requisito {code}.",
+        "tasks": (
+            "Riportare il codice in linea con la schermata {screen} del design approvato.",
+            "Coprire il requisito {code} con un test automatico.",
+        ),
+    },
+    "en": {
+        "ALIGNED": "The change “{line}” follows the approved requirements and design.",
+        "CODE_DRIFT": "The change “{line}” departs from the approved requirements or design: "
+        "the code should change.",
+        "DESIGN_OUTDATED": "The change “{line}” is a legitimate evolution: the design should get "
+        "a new version.",
+        "REQUIREMENTS_OUTDATED": "The change “{line}” is a legitimate evolution: the "
+        "requirements should get a new version.",
+        "design_request": "Update the design so that it describes what the change “{line}” "
+        "introduced on screen {screen}.",
+        "requirements_request": "Update the requirements so that they describe what the change "
+        "“{line}” introduced, starting from requirement {code}.",
+        "tasks": (
+            "Bring the code back in line with screen {screen} of the approved design.",
+            "Cover requirement {code} with an automated test.",
+        ),
+    },
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1125,6 +1244,13 @@ ROUTES: tuple[Route, ...] = (
     ),
     Route("GET", "/projects/{project_id}/import", "import_origin"),
     Route("GET", "/projects/{project_id}/model-usage", "usage"),
+    Route("GET", "/projects/{project_id}/alignment", "alignment"),
+    Route("POST", "/projects/{project_id}/code-changes", "record_change"),
+    Route("GET", "/projects/{project_id}/code-changes", "changes"),
+    Route("GET", "/projects/{project_id}/code-changes/{commit}", "change"),
+    Route("POST", "/projects/{project_id}/code-changes/{commit}/reviews", "review_change"),
+    Route("GET", "/projects/{project_id}/code-changes/{commit}/reviews", "change_reviews"),
+    Route("POST", "/projects/{project_id}/code-changes/{commit}/decision", "decide_change"),
 )
 
 
@@ -1339,32 +1465,42 @@ class _Call:
 
 
 class _Fields:
-    def __init__(self, body: object, allowed: Sequence[str], *, optional: bool = False) -> None:
+    def __init__(
+        self,
+        body: object,
+        allowed: Sequence[str],
+        *,
+        optional: bool = False,
+        location: Sequence[object] = ("body",),
+    ) -> None:
         self.errors: list[dict[str, object]] = []
         self.absent = False
+        self.location = tuple(location)
         if body is NO_BODY or body is None:
             self.absent = True
             if not optional:
-                self.errors.append(_error(("body",), "missing"))
+                self.errors.append(_error(self.location, "missing"))
             body = {}
         elif body is NOT_JSON or not isinstance(body, dict):
             self.absent = True
-            self.errors.append(_error(("body",), "model_attributes_type"))
+            self.errors.append(_error(self.location, "model_attributes_type"))
             body = {}
         self.body: dict[str, object] = body
         self.errors.extend(
-            _error(("body", name), "extra_forbidden") for name in body if name not in allowed
+            _error((*self.location, name), "extra_forbidden")
+            for name in body
+            if name not in allowed
         )
 
     def _get(self, name: str, required: bool) -> tuple[bool, object]:
         if self.absent or name not in self.body:
             if required and not self.absent:
-                self.errors.append(_error(("body", name), "missing"))
+                self.errors.append(_error((*self.location, name), "missing"))
             return False, None
         return True, self.body[name]
 
     def _fail(self, name: str, kind: str) -> None:
-        self.errors.append(_error(("body", name), kind))
+        self.errors.append(_error((*self.location, name), kind))
 
     def text(
         self,
@@ -1442,6 +1578,8 @@ class _Fields:
         minimum_items: int = 0,
         maximum_items: int | None = None,
         default: list[str] | None = None,
+        item_minimum: int = 0,
+        item_maximum: int | None = None,
     ) -> list[str] | None:
         present, value = self._get(name, required)
         if not present:
@@ -1457,8 +1595,12 @@ class _Fields:
         if maximum_items is not None and len(value) > maximum_items:
             self._fail(name, "too_long")
             return default
-        wrong = [index for index, item in enumerate(value) if not isinstance(item, str)]
-        self.errors.extend(_error(("body", name, index), "string_type") for index in wrong)
+        checked = [
+            (index, _text_error(item, item_minimum, item_maximum))
+            for index, item in enumerate(value)
+        ]
+        wrong = [(index, kind) for index, kind in checked if kind is not None]
+        self.errors.extend(_error((*self.location, name, index), kind) for index, kind in wrong)
         return default if wrong else list(value)
 
     def identifier(self, name: str, *, required: bool = True, nullable: bool = False) -> str | None:
@@ -1486,6 +1628,96 @@ class _Fields:
     def value(self, name: str, *, required: bool = True) -> object:
         present, value = self._get(name, required)
         return value if present else None
+
+    def pattern(
+        self,
+        name: str,
+        expression: re.Pattern[str],
+        *,
+        required: bool = True,
+        nullable: bool = False,
+        minimum: int = 0,
+        maximum: int | None = None,
+        default: str | None = None,
+    ) -> str | None:
+        present, value = self._get(name, required)
+        if not present:
+            return default
+        if value is None and nullable:
+            return None
+        kind = _text_error(value, minimum, maximum)
+        if kind is None and expression.fullmatch(str(value)) is None:
+            kind = "string_pattern_mismatch"
+        if kind is not None:
+            self._fail(name, kind)
+            return default
+        return str(value)
+
+    def normalized(
+        self, name: str, value: object, normalizer: Callable[[object], object]
+    ) -> object:
+        try:
+            return normalizer(value)
+        except ValueError:
+            self._fail(name, "value_error")
+            return None
+
+    def moment(self, name: str) -> datetime | None:
+        present, value = self._get(name, True)
+        if not present:
+            return None
+        if not isinstance(value, str):
+            self._fail(name, "datetime_type")
+            return None
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            self._fail(name, "datetime_from_date_parsing")
+            return None
+        if moment.tzinfo is None or moment.utcoffset() is None:
+            self._fail(name, "timezone_aware")
+            return None
+        return moment
+
+    def flag(self, name: str, *, default: bool = False) -> bool:
+        present, value = self._get(name, False)
+        if not present:
+            return default
+        parsed = _lax_boolean(value)
+        if parsed is None:
+            self._fail(
+                name, "bool_parsing" if isinstance(value, str | int | float) else "bool_type"
+            )
+            return default
+        return parsed
+
+    def changed_files(self, name: str) -> list[dict[str, object]]:
+        present, value = self._get(name, False)
+        if not present:
+            return []
+        if not isinstance(value, list):
+            self._fail(name, "list_type")
+            return []
+        if len(value) > MAX_FILES:
+            self._fail(name, "too_long")
+            return []
+        files = []
+        for index, item in enumerate(value):
+            if not isinstance(item, dict):
+                self.errors.append(_error((*self.location, name, index), "model_attributes_type"))
+                continue
+            nested = _Fields(
+                item, ("path", "kind", "added", "removed"), location=(*self.location, name, index)
+            )
+            path = nested.text("path", minimum=1, maximum=MAX_PATH_LENGTH)
+            if path is not None:
+                path = nested.normalized("path", path, _changed_path)
+            kind = nested.choice("kind", FILE_KINDS)
+            added = nested.integer("added", minimum=0)
+            removed = nested.integer("removed", minimum=0)
+            self.errors.extend(nested.errors)
+            files.append({"path": path, "kind": kind, "added": added, "removed": removed})
+        return files
 
     def check(self) -> None:
         if self.errors:
@@ -1532,6 +1764,10 @@ class FakeProject:
         self.usage: list[dict[str, object]] = []
         self.origin: dict[str, object] | None = None
         self.variant = 0
+        self.code_changes: list[dict[str, object]] = []
+        self.change_runs: list[dict[str, object]] = []
+        self.code_tasks: list[dict[str, object]] = []
+        self.decision_count = 0
 
     @property
     def owner(self) -> str:
@@ -1611,6 +1847,22 @@ class FakeProject:
     def mark_knowledge_changed(self) -> None:
         with self._studio._lock:
             self.fingerprint = None
+
+    def changes(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return [self._studio._change_payload(self, record) for record in self.code_changes]
+
+    def change_reviews(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.change_runs)
+
+    def tasks(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.code_tasks)
+
+    def aligned(self) -> dict[str, object] | None:
+        with self._studio._lock:
+            return self._studio._aligned(self)
 
 
 class FakeStudio:
@@ -5687,20 +5939,30 @@ class FakeStudio:
         if project is None:
             raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
         approvals = self._approvals(project)
-        for stage, code in APPROVAL_CODES:
-            if not approvals[stage]:
-                raise _Refusal(409, {"code": code})
-        fingerprint = tuple(str(project.artifact(stage)["id"]) for stage in STAGES)
+        if not approvals["brief"]:
+            raise _Refusal(409, {"code": "BRIEF_APPROVAL_REQUIRED"})
+        present = list(itertools.takewhile(lambda stage: approvals[stage], STAGES))
+        fingerprint = (
+            *(str(project.artifact(stage)["id"]) for stage in present),
+            f"changes={len(project.code_changes)}",
+            f"runs={len(project.change_runs)}",
+            f"decisions={project.decision_count}",
+        )
         if project.packages and project.fingerprint == fingerprint:
             return _Answer(200, {"reused": True, "version": project.packages[-1]})
         number = len(project.packages) + 1
         created_at = self._now()
-        folder = valid_folder(
-            project_name=project.name, version_number=number, created_at=created_at
+        folder = stage_folder(
+            through=present[-1],
+            project_name=project.name,
+            version_number=number,
+            created_at=created_at,
+            state=self._state_sources(project),
         )
         archive = folder_archive(folder)
         manifest = folder.manifest
-        views = manifest["views"].values()
+        views = [view for view in manifest["views"].values() if view]
+        stages = [stage for stage in STAGES if manifest["stages"].get(stage)]
         version = {
             "id": self._new_id(),
             "project_id": project.id,
@@ -5720,8 +5982,14 @@ class FakeStudio:
                     "version_number": manifest["stages"][stage]["version_number"],
                     "content_hash": manifest["stages"][stage]["content_hash"],
                 }
-                for stage in STAGES
+                for stage in stages
             ],
+            "progress": {
+                "approved": list(manifest["progress"]["approved"]),
+                "pending": manifest["progress"]["pending"],
+                "complete": manifest["progress"]["complete"],
+            },
+            "state": {key: manifest["state"][key] for key in STATE_KEYS},
             "twins": [
                 {
                     "twin_id": twin["twin_id"],
@@ -5734,7 +6002,7 @@ class FakeStudio:
             ],
             "feedback": {key: manifest["feedback"][key] for key in FEEDBACK_KEYS},
             "diagram_count": sum(len(view["diagrams"]) for view in views),
-            "table_count": sum(len(view["tables"]) for view in manifest["views"].values()),
+            "table_count": sum(len(view["tables"]) for view in views),
             "entries": list(archive.entries),
         }
         project.packages.append(version)
@@ -5800,6 +6068,9 @@ class FakeStudio:
         except KnowledgeArchiveError as error:
             status = 413 if error.code == "FOLDER_ARCHIVE_TOO_LARGE" else 422
             raise _Refusal(status, {"code": error.code, "location": error.detail}) from error
+        missing = [stage for stage in STAGES if not verified.manifest["stages"].get(stage)]
+        if missing:
+            raise _Refusal(422, {"code": "FOLDER_INCOMPLETE", "location": missing[0]})
         source_name = verified.project_name
         if not 1 <= len(source_name) <= MAX_SOURCE_NAME:
             raise _Refusal(
@@ -5890,6 +6161,396 @@ class FakeStudio:
                     "cost_microusd": sum(int(item["cost_microusd"] or 0) for item in items),
                 },
             },
+        )
+
+    def _code_project(self, call: _Call) -> FakeProject:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
+        return project
+
+    def _find_change(self, project: FakeProject, commit: str) -> dict[str, object]:
+        wanted = commit.lower()
+        if COMMIT_PATTERN.fullmatch(wanted) is None:
+            raise _Refusal(404, {"code": "CODE_CHANGE_NOT_FOUND"})
+        exact = next((item for item in project.code_changes if item["commit"] == wanted), None)
+        if exact is not None:
+            return exact
+        found = [item for item in project.code_changes if str(item["commit"]).startswith(wanted)]
+        if not found:
+            raise _Refusal(404, {"code": "CODE_CHANGE_NOT_FOUND"})
+        if len(found) > 1:
+            raise _Refusal(409, {"code": "CODE_CHANGE_AMBIGUOUS"})
+        return found[0]
+
+    def _change_payload(
+        self, project: FakeProject, record: Mapping[str, object]
+    ) -> dict[str, object]:
+        latest = next(
+            (run for run in project.change_runs if run["commit"] == record["commit"]), None
+        )
+        return {
+            "commit": record["commit"],
+            "parent": record["parent"],
+            "committed_at": record["committed_at"],
+            "author": record["author"],
+            "message": record["message"],
+            "files": copy.deepcopy(record["files"]),
+            "recorded_at": record["recorded_at"],
+            "review": None
+            if latest is None
+            else {
+                "run_id": latest["id"],
+                "reviewed_at": latest["reviewed_at"],
+                "verdict": latest["alignment"]["status"],
+                "summary": latest["alignment"]["summary"],
+            },
+            "decision": copy.deepcopy(record["decision"]),
+        }
+
+    def _aligned(self, project: FakeProject) -> dict[str, object] | None:
+        record = next((item for item in project.code_changes if item["aligned"] is not None), None)
+        return None if record is None else dict(record["aligned"])
+
+    def _pending(self, project: FakeProject) -> list[dict[str, object]]:
+        pending = []
+        for record in project.code_changes:
+            if record["aligned"] is not None:
+                break
+            pending.append(record)
+        return pending
+
+    def _alignment_reference(self, project: FakeProject) -> dict[str, object]:
+        approvals = self._approvals(project)
+        requirements = project.specification if approvals["requirements"] else None
+        design = project.design if approvals["design"] else None
+        return {
+            "requirements": None
+            if requirements is None
+            else {
+                "version_id": requirements["id"],
+                "version_number": requirements["version_number"],
+                "content_hash": requirements["content_hash"],
+            },
+            "design": None
+            if design is None
+            else {
+                "version_id": design["id"],
+                "version_number": design["version_number"],
+                "content_hash": design["content_hash"],
+                "alternative_code": _chosen_code(design["package"]),
+            },
+        }
+
+    def _alignment_payload(self, project: FakeProject) -> dict[str, object]:
+        latest = project.code_changes[0] if project.code_changes else None
+        return {
+            "project_id": project.id,
+            "reference": self._alignment_reference(project),
+            "aligned": self._aligned(project),
+            "pending_changes": len(self._pending(project)),
+            "latest_change": None if latest is None else self._change_payload(project, latest),
+            "tasks": [
+                copy.deepcopy(task) for task in project.code_tasks if task["status"] == "OPEN"
+            ],
+            "review_available": self.hosted,
+        }
+
+    def _approved_twins(self, project: FakeProject) -> list[dict[str, object]]:
+        snapshot = project.snapshot
+        if snapshot is None or not self._approvals(project)["twins"]:
+            return []
+        return list(snapshot["snapshot"]["twin_versions"])
+
+    def _route_alignment(self, call: _Call) -> _Answer:
+        return _Answer(200, self._alignment_payload(self._code_project(call)))
+
+    def _route_record_change(self, call: _Call) -> _Answer:
+        fields = _Fields(
+            call.json(),
+            ("commit", "parent", "committed_at", "author", "message", "files", "diff"),
+        )
+        commit = fields.pattern("commit", COMMIT_PATTERN)
+        parent = fields.pattern("parent", COMMIT_PATTERN, required=False, nullable=True)
+        committed_at = fields.moment("committed_at")
+        author = fields.text("author", required=False, nullable=True, maximum=MAX_AUTHOR_LENGTH)
+        if author is not None:
+            author = fields.normalized("author", author, _optional_line)
+        message = fields.text("message", minimum=1, maximum=MAX_MESSAGE_LENGTH)
+        if message is not None:
+            message = fields.normalized("message", message, _text_block)
+        files = fields.changed_files("files")
+        diff = fields.text("diff", required=False, maximum=MAX_DIFF_LENGTH, default="")
+        diff = fields.normalized("diff", diff, _diff_text)
+        fields.check()
+        commit = str(commit).lower()
+        parent = None if parent is None else parent.lower()
+        if parent == commit:
+            raise _Invalid([_error(("body",), "value_error")])
+        project = self._code_project(call)
+        stored = next((item for item in project.code_changes if item["commit"] == commit), None)
+        if stored is not None:
+            change = self._change_payload(project, stored)
+            return _Answer(200, {"status": "ALREADY_RECORDED", "change": change})
+        record: dict[str, object] = {
+            "commit": commit,
+            "parent": parent,
+            "committed_at": _iso(committed_at) if committed_at is not None else None,
+            "author": author,
+            "message": message,
+            "files": files,
+            "recorded_at": _iso(self._now()),
+            "decision": None,
+            "diff": diff,
+            "aligned": None,
+        }
+        project.code_changes.append(record)
+        project.code_changes.sort(key=_recorded_order, reverse=True)
+        return _Answer(201, {"status": "RECORDED", "change": self._change_payload(project, record)})
+
+    def _route_changes(self, call: _Call) -> _Answer:
+        raw = call.value("pending")
+        pending = False if raw is None else _lax_boolean(raw)
+        if pending is None:
+            raise _Invalid([_error(("query", "pending"), "bool_parsing")])
+        project = self._code_project(call)
+        records = self._pending(project) if pending else project.code_changes
+        return _Answer(
+            200, {"items": [self._change_payload(project, record) for record in records]}
+        )
+
+    def _route_change(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        record = self._find_change(project, call.params["commit"])
+        return _Answer(200, {**self._change_payload(project, record), "diff": record["diff"]})
+
+    def _route_change_reviews(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        record = self._find_change(project, call.params["commit"])
+        runs = [
+            copy.deepcopy(run) for run in project.change_runs if run["commit"] == record["commit"]
+        ]
+        return _Answer(200, {"items": runs})
+
+    def _route_review_change(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("locale", "again"))
+        locale = fields.pattern(
+            "locale",
+            LOCALE_PATTERN,
+            required=False,
+            minimum=2,
+            maximum=MAX_LOCALE_LENGTH,
+            default=DEFAULT_LOCALE,
+        )
+        again = fields.flag("again")
+        fields.check()
+        return self._later(
+            call,
+            "CODE_CHANGE_REVIEW",
+            {"locale": locale, "again": again},
+            lambda: self._reviewed_change(call, str(locale), again),
+        )
+
+    def _reviewed_change(self, call: _Call, locale: str, again: bool) -> _Answer:
+        project = self._code_project(call)
+        record = self._find_change(project, call.params["commit"])
+        if not again and any(run["commit"] == record["commit"] for run in project.change_runs):
+            raise _Refusal(409, {"code": "CODE_CHANGE_REVIEW_EXISTS"})
+        reference = self._alignment_reference(project)
+        if reference["requirements"] is None:
+            raise _Refusal(409, {"code": "REQUIREMENTS_APPROVAL_REQUIRED"})
+        if reference["design"] is None:
+            raise _Refusal(409, {"code": "DESIGN_APPROVAL_REQUIRED"})
+        twins = self._approved_twins(project)
+        if not twins:
+            raise _Refusal(409, {"code": "USER_MODELING_APPROVAL_REQUIRED"})
+        if not self.hosted:
+            raise _Refusal(503, {"code": "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"})
+        charged = 0
+        for operation in (*("CODE_CHANGE_REVIEW" for _ in twins), "CODE_ALIGNMENT"):
+            self._record(project, operation)
+            charged += COSTS[operation]
+        run = self._change_run(project, record, twins, locale, reference, charged)
+        project.change_runs.insert(0, run)
+        return _Answer(201, {"status": "REVIEWED", "run": copy.deepcopy(run)})
+
+    def _change_run(
+        self,
+        project: FakeProject,
+        record: Mapping[str, object],
+        twins: Sequence[Mapping[str, object]],
+        locale: str,
+        reference: Mapping[str, object],
+        charged: int,
+    ) -> dict[str, object]:
+        texts = CHANGE_CRITIQUES[self.language]
+        verdicts = CHANGE_VERDICTS[self.language]
+        specification = project.specification
+        design = project.design
+        if specification is None or design is None:
+            raise RuntimeError("a review needs the approved requirements and design")
+        line = _first_line(str(record["message"]))
+        known = [str(item["code"]) for item in specification["specification"]["requirements"]]
+        cited = [code for code in REQUIREMENT_CODE.findall(str(record["diff"])) if code in known]
+        requirement = cited[0] if cited else known[0]
+        screen = _first_screen(design["package"])
+        files = record["files"]
+        first_file = str(files[0]["path"]) if files else None
+        critiques = []
+        for position, twin in enumerate(twins):
+            findings = []
+            if position == 0:
+                text, action = texts["requirement"]
+                findings.append(
+                    _change_finding(
+                        "MEDIUM",
+                        text.format(code=requirement),
+                        action.format(code=requirement),
+                        requirement=requirement,
+                        file=first_file,
+                    )
+                )
+                text, action = texts["screen"]
+                findings.append(
+                    _change_finding(
+                        "LOW", text.format(code=screen), action.format(code=screen), screen=screen
+                    )
+                )
+            elif position == 1:
+                text, action = texts["check"]
+                findings.append(
+                    _change_finding(
+                        "LOW",
+                        text.format(code=requirement, screen=screen),
+                        action.format(code=requirement, screen=screen),
+                        requirement=requirement,
+                        screen=screen,
+                    )
+                )
+            verdict = "CONCERN" if position == 0 else "FINE"
+            critiques.append(
+                {
+                    "twin_id": twin["twin_id"],
+                    "twin_name": twin["profile"]["name"],
+                    "verdict": verdict,
+                    "summary": texts[verdict].format(goal=_first_goal(twin), line=line),
+                    "findings": findings,
+                }
+            )
+        status = _alignment_status(str(record["message"]))
+        about = [finding["about"] for critique in critiques for finding in critique["findings"]]
+        design_reference = reference["design"]
+        requirements_reference = reference["requirements"]
+        return {
+            "id": self._new_id(),
+            "commit": record["commit"],
+            "reviewed_at": _iso(self._now()),
+            "locale": locale,
+            "reference": {
+                "requirements_version_number": requirements_reference["version_number"],
+                "design_version_number": design_reference["version_number"],
+                "alternative_code": design_reference["alternative_code"],
+            },
+            "critiques": critiques,
+            "alignment": {
+                "status": status,
+                "summary": verdicts[status].format(line=line),
+                "affected": {
+                    "requirements": sorted(
+                        {str(item["requirement"]) for item in about if item["requirement"]}
+                    ),
+                    "screens": sorted({str(item["screen"]) for item in about if item["screen"]}),
+                },
+                "design_request": verdicts["design_request"].format(line=line, screen=screen)
+                if status == "DESIGN_OUTDATED"
+                else None,
+                "requirements_request": verdicts["requirements_request"].format(
+                    line=line, code=requirement
+                )
+                if status == "REQUIREMENTS_OUTDATED"
+                else None,
+                "code_tasks": [
+                    task.format(screen=screen, code=requirement) for task in verdicts["tasks"]
+                ]
+                if status == "CODE_DRIFT"
+                else [],
+            },
+            "cost_microusd": charged,
+        }
+
+    def _route_decide_change(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("kind", "note", "tasks"))
+        kind = fields.choice("kind", DECISIONS)
+        note = fields.text("note", required=False, nullable=True, maximum=MAX_NOTE_LENGTH)
+        if note is not None:
+            note = fields.normalized("note", note, _optional_block)
+        tasks = fields.texts(
+            "tasks",
+            nullable=False,
+            maximum_items=MAX_TASKS,
+            default=[],
+            item_minimum=1,
+            item_maximum=MAX_TASK_LENGTH,
+        )
+        texts = fields.normalized("tasks", tasks, _task_texts) if tasks else []
+        fields.check()
+        texts = list(texts or [])
+        if (kind == "CODE_TASKS") != bool(texts):
+            raise _Invalid([_error(("body",), "value_error")])
+        project = self._code_project(call)
+        record = self._find_change(project, call.params["commit"])
+        latest = next(
+            (run for run in project.change_runs if run["commit"] == record["commit"]), None
+        )
+        subjects = {"requirements": [], "screens": []}
+        if latest is not None:
+            subjects = copy.deepcopy(latest["alignment"]["affected"])
+        moment = _iso(self._now())
+        record["decision"] = {"kind": kind, "decided_at": moment, "note": note}
+        record["aligned"] = None
+        if kind == "ALIGNED":
+            reference = self._alignment_reference(project)
+            requirements, design = reference["requirements"], reference["design"]
+            record["aligned"] = {
+                "commit": record["commit"],
+                "decided_at": moment,
+                "requirements_version_number": None
+                if requirements is None
+                else requirements["version_number"],
+                "design_version_number": None if design is None else design["version_number"],
+            }
+            places = {str(item["commit"]): place for place, item in enumerate(project.code_changes)}
+            aligned_place = places[str(record["commit"])]
+            for task in project.code_tasks:
+                if task["status"] == "OPEN" and places[str(task["from_commit"])] >= aligned_place:
+                    task["status"] = "DONE"
+        for text in texts:
+            project.code_tasks.append(
+                {
+                    "code": f"TSK-{len(project.code_tasks) + 1:03d}",
+                    "text": text,
+                    "about": copy.deepcopy(subjects),
+                    "from_commit": record["commit"],
+                    "created_at": moment,
+                    "status": "OPEN",
+                }
+            )
+        project.decision_count += 1
+        return _Answer(
+            200,
+            {
+                "status": "DECIDED",
+                "change": self._change_payload(project, record),
+                "alignment": self._alignment_payload(project),
+            },
+        )
+
+    def _state_sources(self, project: FakeProject) -> ProjectStateSources:
+        return ProjectStateSources(
+            aligned=self._aligned(project),
+            changes=tuple(self._change_payload(project, record) for record in project.code_changes),
+            runs=tuple(copy.deepcopy(run) for run in project.change_runs),
+            tasks=tuple(copy.deepcopy(task) for task in project.code_tasks),
         )
 
     def _seed(
@@ -6041,6 +6702,9 @@ def _path_parameters(values: Mapping[str, str]) -> dict[str, str]:
             else:
                 parsed[name] = str(int(value))
             continue
+        if name == "commit":
+            parsed[name] = value
+            continue
         try:
             parsed[name] = str(UUID(value))
         except ValueError:
@@ -6062,6 +6726,70 @@ def _query_identifier(call: _Call, name: str) -> str:
 
 def _error(location: Sequence[object], kind: str) -> dict[str, object]:
     return {"loc": list(location), "type": kind}
+
+
+def _text_error(item: object, minimum: int, maximum: int | None) -> str | None:
+    if not isinstance(item, str):
+        return "string_type"
+    if len(item) < minimum:
+        return "string_too_short"
+    if maximum is not None and len(item) > maximum:
+        return "string_too_long"
+    return None
+
+
+def _control_free(value: str) -> bool:
+    return all(ord(character) >= 32 and ord(character) != 127 for character in value)
+
+
+def _single_line(value: object) -> str:
+    normalized = " ".join(str(value).split())
+    if not normalized or not _control_free(normalized):
+        raise ValueError("the text must be one visible line")
+    return normalized
+
+
+def _text_block(value: object) -> str:
+    normalized = str(value).strip()
+    if not normalized or "\x00" in normalized:
+        raise ValueError("the text must hold visible characters")
+    return normalized
+
+
+def _optional_line(value: object) -> str | None:
+    return None if value is None or not str(value).strip() else _single_line(value)
+
+
+def _optional_block(value: object) -> str | None:
+    return None if value is None or not str(value).strip() else _text_block(value)
+
+
+def _changed_path(value: object) -> str:
+    path = str(value)
+    if not path.strip() or not _control_free(path):
+        raise ValueError("the path must be visible")
+    return path
+
+
+def _diff_text(value: object) -> str:
+    diff = str(value)
+    if "\x00" in diff:
+        raise ValueError("the diff must not hold a null character")
+    return diff
+
+
+def _task_texts(value: object) -> list[str]:
+    return [_single_line(item) for item in value] if isinstance(value, list) else []
+
+
+def _lax_boolean(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        return LAX_BOOLEANS.get(value.lower())
+    return None
 
 
 def _json_media_type(content_type: str) -> bool:
@@ -6164,6 +6892,63 @@ def _grounding(
 
 def _bounded(value: str, maximum: int = 120) -> str:
     return value if len(value) <= maximum else f"{value[: maximum - 3].rstrip()}..."
+
+
+def _chosen_code(package: Mapping[str, object]) -> str | None:
+    chosen = _by_id(package["alternatives"], str(package["owner_selected_alternative_id"]))
+    return None if chosen is None else str(chosen["code"])
+
+
+def _first_screen(package: Mapping[str, object]) -> str:
+    prototype = package.get("prototype")
+    screens = [] if prototype is None else prototype["screens"]
+    return str(screens[0]["code"]) if screens else "SCR-001"
+
+
+def _first_line(message: str) -> str:
+    line = next((" ".join(item.split()) for item in message.splitlines() if item.strip()), "")
+    return _bounded(line, FIRST_LINE_LENGTH)
+
+
+def _first_goal(twin: Mapping[str, object]) -> str:
+    for item in twin["profile"]["observations"]:
+        goals = item["value"]["items"]
+        if item["observation_key"] == "user_twin.goals" and goals:
+            return str(goals[0])
+    return str(twin["profile"]["name"])
+
+
+def _change_finding(
+    severity: str,
+    text: str,
+    action: str,
+    *,
+    requirement: str | None = None,
+    screen: str | None = None,
+    file: str | None = None,
+) -> dict[str, object]:
+    return {
+        "severity": severity,
+        "text": text,
+        "about": {"requirement": requirement, "screen": screen, "file": file},
+        "action": action,
+    }
+
+
+def _alignment_status(message: str) -> str:
+    words = message.casefold()
+    for status, keys in ALIGNMENT_WORDS:
+        if any(key in words for key in keys):
+            return status
+    return "ALIGNED"
+
+
+def _recorded_order(record: Mapping[str, object]) -> tuple[datetime, datetime, str]:
+    return (
+        datetime.fromisoformat(str(record["recorded_at"])),
+        datetime.fromisoformat(str(record["committed_at"])),
+        str(record["commit"]),
+    )
 
 
 def _unique(items: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:

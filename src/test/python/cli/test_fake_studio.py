@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import io
 import json
 import threading
 import urllib.error
 import urllib.request
 import warnings
+import zipfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -20,8 +22,9 @@ from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.projects.domain import ProjectMode
 
 from .support.fake_studio import COSTS, PREFIX, FakeStudio
-from .support.folders import valid_archive
+from .support.folders import partial_archive, valid_archive
 
+STEPS = ("brief", "team", "twins", "requirements", "design")
 EMAIL = "owner@example.com"
 OTHER = "other@example.com"
 PASSWORD = "Test-password-not-real!"
@@ -538,6 +541,11 @@ def test_the_order_of_the_steps_is_enforced() -> None:
         incomplete = client.post(base + "/gates/project-brief/submit")
         assert incomplete.json()["status"] == "BRIEF_INCOMPLETE"
         assert "problem" in incomplete.json()["missing_fields"]
+        unpublished = client.post(base + "/knowledge-packages")
+        assert (unpublished.status, unpublished.json()) == (
+            409,
+            {"detail": {"code": "BRIEF_APPROVAL_REQUIRED"}},
+        )
         seeded = studio.seed_project(owner=EMAIL, name="Seme", through="team")
         seeded_base = f"/projects/{seeded.id}"
         assert client.post(seeded_base + "/requirements/proposals").json() == {
@@ -546,8 +554,12 @@ def test_the_order_of_the_steps_is_enforced() -> None:
         assert client.post(seeded_base + "/design/proposals").json() == {
             "detail": {"code": "REQUIREMENTS_APPROVAL_REQUIRED"}
         }
-        assert client.post(seeded_base + "/knowledge-packages").json() == {
-            "detail": {"code": "USER_MODELING_APPROVAL_REQUIRED"}
+        partial = client.post(seeded_base + "/knowledge-packages")
+        assert partial.status == 201
+        assert partial.json()["version"]["progress"] == {
+            "approved": ["brief", "team"],
+            "pending": "twins",
+            "complete": False,
         }
         missing = client.post(seeded_base + "/user-modeling/snapshots/generate")
         assert missing.json() == {"detail": {"code": "PERSONAS_REQUIRED"}}
@@ -1233,6 +1245,123 @@ def test_a_second_knowledge_version_without_a_changed_step() -> None:
         third = client.post(base + "/knowledge-packages")
         assert (third.status, third.json()["version"]["version_number"]) == (201, 3)
         assert [item["version_number"] for item in seeded.knowledge_versions()] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("through", STEPS)
+def test_a_folder_is_published_from_the_brief_on(through: str) -> None:
+    present = list(STEPS[: STEPS.index(through) + 1])
+    complete = through == "design"
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through=through)
+        base = f"/projects/{seeded.id}"
+        published = client.post(base + "/knowledge-packages")
+        assert published.status == 201
+        version = published.json()["version"]
+        assert version["schema_version"] == 3
+        assert [item["stage"] for item in version["stages"]] == present
+        assert version["progress"] == {
+            "approved": present,
+            "pending": None if complete else STEPS[len(present)],
+            "complete": complete,
+        }
+        assert version["state"] == {
+            "changes": 0,
+            "pending_changes": 0,
+            "aligned_commit": None,
+            "open_tasks": 0,
+        }
+        assert version["feedback"]["change_reviews"] == 0
+        entries = set(version["entries"])
+        assert {"state/state.json", "state/state.md", "twins/feedback/changes.json"} <= entries
+        assert ("design/design.json" in entries) is complete
+        assert ("team/team.json" in entries) is (through != "brief")
+        assert client.post(base + "/knowledge-packages").status == 200
+        archive = client.get(base + "/knowledge-packages/1/archive")
+        verified = read_verified_folder(archive.content)
+        assert verified.project_name == "Seme"
+        assert set(verified.manifest["stages"]) == set(present)
+        assert verified.manifest["progress"] == version["progress"]
+        assert studio.errors == []
+
+
+def test_the_development_state_reaches_the_published_folder() -> None:
+    commit = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
+    change = {
+        "commit": commit,
+        "parent": None,
+        "committed_at": "2026-09-29T10:00:00+00:00",
+        "author": "Test Author",
+        "message": "Correggere il drift del risultato",
+        "files": [{"path": "src/app.js", "kind": "MODIFIED", "added": 4, "removed": 1}],
+        "diff": "+// REQ-002\n",
+    }
+    steps = (
+        ("/code-changes", change),
+        (f"/code-changes/{commit}/reviews", {"locale": "it-IT"}),
+        (
+            f"/code-changes/{commit}/decision",
+            {"kind": "CODE_TASKS", "tasks": ["Coprire REQ-002 con un test."]},
+        ),
+        (f"/code-changes/{commit}/decision", {"kind": "ALIGNED", "note": "Allineato."}),
+    )
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        assert client.post(base + "/knowledge-packages").status == 201
+        numbers = []
+        for path, body in steps:
+            assert client.post(base + path, body).status in {200, 201}
+            published = client.post(base + "/knowledge-packages")
+            assert published.status == 201
+            numbers.append(published.json()["version"]["version_number"])
+            assert client.post(base + "/knowledge-packages").status == 200
+        assert numbers == [2, 3, 4, 5]
+        version = published.json()["version"]
+        assert version["state"] == {
+            "changes": 1,
+            "pending_changes": 0,
+            "aligned_commit": commit,
+            "open_tasks": 0,
+        }
+        assert version["feedback"]["change_reviews"] == 1
+        archive = client.get(base + "/knowledge-packages/5/archive")
+        assert read_verified_folder(archive.content).manifest["state"]["aligned_commit"] == commit
+        with zipfile.ZipFile(io.BytesIO(archive.content)) as folder:
+            state = json.loads(folder.read("state/state.json").decode("utf-8"))
+            reviews = json.loads(folder.read("twins/feedback/changes.json").decode("utf-8"))
+        assert state["changes"] == seeded.changes()
+        assert state["aligned"] == seeded.aligned()
+        assert state["tasks"] == seeded.tasks()
+        assert [task["status"] for task in state["tasks"]] == ["DONE"]
+        assert reviews["runs"] == seeded.change_reviews()
+        assert reviews["runs"][0]["alignment"]["status"] == "CODE_DRIFT"
+        assert studio.errors == []
+
+
+def test_a_partial_folder_cannot_be_imported() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="brief")
+        base = f"/projects/{seeded.id}"
+        assert client.post(base + "/knowledge-packages").status == 201
+        published = client.get(base + "/knowledge-packages/1/archive").content
+        for content, pending in (
+            (published, "team"),
+            (partial_archive(through="twins"), "requirements"),
+        ):
+            refused = client.post(
+                "/project-imports",
+                content=multipart({}, {"archive": ("folder.zip", "application/zip", content)}),
+                headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+            )
+            assert (refused.status, refused.json()) == (
+                422,
+                {"detail": {"code": "FOLDER_INCOMPLETE", "location": pending}},
+            )
+        assert len(client.get("/projects").json()) == 1
+        assert studio.errors == []
 
 
 def test_a_hosted_studio_without_a_budget_charges_without_a_ceiling() -> None:
