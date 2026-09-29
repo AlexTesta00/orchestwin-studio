@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import io
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from orchestwin.cli.console import Console
 from orchestwin.cli.context import CommandContext
-from orchestwin.cli.environment import Environment
+from orchestwin.cli.environment import Environment, ProcessResult
 from orchestwin.cli.http import Transport
 from orchestwin.cli.main import main
 from orchestwin.cli.project import ProjectFolder, ProjectLink
@@ -20,7 +20,10 @@ from orchestwin.cli.session import (
     StudioSession,
 )
 
+from .processes import no_processes
 from .transports import NoNetwork
+
+Runner = Callable[[Sequence[str], Path, float], ProcessResult]
 
 START = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 MONOTONIC_ORIGIN = 1000.0
@@ -112,6 +115,7 @@ def terminal(
     language: str | None = "en",
     start: datetime | None = None,
     working_directory: Path | None = None,
+    processes: Runner | None = None,
 ) -> Terminal:
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
@@ -136,6 +140,7 @@ def terminal(
         open_browser=browser.open,
         transport=transport,
         system_language=language,
+        run_process=no_processes if processes is None else processes,
     )
     return Terminal(environment=environment, clock=clock, browser=browser, secrets=keeper)
 
@@ -151,6 +156,7 @@ def environment(
     interactive: bool = False,
     language: str | None = "en",
     start: datetime | None = None,
+    processes: Runner | None = None,
 ) -> Environment:
     return terminal(
         tmp_path,
@@ -162,6 +168,7 @@ def environment(
         interactive=interactive,
         language=language,
         start=start,
+        processes=processes,
     ).environment
 
 
@@ -178,6 +185,7 @@ def run_ut(
     language: str | None = "en",
     interactive: bool = False,
     start: datetime | None = None,
+    processes: Runner | None = None,
 ) -> Run:
     bundle = terminal(
         tmp_path,
@@ -190,6 +198,7 @@ def run_ut(
         language=language,
         start=start,
         working_directory=working_directory,
+        processes=processes,
     )
     status = main(list(arguments), environment=bundle.environment)
     return Run(

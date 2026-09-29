@@ -26,6 +26,8 @@ DIALOGUE = (
 )
 CREATED_AT = "2026-09-29T09:00:00+00:00"
 STAGES = ("brief", "team", "twins", "requirements")
+PUBLICATION = "/knowledge-packages"
+BASE = f"{API}/projects/{PROJECT_ID}"
 
 
 def sign_in(studio: FakeStudio, tmp_path: Path) -> None:
@@ -98,8 +100,24 @@ def changes(studio: FakeStudio) -> list[tuple[str, str, bytes]]:
     return [
         (request.method, request.path, request.body)
         for request in studio.requests
-        if request.method != "GET" and not request.path.endswith("/auth/login")
+        if request.method != "GET" and not request.path.endswith(("/auth/login", PUBLICATION))
     ]
+
+
+def publications(studio: FakeStudio) -> int:
+    return len(
+        [
+            request
+            for request in studio.requests
+            if request.method == "POST" and request.path.endswith(PUBLICATION)
+        ]
+    )
+
+
+def local_progress(tmp_path: Path) -> tuple[list[str], str | None]:
+    manifest = tmp_path / "project" / "orchestwin" / "orchestwin.json"
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    return document["progress"]["approved"], document["progress"]["pending"]
 
 
 def posted(studio: FakeStudio, suffix: str) -> list[object]:
@@ -160,8 +178,17 @@ def test_the_whole_path_with_typed_answers(tmp_path: Path, language: str, yes: s
             "it": "Il prossimo comando è `ut design`",
             "en": "The next command is `ut design`",
         }
+        folder_line = {
+            "it": "Cartella di conoscenza aggiornata in orchestwin/ (versione 4): contiene i "
+            "passi approvati finora.",
+            "en": "Knowledge folder updated in orchestwin/ (version 4): it holds the steps "
+            "approved so far.",
+        }
         assert next_line[language] in run.output
+        assert folder_line[language] in run.output.splitlines()
         assert len(changes(studio)) == len(set(changes(studio)))
+        assert publications(studio) == 4
+        assert local_progress(tmp_path) == (list(STAGES), "design")
         assert run.errors == ""
         assert studio.errors == []
 
@@ -380,8 +407,15 @@ def test_a_project_already_at_the_design_step_only_saves_its_steps(tmp_path: Pat
         assert run.status == 0, run.errors
         assert_saved(studio, tmp_path, STAGES)
         assert changes(studio) == []
+        assert publications(studio) >= 1
+        assert len(seeded.knowledge_versions()) == 1
+        assert local_progress(tmp_path) == (list(STAGES), "design")
     assert "already has an approved brief, team, User Twins and requirements" in run.output
     assert "The next command is `ut design`" in run.output
+    assert (
+        "Knowledge folder updated in orchestwin/ (version 1): it holds the steps approved "
+        "so far." in run.output.splitlines()
+    )
 
 
 def test_the_project_option_refuses_a_folder_linked_to_another_project(tmp_path: Path) -> None:
@@ -450,6 +484,165 @@ def test_a_studio_that_cannot_be_reached_in_the_middle_loses_nothing(tmp_path: P
     assert run.status == 4
     assert "Nothing is lost: what you approved is saved." in run.errors
     assert (tmp_path / "project" / ".orchestwin" / "project.json").is_file()
+    transport.assert_done()
+
+
+def test_each_approved_step_brings_the_partial_folder_into_the_project(tmp_path: Path) -> None:
+    with FakeStudio(language="en") as studio:
+        sign_in(studio, tmp_path)
+
+        first = ut(tmp_path, "--until", "brief", answers=[*start()[:-1], *brief_answers()])
+        after_brief = local_progress(tmp_path)
+        second = ut(tmp_path, "--until", "team", answers=["y", "1"])
+        after_team = local_progress(tmp_path)
+        versions = fake_project(studio, tmp_path).knowledge_versions()
+
+        assert (first.status, second.status) == (0, 0), second.errors
+        assert [version["version_number"] for version in versions] == [1, 2]
+        assert studio.errors == []
+    assert after_brief == (["brief"], "team")
+    assert after_team == (["brief", "team"], "twins")
+    assert (
+        "Knowledge folder updated in orchestwin/ (version 1): it holds the steps approved "
+        "so far." in first.output.splitlines()
+    )
+    assert "Knowledge folder updated in orchestwin/ (version 2)" in second.output
+
+
+def write_local_manifest(project: Path, stages: Sequence[str]) -> None:
+    folder = project / "orchestwin"
+    folder.mkdir(parents=True)
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 7, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": NAME},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": "design", "complete": False},
+        "files": {},
+    }
+    (folder / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_a_folder_that_already_holds_the_approved_steps_is_not_published_again(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    write_local_manifest(tmp_path / "project", STAGES)
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+
+    run = run_ut(["init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert transport.requests("POST") == []
+    transport.assert_done()
+
+
+def expect_approved_steps(transport: ScriptedTransport) -> None:
+    brief = {"id": "brief-1", "version_number": 1, "content_hash": "hb", "brief": {}}
+    team = {
+        "id": "team-1",
+        "version_number": 1,
+        "content_hash": "ht",
+        "brief_version_number": 1,
+        "brief_content_hash": "hb",
+        "selected_agent_ids": ["UX_UI_DESIGNER"],
+        "role_constraints": [],
+        "constraint_issues": [],
+        "members": [{"agent_id": "UX_UI_DESIGNER", "justifications": []}],
+    }
+    snapshot = {"id": "snapshot-1", "version_number": 1, "content_hash": "hs"}
+    requirements = {"id": "spec-1", "version_number": 1, "content_hash": "hr"}
+
+    def gate(version: dict[str, object]) -> dict[str, object]:
+        return {
+            "id": f"gate-{version['id']}",
+            "status": "APPROVED",
+            "artifact": {"artifact_id": version["id"], "content_hash": version["content_hash"]},
+        }
+
+    transport.expect(
+        "GET", BASE, body={"id": PROJECT_ID, "display_name": NAME, "current_stage": "DESIGN"}
+    )
+    transport.expect("GET", f"{BASE}/brief-versions/current", body=brief)
+    transport.expect("GET", f"{BASE}/gates/project-brief/current", body=gate(brief))
+    transport.expect("GET", f"{BASE}/team-proposals/current", body=team)
+    transport.expect("GET", f"{BASE}/readiness", body={"status": "READY_FOR_MAIN_WORKFLOW"})
+    transport.expect("GET", f"{BASE}/gates/agent-team/current", body=gate(team))
+    transport.expect(
+        "GET",
+        f"{BASE}/user-modeling/readiness",
+        body={
+            "workflow_state": "READY_FOR_REQUIREMENTS_DEFINITION",
+            "approved_current_snapshot": True,
+            "snapshot_version_number": 1,
+        },
+    )
+    transport.expect("GET", f"{BASE}/user-modeling/snapshots/current", body=snapshot)
+    transport.expect("GET", f"{BASE}/user-modeling/gate", body=gate(snapshot))
+    transport.expect(
+        "GET",
+        f"{BASE}/requirements/readiness",
+        body={
+            "status": "READY_FOR_DESIGN_EXPLORATION",
+            "version": requirements,
+            "gate": gate(requirements),
+        },
+    )
+
+
+def test_a_studio_that_publishes_only_complete_folders_is_asked_once_and_says_nothing(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+    transport.expect(
+        "POST",
+        f"{BASE}{PUBLICATION}",
+        status=409,
+        body={"detail": {"code": "DESIGN_APPROVAL_REQUIRED"}},
+    )
+
+    run = run_ut(["init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert run.errors == ""
+    assert "knowledge folder" not in run.output.lower()
+    transport.assert_done()
+
+
+def test_a_publication_that_fails_is_said_in_one_line_and_the_path_goes_on(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    link_folder(tmp_path / "project")
+    transport = ScriptedTransport()
+    expect_approved_steps(transport)
+    transport.expect(
+        "POST",
+        f"{BASE}{PUBLICATION}",
+        status=503,
+        body={"detail": {"code": "KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE"}},
+    )
+
+    run = run_ut(["--lang", "it", "init"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert (
+        lines.count(
+            "La cartella di conoscenza non è stata aggiornata "
+            "(KNOWLEDGE_PACKAGE_SERVICE_UNAVAILABLE): il percorso continua, e puoi scaricarla più "
+            "tardi con `ut package publish`."
+        )
+        == 1
+    )
+    assert "Il prossimo comando è `ut design`" in run.output
     transport.assert_done()
 
 

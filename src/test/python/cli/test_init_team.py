@@ -468,6 +468,12 @@ def expect_approved_path(transport: ScriptedTransport, team: Mapping[str, object
             "gate": gate(requirements, "APPROVED"),
         },
     )
+    transport.expect(
+        "POST",
+        f"{BASE}/knowledge-packages",
+        status=409,
+        body={"detail": {"code": "DESIGN_APPROVAL_REQUIRED"}},
+    )
 
 
 @pytest.mark.parametrize(("specialists", "noted"), [(WITHOUT_DESIGNER, True), (SPECIALISTS, False)])

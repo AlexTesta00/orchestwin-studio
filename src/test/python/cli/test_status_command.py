@@ -13,6 +13,7 @@ from .support.transports import API, ScriptedTransport
 
 LOCAL = "http://127.0.0.1:8000"
 BASE = f"{API}/projects/{PROJECT_ID}"
+ALIGNED = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 BUDGET = {
     "currency": "USD",
     "per_generation_microusd": 5_000_000,
@@ -36,6 +37,41 @@ def version(identifier: str, number: int, content_hash: str) -> dict[str, object
     return {"id": identifier, "version_number": number, "content_hash": content_hash}
 
 
+def alignment_document(
+    *, aligned: str | None = ALIGNED, pending: int = 1, tasks: int = 1
+) -> dict[str, object]:
+    return {
+        "project_id": PROJECT_ID,
+        "reference": {"requirements": None, "design": None},
+        "aligned": None
+        if aligned is None
+        else {
+            "commit": aligned,
+            "decided_at": "2026-09-29T08:00:00+00:00",
+            "requirements_version_number": 1,
+            "design_version_number": 2,
+        },
+        "pending_changes": pending,
+        "latest_change": None,
+        "tasks": [
+            {"code": f"TSK-{index + 1:03d}", "text": "Fix it", "status": "OPEN"}
+            for index in range(tasks)
+        ],
+        "review_available": True,
+    }
+
+
+def expect_alignment(
+    transport: ScriptedTransport, document: dict[str, object], recorded: int
+) -> None:
+    transport.expect("GET", f"{BASE}/alignment", body=document)
+    transport.expect(
+        "GET",
+        f"{BASE}/code-changes",
+        body={"items": [{"commit": f"{index:040x}"} for index in range(recorded)]},
+    )
+
+
 def expect_studio(
     transport: ScriptedTransport,
     *,
@@ -45,6 +81,9 @@ def expect_studio(
     later_approved: bool = False,
     folder: int | None = None,
     budget: bool = True,
+    alignment: dict[str, object] | None = None,
+    recorded: int = 3,
+    routes: bool = True,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -113,6 +152,12 @@ def expect_studio(
             "versions": [] if folder is None else [{"version_number": folder}],
         },
     )
+    if later_approved and routes:
+        expect_alignment(
+            transport, alignment_document() if alignment is None else alignment, recorded
+        )
+    elif later_approved:
+        transport.expect("GET", f"{BASE}/alignment", status=404, body={"detail": "Not Found"})
     if budget:
         transport.expect("GET", f"{API}/model-runtime/budget", body=BUDGET)
         transport.expect(
@@ -215,8 +260,169 @@ def test_status_from_the_studio_in_italian_with_an_older_folder(tmp_path: Path) 
         "Prossimo passo: Scarica la cartella di conoscenza: lancia `ut package publish`.",
         "Cartella di conoscenza: versione 2 in questa cartella, versione 3 nello Studio.",
         "La cartella qui è più vecchia: aggiornala con `ut package pull`.",
+        "Sviluppo: commit registrati: 3; dopo il punto allineato: 1; commit allineato: "
+        "4f2a9c1; compiti aperti per il codice: 1.",
         "Spesa del progetto: 0,42 USD. Credito rimasto nello Studio: 25,13 USD.",
     ]
+
+
+def test_a_folder_at_the_version_of_the_studio_sends_the_development_to_ut_align(
+    tmp_path: Path,
+) -> None:
+    project = signed_in_folder(tmp_path)
+    local_manifest(project, 3)
+    transport = expect_studio(
+        ScriptedTransport(),
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=3,
+        alignment=alignment_document(aligned=None, pending=2, tasks=0),
+        recorded=2,
+    )
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    assert run.status == 0
+    lines = run.output.splitlines()
+    assert lines[14:18] == [
+        "Next step: The knowledge folder is up to date: the development goes on with "
+        "`ut align` and `ut watch`.",
+        "Knowledge folder: version 3 in this folder, version 3 in the Studio.",
+        "Development: commits recorded: 2; none aligned yet (waiting: 2); open tasks for the "
+        "code: 0.",
+        "Spent on this project: 0.42 USD. Credit left in the Studio: 25.13 USD.",
+    ]
+    transport.assert_done()
+
+
+def test_the_development_as_json_and_when_nothing_is_recorded(tmp_path: Path) -> None:
+    project = signed_in_folder(tmp_path)
+    local_manifest(project, 3)
+    studio = dict(
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=3,
+    )
+    first = expect_studio(ScriptedTransport(), **studio)
+    empty = expect_studio(
+        ScriptedTransport(),
+        **studio,
+        alignment=alignment_document(aligned=None, pending=0, tasks=0),
+        recorded=0,
+    )
+
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=first).output)
+    nothing = run_ut(["status"], tmp_path, transport=empty)
+
+    assert document["alignment"] == {
+        "recorded": 3,
+        "pending": 1,
+        "aligned_commit": ALIGNED,
+        "open_tasks": 1,
+    }
+    assert document["next_command"] == "ut align"
+    assert (
+        "Development: no commit recorded yet. After your first commit launch `ut align`."
+        in nothing.output.splitlines()
+    )
+
+
+def test_a_studio_without_the_routes_of_the_development_shows_no_line(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(
+        ScriptedTransport(),
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=3,
+        routes=False,
+    )
+
+    run = run_ut(["status", "--json"], tmp_path, transport=transport)
+
+    document = json.loads(run.output)
+    assert run.status == 0
+    assert document["alignment"] is None
+    assert document["next_command"] == "ut package publish"
+    transport.assert_done()
+
+
+def test_offline_the_development_comes_from_the_folder(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    project.knowledge.mkdir(parents=True)
+    stages = ("brief", "team", "twins", "requirements", "design")
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 5, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": "Calcolo mancia"},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": None, "complete": True},
+        "state": {
+            "document": "state/state.json",
+            "text": "state/state.md",
+            "changes": 4,
+            "pending_changes": 2,
+            "aligned_commit": ALIGNED,
+            "open_tasks": 3,
+        },
+        "files": {},
+    }
+    (project.knowledge / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    text = run_ut(["--lang", "it", "status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert (
+        "Sviluppo: commit registrati: 4; dopo il punto allineato: 2; commit allineato: "
+        "4f2a9c1; compiti aperti per il codice: 3." in text.output.splitlines()
+    )
+    assert document["alignment"] == {
+        "recorded": 4,
+        "pending": 2,
+        "aligned_commit": ALIGNED,
+        "open_tasks": 3,
+    }
+
+
+def test_offline_a_partial_folder_and_the_saved_steps_are_read_together(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    project.save_step("brief", version("brief-2", 2, "hb"), gate("brief-2", "hb"), START)
+    project.save_step("team", version("team-1", 1, "ht"), gate("team-1", "ht"), START)
+    project.save_step("twins", version("twins-4", 4, "hw"), gate("twins-4", "hw"), START)
+    project.knowledge.mkdir(parents=True)
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 2, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": "Calcolo mancia"},
+        "stages": {
+            "brief": {"version_number": 3, "gate": {"status": "APPROVED"}},
+            "team": {"version_number": 1, "gate": {"status": "APPROVED"}},
+        },
+        "progress": {"approved": ["brief", "team"], "pending": "twins", "complete": False},
+        "state": {"changes": 0, "pending_changes": 0, "aligned_commit": None, "open_tasks": 0},
+        "files": {},
+    }
+    (project.knowledge / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    run = run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport())
+
+    document = json.loads(run.output)
+    assert [(step["stage"], step["version"]) for step in document["steps"]][:4] == [
+        ("brief", 3),
+        ("team", 1),
+        ("twins", 4),
+        ("requirements", None),
+    ]
+    assert document["alignment"] is None
 
 
 def test_without_a_budget_the_spending_is_not_shown(tmp_path: Path) -> None:
@@ -275,6 +481,8 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
         "project_spent_usd": 0.42,
         "remaining_usd": 25.13,
     }
+    assert document["alignment"] is None
+    assert list(document)[-1] == "alignment"
 
 
 def saved_steps(project: ProjectFolder) -> None:
@@ -326,7 +534,71 @@ def test_offline_status_uses_the_manifest_of_the_knowledge_folder(tmp_path: Path
     assert document["steps"][-1]["version"] == 4
     assert document["knowledge_folder"]["local_version"] == 4
     assert document["next_action"] == "DOWNLOAD_FOLDER"
+    assert document["next_command"] == "ut align"
     assert document["spending"] is None
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "Next step: The knowledge folder is up to date: the development goes on with "
+            "`ut align` and `ut watch`.",
+        ),
+        (
+            "it",
+            "Prossimo passo: La cartella di conoscenza è aggiornata: lo sviluppo continua con "
+            "`ut align` e `ut watch`.",
+        ),
+    ],
+)
+def test_offline_a_complete_folder_sends_the_development_to_ut_align(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    project = link_folder(tmp_path / "project")
+    local_manifest(project, 4)
+
+    run = run_ut(
+        ["--lang", language, "status", "--offline"], tmp_path, transport=ScriptedTransport()
+    )
+
+    assert run.status == 0
+    assert line in run.output.splitlines()
+
+
+def test_offline_a_partial_folder_still_asks_to_download_the_complete_one(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    for number, stage in enumerate(("brief", "team", "twins", "requirements", "design"), 1):
+        identifier = f"{stage}-{number}"
+        project.save_step(
+            stage, version(identifier, 1, f"h{number}"), gate(identifier, f"h{number}"), START
+        )
+    project.knowledge.mkdir(parents=True)
+    stages = ("brief", "team", "twins", "requirements")
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 3, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": "Calcolo mancia"},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": "design", "complete": False},
+        "files": {},
+    }
+    (project.knowledge / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert run.status == 0
+    assert (
+        "Next step: Download the knowledge folder: launch `ut package publish`."
+        in run.output.splitlines()
+    )
+    assert document["next_command"] == "ut package publish"
 
 
 def test_without_sign_in_the_folder_is_read_and_nothing_is_sent(tmp_path: Path) -> None:

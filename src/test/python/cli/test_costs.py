@@ -152,6 +152,8 @@ def test_a_budget_without_the_spending_so_far_shows_only_the_estimate(tmp_path: 
 def test_the_estimates_of_the_contract() -> None:
     assert ESTIMATES["MOCKUP"] == Estimate(1.30, 1.60, 10.0)
     assert ESTIMATES["REQUIREMENTS_PROPOSAL"] == Estimate(0.20, 0.37, 2.0)
+    assert ESTIMATES["CODE_CHANGE_REVIEW"] == Estimate(0.15, 0.25, 1.0)
+    assert ESTIMATES["CODE_ALIGNMENT"] == Estimate(0.15, 0.30, 1.0)
     assert set(ESTIMATES) == {
         "BRIEF_DIALOGUE",
         "TEAM_PROPOSAL",
@@ -164,7 +166,16 @@ def test_the_estimates_of_the_contract() -> None:
         "ITERATION",
         "DESIGN_EVALUATION",
         "TWIN_CHAT",
+        "CODE_CHANGE_REVIEW",
+        "CODE_ALIGNMENT",
     }
+
+
+def test_a_review_of_code_changes_multiplies_the_twins_and_adds_the_verdict() -> None:
+    per_commit = ["CODE_CHANGE_REVIEW", "CODE_CHANGE_REVIEW", "CODE_ALIGNMENT"]
+    total = estimate(per_commit * 2)
+
+    assert (total.low_usd, total.high_usd, total.minutes) == (0.9, 1.6, 6.0)
 
 
 def test_sums_add_the_amounts_and_the_minutes_unless_given() -> None:

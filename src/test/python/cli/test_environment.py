@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import dataclasses
 import io
+import subprocess
 import sys
 from datetime import UTC
+from pathlib import Path
 
 import pytest
 
 from orchestwin.cli import environment as module
 from orchestwin.cli.environment import (
+    Environment,
+    ProcessResult,
+    default_run_process,
     language_code,
     prepare_stream,
     real_environment,
@@ -49,9 +55,82 @@ def test_the_real_environment_reads_the_machine_once(monkeypatch: pytest.MonkeyP
     assert isinstance(environment.transport, UrlTransport)
     assert environment.home.is_absolute()
     assert environment.working_directory.is_absolute()
+    assert environment.run_process is default_run_process
     stdin.detach()
     stdout.detach()
     stderr.detach()
+
+
+def test_the_runner_of_processes_is_the_last_field_and_has_a_default() -> None:
+    last = dataclasses.fields(Environment)[-1]
+
+    assert last.name == "run_process"
+    assert last.default is default_run_process
+
+
+def test_a_process_runs_in_its_folder_and_is_read_as_utf8(tmp_path: Path) -> None:
+    code = (
+        "import os, sys\n"
+        "sys.stdout.buffer.write((os.getcwd() + '|caff\\u00e8').encode('utf-8'))\n"
+        "sys.stderr.buffer.write('attenzione'.encode('utf-8'))\n"
+        "sys.exit(3)\n"
+    )
+
+    result = default_run_process([sys.executable, "-c", code], tmp_path, 60.0)
+
+    assert result.status == 3
+    folder, word = result.output.split("|")
+    assert Path(folder).resolve() == tmp_path.resolve()
+    assert word == "caffè"
+    assert result.errors == "attenzione"
+
+
+def test_bytes_that_are_not_utf8_are_replaced(tmp_path: Path) -> None:
+    code = "import sys\nsys.stdout.buffer.write(b'caff\\xe8')\n"
+
+    result = default_run_process([sys.executable, "-c", code], tmp_path, 60.0)
+
+    assert result == ProcessResult(0, "caff�", "")
+
+
+def test_a_missing_program_answers_127(tmp_path: Path) -> None:
+    result = default_run_process(["orchestwin-no-such-program"], tmp_path, 5.0)
+
+    assert result == ProcessResult(127, "", "orchestwin-no-such-program: not found")
+
+
+def test_a_process_that_takes_too_long_answers_124(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    def slow(arguments: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        seen.update(options)
+        raise subprocess.TimeoutExpired(cmd=arguments, timeout=1.5)
+
+    monkeypatch.setattr(module.subprocess, "run", slow)
+
+    assert default_run_process(["git", "status"], tmp_path, 1.5) == ProcessResult(
+        124, "", "timeout"
+    )
+    assert seen["timeout"] == 1.5
+    assert seen["cwd"] == tmp_path
+    assert seen["stdin"] == subprocess.DEVNULL
+    assert "shell" not in seen
+
+
+def test_a_program_that_cannot_start_answers_126(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(arguments: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(module.subprocess, "run", refused)
+
+    result = default_run_process(["git", "status"], tmp_path, 5.0)
+
+    assert (result.status, result.output) == (126, "")
+    assert result.errors.startswith("git: ")
 
 
 def test_an_output_terminal_keeps_its_encoding_and_replaces_what_it_cannot_write() -> None:

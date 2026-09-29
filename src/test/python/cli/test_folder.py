@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from orchestwin.cli.folder import (
     FOLDER_STAGES,
     INDEX_NAME,
     MANIFEST_NAME,
+    StateSummary,
     pack,
     read_files,
     summary,
@@ -22,7 +24,14 @@ from orchestwin.cli.folder import (
 from orchestwin.knowledge.folder import KnowledgeFolder, build_knowledge_folder, folder_archive
 from orchestwin.knowledge.layout import KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, STAGES
 
-from ..knowledge.knowledge_fixtures import PUBLISHED_AT, real_sources
+from ..knowledge.knowledge_fixtures import (
+    ALIGNED_COMMIT,
+    PUBLISHED_AT,
+    partial_sources,
+    real_sources,
+    schema_two_files,
+    state_sources,
+)
 
 
 @pytest.fixture(scope="module")
@@ -94,6 +103,66 @@ def test_the_summary_reads_only_the_manifest(
     assert all(stage.gate_status == "APPROVED" for stage in found.stages)
     assert found.stage("design") is not None
     assert found.stage("package") is None
+    assert (found.schema_version, found.progress) == (3, FOLDER_STAGES)
+    assert (found.pending, found.complete) == (None, True)
+    assert found.state == StateSummary(
+        changes=0, pending_changes=0, aligned_commit=None, open_tasks=0
+    )
+
+
+def test_the_summary_of_a_partial_folder_reads_the_progress_and_the_state(
+    tmp_path: Path,
+) -> None:
+    partial = build_knowledge_folder(
+        partial_sources("twins", state=state_sources()), version_number=2, created_at=PUBLISHED_AT
+    )
+    target = unpacked(tmp_path, folder_archive(partial).content)
+
+    found = summary(target)
+
+    assert found is not None
+    assert found.schema_version == 3
+    assert found.progress == ("brief", "team", "twins")
+    assert (found.pending, found.complete) == ("requirements", False)
+    assert found.state == StateSummary(
+        changes=2, pending_changes=1, aligned_commit=ALIGNED_COMMIT, open_tasks=1
+    )
+    assert found.stage("twins") is not None and found.stage("twins").version_number == 1
+    assert found.stage("requirements").version_number is None
+    assert found.file_count == len(partial.files)
+
+
+def test_a_schema_2_manifest_holds_the_five_stages_and_no_state(
+    tmp_path: Path, built: KnowledgeFolder
+) -> None:
+    target = tmp_path / "older"
+    for name, content in schema_two_files(built.files).items():
+        path = target.joinpath(*name.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content.encode("utf-8"))
+
+    found = summary(target)
+
+    assert found is not None
+    assert found.schema_version == 2
+    assert found.progress == FOLDER_STAGES
+    assert (found.pending, found.complete, found.state) == (None, True, None)
+
+
+def test_a_schema_3_manifest_without_its_progress_cannot_be_read(tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 1, "content_hash": "c"},
+        "project": {"id": "p", "name": "n"},
+        "stages": {},
+        "progress": {"approved": ["brief", "anything"], "pending": None, "complete": True},
+        "files": {},
+    }
+    (tmp_path / MANIFEST_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+    error = failure(lambda: summary(tmp_path))
+
+    assert (error.code, error.values["code"]) == ("FOLDER_NOT_VERIFIED", "FOLDER_DOCUMENT_INVALID")
 
 
 def test_the_summary_of_a_missing_or_broken_manifest(tmp_path: Path) -> None:
