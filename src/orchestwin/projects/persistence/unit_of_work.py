@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 from orchestwin.projects.persistence.briefs import (
     SqlAlchemyProjectBriefRepository,
 )
+from orchestwin.projects.persistence.progress import SqlAlchemyProjectOverviewRepository
 from orchestwin.projects.persistence.repositories import (
     SqlAlchemyProjectRepository,
 )
@@ -28,6 +29,14 @@ class SqlAlchemyProjectUnitOfWork:
         self._session: AsyncSession | None = None
         self._projects: SqlAlchemyProjectRepository | None = None
         self._briefs: SqlAlchemyProjectBriefRepository | None = None
+        self._overviews: SqlAlchemyProjectOverviewRepository | None = None
+
+    @property
+    def overviews(self) -> SqlAlchemyProjectOverviewRepository:
+        if self._overviews is None:
+            raise RuntimeError("project unit of work is not open")
+
+        return self._overviews
 
     @property
     def projects(
@@ -58,6 +67,7 @@ class SqlAlchemyProjectUnitOfWork:
 
         self._projects = SqlAlchemyProjectRepository(self._session)
         self._briefs = SqlAlchemyProjectBriefRepository(self._session)
+        self._overviews = SqlAlchemyProjectOverviewRepository(self._session)
 
         return self
 
@@ -81,6 +91,7 @@ class SqlAlchemyProjectUnitOfWork:
             self._session = None
             self._projects = None
             self._briefs = None
+            self._overviews = None
 
 
 class SqlAlchemyProjectUnitOfWorkFactory:

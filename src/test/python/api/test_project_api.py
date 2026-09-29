@@ -29,6 +29,12 @@ from orchestwin.projects.domain import (
     ProjectMode,
     create_project,
 )
+from orchestwin.projects.progress import (
+    ProjectNextAction,
+    ProjectOverview,
+    ProjectProgress,
+    ProjectStage,
+)
 from orchestwin.projects.repository import (
     BriefVersionCreationResult,
     BriefVersionCreationStatus,
@@ -101,6 +107,24 @@ class FakeProjectService:
     def __init__(self) -> None:
         self.project: Project | None = build_project()
         self.version = build_version()
+        self.progress = ProjectProgress(
+            ProjectStage.REQUIREMENTS, ProjectNextAction.APPROVE_REQUIREMENTS
+        )
+        self.overview_calls: list[UUID] = []
+
+    async def list_overviews(self, *, owner_user_id: UUID) -> tuple[ProjectOverview, ...]:
+        self.overview_calls.append(owner_user_id)
+        if self.project is None:
+            return ()
+        return (ProjectOverview(project=self.project, progress=self.progress),)
+
+    async def get_overview(
+        self, *, project_id: UUID, owner_user_id: UUID
+    ) -> ProjectOverview | None:
+        self.overview_calls.append(owner_user_id)
+        if self.project is None or project_id != self.project.id:
+            return None
+        return ProjectOverview(project=self.project, progress=self.progress)
 
     async def create(
         self,
@@ -271,6 +295,65 @@ def test_create_and_list_projects() -> None:
     assert created.json()["mode"] == ("GREENFIELD_GENERATION")
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == str(PROJECT_ID)
+
+
+def test_a_new_project_starts_by_describing_the_idea() -> None:
+    with build_client(FakeProjectService()) as client:
+        created = client.post(
+            "/api/v1/projects",
+            headers=authorization_header(),
+            json={"display_name": "Project", "mode": "BROWNFIELD_ASSESSMENT"},
+        )
+
+    assert created.status_code == 201
+    assert created.json()["current_stage"] == "BRIEF"
+    assert created.json()["next_action"] == "DESCRIBE_IDEA"
+
+
+def test_the_list_and_the_detail_say_where_each_project_stands() -> None:
+    service = FakeProjectService()
+    with build_client(service) as client:
+        listed = client.get("/api/v1/projects", headers=authorization_header())
+        detail = client.get(f"/api/v1/projects/{PROJECT_ID}", headers=authorization_header())
+        renamed = client.patch(
+            f"/api/v1/projects/{PROJECT_ID}",
+            headers=authorization_header(),
+            json={"display_name": "Renamed"},
+        )
+
+    assert listed.status_code == detail.status_code == renamed.status_code == 200
+    assert [(item["id"], item["current_stage"], item["next_action"]) for item in listed.json()] == [
+        (str(PROJECT_ID), "REQUIREMENTS", "APPROVE_REQUIREMENTS")
+    ]
+    assert detail.json()["current_stage"] == "REQUIREMENTS"
+    assert detail.json()["next_action"] == "APPROVE_REQUIREMENTS"
+    assert detail.json()["display_name"] == "Project"
+    assert renamed.json()["current_stage"] == "REQUIREMENTS"
+    assert service.overview_calls == [USER_ID, USER_ID, USER_ID]
+
+
+def test_the_stages_and_actions_are_published_in_the_contract() -> None:
+    with build_client(FakeProjectService()) as client:
+        schema = client.get("/api/v1/openapi.json").json()["components"]["schemas"]
+
+    assert schema["ProjectStage"]["enum"] == [
+        "BRIEF",
+        "TEAM",
+        "USER_TWINS",
+        "REQUIREMENTS",
+        "DESIGN",
+        "PACKAGE",
+    ]
+    assert schema["ProjectNextAction"]["enum"] == [
+        "DESCRIBE_IDEA",
+        "APPROVE_BRIEF",
+        "APPROVE_TEAM",
+        "CONFIRM_TWINS",
+        "APPROVE_REQUIREMENTS",
+        "APPROVE_DESIGN",
+        "DOWNLOAD_FOLDER",
+    ]
+    assert {"current_stage", "next_action"} <= set(schema["ProjectResponse"]["required"])
 
 
 def test_project_not_found_does_not_disclose_ownership() -> None:

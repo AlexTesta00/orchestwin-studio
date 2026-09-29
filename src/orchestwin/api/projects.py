@@ -38,6 +38,14 @@ from orchestwin.projects.domain import (
     Project,
     ProjectMode,
 )
+from orchestwin.projects.progress import (
+    ProjectNextAction,
+    ProjectOverview,
+    ProjectProgress,
+    ProjectProgressFacts,
+    ProjectStage,
+    project_progress,
+)
 from orchestwin.projects.repository import (
     BriefVersionCreationStatus,
 )
@@ -78,11 +86,14 @@ class ProjectResponse(BaseModel):
     is_archived: bool
     created_at: datetime
     updated_at: datetime
+    current_stage: ProjectStage
+    next_action: ProjectNextAction
 
     @classmethod
     def from_domain(
         cls,
         project: Project,
+        progress: ProjectProgress,
     ) -> ProjectResponse:
         """Map a project aggregate into an API response."""
         return cls(
@@ -93,7 +104,13 @@ class ProjectResponse(BaseModel):
             is_archived=project.is_archived,
             created_at=project.created_at,
             updated_at=project.updated_at,
+            current_stage=progress.current_stage,
+            next_action=progress.next_action,
         )
+
+    @classmethod
+    def from_overview(cls, overview: ProjectOverview) -> ProjectResponse:
+        return cls.from_domain(overview.project, overview.progress)
 
 
 class ProjectBriefRequest(BaseModel):
@@ -318,7 +335,7 @@ def create_project_router() -> APIRouter:
                 detail="invalid_project",
             ) from error
 
-        return ProjectResponse.from_domain(project)
+        return ProjectResponse.from_domain(project, project_progress(ProjectProgressFacts()))
 
     @router.get(
         "",
@@ -335,9 +352,9 @@ def create_project_router() -> APIRouter:
             Depends(project_service_dependency),
         ],
     ) -> list[ProjectResponse]:
-        projects = await service.list_active(owner_user_id=user.id)
+        overviews = await service.list_overviews(owner_user_id=user.id)
 
-        return [ProjectResponse.from_domain(project) for project in projects]
+        return [ProjectResponse.from_overview(overview) for overview in overviews]
 
     @router.get(
         "/{project_id}",
@@ -355,15 +372,15 @@ def create_project_router() -> APIRouter:
             Depends(project_service_dependency),
         ],
     ) -> ProjectResponse:
-        project = await service.get(
+        overview = await service.get_overview(
             project_id=project_id,
             owner_user_id=user.id,
         )
 
-        if project is None:
+        if overview is None:
             raise project_not_found()
 
-        return ProjectResponse.from_domain(project)
+        return ProjectResponse.from_overview(overview)
 
     @router.patch(
         "/{project_id}",
@@ -397,7 +414,15 @@ def create_project_router() -> APIRouter:
         if project is None:
             raise project_not_found()
 
-        return ProjectResponse.from_domain(project)
+        overview = await service.get_overview(
+            project_id=project_id,
+            owner_user_id=user.id,
+        )
+
+        if overview is None:
+            raise project_not_found()
+
+        return ProjectResponse.from_overview(overview)
 
     @router.delete(
         "/{project_id}",
