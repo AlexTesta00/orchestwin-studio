@@ -211,7 +211,7 @@ describe("RequirementsTableView", () => {
   it("shows the six tables in order with a heading and an explanation each", async () => {
     const wrapper = mounted();
 
-    expect(wrapper.findAll("h4").map((heading) => heading.text())).toEqual([
+    expect(wrapper.findAll("h2").map((heading) => heading.text())).toEqual([
       "Requirements",
       "User stories",
       "Acceptance criteria",
@@ -231,7 +231,7 @@ describe("RequirementsTableView", () => {
 
     await wrapper.setProps({ locale: "it" });
 
-    expect(wrapper.findAll("h4").map((heading) => heading.text())).toEqual([
+    expect(wrapper.findAll("h2").map((heading) => heading.text())).toEqual([
       "Requisiti",
       "Storie degli utenti",
       "Criteri di accettazione",
@@ -249,49 +249,78 @@ describe("RequirementsTableView", () => {
       section(wrapper, "requirements")
         .findAll("thead th")
         .map((cell) => cell.text().replace(/[↑↓↕]/u, "").trim()),
-    ).toEqual(["Code", "Title", "Type", "Priority", "Requirement", "For", "Stories", "Criteria"]);
+    ).toEqual([
+      "Code",
+      "Title",
+      "Type",
+      "Priority",
+      "Requirement",
+      "Verification",
+      "For",
+      "Stories",
+    ]);
     expect(rowsOf(wrapper, "requirements")).toEqual([
       [
         "REQ-001",
         "Create reservations",
-        "Functional",
-        "Should",
+        "Feature",
+        "Important",
         "The desk can create a reservation for a guest.",
+        "AC-001",
         "Receptionist Twin",
         "USR-001\nUSR-002",
-        "AC-001",
       ],
       [
         "REQ-002",
         "Quick search",
-        "Non functional",
-        "Could",
+        "Quality",
+        "Optional",
         "Search answers within one second.",
+        "AC-001",
         "Receptionist Twin\nManager Twin",
         "—",
-        "AC-001",
       ],
       [
         "REQ-003",
         "Data stays in Europe",
         "Constraint",
-        "Must",
+        "Essential",
         "Guest data is stored in the European Union.",
-        "—",
-        "—",
         "AC-002",
+        "—",
+        "—",
       ],
       [
         "REQ-010",
         "Loyalty points",
-        "Functional",
-        "Not for now",
+        "Feature",
+        "For later",
         "Guests collect points for every stay.",
+        "Missing",
         "Manager Twin",
         "USR-002",
-        "—",
       ],
     ]);
+    expect(
+      section(wrapper, "requirements").get('tr[data-row-key="REQ-010"] [data-missing]').classes(),
+    ).toContain("text-warn");
+  });
+
+  it("keeps the table of the requirements open and the other tables closed until asked", async () => {
+    const wrapper = mounted(SPECIFICATION, "it");
+    const others = ["stories", "criteria", "scenarios", "risks", "done"];
+
+    expect(section(wrapper, "requirements").element.tagName).toBe("SECTION");
+    expect(section(wrapper, "requirements").get("h2").classes()).toContain("sr-only");
+    expect(wrapper.text()).toContain("Altre tabelle");
+    for (const key of others) {
+      const details = section(wrapper, key);
+      expect(details.element.tagName).toBe("DETAILS");
+      expect(details.attributes("open")).toBeUndefined();
+    }
+    expect(section(wrapper, "stories").get("summary").text()).toContain("2 righe");
+    expect(section(wrapper, "scenarios").get("summary").text()).toContain("1 riga");
+    expect(section(wrapper, "risks").get("summary h2").text()).toBe("Rischi");
   });
 
   it("resolves every reference to a sorted code, one per line, and never shows an identifier", () => {
@@ -373,11 +402,12 @@ describe("RequirementsTableView", () => {
     await wrapper.setProps({ locale: "it" });
 
     expect(rowsOf(wrapper, "requirements").map((row) => row.slice(2, 4))).toEqual([
-      ["Funzionale", "Importante"],
-      ["Non funzionale", "Utile"],
-      ["Vincolo", "Indispensabile"],
-      ["Funzionale", "Non ora"],
+      ["Funzionalità", "Importante"],
+      ["Qualità", "Facoltativo"],
+      ["Vincolo", "Essenziale"],
+      ["Funzionalità", "Per il futuro"],
     ]);
+    expect(rowsOf(wrapper, "requirements")[3]![5]).toBe("Mancante");
     expect(rowsOf(wrapper, "criteria").map((row) => row[2])).toEqual([
       "Test automatico",
       "Revisione manuale",
@@ -432,7 +462,7 @@ describe("RequirementsTableView", () => {
   it("keeps a section with a short text when its table is empty", async () => {
     const wrapper = mounted({ ...SPECIFICATION, risks: [], scenarios: [] }, "it");
 
-    expect(wrapper.findAll("h4")).toHaveLength(6);
+    expect(wrapper.findAll("h2")).toHaveLength(6);
     expect(section(wrapper, "risks").find("table").exists()).toBe(false);
     expect(section(wrapper, "risks").get('[data-testid="artifact-table-empty"]').text()).toBe(
       "Ancora nulla da mostrare.",

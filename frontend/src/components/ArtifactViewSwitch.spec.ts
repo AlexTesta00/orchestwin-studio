@@ -1,7 +1,9 @@
 import { mount } from "@vue/test-utils";
+import { h } from "vue";
 import { describe, expect, it } from "vitest";
 
 import ArtifactViewSwitch from "./ArtifactViewSwitch.vue";
+import UiSurface from "./UiSurface.vue";
 import { expectAccessible } from "@/test/axe";
 
 function mounted(modelValue: "text" | "table" | "diagram" = "text", locale: "en" | "it" = "it") {
@@ -50,6 +52,26 @@ describe("ArtifactViewSwitch", () => {
     expect(wrapper.emitted("update:modelValue")).toEqual([["table"], ["diagram"], ["diagram"]]);
     expect(document.activeElement?.getAttribute("data-view")).toBe("text");
     wrapper.unmount();
+  });
+
+  it("marks the chosen view with the light pill on a dark surface and the ink pill on a light one", () => {
+    const night = mount({
+      render: () =>
+        h(UiSurface, { tone: "night" }, () => h(ArtifactViewSwitch, { modelValue: "table" })),
+    });
+    const light = mounted("table");
+
+    expect(night.get('[role="tablist"]').attributes("data-surface-context")).toBe("night");
+    expect(night.get('[data-testid="artifact-view-table"]').classes()).toEqual(
+      expect.arrayContaining(["bg-on-night", "text-ink", "min-h-11", "rounded-pill"]),
+    );
+    expect(night.get('[data-testid="artifact-view-text"]').classes()).toContain("text-on-night");
+    expect(light.get('[role="tablist"]').attributes("data-surface-context")).toBe("light");
+    expect(light.get('[data-testid="artifact-view-table"]').classes()).toEqual(
+      expect.arrayContaining(["bg-ink", "text-white"]),
+    );
+    night.unmount();
+    light.unmount();
   });
 
   it("uses the given label, speaks English and has no axe violations", async () => {

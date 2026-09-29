@@ -73,8 +73,34 @@ describe("RequirementsTraceabilityView", () => {
     const table = wrapper.get('[data-testid="traceability-links"]');
 
     expect(table.text()).toContain("USR-001");
-    expect(table.text()).toContain("MOTIVATES");
+    expect(table.text()).toContain("motivates");
+    expect(table.text()).not.toContain("MOTIVATES");
     expect(table.text()).toContain("REQ-001");
+    expect(table.findAll("tbody td").map((cell) => cell.text())).toEqual([
+      "USR-001",
+      "motivates",
+      "REQ-001",
+    ]);
+  });
+
+  it("names the relations in Italian", () => {
+    const wrapper = mount(RequirementsTraceabilityView, {
+      props: {
+        traceability: TRACEABILITY,
+        coverage: COVERAGE,
+        locale: "it",
+      },
+    });
+
+    expect(wrapper.get('[data-testid="traceability-links"] tbody').text()).toContain("motiva");
+    const region = wrapper.get('[role="region"]');
+    expect(region.attributes("tabindex")).toBe("0");
+    expect(wrapper.get(`#${region.attributes("aria-labelledby")}`).text()).toBe(
+      "Tracciabilità e copertura",
+    );
+    expect(wrapper.get('[data-testid="coverage-status"]').text()).toBe(
+      "Alcuni elementi non sono ancora coperti.",
+    );
   });
 
   it("keeps uncovered artifacts explicit", () => {
@@ -86,7 +112,7 @@ describe("RequirementsTraceabilityView", () => {
       },
     });
 
-    expect(wrapper.get('[data-testid="coverage-status"]').text()).toContain("uncovered artifacts");
+    expect(wrapper.get('[data-testid="coverage-status"]').text()).toContain("not covered yet");
     expect(wrapper.text()).toContain("REQ-001");
     expect(wrapper.text()).toContain("USR-001");
   });

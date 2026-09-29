@@ -101,8 +101,11 @@ describe("ProjectDiagramsView", () => {
     expect(wrapper.get('[data-testid="project-diagrams"]').attributes("data-stage")).toBe(
       "requirements",
     );
+    expect(wrapper.get('[data-testid="diagram-choice"]').attributes("aria-label")).toBe(
+      "Scegli un diagramma",
+    );
     expect(
-      wrapper.findAll('[data-testid="diagram-choice"] [role="tab"]').map((tab) => tab.text()),
+      wrapper.findAll('[data-testid="diagram-choice"] button').map((option) => option.text()),
     ).toEqual(["Casi d'uso", "Tracciabilità dei requisiti"]);
     expect(wrapper.get("figcaption").text()).toContain("Casi d'uso");
     expect(engine.render.mock.calls[0]![1]).toBe(DIAGRAMS[0]!.source);
@@ -114,24 +117,59 @@ describe("ProjectDiagramsView", () => {
     const engine = renderer();
     const wrapper = view({ renderer: engine });
     await flushPromises();
+    const option = '[data-testid="diagram-option-requirements/traceability"]';
+    const chosen = wrapper.get(option).element;
 
-    await wrapper.get('[data-testid="diagram-option-requirements/traceability"]').trigger("click");
+    await wrapper.get(option).trigger("click");
     await flushPromises();
 
-    const tabs = wrapper.findAll('[data-testid="diagram-choice"] [role="tab"]');
-    expect(tabs.map((tab) => tab.attributes("aria-selected"))).toEqual(["false", "true"]);
+    const options = wrapper.findAll('[data-testid="diagram-choice"] button');
+    expect(options.map((item) => item.attributes("aria-pressed"))).toEqual(["false", "true"]);
+    expect(wrapper.get(option).element).toBe(chosen);
     expect(wrapper.get("figcaption").text()).toContain("Tracciabilità dei requisiti");
     expect(engine.render.mock.calls.at(-1)![1]).toBe(DIAGRAMS[1]!.source);
     wrapper.unmount();
   });
 
-  it("shows a single diagram without the choice", async () => {
+  it("shows a single diagram without the choice and with its title", async () => {
     const wrapper = view({ stage: "design" });
     await flushPromises();
 
     expect(wrapper.find('[data-testid="diagram-choice"]').exists()).toBe(false);
     expect(wrapper.get("figcaption").text()).toContain("Flussi di DES-001");
-    expect(wrapper.get('[role="tabpanel"]').attributes("aria-labelledby")).toBeUndefined();
+    expect(wrapper.get('[data-testid="mermaid-diagram"] p[aria-hidden="true"]').text()).toBe(
+      "Flussi di DES-001",
+    );
+    wrapper.unmount();
+  });
+
+  it("offers the items it can open and reports the one that the person chooses", async () => {
+    const linked: DiagramRenderer = {
+      render: vi.fn(() =>
+        Promise.resolve(
+          '<svg viewBox="0 0 100 40"><g class="node"><text>USR-001 Vedere la lista</text></g></svg>',
+        ),
+      ),
+    };
+    const wrapper = mount(ProjectDiagramsView, {
+      props: {
+        projectId: PROJECT_ID,
+        stage: "requirements",
+        locale: "it",
+        authorize,
+        api: api(vi.fn((_project, locale) => Promise.resolve(payload(locale, DIAGRAMS)))),
+        renderer: linked,
+        links: [{ code: "USR-001", label: "USR-001: leggila nel testo" }],
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    const node = wrapper.get('[data-diagram-node="USR-001"]');
+    expect(node.attributes("aria-label")).toBe("USR-001: leggila nel testo");
+    await node.trigger("click");
+
+    expect(wrapper.emitted("select-node")).toEqual([["USR-001"]]);
     wrapper.unmount();
   });
 

@@ -17,7 +17,13 @@ import type {
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
 export type RequirementsOperation =
-  "load" | "generate" | "propose-revision" | "decide-revision" | "submit-gate" | "decide-gate";
+  | "load"
+  | "generate"
+  | "propose-revision"
+  | "request-change"
+  | "decide-revision"
+  | "submit-gate"
+  | "decide-gate";
 
 export interface RequirementsStoreError {
   message: string;
@@ -32,6 +38,7 @@ interface RequirementsState {
   current: RequirementsSpecificationVersionPayload | null;
   history: RequirementsSpecificationVersionPayload[];
   diffs: Record<string, RequirementsSpecificationDiffPayload>;
+  changeRequests: Record<string, string>;
   traceability: RequirementsTraceabilityPayload | null;
   coverage: RequirementsCoveragePayload | null;
   gate: HumanGatePayload | null;
@@ -46,6 +53,7 @@ function emptyPending(): Record<RequirementsOperation, boolean> {
     load: false,
     generate: false,
     "propose-revision": false,
+    "request-change": false,
     "decide-revision": false,
     "submit-gate": false,
     "decide-gate": false,
@@ -108,6 +116,7 @@ export const useRequirementsStore = defineStore("requirements", {
     current: null,
     history: [],
     diffs: {},
+    changeRequests: {},
     traceability: null,
     coverage: null,
     gate: null,
@@ -142,6 +151,7 @@ export const useRequirementsStore = defineStore("requirements", {
       this.current = null;
       this.history = [];
       this.diffs = {};
+      this.changeRequests = {};
       this.traceability = null;
       this.coverage = null;
       this.gate = null;
@@ -310,6 +320,33 @@ export const useRequirementsStore = defineStore("requirements", {
         throw error;
       } finally {
         this.finish("propose-revision", projectId, epoch);
+      }
+    },
+
+    async requestChange(
+      projectId: string,
+      request: string,
+      authorize: AuthorizedRequest,
+      api: RequirementsApi = requirementsApi,
+    ) {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.begin("request-change");
+
+      try {
+        const result = await authorize((token) => api.requestChange(projectId, request, token));
+
+        if (this.isCurrent(projectId, epoch) && result.diff !== null) {
+          this.changeRequests[result.diff.id] = request;
+          this.applyDiff(result.diff);
+        }
+
+        return result;
+      } catch (error) {
+        this.capture(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.finish("request-change", projectId, epoch);
       }
     },
 

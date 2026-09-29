@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 
+import { useSurface } from "./UiSurface.vue";
+
 export type ArtifactView = "text" | "table" | "diagram";
 type Locale = "en" | "it";
 
@@ -31,9 +33,24 @@ const messages = {
   },
 } as const;
 
+const palettes = {
+  light: {
+    track: "bg-surface-3",
+    selected: "bg-ink text-white shadow-segment",
+    idle: "text-ink-2 hover:bg-surface hover:text-ink",
+  },
+  night: {
+    track: "bg-on-night/8",
+    selected: "bg-on-night text-ink shadow-segment",
+    idle: "text-on-night hover:bg-night-hover",
+  },
+};
+
 const views: readonly ArtifactView[] = ["text", "table", "diagram"];
 const group = `artifact-view-${useId()}`;
 const copy = computed(() => messages[props.locale]);
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 
 function tabId(view: ArtifactView): string {
   return `${group}-${view}`;
@@ -77,10 +94,11 @@ defineExpose({ tabId });
 
 <template>
   <div
-    class="inline-flex flex-wrap gap-1 rounded-panel border border-line bg-surface-2 p-1"
+    :class="['inline-flex max-w-full flex-wrap gap-1 rounded-[26px] p-1', palette.track]"
     role="tablist"
     :aria-label="label ?? copy.label"
     data-testid="artifact-view-switch"
+    :data-surface-context="surface"
   >
     <button
       v-for="view in views"
@@ -88,12 +106,10 @@ defineExpose({ tabId });
       :key="view"
       type="button"
       role="tab"
-      class="min-h-11 rounded-control px-4 py-2 text-sm font-semibold transition-colors duration-150"
-      :class="
-        view === modelValue
-          ? 'bg-surface text-ink shadow-card'
-          : 'text-ink-2 hover:bg-surface-3 hover:text-ink'
-      "
+      :class="[
+        'inline-flex min-h-11 items-center justify-center rounded-pill px-[18px] text-[15px] font-medium transition-colors duration-150',
+        view === modelValue ? palette.selected : palette.idle,
+      ]"
       :aria-selected="view === modelValue"
       :aria-controls="panelId"
       :tabindex="view === modelValue ? 0 : -1"

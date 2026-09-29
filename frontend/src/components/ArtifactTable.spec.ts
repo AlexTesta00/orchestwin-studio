@@ -1,7 +1,9 @@
 import { mount, type VueWrapper } from "@vue/test-utils";
+import { h } from "vue";
 import { describe, expect, it } from "vitest";
 
 import ArtifactTable, { type ArtifactTableColumn } from "./ArtifactTable.vue";
+import UiSurface from "./UiSurface.vue";
 import { expectAccessible } from "@/test/axe";
 
 const COLUMNS: ArtifactTableColumn[] = [
@@ -67,7 +69,7 @@ describe("ArtifactTable", () => {
     ).toEqual(["book a room", LONG_NOTE, "12"]);
     expect(wrapper.get('tbody th[scope="row"]').classes()).toContain("whitespace-nowrap");
     expect(wrapper.get('tbody td[data-column="note"]').classes()).toEqual(
-      expect.arrayContaining(["whitespace-pre-line", "min-w-56"]),
+      expect.arrayContaining(["whitespace-pre-line", "min-w-44"]),
     );
     expect(wrapper.get('tbody td[data-column="title"]').classes()).toContain("whitespace-pre");
     expect(wrapper.get('tbody td[data-column="size"]').classes()).toEqual(
@@ -215,6 +217,78 @@ describe("ArtifactTable", () => {
       "two:1",
     ]);
     expect(wrapper.text()).not.toContain("one:1");
+    wrapper.unmount();
+  });
+
+  it("keeps every line of a column on one line when the column asks for it", () => {
+    const columns: ArtifactTableColumn[] = [
+      { key: "code", label: "Code" },
+      { key: "names", label: "Names", nowrap: true },
+      { key: "note", label: "Note" },
+    ];
+    const wrapper = mounted(
+      [
+        {
+          code: "REQ-1",
+          names: "Volunteers at the lending desk\nLibrary readers",
+          note: LONG_NOTE,
+        },
+      ],
+      "en",
+      columns,
+    );
+
+    expect(wrapper.get('td[data-column="names"]').classes()).toContain("whitespace-pre");
+    expect(wrapper.get('td[data-column="names"]').classes()).not.toContain("min-w-36");
+    expect(wrapper.get('td[data-column="note"]').classes()).toContain("whitespace-pre-line");
+    wrapper.unmount();
+  });
+
+  it("writes a missing value in words and stresses the columns that ask for it", () => {
+    const columns: ArtifactTableColumn[] = [
+      { key: "code", label: "Code" },
+      { key: "title", label: "Title", strong: true },
+      { key: "check", label: "Check", missing: "Missing" },
+    ];
+    const wrapper = mounted(
+      [
+        { code: "REQ-1", title: "Book a room", check: "AC-1" },
+        { code: "REQ-2", title: "", check: "" },
+      ],
+      "en",
+      columns,
+    );
+    const checks = wrapper.findAll('td[data-column="check"]');
+
+    expect(checks.map((cell) => cell.text())).toEqual(["AC-1", "Missing"]);
+    expect(checks[1]!.get("[data-missing]").classes()).toContain("text-warn");
+    expect(checks[1]!.find('[role="img"]').exists()).toBe(false);
+    expect(wrapper.findAll('td[data-column="title"]')[0]!.classes()).toContain("font-semibold");
+    expect(wrapper.findAll('td[data-column="title"]')[1]!.get('[role="img"]').text()).toBe("—");
+    wrapper.unmount();
+  });
+
+  it("takes the colours of a dark surface", () => {
+    const wrapper = mount({
+      render: () =>
+        h(UiSurface, { tone: "night" }, () =>
+          h(ArtifactTable, {
+            caption: "Planned work",
+            columns: COLUMNS,
+            rows: ROWS,
+            rowKey: "code",
+          }),
+        ),
+    });
+
+    expect(wrapper.get('[data-testid="artifact-table"]').attributes("data-surface-context")).toBe(
+      "night",
+    );
+    expect(wrapper.get('[role="region"]').classes()).toEqual(
+      expect.arrayContaining(["bg-night-raised", "border-night-line", "rounded-tile"]),
+    );
+    expect(wrapper.get('tbody td[data-column="title"]').classes()).toContain("text-on-night");
+    expect(wrapper.get("tbody tr").classes()).not.toContain("even:bg-row-alt");
     wrapper.unmount();
   });
 

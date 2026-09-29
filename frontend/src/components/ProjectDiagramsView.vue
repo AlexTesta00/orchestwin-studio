@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import MermaidDiagram from "./MermaidDiagram.vue";
 import UiButton from "./UiButton.vue";
-import type { DiagramRenderer } from "./mermaidRenderer";
+import { useSurface } from "./UiSurface.vue";
+import type { DiagramLink, DiagramRenderer } from "./mermaidRenderer";
 
 import { apiClient } from "../api/client";
 import type { DiagramsApi } from "../api/diagrams";
@@ -23,6 +24,7 @@ const props = withDefaults(
     api?: DiagramsApi | undefined;
     renderer?: DiagramRenderer | undefined;
     saveFile?: ((blob: Blob, fileName: string) => void) | undefined;
+    links?: readonly DiagramLink[] | undefined;
   }>(),
   {
     locale: "en",
@@ -31,8 +33,11 @@ const props = withDefaults(
     api: undefined,
     renderer: undefined,
     saveFile: undefined,
+    links: () => [],
   },
 );
+
+const emit = defineEmits<{ "select-node": [code: string] }>();
 
 const messages = {
   en: {
@@ -61,9 +66,27 @@ const messages = {
   },
 } as const;
 
+const palettes = {
+  light: {
+    state: "border-line bg-surface-2 text-ink-2",
+    failure: "border-fail-line bg-fail-bg text-fail-dark",
+    note: "text-ink-3",
+    chosen: "border-ink bg-ink text-white",
+    idle: "border-line-strong text-ink-2 hover:bg-surface-3 hover:text-ink",
+  },
+  night: {
+    state: "border-night-line bg-night-raised text-on-night-2",
+    failure: "border-fail-on-night/40 bg-fail-on-night/10 text-fail-on-night",
+    note: "text-on-night-3",
+    chosen: "border-on-night bg-on-night text-ink",
+    idle: "border-on-night/22 text-on-night hover:bg-night-hover",
+  },
+};
+
 const auth = useAuthStore();
 const store = useDiagramsStore();
-const group = `diagrams-${useId()}`;
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const copy = computed(() => messages[props.locale]);
 const selectedKey = ref<string | null>(null);
 const failed = ref(false);
@@ -109,14 +132,18 @@ watch(diagrams, (items) => {
 </script>
 
 <template>
-  <section class="grid gap-5" data-testid="project-diagrams" :data-stage="stage">
-    <p v-if="loading" class="m-0 text-sm font-semibold text-ink-2" role="status">
+  <section class="grid gap-3" data-testid="project-diagrams" :data-stage="stage">
+    <p
+      v-if="loading"
+      :class="['m-0 rounded-tile border px-5 py-4 text-sm font-semibold', palette.state]"
+      role="status"
+    >
       {{ copy.loading }}
     </p>
 
     <div
       v-else-if="failed"
-      class="rounded-panel border border-fail-line bg-fail-bg p-4 text-fail-dark"
+      :class="['rounded-tile border px-5 py-4', palette.failure]"
       role="alert"
       data-testid="diagrams-error"
     >
@@ -128,59 +155,50 @@ watch(diagrams, (items) => {
 
     <p
       v-else-if="selected === null"
-      class="m-0 rounded-panel border border-line-soft bg-surface-2 p-5 text-sm text-ink-2"
+      :class="['m-0 rounded-tile border px-5 py-4 text-sm', palette.state]"
       data-testid="diagrams-empty"
     >
       {{ copy.empty[stage] }}
     </p>
 
     <template v-else>
-      <div
-        v-if="diagrams.length > 1"
-        class="flex flex-wrap gap-2"
-        role="tablist"
-        :aria-label="copy.choose"
-        data-testid="diagram-choice"
+      <MermaidDiagram
+        :source="selected.source"
+        :title="selected.title"
+        :description="selected.description"
+        :file-name="selected.path"
+        :locale="locale"
+        :renderer="renderer"
+        :save-file="saveFile"
+        :links="links"
+        @select-node="emit('select-node', $event)"
       >
-        <button
-          v-for="diagram in diagrams"
-          :id="`${group}-${diagram.key}`"
-          :key="diagram.key"
-          type="button"
-          role="tab"
-          class="min-h-11 rounded-pill border px-4 py-2 text-sm font-semibold transition-colors duration-150"
-          :class="
-            diagram.key === selected.key
-              ? 'border-action bg-action-soft text-action'
-              : 'border-line bg-surface text-ink-2 hover:bg-surface-3'
-          "
-          :aria-selected="diagram.key === selected.key"
-          :aria-controls="`${group}-panel`"
-          :data-testid="`diagram-option-${diagram.key}`"
-          @click="selectedKey = diagram.key"
-        >
-          {{ diagram.title }}
-        </button>
-      </div>
+        <template v-if="diagrams.length > 1" #choice>
+          <div
+            class="flex flex-wrap gap-2"
+            role="group"
+            :aria-label="copy.choose"
+            data-testid="diagram-choice"
+          >
+            <button
+              v-for="diagram in diagrams"
+              :key="diagram.key"
+              type="button"
+              :class="[
+                'min-h-11 rounded-pill border px-3.5 text-[13px] font-semibold transition-colors duration-150',
+                diagram.key === selected.key ? palette.chosen : palette.idle,
+              ]"
+              :aria-pressed="diagram.key === selected.key ? 'true' : 'false'"
+              :data-testid="`diagram-option-${diagram.key}`"
+              @click="selectedKey = diagram.key"
+            >
+              {{ diagram.title }}
+            </button>
+          </div>
+        </template>
+      </MermaidDiagram>
 
-      <div
-        :id="`${group}-panel`"
-        role="tabpanel"
-        :aria-labelledby="diagrams.length > 1 ? `${group}-${selected.key}` : undefined"
-      >
-        <MermaidDiagram
-          :key="`${selected.key}-${locale}`"
-          :source="selected.source"
-          :title="selected.title"
-          :description="selected.description"
-          :file-name="selected.path"
-          :locale="locale"
-          :renderer="renderer"
-          :save-file="saveFile"
-        />
-      </div>
-
-      <p class="m-0 text-xs leading-5 text-ink-3" data-testid="diagrams-note">
+      <p :class="['m-0 text-xs leading-5', palette.note]" data-testid="diagrams-note">
         {{ copy.generated }}
       </p>
     </template>

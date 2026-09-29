@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  DIAGRAM_BACKGROUND,
   DIAGRAM_SANDBOX_ATTRIBUTE,
+  DIAGRAM_TOKENS,
   MERMAID_CONFIGURATION,
   createMermaidRenderer,
 } from "./mermaidRenderer";
@@ -21,6 +23,10 @@ function engine() {
 describe("mermaidRenderer", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(document, "fonts");
   });
 
   it("loads and configures the library once, then draws every diagram", async () => {
@@ -66,6 +72,46 @@ describe("mermaidRenderer", () => {
     expect(MERMAID_CONFIGURATION.securityLevel).toBe("strict");
     expect(MERMAID_CONFIGURATION.startOnLoad).toBe(false);
     expect(MERMAID_CONFIGURATION.theme).toBe("base");
+  });
+
+  it("writes in Geist with the petrol colours of the tokens, readable on the dark canvas", () => {
+    const theme = MERMAID_CONFIGURATION.themeVariables;
+
+    expect(MERMAID_CONFIGURATION.fontFamily.startsWith('"Geist"')).toBe(true);
+    expect(theme.fontFamily).toBe(MERMAID_CONFIGURATION.fontFamily);
+    expect(MERMAID_CONFIGURATION.usecase.actorFontFamily).toBe(MERMAID_CONFIGURATION.fontFamily);
+    expect(theme.darkMode).toBe(true);
+    expect(theme.background).toBe(DIAGRAM_TOKENS["night-deep"]);
+    expect(DIAGRAM_BACKGROUND).toBe(DIAGRAM_TOKENS["night-deep"]);
+    expect(theme.primaryBorderColor).toBe(DIAGRAM_TOKENS["petrol-on-night"]);
+    expect(theme.nodeBorder).toBe(DIAGRAM_TOKENS["petrol-on-night"]);
+    expect(theme.lineColor).toBe(DIAGRAM_TOKENS["petrol-on-night-2"]);
+    expect(theme.primaryTextColor).toBe(DIAGRAM_TOKENS["on-night"]);
+    expect(theme.requirementTextColor).toBe(DIAGRAM_TOKENS["on-night"]);
+    for (const [name, value] of Object.entries(DIAGRAM_TOKENS)) {
+      expect(styles).toContain(`--color-${name}: ${value};`);
+    }
+  });
+
+  it("waits for the font of the diagrams before measuring them", async () => {
+    const order: string[] = [];
+    const load = vi.fn((font: string) => {
+      order.push(`font ${font}`);
+      return Promise.resolve([]);
+    });
+    Object.defineProperty(document, "fonts", { configurable: true, value: { load } });
+    const library = {
+      initialize: vi.fn(),
+      render: vi.fn<Draw>(async (id) => {
+        order.push(`draw ${id}`);
+        return { svg: id };
+      }),
+    };
+    const renderer = createMermaidRenderer(() => Promise.resolve({ default: library }));
+
+    await renderer.render("a", "flowchart LR");
+
+    expect(order).toEqual(['font 15px "Geist"', 'font bold 15px "Geist"', "draw a"]);
   });
 
   it("draws one diagram at a time in the order of the requests", async () => {

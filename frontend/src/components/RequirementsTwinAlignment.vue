@@ -2,6 +2,7 @@
 import { computed, ref, useId, watch } from "vue";
 
 import UiButton from "./UiButton.vue";
+import { useSurface } from "./UiSurface.vue";
 
 import { apiClient } from "@/api/client";
 import {
@@ -109,7 +110,28 @@ const messages = {
 const HIDDEN_ISSUES = new Set(["REQUIREMENTS_NOT_FOUND", "REQUIREMENTS_ALREADY_ALIGNED"]);
 const TWIN_ISSUES = new Set(["USER_TWINS_REQUIRED", "USER_TWINS_APPROVAL_REQUIRED"]);
 
+const palettes = {
+  light: {
+    box: "border-action-soft-line bg-action-soft",
+    title: "text-ink",
+    text: "text-ink-2",
+    done: "text-ok-dark",
+    muted: "text-ink-3",
+    failure: "border-fail-line bg-fail-bg text-fail-dark",
+  },
+  night: {
+    box: "border-petrol-on-night/40 bg-petrol-on-night/8",
+    title: "text-on-night",
+    text: "text-on-night-2",
+    done: "text-petrol-on-night-2",
+    muted: "text-on-night-3",
+    failure: "border-fail-on-night/40 bg-fail-on-night/10 text-fail-on-night",
+  },
+};
+
 const auth = useAuthStore();
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const titleId = `requirements-alignment-${useId()}`;
 const copy = computed(() => messages[props.locale]);
 const api = computed(() => props.api ?? requirementsAlignmentApi);
@@ -223,16 +245,16 @@ watch(
 <template>
   <section
     v-if="mode !== 'hidden'"
-    class="grid gap-3 rounded-panel border border-action-soft-line bg-action-soft p-4"
+    :class="['grid gap-3 rounded-panel border px-5 py-4', palette.box]"
     :aria-labelledby="titleId"
     data-testid="requirements-twin-alignment"
   >
-    <h3 :id="titleId" class="m-0 text-base font-bold text-ink">
+    <h2 :id="titleId" :class="['m-0 text-[15px] font-semibold', palette.title]">
       {{ mode === "done" ? copy.doneTitle : copy.title }}
-    </h3>
+    </h2>
     <p
       v-if="mode === 'done'"
-      class="m-0 max-w-3xl text-sm leading-6 font-semibold text-ok-dark"
+      :class="['m-0 max-w-3xl text-sm leading-normal font-semibold', palette.done]"
       role="status"
       data-testid="requirements-twin-alignment-done"
     >
@@ -241,17 +263,18 @@ watch(
     </p>
     <template v-else>
       <p
-        class="m-0 max-w-3xl text-sm leading-6 text-ink-2"
+        :class="['m-0 max-w-3xl text-sm leading-normal', palette.text]"
         data-testid="requirements-twin-alignment-text"
       >
         {{ explanation }}
       </p>
-      <details v-if="mode === 'blocked'" class="text-xs text-ink-3">
-        <summary class="cursor-pointer">{{ copy.details }}</summary>
-        <code class="break-all">{{ alignment?.issue }}</code>
+      <details v-if="mode === 'blocked'" :class="['text-xs', palette.muted]">
+        <summary class="min-h-11 cursor-pointer py-3">{{ copy.details }}</summary>
+        <code class="font-mono break-all">{{ alignment?.issue }}</code>
       </details>
       <UiButton
         v-if="mode === 'ready'"
+        variant="outline"
         class="justify-self-start"
         :disabled="running"
         data-testid="requirements-twin-alignment-update"
@@ -261,7 +284,7 @@ watch(
       </UiButton>
       <p
         v-if="running"
-        class="m-0 text-sm text-ink-2"
+        :class="['m-0 text-sm', palette.text]"
         role="status"
         data-testid="requirements-twin-alignment-running"
       >
@@ -270,14 +293,14 @@ watch(
     </template>
     <div
       v-if="failure"
-      class="grid gap-1 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+      :class="['grid gap-1 rounded-field border px-4 py-3 text-sm', palette.failure]"
       role="alert"
       data-testid="requirements-twin-alignment-error"
     >
       <p class="m-0 font-semibold">{{ failureText }}</p>
       <details v-if="failure.code" class="text-xs">
-        <summary class="cursor-pointer">{{ copy.details }}</summary>
-        <code class="break-all">{{ failure.code }}</code>
+        <summary class="min-h-11 cursor-pointer py-3">{{ copy.details }}</summary>
+        <code class="font-mono break-all">{{ failure.code }}</code>
       </details>
     </div>
   </section>
