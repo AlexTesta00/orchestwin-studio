@@ -1,8 +1,10 @@
 import { mount } from "@vue/test-utils";
+import { h } from "vue";
 import { describe, expect, it } from "vitest";
 
 import { createAppI18n } from "@/i18n";
 import UiProgressBar from "./UiProgressBar.vue";
+import UiSurface from "./UiSurface.vue";
 import { expectAccessible } from "@/test/axe";
 
 function states(wrapper: ReturnType<typeof mount>): (string | undefined)[] {
@@ -47,6 +49,28 @@ describe("progress bar", () => {
       "pending",
       "pending",
       "pending",
+    ]);
+  });
+
+  it("colours the segments for a light page and for a dark surface", () => {
+    const light = mount(UiProgressBar, {
+      props: { current: 2, total: 3 },
+      global: { plugins: [createAppI18n("it")] },
+    });
+    expect(light.findAll("[data-step-state]").map((node) => node.classes())).toEqual([
+      expect.arrayContaining(["bg-action"]),
+      expect.arrayContaining(["bg-ink"]),
+      expect.arrayContaining(["bg-line"]),
+    ]);
+    const night = mount(UiSurface, {
+      props: { tone: "night" },
+      slots: { default: () => h(UiProgressBar, { current: 2, total: 3 }) },
+      global: { plugins: [createAppI18n("it")] },
+    });
+    expect(night.findAll("[data-step-state]").map((node) => node.classes())).toEqual([
+      expect.arrayContaining(["bg-petrol-on-night"]),
+      expect.arrayContaining(["bg-on-night"]),
+      expect.arrayContaining(["bg-on-night/14"]),
     ]);
   });
 

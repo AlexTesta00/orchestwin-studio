@@ -41,7 +41,10 @@
     "check": "npm run quality && npm run test && npm run bundle"
   },
   "dependencies": {
+    "@fontsource/geist": "5.3.0",
+    "@fontsource/geist-mono": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.2.6",
+    "@fontsource/lexend-zetta": "5.3.0",
     "@fontsource/libre-franklin": "5.2.6",
     "mermaid": "12.0.0",
     "pinia": "4.0.3",

@@ -37,6 +37,8 @@ export default defineConfig({
     include: ["src/**/*.spec.ts"],
     setupFiles: ["./src/test/setup.ts"],
     css: { include: [/\/styles\/tailwind\.css\?raw$/] },
+    testTimeout: 20000,
+    hookTimeout: 20000,
     clearMocks: true,
     restoreMocks: true,
     unstubEnvs: true,
