@@ -295,6 +295,41 @@ describe("InsightBriefTray", () => {
     wrapper.unmount();
   });
 
+  it("sits in the page flow as a dark panel and shows its status line only when there is news", async () => {
+    const tray = useInsightTrayStore();
+    tray.add("project-1", item(1));
+    const wrapper = mountTray();
+    const region = wrapper.get('[data-testid="insight-brief-tray"]');
+    expect(region.classes()).not.toContain("fixed");
+    expect(region.attributes("data-surface")).toBe("night");
+    const statusLine = wrapper.get('[data-testid="insight-brief-tray-status"]').element
+      .parentElement as HTMLElement;
+    expect(statusLine.classList.contains("sr-only")).toBe(true);
+    await wrapper.get('[data-testid="insight-brief-tray-apply"]').trigger("click");
+    await flushPromises();
+    expect(statusLine.classList.contains("sr-only")).toBe(false);
+    await wrapper.get('[data-testid="insight-brief-tray-close"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="insight-brief-tray"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("keeps its actions out of the way on small screens until the list is opened", async () => {
+    const tray = useInsightTrayStore();
+    tray.add("project-1", item(1));
+    const wrapper = mountTray();
+    const actions = wrapper.get('[data-testid="insight-brief-tray-actions"]');
+    expect(actions.classes()).toContain("max-sm:hidden");
+    const details = wrapper.get('[data-testid="insight-brief-tray-details"]');
+    (details.element as HTMLDetailsElement).open = true;
+    await details.trigger("toggle");
+    expect(actions.classes()).not.toContain("max-sm:hidden");
+    (details.element as HTMLDetailsElement).open = false;
+    await details.trigger("toggle");
+    expect(actions.classes()).toContain("max-sm:hidden");
+    wrapper.unmount();
+  });
+
   it("forgets the result when the owner leaves the project", async () => {
     const tray = useInsightTrayStore();
     tray.add("project-1", item(1));

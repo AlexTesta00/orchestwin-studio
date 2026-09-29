@@ -80,7 +80,7 @@ const messages = {
     eyebrow: "Gestione artefatti e provenienza",
     title: "Grafo degli artefatti tra le fasi",
     intro:
-      "Ispeziona le radici esatte delle fasi governate e le relazioni di tracciabilità dal contesto utente e dai requisiti fino a design, architettura e test pianificati.",
+      "Ispeziona le radici esatte delle fasi governate e le relazioni di tracciabilità dal contesto utente e dai requisiti fino al design scelto.",
     methodology:
       "Il grafo deriva le relazioni dagli artefatti immutabili. Mantiene origine e tracciabilità delle critiche sintetiche, ma un collegamento non è evidenza empirica né prova che un requisito abbia superato l'esecuzione.",
     loading: "Caricamento del grafo corrente degli artefatti…",
@@ -261,29 +261,28 @@ watch(
 </script>
 
 <template>
-  <section
-    class="grid gap-6 rounded-card border border-line bg-white p-5 shadow-sm sm:p-7"
-    data-testid="project-artifact-graph"
-  >
+  <section class="grid gap-6 text-on-night" data-testid="project-artifact-graph">
     <header class="grid gap-2">
-      <p class="m-0 text-xs font-semibold tracking-widest text-cyan-700 uppercase">
+      <p class="font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h2 class="text-2xl font-semibold text-ink">{{ copy.title }}</h2>
-      <p class="m-0 max-w-4xl text-ink-2">{{ copy.intro }}</p>
+      <h3 class="text-xl leading-tight font-semibold tracking-block">{{ copy.title }}</h3>
+      <p class="text-[15px] leading-normal text-on-night-2">{{ copy.intro }}</p>
     </header>
 
-    <p class="m-0 rounded-panel border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+    <p
+      class="rounded-field border border-night-line bg-night-raised px-4 py-3 text-sm leading-normal text-on-night-2"
+    >
       {{ copy.methodology }}
     </p>
 
-    <p v-if="store.isBusy" class="m-0 text-ink-2" aria-live="polite">
+    <p v-if="store.isBusy" class="text-sm text-on-night-2" aria-live="polite">
       {{ copy.loading }}
     </p>
 
     <p
       v-if="localError !== null || store.error !== null"
-      class="m-0 rounded-panel border border-fail-line bg-fail-bg p-4 font-semibold text-fail-dark"
+      class="rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm font-semibold text-fail-on-night"
       role="alert"
     >
       {{ localError ?? store.error?.message ?? copy.loadError }}
@@ -292,7 +291,7 @@ watch(
     <div class="flex flex-wrap gap-3">
       <button
         type="button"
-        class="rounded-panel border border-field bg-white px-4 py-2 font-semibold text-ink-2 hover:bg-surface-3"
+        class="inline-flex min-h-11 items-center justify-center rounded-pill border border-on-night/32 bg-on-night/5 px-5 text-sm font-semibold text-on-night transition-colors duration-150 hover:bg-on-night hover:text-ink disabled:cursor-not-allowed disabled:border-night-line disabled:bg-transparent disabled:text-on-night-3"
         :disabled="store.isBusy"
         @click="load"
       >
@@ -300,7 +299,7 @@ watch(
       </button>
       <button
         type="button"
-        class="rounded-panel bg-action px-4 py-2 font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-60"
+        class="inline-flex min-h-11 items-center justify-center rounded-pill bg-on-night px-5 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-petrol-on-night-2 disabled:cursor-not-allowed disabled:bg-night-hover disabled:text-on-night-3"
         :disabled="graph === null || store.isBusy"
         @click="exportGraph"
       >
@@ -308,82 +307,98 @@ watch(
       </button>
     </div>
 
-    <p v-if="graph === null" class="m-0 text-ink-2">{{ copy.unavailable }}</p>
+    <p v-if="graph === null" class="text-[15px] text-on-night-2">{{ copy.unavailable }}</p>
 
     <template v-else>
-      <div class="grid gap-4 sm:grid-cols-3">
-        <div class="rounded-card border border-cyan-200 bg-cyan-50 p-4">
-          <p class="m-0 text-sm font-bold text-cyan-800">{{ copy.nodes }}</p>
-          <p class="mt-1 text-3xl font-semibold text-cyan-950">{{ store.nodeCount }}</p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-tile border border-night-line bg-night-raised p-4">
+          <p class="font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+            {{ copy.nodes }}
+          </p>
+          <p
+            class="mt-2 font-display text-4xl leading-none font-extralight tracking-numeral text-on-night"
+          >
+            {{ store.nodeCount }}
+          </p>
         </div>
-        <div class="rounded-card border border-hypothesis-line bg-hypothesis-bg p-4">
-          <p class="m-0 text-sm font-bold text-hypothesis">{{ copy.links }}</p>
-          <p class="mt-1 text-3xl font-semibold text-hypothesis-text">{{ store.linkCount }}</p>
+        <div class="rounded-tile border border-night-line bg-night-raised p-4">
+          <p class="font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+            {{ copy.links }}
+          </p>
+          <p
+            class="mt-2 font-display text-4xl leading-none font-extralight tracking-numeral text-on-night"
+          >
+            {{ store.linkCount }}
+          </p>
         </div>
-        <div class="rounded-card border border-line bg-surface-2 p-4">
-          <p class="m-0 text-sm font-bold text-ink-2">{{ copy.hash }}</p>
-          <code class="mt-2 block text-xs break-all text-ink-2">
+        <div class="rounded-tile border border-night-line bg-night-raised p-4 sm:col-span-2">
+          <p class="font-mono text-[11px] tracking-label text-on-night-3 uppercase">
+            {{ copy.hash }}
+          </p>
+          <code class="mt-2 block font-mono text-xs leading-[1.6] break-all text-on-night-2">
             {{ graph.content_hash }}
           </code>
         </div>
       </div>
 
-      <section class="grid gap-3 rounded-card border border-line p-5">
-        <h3 class="text-xl font-semibold text-ink">{{ copy.exactRoots }}</h3>
+      <section class="grid gap-3 rounded-tile border border-night-line p-5">
+        <h4 class="text-base font-semibold">{{ copy.exactRoots }}</h4>
         <dl class="grid gap-3 text-sm">
           <div>
-            <dt class="font-semibold text-ink">{{ copy.requirements }}</dt>
-            <dd class="m-0 break-all text-ink-2">
+            <dt class="font-semibold text-on-night">{{ copy.requirements }}</dt>
+            <dd class="mt-1 font-mono text-xs leading-[1.6] break-all text-on-night-2">
               {{ exactReferenceLabel(graph.requirements_reference) }}
             </dd>
           </div>
           <div>
-            <dt class="font-semibold text-ink">{{ copy.design }}</dt>
-            <dd class="m-0 break-all text-ink-2">
+            <dt class="font-semibold text-on-night">{{ copy.design }}</dt>
+            <dd class="mt-1 font-mono text-xs leading-[1.6] break-all text-on-night-2">
               {{ exactReferenceLabel(graph.design_reference) }}
             </dd>
           </div>
         </dl>
       </section>
 
-      <section class="grid gap-5" :aria-label="copy.stagesLabel">
+      <section class="grid gap-4" :aria-label="copy.stagesLabel">
         <article
           v-for="stage in stages"
           :key="stage"
-          class="grid gap-4 rounded-card border border-line bg-surface-2 p-5"
+          class="grid gap-4 rounded-tile border border-night-line p-5"
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-xl font-semibold text-ink">{{ stageLabel(stage) }}</h3>
-            <span class="rounded-full bg-action px-3 py-1 text-xs font-semibold text-white">
+            <h4 class="text-base font-semibold">{{ stageLabel(stage) }}</h4>
+            <span
+              class="inline-flex min-h-[26px] items-center rounded-pill border border-petrol-on-night bg-petrol-on-night/16 px-2.5 text-xs font-medium text-petrol-on-night-2"
+            >
               {{ graph.stage_counts[stage] }}
             </span>
           </div>
-          <ul class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <ul class="grid gap-3 sm:grid-cols-2">
             <li
               v-for="node in nodesByStage[stage]"
               :key="referenceKey(node.reference)"
-              class="grid gap-2 rounded-panel border border-line bg-white p-4 shadow-sm"
+              class="grid content-start gap-2 rounded-field border border-night-line bg-night-raised p-4"
             >
-              <p class="m-0 text-xs font-semibold tracking-wide text-ink-3 uppercase">
+              <p class="font-mono text-[11px] tracking-label text-on-night-3 uppercase">
                 {{ node.display_code }}
               </p>
-              <h4 class="font-semibold text-ink">{{ node.title }}</h4>
-              <dl class="grid gap-1 text-xs text-ink-2">
+              <h5 class="text-sm font-semibold break-words">{{ node.title }}</h5>
+              <dl class="grid gap-1 text-xs text-on-night-2">
                 <div>
-                  <dt class="inline font-bold">{{ copy.nodeKind }}:</dt>
-                  <dd class="m-0 inline">{{ node.reference.kind }}</dd>
+                  <dt class="inline font-semibold text-on-night">{{ copy.nodeKind }}:</dt>
+                  <dd class="inline break-all">{{ node.reference.kind }}</dd>
                 </div>
                 <div v-if="node.reference.version_number !== null">
-                  <dt class="inline font-bold">{{ copy.version }}:</dt>
-                  <dd class="m-0 inline">{{ node.reference.version_number }}</dd>
+                  <dt class="inline font-semibold text-on-night">{{ copy.version }}:</dt>
+                  <dd class="inline">{{ node.reference.version_number }}</dd>
                 </div>
                 <div>
-                  <dt class="inline font-bold">{{ copy.outgoing }}:</dt>
-                  <dd class="m-0 inline">{{ outgoingCount(node.reference) }}</dd>
+                  <dt class="inline font-semibold text-on-night">{{ copy.outgoing }}:</dt>
+                  <dd class="inline">{{ outgoingCount(node.reference) }}</dd>
                 </div>
                 <div>
-                  <dt class="inline font-bold">{{ copy.incoming }}:</dt>
-                  <dd class="m-0 inline">{{ incomingCount(node.reference) }}</dd>
+                  <dt class="inline font-semibold text-on-night">{{ copy.incoming }}:</dt>
+                  <dd class="inline">{{ incomingCount(node.reference) }}</dd>
                 </div>
               </dl>
             </li>
@@ -393,14 +408,14 @@ watch(
 
       <section class="grid gap-4" aria-labelledby="artifact-relationships-title">
         <div class="flex flex-wrap items-end justify-between gap-4">
-          <h3 id="artifact-relationships-title" class="text-xl font-semibold text-ink">
+          <h4 id="artifact-relationships-title" class="text-base font-semibold">
             {{ copy.relationships }}
-          </h3>
-          <label class="grid gap-2 text-sm font-bold text-ink">
+          </h4>
+          <label class="grid gap-2 text-sm font-semibold">
             {{ copy.filter }}
             <select
               v-model="stageFilter"
-              class="rounded-panel border border-field bg-white px-3 py-2 font-normal"
+              class="min-h-11 rounded-control border border-night-line-strong bg-night-panel px-3 py-2 font-normal text-on-night"
             >
               <option value="ALL">{{ copy.allStages }}</option>
               <option v-for="stage in stages" :key="stage" :value="stage">
@@ -410,31 +425,34 @@ watch(
           </label>
         </div>
 
-        <div v-if="visibleLinks.length > 0" class="overflow-x-auto rounded-card border border-line">
-          <table class="w-full min-w-4xl border-collapse text-left text-sm">
-            <thead class="bg-surface-3 text-ink">
+        <div
+          v-if="visibleLinks.length > 0"
+          class="overflow-x-auto rounded-tile border border-night-line"
+        >
+          <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+            <thead class="bg-night-raised text-on-night">
               <tr>
-                <th class="px-4 py-3" scope="col">{{ copy.relationship }}</th>
-                <th class="px-4 py-3" scope="col">{{ copy.source }}</th>
-                <th class="px-4 py-3" scope="col">{{ copy.target }}</th>
+                <th class="px-4 py-3 font-semibold" scope="col">{{ copy.relationship }}</th>
+                <th class="px-4 py-3 font-semibold" scope="col">{{ copy.source }}</th>
+                <th class="px-4 py-3 font-semibold" scope="col">{{ copy.target }}</th>
               </tr>
             </thead>
             <tbody>
               <tr
                 v-for="link in visibleLinks"
                 :key="`${link.kind}:${referenceKey(link.source)}:${referenceKey(link.target)}`"
-                class="border-t border-line"
+                class="border-t border-night-line"
               >
-                <th class="px-4 py-3 font-semibold text-ink" scope="row">
+                <th class="px-4 py-3 font-mono text-xs font-medium text-on-night" scope="row">
                   {{ link.kind }}
                 </th>
-                <td class="px-4 py-3 text-ink-2">{{ nodeLabel(link.source) }}</td>
-                <td class="px-4 py-3 text-ink-2">{{ nodeLabel(link.target) }}</td>
+                <td class="px-4 py-3 text-on-night-2">{{ nodeLabel(link.source) }}</td>
+                <td class="px-4 py-3 text-on-night-2">{{ nodeLabel(link.target) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-else class="m-0 text-ink-2">{{ copy.noRelationships }}</p>
+        <p v-else class="text-[15px] text-on-night-2">{{ copy.noRelationships }}</p>
       </section>
     </template>
   </section>

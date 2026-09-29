@@ -165,107 +165,125 @@ onBeforeUnmount(() => tray.dismissResult(props.projectId));
     v-if="visible"
     role="region"
     :aria-label="copy.region"
-    class="fixed inset-x-0 bottom-0 z-30 border-t border-line-strong bg-surface shadow-decision motion-safe:animate-reveal"
+    class="grid gap-2 rounded-tile border-[1.5px] border-dashed border-violet-on-night/70 bg-night-panel/94 py-2.5 pr-3 pl-4 text-on-night shadow-bar backdrop-blur-[14px] motion-safe:animate-reveal sm:pl-5"
+    data-surface="night"
     data-testid="insight-brief-tray"
   >
-    <div class="mx-auto grid w-full max-w-[1180px] gap-2 px-4 py-3 sm:px-6">
-      <div v-if="items.length > 0" class="flex flex-wrap items-start gap-2">
-        <details
-          class="min-w-0 flex-[1_1_16rem]"
-          :open="listOpen"
-          data-testid="insight-brief-tray-details"
-          @toggle="onToggle"
+    <div v-if="items.length > 0" class="flex flex-wrap items-start gap-x-3 gap-y-2">
+      <details
+        class="group min-w-0 flex-[1_1_16rem]"
+        :open="listOpen"
+        data-testid="insight-brief-tray-details"
+        @toggle="onToggle"
+      >
+        <summary
+          ref="summary"
+          class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 rounded-control text-[15px] leading-6 font-semibold text-violet-on-night-2 [&::-webkit-details-marker]:hidden"
+          data-testid="insight-brief-tray-count"
         >
-          <summary
-            ref="summary"
-            class="min-h-11 cursor-pointer rounded-control py-2.5 text-sm leading-6 font-semibold text-ink"
-            data-testid="insight-brief-tray-count"
+          <span
+            aria-hidden="true"
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-violet-on-night"
+          />
+          <span>{{ countText }}</span>
+          <span
+            aria-hidden="true"
+            class="ml-0.5 inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-on-night-3 transition-transform duration-150 group-open:rotate-45"
+          />
+        </summary>
+        <ul class="m-0 mt-1 mb-1 grid max-h-[40vh] list-none gap-2 overflow-y-auto p-0">
+          <li
+            v-for="(item, index) in items"
+            :key="itemKey(item)"
+            class="flex items-start justify-between gap-2 rounded-field border border-night-line bg-night-raised py-1 pr-1 pl-3.5 text-sm"
+            :data-conflict="conflictLabel(item) !== null"
+            data-testid="insight-brief-tray-item"
           >
-            {{ countText }}
-          </summary>
-          <ul class="m-0 mt-2 grid max-h-[40vh] list-none gap-2 overflow-y-auto p-0">
-            <li
-              v-for="(item, index) in items"
-              :key="itemKey(item)"
-              class="flex items-start justify-between gap-2 rounded-panel border border-line bg-surface-2 py-1 pr-1 pl-3 text-sm"
-              :data-conflict="conflictLabel(item) !== null"
-              data-testid="insight-brief-tray-item"
-            >
-              <span class="grid min-w-0 gap-1 py-2">
-                <span :id="textId(index)" class="leading-6 break-words text-ink">
-                  {{ item.text }}
-                </span>
-                <span
-                  v-if="conflictLabel(item) !== null"
-                  class="justify-self-start rounded-pill border border-fail-line bg-fail-bg px-2 py-0.5 text-xs font-semibold text-fail-dark"
-                  data-testid="insight-brief-tray-conflict"
-                >
-                  {{ conflictLabel(item) }}
-                </span>
+            <span class="grid min-w-0 gap-1 py-2">
+              <span :id="textId(index)" class="leading-6 break-words text-on-night">
+                {{ item.text }}
               </span>
-              <button
-                type="button"
-                class="inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-semibold text-action transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
-                :aria-label="copy.remove"
-                :aria-describedby="textId(index)"
-                :disabled="applying"
-                data-testid="insight-brief-tray-remove"
-                @click="remove(item)"
+              <span
+                v-if="conflictLabel(item) !== null"
+                class="justify-self-start rounded-pill border border-fail-on-night/60 bg-fail-on-night/10 px-2 py-0.5 text-xs font-semibold text-fail-on-night"
+                data-testid="insight-brief-tray-conflict"
               >
-                {{ copy.remove }}
-              </button>
-            </li>
-          </ul>
-        </details>
-        <div class="flex gap-2 max-sm:w-full sm:ml-auto">
-          <button
-            type="button"
-            class="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-control bg-action px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-ink-3 motion-reduce:transition-none sm:flex-none"
-            :disabled="applying"
-            data-testid="insight-brief-tray-apply"
-            @click="applyAll"
-          >
-            {{ copy.apply }}
-          </button>
-          <button
-            type="button"
-            class="inline-flex min-h-11 flex-none items-center justify-center rounded-control border border-button-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:text-ink-3 motion-reduce:transition-none"
-            :disabled="applying"
-            data-testid="insight-brief-tray-clear"
-            @click="tray.clear(projectId)"
-          >
-            {{ copy.clear }}
-          </button>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p
-          role="status"
-          class="m-0 min-w-0 text-sm leading-6"
-          :class="done ? 'font-semibold text-ok-dark' : 'text-ink-2'"
-          data-testid="insight-brief-tray-status"
-        >
-          {{ status }}
-        </p>
+                {{ conflictLabel(item) }}
+              </span>
+            </span>
+            <button
+              type="button"
+              class="inline-flex min-h-11 shrink-0 items-center rounded-pill px-3.5 font-semibold text-on-night-3 transition-colors duration-150 hover:bg-night-hover hover:text-on-night disabled:cursor-not-allowed disabled:opacity-60"
+              :aria-label="copy.remove"
+              :aria-describedby="textId(index)"
+              :disabled="applying"
+              data-testid="insight-brief-tray-remove"
+              @click="remove(item)"
+            >
+              {{ copy.remove }}
+            </button>
+          </li>
+        </ul>
+      </details>
+      <div
+        :class="[
+          'flex gap-2 max-sm:w-full sm:ml-auto',
+          listOpen || applying || failure !== null ? '' : 'max-sm:hidden',
+        ]"
+        data-testid="insight-brief-tray-actions"
+      >
         <button
-          v-if="done"
-          ref="closeButton"
           type="button"
-          class="inline-flex min-h-11 items-center justify-center rounded-control border border-button-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 motion-reduce:transition-none"
-          data-testid="insight-brief-tray-close"
-          @click="tray.dismissResult(projectId)"
+          class="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-pill border border-violet-on-night bg-night-raised px-[18px] py-2 text-sm font-semibold text-violet-on-night-2 transition-colors duration-150 hover:bg-violet-on-night/14 disabled:cursor-not-allowed disabled:border-night-line disabled:text-on-night-3 sm:flex-none"
+          :disabled="applying"
+          data-testid="insight-brief-tray-apply"
+          @click="applyAll"
         >
-          {{ copy.close }}
+          {{ copy.apply }}
+        </button>
+        <button
+          type="button"
+          class="inline-flex min-h-11 flex-none items-center justify-center rounded-pill px-4 py-2 text-sm font-semibold text-on-night-3 transition-colors duration-150 hover:bg-night-hover hover:text-on-night disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="applying"
+          data-testid="insight-brief-tray-clear"
+          @click="tray.clear(projectId)"
+        >
+          {{ copy.clear }}
         </button>
       </div>
-      <p
-        v-if="failureText !== null"
-        role="alert"
-        class="m-0 rounded-panel border border-fail-line bg-fail-bg px-3 py-2 text-sm font-semibold text-fail-dark"
-        data-testid="insight-brief-tray-error"
-      >
-        {{ failureText }}
-      </p>
     </div>
+    <div
+      :class="[
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-2',
+        status === '' && !done ? 'sr-only' : '',
+      ]"
+    >
+      <p
+        role="status"
+        class="m-0 min-w-0 flex-[1_1_16rem] py-1.5 text-sm leading-6"
+        :class="done ? 'font-semibold text-petrol-on-night-2' : 'text-on-night-2'"
+        data-testid="insight-brief-tray-status"
+      >
+        {{ status }}
+      </p>
+      <button
+        v-if="done"
+        ref="closeButton"
+        type="button"
+        class="inline-flex min-h-11 items-center justify-center rounded-pill border border-on-night/32 bg-on-night/5 px-[18px] py-2 text-sm font-semibold text-on-night transition-colors duration-150 hover:bg-on-night hover:text-ink"
+        data-testid="insight-brief-tray-close"
+        @click="tray.dismissResult(projectId)"
+      >
+        {{ copy.close }}
+      </button>
+    </div>
+    <p
+      v-if="failureText !== null"
+      role="alert"
+      class="m-0 mb-1 rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-3.5 py-2 text-sm font-semibold text-fail-on-night"
+      data-testid="insight-brief-tray-error"
+    >
+      {{ failureText }}
+    </p>
   </section>
 </template>

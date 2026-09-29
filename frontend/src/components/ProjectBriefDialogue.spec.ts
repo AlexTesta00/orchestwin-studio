@@ -119,6 +119,7 @@ function fakeApi(current: BriefDialogueResponse | null): BriefDialogueApi {
 function mountDialogue(
   api: BriefDialogueApi,
   currentBrief: ProjectBriefVersionResponse | null = null,
+  locale: "en" | "it" = "it",
 ) {
   return mount(ProjectBriefDialogue, {
     props: {
@@ -127,7 +128,7 @@ function mountDialogue(
       api,
       authorize: <T>(operation: (token: string) => Promise<T>) => operation("token"),
     },
-    global: { plugins: [createAppI18n("it")] },
+    global: { plugins: [createAppI18n(locale)] },
   });
 }
 
@@ -183,8 +184,9 @@ describe("project brief dialogue", () => {
     ]);
     expect(wrapper.emitted("active")?.[1]).toEqual([true]);
     const question = wrapper.get("[data-testid='brief-dialogue-question']");
-    expect(question.text()).toContain("Quale problema vuoi risolvere?");
-    expect(question.text()).toContain("Domanda su problem?");
+    const pendingBubble = wrapper.get("[data-testid='brief-dialogue-pending']");
+    expect(pendingBubble.text()).toContain("Il problema");
+    expect(pendingBubble.text()).toContain("Domanda su problem?");
     expect(wrapper.get("[data-testid='brief-dialogue-progress']").text()).toContain(
       "Domanda 1 di 20",
     );
@@ -202,7 +204,7 @@ describe("project brief dialogue", () => {
       expected_turn_count: 1,
     });
     expect(wrapper.findAll("[data-testid='brief-dialogue-turn']")).toHaveLength(1);
-    expect(wrapper.get("[data-testid='brief-dialogue-question']").text()).toContain("Obiettivi");
+    expect(wrapper.get("[data-testid='brief-dialogue-pending']").text()).toContain("Obiettivi");
 
     await wrapper.get("[data-testid='brief-dialogue-answer']").setValue("Aggiungere\n\nVedere\n");
     await wrapper.get("[data-testid='brief-dialogue-question'] form").trigger("submit");
@@ -212,7 +214,7 @@ describe("project brief dialogue", () => {
       items: ["Aggiungere", "Vedere"],
       expected_turn_count: 2,
     });
-    expect(wrapper.get("[data-testid='brief-dialogue-question']").text()).toContain(
+    expect(wrapper.get("[data-testid='brief-dialogue-pending']").text()).toContain(
       "Approfondimento",
     );
     expect(wrapper.text()).toContain("Aggiungere · Vedere");
@@ -249,7 +251,7 @@ describe("project brief dialogue", () => {
     await wrapper.get("[data-testid='brief-dialogue-continue']").trigger("click");
     await flushPromises();
     expect(vi.mocked(api.nextQuestion).mock.calls[0]?.slice(0, 2)).toEqual(["project-1", 1]);
-    expect(wrapper.get("[data-testid='brief-dialogue-question']").text()).toContain("Obiettivi");
+    expect(wrapper.get("[data-testid='brief-dialogue-pending']").text()).toContain("Obiettivi");
 
     await wrapper.get("[data-testid='brief-dialogue-compose']").trigger("click");
     await flushPromises();
@@ -316,6 +318,126 @@ describe("project brief dialogue", () => {
       (wrapper.get("[data-testid='brief-dialogue-answer']").element as HTMLTextAreaElement).value,
     ).toBe("Si perdono i nomi.");
   });
+
+  it("lets the brief take shape next to the conversation", async () => {
+    const api = fakeApi(
+      response("BRIEF_DIALOGUE_CURRENT", [
+        turn(1, "problem", { kind: "TEXT", text: "Si perdono i nomi.", items: null }),
+        turn(2, "target_users", { kind: "UNKNOWN", text: null, items: null }),
+        turn(3, "goals", null),
+      ]),
+    );
+    const wrapper = mountDialogue(api);
+    await flushPromises();
+
+    const shape = wrapper.get("[data-testid='brief-dialogue-shape']");
+    expect(shape.get("h3").text()).toBe("Il brief prende forma");
+    const cards = shape.findAll("[data-shape-field]");
+    expect(
+      cards.map((card) => [
+        card.attributes("data-shape-field"),
+        card.attributes("data-shape-state"),
+      ]),
+    ).toEqual([
+      ["description", "answered"],
+      ["problem", "answered"],
+      ["target_users", "open"],
+      ["goals", "asking"],
+      ["functional_requirements", "waiting"],
+    ]);
+    expect(cards[0]!.text()).toContain("Una lista ospiti per il workshop.");
+    expect(cards[1]!.text()).toContain("Si perdono i nomi.");
+    expect(cards[2]!.text()).toContain("Non lo sai ancora: resta un punto aperto");
+    expect(cards[3]!.text()).toContain("Te lo sto chiedendo ora");
+    expect(cards[4]!.text()).toContain("In attesa della tua risposta");
+    const log = wrapper.get("[role='log']");
+    expect(log.text()).toContain("Una lista ospiti per il workshop.");
+    expect(log.findAll("[data-testid='brief-dialogue-turn']")).toHaveLength(2);
+  });
+
+  it("sends a text answer with Enter and keeps Enter for new lines in a list", async () => {
+    const api = fakeApi(response("BRIEF_DIALOGUE_CURRENT", [turn(1, "problem", null)]));
+    vi.mocked(api.answer).mockResolvedValueOnce(
+      response("BRIEF_QUESTION_ASKED", [
+        turn(1, "problem", { kind: "TEXT", text: "Si perdono i nomi.", items: null }),
+        turn(2, "goals", null),
+      ]),
+    );
+    const wrapper = mountDialogue(api);
+    await flushPromises();
+
+    const answer = wrapper.get("[data-testid='brief-dialogue-answer']");
+    await answer.setValue("Si perdono i nomi.");
+    await answer.trigger("keydown", { key: "Enter", shiftKey: true });
+    expect(api.answer).not.toHaveBeenCalled();
+    await answer.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(vi.mocked(api.answer).mock.calls[0]?.[1]).toEqual({
+      kind: "TEXT",
+      text: "Si perdono i nomi.",
+      expected_turn_count: 1,
+    });
+    const listAnswer = wrapper.get("[data-testid='brief-dialogue-answer']");
+    await listAnswer.setValue("Aggiungere");
+    await listAnswer.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(api.answer).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows that the analyst is writing while the Studio works", async () => {
+    const api = fakeApi(response("BRIEF_DIALOGUE_CURRENT", [turn(1, "problem", null)]));
+    let reply!: (value: BriefDialogueResponse) => void;
+    vi.mocked(api.answer).mockImplementation(
+      () => new Promise<BriefDialogueResponse>((resolve) => (reply = resolve)),
+    );
+    const wrapper = mountDialogue(api);
+    await flushPromises();
+    expect(wrapper.find("[data-testid='brief-dialogue-typing']").exists()).toBe(false);
+
+    await wrapper.get("[data-testid='brief-dialogue-answer']").setValue("Si perdono i nomi.");
+    await wrapper.get("[data-testid='brief-dialogue-composer']").trigger("submit");
+    await flushPromises();
+    const typing = wrapper.get("[data-testid='brief-dialogue-typing']");
+    expect(typing.attributes("aria-label")).toBe("L'analista sta scrivendo");
+    expect(wrapper.get("[data-testid='brief-dialogue-send']").attributes("disabled")).toBeDefined();
+    reply(
+      response("BRIEF_QUESTION_ASKED", [
+        turn(1, "problem", { kind: "TEXT", text: "Si perdono i nomi.", items: null }),
+        turn(2, "goals", null),
+      ]),
+    );
+    await flushPromises();
+    expect(wrapper.find("[data-testid='brief-dialogue-typing']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='brief-dialogue-pending']").text()).toContain("Obiettivi");
+  });
+
+  it.each([
+    ["it", ["goals"], "Domanda 1 di 20 · 1 informazione essenziale ancora da chiedere"],
+    [
+      "it",
+      ["goals", "target_users", "functional_requirements"],
+      "Domanda 1 di 20 · 3 informazioni essenziali ancora da chiedere",
+    ],
+    ["en", ["goals"], "Question 1 of 20 · 1 essential detail still to ask"],
+    [
+      "en",
+      ["goals", "target_users", "functional_requirements"],
+      "Question 1 of 20 · 3 essential details still to ask",
+    ],
+  ] as const)(
+    "counts the essential details still to ask in %s with %j",
+    async (locale, open, sentence) => {
+      const api = fakeApi(
+        response("BRIEF_DIALOGUE_CURRENT", [turn(1, "problem", null)], {
+          essentialOpen: [...open],
+        }),
+      );
+      const wrapper = mountDialogue(api, null, locale);
+      await flushPromises();
+
+      expect(wrapper.get("[data-testid='brief-dialogue-progress']").text()).toBe(sentence);
+    },
+  );
 
   it("has no axe violations", async () => {
     const wrapper = mountDialogue(
