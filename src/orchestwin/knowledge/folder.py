@@ -54,7 +54,7 @@ from orchestwin.knowledge.layout import (
     stage_document,
     stage_text,
 )
-from orchestwin.knowledge.schema import SCHEMA_NAMES, schema_files
+from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
@@ -245,12 +245,11 @@ def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
 
 
 def content_files(sources: KnowledgeSources) -> dict[str, str]:
-    codes = code_index(sources.payload("requirements"))
+    specification = sources.payload("requirements")
+    package = sources.payload("design")
+    codes = code_index(specification)
     diagrams = folder_diagrams(sources)
-    tables = knowledge_tables(
-        specification=sources.payload("requirements"),
-        package=sources.payload("design"),
-    )
+    tables = knowledge_tables(specification=specification, package=package)
     twins = portable_twins(sources)
     files = {
         stage_text("brief"): brief_markdown(sources.brief, sources.brief_gate),
@@ -264,7 +263,7 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         + _views(DiagramStage.DESIGN, tables, diagrams),
         DESIGN_CRITIQUES_TEXT: critiques_markdown(sources.design),
         DESIGN_MOCKUPS_TEXT: mockups_markdown(sources.design),
-        MOCKUP_HTML_FILE: mockup_html(sources.design),
+        MOCKUP_HTML_FILE: mockup_html(sources.design, language=project_language(specification)),
         FEEDBACK_TEXT: feedback_markdown(sources),
     }
     for stage in STAGES:
@@ -276,7 +275,7 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         files[path] = json_text(document)
     files.update(tables)
     files.update({diagram.path: diagram.source for diagram in diagrams})
-    files.update(schema_files())
+    files.update(schema_files(design_additions=has_design_additions(package)))
     return files
 
 

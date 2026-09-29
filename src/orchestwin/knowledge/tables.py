@@ -153,6 +153,7 @@ TABLE_COLUMNS: Final = {
     for stage, tables in _STAGE_COLUMNS.items()
     for name, columns in tables.items()
 }
+CRITIQUE_VERDICT_COLUMNS: Final = ("verdict", "quote")
 
 
 def _codes(items: Iterable[Mapping[str, object]]) -> dict[str, str]:
@@ -197,9 +198,17 @@ def _csv(columns: Sequence[str], rows: Iterable[Mapping[str, object]]) -> str:
     return buffer.getvalue()
 
 
-def _stage_tables(stage: str, tables: Mapping[str, _Rows]) -> dict[str, str]:
+def _stage_tables(
+    stage: str,
+    tables: Mapping[str, _Rows],
+    extra_columns: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, str]:
     columns = _STAGE_COLUMNS[stage]
-    return {table_document(stage, name): _csv(columns[name], rows) for name, rows in tables.items()}
+    extra = extra_columns or {}
+    return {
+        table_document(stage, name): _csv((*columns[name], *extra.get(name, ())), rows)
+        for name, rows in tables.items()
+    }
 
 
 def _code(identifier: object, codes: Mapping[str, str]) -> str:
@@ -397,7 +406,13 @@ def _visual_rows(
     return rows
 
 
-def _critique_rows(package: Mapping[str, object], alternatives: Mapping[str, str]) -> _Rows:
+def _has_verdicts(package: Mapping[str, object]) -> bool:
+    return any(critique.get("verdict") is not None for critique in package["critiques"])
+
+
+def _critique_rows(
+    package: Mapping[str, object], alternatives: Mapping[str, str], *, verdicts: bool
+) -> _Rows:
     rows: _Rows = []
     for critique in package["critiques"]:
         critique_row: dict[str, object] = {
@@ -408,6 +423,10 @@ def _critique_rows(package: Mapping[str, object], alternatives: Mapping[str, str
             "epistemic_status": critique["epistemic_status"],
             "human_validation": critique["human_validation"],
         }
+        if verdicts:
+            critique_row.update(
+                {column: critique.get(column) for column in CRITIQUE_VERDICT_COLUMNS}
+            )
         rows.extend(
             {**critique_row, "aspect": aspect, "text": text}
             for aspect in _CRITIQUE_ASPECTS
@@ -513,19 +532,21 @@ def design_tables(
 ) -> dict[str, str]:
     codes = _Codes.of(specification)
     alternatives = _codes(package["alternatives"])
+    verdicts = _has_verdicts(package)
     tables: dict[str, _Rows] = {
         "alternatives": _alternative_rows(package, codes),
         "workflows": _workflow_rows(package, codes),
         "visual-language": _visual_rows(package, "choices", "dimension", "value"),
         "palette": _visual_rows(package, "palette", "role", "colour"),
-        "critiques": _critique_rows(package, alternatives),
+        "critiques": _critique_rows(package, alternatives, verdicts=verdicts),
         "concerns": _concern_rows(package, codes, alternatives),
     }
     prototype = package.get("prototype")
     if prototype is not None:
         tables["screens"] = _screen_rows(prototype, codes)
         tables["transitions"] = _transition_rows(prototype)
-    return _stage_tables(_DESIGN_STAGE, tables)
+    extra = {"critiques": CRITIQUE_VERDICT_COLUMNS} if verdicts else None
+    return _stage_tables(_DESIGN_STAGE, tables, extra)
 
 
 def knowledge_tables(
@@ -538,6 +559,7 @@ def knowledge_tables(
 
 
 __all__ = [
+    "CRITIQUE_VERDICT_COLUMNS",
     "TABLE_COLUMNS",
     "design_tables",
     "knowledge_tables",

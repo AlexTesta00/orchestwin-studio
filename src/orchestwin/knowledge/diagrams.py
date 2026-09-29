@@ -12,6 +12,8 @@ DIAGRAM_EXTENSION: Final = ".mmd"
 
 _LABEL_WIDTH: Final = 34
 _SHORT_TEXT: Final = 72
+_SHORT_OUTCOME: Final = 40
+_GROUPED_OUTCOMES: Final = 2
 _INDENT: Final = "  "
 _ELLIPSIS: Final = "…"
 _ENTITIES: Final = {
@@ -64,6 +66,7 @@ _NOUNS: Final = {
         "screen": ("screen", "screens"),
         "transition": ("transition", "transitions"),
         "element": ("element", "elements"),
+        "link": ("link", "links"),
     },
     "it": {
         "actor": ("attore", "attori"),
@@ -80,6 +83,7 @@ _NOUNS: Final = {
         "screen": ("schermata", "schermate"),
         "transition": ("transizione", "transizioni"),
         "element": ("elemento", "elementi"),
+        "link": ("collegamento", "collegamenti"),
     },
 }
 _TEXT: Final = {
@@ -694,6 +698,44 @@ def focus_alternative(package: Mapping[str, object]) -> Mapping[str, object] | N
     return alternatives[0] if alternatives else None
 
 
+def _transition_label(
+    transition: Mapping[str, object], elements: Mapping[str, Mapping[str, object]]
+) -> str:
+    trigger = elements.get(str(transition["trigger_element_id"]))
+    outcome = _short(transition["outcome"])
+    parts = [] if trigger is None else [f"{trigger['code']} {_short(trigger['content'])}"]
+    if trigger is None or _normal(trigger["content"]).casefold() != outcome.casefold():
+        parts.append(outcome)
+    return _label(*parts)
+
+
+def _screen_links(
+    transitions: Sequence[Mapping[str, object]],
+    screen_codes: Mapping[str, str],
+    *,
+    grouped: bool,
+) -> list[tuple[tuple[str, str], list[Mapping[str, object]]]]:
+    edges: dict[object, tuple[tuple[str, str], list[Mapping[str, object]]]] = {}
+    for index, transition in enumerate(transitions):
+        pair = (
+            _identifier(screen_codes[str(transition["source_screen_id"])]),
+            _identifier(screen_codes[str(transition["target_screen_id"])]),
+        )
+        edges.setdefault(pair if grouped else index, (pair, []))[1].append(transition)
+    return list(edges.values())
+
+
+def _first_outcomes(links: Sequence[Mapping[str, object]]) -> list[str]:
+    outcomes: list[str] = []
+    for transition in links:
+        outcome = _short(transition["outcome"], _SHORT_OUTCOME)
+        if all(outcome.casefold() != known.casefold() for known in outcomes):
+            outcomes.append(outcome)
+        if len(outcomes) == _GROUPED_OUTCOMES:
+            break
+    return outcomes
+
+
 def screen_map_diagram(
     package: Mapping[str, object],
     *,
@@ -725,15 +767,14 @@ def screen_map_diagram(
         label = _label(f"{screen['code']} · {_short(screen['title'])}", f"{state} · {count}")
         lines.append(f'{_INDENT}state "{label}" as {_identifier(screen["code"])}')
     lines.append(f"{_INDENT}[*] --> {_identifier(entry)}")
-    for transition in transitions:
-        trigger = elements.get(str(transition["trigger_element_id"]))
-        outcome = _short(transition["outcome"])
-        parts = [] if trigger is None else [f"{trigger['code']} {_short(trigger['content'])}"]
-        if trigger is None or _normal(trigger["content"]).casefold() != outcome.casefold():
-            parts.append(outcome)
-        source = _identifier(screen_codes[str(transition["source_screen_id"])])
-        destination = _identifier(screen_codes[str(transition["target_screen_id"])])
-        lines.append(f"{_INDENT}{source} --> {destination}: {_label(*parts)}")
+    grouped = package.get("generated_mockup") is not None
+    for (source, destination), links in _screen_links(transitions, screen_codes, grouped=grouped):
+        label = (
+            _transition_label(links[0], elements)
+            if len(links) == 1
+            else _label(_count(language, "link", links), *_first_outcomes(links))
+        )
+        lines.append(f"{_INDENT}{source} --> {destination}: {label}")
     return Diagram(
         key="design/screen-map",
         stage=DiagramStage.DESIGN,

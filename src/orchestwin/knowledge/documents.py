@@ -344,10 +344,11 @@ def design_markdown(
             f"Selected alternative: {alternatives.get(selected, UNSET)}. "
             f"Recommended alternative: {alternatives.get(recommended, UNSET)}.",
             "",
-            "## Alternatives",
-            "",
         ]
     )
+    lines.extend(_generated_mockup_lines(package, alternatives))
+    lines.extend(_owner_assertion_lines(package.get("owner_assertions") or ()))
+    lines.extend(["## Alternatives", ""])
     for item in package["alternatives"]:
         lines.extend(
             [
@@ -399,6 +400,35 @@ def design_markdown(
     return "\n".join(lines)
 
 
+def _generated_mockup_lines(
+    package: Mapping[str, object], alternatives: Mapping[str, str]
+) -> list[str]:
+    generated = package.get("generated_mockup")
+    if generated is None:
+        return []
+    mockup = generated["mockup"]
+    return [
+        f"Generated mockup: {mockup['title']}, "
+        f"{counted(len(mockup['screens']), 'screen', 'screens')} written as HTML and CSS for "
+        f"{alternatives.get(mockup['design_alternative_id'], UNSET)}. It opens from "
+        "`mockup.html`; `mockups.md` describes its screens, elements and transitions.",
+        "",
+    ]
+
+
+def _owner_assertion_lines(assertions: Sequence[str]) -> list[str]:
+    if not assertions:
+        return []
+    return [
+        "## Owner assertions",
+        "",
+        "Statements of the owner that the design must respect, in the order the owner gave them.",
+        "",
+        *(f"{number}. {assertion}" for number, assertion in enumerate(assertions, 1)),
+        "",
+    ]
+
+
 def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
     if visual is None:
         return []
@@ -421,6 +451,13 @@ def _visual_language_lines(visual: Mapping[str, object] | None) -> list[str]:
     ]
 
 
+def _verdict_lines(critique: Mapping[str, object]) -> list[str]:
+    verdict = critique.get("verdict")
+    if verdict is None:
+        return []
+    return [f"Verdict: {verdict}", "", f"> {critique.get('quote') or UNSET}", ""]
+
+
 def critiques_markdown(version: DesignPackageVersion) -> str:
     package = version.package.to_snapshot()
     alternatives = _alternative_codes(package)
@@ -435,6 +472,7 @@ def critiques_markdown(version: DesignPackageVersion) -> str:
                 f"## {critique['code']}: {twin['name']} on "
                 f"{alternatives.get(critique['design_alternative_id'], UNSET)}",
                 "",
+                *_verdict_lines(critique),
                 f"Confidence {critique['confidence']}, epistemic status "
                 f"{critique['epistemic_status']}, human validation "
                 f"{critique['human_validation']}. {critique['rationale']}",
@@ -477,6 +515,16 @@ def mockups_markdown(version: DesignPackageVersion) -> str:
             "",
         ]
     )
+    if package.get("generated_mockup") is not None:
+        lines.extend(
+            [
+                "The screens, elements and transitions below are derived from the HTML of the "
+                "generated mockup in `mockup.html`: every screen is the section whose identifier "
+                "is its code, every element carries its code in the attribute `data-elm`, and "
+                "every transition is a link between two screens.",
+                "",
+            ]
+        )
     for screen in prototype["screens"]:
         lines.extend(
             [f"## {screen['code']}: {screen['title']} ({title_text(screen['state'])})", ""]

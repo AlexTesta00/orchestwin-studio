@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
+from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup, bound_mockup_from_snapshot
+from orchestwin.artifacts.generated_mockups import GeneratedMockupError
 from orchestwin.knowledge.layout import (
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
@@ -29,6 +31,10 @@ MAX_ARCHIVE_ENTRIES: Final = 400
 MAX_ENTRY_SIZE: Final = 8 * 1024 * 1024
 MAX_FOLDER_SIZE: Final = 64 * 1024 * 1024
 MAX_PATH_LENGTH: Final = 240
+MOCKUP_LOCATION: Final = "design: package.generated_mockup"
+MOCKUP_ALTERNATIVE: Final = "SELECTED_ALTERNATIVE"
+MOCKUP_INVALID: Final = "MOCKUP_INVALID"
+MOCKUP_PROTOTYPE: Final = "PROTOTYPE_NOT_DERIVED"
 _FORBIDDEN_PATH_CHARACTERS: Final = frozenset('\\:*?"<>|\0')
 
 
@@ -125,6 +131,55 @@ def _json(files: Mapping[str, str], path: str) -> Mapping[str, object]:
     return document
 
 
+def mockup_failure(code: str) -> KnowledgeArchiveError:
+    return KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", f"{MOCKUP_LOCATION}: {code}")
+
+
+def _mockup_token_names(package: Mapping[str, object]) -> tuple[str, ...]:
+    selected = package.get("owner_selected_alternative_id")
+    generated = package.get("generated_mockup")
+    mockup = generated.get("mockup") if isinstance(generated, Mapping) else None
+    if selected is None or not isinstance(mockup, Mapping):
+        raise mockup_failure(MOCKUP_ALTERNATIVE)
+    if mockup.get("design_alternative_id") != selected:
+        raise mockup_failure(MOCKUP_ALTERNATIVE)
+    for alternative in package.get("alternatives") or ():
+        if isinstance(alternative, Mapping) and alternative.get("id") == selected:
+            visual = alternative.get("visual_language")
+            tokens = visual.get("tokens") if isinstance(visual, Mapping) else None
+            if isinstance(tokens, Mapping):
+                return tuple(tokens)
+    raise mockup_failure(MOCKUP_ALTERNATIVE)
+
+
+def folder_generated_mockup(package: Mapping[str, object]) -> BoundGeneratedMockup | None:
+    generated = package.get("generated_mockup")
+    if generated is None:
+        return None
+    token_names = _mockup_token_names(package)
+    try:
+        return bound_mockup_from_snapshot(generated, token_names=token_names)
+    except GeneratedMockupError as error:
+        raise mockup_failure(error.code) from error
+    except (TypeError, ValueError) as error:
+        raise mockup_failure(MOCKUP_INVALID) from error
+
+
+def derived_prototype_snapshot(bound: BoundGeneratedMockup) -> dict[str, object]:
+    try:
+        return bound.prototype().to_snapshot()
+    except GeneratedMockupError as error:
+        raise mockup_failure(error.code) from error
+    except (TypeError, ValueError) as error:
+        raise mockup_failure(MOCKUP_PROTOTYPE) from error
+
+
+def _verify_generated_mockup(package: Mapping[str, object]) -> None:
+    bound = folder_generated_mockup(package)
+    if bound is not None and derived_prototype_snapshot(bound) != package.get("prototype"):
+        raise mockup_failure(MOCKUP_PROTOTYPE)
+
+
 def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
     manifest = _json(files, KNOWLEDGE_MANIFEST)
     try:
@@ -162,6 +217,7 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
             or document["project_id"] != manifest["project"]["id"]
         ):
             raise KnowledgeArchiveError("FOLDER_TAMPERED", stage_document(stage))
+    _verify_generated_mockup(documents["design"]["package"])
     return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
 
 
@@ -175,8 +231,15 @@ __all__ = [
     "MAX_DOCUMENT_DEPTH",
     "MAX_ENTRY_SIZE",
     "MAX_FOLDER_SIZE",
+    "MOCKUP_ALTERNATIVE",
+    "MOCKUP_INVALID",
+    "MOCKUP_LOCATION",
+    "MOCKUP_PROTOTYPE",
     "KnowledgeArchiveError",
     "VerifiedFolder",
+    "derived_prototype_snapshot",
+    "folder_generated_mockup",
+    "mockup_failure",
     "read_folder_archive",
     "read_verified_folder",
     "safe_path",
