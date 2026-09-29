@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import timedelta
 from typing import Any, cast
@@ -31,6 +32,14 @@ from .design_fixtures import (
     OWNER_ID,
     PROJECT_ID,
     design_version,
+)
+from .test_design_package_extension import (
+    ASSERTIONS,
+    VERDICTS,
+    fixture_bound,
+    fixture_package,
+    plain_package,
+    through_json,
 )
 
 OTHER_OWNER_ID = UUID("00000000-0000-4000-8000-000000000099")
@@ -209,3 +218,79 @@ def test_version_record_rejects_tampered_package_content() -> None:
 
     with pytest.raises(ValueError, match="hash must match"):
         design_package_version_from_record(record)
+
+
+def test_records_keep_the_mockup_the_assertions_and_the_verdicts_without_loss() -> None:
+    base = design_version(package=plain_package())
+    proposed = fixture_package()
+    proposal = propose_design_revision(
+        diff_id=UUID("00000000-0000-4000-8000-000000000711"),
+        owner_user_id=OWNER_ID,
+        base_version=base,
+        proposed_package=proposed,
+        created_at=CREATED_AT + timedelta(minutes=1),
+    )
+
+    if proposal.diff is None:
+        raise AssertionError("Design Package diff was not created")
+
+    decision = decide_design_revision(
+        diff=proposal.diff,
+        current_version=base,
+        decision=DesignRevisionDecision.APPROVE,
+        actor_user_id=OWNER_ID,
+        occurred_at=CREATED_AT + timedelta(minutes=2),
+        resulting_version_id=UUID("00000000-0000-4000-8000-000000000712"),
+        reason="Il mockup generato rispetta le asserzioni del proprietario.",
+    )
+
+    if decision.version is None:
+        raise AssertionError("Design Package version was not created")
+
+    version_record = through_json(
+        design_package_version_to_record(decision.version),
+        "package_snapshot",
+    )
+    snapshot = cast(dict[str, object], version_record["package_snapshot"])
+    critiques = cast(list[dict[str, object]], snapshot["critiques"])
+
+    assert version_record["schema_version"] == 1
+    assert version_record["content_hash"] == proposed.content_hash
+    assert snapshot["generated_mockup"] == fixture_bound().to_snapshot()
+    assert snapshot["owner_assertions"] == list(ASSERTIONS)
+    assert [(item["verdict"], item["quote"]) for item in critiques] == list(VERDICTS)
+    assert design_package_version_from_record(version_record) == decision.version
+
+    for diff in (proposal.diff, decision.diff):
+        record = through_json(design_diff_to_record(diff), "diff_snapshot")
+        assert design_diff_from_record(record) == diff
+
+
+def test_version_record_rejects_a_tampered_generated_mockup() -> None:
+    record = through_json(
+        design_package_version_to_record(design_version(package=fixture_package())),
+        "package_snapshot",
+    )
+    snapshot = cast(dict[str, Any], record["package_snapshot"])
+    screen = snapshot["generated_mockup"]["mockup"]["screens"][0]
+    reworded = json.loads(json.dumps(snapshot))
+    reworded["owner_assertions"] = ["Il pulsante principale resta in basso."]
+    edited = json.loads(json.dumps(snapshot))
+    edited["generated_mockup"]["mockup"]["screens"][0]["markup"] = screen["markup"].replace(
+        "</h1>", " aggiornati</h1>", 1
+    )
+    unsafe = json.loads(json.dumps(snapshot))
+    unsafe["generated_mockup"]["mockup"]["screens"][0]["markup"] = (
+        screen["markup"] + '<a href="#SCR-001" onclick="steal()">Apri</a>'
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="hash must match"):
+        design_package_version_from_record({**record, "package_snapshot": reworded})
+
+    with pytest.raises(ValueError, match="prototype derived from the generated mockup"):
+        design_package_version_from_record({**record, "package_snapshot": edited})
+
+    with pytest.raises(ValueError, match=r"^ATTRIBUTE_FORBIDDEN"):
+        design_package_version_from_record({**record, "package_snapshot": unsafe})

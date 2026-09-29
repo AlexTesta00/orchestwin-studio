@@ -8,9 +8,11 @@ from datetime import datetime
 from typing import Final, Protocol
 from uuid import UUID
 
+from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup
 from orchestwin.artifacts.design import (
     DesignAlternative,
     SyntheticDesignCritique,
+    contains_control_character,
 )
 from orchestwin.artifacts.prototypes import DeclarativePrototype
 from orchestwin.artifacts.references import (
@@ -38,6 +40,8 @@ from orchestwin.projects.requirements_specifications import (
 DESIGN_PACKAGE_SCHEMA_VERSION: Final = 1
 MIN_DESIGN_ALTERNATIVES: Final = 2
 MAX_DESIGN_ALTERNATIVES: Final = 4
+MAX_OWNER_ASSERTIONS: Final = 20
+MAX_OWNER_ASSERTION_LENGTH: Final = 300
 _MAX_CONCERN_TEXT_LENGTH: Final = 4000
 _MAX_OPEN_QUESTION_LENGTH: Final = 2000
 
@@ -202,6 +206,8 @@ class DesignExplorationPackage:
     prototype: DeclarativePrototype | None
     concerns: tuple[DesignConcern, ...] = ()
     open_questions: tuple[str, ...] = ()
+    generated_mockup: BoundGeneratedMockup | None = None
+    owner_assertions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect diversity, critique coverage, and internal traceability."""
@@ -247,6 +253,8 @@ class DesignExplorationPackage:
             require_items=False,
         ):
             raise ValueError("design package open questions must be normalized")
+
+        _validate_owner_assertions(self.owner_assertions)
 
         requirement_ids = frozenset(self.grounding.requirement_ids)
         user_story_ids = frozenset(self.grounding.user_story_ids)
@@ -322,6 +330,9 @@ class DesignExplorationPackage:
                 criterion_ids=criterion_ids,
             )
 
+        if self.generated_mockup is not None:
+            _validate_generated_mockup(self, requirement_ids=requirement_ids)
+
         for concern in self.concerns:
             _require_subset(
                 concern.requirement_ids,
@@ -341,7 +352,7 @@ class DesignExplorationPackage:
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic complete Design Package snapshot."""
-        return {
+        snapshot: dict[str, object] = {
             "schema_version": DESIGN_PACKAGE_SCHEMA_VERSION,
             "project_id": str(self.project_id),
             "grounding": self.grounding.to_snapshot(),
@@ -361,6 +372,11 @@ class DesignExplorationPackage:
             "concerns": [concern.to_snapshot() for concern in self.concerns],
             "open_questions": list(self.open_questions),
         }
+        if self.generated_mockup is not None:
+            snapshot["generated_mockup"] = self.generated_mockup.to_snapshot()
+        if self.owner_assertions:
+            snapshot["owner_assertions"] = list(self.owner_assertions)
+        return snapshot
 
     def canonical_json(self) -> str:
         """Serialize this Design Package deterministically."""
@@ -519,6 +535,8 @@ def create_design_exploration_package(
     prototype: DeclarativePrototype | None = None,
     concerns: Iterable[DesignConcern] = (),
     open_questions: Iterable[str] = (),
+    generated_mockup: BoundGeneratedMockup | None = None,
+    owner_assertions: Iterable[str] = (),
 ) -> DesignExplorationPackage:
     """Create a complete package in deterministic collection order."""
     return DesignExplorationPackage(
@@ -548,7 +566,69 @@ def create_design_exploration_package(
             maximum_item_length=_MAX_OPEN_QUESTION_LENGTH,
             require_items=False,
         ),
+        generated_mockup=generated_mockup,
+        owner_assertions=normalize_text_items(
+            owner_assertions,
+            label="design owner assertions",
+            maximum_item_length=MAX_OWNER_ASSERTION_LENGTH,
+            require_items=False,
+        ),
     )
+
+
+def _validate_owner_assertions(assertions: tuple[str, ...]) -> None:
+    if assertions != normalize_text_items(
+        assertions,
+        label="design owner assertions",
+        maximum_item_length=MAX_OWNER_ASSERTION_LENGTH,
+        require_items=False,
+    ):
+        raise ValueError("design owner assertions must be normalized")
+
+    if len(assertions) > MAX_OWNER_ASSERTIONS:
+        raise ValueError(f"a Design Package holds at most {MAX_OWNER_ASSERTIONS} owner assertions")
+
+    if any(contains_control_character(assertion) for assertion in assertions):
+        raise ValueError("design owner assertions must not contain control characters")
+
+
+def _validate_generated_mockup(
+    package: DesignExplorationPackage,
+    *,
+    requirement_ids: frozenset[UUID],
+) -> None:
+    mockup = package.generated_mockup
+
+    if not isinstance(mockup, BoundGeneratedMockup):
+        raise ValueError("design generated mockup must be a bound generated mockup")
+
+    if package.owner_selected_alternative_id is None or package.prototype is None:
+        raise ValueError(
+            "a generated mockup requires an owner-selected alternative and a prototype"
+        )
+
+    if mockup.design_alternative_id != package.owner_selected_alternative_id:
+        raise ValueError("generated mockup must represent the owner-selected alternative")
+
+    selected = next(
+        alternative
+        for alternative in package.alternatives
+        if alternative.id == package.owner_selected_alternative_id
+    )
+
+    if selected.visual_language is None:
+        raise ValueError(
+            "a generated mockup requires the visual language of the owner-selected alternative"
+        )
+
+    _require_subset(
+        mockup.requirement_ids,
+        requirement_ids,
+        label="generated mockup requirement IDs",
+    )
+
+    if package.prototype != mockup.prototype():
+        raise ValueError("design prototype must be the prototype derived from the generated mockup")
 
 
 def _context_reference(
@@ -646,6 +726,8 @@ def _validate_prototype_scope(
 __all__ = [
     "DESIGN_PACKAGE_SCHEMA_VERSION",
     "MAX_DESIGN_ALTERNATIVES",
+    "MAX_OWNER_ASSERTIONS",
+    "MAX_OWNER_ASSERTION_LENGTH",
     "MIN_DESIGN_ALTERNATIVES",
     "DesignConcern",
     "DesignExplorationPackage",

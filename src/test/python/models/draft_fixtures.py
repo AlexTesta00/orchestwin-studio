@@ -179,6 +179,9 @@ def proposal_draft(stage, value, request):
             item["confidence"] = item["confidence"]["value"]
             for key in ("provenance", "epistemic_status", "human_validation", "kind"):
                 item.pop(key)
+            for key in ("verdict", "quote"):
+                if key in item and item[key] is None:
+                    item.pop(key)
         return result
     architecture, plan = result["architecture"], result["test_plan"]
     for key in (

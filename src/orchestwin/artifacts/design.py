@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,6 +15,7 @@ from orchestwin.projects.requirements_primitives import (
     canonical_json,
     canonical_user_twin_references,
     canonical_uuid_tuple,
+    normalize_optional_text,
     normalize_required_text,
     normalize_text_items,
     snapshot_content_hash,
@@ -31,6 +33,13 @@ _MAX_SUMMARY_LENGTH: Final = 3000
 _MAX_RATIONALE_LENGTH: Final = 4000
 _MAX_ITEM_LENGTH: Final = 2000
 _MAX_CRITIQUE_RATIONALE_LENGTH: Final = 2000
+MAX_CRITIQUE_VERDICT_LENGTH: Final = 60
+MAX_CRITIQUE_QUOTE_LENGTH: Final = 240
+_CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def contains_control_character(value: str) -> bool:
+    return _CONTROL_CHARACTER.search(value) is not None
 
 
 class DesignApproach(StrEnum):
@@ -290,6 +299,8 @@ class SyntheticDesignCritique:
     human_validation: HumanValidationRequirement
     rationale: str
     kind: DesignCritiqueKind = DesignCritiqueKind.SYNTHETIC_USER_TWIN
+    verdict: str | None = None
+    quote: str | None = None
 
     def __post_init__(self) -> None:
         """Protect explicit synthetic and review-required semantics."""
@@ -339,6 +350,19 @@ class SyntheticDesignCritique:
         if self.human_validation is not HumanValidationRequirement.REQUIRED:
             raise ValueError("synthetic design critique requires human validation")
 
+        for value, label, maximum_length in (
+            (self.verdict, "design critique verdict", MAX_CRITIQUE_VERDICT_LENGTH),
+            (self.quote, "design critique quote", MAX_CRITIQUE_QUOTE_LENGTH),
+        ):
+            if normalize_optional_text(value, label=label, maximum_length=maximum_length) != value:
+                raise ValueError(f"{label} must be normalized")
+
+            if value is not None and contains_control_character(value):
+                raise ValueError(f"{label} must not contain control characters")
+
+        if (self.verdict is None) != (self.quote is None):
+            raise ValueError("design critique verdict and quote must be present together")
+
     @property
     def requires_human_validation(self) -> bool:
         """Return the mandatory validation state of synthetic feedback."""
@@ -346,7 +370,7 @@ class SyntheticDesignCritique:
 
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic synthetic-critique snapshot."""
-        return {
+        snapshot: dict[str, object] = {
             "id": str(self.id),
             "code": self.code,
             "kind": self.kind.value,
@@ -365,6 +389,11 @@ class SyntheticDesignCritique:
             "human_validation": self.human_validation.value,
             "rationale": self.rationale,
         }
+        if self.verdict is not None:
+            snapshot["verdict"] = self.verdict
+        if self.quote is not None:
+            snapshot["quote"] = self.quote
+        return snapshot
 
     @property
     def content_hash(self) -> str:
@@ -555,6 +584,8 @@ def create_synthetic_design_critique(
     trust_concerns: Iterable[str] = (),
     questions: Iterable[str] = (),
     suggested_changes: Iterable[str] = (),
+    verdict: str | None = None,
+    quote: str | None = None,
 ) -> SyntheticDesignCritique:
     """Create explicitly synthetic, model-inferred design feedback."""
     return SyntheticDesignCritique(
@@ -613,15 +644,28 @@ def create_synthetic_design_critique(
             label="design critique rationale",
             maximum_length=_MAX_CRITIQUE_RATIONALE_LENGTH,
         ),
+        verdict=normalize_optional_text(
+            verdict,
+            label="design critique verdict",
+            maximum_length=MAX_CRITIQUE_VERDICT_LENGTH,
+        ),
+        quote=normalize_optional_text(
+            quote,
+            label="design critique quote",
+            maximum_length=MAX_CRITIQUE_QUOTE_LENGTH,
+        ),
     )
 
 
 __all__ = [
+    "MAX_CRITIQUE_QUOTE_LENGTH",
+    "MAX_CRITIQUE_VERDICT_LENGTH",
     "DesignAlternative",
     "DesignApproach",
     "DesignCritiqueKind",
     "DesignWorkflow",
     "SyntheticDesignCritique",
+    "contains_control_character",
     "create_design_alternative",
     "create_design_workflow",
     "create_synthetic_design_critique",
