@@ -21,7 +21,7 @@ def test_default_runtime_composes_the_diagram_service_from_the_stage_queries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     requirements_marker = SimpleNamespace(
-        generation=object(), revisions=object(), queries=object(), gate=object()
+        generation=object(), revisions=object(), queries=object(), gate=object(), changes=object()
     )
     design_marker = SimpleNamespace(
         generation=object(), revisions=object(), queries=object(), gate=object()

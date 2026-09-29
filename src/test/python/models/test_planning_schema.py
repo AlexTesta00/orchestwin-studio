@@ -1,6 +1,9 @@
 """Reference grammars reject fabricated links before model output is accepted."""
 
+import copy
 import re
+
+import pytest
 
 from orchestwin.models.design_drafts import DesignDraft, design_context
 from orchestwin.models.planning_schema import (
@@ -89,3 +92,16 @@ def test_critiques_get_shorter_lists_as_the_twins_grow():
         assert critique["concerns"]["minItems"] == 1
         fits = schema["$defs"]["VisualLanguageDraft"]["properties"]["twin_fit"]
         assert len(fits["prefixItems"]) == count
+
+
+@pytest.mark.parametrize("purpose", ["DESIGN_MOCKUP", "DESIGN_MOCKUP_HTML", "DESIGN_ITERATION"])
+def test_design_purposes_other_than_the_alternatives_keep_their_own_schema(purpose):
+    context, _ = design_context(design_fixtures.proposal_request())
+    schema = {
+        "type": "object",
+        "properties": {"approach": {"type": "string"}, "css": {"type": "string"}},
+        "required": ["approach", "css"],
+    }
+    before = copy.deepcopy(schema)
+    constrain_planning_schema(schema, {**context, "purpose": purpose}, "design")
+    assert schema == before

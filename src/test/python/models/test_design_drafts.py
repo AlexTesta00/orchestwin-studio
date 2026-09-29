@@ -48,6 +48,7 @@ from orchestwin.models.model_proposals import (
     design_output_tokens,
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.structured_generation import StructuredGenerationProviderKind
 from orchestwin.projects.requirements_primitives import canonical_json
 from orchestwin.twins.epistemics import EvidenceReference, EvidenceSourceKind
 
@@ -379,6 +380,7 @@ def test_a_critique_names_its_alternative_and_its_twin_before_its_content():
 
 class _StubConfiguration:
     max_output_tokens = 8192
+    provider_kind = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
 
 
 class _StubGenerator:
@@ -388,6 +390,9 @@ class _StubGenerator:
     def __init__(self, output):
         self.output = output
         self.calls = []
+
+    def route(self, task, purpose=None):
+        return self
 
     async def generate(self, **kwargs):
         self.calls.append(kwargs)

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "providers": [
+    {"id": "anthropic", "kind": "ANTHROPIC_HOSTED", "api_key_env": "ORCHESTWIN_ANTHROPIC_API_KEY"}
+  ],
+  "models": [
+    {
+      "id": "opus-design", "provider": "anthropic", "model": "claude-opus-5-5", "effort": "high",
+      "context_window_tokens": 1000000, "max_output_tokens": 64000,
+      "reasoning_allowance_tokens": 64000, "timeout_seconds": 1200, "characters_per_token": 3.0,
+      "prices": {"input": "4.00", "output": "20.00", "cache_read": "0.20", "cache_write": "5.00"}
+    },
+    {
+      "id": "opus", "provider": "anthropic", "model": "claude-opus-5-5", "effort": "medium",
+      "context_window_tokens": 1000000, "max_output_tokens": 64000,
+      "reasoning_allowance_tokens": 12000, "timeout_seconds": 900, "characters_per_token": 3.0,
+      "prices": {"input": "4.00", "output": "20.00", "cache_read": "0.20", "cache_write": "5.00"}
+    },
+    {
+      "id": "sonnet", "provider": "anthropic", "model": "claude-sonnet-5", "effort": "medium",
+      "context_window_tokens": 1000000, "max_output_tokens": 32000,
+      "reasoning_allowance_tokens": 8000, "timeout_seconds": 600, "characters_per_token": 3.0,
+      "prices": {"input": "2.00", "output": "10.00", "cache_read": "0.20", "cache_write": "2.50"}
+    }
+  ],
+  "routes": {"default": "opus", "tasks": {"design": "opus-design"}, "purposes": {}},
+  "budget": {"per_generation_usd": "2.50", "per_project_usd": "10.00", "total_usd": "60.00"}
+}

@@ -17,13 +17,21 @@ from orchestwin.api.brief_dialogue import create_brief_dialogue_router
 from orchestwin.api.clarification import create_clarification_router
 from orchestwin.api.design import create_design_router
 from orchestwin.api.design_discussion import create_design_discussion_router
+from orchestwin.api.design_iterations import create_design_iteration_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_review_pins import create_design_review_pins_router
 from orchestwin.api.diagrams import create_diagram_router
+from orchestwin.api.generation_jobs import GenerationJobRegistry
+from orchestwin.api.generation_requests import (
+    PREFERENCE_APPLIED,
+    create_generation_request_router,
+)
 from orchestwin.api.health import create_health_router
 from orchestwin.api.insight_applications import create_insight_application_router
 from orchestwin.api.knowledge_packages import create_knowledge_package_router
 from orchestwin.api.model_runtime import create_model_runtime_router
+from orchestwin.api.model_usage import create_model_usage_router
 from orchestwin.api.project_imports import create_project_import_router
 from orchestwin.api.projects import create_project_router
 from orchestwin.api.proposal_evidence import create_proposal_evidence_router
@@ -56,6 +64,7 @@ def create_app(
     resolved_settings = settings if settings is not None else load_settings()
     resolved_runtime = runtime if runtime is not None else create_default_runtime(resolved_settings)
     resolved_auth_settings = auth_settings if auth_settings is not None else AuthApiSettings()
+    jobs = GenerationJobRegistry()
 
     @asynccontextmanager
     async def lifespan(
@@ -71,7 +80,10 @@ def create_app(
                 )
             yield
         finally:
-            await resolved_runtime.close()
+            try:
+                await jobs.close()
+            finally:
+                await resolved_runtime.close()
 
     application = FastAPI(
         title=resolved_settings.application_name,
@@ -91,10 +103,17 @@ def create_app(
 
     @application.exception_handler(ProposalGenerationError)
     async def proposal_failure(_request, error: ProposalGenerationError):
-        if error.code in {"PROVIDER_UNAVAILABLE", "TIMEOUT", "RATE_LIMITED"}:
+        if error.code in {
+            "PROVIDER_UNAVAILABLE",
+            "TIMEOUT",
+            "RATE_LIMITED",
+            "GENERATION_BUDGET_UNAVAILABLE",
+        }:
             status_code = 503
         elif error.code == "CONTEXT_BUDGET_EXCEEDED":
             status_code = 422
+        elif error.code == "GENERATION_BUDGET_EXCEEDED":
+            status_code = 402
         else:
             status_code = 502
         return JSONResponse(
@@ -132,6 +151,7 @@ def create_app(
     application.state.requirements_revision_service = resolved_runtime.requirements_revision_service
     application.state.requirements_query_service = resolved_runtime.requirements_query_service
     application.state.requirements_gate_service = resolved_runtime.requirements_gate_service
+    application.state.requirements_change_service = resolved_runtime.requirements_change_service
     application.state.design_generation_service = resolved_runtime.design_generation_service
     application.state.design_revision_service = resolved_runtime.design_revision_service
     application.state.design_query_service = resolved_runtime.design_query_service
@@ -145,6 +165,7 @@ def create_app(
     )
     application.state.project_import_service = resolved_runtime.project_import_service
     application.state.training_api_service = resolved_runtime.training_api_service
+    application.state.generation_jobs = jobs
 
     application.add_middleware(
         CORSMiddleware,
@@ -160,10 +181,12 @@ def create_app(
         allow_headers=[
             "Authorization",
             "Content-Type",
+            "Prefer",
         ],
         expose_headers=[
             "Content-Disposition",
             "X-Content-SHA256",
+            PREFERENCE_APPLIED,
         ],
     )
 
@@ -179,8 +202,11 @@ def create_app(
         create_requirements_router(),
         create_design_router(),
         create_design_mockup_router(),
+        create_design_iteration_router(),
         create_design_loop_router(),
+        create_design_review_pins_router(),
         create_design_discussion_router(),
+        create_generation_request_router(),
         create_insight_application_router(),
         create_artifact_graph_router(),
         create_diagram_router(),
@@ -191,6 +217,7 @@ def create_app(
         create_training_router(),
         create_proposal_evidence_router(),
         create_model_runtime_router(),
+        create_model_usage_router(),
     ):
         application.include_router(
             router,

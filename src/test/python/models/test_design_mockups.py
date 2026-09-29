@@ -15,6 +15,8 @@ from orchestwin.api.design_mockups import (
     _mockup_instruction,
     _payload,
 )
+from orchestwin.artifacts.bound_mockups import create_bound_mockup
+from orchestwin.artifacts.generated_mockups import create_generated_mockup
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype, NavigationPattern
 from orchestwin.models.design_drafts import requirements_view
 from orchestwin.models.design_mockups import MockupDraft, MockupElementDraft, bind_mockup
@@ -22,6 +24,7 @@ from orchestwin.models.planning_schema import constrain_planning_schema
 from orchestwin.models.proposal_generation import ProposalGenerationError
 
 from ..artifacts import design_fixtures as fixtures
+from .test_generated_mockup_support import ScriptedMockupGenerator
 from .test_model_proposals import make_generator
 
 
@@ -216,9 +219,12 @@ class MemoryEvidence:
         self.events.append(kwargs)
 
 
-def application(tmp_path, *, missing=False, stale=False, value=None):
-    version = fixtures.design_version()
-    generator, transport = make_generator(tmp_path, draft_value() if value is None else value)
+def application(tmp_path, *, missing=False, stale=False, value=None, package=None, generator=None):
+    version = fixtures.design_version(package=package)
+    if generator is None:
+        generator, transport = make_generator(tmp_path, draft_value() if value is None else value)
+    else:
+        transport = None
     evidence = MemoryEvidence()
     calls = 0
 
@@ -350,3 +356,69 @@ def test_mockup_instruction_and_context_follow_the_visual_language():
         "visual_language" not in _alternative_view(plain)
         or _alternative_view(plain)["visual_language"] is None
     )
+
+
+def generated_screen(index, target):
+    return {
+        "code": f"SCR-00{index}",
+        "title": f"Reservation step {index}",
+        "state": "SUCCESS" if index == 2 else "DEFAULT",
+        "markup": (
+            '<main data-req="REQ-001">'
+            f"<h1>Reservation step {index}</h1>"
+            "<p>The receptionist checks the guest data and continues with the next step of the "
+            "reservation for the room that the guest asked for at the desk.</p>"
+            f'<a href="#{target}">Continue</a>'
+            "</main>"
+        ),
+    }
+
+
+def generated_mockup_package():
+    package = fixtures.design_package()
+    dashboard = next(item for item in package.alternatives if item.visual_language is not None)
+    mockup = create_generated_mockup(
+        design_alternative_id=dashboard.id,
+        title="Reservation desk",
+        styles="main{padding:var(--vl-space)}",
+        screens=[generated_screen(1, "SCR-002"), generated_screen(2, "SCR-001")],
+        token_names=dict(dashboard.visual_language.tokens),
+    )
+    bound = create_bound_mockup(
+        mockup=mockup, requirement_ids_by_code={"REQ-001": fixtures.REQUIREMENT_ID}
+    )
+    return replace(
+        package,
+        owner_selected_alternative_id=dashboard.id,
+        prototype=bound.prototype(),
+        generated_mockup=bound,
+    )
+
+
+def test_the_declarative_path_replaces_a_generated_mockup_of_the_current_design(tmp_path):
+    current = generated_mockup_package()
+    assert current.generated_mockup is not None
+    app, body, evidence, transport = application(tmp_path, package=current)
+    result = asyncio.run(
+        app.generate(owner_user_id=fixtures.OWNER_ID, project_id=fixtures.PROJECT_ID, body=body)
+    )
+    assert len(transport.calls) == 1
+    assert result.package.generated_mockup is None
+    assert result.package.owner_selected_alternative_id == body.alternative_id
+    assert result.package.prototype.design_alternative_id == body.alternative_id
+    assert result.approach is None and result.cost_microusd is None
+    accepted = next(x for x in evidence.events if x["kind"] == "ADAPTER_ACCEPTED")
+    assert accepted["payload"]["result"]["package"].get("generated_mockup") is None
+
+
+def test_the_declarative_path_is_closed_while_the_generated_path_is_active(tmp_path):
+    generator = ScriptedMockupGenerator()
+    app, body, evidence, _transport = application(tmp_path, generator=generator)
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(
+            app.generate(owner_user_id=fixtures.OWNER_ID, project_id=fixtures.PROJECT_ID, body=body)
+        )
+    assert refused.value.status_code == 409
+    assert refused.value.detail == {"code": "GENERATED_MOCKUP_PATH_ACTIVE"}
+    assert generator.calls == []
+    assert evidence.events == []

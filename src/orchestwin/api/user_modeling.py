@@ -13,6 +13,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
 from pydantic import (
@@ -22,6 +23,8 @@ from pydantic import (
     model_validator,
 )
 
+from orchestwin.api.generation_jobs import GenerationOperation
+from orchestwin.api.generation_requests import generation_request
 from orchestwin.twins.application import (
     GroundedSnapshotGenerationResult,
     PersonaDecisionApplicationResult,
@@ -1003,17 +1006,28 @@ def create_user_modeling_router(
     )
     async def propose_personas(
         project_id: UUID,
+        request: Request,
         owner_user_id: UUID = (owner_user_id_dependency),
     ) -> PersonaProposalCommandPayload:
         """Propose one-to-four project personas."""
-        result = await dependencies.commands.propose_personas(
-            owner_user_id=(owner_user_id),
+
+        async def proposal() -> PersonaProposalCommandPayload:
+            result = await dependencies.commands.propose_personas(
+                owner_user_id=(owner_user_id),
+                project_id=project_id,
+            )
+
+            _raise_for_user_modeling_issue(result.issue)
+
+            return _persona_proposal_payload(result)
+
+        return await generation_request(
+            request,
+            GenerationOperation.PERSONA_PROPOSAL,
+            proposal,
+            owner_user_id=owner_user_id,
             project_id=project_id,
         )
-
-        _raise_for_user_modeling_issue(result.issue)
-
-        return _persona_proposal_payload(result)
 
     @router.post(
         "/personas/{persona_id}/decision",
@@ -1044,17 +1058,28 @@ def create_user_modeling_router(
     )
     async def generate_snapshot(
         project_id: UUID,
+        request: Request,
         owner_user_id: UUID = (owner_user_id_dependency),
     ) -> SnapshotGenerationCommandPayload:
         """Generate project-grounded User Twins and snapshot."""
-        result = await dependencies.commands.generate_grounded_snapshot(
-            owner_user_id=(owner_user_id),
+
+        async def generation() -> SnapshotGenerationCommandPayload:
+            result = await dependencies.commands.generate_grounded_snapshot(
+                owner_user_id=(owner_user_id),
+                project_id=project_id,
+            )
+
+            _raise_for_user_modeling_issue(result.issue)
+
+            return _snapshot_generation_payload(result)
+
+        return await generation_request(
+            request,
+            GenerationOperation.USER_TWIN_GENERATION,
+            generation,
+            owner_user_id=owner_user_id,
             project_id=project_id,
         )
-
-        _raise_for_user_modeling_issue(result.issue)
-
-        return _snapshot_generation_payload(result)
 
     @router.get(
         "/snapshots/current",

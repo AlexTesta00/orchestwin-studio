@@ -22,10 +22,12 @@ from orchestwin.api.design_loop import (
     DesignLoopApplication,
 )
 from orchestwin.artifacts.design_evaluation import (
+    HOSTED_DOCUMENT_BYTES,
     DesignEvaluationRun,
     design_review_anchors,
     design_review_view,
     evaluation_document,
+    finding_anchor_key,
 )
 from orchestwin.artifacts.design_static_check import (
     STATIC_PROFILE_CONSTRAINT,
@@ -47,6 +49,7 @@ from orchestwin.evaluation.findings import (
 from orchestwin.evaluation.proposer_evaluator import TWIN_REVIEW_EVALUATOR_ID, TWIN_REVIEW_TASK
 from orchestwin.models.proposal_evidence import begin_model_generation
 from orchestwin.models.proposal_generation import ProposalGenerationError
+from orchestwin.models.structured_generation import StructuredGenerationProviderKind
 from orchestwin.projects.requirements_primitives import (
     UserTwinVersionReference,
     canonical_json,
@@ -64,6 +67,7 @@ from orchestwin.twins.epistemics import (
 )
 from orchestwin.twins.user_twins import UserTwinLifecycleStatus
 from src.test.python.artifacts import design_fixtures
+from src.test.python.artifacts.test_design_package_extension import extended_package, large_bound
 
 CONFIGURATION = UserTwinEvaluatorConfiguration(
     evaluator_id="fake-design-evaluator",
@@ -243,12 +247,19 @@ class MemoryEvidence:
 
 
 class FakeGenerator:
-    def __init__(self, *outcomes):
+    def __init__(
+        self, *outcomes, provider_kind=StructuredGenerationProviderKind.OPENAI_COMPATIBLE_LOCAL
+    ):
         self.outcomes = list(outcomes)
         self.calls = []
         self.configuration = SimpleNamespace(
-            identity=SimpleNamespace(content_hash=MODEL_HASH), max_output_tokens=8192
+            identity=SimpleNamespace(content_hash=MODEL_HASH),
+            max_output_tokens=8192,
+            provider_kind=provider_kind,
         )
+
+    def route(self, task, purpose=None):
+        return self
 
     async def generate(self, **kwargs):
         self.calls.append(kwargs)
@@ -639,6 +650,79 @@ def test_twin_review_does_not_retry_other_failures(monkeypatch, code):
     assert len(generator.calls) == 1
     assert MemoryRuns.runs == []
     assert evidence.events == [(0, "APPLICATION_RESULT", {"status": "FAILED", "code": code})]
+
+
+def large_version():
+    return design_fixtures.design_version(package=extended_package(large_bound()))
+
+
+def test_a_hosted_twin_review_reads_a_large_generated_mockup_within_the_hosted_limits(
+    monkeypatch,
+):
+    version = large_version()
+    generator = FakeGenerator(
+        review(anchor="SCR-001/ELM-016"),
+        provider_kind=StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
+    )
+    app, body = application(
+        monkeypatch,
+        version=version,
+        generator=generator,
+        evidence=MemoryEvidence(),
+        profile=ObservedProfile,
+    )
+    result = evaluate(app, body)
+    [call] = generator.calls
+    assert call["retry_schema_errors"] is False
+    assert call["context"]["design"] == design_review_view(version, hosted=True, language="it")
+    anchors = design_review_anchors(version, hosted=True, language="it")
+    schema = call["output_type"].model_json_schema()
+    assert schema["$defs"]["TwinReviewFinding"]["properties"]["anchor"]["enum"] == list(anchors)
+    [document] = [
+        item
+        for item in result.run.bundle.artifacts
+        if item.kind is EvaluationArtifactKind.DOM_SNAPSHOT
+    ]
+    assert document.size_bytes <= HOSTED_DOCUMENT_BYTES
+    assert document.sha256_digest == (
+        evaluation_document(version, language="it", hosted=True).reference.sha256_digest
+    )
+    [finding] = result.run.findings
+    assert finding_anchor_key(finding) == "SCR-001/ELM-016"
+    assert finding.location == anchors["SCR-001/ELM-016"]
+    assert MemoryRuns.runs == [result.run]
+
+
+def test_a_local_twin_review_refuses_a_generated_mockup_it_cannot_hold(monkeypatch):
+    app, body, generator, _evidence = reviewing(monkeypatch, review(), version=large_version())
+    with pytest.raises(HTTPException) as failure:
+        evaluate(app, body)
+    assert failure.value.status_code == 409
+    assert failure.value.detail == {"code": "EVALUATION_DOCUMENT_TOO_LARGE"}
+    assert generator.calls == []
+
+
+def test_a_schema_error_is_answered_once_more_within_the_attempts_of_the_review(monkeypatch):
+    schema_error = ProposalGenerationError("RESPONSE_SCHEMA_ERROR")
+    app, body, generator, evidence = reviewing(monkeypatch, schema_error, review())
+    result = evaluate(app, body)
+    assert len(generator.calls) == 2
+    assert {call["retry_schema_errors"] for call in generator.calls} == {False}
+    assert [item.finding_id for item in result.run.findings] == ["UTF-001"]
+    assert evidence.events[0][2] == {
+        "status": "TWIN_REVIEW_REJECTED",
+        "evaluation_run_id": str(result.run.id),
+    }
+    twice, body, generator, _evidence = reviewing(
+        monkeypatch,
+        ProposalGenerationError("RESPONSE_SCHEMA_ERROR"),
+        ProposalGenerationError("RESPONSE_SCHEMA_ERROR"),
+        review(),
+    )
+    with pytest.raises(ProposalGenerationError) as failure:
+        evaluate(twice, body)
+    assert failure.value.code == "RESPONSE_SCHEMA_ERROR"
+    assert len(generator.calls) == 2
 
 
 def test_twin_review_needs_known_profile_observations(monkeypatch):

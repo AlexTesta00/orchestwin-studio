@@ -94,6 +94,12 @@ def _content_hash(snapshot):
     return hashlib.sha256(canonical_json(snapshot).encode("utf-8")).hexdigest()
 
 
+def _related(scope):
+    if not scope.related_generations:
+        return {}
+    return {"related_generations": list(scope.related_generations)}
+
+
 def _answer_from(body: DialogueAnswerRequest) -> DialogueAnswer:
     if body.kind == "TEXT":
         return DialogueAnswer.text_answer(body.text)
@@ -296,6 +302,7 @@ class BriefDialogueApplication:
                     "generated_content_hashes": {
                         "BRIEF_DIALOGUE_STOP": [_content_hash({"question": None})]
                     },
+                    **_related(scope),
                 },
             )
             return result
@@ -308,6 +315,7 @@ class BriefDialogueApplication:
                 "generated_content_hashes": {
                     "BRIEF_DIALOGUE_TURN": [_content_hash(turn.to_snapshot())]
                 },
+                **_related(scope),
             },
         )
         return BriefDialogueResult(outcome, asked, brief_version)
@@ -390,6 +398,7 @@ class BriefDialogueApplication:
                     ],
                 },
                 "generated_content_hashes": {"PROJECT_BRIEF": [version.content_hash]},
+                **_related(scope),
             },
         )
         return BriefDialogueResult(

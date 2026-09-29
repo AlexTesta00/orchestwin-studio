@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.clarification import HumanGateEventResponse, HumanGateResponse
+from orchestwin.api.generation_jobs import GenerationOperation
+from orchestwin.api.generation_requests import generation_request
 from orchestwin.artifacts.design import (
     DesignApproach,
     DesignCritiqueKind,
@@ -247,6 +249,28 @@ class SyntheticDesignCritiquePayload(ApiModel):
     epistemic_status: EpistemicStatus
     human_validation: HumanValidationRequirement
     rationale: str
+    verdict: str | None = None
+    quote: str | None = None
+
+
+class GeneratedScreenPayload(ApiModel):
+    code: str
+    title: str
+    state: PrototypeScreenState
+    markup: str
+
+
+class GeneratedMockupPayload(ApiModel):
+    contract_version: int
+    design_alternative_id: UUID
+    title: str
+    styles: str
+    screens: tuple[GeneratedScreenPayload, ...]
+
+
+class BoundGeneratedMockupPayload(ApiModel):
+    mockup: GeneratedMockupPayload
+    requirement_ids_by_code: dict[str, UUID]
 
 
 class PrototypeElementPayload(ApiModel):
@@ -326,6 +350,8 @@ class DesignPackagePayload(ApiModel):
     prototype: DeclarativePrototypePayload | None
     concerns: tuple[DesignConcernPayload, ...]
     open_questions: tuple[str, ...]
+    generated_mockup: BoundGeneratedMockupPayload | None = None
+    owner_assertions: tuple[str, ...] = ()
 
     @classmethod
     def from_domain(
@@ -343,6 +369,14 @@ class DesignPackagePayload(ApiModel):
                 del alternative["approach"]
             if alternative["visual_language"] is None:
                 del alternative["visual_language"]
+        for critique in payload["critiques"]:
+            for key in ("verdict", "quote"):
+                if critique[key] is None:
+                    del critique[key]
+        if payload["generated_mockup"] is None:
+            del payload["generated_mockup"]
+        if not payload["owner_assertions"]:
+            del payload["owner_assertions"]
         return design_package_from_snapshot(payload)
 
 
@@ -779,19 +813,29 @@ def create_design_router() -> APIRouter:
     )
     async def generate_design_endpoint(
         project_id: UUID,
+        request: Request,
         user: Annotated[UserAccount, Depends(current_user_dependency)],
         service: Annotated[
             DesignGenerationService,
             Depends(design_generation_service_dependency),
         ],
     ) -> DesignGenerationPayload:
-        result = await service.generate(
+        async def generation() -> DesignGenerationPayload:
+            result = await service.generate(
+                owner_user_id=user.id,
+                project_id=project_id,
+            )
+            _raise_generation_failure(result)
+
+            return DesignGenerationPayload.from_domain(result)
+
+        return await generation_request(
+            request,
+            GenerationOperation.DESIGN_PROPOSAL,
+            generation,
             owner_user_id=user.id,
             project_id=project_id,
         )
-        _raise_generation_failure(result)
-
-        return DesignGenerationPayload.from_domain(result)
 
     @router.get(
         "/current",
@@ -1165,6 +1209,7 @@ def _unprocessable(code: str) -> HTTPException:
 
 __all__ = [
     "DESIGN_API_PREFIX",
+    "BoundGeneratedMockupPayload",
     "DesignGenerationPayload",
     "DesignPackageDiffPayload",
     "DesignPackagePayload",
@@ -1172,5 +1217,7 @@ __all__ = [
     "DesignQueryService",
     "DesignReadinessPayload",
     "DesignRevisionPayload",
+    "GeneratedMockupPayload",
+    "GeneratedScreenPayload",
     "create_design_router",
 ]

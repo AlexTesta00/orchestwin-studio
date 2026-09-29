@@ -41,6 +41,8 @@ REQUIREMENTS_PROPOSAL_SCHEMA_VERSION: Final = 1
 MAX_REQUIREMENTS_PROVIDER_ID_LENGTH: Final = 128
 MIN_REQUIREMENTS_PROPOSAL_TWINS: Final = MIN_USER_TWINS
 MAX_REQUIREMENTS_PROPOSAL_TWINS: Final = MAX_USER_TWINS
+MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH: Final = 2000
+REQUIREMENTS_CHANGE_PURPOSE: Final = "REQUIREMENTS_CHANGE"
 
 _MAX_BRIEF_NAME_LENGTH: Final = 200
 _MAX_BRIEF_TEXT_LENGTH: Final = 4000
@@ -350,6 +352,8 @@ class RequirementsProposalRequest:
     user_modeling: RequirementsUserModelingInput
     catalog_version: int
     catalog_content_hash: str
+    current_specification: RequirementsSpecification | None = None
+    owner_request: str | None = None
 
     def __post_init__(self) -> None:
         """Protect current fixed-catalog metadata."""
@@ -368,9 +372,40 @@ class RequirementsProposalRequest:
         ):
             raise ValueError("requirements proposal request must use the current agent catalog")
 
+        if (self.current_specification is None) != (self.owner_request is None):
+            raise ValueError(
+                "a requirements change needs the current specification and the owner request"
+            )
+
+        if self.current_specification is None or self.owner_request is None:
+            return
+
+        if (
+            not isinstance(self.owner_request, str)
+            or self.owner_request != self.owner_request.strip()
+            or not 1 <= len(self.owner_request) <= MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH
+        ):
+            raise ValueError(
+                "the owner request must be trimmed text of "
+                f"1 to {MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH} characters"
+            )
+
+        current = self.current_specification
+
+        if (
+            current.project_id != self.project_id
+            or current.project_brief_reference != self.brief.reference
+            or current.agent_team_reference != self.team.reference
+            or current.user_modeling_reference != self.user_modeling.reference
+            or current.catalog_version != self.catalog_version
+            or current.catalog_content_hash != self.catalog_content_hash
+            or current.user_twin_references != self.user_modeling.user_twin_references
+        ):
+            raise ValueError("the current requirements specification must use the governed context")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return the complete deterministic provider request."""
-        return {
+        snapshot: dict[str, object] = {
             "schema_version": (REQUIREMENTS_PROPOSAL_SCHEMA_VERSION),
             "project_id": str(self.project_id),
             "project_mode": self.project_mode.value,
@@ -381,6 +416,15 @@ class RequirementsProposalRequest:
             "brief": self.brief.to_snapshot(),
             "team": self.team.to_snapshot(),
             "user_modeling": (self.user_modeling.to_snapshot()),
+        }
+
+        if self.current_specification is None or self.owner_request is None:
+            return snapshot
+
+        return {
+            **snapshot,
+            "current_specification": self.current_specification.to_snapshot(),
+            "owner_request": self.owner_request,
         }
 
     def canonical_json(self) -> str:
@@ -468,7 +512,9 @@ class RequirementsProposalPort(Protocol):
 
 
 __all__ = [
+    "MAX_REQUIREMENTS_OWNER_REQUEST_LENGTH",
     "MAX_REQUIREMENTS_PROVIDER_ID_LENGTH",
+    "REQUIREMENTS_CHANGE_PURPOSE",
     "REQUIREMENTS_PROPOSAL_SCHEMA_VERSION",
     "RequirementsBriefInput",
     "RequirementsProposalIssueCode",

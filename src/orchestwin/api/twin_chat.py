@@ -150,6 +150,11 @@ class TwinChatApplication:
             {
                 "result": recorded.to_snapshot(),
                 "generated_content_hashes": {"TWIN_CHAT_TURN": [turn.content_hash]},
+                **(
+                    {"related_generations": list(scope.related_generations)}
+                    if scope.related_generations
+                    else {}
+                ),
             },
         )
         return TwinChatResult(status=TwinChatStatus.TURN_RECORDED, conversation=recorded)

@@ -3,13 +3,19 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from datetime import datetime
 from typing import Final
 from uuid import UUID, uuid5
 
 from orchestwin.artifacts.design_packages import DesignPackageVersion
+from orchestwin.artifacts.generated_mockup_structure import derive_elements
 from orchestwin.artifacts.mockup_html import render_evaluation_document
+from orchestwin.artifacts.prototypes import (
+    PrototypeElement,
+    PrototypeElementKind,
+    PrototypeScreen,
+)
 from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES
 from orchestwin.evaluation.artifacts import (
     EvaluationArtifactBundle,
@@ -51,6 +57,15 @@ SCENARIO_TASK_LENGTH: Final = 2000
 SCENARIO_OUTCOME_LENGTH: Final = 1000
 _SCENARIO_NAMESPACE: Final = UUID("5b0d2f1e-0e4a-4d1f-9d6a-3c1e5e7f2a11")
 CONTENT_STEPS: Final = (None, 400, 240, 160, 100, 60)
+HOSTED_DOCUMENT_BYTES: Final = 96 * 1024
+TABLE_ROWS_SHOWN: Final = 12
+MAX_ELEMENT_ANCHORS: Final = 120
+OTHER_ANCHORS_PER_SCREEN: Final = 8
+REMAINING_ROWS: Final = {
+    "it": ("… e un'altra riga della tabella", "… e altre {count} righe della tabella"),
+    "en": ("… and one more row in the table", "… and {count} more rows in the table"),
+}
+_ANCHOR_KEY: Final = re.compile(r"SCR-[0-9]{3,6}(?:/ELM-[0-9]{3,6})?")
 _WORD: Final = re.compile(r"[a-z0-9àèéìòù]+")
 _STOPWORDS: Final = frozenset(
     [
@@ -138,6 +153,35 @@ class DesignEvaluationError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class AnchoredSyntheticFinding(SyntheticFinding):
+    anchor_key: str
+
+    def __post_init__(self) -> None:
+        SyntheticFinding.__post_init__(self)
+        if not isinstance(self.anchor_key, str) or _ANCHOR_KEY.fullmatch(self.anchor_key) is None:
+            raise ValueError("synthetic finding anchor key must name a screen or an element")
+
+    def to_snapshot(self) -> dict[str, object]:
+        snapshot: dict[str, object] = {}
+        for key, value in SyntheticFinding.to_snapshot(self).items():
+            snapshot[key] = value
+            if key == "location":
+                snapshot["anchor_key"] = self.anchor_key
+        return snapshot
+
+
+def anchor_finding(finding: SyntheticFinding, anchor_key: str) -> AnchoredSyntheticFinding:
+    return AnchoredSyntheticFinding(
+        **{item.name: getattr(finding, item.name) for item in fields(SyntheticFinding)},
+        anchor_key=anchor_key,
+    )
+
+
+def finding_anchor_key(finding: SyntheticFinding) -> str | None:
+    return finding.anchor_key if isinstance(finding, AnchoredSyntheticFinding) else None
+
+
+@dataclass(frozen=True, slots=True)
 class DesignEvaluationDocument:
     content: bytes
     reference: EvaluationArtifactReference
@@ -175,16 +219,20 @@ def evaluation_reference(
 
 
 def evaluation_document(
-    version: DesignPackageVersion, *, language: str = "und"
+    version: DesignPackageVersion, *, language: str = "und", hosted: bool = False
 ) -> DesignEvaluationDocument:
     package = version.package
     if package.prototype is None or package.owner_selected_alternative_id is None:
         raise DesignEvaluationError("DESIGN_PROTOTYPE_REQUIRED")
     snapshot = package.to_snapshot()
+    maximum = MAX_VIEW_BYTES
+    if hosted and package.generated_mockup is not None:
+        snapshot = _reduced_snapshot(version, snapshot, language)
+        maximum = HOSTED_DOCUMENT_BYTES
     for step in CONTENT_STEPS:
         text = render_evaluation_document(snapshot, language=language, max_content=step)
         content = text.encode("utf-8")
-        if len(content) <= MAX_VIEW_BYTES:
+        if len(content) <= maximum:
             return DesignEvaluationDocument(
                 content=content,
                 reference=evaluation_reference(
@@ -223,26 +271,165 @@ def _anchor_label(text: str) -> str:
     return text if len(text) <= ANCHOR_LABEL_LENGTH else text[: ANCHOR_LABEL_LENGTH - 1] + "…"
 
 
-def design_review_anchors(version: DesignPackageVersion) -> dict[str, str]:
+def remaining_rows_text(count: int, language: str) -> str:
+    one, many = REMAINING_ROWS.get(language, REMAINING_ROWS["en"])
+    return one if count == 1 else many.format(count=count)
+
+
+def _hidden_rows(version: DesignPackageVersion) -> tuple[frozenset[str], dict[str, int]]:
+    elements = derive_elements(version.package.generated_mockup.mockup)
+    tables: dict[tuple[str, tuple[int, ...]], list] = {}
+    for item in elements:
+        if item.node_name == "tr" and item.kind is PrototypeElementKind.LIST:
+            tables.setdefault((item.screen_code, item.path[:-2]), []).append(item)
+    paths: dict[str, set[tuple[int, ...]]] = {}
+    markers: dict[str, int] = {}
+    for (screen, _table), rows in tables.items():
+        rest = rows[TABLE_ROWS_SHOWN:]
+        if rest:
+            markers[rest[0].code] = len(rest)
+            paths.setdefault(screen, set()).update(row.path for row in rest)
+    hidden = frozenset(
+        item.code
+        for item in elements
+        if any(
+            item.path[:depth] in paths.get(item.screen_code, ())
+            for depth in range(1, len(item.path) + 1)
+        )
+    )
+    return hidden, markers
+
+
+def review_screens(
+    version: DesignPackageVersion, *, hosted: bool = False, language: str = "und"
+) -> tuple[tuple[PrototypeScreen, tuple[PrototypeElement, ...]], ...]:
+    screens = ordered_screens(version)
+    if not hosted or version.package.generated_mockup is None:
+        return tuple((screen, screen.elements) for screen in screens)
+    hidden, markers = _hidden_rows(version)
+    reduced = []
+    for screen in screens:
+        elements = []
+        for element in screen.elements:
+            count = markers.get(element.code)
+            if count is not None:
+                elements.append(
+                    replace(
+                        element,
+                        kind=PrototypeElementKind.TEXT,
+                        content=remaining_rows_text(count, language),
+                        accessible_name=None,
+                    )
+                )
+            elif element.code not in hidden:
+                elements.append(element)
+        reduced.append((screen, tuple(elements)))
+    return tuple(reduced)
+
+
+def _reduced_snapshot(
+    version: DesignPackageVersion, snapshot: Mapping[str, object], language: str
+) -> dict[str, object]:
+    elements = {
+        screen.code: [element.to_snapshot() for element in items]
+        for screen, items in review_screens(version, hosted=True, language=language)
+    }
+    prototype = snapshot["prototype"]
+    return {
+        **snapshot,
+        "prototype": {
+            **prototype,
+            "screens": [
+                {**screen, "elements": elements[screen["code"]]} for screen in prototype["screens"]
+            ],
+        },
+    }
+
+
+def _anchored_elements(elements):
+    kept, others = [], 0
+    for element in elements:
+        if element.is_interactive or element.kind is PrototypeElementKind.HEADING:
+            kept.append(element)
+        elif others < OTHER_ANCHORS_PER_SCREEN:
+            others += 1
+            kept.append(element)
+    return tuple(kept)
+
+
+def design_review_anchors(
+    version: DesignPackageVersion, *, hosted: bool = False, language: str = "und"
+) -> dict[str, str]:
     _selected_alternative(version)
+    screens = review_screens(version, hosted=hosted, language=language)
+    bounded = sum(len(elements) for _screen, elements in screens) > MAX_ELEMENT_ANCHORS
     anchors: dict[str, str] = {}
-    for screen in ordered_screens(version):
+    for screen, elements in screens:
         place = f"{screen.code} {_anchor_label(screen.title)}"
         anchors[screen.code] = place
-        for element in screen.elements:
+        for element in _anchored_elements(elements) if bounded else elements:
             label = _anchor_label(element.accessible_name or element.content)
             anchors[f"{screen.code}/{element.code}"] = f"{place} · {element.code} {label}"
     return anchors
 
 
-def design_review_view(version: DesignPackageVersion) -> dict[str, object]:
+def _element_view(element, leads) -> dict[str, object]:
+    return {
+        "code": element.code,
+        "kind": element.kind.value,
+        "content": element.content,
+        "accessible_name": element.accessible_name,
+        "field_name": element.field_name,
+        "required": element.required,
+        "options": list(element.options),
+        "leads_to": leads.get(element.id),
+    }
+
+
+def _compact_element_view(element, leads) -> dict[str, object]:
+    view: dict[str, object] = {
+        "code": element.code,
+        "kind": element.kind.value,
+        "content": element.content,
+    }
+    if element.accessible_name is not None and element.accessible_name != element.content:
+        view["accessible_name"] = element.accessible_name
+    if element.field_name is not None:
+        view["field_name"] = element.field_name
+    if element.required:
+        view["required"] = True
+    if element.options:
+        view["options"] = list(element.options)
+    if element.id in leads:
+        view["leads_to"] = leads[element.id]
+    return view
+
+
+def _screen_view(screen, elements, leads, *, generated: bool) -> dict[str, object]:
+    view: dict[str, object] = {
+        "code": screen.code,
+        "title": screen.title,
+        "state": screen.state.value,
+    }
+    if not generated:
+        view["elements"] = [_element_view(element, leads) for element in elements]
+        return view
+    view["visible_text"] = [element.content for element in elements]
+    view["elements"] = [_compact_element_view(element, leads) for element in elements]
+    return view
+
+
+def design_review_view(
+    version: DesignPackageVersion, *, hosted: bool = False, language: str = "und"
+) -> dict[str, object]:
     alternative = _selected_alternative(version)
     prototype = version.package.prototype
-    screens = ordered_screens(version)
-    codes = {screen.id: screen.code for screen in screens}
+    screens = review_screens(version, hosted=hosted, language=language)
+    codes = {screen.id: screen.code for screen, _elements in screens}
     leads = {
         item.trigger_element_id: codes[item.target_screen_id] for item in prototype.transitions
     }
+    generated = version.package.generated_mockup is not None
     visual = alternative.visual_language
     return {
         "alternative": {
@@ -266,27 +453,10 @@ def design_review_view(version: DesignPackageVersion) -> dict[str, object]:
             "choices": visual.choices.to_snapshot(),
             "twin_fit": {str(item.twin_id): item.statement for item in visual.twin_fit},
         },
-        "entry_screen": screens[0].code,
+        "entry_screen": screens[0][0].code,
         "screens": [
-            {
-                "code": screen.code,
-                "title": screen.title,
-                "state": screen.state.value,
-                "elements": [
-                    {
-                        "code": element.code,
-                        "kind": element.kind.value,
-                        "content": element.content,
-                        "accessible_name": element.accessible_name,
-                        "field_name": element.field_name,
-                        "required": element.required,
-                        "options": list(element.options),
-                        "leads_to": leads.get(element.id),
-                    }
-                    for element in screen.elements
-                ],
-            }
-            for screen in screens
+            _screen_view(screen, elements, leads, generated=generated)
+            for screen, elements in screens
         ],
     }
 
@@ -598,6 +768,8 @@ def synthetic_finding_from_snapshot(payload: Mapping[str, object]) -> SyntheticF
     )
     if finding.content_hash != payload["content_hash"]:
         raise ValueError("synthetic finding snapshot is not canonical")
+    if "anchor_key" in payload:
+        return anchor_finding(finding, payload["anchor_key"])
     return finding
 
 
@@ -691,13 +863,20 @@ __all__ = [
     "DESIGN_EVALUATION_SCHEMA_VERSION",
     "DESIGN_SPECIFICATION_LOCATION",
     "EVALUATION_DOCUMENT_LOCATION",
+    "HOSTED_DOCUMENT_BYTES",
     "MATCH_SIMILARITY",
     "MATCH_STEM_LENGTH",
+    "MAX_ELEMENT_ANCHORS",
     "MAX_EVALUATED_TWINS",
+    "OTHER_ANCHORS_PER_SCREEN",
+    "REMAINING_ROWS",
+    "TABLE_ROWS_SHOWN",
+    "AnchoredSyntheticFinding",
     "DesignEvaluationComparison",
     "DesignEvaluationDocument",
     "DesignEvaluationError",
     "DesignEvaluationRun",
+    "anchor_finding",
     "compare_design_evaluations",
     "create_design_evaluation_run",
     "design_evaluation_run_from_snapshot",
@@ -710,8 +889,11 @@ __all__ = [
     "evaluation_reference",
     "evaluation_response_from_snapshot",
     "evaluation_scenario",
+    "finding_anchor_key",
     "finding_key",
     "finding_similarity",
     "ordered_screens",
+    "remaining_rows_text",
+    "review_screens",
     "synthetic_finding_from_snapshot",
 ]

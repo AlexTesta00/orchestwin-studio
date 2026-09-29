@@ -12,7 +12,11 @@ import pytest
 from orchestwin.artifacts import design_evaluation as module
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
+    HOSTED_DOCUMENT_BYTES,
+    MAX_ELEMENT_ANCHORS,
+    AnchoredSyntheticFinding,
     DesignEvaluationError,
+    anchor_finding,
     compare_design_evaluations,
     create_design_evaluation_run,
     design_evaluation_run_from_snapshot,
@@ -20,9 +24,14 @@ from orchestwin.artifacts.design_evaluation import (
     design_review_view,
     evaluation_bundle,
     evaluation_document,
+    finding_anchor_key,
     finding_key,
     finding_similarity,
+    ordered_screens,
+    remaining_rows_text,
+    synthetic_finding_from_snapshot,
 )
+from orchestwin.artifacts.design_static_check import static_check_document, static_check_target
 from orchestwin.artifacts.prototypes import create_prototype_element, create_prototype_screen
 from orchestwin.evaluation.artifact_content import MAX_VIEW_BYTES, prepare_artifact_content
 from orchestwin.evaluation.artifacts import EvaluationArtifactKind
@@ -31,7 +40,9 @@ from orchestwin.evaluation.evaluator import (
     FakeSyntheticFindingTemplate,
     FakeUserTwinEvaluator,
     UserTwinEvaluationRequest,
+    UserTwinEvaluationResponse,
     UserTwinEvaluatorConfiguration,
+    user_twin_evaluation_response_hash,
 )
 from orchestwin.evaluation.findings import (
     SyntheticFindingCriterion,
@@ -42,6 +53,15 @@ from orchestwin.evaluation.findings import (
 from orchestwin.twins.user_twins import UserTwinLifecycleStatus
 
 from . import design_fixtures
+from .test_design_package_extension import (
+    LARGE_ROWS,
+    extended_package,
+    fixture_package,
+    large_bound,
+    large_markup,
+    support_bound,
+)
+from .test_generated_mockup_support import FIXTURES
 
 NOW = datetime(2026, 9, 25, 20, 0, tzinfo=UTC)
 RUN_ID = UUID("00000000-0000-4000-8000-000000000901")
@@ -566,3 +586,306 @@ def test_findings_of_regenerated_designs_match_by_content_words_whatever_the_cri
     assert finding_similarity(earlier, other_twin) == 0.0
     counts = compare_design_evaluations(base, head).to_snapshot()["counts"]
     assert (counts["resolved"], counts["persisting"], counts["introduced"]) == (0, 1, 2)
+
+
+DOCUMENT_HASHES = {
+    "und": "480fcca62bc634501a18a4717052811c44ac4be07b9d3625d9406883ae5f28af",
+    "it": "b0c0fb45e36be9635b3ae2e252405a5a670c8f9c4284856f686d635eb4b5af93",
+    "dashboard": "4920eee468d83118b93f01db6348931b0ae9b6b1f1891381fa34f67e6a372ab9",
+    "generated": "fe9effbf24e49e0974be5d225d9d1a7f88d8d5569da5f0a760877bfa08cd3ef6",
+}
+STORED_RUN_HASH = "b83db3e4a67b6a5d550579da5c0feb4a506987d41b7c570c900eda345e7c2df2"
+STORED_FINDING_HASH = "13af69773a53dab8a97b15b0388b1de05667e5676d805e11a47089eba6ce7111"
+STORED_BUNDLE_ID = UUID("00000000-0000-4000-8000-000000000d01")
+STORED_RUN_ID = UUID("00000000-0000-4000-8000-000000000d02")
+STORED_AT = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
+REVIEW_CONFIGURATION = UserTwinEvaluatorConfiguration(
+    evaluator_id="proposer-design-twin-review",
+    evaluator_version="1.0.0",
+    model_config_ref="c" * 64,
+    prompt_version_ref="s22-design-twin-review-v2",
+)
+HIDDEN_ROWS = LARGE_ROWS - module.TABLE_ROWS_SHOWN
+VIEW_LIMIT = 40 * 1024
+SEARCH_FORM = (
+    '<form aria-label="Ricerca"><label for="lettore">Lettore</label>'
+    '<input id="lettore" name="lettore" type="search">'
+    '<button type="button">Cerca</button></form>'
+)
+
+
+def digest(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def generated_version(bound=None):
+    return design_fixtures.design_version(
+        package=fixture_package() if bound is None else extended_package(bound)
+    )
+
+
+def table_markup(index: int, rows: int, screens: int) -> str:
+    target = "SCR-001" if index == screens else f"SCR-{index + 1:03d}"
+    body = "".join(
+        f"<tr><td>Lettore {index}.{row}</td><td>Volume {row}</td><td>{row} ottobre</td></tr>"
+        for row in range(1, rows + 1)
+    )
+    items = "".join(f"<li>Promemoria {index}.{item} inviato ai lettori.</li>" for item in range(5))
+    return (
+        f'<main data-req="REQ-00{index}"><h1>Registro della sede {index}</h1>'
+        "<p>Controlla i prestiti aperti della sede e invia un promemoria ai lettori in ritardo.</p>"
+        '<table><thead><tr><th scope="col">Lettore</th><th scope="col">Titolo</th>'
+        f'<th scope="col">Scadenza</th></tr></thead><tbody>{body}</tbody></table>'
+        f'<ul>{items}</ul><a href="#{target}">Prosegui</a></main>'
+    )
+
+
+def stored_run(anchor: str | None = None):
+    version = design_fixtures.design_version()
+    document = evaluation_document(version, language="it")
+    bundle = evaluation_bundle(
+        version, document, locale="it-IT", created_at=STORED_AT, bundle_id=STORED_BUNDLE_ID
+    )
+    finding = create_synthetic_finding(
+        finding_id="UTF-001",
+        twin_id=design_fixtures.TWIN_ID,
+        twin_version=2,
+        artifact_id=design_fixtures.PROTOTYPE_ID,
+        artifact_version=1,
+        location="SCR-001 Create reservation · ELM-001 Guest name",
+        summary="The guest name field gives no format hint.",
+        rationale="At a busy desk I cannot guess the expected name format.",
+        criterion=SyntheticFindingCriterion.COMPREHENSIBILITY,
+        severity=SyntheticFindingSeverity.MAJOR,
+        epistemic_status=SyntheticFindingEpistemicStatus.MODEL_INFERRED,
+        evidence_refs=(
+            f"artifact:{design_fixtures.PROTOTYPE_ID}:v1",
+            f"user-twin:{design_fixtures.TWIN_ID}:v2#user_twin.role",
+        ),
+        confidence=0.7,
+        recommended_action="Show the expected format below the field.",
+        requires_human_validation=True,
+        model_config_ref="c" * 64,
+        prompt_version_ref="s22-design-twin-review-v2",
+    )
+    values = {
+        "evaluation_run_id": STORED_RUN_ID,
+        "artifact_bundle_id": bundle.id,
+        "artifact_bundle_hash": bundle.content_hash,
+        "twin_id": design_fixtures.TWIN_ID,
+        "twin_version": 2,
+        "evaluator": REVIEW_CONFIGURATION,
+        "findings": (finding if anchor is None else anchor_finding(finding, anchor),),
+        "summary": "The flow suits my desk work.",
+        "evidence_gaps": (),
+    }
+    response = UserTwinEvaluationResponse(
+        **values,
+        completed_at=STORED_AT,
+        content_hash=user_twin_evaluation_response_hash(**values),
+    )
+    return create_design_evaluation_run(
+        run_id=STORED_RUN_ID,
+        owner_user_id=design_fixtures.OWNER_ID,
+        version=version,
+        bundle=bundle,
+        responses=(response,),
+        started_at=STORED_AT,
+        completed_at=STORED_AT + timedelta(seconds=5),
+    )
+
+
+def test_the_document_is_byte_identical_for_the_local_route_and_a_declarative_design():
+    version = design_fixtures.design_version()
+    for hosted in (False, True):
+        assert (
+            digest(evaluation_document(version, hosted=hosted).content) == (DOCUMENT_HASHES["und"])
+        )
+        assert (
+            digest(evaluation_document(version, language="it", hosted=hosted).content)
+            == (DOCUMENT_HASHES["it"])
+        )
+        dashboard = evaluation_document(dashboard_version(), language="it", hosted=hosted)
+        assert digest(dashboard.content) == DOCUMENT_HASHES["dashboard"]
+        assert design_review_view(version, hosted=hosted) == design_review_view(version)
+        assert design_review_anchors(version, hosted=hosted) == design_review_anchors(version)
+    generated = evaluation_document(generated_version(), language="it")
+    assert digest(generated.content) == DOCUMENT_HASHES["generated"]
+
+
+def test_a_hosted_route_reviews_a_generated_mockup_that_the_local_route_refuses():
+    version = generated_version(large_bound())
+    with pytest.raises(DesignEvaluationError, match="EVALUATION_DOCUMENT_TOO_LARGE"):
+        evaluation_document(version, language="it")
+    document = evaluation_document(version, language="it", hosted=True)
+    text = document.content.decode("utf-8")
+    assert MAX_VIEW_BYTES < HOSTED_DOCUMENT_BYTES == 96 * 1024
+    assert len(document.content) <= HOSTED_DOCUMENT_BYTES
+    assert text.count(remaining_rows_text(HIDDEN_ROWS, "it")) == 5
+    assert "Lettore 1.12 · Volume 12" in text and "Lettore 1.13 · " not in text
+    assert "<script" not in text.lower() and "<style" not in text.lower()
+    assert document.reference.kind is EvaluationArtifactKind.DOM_SNAPSHOT
+    assert document.reference.size_bytes == len(document.content)
+    assert evaluation_document(version, language="it", hosted=True) == document
+
+
+def test_every_table_keeps_twelve_rows_and_one_line_for_the_rest():
+    assert remaining_rows_text(1, "it") == "… e un'altra riga della tabella"
+    assert remaining_rows_text(29, "it") == "… e altre 29 righe della tabella"
+    assert remaining_rows_text(29, "en") == "… and 29 more rows in the table"
+    assert remaining_rows_text(1, "und") == "… and one more row in the table"
+    short = generated_version(support_bound(table_markup(1, 13, 2), table_markup(2, 12, 2)))
+    view = design_review_view(short, hosted=True, language="it")
+    first, second = view["screens"]
+    assert first["visible_text"].count("… e un'altra riga della tabella") == 1
+    assert not any("riga della tabella" in text for text in second["visible_text"])
+    assert sum(item["kind"] == "LIST" for item in second["elements"]) == 12 + 5
+
+
+def test_the_static_check_refuses_a_generated_mockup_it_cannot_hold():
+    first = large_markup(1).replace("</h1>", "</h1>" + SEARCH_FORM)
+    markups = [large_markup(index) for index in range(2, 6)]
+    version = generated_version(support_bound(first, markups[0], extra=markups[1:]))
+    target = static_check_target(version, locale="it-IT")
+    assert target.screen_code == "SCR-001"
+    with pytest.raises(DesignEvaluationError, match="EVALUATION_DOCUMENT_TOO_LARGE"):
+        static_check_document(version, target)
+
+
+def test_the_anchors_of_a_large_generated_mockup_are_bounded_and_deterministic():
+    version = generated_version(large_bound())
+    anchors = design_review_anchors(version)
+    assert anchors == design_review_anchors(version)
+    elements = [key for key in anchors if "/" in key]
+    total = sum(len(screen.elements) for screen in version.package.prototype.screens)
+    assert total == 250 > MAX_ELEMENT_ANCHORS
+    assert len(elements) == 5 * 10
+    assert [key for key in anchors if key.startswith("SCR-001")] == [
+        "SCR-001",
+        *(f"SCR-001/ELM-{number:03d}" for number in range(1, 10)),
+        "SCR-001/ELM-050",
+    ]
+    assert [key for key in anchors if "/" not in key] == [f"SCR-{n:03d}" for n in range(1, 6)]
+    hosted = design_review_anchors(version, hosted=True, language="en")
+    assert len([key for key in hosted if "/" in key]) == 5 * 22 <= MAX_ELEMENT_ANCHORS
+    assert hosted["SCR-001/ELM-016"] == (
+        f"SCR-001 {ordered_screens(version)[0].title} · ELM-016 "
+        + remaining_rows_text(HIDDEN_ROWS, "en")
+    )
+    assert "SCR-001/ELM-017" not in hosted and "SCR-001/ELM-044" not in hosted
+    assert "SCR-001/ELM-045" in hosted
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_a_generated_mockup_below_the_bound_anchors_every_element(name):
+    version = design_fixtures.design_version(package=fixture_package(name))
+    anchors = design_review_anchors(version)
+    expected = [
+        key
+        for screen in ordered_screens(version)
+        for key in (screen.code, *(f"{screen.code}/{item.code}" for item in screen.elements))
+    ]
+    assert list(anchors) == expected
+    assert design_review_anchors(version, hosted=True, language="it") == anchors
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_the_view_of_a_generated_mockup_carries_the_visible_text_in_reading_order(name):
+    version = design_fixtures.design_version(package=fixture_package(name))
+    view = design_review_view(version)
+    screens = ordered_screens(version)
+    assert view["entry_screen"] == "SCR-001"
+    assert [item["code"] for item in view["screens"]] == [screen.code for screen in screens]
+    for item, screen in zip(view["screens"], screens, strict=True):
+        assert list(item) == ["code", "title", "state", "visible_text", "elements"]
+        assert item["visible_text"] == [element.content for element in screen.elements]
+        assert [element["code"] for element in item["elements"]] == [
+            element.code for element in screen.elements
+        ]
+        for element in item["elements"]:
+            assert {"code", "kind", "content"} <= set(element)
+            assert None not in element.values() and False not in element.values()
+            assert element.get("options", ["x"]) != []
+            assert element.get("accessible_name") != element["content"]
+    targets = [
+        element["leads_to"]
+        for item in view["screens"]
+        for element in item["elements"]
+        if "leads_to" in element
+    ]
+    assert len(targets) == len(version.package.prototype.transitions)
+    assert len(json.dumps(view).encode("utf-8")) < VIEW_LIMIT
+    assert json.loads(json.dumps(view)) == view
+
+
+def test_the_hosted_view_reduces_long_tables_like_the_document():
+    version = generated_version(large_bound())
+    local = design_review_view(version)
+    hosted = design_review_view(version, hosted=True, language="it")
+    first = hosted["screens"][0]
+    codes = [item["code"] for item in first["elements"]]
+    assert codes == [
+        *(f"ELM-{number:03d}" for number in range(1, 17)),
+        *(f"ELM-{number:03d}" for number in range(45, 51)),
+    ]
+    marker = first["elements"][15]
+    assert marker == {
+        "code": "ELM-016",
+        "kind": "TEXT",
+        "content": remaining_rows_text(HIDDEN_ROWS, "it"),
+    }
+    assert first["visible_text"][15] == marker["content"]
+    assert len(local["screens"][0]["elements"]) == 50
+    anchors = design_review_anchors(version, hosted=True, language="it")
+    assert [key for key in anchors if key.startswith("SCR-001/")] == [
+        f"SCR-001/{code}" for code in codes
+    ]
+    assert len(json.dumps(hosted).encode("utf-8")) < len(json.dumps(local).encode("utf-8"))
+
+
+def test_a_view_of_about_one_hundred_forty_derived_elements_stays_below_forty_kilobytes():
+    markups = [table_markup(index, 38, 3) for index in range(1, 4)]
+    version = generated_version(support_bound(markups[0], markups[1], extra=markups[2:]))
+    assert sum(len(screen.elements) for screen in version.package.prototype.screens) == 141
+    for hosted in (False, True):
+        view = design_review_view(version, hosted=hosted, language="it")
+        assert len(json.dumps(view).encode("utf-8")) < VIEW_LIMIT
+
+
+def test_a_finding_keeps_its_anchor_key_next_to_the_readable_location():
+    finding = stored_run().findings[0]
+    anchored = anchor_finding(finding, "SCR-001/ELM-001")
+    snapshot = anchored.to_snapshot()
+    keys = list(snapshot)
+    assert keys[keys.index("location") + 1] == "anchor_key"
+    assert snapshot["anchor_key"] == "SCR-001/ELM-001"
+    assert {key: value for key, value in snapshot.items() if key != "anchor_key"} == (
+        finding.to_snapshot()
+    )
+    assert anchored.content_hash == finding.content_hash == STORED_FINDING_HASH
+    assert isinstance(anchored, AnchoredSyntheticFinding)
+    assert (finding_anchor_key(anchored), finding_anchor_key(finding)) == ("SCR-001/ELM-001", None)
+    assert synthetic_finding_from_snapshot(snapshot) == anchored
+    assert synthetic_finding_from_snapshot(finding.to_snapshot()) == finding
+    assert anchor_finding(finding, "SCR-002").anchor_key == "SCR-002"
+    for invalid in (None, "", "ELM-001", "SCR-1", "SCR-001/ELM-001/x", "scr-001", 7):
+        with pytest.raises(ValueError, match="anchor key"):
+            synthetic_finding_from_snapshot({**finding.to_snapshot(), "anchor_key": invalid})
+
+
+def test_stored_runs_keep_their_hash_and_anchored_runs_round_trip():
+    run = stored_run()
+    assert run.content_hash == STORED_RUN_HASH
+    assert run.findings[0].content_hash == STORED_FINDING_HASH
+    stored = json.loads(json.dumps(run.to_snapshot()))
+    assert "anchor_key" not in json.dumps(stored)
+    assert design_evaluation_run_from_snapshot(stored) == run
+    anchored = stored_run(anchor="SCR-001/ELM-001")
+    assert anchored.content_hash != run.content_hash
+    reloaded = design_evaluation_run_from_snapshot(json.loads(json.dumps(anchored.to_snapshot())))
+    assert reloaded == anchored
+    assert finding_anchor_key(reloaded.findings[0]) == "SCR-001/ELM-001"
+    tampered = json.loads(json.dumps(anchored.to_snapshot()))
+    tampered["responses"][0]["findings"][0]["anchor_key"] = "SCR-002"
+    with pytest.raises(ValueError, match="hash is inconsistent"):
+        design_evaluation_run_from_snapshot(tampered)
