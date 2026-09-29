@@ -1,0 +1,88 @@
+<header class="topbar" data-req="REQ-001">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+      <path d="M4 4h6v16H4z M14 4h6v16h-6z" fill="var(--vl-color-primary)"></path>
+    </svg>
+    <p class="brand-name">Biblioteca Sant'Ambrogio</p>
+  </div>
+  <nav class="main-nav" aria-label="Sezioni del registro">
+    <ul>
+      <li><a href="#SCR-001" aria-current="page">Prestiti</a></li>
+      <li><a href="#SCR-002">Solleciti</a></li>
+      <li><a href="#SCR-003">Esiti degli invii</a></li>
+    </ul>
+  </nav>
+  <p class="operator"><span class="avatar" aria-hidden="true">LM</span> Lucia Marchetti, banco prestiti</p>
+</header>
+<main class="page">
+  <div class="page-head">
+    <div class="page-intro">
+      <p class="eyebrow">Registro prestiti · martedì 29 settembre 2026</p>
+      <h1>Prestiti in corso</h1>
+      <p class="lead">Controlla i volumi fuori sede, individua i ritardi e invia i solleciti prima della chiusura di venerdì alle 19.</p>
+    </div>
+    <a class="button button-primary" href="#SCR-002" data-req="REQ-003">Sollecita i 9 ritardi</a>
+  </div>
+  <section class="kpis" aria-label="Indicatori della settimana" data-req="REQ-005">
+    <article class="kpi">
+      <h2>Prestiti attivi</h2>
+      <p class="kpi-value">128</p>
+      <p class="kpi-note">12 in più della settimana scorsa</p>
+    </article>
+    <article class="kpi kpi-alert">
+      <h2>In ritardo</h2>
+      <p class="kpi-value">9</p>
+      <p class="kpi-note">3 oltre i 14 giorni</p>
+    </article>
+    <article class="kpi">
+      <h2>Rientri attesi</h2>
+      <p class="kpi-value">23</p>
+      <p class="kpi-note">entro venerdì 2 ottobre</p>
+    </article>
+    <article class="kpi">
+      <h2>Prenotazioni</h2>
+      <p class="kpi-value">14</p>
+      <p class="kpi-note">5 per le novità di narrativa</p>
+    </article>
+  </section>
+  <section class="panel" aria-labelledby="loans-title" data-req="REQ-001">
+    <div class="panel-head">
+      <h2 id="loans-title">Prestiti da controllare</h2>
+      <form class="filters" aria-label="Filtri del registro" data-req="REQ-004">
+        <div class="field">
+          <label for="loan-search">Lettore o titolo</label>
+          <input id="loan-search" name="ricerca" type="search" placeholder="Es. Ferri, Calvino">
+        </div>
+        <div class="field">
+          <label for="loan-status">Stato</label>
+          <select id="loan-status" name="stato">
+            <option value="tutti" selected>Tutti gli stati</option>
+            <option value="ritardo">In ritardo</option>
+            <option value="scadenza">In scadenza</option>
+            <option value="regolare">Regolari</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <table class="loans">
+      <caption>Prestiti ordinati per giorni di ritardo, i più urgenti per primi</caption>
+      <thead>
+        <tr><th scope="col">Lettore</th><th scope="col">Volume</th><th scope="col">Scadenza</th><th scope="col">Stato</th><th scope="col">Azione</th></tr>
+      </thead>
+      <tbody data-req="REQ-002">
+        <tr><td>Giulia Ferri <span class="muted">tessera 0412</span></td><td>Il sistema periodico</td><td><time datetime="2026-09-14">14 set</time></td><td><span class="badge badge-danger">15 giorni di ritardo</span></td><td><a class="row-action" href="#SCR-002" data-req="REQ-003">Sollecita</a></td></tr>
+        <tr><td>Marco Bellini <span class="muted">tessera 0977</span></td><td>Le città invisibili</td><td><time datetime="2026-09-17">17 set</time></td><td><span class="badge badge-danger">12 giorni di ritardo</span></td><td><a class="row-action" href="#SCR-002" data-req="REQ-003">Sollecita</a></td></tr>
+        <tr><td>Sara Colombo <span class="muted">tessera 1130</span></td><td>Lessico famigliare</td><td><time datetime="2026-09-21">21 set</time></td><td><span class="badge badge-danger">8 giorni di ritardo</span></td><td><a class="row-action" href="#SCR-002" data-req="REQ-003">Sollecita</a></td></tr>
+        <tr><td>Davide Rinaldi <span class="muted">tessera 0268</span></td><td>La luna e i falò</td><td><time datetime="2026-09-30">30 set</time></td><td><span class="badge badge-warning">Scade domani</span></td><td><a class="row-action" href="#SCR-002" data-req="REQ-003">Avvisa</a></td></tr>
+        <tr><td>Elena Moretti <span class="muted">tessera 1544</span></td><td>Il giardino dei Finzi-Contini</td><td><time datetime="2026-10-02">2 ott</time></td><td><span class="badge badge-warning">Scade venerdì</span></td><td><a class="row-action" href="#SCR-002" data-req="REQ-003">Avvisa</a></td></tr>
+        <tr><td>Paolo Greco <span class="muted">tessera 0831</span></td><td>Se questo è un uomo</td><td><time datetime="2026-10-09">9 ott</time></td><td><span class="badge badge-success">Regolare</span></td><td><button class="row-action" type="button">Proroga</button></td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="5">Mostrati 6 dei 128 prestiti attivi · aggiornato alle 10:42</td></tr>
+      </tfoot>
+    </table>
+  </section>
+</main>
+<footer class="site-footer">
+  <p>Biblioteca di quartiere Sant'Ambrogio · via Frigia 12, Milano · banco prestiti 02 8845 1203</p>
+</footer>

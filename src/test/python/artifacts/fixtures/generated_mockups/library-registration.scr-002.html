@@ -1,0 +1,44 @@
+<header class="topbar">
+  <p class="brand">Biblioteca Sant'Ambrogio · Iscrizione online</p>
+  <p class="help">Serve aiuto? Chiama il 02 8845 1200, dal lunedì al sabato dalle 9 alle 19.</p>
+</header>
+<main class="wizard">
+  <nav class="stepper" aria-label="Passaggi dell'iscrizione" data-req="REQ-005">
+    <ol>
+      <li class="step step-done"><span class="step-number">1</span> Dati personali</li>
+      <li class="step step-current" aria-current="step"><span class="step-number">2</span> Tessera e avvisi</li>
+      <li class="step"><span class="step-number">3</span> Riepilogo</li>
+    </ol>
+  </nav>
+  <div class="card">
+    <p class="eyebrow">Passaggio 2 di 3</p>
+    <h1>Tessera e avvisi</h1>
+    <p class="lead">Scegli la tessera più adatta e come vuoi essere avvisata quando un libro prenotato è pronto o un prestito sta per scadere.</p>
+    <form class="form" aria-labelledby="card-title" data-req="REQ-003">
+      <fieldset class="choices">
+        <legend id="card-title">Tipo di tessera</legend>
+        <label class="choice"><input type="radio" name="tessera" value="ordinaria" checked> <span class="choice-body"><strong>Ordinaria</strong> fino a 5 prestiti per 30 giorni, gratuita</span></label>
+        <label class="choice"><input type="radio" name="tessera" value="studio"> <span class="choice-body"><strong>Studio</strong> 8 prestiti e sala studio aperta dalle 8 alle 23</span></label>
+        <label class="choice"><input type="radio" name="tessera" value="famiglia"> <span class="choice-body"><strong>Famiglia</strong> una tessera per 4 persone con prestiti condivisi</span></label>
+      </fieldset>
+      <div class="field">
+        <label for="branch">Sede di ritiro preferita</label>
+        <select id="branch" name="sede">
+          <option value="centrale" selected>Centrale, via Frigia 12</option>
+          <option value="gorla">Gorla, piazza Piola 3</option>
+          <option value="precotto">Precotto, via dei Transiti 40</option>
+        </select>
+      </div>
+      <fieldset class="choices" data-req="REQ-004">
+        <legend>Avvisi che vuoi ricevere</legend>
+        <label class="check"><input type="checkbox" name="avvisi" value="scadenza" checked> Tre giorni prima della scadenza di un prestito</label>
+        <label class="check"><input type="checkbox" name="avvisi" value="prenotazione" checked> Quando una prenotazione è pronta al banco</label>
+        <label class="check"><input type="checkbox" name="avvisi" value="novita"> Novità del mese nei generi che preferisci</label>
+      </fieldset>
+      <div class="actions">
+        <a class="button button-quiet" href="#SCR-001">Indietro</a>
+        <a class="button button-primary" href="#SCR-003">Continua</a>
+      </div>
+    </form>
+  </div>
+</main>
