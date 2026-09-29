@@ -1,0 +1,1015 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from orchestwin.cli.flows.changes import git_command
+from orchestwin.cli.http import UrlTransport
+
+from .support.fake_studio import FakeProject, FakeStudio
+from .support.processes import FakeCommit, FakeFile, ScriptedProcesses, script_repository
+from .support.terminal import TEST_PASSWORD, Run, link_folder, run_ut
+
+EMAIL = "owner@example.com"
+NAME = "Calcolo mancia"
+FIRST = "1" * 40
+SECOND = "2" * 40
+THIRD = "3" * 40
+DIFF = (
+    "diff --git a/src/app.js b/src/app.js\n"
+    "--- a/src/app.js\n"
+    "+++ b/src/app.js\n"
+    "@@ -1 +1 @@\n"
+    "-const tip = 0;\n"
+    "+const tip = choose(); // REQ-002\n"
+)
+WRITING_WORDS = ("commit", "add", "push", "reset", "checkout", "stash", "rebase", "merge")
+
+
+def commit(hash_value: str, message: str, *, parent: str | None = None) -> FakeCommit:
+    return FakeCommit(
+        hash_value,
+        message,
+        files=(FakeFile("src/app.js", added=1, removed=1), FakeFile(".env", status="A")),
+        parent=parent,
+        diff=DIFF,
+    )
+
+
+ALIGNED_PAIR = (
+    commit(FIRST, "Add the amount field"),
+    commit(SECOND, "Show the tip", parent=FIRST),
+)
+FOLDER_DIFF = (
+    "diff --git a/orchestwin/state/state.md b/orchestwin/state/state.md\n"
+    "--- a/orchestwin/state/state.md\n"
+    "+++ b/orchestwin/state/state.md\n"
+    "@@ -1 +1 @@\n"
+    "-old\n"
+    "+new\n"
+)
+
+
+def folder_commit(hash_value: str, *, parent: str | None = None, prefix: str = "") -> FakeCommit:
+    return FakeCommit(
+        hash_value,
+        "Update the knowledge folder",
+        files=(
+            FakeFile(f"{prefix}orchestwin/state/state.md"),
+            FakeFile(f"{prefix}.orchestwin/steps/design.json", status="A"),
+        ),
+        parent=parent,
+        diff=FOLDER_DIFF,
+    )
+
+
+def decide_command(hash_value: str) -> list[str]:
+    return git_command("rev-parse", "--verify", "--quiet", f"{hash_value[:7]}^{{commit}}")
+
+
+@dataclass(frozen=True, slots=True)
+class Session:
+    studio: FakeStudio
+    project: FakeProject
+    tmp_path: Path
+
+    @property
+    def root(self) -> Path:
+        return self.tmp_path / "project"
+
+    def repository(
+        self, commits: Sequence[FakeCommit], *, since: str | None = None, status: str = ""
+    ) -> ScriptedProcesses:
+        return script_repository(
+            ScriptedProcesses(), self.root, commits, since=since, status=status
+        )
+
+    def ut(
+        self,
+        *arguments: str,
+        processes: ScriptedProcesses | None = None,
+        answers: Sequence[str] = (),
+        language: str = "en",
+    ) -> Run:
+        return run_ut(
+            ["--lang", language, *arguments],
+            self.tmp_path,
+            transport=UrlTransport(),
+            answers=answers,
+            processes=processes,
+        )
+
+    def decisions(self) -> dict[str, object]:
+        return {
+            str(change["commit"]): change["decision"] and change["decision"]["kind"]
+            for change in self.project.changes()
+        }
+
+
+@contextmanager
+def session(
+    tmp_path: Path,
+    *,
+    hosted: bool = True,
+    language: str = "en",
+    through: str = "design",
+    budget_usd: float | None = 60.0,
+    link_language: str | None = None,
+) -> Iterator[Session]:
+    with FakeStudio(language=language, hosted=hosted, twins=2, budget_usd=budget_usd) as studio:
+        studio.add_account(EMAIL, TEST_PASSWORD)
+        project = studio.seed_project(owner=EMAIL, name=NAME, through=through)
+        login = run_ut(
+            ["login", "--studio", studio.address, "--email", EMAIL, "--password-stdin"],
+            tmp_path,
+            transport=UrlTransport(),
+            answers=[TEST_PASSWORD],
+        )
+        assert login.status == 0, login.errors
+        link_folder(
+            tmp_path / "project",
+            project_id=project.id,
+            name=NAME,
+            studio=studio.address,
+            language=link_language,
+        )
+        yield Session(studio=studio, project=project, tmp_path=tmp_path)
+        assert studio.errors == []
+
+
+def no_writes(processes: ScriptedProcesses) -> bool:
+    return all(
+        not any(word in call.arguments for word in WRITING_WORDS) for call in processes.calls
+    )
+
+
+def test_two_aligned_commits_are_recorded_reviewed_and_the_newest_becomes_the_point(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path) as current:
+        processes = current.repository(ALIGNED_PAIR)
+
+        run = current.ut("align", processes=processes, answers=["y", ""])
+
+        changes = current.project.changes()
+        runs = current.project.change_reviews()
+        aligned = current.project.aligned()
+        recorded = {str(item["commit"]): item for item in current.project.code_changes}
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert lines[:8] == [
+        'Alignment of "Calcolo mancia"',
+        "=============================",
+        "Approved reference: requirements version 1, design version 2 (alternative DES-002).",
+        "No commit is aligned yet.",
+        "Commits of the repository considered (the newest 50 at most): 2.",
+        "- 1111111  2026-09-29 10:15  Add the amount field  (files: 2)",
+        "- 2222222  2026-09-29 10:15  Show the tip  (files: 2)",
+        "Commits recorded now in the Studio: 2.",
+    ]
+    assert (
+        "Commits for the twins to review: 2. Twins in each review: 2. Each twin gives its "
+        "opinion on each commit, then the model says whether code, design and requirements are "
+        "still aligned." in lines
+    )
+    assert "Estimate: 0.90-1.60 USD, about 6 min. Credit left in the Studio: 60.00 USD." in lines
+    assert "Review of commit 1111111: Add the amount field" in lines
+    assert "Review of commit 2222222: Show the tip" in lines
+    assert "Your decision on commit 2222222: Show the tip" in lines
+    assert "  1. Mark this commit as aligned" in lines
+    assert (
+        "Commit 2222222 is now the aligned point: the open tasks for the code that come from "
+        "this commit or from earlier ones are closed; those of newer commits stay open." in lines
+    )
+    assert "Commit 1111111: same verdict as 2222222, recorded as covered by it." in lines
+    assert (
+        "Knowledge folder updated in orchestwin/ (version 1): orchestwin/state holds the state "
+        "of the development." in lines
+    )
+    assert lines[-1] == (
+        "Development: commits recorded: 2; after the aligned point: 0; aligned commit: "
+        "2222222; open tasks for the code: 0."
+    )
+    assert [change["decision"]["kind"] for change in changes] == ["ALIGNED", "DISMISSED"]
+    assert changes[1]["decision"]["note"] == "covered by 2222222"
+    assert len(runs) == 2
+    assert aligned is not None and aligned["commit"] == SECOND
+    assert recorded[FIRST]["diff"] == DIFF + "[excluded: .env]\n"
+    assert recorded[FIRST]["files"] == [
+        {"path": "src/app.js", "kind": "MODIFIED", "added": 1, "removed": 1},
+        {"path": ".env", "kind": "ADDED", "added": 1, "removed": 0},
+    ]
+    assert recorded[SECOND]["parent"] == FIRST
+    state = json.loads(
+        (current.root / "orchestwin" / "state" / "state.json").read_text(encoding="utf-8")
+    )
+    assert [item["commit"] for item in state["changes"]] == [SECOND, FIRST]
+    assert no_writes(processes)
+
+
+def test_a_second_launch_starts_after_the_aligned_commit(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        first = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=["y", ""])
+        later = commit(THIRD, "Round the tip", parent=SECOND)
+        processes = current.repository([later], since=SECOND)
+
+        second = current.ut("align", "--dry-run", processes=processes)
+        nothing = current.ut("align", processes=current.repository([], since=SECOND))
+
+    assert first.status == 0, first.errors
+    assert second.status == 0, second.errors
+    lines = second.output.splitlines()
+    assert any(
+        line.startswith("Aligned point: commit 2222222 of 2026-09-29 ")
+        and line.endswith(", with requirements version 1 and design version 2.")
+        for line in lines
+    )
+    assert "Commits after the aligned point: 1." in lines
+    assert "Trial without spending (--dry-run). Commits the twins would review: 1." in lines
+    assert "- 3333333  2026-09-29 10:15  Round the tip  (files: 2)" in lines
+    assert (
+        "Estimate of these reviews: 0.45-0.80 USD, about 3 min. Without --dry-run they really "
+        "start." in lines
+    )
+    assert "Review of commit" not in second.output
+    assert nothing.status == 0
+    assert "There is no new commit to align." in nothing.output
+
+
+def test_code_drift_records_the_tasks_of_the_model_as_edited(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        drift = commit(FIRST, "The tip choice drifts from the screen")
+        run = current.ut(
+            "align",
+            processes=current.repository([drift]),
+            answers=["y", "", "", "Cover the tip choice with a test"],
+        )
+        tasks = current.project.tasks()
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert "  1. Record these tasks for the code" in lines
+    assert "  2. Mark it as aligned anyway" in lines
+    assert (
+        "Tasks recorded for the code: 2. They stay open until this commit or a later one is "
+        "marked as aligned." in lines
+    )
+    assert [task["text"] for task in tasks] == [
+        "Bring the code back in line with screen SCR-001 of the approved design.",
+        "Cover the tip choice with a test",
+    ]
+    assert [task["code"] for task in tasks] == ["TSK-001", "TSK-002"]
+    assert lines[-1] == (
+        "Development: commits recorded: 1; none aligned yet (waiting: 1); open tasks for the "
+        "code: 2."
+    )
+
+
+def test_a_task_of_the_model_can_be_dropped_and_a_blank_one_is_never_sent(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path) as current:
+        drift = commit(FIRST, "Drift in the totals")
+        run = current.ut("align", processes=current.repository([drift]), answers=["y", "", "-", ""])
+        tasks = current.project.tasks()
+        bodies = [
+            json.loads(request.body)
+            for request in current.studio.requests
+            if request.path.endswith("/decision")
+        ]
+
+    assert run.status == 0, run.errors
+    assert [task["text"] for task in tasks] == ["Cover requirement REQ-002 with an automated test."]
+    assert bodies == [
+        {
+            "kind": "CODE_TASKS",
+            "note": None,
+            "tasks": ["Cover requirement REQ-002 with an automated test."],
+        }
+    ]
+
+
+def test_tasks_written_by_the_owner_for_an_aligned_commit(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", "2", "Add a label to the amount", "  ", ""],
+        )
+        tasks = current.project.tasks()
+
+    assert run.status == 0, run.errors
+    assert (
+        "Write the tasks for the code, one per line (at most 10); an empty line ends the list."
+        in run.output
+    )
+    assert [task["text"] for task in tasks] == ["Add a label to the amount"]
+
+
+def test_leaving_it_for_later_records_nothing(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", "5"],
+        )
+        decisions = current.decisions()
+        publications = [
+            request
+            for request in current.studio.requests
+            if request.method == "POST" and request.path.endswith("/knowledge-packages")
+        ]
+
+    assert run.status == 0, run.errors
+    assert (
+        "Nothing recorded: the commit waits for your decision. Launch `ut align` again whenever "
+        "you want." in run.output
+    )
+    assert decisions == {FIRST: None}
+    assert publications == []
+
+
+def test_an_earlier_commit_with_another_verdict_gets_its_own_question(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        commits = [
+            commit(FIRST, "Drift of the totals"),
+            commit(SECOND, "Show the tip", parent=FIRST),
+        ]
+        run = current.ut("align", processes=current.repository(commits), answers=["y", "", "later"])
+        decisions = current.decisions()
+
+    assert run.status == 0, run.errors
+    assert "Your decision on commit 2222222: Show the tip" in run.output
+    assert "Your decision on commit 1111111: Drift of the totals" in run.output
+    assert decisions == {SECOND: "ALIGNED", FIRST: None}
+
+
+def test_a_design_that_is_outdated_gets_a_new_version_approved(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        evolution = commit(FIRST, "Rework the card of the design")
+        run = current.ut(
+            "align", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
+        )
+        changes = current.project.changes()
+        design = current.project.current("design")
+        approved = current.project.approved("design")
+
+    assert run.status == 0, run.errors
+    assert "  1. Ask a new version of the design with this request" in run.output
+    assert "Change applied: the design is now at version 3, to be approved." in run.output
+    assert (
+        "Decision recorded: a new version of the design was asked from commit 1111111."
+        in run.output
+    )
+    assert "Do you approve version 3 of the design now? [Y/n] " in run.output
+    assert changes[0]["decision"]["kind"] == "DESIGN_CHANGE"
+    assert changes[0]["decision"]["note"].startswith("Update the design so that it describes")
+    assert design is not None and design["version_number"] == 3
+    assert approved
+    assert (current.root / "orchestwin" / "orchestwin.json").is_file()
+
+
+def test_the_new_design_version_can_wait_for_a_later_approval(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        evolution = commit(FIRST, "Rework the card of the design")
+        run = current.ut(
+            "align",
+            processes=current.repository([evolution]),
+            answers=["y", "", "Make the card larger", "y", "n"],
+        )
+        changes = current.project.changes()
+        approved = current.project.approved("design")
+
+    assert run.status == 0, run.errors
+    assert changes[0]["decision"] == {
+        "kind": "DESIGN_CHANGE",
+        "decided_at": changes[0]["decision"]["decided_at"],
+        "note": "Make the card larger",
+    }
+    assert (
+        "Version 3 of the design waits for your approval: approve it with `ut design approve`."
+        in run.output
+    )
+    assert not approved
+
+
+def test_requirements_that_are_outdated_get_a_change_approved(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        evolution = commit(FIRST, "New requirement: split among friends")
+        run = current.ut(
+            "align", processes=current.repository([evolution]), answers=["y", "", "", "y", "y"]
+        )
+        changes = current.project.changes()
+        requirements = current.project.current("requirements")
+        saved = json.loads(
+            (current.root / ".orchestwin" / "steps" / "requirements.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    assert run.status == 0, run.errors
+    assert "  1. Ask a change of the requirements with this request" in run.output
+    assert "Change applied: the requirements are at version 2." in run.output
+    assert (
+        "The requirements changed: check the design with `ut design`, because it may no longer "
+        "match them." in run.output
+    )
+    assert changes[0]["decision"]["kind"] == "REQUIREMENTS_CHANGE"
+    assert requirements is not None and requirements["version_number"] == 2
+    assert saved["version"]["version_number"] == 2
+
+
+def test_without_a_model_the_commits_are_recorded_and_the_command_ends_with_1(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path, hosted=False) as current:
+        run = current.ut("align", processes=current.repository(ALIGNED_PAIR))
+        changes = current.project.changes()
+        runs = current.project.change_reviews()
+
+    assert run.status == 1
+    assert "Commits recorded now in the Studio: 2." in run.output
+    assert run.errors == (
+        "The twins cannot review the code on this Studio, because no model is connected "
+        "(CHANGE_REVIEW_MODEL_NOT_CONFIGURED). The commits stay recorded; whoever runs the "
+        "Studio can connect a model.\n"
+    )
+    assert len(changes) == 2
+    assert runs == []
+
+
+def test_a_ceiling_of_the_studio_is_named(tmp_path: Path) -> None:
+    with session(tmp_path, budget_usd=0.5) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y"],
+        )
+
+    assert run.status == 5
+    assert "The estimate is above the credit left: the Studio may refuse the generation." in (
+        run.output
+    )
+    assert run.errors == (
+        "The Studio reached its overall spending ceiling (0.50 USD): the review did not start. "
+        "The commits stay recorded; whoever runs the Studio can raise the ceiling, then launch "
+        "`ut align` again.\n"
+    )
+
+
+def test_a_refused_spending_reviews_nothing(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=["n"])
+        runs = current.project.change_reviews()
+
+    assert run.status == 5
+    assert runs == []
+    assert "No generation started: the spending was not confirmed." in run.errors
+
+
+def test_latest_reviews_only_the_newest_commit(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align", "--latest", processes=current.repository(ALIGNED_PAIR), answers=["y", ""]
+        )
+        runs = current.project.change_reviews()
+        decisions = current.decisions()
+
+    assert run.status == 0, run.errors
+    assert [item["commit"] for item in runs] == [SECOND]
+    assert decisions == {SECOND: "ALIGNED", FIRST: None}
+
+
+def test_since_starts_after_a_commit_of_the_repository(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        processes = current.repository([ALIGNED_PAIR[1]], since=FIRST)
+        processes.expect(
+            git_command("rev-parse", "--verify", "--quiet", f"{FIRST[:7]}^{{commit}}"),
+            output=f"{FIRST}\n",
+        )
+        unknown = current.repository([])
+        unknown.expect(
+            git_command("rev-parse", "--verify", "--quiet", "nothing^{commit}"), status=1
+        )
+
+        run = current.ut("align", "--since", FIRST[:7], "--dry-run", processes=processes)
+        refused = current.ut("align", "--since", "nothing", processes=unknown)
+
+    assert run.status == 0, run.errors
+    assert "Commits after 1111111: 1." in run.output
+    assert refused.status == 2
+    assert refused.errors == (
+        "The commit nothing given with --since is not in this repository: check the hash or the "
+        "name.\n"
+    )
+
+
+def test_changes_not_committed_are_mentioned_but_not_those_of_ut(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        dirty = current.ut(
+            "align",
+            "--dry-run",
+            processes=current.repository(ALIGNED_PAIR, status=" M src/app.js\x00"),
+        )
+        own = current.ut(
+            "align",
+            "--dry-run",
+            processes=current.repository(
+                ALIGNED_PAIR, status="?? .orchestwin/\x00 M orchestwin/state/state.md\x00"
+            ),
+        )
+
+    sentence = "The folder has changes not saved in a commit yet: ut align considers only commits."
+    assert sentence in dirty.output
+    assert sentence not in own.output
+
+
+def test_a_design_not_yet_approved_is_asked_first(tmp_path: Path) -> None:
+    with session(tmp_path, through="requirements") as current:
+        processes = current.repository(ALIGNED_PAIR)
+        run = current.ut("align", processes=processes)
+
+    assert run.status == 1
+    assert run.errors == (
+        "The design is not approved yet (ALIGN_DESIGN_REQUIRED): choose and approve it with "
+        "`ut design`, then the code can be aligned with it.\n"
+    )
+    assert [call.arguments[-1] for call in processes.calls] == ["--show-toplevel"]
+
+
+def test_the_folder_must_be_in_a_git_repository_and_git_must_exist(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        outside = ScriptedProcesses().expect(
+            git_command("rev-parse", "--show-toplevel"), status=128
+        )
+        no_git = current.ut("align")
+        not_a_repository = current.ut("align", processes=outside)
+
+    assert no_git.status == 1
+    assert no_git.errors == (
+        "The git program is not installed or cannot be found (GIT_NOT_AVAILABLE): install it, "
+        "then try again.\n"
+    )
+    assert not_a_repository.status == 1
+    assert "is not inside a git repository (ALIGN_NO_GIT)" in not_a_repository.errors
+
+
+def test_a_folder_that_is_not_linked_or_not_signed_in(tmp_path: Path) -> None:
+    unlinked = run_ut(["align"], tmp_path, transport=UrlTransport())
+    link_folder(tmp_path / "project")
+    anonymous = run_ut(["align"], tmp_path, transport=UrlTransport())
+
+    assert unlinked.status == 6
+    assert anonymous.status == 3
+    assert "ut login" in anonymous.errors
+
+
+def test_a_review_made_earlier_is_not_asked_again(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        first = current.ut(
+            "align", processes=current.repository(ALIGNED_PAIR), answers=["y", "later"]
+        )
+        again = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=[""])
+        runs = current.project.change_reviews()
+        decisions = current.decisions()
+
+    assert first.status == 0, first.errors
+    assert again.status == 0, again.errors
+    assert "Every commit to consider already has a review of the twins." in again.output
+    assert "Go ahead with this spending?" not in again.output
+    assert len(runs) == 2
+    assert decisions == {SECOND: "ALIGNED", FIRST: "DISMISSED"}
+
+
+def test_the_review_in_italian(tmp_path: Path) -> None:
+    with session(tmp_path, language="it", link_language="it") as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Aggiunge il campo")]),
+            answers=["s", ""],
+            language="it",
+        )
+        locales = [
+            json.loads(request.body)["locale"]
+            for request in current.studio.requests
+            if request.path.endswith("/reviews") and request.method == "POST"
+        ]
+        note = current.project.changes()[0]["decision"]
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert "Allineamento di «Calcolo mancia»" in lines
+    assert "Verdetto del modello" in lines
+    assert "Il codice è allineato ai requisiti e al design approvati (ALIGNED)." in lines
+    assert "  1. Segna questo commit come allineato" in lines
+    assert locales == ["it-IT"]
+    assert note["kind"] == "ALIGNED"
+
+
+DESIGN_FOLLOW = "Ask a new version of the design that follows this commit"
+REQUIREMENTS_FOLLOW = "Ask a change of the requirements that follows this commit"
+MENU_LINES = {
+    "Add the amount field": [
+        "  1. Mark this commit as aligned",
+        "  2. Record tasks for the code",
+        f"  3. {DESIGN_FOLLOW}",
+        f"  4. {REQUIREMENTS_FOLLOW}",
+        "  5. Leave it for later",
+    ],
+    "Rework the card of the design": [
+        "  1. Ask a new version of the design with this request",
+        "  2. Mark it as aligned anyway",
+        "  3. Record tasks for the code",
+        f"  4. {REQUIREMENTS_FOLLOW}",
+        "  5. Leave it for later",
+    ],
+    "New requirement: split the bill": [
+        "  1. Ask a change of the requirements with this request",
+        "  2. Mark it as aligned anyway",
+        "  3. Record tasks for the code",
+        f"  4. {DESIGN_FOLLOW}",
+        "  5. Leave it for later",
+    ],
+    "The tip choice drifts": [
+        "  1. Record these tasks for the code",
+        "  2. Mark it as aligned anyway",
+        f"  3. {DESIGN_FOLLOW}",
+        f"  4. {REQUIREMENTS_FOLLOW}",
+        "  5. Leave it for later",
+    ],
+}
+
+
+LATER_SAID = (
+    "Nothing recorded: the commit waits for your decision. Launch `ut align` again whenever you "
+    "want."
+)
+NO_REQUEST = "No request written: nothing recorded."
+NO_TASK = "No task written: nothing recorded."
+
+
+@pytest.mark.parametrize(
+    ("message", "answers", "kind", "said"),
+    [
+        ("Add the amount field", ["y", "later"], None, LATER_SAID),
+        ("Add the amount field", ["y", "3", ""], None, NO_REQUEST),
+        ("Add the amount field", ["y", "4", ""], None, NO_REQUEST),
+        ("The tip choice drifts", ["y", "2"], "ALIGNED", None),
+        ("The tip choice drifts", ["y", "5"], None, LATER_SAID),
+        ("The tip choice drifts", ["y", "design", ""], None, NO_REQUEST),
+        ("The tip choice drifts", ["y", "requirements", ""], None, NO_REQUEST),
+        ("Rework the card of the design", ["y", "2"], "ALIGNED", None),
+        ("Rework the card of the design", ["y", "3", ""], None, NO_TASK),
+        ("Rework the card of the design", ["y", "4", ""], None, NO_REQUEST),
+        ("Rework the card of the design", ["y", "5"], None, LATER_SAID),
+        (
+            "New requirement: split the bill",
+            ["y", "3", "Split the bill in the code", ""],
+            "CODE_TASKS",
+            None,
+        ),
+        ("New requirement: split the bill", ["y", "2"], "ALIGNED", None),
+        ("New requirement: split the bill", ["y", "4", ""], None, NO_REQUEST),
+    ],
+)
+def test_every_other_choice_of_the_menus(
+    tmp_path: Path, message: str, answers: list[str], kind: str | None, said: str | None
+) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align", processes=current.repository([commit(FIRST, message)]), answers=answers
+        )
+        decisions = current.decisions()
+        tasks = current.project.tasks()
+        posts = [
+            request.path
+            for request in current.studio.requests
+            if request.method == "POST" and request.path.endswith(("/jobs", "/change-requests"))
+        ]
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    menu = lines.index("What do you do with this commit?")
+    assert lines[menu + 1 : menu + 6] == MENU_LINES[message]
+    assert decisions == {FIRST: kind}
+    assert [task["text"] for task in tasks] == (
+        ["Split the bill in the code"] if kind == "CODE_TASKS" else []
+    )
+    assert posts == []
+    if said is not None:
+        assert said in lines
+
+
+def test_an_aligned_commit_can_ask_a_design_that_follows_it(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", "design", "Make the card larger", "", "y", "y"],
+        )
+        change = current.project.changes()[0]
+        design = current.project.current("design")
+        approved = current.project.approved("design")
+
+    assert run.status == 0, run.errors
+    assert (
+        "Describe in words what should change so that it follows this commit (an empty text "
+        "cancels and records nothing):" in run.output.splitlines()
+    )
+    assert "Change applied: the design is now at version 3, to be approved." in run.output
+    assert change["decision"]["kind"] == "DESIGN_CHANGE"
+    assert change["decision"]["note"] == "Make the card larger"
+    assert design is not None and design["version_number"] == 3
+    assert approved
+
+
+def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "The tip choice drifts")]),
+            answers=["y", "requirements", "Each person chooses a tip", "", "y", "y"],
+        )
+        change = current.project.changes()[0]
+        requirements = current.project.current("requirements")
+
+    assert run.status == 0, run.errors
+    assert "Change applied: the requirements are at version 2." in run.output
+    assert (
+        "The requirements changed: check the design with `ut design`, because it may no longer "
+        "match them." in run.output
+    )
+    assert change["decision"]["kind"] == "REQUIREMENTS_CHANGE"
+    assert change["decision"]["note"] == "Each person chooses a tip"
+    assert requirements is not None and requirements["version_number"] == 2
+
+
+@pytest.mark.parametrize(
+    ("code", "status", "sentence"),
+    [
+        (
+            "REQUIREMENTS_APPROVAL_REQUIRED",
+            409,
+            "The requirements are not approved at the moment (REQUIREMENTS_APPROVAL_REQUIRED): "
+            "approve them with `ut init`, then launch `ut align` again.\n",
+        ),
+        (
+            "USER_MODELING_APPROVAL_REQUIRED",
+            409,
+            "The User Twins are not approved at the moment (USER_MODELING_APPROVAL_REQUIRED): "
+            "approve them with `ut init`, then launch `ut align` again.\n",
+        ),
+        (
+            "INVALID_PROVIDER_OUTPUT",
+            502,
+            "The model gave an answer that the Studio cannot use (INVALID_PROVIDER_OUTPUT): "
+            "nothing was stored. Launching `ut align` again tries once more, and it is a new "
+            "spending.\n",
+        ),
+        (
+            "TOO_MANY_GENERATIONS",
+            429,
+            "Too many generations are already running in the Studio: wait for one to finish, "
+            "then try again.\n",
+        ),
+    ],
+)
+def test_a_review_refused_by_the_studio_is_explained(
+    tmp_path: Path, code: str, status: int, sentence: str
+) -> None:
+    with session(tmp_path) as current:
+        current.studio.fail_job("CODE_CHANGE_REVIEW", code=code, status=status)
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y"],
+        )
+        changes = current.project.changes()
+
+    assert run.status == 1
+    assert run.errors == sentence
+    assert "Review of commit 1111111: not completed after" in run.output
+    assert [change["commit"] for change in changes] == [FIRST]
+
+
+def test_a_folder_that_the_studio_does_not_publish_is_said_in_one_line(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        current.studio.fail_next(
+            "POST",
+            "/projects/{project_id}/knowledge-packages",
+            status=409,
+            body={"detail": {"code": "KNOWLEDGE_PACKAGE_VERSION_CONFLICT"}},
+        )
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", ""],
+        )
+        decisions = current.decisions()
+
+    assert run.status == 0, run.errors
+    assert (
+        "The Studio did not publish the knowledge folder (KNOWLEDGE_PACKAGE_VERSION_CONFLICT): "
+        "the decision is recorded; publish it later with `ut package publish`."
+        in run.output.splitlines()
+    )
+    assert decisions == {FIRST: "ALIGNED"}
+
+
+def review_posts(studio: FakeStudio) -> list[str]:
+    return [
+        request.path
+        for request in studio.requests
+        if request.method == "POST" and request.path.endswith("/reviews")
+    ]
+
+
+def test_a_commit_of_the_knowledge_folder_is_recorded_never_reviewed_and_dismissed(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path) as current:
+        commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
+        run = current.ut("align", processes=current.repository(commits), answers=["y", ""])
+        changes = {str(change["commit"]): change for change in current.project.changes()}
+        runs = current.project.change_reviews()
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert "Commits recorded now in the Studio: 2." in lines
+    assert (
+        "Commits that change only the knowledge folder, recorded without a review: 1 "
+        "(2222222); the newest needs no decision and is marked as dismissed." in lines
+    )
+    assert "Estimate: 0.45-0.80 USD, about 3 min. Credit left in the Studio: 60.00 USD." in lines
+    assert "Review of commit 2222222" not in run.output
+    assert "Your decision on commit 1111111: Add the amount field" in lines
+    assert [item["commit"] for item in runs] == [FIRST]
+    assert changes[SECOND]["decision"]["kind"] == "DISMISSED"
+    assert changes[SECOND]["decision"]["note"] == "knowledge folder only"
+    assert changes[FIRST]["decision"]["kind"] == "ALIGNED"
+    assert lines[-1] == (
+        "Development: commits recorded: 2; after the aligned point: 1; aligned commit: "
+        "1111111; open tasks for the code: 0."
+    )
+
+
+def test_an_older_commit_of_the_knowledge_folder_is_skipped_without_a_decision(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path) as current:
+        commits = [folder_commit(FIRST), commit(SECOND, "Show the tip", parent=FIRST)]
+        run = current.ut("align", processes=current.repository(commits), answers=["y", ""])
+        decisions = current.decisions()
+        runs = current.project.change_reviews()
+
+    assert run.status == 0, run.errors
+    assert (
+        "Commits that change only the knowledge folder, recorded without a review: 1 (1111111)."
+        in run.output.splitlines()
+    )
+    assert [item["commit"] for item in runs] == [SECOND]
+    assert decisions == {SECOND: "ALIGNED", FIRST: None}
+
+
+def test_a_folder_commit_of_an_italian_project_in_a_subfolder_of_the_repository(
+    tmp_path: Path,
+) -> None:
+    with session(tmp_path, link_language="it") as current:
+        processes = script_repository(
+            ScriptedProcesses(), tmp_path, [folder_commit(FIRST, prefix="project/")]
+        )
+        run = current.ut("align", processes=processes, language="it")
+        changes = current.project.changes()
+        posts = review_posts(current.studio)
+
+    assert run.status == 0, run.errors
+    assert (
+        "Commit che cambiano soltanto la cartella di conoscenza, registrati senza farli "
+        "esaminare: 1 (1111111); il più recente non ha bisogno di una decisione ed è segnato "
+        "come scartato." in run.output.splitlines()
+    )
+    assert "Stima" not in run.output
+    assert changes[0]["decision"]["note"] == "solo cartella di conoscenza"
+    assert posts == []
+
+
+def test_a_dry_run_dismisses_nothing(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
+        run = current.ut("align", "--dry-run", processes=current.repository(commits))
+        decisions = current.decisions()
+
+    assert run.status == 0, run.errors
+    assert (
+        "Commits that change only the knowledge folder, recorded without a review: 1 (2222222)."
+        in run.output.splitlines()
+    )
+    assert "Trial without spending (--dry-run). Commits the twins would review: 1." in run.output
+    assert decisions == {SECOND: None, FIRST: None}
+
+
+def test_latest_reviews_the_newest_commit_of_the_code(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        commits = [commit(FIRST, "Add the amount field"), folder_commit(SECOND, parent=FIRST)]
+        run = current.ut(
+            "align", "--latest", processes=current.repository(commits), answers=["y", ""]
+        )
+        runs = current.project.change_reviews()
+
+    assert run.status == 0, run.errors
+    assert [item["commit"] for item in runs] == [FIRST]
+
+
+def test_decide_opens_the_menu_again_without_reviews_or_records(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        first = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", "later"],
+        )
+        before = len(current.studio.requests)
+        processes = current.repository([])
+        processes.expect(decide_command(FIRST), output=f"{FIRST}\n")
+        again = current.ut("align", "--decide", FIRST[:7], processes=processes, answers=[""])
+        later = [
+            (request.method, request.path.rsplit("/", 1)[-1])
+            for request in current.studio.requests[before:]
+            if request.method == "POST"
+        ]
+        decisions = current.decisions()
+
+    assert first.status == 0, first.errors
+    assert again.status == 0, again.errors
+    lines = again.output.splitlines()
+    assert "Review of commit 1111111: Add the amount field" in lines
+    assert "Your decision on commit 1111111: Add the amount field" in lines
+    assert "Estimate" not in again.output
+    assert "Commits recorded now" not in again.output
+    assert "Decision taken before" not in again.output
+    assert ("POST", "reviews") not in later
+    assert ("POST", "code-changes") not in later
+    assert ("POST", "decision") in later
+    assert decisions == {FIRST: "ALIGNED"}
+
+
+def test_decide_replaces_an_earlier_decision_and_newer_tasks_stay_open(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        commits = [
+            commit(FIRST, "The tip choice drifts"),
+            commit(SECOND, "The totals drift too", parent=FIRST),
+        ]
+        first = current.ut(
+            "align", processes=current.repository(commits), answers=["y", "", "", ""]
+        )
+        processes = current.repository([])
+        processes.expect(decide_command(FIRST), output=f"{FIRST}\n")
+        again = current.ut("align", "--decide", FIRST[:7], processes=processes, answers=["2"])
+        decisions = current.decisions()
+        tasks = current.project.tasks()
+
+    assert first.status == 0, first.errors
+    assert again.status == 0, again.errors
+    assert (
+        "Decision taken before on this commit: dismissed. The new one replaces it."
+        in again.output.splitlines()
+    )
+    assert "  2. Mark it as aligned anyway" in again.output.splitlines()
+    assert decisions == {SECOND: "CODE_TASKS", FIRST: "ALIGNED"}
+    assert [(task["from_commit"], task["status"]) for task in tasks] == [
+        (SECOND, "OPEN"),
+        (SECOND, "OPEN"),
+    ]
+
+
+def test_decide_refusals(tmp_path: Path) -> None:
+    with session(tmp_path, hosted=False) as current:
+        recorded = current.ut("align", processes=current.repository(ALIGNED_PAIR))
+        unknown = current.repository([])
+        unknown.expect(decide_command("abcdef0"), status=1)
+        missing = current.ut("align", "--decide", "abcdef0", processes=unknown)
+        not_reviewed_git = current.repository([])
+        not_reviewed_git.expect(decide_command(FIRST), output=f"{FIRST}\n")
+        not_reviewed = current.ut("align", "--decide", FIRST[:7], processes=not_reviewed_git)
+        alone = current.ut("align", "--decide", FIRST[:7], "--dry-run")
+
+    assert recorded.status == 1
+    assert missing.status == 2
+    assert missing.errors == (
+        "The commit abcdef0 given with --decide is not in this repository: check the hash or "
+        "the name.\n"
+    )
+    assert not_reviewed.status == 1
+    assert not_reviewed.errors == (
+        "The commit 1111111 has no review of the twins in the Studio yet (ALIGN_NOT_REVIEWED): "
+        "launch `ut align` to record it and have it reviewed, then decide.\n"
+    )
+    assert alone.status == 2
+    assert alone.errors == (
+        "--decide goes alone: it cannot be used with --since, --latest or --dry-run.\n"
+    )
+    assert alone.output == ""
