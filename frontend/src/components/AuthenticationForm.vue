@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 
 import type { AuthenticationInput } from "@/api/contracts";
 import UiButton from "./UiButton.vue";
+import { useSurface } from "./UiSurface.vue";
 
 const props = defineProps<{
   mode: "login" | "register";
@@ -23,6 +24,32 @@ const MINIMUM_PASSWORD_LENGTH = 8;
 const MAXIMUM_PASSWORD_LENGTH = 1024;
 const UPPERCASE_LETTER = /\p{Uppercase}/u;
 const SPECIAL_CHARACTER = /[^\p{L}\p{N}\p{White_Space}]/u;
+
+const palettes = {
+  light: {
+    label: "text-ink-2",
+    field: "border-field bg-surface text-ink",
+    hint: "text-ink-3",
+    error: "border-fail-line bg-fail-bg text-fail-dark",
+  },
+  night: {
+    label: "text-on-night-2",
+    field: "border-on-night/18 bg-on-night/4 text-on-night",
+    hint: "text-on-night-3",
+    error: "border-fail-on-night/40 bg-fail-on-night/10 text-fail-on-night",
+  },
+};
+
+const context = useSurface(() => undefined);
+const palette = computed(() => palettes[context.value]);
+const labelClasses = computed(() => [
+  "font-mono text-[11px] tracking-label uppercase",
+  palette.value.label,
+]);
+const fieldClasses = computed(() => [
+  "h-[52px] w-full rounded-field border px-4 text-base",
+  palette.value.field,
+]);
 
 const email = ref("");
 const password = ref("");
@@ -62,26 +89,26 @@ function submit(): void {
 </script>
 
 <template>
-  <form class="grid gap-5" novalidate @submit.prevent="submit">
+  <form class="flex flex-col gap-[18px]" novalidate @submit.prevent="submit">
     <div
       v-if="visibleError"
       ref="errorSummary"
-      class="rounded-panel border border-fail-line bg-fail-bg px-4 py-3 text-sm font-semibold text-fail-dark"
+      :class="['rounded-field border px-4 py-3 text-sm font-semibold', palette.error]"
       role="alert"
       tabindex="-1"
     >
       {{ t(`auth.errors.${visibleError}`) }}
     </div>
 
-    <div class="grid gap-2">
-      <label class="text-sm font-semibold" for="authentication-email">
+    <div class="flex flex-col gap-2">
+      <label :class="labelClasses" for="authentication-email">
         {{ t("auth.email") }}
       </label>
 
       <input
         id="authentication-email"
         v-model="email"
-        class="min-h-11 rounded-control border border-field bg-surface px-4 py-2.5 text-[15px] text-ink"
+        :class="fieldClasses"
         name="email"
         type="email"
         autocomplete="email"
@@ -89,15 +116,15 @@ function submit(): void {
       />
     </div>
 
-    <div class="grid gap-2">
-      <label class="text-sm font-semibold" for="authentication-password">
+    <div class="flex flex-col gap-2">
+      <label :class="labelClasses" for="authentication-password">
         {{ t("auth.password") }}
       </label>
 
       <input
         id="authentication-password"
         v-model="password"
-        class="min-h-11 rounded-control border border-field bg-surface px-4 py-2.5 text-[15px] text-ink"
+        :class="fieldClasses"
         name="password"
         type="password"
         :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
@@ -108,12 +135,16 @@ function submit(): void {
         required
       />
 
-      <p v-if="mode === 'register'" id="password-hint" class="m-0 text-sm leading-6 text-ink-3">
+      <p
+        v-if="mode === 'register'"
+        id="password-hint"
+        :class="['m-0 text-[13px] leading-normal', palette.hint]"
+      >
         {{ t("auth.passwordHint") }}
       </p>
     </div>
 
-    <UiButton type="submit" full :disabled="busy">
+    <UiButton type="submit" size="lg" full class="mt-1" :disabled="busy">
       {{ busy ? t("auth.submitting") : t(`auth.${mode}.submit`) }}
     </UiButton>
   </form>

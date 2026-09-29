@@ -79,15 +79,12 @@ describe("ProjectImportDialog", () => {
   it("explains the import and waits for an archive before creating the project", async () => {
     const api = importsApi();
     const wrapper = mountDialog(api);
-    expect(wrapper.get("h2").text()).toBe("Parti da una cartella di conoscenza");
-    expect(wrapper.text()).toContain(
-      "Carica l'archivio che lo Studio ti ha dato alla fine di un altro progetto.",
-    );
     const file = wrapper.get('[data-testid="project-import-file"]');
     expect(file.attributes("accept")).toBe(".zip");
     expect(wrapper.get(`label[for="${file.attributes("id")}"]`).text()).toBe(
-      "Archivio della cartella di conoscenza (.zip)",
+      "Trascina qui l'archivio .zip della cartella di conoscenza, oppure sceglilo dal computer.",
     );
+    expect(wrapper.find('[data-testid="project-import-chosen"]').exists()).toBe(false);
     const name = wrapper.get('[data-testid="project-import-name"]');
     expect(name.attributes("maxlength")).toBe("120");
     expect(wrapper.get(`#${name.attributes("aria-describedby")}`).text()).toBe(
@@ -99,6 +96,76 @@ describe("ProjectImportDialog", () => {
     expect(api.importArchive).not.toHaveBeenCalled();
     await choose(wrapper, archive());
     expect(wrapper.get(submit).attributes("disabled")).toBeUndefined();
+    expect(wrapper.get('[data-testid="project-import-chosen"]').text()).toBe(
+      "Archivio scelto: orchestwin-knowledge-v3.zip",
+    );
+    expect(wrapper.get('[data-testid="project-import-drop"]').classes()).toContain("border-solid");
+  });
+
+  it("takes an archive dropped on the area and marks the area while it is dragged", async () => {
+    const api = importsApi();
+    const wrapper = mountDialog(api);
+    const zone = wrapper.get('[data-testid="project-import-drop"]');
+    expect(zone.classes()).toContain("border-dashed");
+    await zone.trigger("dragenter");
+    expect(zone.attributes("data-dragging")).toBe("true");
+    await zone.trigger("dragleave", { relatedTarget: null });
+    expect(zone.attributes("data-dragging")).toBeUndefined();
+    await zone.trigger("dragover");
+    const file = archive();
+    await zone.trigger("drop", { dataTransfer: { files: [file] } });
+    expect(zone.attributes("data-dragging")).toBeUndefined();
+    expect(wrapper.get('[data-testid="project-import-chosen"]').text()).toBe(
+      "Archivio scelto: orchestwin-knowledge-v3.zip",
+    );
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(api.importArchive).toHaveBeenCalledWith(
+      file,
+      "orchestwin-knowledge-v3.zip",
+      null,
+      "token",
+    );
+  });
+
+  it("refuses a dropped archive larger than 16 MB and ignores a drop without files", async () => {
+    const api = importsApi();
+    const wrapper = mountDialog(api, "en");
+    const zone = wrapper.get('[data-testid="project-import-drop"]');
+    await zone.trigger("drop", { dataTransfer: { files: [] } });
+    expect(wrapper.find(error).exists()).toBe(false);
+    await zone.trigger("drop", { dataTransfer: { files: [archive(LIMIT + 1)] } });
+    expect(wrapper.get(error).get("p").text()).toBe(
+      "The archive is larger than 16 MB, the most the Studio accepts.",
+    );
+    expect(wrapper.find('[data-testid="project-import-chosen"]').exists()).toBe(false);
+    expect(wrapper.get(submit).attributes("disabled")).toBeDefined();
+  });
+
+  it("ignores an archive dropped while the project is being created", async () => {
+    let resolve!: (value: ProjectImportPayload) => void;
+    const api = importsApi();
+    api.importArchive.mockImplementationOnce(
+      () =>
+        new Promise<ProjectImportPayload>((done) => {
+          resolve = done;
+        }),
+    );
+    const wrapper = mountDialog(api);
+    await choose(wrapper, archive());
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const zone = wrapper.get('[data-testid="project-import-drop"]');
+    await zone.trigger("dragenter");
+    expect(zone.attributes("data-dragging")).toBeUndefined();
+    const other = new File(["PK"], "another.zip", { type: "application/zip" });
+    await zone.trigger("drop", { dataTransfer: { files: [other] } });
+    expect(wrapper.get('[data-testid="project-import-chosen"]').text()).toBe(
+      "Archivio scelto: orchestwin-knowledge-v3.zip",
+    );
+    resolve(IMPORTED);
+    await flushPromises();
+    expect(wrapper.emitted("imported")).toEqual([[IMPORTED]]);
   });
 
   it("uploads the archive without a name and emits the new project", async () => {
@@ -198,6 +265,14 @@ describe("ProjectImportDialog", () => {
       "Alcuni file della cartella non si possono leggere, quindi non può nascerne un progetto. Esporta di nuovo la cartella dallo Studio.",
     ],
     [
+      refused("FOLDER_DOCUMENT_INVALID", "design: package.generated_mockup: ATTRIBUTE_FORBIDDEN"),
+      "Il mockup dentro questa cartella contiene qualcosa che lo Studio non accetta, quindi la cartella non è stata importata.",
+    ],
+    [
+      refused("FOLDER_DOCUMENT_INVALID", "design: package.alternatives"),
+      "Alcuni file della cartella non si possono leggere, quindi non può nascerne un progetto. Esporta di nuovo la cartella dallo Studio.",
+    ],
+    [
       refused("FOLDER_SCHEMA_UNSUPPORTED"),
       "Questa cartella è stata scritta da un'altra versione dello Studio, quindi qui non si può leggere.",
     ],
@@ -247,6 +322,25 @@ describe("ProjectImportDialog", () => {
     expect(alert.get("p").text()).not.toContain("DESIGN_OUTDATED");
     expect(alert.get("details summary").text()).toBe("Dettagli");
     expect(alert.get("details code").text()).toBe("FOLDER_INCONSISTENT · DESIGN_OUTDATED");
+  });
+
+  it("says in English that a refused mockup kept the folder out and keeps the reason in the details", async () => {
+    const api = importsApi();
+    api.importArchive.mockRejectedValueOnce(
+      refused("FOLDER_DOCUMENT_INVALID", "design: package.generated_mockup: ELEMENT_FORBIDDEN"),
+    );
+    const wrapper = mountDialog(api, "en");
+    await choose(wrapper, archive());
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const alert = wrapper.get(error);
+    expect(alert.get("p").text()).toBe(
+      "The mockup inside this folder contains something that the Studio does not accept, so the folder was not imported.",
+    );
+    expect(alert.get("details code").text()).toBe(
+      "FOLDER_DOCUMENT_INVALID · design: package.generated_mockup: ELEMENT_FORBIDDEN",
+    );
+    expect(wrapper.emitted("imported")).toBeUndefined();
   });
 
   it("emits cancel", async () => {

@@ -44,6 +44,26 @@ export type BriefField =
   | "available_artifacts"
   | "definition_of_done";
 
+export const PROJECT_STAGES = [
+  "BRIEF",
+  "TEAM",
+  "USER_TWINS",
+  "REQUIREMENTS",
+  "DESIGN",
+  "PACKAGE",
+] as const;
+
+export type ProjectStage = (typeof PROJECT_STAGES)[number];
+
+export type ProjectNextAction =
+  | "DESCRIBE_IDEA"
+  | "APPROVE_BRIEF"
+  | "APPROVE_TEAM"
+  | "CONFIRM_TWINS"
+  | "APPROVE_REQUIREMENTS"
+  | "APPROVE_DESIGN"
+  | "DOWNLOAD_FOLDER";
+
 export interface ProjectResponse {
   readonly id: string;
   readonly display_name: string;
@@ -52,6 +72,8 @@ export interface ProjectResponse {
   readonly is_archived: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly current_stage?: ProjectStage;
+  readonly next_action?: ProjectNextAction;
 }
 
 export interface ProjectCreateInput {
