@@ -32,6 +32,7 @@ from orchestwin.twins.persistence.snapshots import (
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion
 
 IMPORTED_VERSION_NUMBER: Final = 1
+FOLDER_INCOMPLETE: Final = "FOLDER_INCOMPLETE"
 _IDENTITY: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _HASH: Final = re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
 _IDENTITY_KEYS: Final = frozenset({"id", "persona_id", "twin_id", "project_id"})
@@ -83,6 +84,11 @@ class ProjectImportPlan:
     @property
     def twins(self):
         return self.modeling.snapshot.twin_versions
+
+
+def require_complete(folder: VerifiedFolder) -> None:
+    if not folder.complete:
+        raise KnowledgeArchiveError(FOLDER_INCOMPLETE, folder.pending_stage)
 
 
 def folder_origin(folder: VerifiedFolder) -> FolderOrigin:
@@ -307,6 +313,7 @@ def _plan(
     owner_user_id: UUID,
     created_at: datetime,
 ) -> ProjectImportPlan:
+    require_complete(folder)
     documents = folder.documents
     if set(documents) != set(STAGES):
         raise KnowledgeArchiveError("FOLDER_DOCUMENT_MISSING")
@@ -465,6 +472,7 @@ def plan_documents(
 
 
 __all__ = [
+    "FOLDER_INCOMPLETE",
     "IMPORTED_VERSION_NUMBER",
     "FolderOrigin",
     "ProjectImportPlan",
@@ -472,4 +480,5 @@ __all__ = [
     "folder_origin",
     "plan_documents",
     "plan_project_import",
+    "require_complete",
 ]
