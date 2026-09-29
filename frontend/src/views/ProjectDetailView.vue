@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -10,6 +10,7 @@ import type {
   ProjectResponse,
 } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
+import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
 import InsightBriefTray from "@/components/InsightBriefTray.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
 import ProjectBriefDialogue from "@/components/ProjectBriefDialogue.vue";
@@ -23,18 +24,21 @@ import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
 import UiButton from "@/components/UiButton.vue";
-import UiCard from "@/components/UiCard.vue";
-import UiProgressBar from "@/components/UiProgressBar.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSidePanel from "@/components/UiSidePanel.vue";
-import UiStepper, { type StepItem } from "@/components/UiStepper.vue";
+import UiStepHeader from "@/components/UiStepHeader.vue";
+import UiStepper, { type StepItem, type StepStatus } from "@/components/UiStepper.vue";
+import { surfaceKey, type SurfaceContext } from "@/components/UiSurface.vue";
+import UiTechnicalDetails from "@/components/UiTechnicalDetails.vue";
 import { useTeamStore } from "@/stores/team";
 import { useUserModelingStore } from "@/stores/userModeling";
 import { useRequirementsStore } from "@/stores/requirements";
 import { useDesignStore } from "@/stores/design";
+import { useDesignMockupsStore } from "@/stores/designMockups";
 import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
 import { useInsightTrayStore } from "@/stores/insightTray";
+import { useKnowledgePackagesStore } from "@/stores/knowledgePackages";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
 
@@ -46,6 +50,8 @@ const requirements = useRequirementsStore();
 const design = useDesignStore();
 const clarification = useClarificationStore();
 const tray = useInsightTrayStore();
+const packages = useKnowledgePackagesStore();
+const mockups = useDesignMockupsStore();
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() => `${currentBrief.value?.id}:${clarification.gate?.status}`);
 const teamContext = computed(
@@ -58,6 +64,12 @@ const requirementsContext = computed(
   () => `${twinContext.value}:${requirements.current?.id}:${requirements.gate?.status}`,
 );
 
+provide(
+  surfaceKey,
+  computed<SurfaceContext>(() => "night"),
+);
+
+const { t: tg } = useI18n({ useScope: "global" });
 const { t, locale } = useI18n({
   useScope: "local",
   messages: {
@@ -66,20 +78,45 @@ const { t, locale } = useI18n({
         loading: "Loading project…",
         loadError: "The project could not be loaded.",
         saveError: "The Project Brief version could not be saved.",
-        currentBrief: "Your idea",
-        noBrief: "Describe what you would like to create to get started.",
-        versionHistory: "Previous descriptions",
-        version: "Version {number}",
         allProjects: "All projects",
         principle: "AI proposes, you decide",
-        provenance: "Provenance",
-        readOnly: "Step already closed. You can reread it, not change it.",
+        readOnly:
+          "You already approved this step: you can read it again. Any change makes a new version that you approve again.",
+        readOnlyBrief:
+          "You already approved the brief: you can read it again. If you change it, a new version is made that you approve again, and the steps after it need another look.",
+        readOnlyTeam:
+          "You already approved the team: you can read it again. You can still switch the optional roles on or off: every change you save makes a new version of the team that you approve again.",
+        readOnlyTwins:
+          "You already approved the user twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
+        readOnlyRequirements:
+          "You already approved the requirements: you can read them again. If you change one, a new version is made that you approve again.",
+        readOnlyDesign:
+          "You already approved the design: you can read it again and try the mockup. If you change the choice or the design, a new version is made that you approve again.",
+        packagePreview: "Preview of {code} · {title}",
         backToCurrent: "Back to the current step",
-        unlockHint: "The next step unlocks after your approval.",
-        editBrief: "Edit the description",
-        describeIdea: "Describe your idea",
-        openDialogue: "Back to the dialogue",
-        tools: "Project tools and technical details",
+        editBrief: "Edit the brief yourself",
+        describeIdea: "Describe your idea in the form",
+        openDialogue: "Back to the dialogue with the analyst",
+        showSteps: "All steps",
+        readyToDownload: "Ready to download",
+        techVersion: "Version {number}",
+        techApproved: "approved by you",
+        techPending: "waiting for your decision",
+        techNone: "No version yet",
+        hash: "Content hash",
+        origin: "Knowledge folder",
+        originValue: "{project}, version {version}",
+        archiveHash: "Archive hash",
+        briefVersions: "Brief versions",
+        version: "Version {number} · {date}",
+        provenance: "Open the provenance graph",
+        provenanceTitle: "Provenance",
+        projectDetails: "Project details",
+        folderVersion: "Folder version {number}",
+        noFolder: "No folder prepared yet",
+        folderContents: "Contents",
+        folderSummary:
+          "{files} files · {steps} approved step | {files} files · {steps} approved steps",
       },
     },
     it: {
@@ -87,20 +124,45 @@ const { t, locale } = useI18n({
         loading: "Caricamento progetto…",
         loadError: "Non è stato possibile caricare il progetto.",
         saveError: "Non è stato possibile salvare la versione del Project Brief.",
-        currentBrief: "La tua idea",
-        noBrief: "Descrivi cosa vuoi realizzare per iniziare.",
-        versionHistory: "Descrizioni precedenti",
-        version: "Versione {number}",
         allProjects: "Tutti i progetti",
         principle: "L'AI propone, decidi tu",
-        provenance: "Provenienza",
-        readOnly: "Passo già chiuso. Puoi rileggerlo, non modificarlo.",
+        readOnly:
+          "Hai già approvato questo passo: puoi rileggerlo. Ogni modifica crea una nuova versione da approvare di nuovo.",
+        readOnlyBrief:
+          "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
+        readOnlyTeam:
+          "Hai già approvato la squadra: puoi rileggerla. Puoi ancora attivare o togliere i ruoli facoltativi: ogni cambio che salvi crea una nuova versione della squadra da approvare di nuovo.",
+        readOnlyTwins:
+          "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
+        readOnlyRequirements:
+          "Hai già approvato i requisiti: puoi rileggerli. Se ne modifichi uno, nasce una nuova versione da approvare di nuovo.",
+        readOnlyDesign:
+          "Hai già approvato il design: puoi rileggerlo e provare il mockup. Se cambi la scelta o il design, nasce una nuova versione da approvare di nuovo.",
+        packagePreview: "Anteprima di {code} · {title}",
         backToCurrent: "Torna al passo attuale",
-        unlockHint: "Il passo successivo si sblocca dopo la tua approvazione.",
-        editBrief: "Modifica la descrizione",
-        describeIdea: "Descrivi la tua idea",
-        openDialogue: "Torna al dialogo",
-        tools: "Strumenti e dettagli tecnici del progetto",
+        editBrief: "Modifica il brief di persona",
+        describeIdea: "Descrivi la tua idea nel modulo",
+        openDialogue: "Torna al dialogo con l'analista",
+        showSteps: "Tutti i passi",
+        readyToDownload: "Pronto da scaricare",
+        techVersion: "Versione {number}",
+        techApproved: "approvata da te",
+        techPending: "in attesa della tua decisione",
+        techNone: "Nessuna versione ancora",
+        hash: "Hash del contenuto",
+        origin: "Cartella di conoscenza",
+        originValue: "{project}, versione {version}",
+        archiveHash: "Hash dell'archivio",
+        briefVersions: "Versioni del brief",
+        version: "Versione {number} · {date}",
+        provenance: "Apri il grafo della provenienza",
+        provenanceTitle: "Provenienza",
+        projectDetails: "Dettagli del progetto",
+        folderVersion: "Cartella versione {number}",
+        noFolder: "Nessuna cartella preparata",
+        folderContents: "Contenuto",
+        folderSummary:
+          "{files} file · {steps} passo approvato | {files} file · {steps} passi approvati",
       },
     },
   },
@@ -120,6 +182,8 @@ const briefMode = ref<"dialogue" | "form" | null>(null);
 const briefView = computed(
   () => briefMode.value ?? (currentBrief.value === null ? "dialogue" : "form"),
 );
+const stepsOpen = ref(false);
+const editorOpen = ref(false);
 let projectEpoch = 0;
 
 function onDialogueActive(active: boolean): void {
@@ -191,41 +255,62 @@ const stageLabels = computed(() =>
 const stageDescriptions = computed(() =>
   locale.value === "it"
     ? [
-        "Racconta cosa vuoi realizzare e per chi.",
-        "Scegli gli assistenti che lavoreranno al tuo progetto.",
-        "Conosci i profili simulati delle persone che useranno il prodotto.",
-        "Decidi cosa deve fare la tua applicazione.",
-        "Esplora le schermate e scegli l’esperienza da realizzare.",
-        "Scarica il pacchetto di design e continua nel tuo ambiente di sviluppo.",
+        "Racconta cosa vuoi realizzare e per chi. Quello che manca arriva come proposta: decidi tu se tenerla.",
+        "Gli assistenti che lavoreranno al tuo progetto, e in quale passo.",
+        "I profili simulati delle persone che useranno il prodotto. Confermali, correggili, parlaci.",
+        "Che cosa deve fare la tua applicazione, per chi, e come controlleremo che lo faccia.",
+        "Alternative già provate dai twin. Leggi il loro parere, prova il mockup e scegli.",
+        "La cartella di conoscenza da portare nei tuoi strumenti di sviluppo.",
       ]
     : [
-        "Describe what you want to create and who it is for.",
-        "Choose the assistants who will work on your project.",
-        "Meet the simulated profiles of the people who will use your product.",
-        "Decide what your application needs to do.",
-        "Explore the screens and choose the experience to build.",
-        "Download the design package and continue in your own development environment.",
+        "Tell what you want to build and for whom. What is missing arrives as a proposal: you decide whether to keep it.",
+        "The assistants who will work on your project, and in which step.",
+        "The simulated profiles of the people who will use the product. Confirm them, correct them, talk to them.",
+        "What your application must do, for whom, and how we will check that it does.",
+        "Alternatives already tried by the twins. Read what they think, try the mockup and choose.",
+        "The knowledge folder to bring into your own development tools.",
       ],
 );
 const stepItems = computed<StepItem[]>(() =>
-  stageLabels.value.map((label, index) => ({
-    key: `step-${index}`,
-    label,
-    index,
-    status:
+  stageLabels.value.map((label, index) => {
+    const status: StepStatus =
       index < currentStage.value
         ? "approved"
         : index === currentStage.value
           ? "current"
-          : "pending",
-  })),
+          : "pending";
+    const item: StepItem = { key: `step-${index}`, label, index, status };
+    if (index === 5 && status === "current") item.note = t("detail.readyToDownload");
+    return item;
+  }),
+);
+const headerStatus = computed<StepStatus>(() =>
+  activeStage.value < currentStage.value ? "approved" : "current",
+);
+const readOnlyText = computed(() =>
+  t(
+    [
+      "detail.readOnlyBrief",
+      "detail.readOnlyTeam",
+      "detail.readOnlyTwins",
+      "detail.readOnlyRequirements",
+      "detail.readOnlyDesign",
+    ][activeStage.value] ?? "detail.readOnly",
+  ),
 );
 const provenanceOpen = ref(false);
 const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
+function segmentClass(index: number): string {
+  if (index < currentStage.value) return "bg-petrol-on-night";
+  if (index === currentStage.value) return "bg-on-night";
+  return "bg-on-night/14";
+}
+
 function selectStep(key: string): void {
   const index = Number(key.replace("step-", ""));
   selectedStage.value = index === currentStage.value ? null : index;
+  stepsOpen.value = false;
 }
 
 const stageVersions = computed(() => [
@@ -244,6 +329,96 @@ const stageSummaries = computed(() =>
     approved: completedStages.value[index] === true,
   })),
 );
+const stageArtifacts = computed(() => {
+  const id = projectId.value;
+  const designVersion = design.projectId === id ? design.current : null;
+  return [
+    currentBrief.value,
+    team.projectId === id ? team.currentVersion : null,
+    modeling.projectId === id ? modeling.currentSnapshot : null,
+    requirements.projectId === id ? requirements.current : null,
+    designVersion,
+    designVersion,
+  ];
+});
+const latestFolder = computed(() =>
+  packages.projectId === projectId.value ? packages.latest : null,
+);
+const chosenGenerated = computed(() => {
+  const version = design.projectId === projectId.value ? design.current : null;
+  if (version === null || !version.package?.generated_mockup) {
+    return null;
+  }
+  const alternativeId = version.package.owner_selected_alternative_id;
+  const alternative = version.package.alternatives.find((item) => item.id === alternativeId);
+  return alternative === undefined ? null : { version, alternative };
+});
+const packagePreview = computed(() => {
+  const chosen = chosenGenerated.value;
+  if (chosen === null || mockups.projectId !== projectId.value) {
+    return null;
+  }
+  const document = mockups.documentFor(chosen.alternative.id, { source: "applied" });
+  return document === null
+    ? null
+    : {
+        html: document.html,
+        title: t("detail.packagePreview", {
+          code: chosen.alternative.code,
+          title: chosen.alternative.title,
+        }),
+      };
+});
+const technicalSummary = computed(() => {
+  if (activeStage.value === 5) {
+    const folder = latestFolder.value;
+    return folder === null
+      ? t("detail.noFolder")
+      : t("detail.folderVersion", { number: folder.version_number });
+  }
+  const version = activeVersion.value;
+  if (version === undefined || version === null) return t("detail.techNone");
+  const state = completedStages.value[activeStage.value]
+    ? t("detail.techApproved")
+    : t("detail.techPending");
+  return `${t("detail.techVersion", { number: version })} · ${state}`;
+});
+const technicalRows = computed(() => {
+  const rows: { label: string; value: string }[] = [];
+  if (activeStage.value === 5) {
+    const folder = latestFolder.value;
+    if (folder !== null) {
+      rows.push({ label: t("detail.hash"), value: folder.content_hash });
+      rows.push({ label: t("detail.archiveHash"), value: folder.archive_hash });
+      rows.push({
+        label: t("detail.folderContents"),
+        value: t(
+          "detail.folderSummary",
+          { files: folder.file_count, steps: folder.stages.length },
+          folder.stages.length,
+        ),
+      });
+    }
+    return rows;
+  }
+  const artifact = stageArtifacts.value[activeStage.value];
+  if (artifact) rows.push({ label: t("detail.hash"), value: artifact.content_hash });
+  return rows;
+});
+const projectRows = computed(() => {
+  const origin = importOrigin.value;
+  if (origin === null) return [];
+  return [
+    {
+      label: t("detail.origin"),
+      value: t("detail.originValue", {
+        project: origin.origin.project_name,
+        version: origin.origin.package_version,
+      }),
+    },
+    { label: t("detail.archiveHash"), value: origin.archive_hash },
+  ];
+});
 
 watch(currentStage, (next, previous) => {
   // Follow progress unless the owner deliberately revisited an earlier stage.
@@ -270,6 +445,13 @@ watch(
         ];
       }
     }
+  },
+);
+
+watch(
+  () => currentBrief.value?.version_number,
+  () => {
+    editorOpen.value = false;
   },
 );
 
@@ -381,233 +563,387 @@ async function loadImportOrigin(): Promise<void> {
   if (sequence === originSequence) importOrigin.value = origin;
 }
 
+const stagesRoot = ref<HTMLElement | null>(null);
+const technicalRow = ref<HTMLElement | null>(null);
+const stageOwnDetails = ref<readonly boolean[]>([]);
+const stepRowPlaced = ref(false);
+let stageDetailsObserver: MutationObserver | null = null;
+
+function scanStageDetails(): void {
+  const root = stagesRoot.value;
+  const next = Array.from({ length: 6 }, (_, index) =>
+    Boolean(root?.querySelector(`#studio-stage-${index} [data-testid="step-technical-details"]`)),
+  );
+  if (next.some((value, index) => value !== stageOwnDetails.value[index])) {
+    stageOwnDetails.value = next;
+  }
+  const placed = Boolean(
+    technicalRow.value?.querySelector('[data-testid="step-technical-details"]'),
+  );
+  if (stepRowPlaced.value !== placed) {
+    stepRowPlaced.value = placed;
+  }
+}
+
+const pageDetailsVisible = computed(
+  () =>
+    project.value !== null &&
+    stageOwnDetails.value[activeStage.value] !== true &&
+    !stepRowPlaced.value,
+);
+
+watch([stagesRoot, technicalRow], ([root, row]) => {
+  stageDetailsObserver?.disconnect();
+  stageDetailsObserver = null;
+  scanStageDetails();
+  if (typeof MutationObserver === "undefined") return;
+  stageDetailsObserver = new MutationObserver(scanStageDetails);
+  for (const element of [root, row]) {
+    if (element !== null) {
+      stageDetailsObserver.observe(element, { childList: true, subtree: true });
+    }
+  }
+});
+
+watch(
+  () =>
+    [
+      activeStage.value === 5,
+      chosenGenerated.value?.version.content_hash,
+      mockups.projectId === projectId.value,
+    ] as const,
+  ([packageShown, contentHash, active]) => {
+    const chosen = chosenGenerated.value;
+    if (!packageShown || contentHash === undefined || !active || chosen === null) return;
+    if (mockups.documentFor(chosen.alternative.id, { source: "applied" }) !== null) return;
+    void mockups
+      .loadDocument(chosen.alternative.id, authorized, { source: "applied" })
+      .catch(() => undefined);
+  },
+  { immediate: true },
+);
+
 watch(projectId, loadProject, { immediate: true });
 watch(projectId, loadImportOrigin, { immediate: true });
 onUnmounted(() => {
   projectEpoch++;
   originSequence++;
+  stageDetailsObserver?.disconnect();
 });
 </script>
 
 <template>
   <div
-    class="studio-workspace mx-auto grid w-full gap-8 lg:grid-cols-[272px_minmax(0,1fr)]"
-    :class="{ 'pb-44 sm:pb-36 md:pb-28': trayVisible }"
+    class="relative mx-auto grid w-full gap-x-12 gap-y-6 rounded-stage bg-night px-5 pt-6 text-on-night sm:px-8 sm:pt-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:px-[clamp(24px,4vw,56px)]"
+    data-surface="night"
     data-testid="project-workspace"
   >
-    <UiStateBlock
-      v-if="loading"
-      kind="loading"
-      :title="t('detail.loading')"
-      class="lg:col-span-2"
-    />
-    <UiStateBlock
-      v-else-if="errorDetail !== null"
-      kind="error"
-      :title="errorDetail === 'brief_save_failed' ? t('detail.saveError') : t('detail.loadError')"
-      class="lg:col-span-2"
-    />
-
-    <template v-else-if="project !== null">
-      <aside class="grid content-start gap-5 lg:sticky lg:top-[76px] lg:self-start">
-        <RouterLink
-          class="inline-flex items-center gap-1.5 text-sm font-semibold text-action underline-offset-4 hover:underline"
-          to="/projects"
-        >
-          <span aria-hidden="true">←</span>
-          {{ t("detail.allProjects") }}
-        </RouterLink>
-        <div class="grid gap-1">
-          <p class="m-0 text-[15px] font-semibold tracking-block">{{ project.display_name }}</p>
-          <p class="m-0 font-mono text-[11px] text-ink-3">{{ t("detail.principle") }}</p>
-        </div>
+    <aside v-if="project !== null" class="flex min-w-0 flex-col lg:sticky lg:top-24">
+      <RouterLink
+        class="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-petrol-on-night-2 underline-offset-4 hover:underline"
+        to="/projects"
+      >
+        <span aria-hidden="true">←</span>
+        {{ t("detail.allProjects") }}
+      </RouterLink>
+      <div class="pt-1 pb-5">
+        <p class="text-lg leading-tight font-semibold tracking-block text-on-night">
+          {{ project.display_name }}
+        </p>
+        <p class="mt-1 text-[13px] text-on-night-3">{{ t("detail.principle") }}</p>
+      </div>
+      <button
+        type="button"
+        class="mb-3 grid min-h-11 w-full gap-2.5 rounded-field border border-night-line bg-night-raised px-4 py-3 text-left transition-colors duration-150 hover:bg-night-hover lg:hidden"
+        :aria-expanded="stepsOpen ? 'true' : 'false'"
+        aria-controls="project-steps"
+        data-testid="project-steps-toggle"
+        @click="stepsOpen = !stepsOpen"
+      >
+        <span class="flex items-center justify-between gap-3">
+          <span class="text-[15px] font-semibold text-on-night">{{ t("detail.showSteps") }}</span>
+          <span
+            aria-hidden="true"
+            :class="[
+              'mr-1 inline-block h-2 w-2 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150',
+              stepsOpen ? 'translate-y-0.5 -rotate-135' : '-translate-y-0.5 rotate-45',
+            ]"
+          />
+        </span>
+        <span class="flex gap-1" aria-hidden="true">
+          <span
+            v-for="(item, index) in stepItems"
+            :key="item.key"
+            :class="['h-1 flex-1 rounded-[2px]', segmentClass(index)]"
+          />
+        </span>
+      </button>
+      <div id="project-steps" :class="stepsOpen ? '' : 'max-lg:hidden'">
         <UiStepper :steps="stepItems" :active="`step-${activeStage}`" @select="selectStep" />
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 text-sm font-semibold text-action underline-offset-4 hover:underline"
-          data-testid="open-provenance"
-          @click="provenanceOpen = true"
-        >
-          {{ t("detail.provenance") }}
-        </button>
-      </aside>
+      </div>
+    </aside>
 
-      <div class="grid content-start gap-6">
-        <header class="grid gap-3">
-          <UiProgressBar :current="activeStage + 1" :reached="currentStage + 1" :total="6" />
-          <h1 class="m-0 text-[34px] leading-[1.2] font-semibold tracking-title">
-            {{ stageLabels[activeStage] }}
-          </h1>
-          <p class="m-0 text-[17px] leading-7 text-ink-2">{{ stageDescriptions[activeStage] }}</p>
-          <p
-            v-if="importOrigin"
-            class="m-0 rounded-panel border border-action-soft-line bg-action-soft px-4 py-3 text-sm leading-6 text-ink-2"
-            data-testid="project-import-origin"
-          >
-            {{
-              t("projects.detail.importedFrom", {
-                project: importOrigin.origin.project_name,
-                version: importOrigin.origin.package_version,
-              })
-            }}
-          </p>
-        </header>
+    <div class="min-w-0 pb-16 lg:pb-24" :class="{ 'lg:col-span-2': project === null }">
+      <UiStateBlock v-if="loading" kind="loading" :title="t('detail.loading')" />
+      <UiStateBlock
+        v-else-if="errorDetail !== null"
+        kind="error"
+        :title="errorDetail === 'brief_save_failed' ? t('detail.saveError') : t('detail.loadError')"
+      />
 
-        <div
-          v-if="activeStage < currentStage"
-          class="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line-strong bg-surface-3 px-4 py-3"
-          aria-live="polite"
+      <template v-else-if="project !== null">
+        <UiStepHeader
+          :step="activeStage + 1"
+          :total="6"
+          :title="stageLabels[activeStage] ?? ''"
+          :description="stageDescriptions[activeStage]"
+          :status="headerStatus"
+        />
+        <p
+          v-if="importOrigin"
+          class="mt-4 max-w-[720px] rounded-field border border-petrol-on-night/35 bg-petrol-on-night/8 px-4 py-3 text-sm leading-normal text-on-night-2"
+          data-testid="project-import-origin"
         >
-          <p class="m-0 text-sm text-ink-2">
-            {{ t("detail.readOnly") }}
-            <template v-if="activeVersion">
-              <span class="font-mono text-xs text-ink-3">· v{{ activeVersion }}</span>
-            </template>
-          </p>
-          <UiButton variant="secondary" data-testid="back-to-current" @click="selectedStage = null">
-            {{ t("detail.backToCurrent") }}
-          </UiButton>
-        </div>
-        <p v-else-if="activeStage < 5" class="m-0 font-mono text-xs text-ink-3" aria-live="polite">
-          {{ t("detail.unlockHint") }}
+          {{
+            tg("projects.detail.importedFrom", {
+              project: importOrigin.origin.project_name,
+              version: importOrigin.origin.package_version,
+            })
+          }}
         </p>
 
         <div
-          id="studio-stage-0"
-          v-show="activeStage === 0"
-          class="grid gap-5"
-          data-testid="stage-brief"
+          v-if="activeStage < currentStage"
+          class="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-panel border border-night-line bg-night-raised py-3 pr-3 pl-5"
+          aria-live="polite"
+          data-testid="step-read-only"
         >
-          <ProjectBriefDialogue
-            v-show="briefView === 'dialogue'"
-            :key="`${projectId}:brief-dialogue`"
-            :project-id="projectId"
-            :current-brief="currentBrief"
-            :authorize="authorized"
-            @active="onDialogueActive"
-            @synthesized="onDialogueSynthesized"
-            @open-form="briefMode = 'form'"
-            @unavailable="briefMode = 'form'"
-          />
-          <template v-if="briefView === 'form'">
-            <UiCard>
-              <h2 id="current-brief-title" class="m-0 text-2xl font-semibold tracking-card">
-                {{ t("detail.currentBrief") }}
-              </h2>
-              <p v-if="currentBrief" class="mt-3 mb-0 text-[15px] leading-6 text-ink-2">
-                {{ currentBrief.brief.description ?? currentBrief.brief.problem }}
-              </p>
-              <p v-else class="mt-3 mb-0 text-[15px] text-ink-2">{{ t("detail.noBrief") }}</p>
-              <details class="mt-4" :open="currentBrief === null">
-                <summary class="cursor-pointer text-sm font-semibold text-action">
-                  {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
-                </summary>
-                <div class="mt-4">
-                  <ProjectBriefEditor
-                    :key="currentBrief?.version_number ?? 0"
-                    :initial="currentBrief?.brief ?? null"
-                    :busy="saving"
-                    @submit="saveBrief"
+          <p class="min-w-[min(100%,16rem)] flex-1 text-[15px] leading-normal text-on-night-3">
+            {{ readOnlyText }}
+          </p>
+          <UiButton variant="outline" data-testid="back-to-current" @click="selectedStage = null">
+            {{ t("detail.backToCurrent") }}
+          </UiButton>
+        </div>
+
+        <div ref="stagesRoot" class="mt-7">
+          <div
+            id="studio-stage-0"
+            v-show="activeStage === 0"
+            class="flex min-w-0 flex-col gap-6"
+            data-testid="stage-brief"
+          >
+            <ProjectBriefDialogue
+              v-show="briefView === 'dialogue'"
+              :key="`${projectId}:brief-dialogue`"
+              :project-id="projectId"
+              :current-brief="currentBrief"
+              :authorize="authorized"
+              @active="onDialogueActive"
+              @synthesized="onDialogueSynthesized"
+              @open-form="briefMode = 'form'"
+              @unavailable="briefMode = 'form'"
+            />
+            <template v-if="briefView === 'form'">
+              <ProjectClarificationFlow
+                v-if="currentBrief !== null"
+                :key="`${projectId}:${currentBrief.version_number}:clarification`"
+                :project-id="projectId"
+                :current-brief="currentBrief"
+                :history="briefHistory"
+                :active="activeStage === 0"
+              />
+              <div
+                v-if="currentBrief !== null || !completedStages[0]"
+                class="flex flex-wrap items-center gap-x-6"
+              >
+                <button
+                  v-if="currentBrief !== null"
+                  type="button"
+                  class="group inline-flex min-h-11 items-center gap-2.5 text-sm font-semibold text-petrol-on-night-2 underline-offset-4 hover:underline"
+                  :aria-expanded="editorOpen ? 'true' : 'false'"
+                  aria-controls="brief-editor-panel"
+                  data-testid="brief-edit-toggle"
+                  @click="editorOpen = !editorOpen"
+                >
+                  <span
+                    aria-hidden="true"
+                    :class="[
+                      'inline-block h-1.5 w-1.5 shrink-0 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150',
+                      editorOpen ? 'rotate-45' : '-rotate-45',
+                    ]"
                   />
-                </div>
-              </details>
-              <details v-if="briefHistory.length" class="mt-4 border-t border-line-soft pt-3">
-                <summary class="cursor-pointer font-mono text-xs text-ink-3">
-                  {{ t("detail.versionHistory") }} ({{ briefHistory.length }})
-                </summary>
-                <ol class="mt-3 grid gap-2">
-                  <li
-                    v-for="version in briefHistory"
-                    :key="version.id"
-                    class="grid gap-1 rounded-panel bg-surface-2 p-3 text-xs text-ink-3"
-                  >
-                    <strong class="text-ink-2"
-                      >{{ t("detail.version", { number: version.version_number }) }} ·
-                      {{ formatDate(version.created_at) }}</strong
-                    >
-                    <code class="font-mono break-all">{{ version.content_hash }}</code>
-                  </li>
-                </ol>
-              </details>
-              <div v-if="!completedStages[0]" class="mt-4">
-                <UiButton
-                  variant="secondary"
+                  {{ t("detail.editBrief") }}
+                </button>
+                <button
+                  v-if="!completedStages[0]"
+                  type="button"
+                  class="inline-flex min-h-11 items-center text-sm font-semibold text-on-night-3 underline-offset-4 hover:text-on-night hover:underline"
                   data-testid="brief-open-dialogue"
                   @click="briefMode = 'dialogue'"
                 >
                   {{ t("detail.openDialogue") }}
-                </UiButton>
+                </button>
               </div>
-            </UiCard>
-            <ProjectClarificationFlow
-              v-if="currentBrief !== null"
-              :key="`${projectId}:${currentBrief.version_number}:clarification`"
-              :project-id="projectId"
-              :current-brief="currentBrief"
-            />
-          </template>
-        </div>
-        <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
-          <ProjectTeamSelectionFlow
-            id="studio-team"
-            :key="`${projectId}:${briefContext}:team`"
-            :project-id="projectId"
-          />
-        </div>
-        <div id="studio-stage-2" v-show="activeStage === 2" data-testid="stage-twins">
-          <ProjectUserModelingFlow
-            id="studio-twins"
-            v-if="auth.accessToken"
-            :key="`${projectId}:${teamContext}:user-modeling`"
-            :project-id="projectId"
-            :access-token="auth.accessToken"
-            :authorize="authorized"
-            :locale="locale === 'it' ? 'it' : 'en'"
-            @open-chat="chatTwin = $event"
-          />
-        </div>
-        <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">
-          <ProjectRequirementsFlow
-            id="studio-requirements"
-            :prerequisite-ready="modeling.isReadyForRequirements"
-            :key="`${projectId}:${twinContext}:requirements`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-        <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
-          <ProjectDesignFlow
-            id="studio-design"
-            :prerequisite-ready="requirements.isReadyForDesign"
-            :key="`${projectId}:${requirementsContext}:design`"
-            :project-id="projectId"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-        <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
-          <ProjectDesignPackagePanel
-            id="studio-package"
-            :project-id="projectId"
-            :stages="stageSummaries"
-            :authorize="authorized"
-            :locale="locale === 'it' ? 'it' : 'en'"
-          />
-        </div>
-        <details
-          class="rounded-panel border border-line bg-surface px-4 py-3"
-          data-testid="technical-details"
-        >
-          <summary class="cursor-pointer text-sm font-semibold text-ink-2">
-            {{ t("detail.tools") }}
-          </summary>
-          <div class="mt-4 grid gap-4">
-            <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
+              <section
+                id="brief-editor-panel"
+                v-show="currentBrief === null || editorOpen"
+                class="rounded-tile border border-night-line bg-night-raised px-5 py-6 sm:p-7"
+                aria-labelledby="brief-editor-title"
+                data-testid="brief-editor"
+              >
+                <h2
+                  id="brief-editor-title"
+                  class="mb-5 text-[22px] leading-tight font-semibold tracking-block text-on-night"
+                >
+                  {{ currentBrief ? t("detail.editBrief") : t("detail.describeIdea") }}
+                </h2>
+                <ProjectBriefEditor
+                  :key="currentBrief?.version_number ?? 0"
+                  :initial="currentBrief?.brief ?? null"
+                  :busy="saving"
+                  @submit="saveBrief"
+                />
+              </section>
+            </template>
           </div>
-        </details>
+          <div id="studio-stage-1" v-show="activeStage === 1" data-testid="stage-team">
+            <ProjectTeamSelectionFlow
+              id="studio-team"
+              :key="`${projectId}:${briefContext}:team`"
+              :project-id="projectId"
+              :active="activeStage === 1"
+            />
+          </div>
+          <div id="studio-stage-2" v-show="activeStage === 2" data-testid="stage-twins">
+            <ProjectUserModelingFlow
+              id="studio-twins"
+              v-if="auth.accessToken"
+              :key="`${projectId}:${teamContext}:user-modeling`"
+              :project-id="projectId"
+              :access-token="auth.accessToken"
+              :authorize="authorized"
+              :locale="locale === 'it' ? 'it' : 'en'"
+              :active="activeStage === 2"
+              @open-chat="chatTwin = $event"
+            />
+          </div>
+          <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">
+            <ProjectRequirementsFlow
+              id="studio-requirements"
+              :prerequisite-ready="modeling.isReadyForRequirements"
+              :key="`${projectId}:${twinContext}:requirements`"
+              :project-id="projectId"
+              :locale="locale === 'it' ? 'it' : 'en'"
+              :active="activeStage === 3"
+            />
+          </div>
+          <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
+            <ProjectDesignFlow
+              id="studio-design"
+              :prerequisite-ready="requirements.isReadyForDesign"
+              :key="`${projectId}:${requirementsContext}:design`"
+              :project-id="projectId"
+              :locale="locale === 'it' ? 'it' : 'en'"
+              :active="activeStage === 4"
+            />
+          </div>
+          <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
+            <ProjectDesignPackagePanel
+              id="studio-package"
+              :project-id="projectId"
+              :stages="stageSummaries"
+              :authorize="authorized"
+              :locale="locale === 'it' ? 'it' : 'en'"
+            >
+              <template v-if="packagePreview !== null" #preview>
+                <GeneratedMockupFrame
+                  :html="packagePreview.html"
+                  :title="packagePreview.title"
+                  :interactive="false"
+                  data-testid="package-preview-generated"
+                />
+              </template>
+            </ProjectDesignPackagePanel>
+          </div>
+        </div>
+      </template>
+
+      <div class="sticky bottom-4 z-30 flex flex-col" data-testid="step-dock">
+        <InsightBriefTray
+          v-if="projectId"
+          class="mt-10"
+          :project-id="projectId"
+          :locale="locale === 'it' ? 'it' : 'en'"
+          :authorize="authorized"
+        />
+        <div
+          id="step-decision-bar"
+          v-show="project !== null && activeStage === currentStage"
+          :class="['flex flex-col', trayVisible ? '[&_[data-testid=decision-bar]]:mt-3' : '']"
+          data-testid="step-decision-bar"
+        />
       </div>
+
+      <div
+        id="step-technical-row"
+        ref="technicalRow"
+        v-show="project !== null"
+        data-testid="step-technical-row"
+      />
+
+      <UiTechnicalDetails
+        v-if="pageDetailsVisible"
+        :key="`step-details-${activeStage}`"
+        :summary="technicalSummary"
+        :rows="technicalRows"
+        data-testid="technical-details"
+      >
+        <div v-if="activeStage === 0 && briefHistory.length > 0" class="grid gap-2">
+          <p class="text-on-night-3">{{ t("detail.briefVersions") }}</p>
+          <ol class="m-0 grid list-none gap-1.5 p-0">
+            <li
+              v-for="version in briefHistory"
+              :key="version.id"
+              class="grid gap-0.5 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-x-5"
+            >
+              <span class="text-on-night-2">
+                {{
+                  t("detail.version", {
+                    number: version.version_number,
+                    date: formatDate(version.created_at),
+                  })
+                }}
+              </span>
+              <code class="font-mono text-xs leading-[1.6] wrap-anywhere">
+                {{ version.content_hash }}
+              </code>
+            </li>
+          </ol>
+        </div>
+      </UiTechnicalDetails>
+
+      <UiTechnicalDetails
+        v-if="project !== null"
+        :class="pageDetailsVisible || stepRowPlaced ? 'mt-0! border-t-0! pt-0!' : ''"
+        :summary="t('detail.projectDetails')"
+        :rows="projectRows"
+        data-testid="project-details"
+      >
+        <ModelRuntimeStatus :locale="locale === 'it' ? 'it' : 'en'" />
+        <div>
+          <UiButton variant="outline" data-testid="open-provenance" @click="provenanceOpen = true">
+            {{ t("detail.provenance") }}
+          </UiButton>
+        </div>
+      </UiTechnicalDetails>
+    </div>
+
+    <template v-if="project !== null">
       <UiSidePanel
         :open="provenanceOpen"
-        :title="t('detail.provenance')"
+        :title="t('detail.provenanceTitle')"
+        surface="night"
         @close="provenanceOpen = false"
       >
         <ProjectArtifactGraph
@@ -619,7 +955,8 @@ onUnmounted(() => {
       </UiSidePanel>
       <UiSidePanel
         :open="chatTwin !== null"
-        :title="chatTwin ? t('twinChat.title', { name: chatTwin.profile.name }) : ''"
+        :title="chatTwin ? tg('twinChat.title', { name: chatTwin.profile.name }) : ''"
+        surface="night"
         @close="chatTwin = null"
       >
         <TwinChatPanel
@@ -631,27 +968,5 @@ onUnmounted(() => {
         />
       </UiSidePanel>
     </template>
-    <InsightBriefTray
-      v-if="projectId"
-      :project-id="projectId"
-      :locale="locale === 'it' ? 'it' : 'en'"
-      :authorize="authorized"
-    />
   </div>
 </template>
-
-<style scoped>
-.studio-workspace :deep(section.rounded-card) {
-  border-radius: 18px;
-  padding: 1.5rem;
-}
-.studio-workspace :deep(h2) {
-  font-size: 1.5rem;
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-}
-.studio-workspace :deep(h3) {
-  font-size: 1.0625rem;
-  line-height: 1.5;
-}
-</style>
