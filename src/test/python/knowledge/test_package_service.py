@@ -21,7 +21,13 @@ from orchestwin.knowledge.packages import KnowledgePackageVersion
 from orchestwin.knowledge.schema import KnowledgeSchemaError
 from src.test.python.artifacts.design_fixtures import OWNER_ID, PROJECT_ID
 
-from .knowledge_fixtures import PUBLISHED_AT, sources
+from .knowledge_fixtures import (
+    PUBLISHED_AT,
+    partial_sources,
+    real_sources,
+    sources,
+    state_sources,
+)
 
 STRANGER = UUID(int=99)
 
@@ -168,16 +174,44 @@ def test_changed_content_becomes_the_next_version() -> None:
     assert [item.version_number for item, _ in store.rows] == [1, 2]
 
 
-def test_older_schema_version_is_not_reused() -> None:
+@pytest.mark.parametrize("older", [1, 2])
+def test_older_schema_version_is_not_reused(older: int) -> None:
     loader, store = FakeLoader(), FakeStore()
     first = publish(service(loader, store)).version
-    store.rows[0] = (replace(first, schema_version=1), store.rows[0][1])
+    store.rows[0] = (replace(first, schema_version=older), store.rows[0][1])
 
     second = publish(service(loader, store))
 
     assert second.reused is False
     assert second.version.version_number == 2
+    assert second.version.schema_version == KNOWLEDGE_SCHEMA_VERSION == 3
     assert second.version.content_hash == first.content_hash
+
+
+def test_a_brief_only_project_publishes_a_partial_folder_of_schema_three() -> None:
+    store = FakeStore()
+
+    publication = publish(service(FakeLoader(partial_sources("brief")), store))
+
+    manifest = publication.version.manifest
+    assert publication.reused is False
+    assert manifest["schema_version"] == 3
+    assert list(manifest["stages"]) == ["brief"]
+    assert manifest["progress"] == {"approved": ["brief"], "pending": "team", "complete": False}
+    assert "state/state.json" in publication.version.entries
+    assert "team/team.json" not in publication.version.entries
+
+
+def test_a_new_change_review_publishes_a_new_version() -> None:
+    store = FakeStore()
+    first = publish(service(FakeLoader(real_sources()), store))
+
+    second = publish(service(FakeLoader(real_sources(state=state_sources())), store))
+
+    assert second.reused is False
+    assert second.version.version_number == 2
+    assert second.version.content_hash != first.version.content_hash
+    assert second.version.manifest["state"]["changes"] == 2
 
 
 def test_missing_approvals_stop_the_publication_before_any_write() -> None:

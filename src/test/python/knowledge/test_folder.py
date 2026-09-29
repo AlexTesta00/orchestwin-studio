@@ -44,6 +44,7 @@ FEEDBACK_FILES = (
     "twins/feedback/insights.json",
     "twins/feedback/reviews.json",
 )
+STATE_FILES = ("state/state.json", "state/state.md", "twins/feedback/changes.json")
 DIAGRAM_FILES = (
     "requirements/diagrams/use-cases.mmd",
     "requirements/diagrams/requirements.mmd",
@@ -77,6 +78,7 @@ def test_folder_holds_every_view_of_every_approved_stage() -> None:
                 *STAGE_FILES,
                 *DESIGN_FILES,
                 *FEEDBACK_FILES,
+                *STATE_FILES,
                 *DIAGRAM_FILES,
                 *TABLE_COLUMNS,
                 *schema_files(),
@@ -109,7 +111,7 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
     manifest = json.loads(built.files[KNOWLEDGE_MANIFEST])
 
     assert manifest == built.manifest
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["kind"] == KNOWLEDGE_FOLDER_KIND
     assert manifest["manifest"] == KNOWLEDGE_MANIFEST
     assert manifest["index"] == KNOWLEDGE_INDEX
@@ -143,8 +145,20 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "decisions": 2,
         "discussions": 1,
         "insights": 1,
+        "changes": "twins/feedback/changes.json",
+        "change_reviews": 0,
+    }
+    assert manifest["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
+    assert manifest["state"] == {
+        "document": "state/state.json",
+        "text": "state/state.md",
+        "changes": 0,
+        "pending_changes": 0,
+        "aligned_commit": None,
+        "open_tasks": 0,
     }
     assert manifest["schemas"] == {name: f"schema/{name}.schema.json" for name in SCHEMA_NAMES}
+    assert len(manifest["schemas"]) == 12
 
 
 def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
@@ -300,17 +314,25 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
     assert index.startswith(f"# OrchesTwin knowledge folder: {PROJECT_NAME}\n")
     assert f"Knowledge folder version 1 of project {built.project_id}" in index
     assert f"Content hash `{built.content_hash}`" in index
-    for heading in (
+    headings = [line for line in index.splitlines() if line.startswith("## ")]
+    assert headings == [
         "## What this folder is",
         "## How to use it",
         "## Approved stages",
         "## User twins",
         "## Views",
         "## Twin feedback",
+        "## Development state",
+        "## Latest critiques on the code",
         "## Schema",
         "## Files",
-    ):
-        assert heading in index
+    ]
+    assert "This folder holds 5 of 5 approved steps; every step is approved." in index
+    assert "- Build against `requirements/requirements.md` and `design/design.md`" in index
+    assert "- The state of the development is in `state/state.md` and `state/state.json`" in index
+    assert "The Studio has recorded no change (commit) of the code yet." in index
+    assert "## Latest critiques on the code\n\nNone yet.\n" in index
+    assert "`twins/feedback/changes.json` holds 0 review runs of the twins" in index
     assert f"`{twin['document']}`" in index
     assert "| requirements | diagram | `requirements/diagrams/use-cases.mmd` | Use cases |" in index
     assert "| design | mockup | `design/mockup.html` |" in index

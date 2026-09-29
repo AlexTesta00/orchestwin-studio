@@ -55,6 +55,10 @@ def test_published_archive_reads_back_as_the_same_verified_folder() -> None:
     assert verified.content_hash == built.content_hash
     assert set(verified.documents) == {"brief", "team", "twins", "requirements", "design"}
     assert verified.documents["design"] == json.loads(built.files["design/design.json"])
+    assert verified.schema_version == 3
+    assert verified.present_stages == ("brief", "team", "twins", "requirements", "design")
+    assert verified.pending_stage is None
+    assert verified.complete is True
 
 
 @pytest.mark.parametrize(
@@ -199,14 +203,17 @@ def test_json_the_parser_cannot_nest_is_an_invalid_document(
     assert (refused.code, refused.detail) == ("FOLDER_DOCUMENT_INVALID", KNOWLEDGE_MANIFEST)
 
 
-@pytest.mark.parametrize(("key", "value"), [("schema_version", 1), ("kind", "something.else")])
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("schema_version", 1), ("schema_version", 4), ("kind", "something.else"), ("kind", None)],
+)
 def test_folders_of_another_schema_or_kind_are_not_supported(key: str, value: object) -> None:
     files = folder().files
     manifest = {**json.loads(files[KNOWLEDGE_MANIFEST]), key: value}
 
     rejected = failure(lambda: verify_folder({**files, KNOWLEDGE_MANIFEST: json_text(manifest)}))
 
-    assert rejected.code in {"FOLDER_SCHEMA_UNSUPPORTED", "FOLDER_DOCUMENT_INVALID"}
+    assert (rejected.code, rejected.detail) == ("FOLDER_SCHEMA_UNSUPPORTED", None)
 
 
 def test_changed_missing_and_added_files_are_detected() -> None:

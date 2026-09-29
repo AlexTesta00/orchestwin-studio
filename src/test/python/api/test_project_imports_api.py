@@ -155,7 +155,7 @@ def test_import_answers_created_with_the_new_project_its_origin_and_the_steps_to
         "project_name": "Lista ospiti workshop",
         "package_version": 1,
         "package_content_hash": result.plan.origin.package_content_hash,
-        "schema_version": 2,
+        "schema_version": 3,
     }
     assert list(body["stages"]) == list(STAGES)
     assert body["stages"] == expected_stages()
@@ -188,6 +188,7 @@ def test_import_without_a_display_name_lets_the_service_use_the_folder_name() ->
         ("FOLDER_SCHEMA_UNSUPPORTED", None, 422),
         ("FOLDER_TAMPERED", "brief/brief.md", 422),
         ("FOLDER_INCONSISTENT", "DESIGN_OUTDATED", 422),
+        ("FOLDER_INCOMPLETE", "requirements", 422),
         ("PROJECT_NAME_INVALID", "display_name", 422),
         ("PROJECT_IMPORT_REJECTED", "design", 409),
     ],
@@ -280,7 +281,7 @@ def test_origin_of_an_imported_project_names_its_folder_and_versions() -> None:
             "project_name": "Lista ospiti workshop",
             "package_version": 1,
             "package_content_hash": record.package_content_hash,
-            "schema_version": 2,
+            "schema_version": 3,
         },
         "stages": expected_stages(),
         "imported_at": "2026-09-28T09:00:00Z",

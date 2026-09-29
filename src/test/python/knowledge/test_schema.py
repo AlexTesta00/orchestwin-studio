@@ -31,11 +31,14 @@ from orchestwin.artifacts.prototypes import PrototypeElementKind
 from orchestwin.knowledge import schema as schema_module
 from orchestwin.knowledge.folder import KnowledgeFolder, build_knowledge_folder, text_digest
 from orchestwin.knowledge.layout import (
+    FEEDBACK_CHANGES,
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_INSIGHTS,
     FEEDBACK_REVIEWS,
     KNOWLEDGE_MANIFEST,
     STAGES,
+    STATE_DOCUMENT,
+    STATE_TEXT,
     schema_document,
     stage_document,
 )
@@ -299,7 +302,8 @@ def test_schema_files_publish_one_valid_json_schema_for_every_document_kind() ->
     )
 
     assert list(files) == [f"schema/{name}.schema.json" for name in SCHEMA_NAMES]
-    assert len(files) == 10
+    assert len(files) == 12
+    assert SCHEMA_NAMES[-2:] == ("state", "changes")
     assert schema_files() == files
     assert fresh.stdout.strip() == (
         hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
@@ -311,7 +315,7 @@ def test_schema_files_publish_one_valid_json_schema_for_every_document_kind() ->
         assert text == json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
         assert schema == schemas[name]
         assert schema["$schema"] == SCHEMA_DIALECT == "https://json-schema.org/draft/2020-12/schema"
-        assert schema["$id"] == f"urn:orchestwin:knowledge-folder:2:{name}"
+        assert schema["$id"] == f"urn:orchestwin:knowledge-folder:3:{name}"
         assert schema["title"].strip()
         assert schema["description"].strip()
 
@@ -364,6 +368,9 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
     assert names[FEEDBACK_REVIEWS] == "reviews"
     assert names[FEEDBACK_DISCUSSIONS] == "discussions"
     assert names[FEEDBACK_INSIGHTS] == "insights"
+    assert names[STATE_DOCUMENT] == "state"
+    assert names[FEEDBACK_CHANGES] == "changes"
+    assert names[STATE_TEXT] is None
     assert twins == [path for path in folder.files if path.endswith("/twin.json")]
     assert len(twins) == 1
     for path, name in names.items():
@@ -412,6 +419,23 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
             None,
             "package.alternatives[0].approach",
         ),
+        ("manifest", ("progress",), REMOVED, ""),
+        ("manifest", ("state",), REMOVED, ""),
+        ("manifest", ("feedback", "changes"), REMOVED, ""),
+        ("manifest", ("state",), None, "state"),
+        ("manifest", ("stages", "team"), REMOVED, "stages"),
+        ("manifest", ("stages", "requirements"), None, "stages.requirements"),
+        ("manifest", ("schema_version",), 1, "schema_version"),
+        ("manifest", ("progress", "pending"), "roadmap", "progress.pending"),
+        ("manifest", ("state", "aligned_commit"), "ABC1234", "state.aligned_commit"),
+        ("state", ("schema_version",), 2, "schema_version"),
+        (
+            "state",
+            ("reference", "design", "alternative_code"),
+            "DES-2",
+            "reference.design.alternative_code",
+        ),
+        ("changes", ("kind",), "orchestwin.project-state", "kind"),
     ],
 )
 def test_both_validators_reject_a_document_that_breaks_its_schema(
