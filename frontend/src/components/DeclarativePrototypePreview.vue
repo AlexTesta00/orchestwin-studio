@@ -2,13 +2,22 @@
 import { computed, nextTick, reactive, ref, useId, watch } from "vue";
 
 import PrototypeElement from "./PrototypeElement.vue";
+import { useSurface } from "./UiSurface.vue";
 import type {
   DeclarativePrototypePayload,
   PrototypeElementPayload,
   PrototypeViewport,
   VisualLanguagePayload,
 } from "../types/design";
-import { layoutZones } from "./prototypeLayout";
+import {
+  displayElements,
+  layoutZones,
+  splits,
+  zoneRuns,
+  type DisplayElement,
+  type LayoutZone,
+  type ZoneRun,
+} from "./prototypeLayout";
 import { shellClasses, tokenStyle, visualChoices, type VisualLocale } from "./visualLanguage";
 
 const props = withDefaults(
@@ -43,7 +52,40 @@ const labels = {
     sizes: { MOBILE: "Telefono", TABLET: "Tablet", DESKTOP: "Desktop" },
   },
 };
+const palettes = {
+  light: {
+    title: "text-ink",
+    quiet: "text-ink-2 hover:bg-surface-3",
+    current: "bg-ink text-white",
+    idle: "text-ink-2 hover:bg-surface-3",
+    group: "border-line",
+    stage: "rounded-panel border-line bg-surface-3",
+    frame: "border-line",
+    chrome: "border-line-soft bg-surface-2",
+    dot: "bg-button-line",
+    muted: "text-ink-3",
+    missing: "bg-white text-ink-2",
+  },
+  night: {
+    title: "text-on-night",
+    quiet: "text-on-night-2 hover:bg-night-hover hover:text-on-night",
+    current: "bg-on-night text-ink",
+    idle: "text-on-night hover:bg-night-hover",
+    group: "border-night-line",
+    stage: "rounded-tile border-night-line bg-night-deep",
+    frame: "border-night-line",
+    chrome: "border-night-line bg-night-panel",
+    dot: "bg-on-night/30",
+    muted: "text-on-night-3",
+    missing: "bg-night-raised text-on-night-2",
+  },
+};
+
+const SINGLE_COLUMN_FIELDS = 3;
+
 const copy = computed(() => labels[props.locale]);
+const surface = useSurface(() => undefined);
+const palette = computed(() => palettes[surface.value]);
 const titleId = `mockup-${useId()}`;
 const currentScreenId = ref(props.prototype.entry_screen_id);
 const viewport = ref<PrototypeViewport>(
@@ -66,11 +108,16 @@ const tokens = computed(() => tokenStyle(props.visual));
 const shell = computed(() => shellClasses(choices.value));
 const productName = computed(() => props.visual?.product_name ?? props.prototype.title);
 const isPhone = computed(() => viewport.value === "MOBILE");
-const zones = computed(() =>
-  currentScreen.value === null
-    ? []
-    : layoutZones(choices.value.archetype, currentScreen.value.elements),
-);
+const zones = computed<(LayoutZone & { runs: ZoneRun[] })[]>(() => {
+  const screen = currentScreen.value;
+  if (screen === null) return [];
+  const archetype = choices.value.archetype;
+  const elements = displayElements(archetype, screen.title, productName.value, screen.elements);
+  return layoutZones(archetype, elements).map((zone) => ({
+    ...zone,
+    runs: zoneRuns(zone.name, zone.elements),
+  }));
+});
 const columns = computed(() => zones.value.filter((zone) => zone.name === "column"));
 const others = computed(() => zones.value.filter((zone) => zone.name !== "column"));
 const showRail = computed(() => choices.value.navigation === "SIDE_RAIL" && !isPhone.value);
@@ -79,15 +126,7 @@ const showTopLinks = computed(
   () => choices.value.navigation === "TOP_BAR" || choices.value.navigation === "TABS",
 );
 const showStepper = computed(() => choices.value.archetype === "GUIDED_STEPS");
-const split = computed(
-  () =>
-    !isPhone.value &&
-    others.value.length === 2 &&
-    (choices.value.archetype === "LIST_DETAIL" || choices.value.archetype === "SPLIT_SCREEN"),
-);
-const framed = computed(
-  () => choices.value.archetype === "SINGLE_CARD" || choices.value.archetype === "GUIDED_STEPS",
-);
+const split = computed(() => !isPhone.value && splits(choices.value.archetype, others.value));
 
 function transitionFor(elementId: string) {
   return props.prototype.transitions.find(
@@ -135,8 +174,13 @@ function fieldKey(element: PrototypeElementPayload): string {
 function twoColumns(elements: readonly PrototypeElementPayload[]): boolean {
   return (
     !isPhone.value &&
-    elements.filter((item) => item.kind === "TEXT_INPUT" || item.kind === "SELECT").length > 1
+    elements.filter((item) => item.kind === "TEXT_INPUT" || item.kind === "SELECT").length >
+      SINGLE_COLUMN_FIELDS
   );
+}
+
+function pairLabel(element: DisplayElement): string {
+  return element.content.trimEnd().replace(/:$/, "").trimEnd();
 }
 
 function cells(content: string): string[] {
@@ -145,14 +189,14 @@ function cells(content: string): string[] {
 </script>
 
 <template>
-  <section class="grid min-w-0 gap-3" :aria-labelledby="titleId">
+  <section class="grid min-w-0 gap-3" :aria-labelledby="titleId" :data-surface-context="surface">
     <header class="flex flex-wrap items-center justify-between gap-3">
-      <h3 :id="titleId" class="m-0 text-base font-semibold text-ink">
+      <h3 :id="titleId" :class="['m-0 text-base font-semibold', palette.title]">
         {{ prototype.title }}
       </h3>
       <button
         type="button"
-        class="rounded-md px-2 py-1 text-xs font-semibold text-ink-2 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-action"
+        :class="['min-h-11 rounded-pill px-3.5 text-xs font-semibold', palette.quiet]"
         @click="reset"
       >
         {{ copy.reset }}
@@ -164,12 +208,10 @@ function cells(content: string): string[] {
           v-for="(screen, index) in prototype.screens"
           :key="screen.id"
           type="button"
-          class="rounded-control px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-action"
-          :class="
-            screen.id === currentScreenId
-              ? 'bg-action-soft text-action'
-              : 'text-ink-2 hover:bg-surface-3'
-          "
+          :class="[
+            'min-h-11 rounded-pill px-3.5 text-xs font-semibold',
+            screen.id === currentScreenId ? palette.current : palette.idle,
+          ]"
           :aria-current="screen.id === currentScreenId ? 'step' : undefined"
           @click="showScreen(screen.id)"
         >
@@ -177,7 +219,7 @@ function cells(content: string): string[] {
         </button>
       </nav>
       <div
-        class="flex rounded-control border border-line p-1"
+        :class="['flex rounded-pill border p-1', palette.group]"
         role="group"
         :aria-label="copy.viewport"
       >
@@ -185,8 +227,10 @@ function cells(content: string): string[] {
           v-for="option in prototype.supported_viewports"
           :key="option"
           type="button"
-          class="rounded-md px-2 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-action"
-          :class="viewport === option ? 'bg-ink text-white' : 'text-ink-2 hover:bg-surface-3'"
+          :class="[
+            'min-h-9 rounded-pill px-3 text-xs font-medium',
+            viewport === option ? palette.current : palette.idle,
+          ]"
           :aria-pressed="viewport === option"
           :data-viewport="option"
           @click="viewport = option"
@@ -195,21 +239,21 @@ function cells(content: string): string[] {
         </button>
       </div>
     </div>
-    <div class="min-w-0 rounded-panel border border-line bg-surface-3 p-3 sm:p-5">
+    <div :class="['min-w-0 border p-3 sm:p-5', palette.stage]">
       <article
         v-if="currentScreen !== null"
-        :class="[viewportClass, ...shell, { 'vl-phone': isPhone }]"
-        class="vl mx-auto overflow-hidden rounded-panel border border-line shadow-sm transition-[max-width]"
+        :class="[viewportClass, ...shell, { 'vl-phone': isPhone }, palette.frame]"
+        class="vl mx-auto overflow-hidden rounded-panel border shadow-sm transition-[max-width]"
         :style="tokens"
         :data-screen-id="currentScreen.id"
         :data-archetype="choices.archetype"
       >
         <div
-          class="flex items-center gap-1.5 border-b border-line-soft bg-surface-2 px-4 py-2"
+          :class="['flex items-center gap-1.5 border-b px-4 py-2', palette.chrome]"
           aria-hidden="true"
         >
-          <span v-for="dot in 3" :key="dot" class="h-1.5 w-1.5 rounded-full bg-button-line" />
-          <span class="ml-2 text-[10px] tracking-wide text-ink-3">{{ copy.example }}</span>
+          <span v-for="dot in 3" :key="dot" :class="['h-1.5 w-1.5 rounded-full', palette.dot]" />
+          <span :class="['ml-2 text-[10px] tracking-wide', palette.muted]">{{ copy.example }}</span>
         </div>
         <div class="vl-shell">
           <div class="vl-bar">
@@ -258,27 +302,43 @@ function cells(content: string): string[] {
                   {{ index + 1 }}. {{ screen.title }}
                 </button>
               </div>
-              <h4 ref="screenHeading" tabindex="-1" class="vl-title outline-none">
+              <h4 ref="screenHeading" tabindex="-1" class="vl-title">
                 {{ currentScreen.title }}
               </h4>
-              <form ref="form" class="vl-zones" :class="{ 'vl-frame': framed }" @submit.prevent>
+              <form ref="form" class="vl-zones" @submit.prevent>
                 <div v-if="columns.length > 0" class="vl-columns">
                   <div v-for="(zone, column) in columns" :key="column" class="vl-column">
-                    <PrototypeElement
-                      v-for="(element, index) in zone.elements"
-                      :key="element.id"
-                      :element="element"
-                      :zone="zone.name"
-                      :index="index"
-                      :state="currentScreen.state"
-                      :value="values[fieldKey(element)] ?? ''"
-                      :active="transitionFor(element.id) !== undefined"
-                      @update:value="values[fieldKey(element)] = $event"
-                      @activate="activate"
-                    />
+                    <template v-for="run in zone.runs" :key="run.key">
+                      <dl v-if="run.kind === 'pairs'" class="vl-pairs">
+                        <div v-for="element in run.elements" :key="element.id" class="vl-pair">
+                          <dt>{{ pairLabel(element) }}</dt>
+                          <dd>{{ element.value }}</dd>
+                        </div>
+                      </dl>
+                      <ul v-else-if="run.kind === 'list'" class="vl-list">
+                        <li v-for="(item, itemIndex) in run.items" :key="itemIndex">{{ item }}</li>
+                      </ul>
+                      <div v-else-if="run.kind === 'cards'" class="vl-cards">
+                        <div v-for="element in run.elements" :key="element.id" class="vl-card">
+                          {{ element.content }}
+                        </div>
+                      </div>
+                      <PrototypeElement
+                        v-else
+                        :element="run.element"
+                        :zone="zone.name"
+                        :index="run.index"
+                        :figure="run.element.figure ?? null"
+                        :state="currentScreen.state"
+                        :value="values[fieldKey(run.element)] ?? ''"
+                        :active="transitionFor(run.element.id) !== undefined"
+                        @update:value="values[fieldKey(run.element)] = $event"
+                        @activate="activate"
+                      />
+                    </template>
                   </div>
                 </div>
-                <div :class="split ? 'vl-split' : 'contents'">
+                <div :class="split ? 'vl-split' : 'vl-flow'">
                   <template v-for="zone in others" :key="zone.name">
                     <div v-if="zone.name === 'table'" class="vl-zone vl-zone-table">
                       <table class="vl-table">
@@ -302,18 +362,36 @@ function cells(content: string): string[] {
                         { 'vl-two-columns': zone.name === 'main' && twoColumns(zone.elements) },
                       ]"
                     >
-                      <PrototypeElement
-                        v-for="(element, index) in zone.elements"
-                        :key="element.id"
-                        :element="element"
-                        :zone="zone.name"
-                        :index="index"
-                        :state="currentScreen.state"
-                        :value="values[fieldKey(element)] ?? ''"
-                        :active="transitionFor(element.id) !== undefined"
-                        @update:value="values[fieldKey(element)] = $event"
-                        @activate="activate"
-                      />
+                      <template v-for="run in zone.runs" :key="run.key">
+                        <dl v-if="run.kind === 'pairs'" class="vl-pairs">
+                          <div v-for="element in run.elements" :key="element.id" class="vl-pair">
+                            <dt>{{ pairLabel(element) }}</dt>
+                            <dd>{{ element.value }}</dd>
+                          </div>
+                        </dl>
+                        <ul v-else-if="run.kind === 'list'" class="vl-list">
+                          <li v-for="(item, itemIndex) in run.items" :key="itemIndex">
+                            {{ item }}
+                          </li>
+                        </ul>
+                        <div v-else-if="run.kind === 'cards'" class="vl-cards">
+                          <div v-for="element in run.elements" :key="element.id" class="vl-card">
+                            {{ element.content }}
+                          </div>
+                        </div>
+                        <PrototypeElement
+                          v-else
+                          :element="run.element"
+                          :zone="zone.name"
+                          :index="run.index"
+                          :figure="run.element.figure ?? null"
+                          :state="currentScreen.state"
+                          :value="values[fieldKey(run.element)] ?? ''"
+                          :active="transitionFor(run.element.id) !== undefined"
+                          @update:value="values[fieldKey(run.element)] = $event"
+                          @activate="activate"
+                        />
+                      </template>
                     </div>
                   </template>
                 </div>
@@ -337,7 +415,7 @@ function cells(content: string): string[] {
           </div>
         </div>
       </article>
-      <p v-else class="m-0 rounded-control bg-white p-4 text-sm text-ink-2" role="alert">
+      <p v-else :class="['m-0 rounded-field p-4 text-sm', palette.missing]" role="alert">
         {{ copy.noScreen }}
       </p>
     </div>
@@ -351,33 +429,26 @@ function cells(content: string): string[] {
   font-family: var(--vl-font-body);
   font-size: var(--vl-size-body);
   line-height: var(--vl-line-height);
+  overflow-wrap: anywhere;
+  container-type: inline-size;
 }
 .vl-shell {
+  --vl-gutter: clamp(12px, 3cqi, calc(var(--vl-space) * 2));
   min-height: 320px;
   display: grid;
   grid-template-rows: auto 1fr auto;
 }
-.vl-bg-TINTED .vl-shell {
+.vl-bg-TINTED .vl-shell,
+.vl-bg-DOTS .vl-shell,
+.vl-bg-GRID .vl-shell,
+.vl-bg-STRIPES .vl-shell {
   background: var(--vl-color-surface-alt);
 }
 .vl-bg-GRADIENT .vl-shell {
-  background: linear-gradient(160deg, var(--vl-color-primary-soft), var(--vl-color-background) 60%);
-}
-.vl-bg-DOTS .vl-shell {
-  background-image: radial-gradient(var(--vl-color-border) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-.vl-bg-GRID .vl-shell {
-  background-image:
-    linear-gradient(var(--vl-color-border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--vl-color-border) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-.vl-bg-STRIPES .vl-shell {
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--vl-color-surface-alt) 0 12px,
-    transparent 12px 24px
+  background: linear-gradient(
+    180deg,
+    var(--vl-color-primary-soft),
+    var(--vl-color-background) 440px
   );
 }
 .vl-bar {
@@ -386,14 +457,15 @@ function cells(content: string): string[] {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--vl-gap);
-  padding: var(--vl-space) calc(var(--vl-space) * 2);
+  padding: var(--vl-space) max(var(--vl-gutter), calc((100% - 1100px) / 2));
   border-bottom: var(--vl-border-width) solid var(--vl-color-border);
   background: var(--vl-color-surface);
 }
 .vl-header-HERO_BAND .vl-bar {
   background: var(--vl-color-primary);
   color: var(--vl-color-on-primary);
-  padding: calc(var(--vl-space) * 3) calc(var(--vl-space) * 2);
+  padding-top: calc(var(--vl-space) * 3);
+  padding-bottom: calc(var(--vl-space) * 3);
   border-bottom: 0;
 }
 .vl-header-MINIMAL .vl-bar {
@@ -412,7 +484,7 @@ function cells(content: string): string[] {
   text-transform: var(--vl-heading-transform);
   font-variant: var(--vl-heading-variant);
   letter-spacing: var(--vl-heading-tracking);
-  font-size: var(--vl-size-title);
+  font-size: min(var(--vl-size-title), 7cqi);
 }
 .vl-links,
 .vl-tabs {
@@ -452,12 +524,16 @@ function cells(content: string): string[] {
 }
 .vl-layout {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
   gap: var(--vl-gap);
-  padding: calc(var(--vl-space) * 2);
-  align-items: start;
+  width: 100%;
+  max-width: calc(1100px + 2 * var(--vl-gutter));
+  margin: 0 auto;
+  padding: var(--vl-gutter);
 }
 .vl-with-rail {
-  grid-template-columns: minmax(120px, 180px) 1fr;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
 }
 .vl-rail {
   display: grid;
@@ -473,6 +549,11 @@ function cells(content: string): string[] {
 }
 .vl-main {
   min-width: 0;
+  background: var(--vl-color-surface);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  box-shadow: var(--vl-shadow);
+  padding: clamp(16px, 3cqi, calc(var(--vl-space) * 2.5));
 }
 .vl-title {
   margin: 0 0 var(--vl-gap);
@@ -481,8 +562,9 @@ function cells(content: string): string[] {
   text-transform: var(--vl-heading-transform);
   font-variant: var(--vl-heading-variant);
   letter-spacing: var(--vl-heading-tracking);
-  font-size: var(--vl-size-display);
+  font-size: min(var(--vl-size-display), 8.5cqi);
   line-height: 1.15;
+  outline: none;
 }
 .vl-stepper {
   display: flex;
@@ -491,60 +573,82 @@ function cells(content: string): string[] {
   margin-bottom: var(--vl-gap);
 }
 .vl-step {
-  background: var(--vl-color-surface);
+  background: var(--vl-color-surface-alt);
   border: var(--vl-border-width) solid var(--vl-color-border);
   color: var(--vl-color-text-muted);
 }
 .vl-zones {
   display: grid;
-  gap: var(--vl-gap);
+  gap: calc(var(--vl-gap) * 1.25);
 }
-.vl-frame {
-  background: var(--vl-color-surface);
-  border: var(--vl-border-width) solid var(--vl-color-border);
-  border-radius: var(--vl-radius-panel);
-  padding: calc(var(--vl-space) * 2);
-  box-shadow: var(--vl-shadow);
+.vl-flow {
+  display: contents;
 }
-.vl-shell-SINGLE_CARD .vl-main,
-.vl-shell-GUIDED_STEPS .vl-main,
 .vl-shell-CONVERSATIONAL .vl-main {
-  max-width: 560px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 820px;
+  justify-self: center;
 }
 .vl-shell-FOCUS_MODE .vl-main {
-  max-width: 480px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 640px;
+  justify-self: center;
   text-align: center;
 }
 .vl-shell-FOCUS_MODE .vl-zone {
   justify-items: center;
 }
+.vl-shell-FOCUS_MODE :deep(.vl-button),
+.vl-shell-FOCUS_MODE :deep(.vl-link) {
+  justify-self: center;
+}
+.vl-shell-FOCUS_MODE .vl-zone > :deep(.vl-field),
+.vl-shell-FOCUS_MODE .vl-list,
+.vl-shell-FOCUS_MODE .vl-cards,
+.vl-shell-FOCUS_MODE .vl-pairs {
+  width: 100%;
+}
+.vl-shell-FOCUS_MODE .vl-title {
+  font-size: min(calc(var(--vl-size-display) * 1.15), 9.5cqi);
+}
 .vl-shell-SEARCH_FIRST .vl-zone-intro {
   text-align: center;
+  justify-items: center;
 }
 .vl-zone {
   display: grid;
   gap: var(--vl-gap);
+  align-content: start;
+  min-width: 0;
+}
+.vl-zone > :deep(.vl-h2:not(:first-child)) {
+  margin-top: calc(var(--vl-gap) / 2);
+}
+.vl-zone > :deep(.vl-text) {
+  max-width: 72ch;
+}
+.vl-zone-main > :deep(.vl-field) {
+  max-width: 560px;
 }
 .vl-two-columns {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.vl-two-columns > :deep(.vl-h2),
-.vl-two-columns > :deep(.vl-text),
-.vl-two-columns > :deep(.vl-button),
-.vl-two-columns > :deep(.vl-link),
-.vl-two-columns > :deep(.vl-status),
-.vl-two-columns > :deep(.vl-list) {
+.vl-two-columns > :deep(:not(.vl-field)) {
   grid-column: 1 / -1;
 }
+.vl-two-columns > :deep(.vl-field) {
+  max-width: none;
+}
 .vl-zone-tiles {
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.vl-zone-tiles :deep(.vl-status-ok) {
+  background: var(--vl-color-surface-alt);
+  color: var(--vl-color-text);
+  border-color: var(--vl-color-border);
 }
 .vl-zone-gallery {
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 .vl-zone-thread {
   gap: var(--vl-space);
@@ -569,21 +673,24 @@ function cells(content: string): string[] {
   border-left: 2px solid var(--vl-color-primary);
   padding-left: var(--vl-gap);
 }
+.vl-zone-table {
+  overflow-x: auto;
+}
 .vl-split {
   display: grid;
-  gap: var(--vl-gap);
+  gap: calc(var(--vl-gap) * 1.5);
   align-items: start;
 }
 .vl-shell-LIST_DETAIL .vl-split {
-  grid-template-columns: 2fr 3fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
 }
 .vl-shell-SPLIT_SCREEN .vl-split {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 .vl-columns {
   display: grid;
   gap: var(--vl-gap);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-items: start;
 }
 .vl-column {
@@ -596,15 +703,22 @@ function cells(content: string): string[] {
 }
 .vl-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: var(--vl-color-surface);
-  border: var(--vl-border-width) solid var(--vl-color-border);
+  border: max(1px, var(--vl-border-width)) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  overflow: hidden;
 }
 .vl-table td {
-  padding: var(--vl-space);
-  border-bottom: 1px solid var(--vl-color-border);
+  padding: var(--vl-space) calc(var(--vl-space) * 1.5);
+  border-top: 1px solid var(--vl-color-border);
+  border-bottom: 0;
   text-align: left;
   vertical-align: top;
+}
+.vl-table tr:first-child td {
+  border-top: 0;
 }
 .vl-table tr:nth-child(even) td {
   background: var(--vl-color-surface-alt);
@@ -613,6 +727,56 @@ function cells(content: string): string[] {
   margin: 0;
   color: var(--vl-color-danger);
   font-weight: 600;
+}
+.vl-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--vl-color-surface);
+  border: max(1px, var(--vl-border-width)) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  overflow: hidden;
+}
+.vl-list li {
+  padding: var(--vl-space) calc(var(--vl-space) * 1.5);
+  border-top: 1px solid var(--vl-color-border);
+}
+.vl-list li:first-child {
+  border-top: 0;
+}
+.vl-cards {
+  display: grid;
+  gap: var(--vl-gap);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.vl-pairs {
+  margin: 0;
+  max-width: 760px;
+  background: var(--vl-color-surface-alt);
+  border: var(--vl-border-width) solid var(--vl-color-border);
+  border-radius: var(--vl-radius-panel);
+  padding: 0 calc(var(--vl-space) * 1.5);
+}
+.vl-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--vl-gap);
+  padding: var(--vl-space) 0;
+  border-top: 1px solid var(--vl-color-border);
+}
+.vl-pair:first-child {
+  border-top: 0;
+}
+.vl-pair dt {
+  color: var(--vl-color-text-muted);
+  font-weight: 600;
+}
+.vl-pair dd {
+  margin: 0;
+}
+.vl-phone .vl-pair {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--vl-space) / 4);
 }
 :deep(.vl-h2) {
   margin: 0;
@@ -627,22 +791,33 @@ function cells(content: string): string[] {
 :deep(.vl-text) {
   margin: 0;
 }
-:deep(.vl-list) {
-  margin: 0;
-  padding-left: 1.25em;
-}
 :deep(.vl-card) {
-  background: var(--vl-color-surface);
+  background: var(--vl-color-surface-alt);
   border: var(--vl-border-width) solid var(--vl-color-border);
   border-radius: var(--vl-radius-panel);
   padding: calc(var(--vl-space) * 1.5);
+  box-shadow: none;
+}
+.vl-column :deep(.vl-card) {
+  background: var(--vl-color-surface);
   box-shadow: var(--vl-shadow);
+}
+:deep(.vl-tile-label) {
+  display: block;
+}
+:deep(.vl-figure) {
+  display: block;
+  margin-top: calc(var(--vl-space) / 2);
+  font-family: var(--vl-font-heading);
+  font-size: var(--vl-size-title);
+  font-weight: var(--vl-heading-weight);
+  line-height: 1.2;
 }
 :deep(.vl-bubble) {
   max-width: 78%;
   padding: var(--vl-space) calc(var(--vl-space) * 1.5);
   border-radius: var(--vl-radius-panel);
-  background: var(--vl-color-surface);
+  background: var(--vl-color-surface-alt);
   border: var(--vl-border-width) solid var(--vl-color-border);
 }
 :deep(.vl-person) {
@@ -673,6 +848,17 @@ function cells(content: string): string[] {
   color: var(--vl-color-text-muted);
   min-width: 0;
 }
+:deep(.vl-hidden) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 :deep(.vl-input) {
   min-height: var(--vl-control-height);
   padding: 0 var(--vl-space);
@@ -700,10 +886,12 @@ function cells(content: string): string[] {
   align-items: center;
   justify-content: center;
   min-height: var(--vl-control-height);
+  max-width: 100%;
   padding: 0 calc(var(--vl-space) * 2);
   border-radius: var(--vl-radius-control);
   font: inherit;
   font-weight: 700;
+  text-align: center;
   cursor: pointer;
   border: max(1px, var(--vl-border-width)) solid transparent;
   background: var(--vl-color-primary);
@@ -742,9 +930,9 @@ function cells(content: string): string[] {
   opacity: 0.6;
 }
 .vl-phone .vl-with-rail {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .vl-phone .vl-split {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 </style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
 
+import UiButton from "./UiButton.vue";
 import { apiClient } from "@/api/client";
 import { RequirementsApiError, requirementsApi, type RequirementsApi } from "@/api/requirements";
 import { useAuthStore } from "@/stores/auth";
@@ -251,90 +252,94 @@ watch(() => [props.projectId, props.refreshKey] as const, refresh, { immediate: 
   <div class="grid gap-3">
     <section
       v-if="mode === 'steps'"
-      class="grid gap-3 rounded-panel border border-action-soft-line bg-action-soft p-4"
+      class="grid gap-3 rounded-tile border border-petrol-on-night/35 bg-petrol-on-night/8 p-5 text-on-night"
       :aria-labelledby="titleId"
       data-testid="design-next-step"
     >
-      <p class="m-0 text-xs font-semibold tracking-widest text-action uppercase">
+      <p class="m-0 font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h4 :id="titleId" class="m-0 text-base font-bold text-ink">{{ title }}</h4>
-      <p class="m-0 max-w-3xl text-sm leading-6 text-ink-2">{{ explanation }}</p>
-      <ol class="m-0 grid list-none gap-3 p-0">
+      <h4 :id="titleId" class="m-0 text-[17px] font-semibold">{{ title }}</h4>
+      <p class="m-0 max-w-3xl text-[15px] leading-normal text-on-night-2">{{ explanation }}</p>
+      <ol class="m-0 grid list-none gap-3 p-0 md:grid-cols-2">
         <li
-          class="grid gap-2 rounded-panel border border-line bg-white p-3"
+          class="grid content-start gap-2 rounded-field border border-night-line bg-night-raised p-4"
           :data-done="stepOneDone"
           data-testid="design-next-step-1"
         >
-          <p class="m-0 text-xs font-semibold tracking-wide text-ink-3 uppercase">
+          <p class="m-0 font-mono text-[11px] tracking-label text-on-night-3 uppercase">
             {{ fill(copy.step, { n: 1 }) }}
           </p>
           <p
             v-if="stepOneDone"
-            class="m-0 text-sm font-semibold text-ok-dark"
+            class="m-0 text-sm font-semibold text-petrol-on-night-2"
             data-testid="design-next-step-1-done"
           >
             <span aria-hidden="true">✓</span> {{ copy.stepOneDone }}
           </p>
           <template v-else>
-            <button
-              type="button"
-              class="justify-self-start rounded-panel bg-action px-4 py-2 text-sm font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-surface-3"
+            <UiButton
+              variant="pill"
+              class="justify-self-start"
               :disabled="approving || busy"
               data-testid="design-reapprove-requirements"
               @click="reapprove"
             >
               {{ copy.stepOne }}
-            </button>
-            <p class="m-0 text-xs text-ink-3">{{ copy.stepOneHint }}</p>
+            </UiButton>
+            <p class="m-0 text-[13px] text-on-night-3">{{ copy.stepOneHint }}</p>
           </template>
-          <p v-if="approving" class="m-0 text-sm text-ink-2" aria-live="polite">
+          <p v-if="approving" class="m-0 text-sm text-on-night-2" aria-live="polite">
             {{ copy.approving }}
           </p>
         </li>
         <li
-          class="grid gap-2 rounded-panel border border-line bg-white p-3"
+          class="grid content-start gap-2 rounded-field border border-night-line bg-night-raised p-4"
           data-testid="design-next-step-2"
         >
-          <p class="m-0 text-xs font-semibold tracking-wide text-ink-3 uppercase">
+          <p class="m-0 font-mono text-[11px] tracking-label text-on-night-3 uppercase">
             {{ fill(copy.step, { n: 2 }) }}
           </p>
-          <button
-            type="button"
-            class="justify-self-start rounded-panel bg-action px-4 py-2 text-sm font-semibold text-white hover:bg-action-hover disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-ink-3"
+          <UiButton
+            :variant="stepOneDone ? 'pill' : 'outline'"
+            class="justify-self-start"
             :disabled="!stepOneDone || approving || busy"
             data-testid="design-next-regenerate"
             @click="regenerate"
           >
             {{ copy.stepTwo }}
-          </button>
-          <p v-if="!stepOneDone" class="m-0 text-xs text-ink-3">{{ copy.stepTwoLocked }}</p>
+          </UiButton>
+          <p v-if="!stepOneDone" class="m-0 text-[13px] text-on-night-3">
+            {{ copy.stepTwoLocked }}
+          </p>
         </li>
       </ol>
       <div
         v-if="failure"
-        class="grid gap-1 rounded-panel border border-fail-line bg-fail-bg p-3 text-sm text-fail-dark"
+        class="grid gap-1 rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm text-fail-on-night"
         role="alert"
         data-testid="design-next-step-error"
       >
         <p class="m-0 font-semibold">{{ failure.manual ? copy.manual : copy.failed }}</p>
         <details class="text-xs">
-          <summary class="cursor-pointer">{{ copy.details }}</summary>
+          <summary class="inline-flex min-h-11 cursor-pointer items-center">
+            {{ copy.details }}
+          </summary>
           <code class="break-all">{{ failure.code }}</code>
         </details>
       </div>
     </section>
     <section
       v-else-if="mode === 'brief'"
-      class="grid gap-2 rounded-panel border border-action-soft-line bg-action-soft p-4"
+      class="grid gap-2 rounded-tile border border-petrol-on-night/35 bg-petrol-on-night/8 p-5 text-on-night"
       :aria-labelledby="titleId"
       data-testid="design-next-step-brief"
     >
-      <p class="m-0 text-xs font-semibold tracking-widest text-action uppercase">
+      <p class="m-0 font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
         {{ copy.eyebrow }}
       </p>
-      <h4 :id="titleId" class="m-0 text-base font-bold text-ink">{{ copy.briefTitle }}</h4>
-      <p class="m-0 max-w-3xl text-sm leading-6 text-ink-2">
+      <h4 :id="titleId" class="m-0 text-[17px] font-semibold">{{ copy.briefTitle }}</h4>
+      <p class="m-0 max-w-3xl text-[15px] leading-normal text-on-night-2">
         {{ fill(copy.brief, { version: lastApplication?.target_version_number ?? "" }) }}
       </p>
     </section>
