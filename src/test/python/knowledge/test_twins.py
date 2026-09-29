@@ -9,7 +9,7 @@ from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.layout import TWIN_DOCUMENT_KIND, twin_slug
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
 
-from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, sources
+from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, partial_sources, sources
 
 
 def test_every_twin_gets_a_self_contained_document_with_its_persona_and_origin() -> None:
@@ -24,7 +24,7 @@ def test_every_twin_gets_a_self_contained_document_with_its_persona_and_origin()
         assert twin.slug == twin_slug(version["profile"]["name"], version["twin_id"])
         assert twin.document_path == f"twins/{twin.slug}/twin.json"
         assert twin.text_path == f"twins/{twin.slug}/twin.md"
-        assert twin.document["schema_version"] == 2
+        assert twin.document["schema_version"] == 3
         assert twin.document["kind"] == TWIN_DOCUMENT_KIND
         assert twin.document["slug"] == twin.slug
         assert twin.document["twin"] == version
@@ -126,3 +126,11 @@ def test_portable_twin_is_a_value() -> None:
 
     assert isinstance(first, PortableTwin)
     assert first == second
+
+
+@pytest.mark.parametrize("through", ["brief", "team"])
+def test_a_folder_before_the_approved_twins_has_no_portable_twin(through: str) -> None:
+    package = partial_sources(through)
+
+    assert portable_twins(package) == ()
+    assert portable_twins(partial_sources("twins"))

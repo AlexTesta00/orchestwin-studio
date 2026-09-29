@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import UUID
 
 from orchestwin.artifacts.design_discussion import DiscussionStatus
@@ -24,12 +25,15 @@ from src.test.python.artifacts.design_fixtures import design_version
 from src.test.python.artifacts.test_design_evaluation import TWIN_A, TWIN_B
 
 from .knowledge_fixtures import (
+    ALIGNED_COMMIT,
     RUN_ONE,
     RUN_TWO,
     applications,
+    change_run,
     discussions,
     evaluation_runs,
     sources,
+    state_sources,
     validations,
 )
 
@@ -81,7 +85,8 @@ def test_feedback_documents_hold_the_exact_records() -> None:
 
     assert list(documents) == [FEEDBACK_REVIEWS, FEEDBACK_DISCUSSIONS, FEEDBACK_INSIGHTS]
     reviews = documents[FEEDBACK_REVIEWS]
-    assert reviews["schema_version"] == 2
+    assert reviews["schema_version"] == 3
+    assert {document["schema_version"] for document in documents.values()} == {3}
     assert reviews["kind"] == REVIEWS_KIND
     assert reviews["project_id"] == str(package.project_id)
     assert reviews["design"] == {
@@ -194,3 +199,54 @@ def test_feedback_text_without_records_says_so() -> None:
     assert "## Reviews\n\nnot provided.\n" in text
     assert "## Approved discussions\n\nnot provided.\n" in text
     assert "## Applied insights\n\nnot provided.\n" in text
+    assert text.endswith(
+        "## Critiques on the code changes\n\nNo code change has been reviewed yet.\n"
+    )
+
+
+def test_feedback_text_ends_with_one_paragraph_for_every_critique_run_on_the_code() -> None:
+    first = change_run()
+    second = {
+        **change_run(),
+        "id": "00000000-0000-4000-8000-00000000d002",
+        "commit": ALIGNED_COMMIT,
+        "reviewed_at": "2026-09-28T09:40:00+00:00",
+        "alignment": {
+            **change_run()["alignment"],
+            "status": "DESIGN_OUTDATED",
+            "design_request": "Aggiungere un filtro per sede nella lista",
+            "code_tasks": [],
+        },
+    }
+    package = sources(state=replace(state_sources(), runs=(first, second)))
+
+    section = feedback_markdown(package).split("## Critiques on the code changes\n\n", 1)[1]
+    paragraphs = [item for item in section.split("\n\n") if item.strip()]
+
+    assert len(paragraphs) == 2
+    assert paragraphs[0].startswith(
+        "Commit `4f2a9c1`, reviewed on 2026-09-28 11:30+00:00 against requirements version 2 "
+        "and design version 4, alternative DES-002: the code departs from the approved "
+        "requirements or design (CODE_DRIFT). Il controllo del nome vuoto non segue il "
+        "requisito REQ-003."
+    )
+    assert (
+        "Addetti all'accoglienza: the change raises a concern (CONCERN), 2 findings. "
+        "Il messaggio per il nome vuoto compare solo dopo il salvataggio."
+    ) in paragraphs[0]
+    assert "Organizzatori volontari: the change is fine (FINE), 1 finding." in paragraphs[0]
+    assert paragraphs[0].endswith(
+        "Tasks proposed for the code: Mostrare il messaggio di errore accanto al campo del nome."
+    )
+    assert paragraphs[1].startswith("Commit `9d8e7f6`, reviewed on 2026-09-28 09:40+00:00")
+    assert "the design should get a new version (DESIGN_OUTDATED)" in paragraphs[1]
+    assert "Design change request: Aggiungere un filtro per sede nella lista." in paragraphs[1]
+    assert "Tasks proposed" not in paragraphs[1]
+    assert "\n" not in paragraphs[0].strip()
+
+
+def test_feedback_counts_are_zero_while_the_design_is_not_approved() -> None:
+    package = replace(sources(), design=None, design_gate=None)
+
+    assert package.present_stages == ("brief", "team", "twins", "requirements")
+    assert set(feedback_summary(package).values()) == {0}
