@@ -1,0 +1,1369 @@
+from __future__ import annotations
+
+import gc
+import hashlib
+import json
+import threading
+import urllib.error
+import urllib.request
+import warnings
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from http.cookies import SimpleCookie
+
+import pytest
+
+from orchestwin.agents.selection_rules import determine_team_constraints
+from orchestwin.knowledge.archive import read_verified_folder
+from orchestwin.models.proposal_tasks import TASKS
+from orchestwin.projects.domain import ProjectMode
+
+from .support.fake_studio import COSTS, PREFIX, FakeStudio
+from .support.folders import valid_archive
+
+EMAIL = "owner@example.com"
+OTHER = "other@example.com"
+PASSWORD = "Test-password-not-real!"
+PREFER = {"Prefer": "respond-async"}
+ANSWERS = {
+    "problem": {"kind": "TEXT", "text": "Al tavolo nessuno sa quanto lasciare."},
+    "target_users": {"kind": "ITEM_LIST", "items": ["Camerieri", "Clienti"]},
+    "goals": {"kind": "ITEM_LIST", "items": ["Calcolare la mancia in fretta"]},
+    "functional_requirements": {"kind": "UNKNOWN"},
+}
+BOUNDARY = "fake-boundary-not-real"
+
+
+@dataclass(frozen=True, slots=True)
+class Reply:
+    status: int
+    headers: Mapping[str, str]
+    content: bytes
+
+    def json(self) -> object:
+        return json.loads(self.content.decode("utf-8"))
+
+
+class Client:
+    def __init__(self, studio: FakeStudio) -> None:
+        self.base = studio.address + PREFIX
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.token: str | None = None
+        self.refresh_token: str | None = None
+
+    def send(
+        self,
+        method: str,
+        path: str,
+        body: object = None,
+        *,
+        headers: Mapping[str, str] | None = None,
+        content: bytes | None = None,
+    ) -> Reply:
+        data = content
+        request_headers = dict(headers or {})
+        if content is None and body is not None:
+            data = json.dumps(body).encode("utf-8")
+            request_headers.setdefault("Content-Type", "application/json")
+        if self.token is not None:
+            request_headers.setdefault("Authorization", f"Bearer {self.token}")
+        request = urllib.request.Request(
+            self.base + path, data=data, headers=request_headers, method=method
+        )
+        try:
+            with self.opener.open(request, timeout=10) as response:
+                return Reply(response.status, _lower(response.headers), response.read())
+        except urllib.error.HTTPError as error:
+            with error:
+                return Reply(error.code, _lower(error.headers), error.read())
+
+    def get(self, path: str) -> Reply:
+        return self.send("GET", path)
+
+    def post(self, path: str, body: object = None, **options: object) -> Reply:
+        return self.send("POST", path, body, **options)
+
+    def login(self, email: str = EMAIL, password: str = PASSWORD) -> Reply:
+        reply = self.post("/auth/login", {"email": email, "password": password})
+        if reply.status == 200:
+            self.token = str(reply.json()["access_token"])
+            self.refresh_token = _cookie(reply)
+        return reply
+
+    def refresh(self, token: str | None) -> Reply:
+        headers = {} if token is None else {"Cookie": f"orchestwin_refresh={token}"}
+        saved, self.token = self.token, None
+        try:
+            return self.post("/auth/refresh", headers=headers)
+        finally:
+            self.token = saved
+
+
+def _lower(headers: object) -> dict[str, str]:
+    return {name.lower(): value for name, value in headers.items()}
+
+
+def _cookie(reply: Reply) -> str:
+    jar: SimpleCookie = SimpleCookie()
+    jar.load(reply.headers["set-cookie"])
+    return jar["orchestwin_refresh"].value
+
+
+def signed_in(studio: FakeStudio, email: str = EMAIL) -> Client:
+    studio.add_account(email, PASSWORD)
+    client = Client(studio)
+    assert client.login(email).status == 200
+    return client
+
+
+def new_project(client: Client, name: str = "Calcolo mancia") -> str:
+    reply = client.post("/projects", {"display_name": name, "mode": "GREENFIELD_GENERATION"})
+    assert reply.status == 201
+    return f"/projects/{reply.json()['id']}"
+
+
+def follow(client: Client, path: str) -> tuple[dict, int]:
+    polls = 0
+    while True:
+        reply = client.get(path)
+        assert reply.status == 200
+        polls += 1
+        job = reply.json()
+        if job["status"] != "RUNNING":
+            return job, polls
+        assert polls < 20
+
+
+def later(client: Client, base: str, path: str, body: object = None) -> dict:
+    reply = client.post(base + path, body, headers=PREFER)
+    assert reply.status == 202
+    assert reply.headers["preference-applied"] == "respond-async"
+    started = reply.json()
+    assert (started["kind"], started["status"], started["response"]) == ("REQUEST", "RUNNING", None)
+    job, _ = follow(client, f"{base}/generation-jobs/{started['job_id']}")
+    return job["response"]
+
+
+def approve(client: Client, submit: str, decide: str) -> dict:
+    submitted = client.post(submit)
+    assert submitted.status in {200, 201}
+    decided = client.post(decide, {"action": "APPROVE"})
+    assert decided.status == 200
+    return decided.json()
+
+
+def stage(client: Client, base: str) -> tuple[str, str]:
+    project = client.get(base).json()
+    return project["current_stage"], project["next_action"]
+
+
+def multipart(fields: Mapping[str, str], files: Mapping[str, tuple[str, str, bytes]]) -> bytes:
+    parts = []
+    for name, value in fields.items():
+        head = f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+        parts.append(head.encode("utf-8") + value.encode("utf-8") + b"\r\n")
+    for name, (file_name, media_type, content) in files.items():
+        head = (
+            f"--{BOUNDARY}\r\nContent-Disposition: form-data; "
+            f'name="{name}"; filename="{file_name}"\r\nContent-Type: {media_type}\r\n\r\n'
+        )
+        parts.append(head.encode("utf-8") + content + b"\r\n")
+    parts.append(f"--{BOUNDARY}--\r\n".encode("ascii"))
+    return b"".join(parts)
+
+
+def walk_brief(client: Client, base: str) -> dict:
+    started = client.post(base + "/brief-dialogue", {"statement": "Una pagina per la mancia."})
+    assert started.status == 201
+    state = started.json()
+    assert state["status"] == "BRIEF_DIALOGUE_STARTED"
+    asked = []
+    while True:
+        turns = state["snapshot"]["turns"]
+        pending = [turn for turn in turns if turn["answer"] is None]
+        if not pending:
+            break
+        asked.append(pending[0]["field"])
+        body = {**ANSWERS[pending[0]["field"]], "expected_turn_count": len(turns)}
+        reply = client.post(base + "/brief-dialogue/answers", body)
+        assert reply.status == 201
+        state = reply.json()
+    assert asked == ["problem", "target_users", "goals", "functional_requirements"]
+    assert state["status"] == "BRIEF_DIALOGUE_READY"
+    assert state["progress"]["open_essential_fields"] == []
+    synthesis = client.post(
+        base + "/brief-dialogue/synthesis",
+        {"expected_turn_count": len(state["snapshot"]["turns"])},
+    )
+    assert synthesis.status == 201
+    return synthesis.json()
+
+
+def walk_twins(client: Client, base: str) -> list:
+    proposed = later(client, base, "/user-modeling/personas/proposals")
+    assert proposed["status_code"] == 200
+    assert len(proposed["body"]["versions"]) == 2
+    for persona in client.get(base + "/user-modeling/personas").json():
+        decided = client.post(
+            f"{base}/user-modeling/personas/{persona['persona_id']}/decision",
+            {"decision": "CONFIRM"},
+        )
+        assert decided.json()["version"]["profile"]["confirmation_status"] == "CONFIRMED"
+    generated = later(client, base, "/user-modeling/snapshots/generate")
+    assert (generated["status_code"], generated["body"]["status"]) == (200, "CREATED")
+    decision = approve(
+        client, base + "/user-modeling/gate/submit", base + "/user-modeling/gate/decision"
+    )
+    assert decision["outcome"] == "APPLIED"
+    readiness = client.get(base + "/user-modeling/readiness").json()
+    assert readiness["workflow_state"] == "READY_FOR_REQUIREMENTS_DEFINITION"
+    return generated["body"]["twin_versions"]
+
+
+def mockups(client: Client, base: str, current: dict) -> dict[str, dict]:
+    started = {}
+    for alternative in current["package"]["alternatives"]:
+        reply = client.post(
+            base + "/design/mockups/jobs",
+            {
+                "design_version_id": current["id"],
+                "design_content_hash": current["content_hash"],
+                "alternative_id": alternative["id"],
+            },
+        )
+        assert reply.status == 202
+        assert "preference-applied" not in reply.headers
+        started[alternative["id"]] = reply.json()["job_id"]
+    results = {}
+    for alternative_id, job_id in started.items():
+        job, polls = follow(client, f"{base}/design/mockups/jobs/{job_id}")
+        assert (job["kind"], job["status"], job["alternative_id"], polls) == (
+            "MOCKUP",
+            "SUCCEEDED",
+            alternative_id,
+            3,
+        )
+        results[alternative_id] = job["result"]
+    return results
+
+
+def apply(client: Client, base: str, package: dict) -> dict:
+    proposed = client.post(base + "/design/revisions", {"package": package})
+    assert proposed.status == 201
+    diff = proposed.json()["diff"]
+    decided = client.post(f"{base}/design/revisions/{diff['id']}/decision", {"decision": "APPROVE"})
+    assert decided.status == 200
+    return decided.json()["version"]
+
+
+def review(client: Client, base: str, current: dict) -> dict:
+    response = later(
+        client,
+        base,
+        "/design/evaluations",
+        {
+            "design_version_id": current["id"],
+            "design_content_hash": current["content_hash"],
+            "locale": "it-IT",
+        },
+    )
+    assert response["status_code"] == 201
+    return response["body"]
+
+
+def test_the_whole_path_runs_with_urllib() -> None:
+    with FakeStudio(language="it", twins=2, job_polls=2) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        client = Client(studio)
+        assert client.get("/health").json() == {"status": "ok"}
+        assert client.login().status == 200
+        assert client.get("/auth/me").json()["email"] == EMAIL
+        assert client.get("/model-runtime/budget").json()["total_microusd"] == 60_000_000
+        base = new_project(client)
+        assert stage(client, base) == ("BRIEF", "DESCRIBE_IDEA")
+
+        synthesis = walk_brief(client, base)
+        brief = synthesis["brief_version"]["brief"]
+        assert brief["name"] == "Calcolo mancia"
+        assert brief["problem"] == ANSWERS["problem"]["text"]
+        assert brief["missing_fields"] == []
+        proposals = synthesis["assumptions"]
+        assert [item["field"] for item in proposals] == [
+            "functional_requirements",
+            "non_functional_requirements",
+            "definition_of_done",
+        ]
+        accepted = client.post(f"{base}/brief-assumptions/{proposals[0]['id']}/accept", {})
+        assert accepted.json()["status"] == "ACCEPTED"
+        rejected = client.post(
+            f"{base}/brief-assumptions/{proposals[1]['id']}/reject", {"reason": "Non serve"}
+        )
+        assert rejected.json()["assumption"]["status"] == "REJECTED"
+        everything = client.post(base + "/brief-assumptions/accept-all")
+        assert [item["field"] for item in everything.json()["accepted"]] == ["definition_of_done"]
+        assert client.post(base + "/brief-assumptions/accept-all").status == 409
+        gate = approve(
+            client, base + "/gates/project-brief/submit", base + "/gates/project-brief/decisions"
+        )
+        assert gate["gate"]["status"] == "APPROVED"
+        assert client.get(base).json()["current_brief_version"] == 4
+        assert stage(client, base) == ("TEAM", "APPROVE_TEAM")
+
+        assert client.post(base + "/team-proposals").status == 201
+        assert (
+            "UX_UI_DESIGNER"
+            in client.get(base + "/team-proposals/current").json()["selected_agent_ids"]
+        )
+        approve(client, base + "/gates/agent-team/submit", base + "/gates/agent-team/decisions")
+        assert stage(client, base) == ("USER_TWINS", "CONFIRM_TWINS")
+
+        twins = walk_twins(client, base)
+        assert stage(client, base) == ("REQUIREMENTS", "APPROVE_REQUIREMENTS")
+
+        created = later(client, base, "/requirements/proposals")
+        assert (created["status_code"], created["body"]["status"]) == (201, "CREATED")
+        approve(client, base + "/requirements/gate/submit", base + "/requirements/gate/decision")
+        assert stage(client, base) == ("DESIGN", "APPROVE_DESIGN")
+
+        generated = later(client, base, "/design/proposals")
+        assert generated["status_code"] == 201
+        current = client.get(base + "/design/current").json()
+        assert [item["code"] for item in current["package"]["alternatives"]] == [
+            "DES-001",
+            "DES-002",
+        ]
+        assert client.get(base + "/design/mockups/capabilities").json()["generated_mockups"]
+        results = mockups(client, base, current)
+        assert [
+            [warning["code"] for warning in results[item["id"]]["warnings"]]
+            for item in current["package"]["alternatives"]
+        ] == [[], ["LIST_TOO_SHORT"]]
+        for alternative_id in results:
+            document = client.get(
+                f"{base}/design/mockups/document?alternative_id={alternative_id}&source=latest"
+            ).json()["html"]
+            assert '<html lang="it">' in document
+            assert '<section class="ot-screen" id="SCR-001"' in document
+        chosen = current["package"]["recommended_alternative_id"]
+        applied = apply(client, base, results[chosen]["package"])
+        assert (applied["version_number"], applied["ready_for_gate"]) == (2, True)
+
+        first = review(client, base, applied)
+        assert len(first["responses"]) == 2
+        pins = client.get(f"{base}/design/evaluations/{first['id']}/pins").json()
+        places = {
+            element["code"]: (screen["code"], element["kind"])
+            for screen in applied["package"]["prototype"]["screens"]
+            for element in screen["elements"]
+        }
+        assert [places[pin["element_code"]] for pin in pins["pins"]] == [
+            ("SCR-001", "LINK"),
+            ("SCR-002", "STATUS"),
+        ]
+        assert [item["screen_code"] for item in pins["unanchored"]] == ["SCR-001"]
+        pinned = client.get(f"{base}/design/evaluations/{first['id']}/document").json()
+        assert pinned["html"].count('class="ot-pin"') == 2
+        assert '<html lang="it-IT">' in pinned["html"]
+
+        started = client.post(
+            base + "/design/iterations/jobs",
+            {
+                "design_version_id": applied["id"],
+                "design_content_hash": applied["content_hash"],
+                "request": "Metti il pulsante in alto",
+                "assertions": ["Il pulsante principale resta visibile"],
+            },
+        )
+        assert started.status == 202
+        iteration, _ = follow(client, f"{base}/design/iterations/jobs/{started.json()['job_id']}")
+        assert iteration["status"] == "SUCCEEDED"
+        assert iteration["result"]["changes"]
+        iterated = apply(client, base, iteration["result"]["package"])
+        assert iterated["package"]["owner_assertions"] == ["Il pulsante principale resta visibile"]
+        document = client.get(
+            f"{base}/design/mockups/document?alternative_id={chosen}&source=applied"
+        ).json()
+        assert "Calcola la mancia in un tocco" in document["html"]
+        items = client.get(base + "/design/iterations").json()["items"]
+        assert [(item["status"], item["applied_design_version_number"]) for item in items] == [
+            ("APPLIED", iterated["version_number"])
+        ]
+        review(client, base, iterated)
+        comparison = client.get(base + "/design/evaluations/comparison").json()
+        assert comparison["counts"]["resolved"] == 1
+        assert comparison["counts"]["persisting"] == 2
+
+        twin_id = twins[0]["twin_id"]
+        turn = client.post(
+            f"{base}/user-twins/{twin_id}/conversation/turns",
+            {"question": "Che cosa ti serve?", "expected_turn_count": 0},
+        )
+        assert turn.status == 201
+        assert (
+            len(client.get(f"{base}/user-twins/{twin_id}/conversation").json()["snapshot"]["turns"])
+            == 1
+        )
+
+        approve(client, base + "/design/gate/submit", base + "/design/gate/decision")
+        assert stage(client, base) == ("PACKAGE", "DOWNLOAD_FOLDER")
+
+        published = client.post(base + "/knowledge-packages", {})
+        assert (published.status, published.json()["reused"]) == (201, False)
+        again = client.post(base + "/knowledge-packages", {})
+        assert (again.status, again.json()["version"]["version_number"]) == (200, 1)
+        history = client.get(base + "/knowledge-packages").json()
+        assert [item["version_number"] for item in history["versions"]] == [1]
+        archive = client.get(base + "/knowledge-packages/1/archive")
+        assert archive.headers["content-type"] == "application/zip"
+        assert archive.headers["x-content-sha256"] == hashlib.sha256(archive.content).hexdigest()
+        assert read_verified_folder(archive.content).project_name == "Calcolo mancia"
+
+        imported = client.post(
+            "/project-imports",
+            content=multipart(
+                {"display_name": "Copia del progetto"},
+                {"archive": ("folder.zip", "application/zip", archive.content)},
+            ),
+            headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+        )
+        assert imported.status == 201
+        body = imported.json()
+        assert body["project"]["display_name"] == "Copia del progetto"
+        assert body["approval_required"] == ["brief", "team", "twins", "requirements", "design"]
+        copy_base = f"/projects/{body['project']['id']}"
+        origin = client.get(copy_base + "/import").json()
+        assert origin["archive_hash"] == hashlib.sha256(archive.content).hexdigest()
+        assert stage(client, copy_base) == ("BRIEF", "APPROVE_BRIEF")
+
+        usage = client.get(base + "/model-usage").json()
+        budget = client.get("/model-runtime/budget").json()
+        assert usage["totals"]["cost_microusd"] == studio.spent_microusd
+        assert budget["spent_total_microusd"] == studio.spent_microusd
+        assert budget["remaining_total_microusd"] == 60_000_000 - studio.spent_microusd
+        assert studio.project(body["project"]["id"]).name == "Copia del progetto"
+        assert studio.errors == []
+
+
+def test_the_refresh_rotates_the_cookie_and_a_reuse_closes_the_family() -> None:
+    with FakeStudio() as studio:
+        first = signed_in(studio)
+        second = Client(studio)
+        assert second.login().status == 200
+        original = first.refresh_token
+        rotated = first.refresh(original)
+        assert rotated.status == 200
+        renewed = _cookie(rotated)
+        assert renewed != original
+        assert "Path=/api/v1/auth" in rotated.headers["set-cookie"]
+        reused = first.refresh(original)
+        assert (reused.status, reused.json()) == (401, {"detail": "refresh_token_reuse_detected"})
+        assert 'orchestwin_refresh=""' in reused.headers["set-cookie"]
+        assert first.refresh(renewed).json() == {"detail": "refresh_token_reuse_detected"}
+        assert second.refresh(second.refresh_token).status == 200
+        assert first.refresh(None).json() == {"detail": "invalid_refresh_token"}
+        assert first.get("/auth/me").status == 200
+
+
+def test_the_sign_in_refuses_and_the_logout_closes_the_session() -> None:
+    with FakeStudio() as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        client = Client(studio)
+        refused = client.login(password="Wrong-password-not-real!")
+        assert (refused.status, refused.headers["www-authenticate"]) == (401, "Bearer")
+        invalid = client.post("/auth/login", {"email": EMAIL})
+        assert invalid.status == 422
+        assert invalid.json()["detail"] == "invalid_authentication"
+        assert client.login(email=EMAIL.upper()).status == 200
+        logout = client.post(
+            "/auth/logout", headers={"Cookie": f"orchestwin_refresh={client.refresh_token}"}
+        )
+        assert (logout.status, logout.headers["content-type"], logout.content) == (
+            204,
+            "application/json",
+            b"",
+        )
+        assert "content-length" not in logout.headers
+        assert client.refresh(client.refresh_token).json() == {
+            "detail": "refresh_token_reuse_detected"
+        }
+
+
+def test_expired_access_tokens_answer_401_until_the_renewal() -> None:
+    moment = datetime(2026, 9, 29, 9, 12, 3, tzinfo=UTC)
+    with FakeStudio(now=lambda: moment) as studio:
+        client = signed_in(studio)
+        login = client.post("/auth/login", {"email": EMAIL, "password": PASSWORD}).json()
+        assert login["expires_at"] == "2026-09-30T09:12:03Z"
+        studio.expire_access_tokens()
+        denied = client.get("/projects")
+        assert (denied.status, denied.json()) == (401, {"detail": "invalid_authentication"})
+        renewed = client.refresh(client.refresh_token)
+        client.token = renewed.json()["access_token"]
+        assert client.get("/projects").json() == []
+
+
+def test_projects_are_scoped_to_their_owner() -> None:
+    with FakeStudio() as studio:
+        owner = signed_in(studio)
+        base = new_project(owner)
+        other = signed_in(studio, OTHER)
+        assert other.get(base).json() == {"detail": "project_not_found"}
+        assert other.get(base + "/design/current").json() == {
+            "detail": {"code": "DESIGN_PACKAGE_NOT_FOUND"}
+        }
+        assert other.get(base + "/model-usage").status == 404
+        assert other.get(base + "/brief-assumptions").json() == []
+        assert other.get("/projects").json() == []
+        anonymous = Client(studio)
+        assert anonymous.get(base).status == 401
+        assert anonymous.get("/projects").headers["www-authenticate"] == "Bearer"
+        assert owner.get("/projects/not-a-uuid").json()["errors"] == [
+            {"loc": ["path", "project_id"], "type": "uuid_parsing"}
+        ]
+        assert owner.get("/unknown").status == 404
+        assert owner.send("DELETE", "/projects").status == 405
+
+
+def test_the_order_of_the_steps_is_enforced() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        base = new_project(client)
+        assert client.post(base + "/team-proposals").json() == {
+            "detail": "team_proposal_context_not_found"
+        }
+        client.post(base + "/brief-versions", {"name": "Calcolo mancia", "description": "Mancia"})
+        blocked = client.post(base + "/team-proposals")
+        assert (blocked.status, blocked.json()["status"]) == (409, "BRIEF_NOT_APPROVED")
+        incomplete = client.post(base + "/gates/project-brief/submit")
+        assert incomplete.json()["status"] == "BRIEF_INCOMPLETE"
+        assert "problem" in incomplete.json()["missing_fields"]
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="team")
+        seeded_base = f"/projects/{seeded.id}"
+        assert client.post(seeded_base + "/requirements/proposals").json() == {
+            "detail": {"code": "USER_MODELING_APPROVAL_REQUIRED"}
+        }
+        assert client.post(seeded_base + "/design/proposals").json() == {
+            "detail": {"code": "REQUIREMENTS_APPROVAL_REQUIRED"}
+        }
+        assert client.post(seeded_base + "/knowledge-packages").json() == {
+            "detail": {"code": "USER_MODELING_APPROVAL_REQUIRED"}
+        }
+        missing = client.post(seeded_base + "/user-modeling/snapshots/generate")
+        assert missing.json() == {"detail": {"code": "PERSONAS_REQUIRED"}}
+        regeneration = client.post(seeded_base + "/design/regenerations").json()
+        assert (regeneration["status"], regeneration["issue"]) == (
+            "REJECTED",
+            "REQUIREMENTS_APPROVAL_REQUIRED",
+        )
+
+
+def test_seed_project_completes_the_path_through_the_named_step() -> None:
+    expected = {
+        "brief": ("TEAM", "APPROVE_TEAM"),
+        "team": ("USER_TWINS", "CONFIRM_TWINS"),
+        "twins": ("REQUIREMENTS", "APPROVE_REQUIREMENTS"),
+        "requirements": ("DESIGN", "APPROVE_DESIGN"),
+        "design": ("PACKAGE", "DOWNLOAD_FOLDER"),
+    }
+    with FakeStudio(twins=3) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        for through, progress in expected.items():
+            project = studio.seed_project(owner=EMAIL, name=f"Progetto {through}", through=through)
+            assert (project.stage, project.next_action) == progress
+            assert project.approved(through)
+            assert project.current(through) is not None
+        design = project.current("design")
+        assert design["ready_for_gate"]
+        assert len(project.current("twins")["snapshot"]["twin_versions"]) == 3
+        assert project.gate("design")["status"] == "APPROVED"
+        with pytest.raises(ValueError):
+            studio.seed_project(owner=OTHER, name="Nessuno", through="brief")
+        with pytest.raises(ValueError):
+            studio.seed_project(owner=EMAIL, name="Errato", through="package")
+
+
+def test_a_request_answers_202_and_the_job_ends_after_the_polls() -> None:
+    with FakeStudio(job_polls=2) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="team")
+        base = f"/projects/{seeded.id}"
+        first = client.post(base + "/user-modeling/personas/proposals", headers=PREFER)
+        second = client.post(base + "/user-modeling/personas/proposals", headers=PREFER)
+        assert (first.status, second.status) == (202, 202)
+        assert first.json()["job_id"] == second.json()["job_id"]
+        assert first.json()["operation"] == "PERSONA_PROPOSAL"
+        running = client.get(base + "/generation-jobs?status=RUNNING").json()["items"]
+        assert [job["job_id"] for job in running] == [first.json()["job_id"]]
+        path = f"{base}/generation-jobs/{first.json()['job_id']}"
+        statuses = [client.get(path).json()["status"] for _ in range(3)]
+        assert statuses == ["RUNNING", "RUNNING", "SUCCEEDED"]
+        finished = client.get(path).json()
+        assert finished["response"]["status_code"] == 200
+        assert finished["stage"] is None
+        repeated = later(client, base, "/user-modeling/personas/proposals")
+        assert repeated == {
+            "status_code": 409,
+            "body": {"detail": {"code": "PERSONAS_ALREADY_EXIST"}},
+        }
+        assert client.get(base + "/generation-jobs?status=WRONG").status == 422
+        assert seeded.jobs()[0]["status"] == "SUCCEEDED"
+
+
+def test_without_the_header_a_generation_answers_at_once() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="twins")
+        base = f"/projects/{seeded.id}"
+        reply = client.post(base + "/requirements/proposals")
+        assert (reply.status, reply.json()["status"]) == (201, "CREATED")
+        assert client.get(base + "/generation-jobs").json() == {"items": []}
+        job = client.post(
+            base + "/requirements/change-requests", {"request": "Aggiungi il bis"}, headers=PREFER
+        )
+        finished, polls = follow(client, f"{base}/generation-jobs/{job.json()['job_id']}")
+        assert polls == 1
+        assert finished["response"]["body"]["diff"]["status"] == "PROPOSED"
+
+
+def test_fail_next_answers_the_given_status_and_body() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="twins")
+        base = f"/projects/{seeded.id}"
+        timeout = {"detail": {"code": "TIMEOUT", "stage": "MODEL_PROPOSAL"}}
+        studio.fail_next(
+            "POST",
+            "/projects/{project_id}/requirements/proposals",
+            status=503,
+            body=timeout,
+            times=2,
+        )
+        studio.fail_next(
+            "GET",
+            "/projects",
+            status=429,
+            body={"detail": "slow down"},
+            headers={"Retry-After": "5"},
+        )
+        studio.fail_next("GET", "/health", status=500, body=b"Internal Server Error")
+        assert client.post(base + "/requirements/proposals").json() == timeout
+        assert client.post(base + "/requirements/proposals", headers=PREFER).status == 503
+        assert client.post(base + "/requirements/proposals").status == 201
+        limited = client.get("/projects")
+        assert (limited.status, limited.headers["retry-after"]) == (429, "5")
+        broken = client.get("/health")
+        assert (broken.status, broken.content) == (500, b"Internal Server Error")
+        assert client.get("/health").status == 200
+
+
+def test_fail_job_and_lose_job_shape_the_end_of_a_job() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="requirements")
+        base = f"/projects/{seeded.id}"
+        studio.fail_job("DESIGN_PROPOSAL", code="TIMEOUT")
+        failed = later(client, base, "/design/proposals")
+        assert failed == {
+            "status_code": 503,
+            "body": {"detail": {"code": "TIMEOUT", "stage": "MODEL_PROPOSAL"}},
+        }
+        assert later(client, base, "/design/proposals")["status_code"] == 201
+        current = client.get(base + "/design/current").json()
+        alternative = current["package"]["alternatives"][0]["id"]
+        body = {
+            "design_version_id": current["id"],
+            "design_content_hash": current["content_hash"],
+            "alternative_id": alternative,
+        }
+        studio.fail_job("MOCKUP", code="MOCKUP_QUALITY_REJECTED", rejected=True)
+        started = client.post(base + "/design/mockups/jobs", body).json()
+        rejected, _ = follow(client, f"{base}/design/mockups/jobs/{started['job_id']}")
+        assert (rejected["status"], rejected["failure"]["code"]) == (
+            "REJECTED",
+            "MOCKUP_QUALITY_REJECTED",
+        )
+        studio.lose_job("MOCKUP")
+        lost = client.post(base + "/design/mockups/jobs", body).json()
+        missing = client.get(f"{base}/design/mockups/jobs/{lost['job_id']}")
+        assert (missing.status, missing.json()) == (
+            404,
+            {"detail": {"code": "GENERATION_JOB_NOT_FOUND"}},
+        )
+        assert client.get(f"{base}/generation-jobs/{lost['job_id']}").status == 404
+        assert lost["job_id"] not in {
+            job["job_id"] for job in client.get(base + "/generation-jobs").json()["items"]
+        }
+        with pytest.raises(ValueError):
+            studio.lose_job("UNKNOWN")
+
+
+def test_the_budget_ceiling_refuses_generations() -> None:
+    with FakeStudio(budget_usd=1.0, spent_usd=1.0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        budget = client.get("/model-runtime/budget").json()
+        assert (budget["remaining_total_microusd"], budget["per_generation_microusd"]) == (
+            0,
+            1_000_000,
+        )
+        current = client.get(base + "/design/current").json()
+        refused = client.post(
+            base + "/design/mockups/jobs",
+            {
+                "design_version_id": current["id"],
+                "design_content_hash": current["content_hash"],
+                "alternative_id": current["package"]["owner_selected_alternative_id"],
+            },
+        )
+        assert (refused.status, refused.json()) == (
+            402,
+            {"detail": {"code": "GENERATION_BUDGET_EXCEEDED"}},
+        )
+        assert client.get(base + "/generation-jobs").json() == {"items": []}
+        exceeded = {"detail": {"code": "GENERATION_BUDGET_EXCEEDED", "stage": "MODEL_PROPOSAL"}}
+        assert client.post(base + "/design/regenerations").json() == exceeded
+        assert later(client, base, "/design/regenerations") == {
+            "status_code": 402,
+            "body": exceeded,
+        }
+        assert client.get(base + "/model-usage").json()["totals"]["cost_microusd"] == 0
+
+
+def test_a_mockup_that_would_pass_the_ceiling_fails_inside_its_job() -> None:
+    with FakeStudio(budget_usd=2.0, spent_usd=1.0, job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        current = client.get(base + "/design/current").json()
+        started = client.post(
+            base + "/design/mockups/jobs",
+            {
+                "design_version_id": current["id"],
+                "design_content_hash": current["content_hash"],
+                "alternative_id": current["package"]["owner_selected_alternative_id"],
+            },
+        )
+        assert started.status == 202
+        job, _ = follow(client, f"{base}/design/mockups/jobs/{started.json()['job_id']}")
+        assert (job["status"], job["failure"]) == (
+            "FAILED",
+            {"code": "GENERATION_BUDGET_EXCEEDED", "reasons": []},
+        )
+        assert studio.spent_microusd == 1_000_000
+
+
+def test_a_studio_without_a_model_answers_like_the_real_one() -> None:
+    with FakeStudio(hosted=False, job_polls=0) as studio:
+        client = signed_in(studio)
+        base = new_project(client)
+        assert client.get("/model-runtime/budget").json() == {
+            "detail": {"code": "REAL_MODEL_RUNTIME_NOT_CONFIGURED"}
+        }
+        assert client.post(base + "/brief-dialogue", {"statement": "Mancia"}).json() == {
+            "detail": {"code": "BRIEF_DIALOGUE_MODEL_NOT_CONFIGURED"}
+        }
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="requirements")
+        seeded_base = f"/projects/{seeded.id}"
+        proposal = client.post(seeded_base + "/design/proposals")
+        assert proposal.status == 201
+        package = proposal.json()["version"]["package"]
+        assert [(item["code"], item["approach"]) for item in package["alternatives"]] == [
+            ("DES-001", "GUIDED_WORKFLOW"),
+            ("DES-002", "DASHBOARD_FIRST"),
+            ("DES-003", "TASK_FOCUSED"),
+        ]
+        assert package["recommended_alternative_id"] == package["alternatives"][0]["id"]
+        twins = len(package["grounding"]["user_twin_references"])
+        assert len(package["critiques"]) == 3 * twins
+        assert {(item["verdict"], item["quote"]) for item in package["critiques"]} == {(None, None)}
+        capabilities = client.get(seeded_base + "/design/mockups/capabilities").json()
+        assert capabilities == {
+            "generated_mockups": False,
+            "iterations": False,
+            "model": None,
+            "static_check": False,
+        }
+        current = client.get(seeded_base + "/design/current").json()
+        chosen = package["recommended_alternative_id"]
+        body = {
+            "design_version_id": current["id"],
+            "design_content_hash": current["content_hash"],
+            "alternative_id": chosen,
+        }
+        declarative = client.post(seeded_base + "/design/mockups", body)
+        assert (declarative.status, declarative.json()) == (
+            503,
+            {"detail": {"code": "REAL_MOCKUP_MODEL_NOT_CONFIGURED"}},
+        )
+        generated = client.post(seeded_base + "/design/mockups/jobs", body)
+        assert generated.json() == {"detail": {"code": "REAL_MOCKUP_MODEL_NOT_CONFIGURED"}}
+        latest = client.get(f"{seeded_base}/design/mockups?alternative_id={chosen}")
+        assert (latest.status, latest.content) == (200, b"null")
+        evaluation = {
+            "design_version_id": current["id"],
+            "design_content_hash": current["content_hash"],
+        }
+        refused = client.post(seeded_base + "/design/evaluations", evaluation)
+        assert (refused.status, refused.json()) == (
+            503,
+            {"detail": {"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"}},
+        )
+        started = client.post(seeded_base + "/design/evaluations", evaluation, headers=PREFER)
+        assert started.status == 202
+        job, _ = follow(client, f"{seeded_base}/generation-jobs/{started.json()['job_id']}")
+        assert (job["status"], job["response"]) == (
+            "FAILED",
+            {"status_code": 503, "body": {"detail": {"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"}}},
+        )
+        reviewer = client.post(
+            seeded_base + "/design/evaluations", {**evaluation, "mode": "TWIN_REVIEW"}
+        )
+        assert reviewer.json() == {"detail": {"code": "DESIGN_REVIEWER_NOT_CONFIGURED"}}
+        assert client.get(seeded_base + "/design/evaluations").json() == []
+        twin = current["package"]["grounding"]["user_twin_references"][0]["twin_id"]
+        chat = client.post(
+            f"{seeded_base}/user-twins/{twin}/conversation/turns",
+            {"question": "Ciao", "expected_turn_count": 0},
+        )
+        assert chat.json() == {"detail": {"code": "TWIN_CHAT_MODEL_NOT_CONFIGURED"}}
+        assert client.get(seeded_base + "/model-usage").json()["items"] == []
+        assert studio.spent_microusd == 0
+        designed = studio.seed_project(owner=EMAIL, name="Scelto", through="design")
+        chosen_design = designed.current("design")
+        assert chosen_design["ready_for_gate"]
+        assert chosen_design["package"]["generated_mockup"] is None
+        assert (
+            chosen_design["package"]["owner_selected_alternative_id"]
+            == (chosen_design["package"]["alternatives"][0]["id"])
+        )
+        assert studio.errors == []
+
+
+def test_the_mockup_routes_of_a_hosted_studio_answer_like_the_real_ones() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        current = client.get(base + "/design/current").json()
+        chosen = current["package"]["owner_selected_alternative_id"]
+        body = {
+            "design_version_id": current["id"],
+            "design_content_hash": current["content_hash"],
+            "alternative_id": chosen,
+        }
+        assert client.post(base + "/design/mockups", body).json() == {
+            "detail": {"code": "GENERATED_MOCKUP_PATH_ACTIVE"}
+        }
+        stale = client.post(base + "/design/mockups", {**body, "design_content_hash": "0" * 64})
+        assert (stale.status, stale.json()) == (409, {"detail": {"code": "DESIGN_CONTEXT_CHANGED"}})
+        unknown = client.post(base + "/design/mockups", {**body, "alternative_id": current["id"]})
+        assert (unknown.status, unknown.json()) == (
+            422,
+            {"detail": {"code": "DESIGN_ALTERNATIVE_NOT_FOUND"}},
+        )
+        latest = client.get(f"{base}/design/mockups?alternative_id={chosen}").json()
+        assert latest["status"] == "MOCKUP_GENERATED"
+        assert latest["package"] == current["package"]
+        other = next(
+            item["id"] for item in current["package"]["alternatives"] if item["id"] != chosen
+        )
+        assert client.get(f"{base}/design/mockups?alternative_id={other}").content == b"null"
+        missing = client.get(base + "/design/mockups")
+        assert missing.json()["errors"] == [{"loc": ["query", "alternative_id"], "type": "missing"}]
+        stranger = signed_in(studio, OTHER)
+        assert stranger.get(f"{base}/design/mockups?alternative_id={chosen}").json() == {
+            "detail": {"code": "DESIGN_PACKAGE_NOT_FOUND"}
+        }
+        static = client.post(
+            base + "/design/evaluations",
+            {
+                "design_version_id": current["id"],
+                "design_content_hash": current["content_hash"],
+                "mode": "STATIC_CHECK",
+            },
+        )
+        assert static.json() == {"detail": {"code": "DESIGN_EVALUATOR_NOT_CONFIGURED"}}
+        capabilities = client.get(base + "/design/mockups/capabilities").json()
+        assert (capabilities["generated_mockups"], capabilities["static_check"]) == (True, False)
+
+
+@pytest.mark.parametrize("hosted", [True, False])
+def test_the_team_follows_the_real_rules(hosted: bool) -> None:
+    with FakeStudio(hosted=hosted, job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="brief")
+        base = f"/projects/{seeded.id}"
+        created = client.post(base + "/team-proposals")
+        assert created.status == 201
+        team = created.json()["version"]
+        brief = seeded.brief
+        assert brief is not None
+        rules = determine_team_constraints(project_mode=ProjectMode(seeded.mode), brief=brief.brief)
+        assert team["role_constraints"] == rules.to_snapshot()["role_constraints"]
+        assert team["constraints_content_hash"] == rules.content_hash
+        assert team["constraint_issues"] == []
+        mandatory = [agent.value for agent in rules.mandatory_agent_ids]
+        deterministic = {
+            member["agent_id"]: member
+            for member in team["members"]
+            if member["source"] == "DETERMINISTIC_MANDATORY"
+        }
+        assert list(deterministic) == mandatory
+        for constraint in team["role_constraints"]:
+            if constraint["kind"] == "MANDATORY":
+                member = deterministic[constraint["agent_id"]]
+                assert [item["code"] for item in member["justifications"]] == [
+                    item["code"] for item in constraint["reasons"]
+                ]
+        suggested = [
+            (member["agent_id"], member["justifications"][0]["code"])
+            for member in team["members"]
+            if member["source"] == "PROPOSER_SUGGESTED"
+        ]
+        optional = {agent.value for agent in rules.optional_agent_ids}
+        expected = [("FRONTEND_ENGINEER", "MODEL_RECOMMENDATION")]
+        assert suggested == (expected if hosted and "FRONTEND_ENGINEER" in optional else [])
+        assert team["provider_kind"] == ("MODEL_ADAPTER" if hosted else "FAKE_DETERMINISTIC")
+        assert "UX_UI_DESIGNER" in team["selected_agent_ids"]
+
+
+def test_contradictory_signals_block_the_team_as_in_the_real_studio() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        base = new_project(client)
+        fields = {
+            "name": "Archivio",
+            "description": "Una app con database ma senza backend.",
+            "problem": "Le ricette sono sparse.",
+            "goals": ["Ritrovare una ricetta"],
+            "target_users": ["Cuochi"],
+            "functional_requirements": ["Cercare una ricetta"],
+        }
+        unknown = [
+            "domain",
+            "technical_constraints",
+            "temporal_constraints",
+            "budget",
+            "non_functional_requirements",
+            "risks",
+            "stakeholders",
+            "available_artifacts",
+            "definition_of_done",
+        ]
+        created = client.post(base + "/brief-versions", {**fields, "unknown_fields": unknown})
+        assert created.status == 201
+        approve(
+            client, base + "/gates/project-brief/submit", base + "/gates/project-brief/decisions"
+        )
+        project = studio.project(base.rsplit("/", 1)[1])
+        brief = project.brief
+        assert brief is not None
+        rules = determine_team_constraints(
+            project_mode=ProjectMode(project.mode), brief=brief.brief
+        )
+        assert rules.has_conflicts
+        blocked = client.post(base + "/team-proposals")
+        assert (blocked.status, blocked.json()["status"], blocked.json()["version"]) == (
+            409,
+            "BLOCKED_BY_CONSTRAINTS",
+            None,
+        )
+        assert [item["agent_id"] for item in blocked.json()["issues"]] == [
+            issue.agent_id.value for issue in rules.issues
+        ]
+        assert client.get(base + "/model-usage").json()["items"] == []
+
+
+@pytest.mark.parametrize("hosted", [True, False])
+def test_a_team_without_the_designer_gets_no_design(hosted: bool) -> None:
+    with FakeStudio(hosted=hosted, job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(
+            owner=EMAIL,
+            name="Squadra vecchia",
+            through="requirements",
+            team_without=["UX_UI_DESIGNER"],
+        )
+        team = seeded.current("team")
+        assert "UX_UI_DESIGNER" not in team["selected_agent_ids"]
+        designer = next(
+            item for item in team["role_constraints"] if item["agent_id"] == "UX_UI_DESIGNER"
+        )
+        assert (designer["kind"], designer["reasons"]) == ("OPTIONAL", [])
+        base = f"/projects/{seeded.id}"
+        refused = client.post(base + "/design/proposals")
+        if hosted:
+            expected = (
+                502,
+                {"detail": {"code": "INVALID_PROVIDER_OUTPUT", "stage": "MODEL_PROPOSAL"}},
+            )
+        else:
+            expected = (
+                409,
+                {"detail": {"code": "PROPOSAL_REJECTED", "proposal_issue": "UX_DESIGNER_REQUIRED"}},
+            )
+        assert (refused.status, refused.json()) == expected
+        assert later(client, base, "/design/proposals") == {
+            "status_code": expected[0],
+            "body": expected[1],
+        }
+        assert client.get(base + "/design").json() == []
+        assert studio.spent_microusd == 0
+        with pytest.raises(ValueError):
+            studio.seed_project(
+                owner=EMAIL, name="Mai", through="design", team_without=["UX_UI_DESIGNER"]
+            )
+        with pytest.raises(ValueError):
+            studio.seed_project(
+                owner=EMAIL, name="Mai", through="brief", team_without=["QA_TEST_ENGINEER"]
+            )
+        with pytest.raises(ValueError):
+            studio.seed_project(owner=EMAIL, name="Mai", through="team", team_without=["NOBODY"])
+
+
+def test_add_account_refuses_what_the_real_registration_refuses() -> None:
+    with FakeStudio() as studio:
+        for address in ("owner@example.test", "person@localhost", "not-an-address", "a@"):
+            with pytest.raises(ValueError, match=r"refuses|characters"):
+                studio.add_account(address, PASSWORD)
+        with pytest.raises(ValueError, match="special-use or reserved"):
+            studio.add_account("owner@example.test", PASSWORD)
+        studio.add_account(" Owner@Example.com ", PASSWORD)
+        with pytest.raises(ValueError, match="already exists"):
+            studio.add_account("owner@example.com", PASSWORD)
+        assert Client(studio).login(email="OWNER@example.com").status == 200
+        assert Client(studio).login(email="owner@example.test").status == 401
+
+
+def test_the_registration_opens_a_session_like_the_login() -> None:
+    with FakeStudio() as studio:
+        client = Client(studio)
+        created = client.post(
+            "/auth/register", {"email": " New@Example.com ", "password": PASSWORD}
+        )
+        assert created.status == 201
+        body = created.json()
+        assert list(body) == ["access_token", "token_type", "expires_at", "user"]
+        assert (body["token_type"], body["user"]["email"]) == ("bearer", "new@example.com")
+        assert "Path=/api/v1/auth" in created.headers["set-cookie"]
+        assert "HttpOnly" in created.headers["set-cookie"]
+        client.token = str(body["access_token"])
+        assert client.get("/auth/me").json() == body["user"]
+        assert client.refresh(_cookie(created)).status == 200
+        assert Client(studio).login(email="NEW@example.com").status == 200
+        again = Client(studio).post(
+            "/auth/register", {"email": "new@example.com", "password": PASSWORD}
+        )
+        assert (again.status, again.json()) == (409, {"detail": "email_already_registered"})
+        with pytest.raises(ValueError, match="already exists"):
+            studio.add_account("new@example.com", PASSWORD)
+        studio.add_account(EMAIL, PASSWORD)
+        taken = Client(studio).post(
+            "/auth/register", {"email": EMAIL.upper(), "password": PASSWORD}
+        )
+        assert (taken.status, taken.json()) == (409, {"detail": "email_already_registered"})
+        assert studio.errors == []
+
+
+@pytest.mark.parametrize(
+    ("email", "password", "detail"),
+    [
+        ("probe@example.test", PASSWORD, "invalid_registration"),
+        ("person@localhost", PASSWORD, "invalid_registration"),
+        ("probe@example.test", "abcdefgh!", "invalid_registration"),
+        ("new@example.com", "abcdefg1!", "password_missing_uppercase"),
+        ("new@example.com", "Abcdefg12", "password_missing_special"),
+    ],
+)
+def test_the_registration_refuses_what_the_real_one_refuses(
+    email: str, password: str, detail: str
+) -> None:
+    with FakeStudio() as studio:
+        client = Client(studio)
+        refused = client.post("/auth/register", {"email": email, "password": password})
+        assert (refused.status, refused.json()) == (422, {"detail": detail})
+        assert "set-cookie" not in refused.headers
+        assert client.login(email=email, password=password).status == 401
+
+
+@pytest.mark.parametrize(
+    ("body", "detail", "error"),
+    [
+        (
+            {"email": EMAIL, "password": "Abcde1!"},
+            "password_too_short",
+            (["body", "password"], "string_too_short"),
+        ),
+        (
+            {"email": EMAIL, "password": "Ab!" * 342},
+            "password_too_long",
+            (["body", "password"], "string_too_long"),
+        ),
+        ({"email": EMAIL}, "invalid_registration", (["body", "password"], "missing")),
+        (
+            {"email": "a@", "password": PASSWORD},
+            "invalid_registration",
+            (["body", "email"], "string_too_short"),
+        ),
+        (
+            {"email": EMAIL, "password": PASSWORD, "role": "owner"},
+            "invalid_registration",
+            (["body", "role"], "extra_forbidden"),
+        ),
+        (None, "invalid_registration", (["body"], "missing")),
+    ],
+)
+def test_invalid_registration_bodies_carry_the_codes_of_the_real_api(
+    body: object, detail: str, error: tuple[list[object], str]
+) -> None:
+    with FakeStudio() as studio:
+        reply = Client(studio).post("/auth/register", body)
+        location, kind = error
+        assert (reply.status, reply.json()) == (
+            422,
+            {"detail": detail, "errors": [{"loc": location, "type": kind}]},
+        )
+        assert studio.errors == []
+
+
+def test_the_model_runtime_readiness_answers_like_the_real_route() -> None:
+    with FakeStudio(hosted=False) as studio:
+        client = signed_in(studio)
+        missing = client.get("/model-runtime/readiness")
+        assert (missing.status, missing.json()) == (
+            503,
+            {
+                "mode": "DEVELOPMENT_FIXTURES",
+                "ready": False,
+                "code": "REAL_MODEL_RUNTIME_NOT_CONFIGURED",
+            },
+        )
+        anonymous = Client(studio).get("/model-runtime/readiness")
+        assert (anonymous.status, anonymous.headers["www-authenticate"]) == (401, "Bearer")
+    with FakeStudio(budget_usd=2.0, spent_usd=0.5) as studio:
+        client = signed_in(studio)
+        ready = client.get("/model-runtime/readiness")
+        assert ready.status == 200
+        report = ready.json()
+        assert list(report) == [
+            "mode",
+            "manifest_schema_version",
+            "ready",
+            "components",
+            "proposal_tasks",
+            "routes",
+            "budget",
+            "evaluator_configured",
+            "generation_performed",
+            "semantic_quality_qualified",
+            "formal_campaign_ready",
+        ]
+        assert (report["mode"], report["manifest_schema_version"], report["ready"]) == (
+            "REAL_REQUIRED",
+            2,
+            True,
+        )
+        assert list(report["components"]) == ["provider:anthropic", "database"]
+        assert report["proposal_tasks"] == sorted(TASKS)
+        assert list(report["routes"]["tasks"]) == sorted(TASKS)
+        assert report["budget"] == client.get("/model-runtime/budget").json()
+        assert report["budget"]["remaining_total_microusd"] == 1_500_000
+    with FakeStudio(budget_usd=None) as studio:
+        assert signed_in(studio).get("/model-runtime/readiness").json()["budget"] is None
+        assert studio.errors == []
+
+
+def test_the_dialogue_can_ask_after_the_essential_fields() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        studio.ask_after_essentials("non_functional_requirements")
+        base = new_project(client)
+        statement = {"statement": "Una pagina per la mancia."}
+        state = client.post(base + "/brief-dialogue", statement).json()
+        while state["snapshot"]["turns"][-1]["field"] in ANSWERS:
+            turns = state["snapshot"]["turns"]
+            body = {**ANSWERS[turns[-1]["field"]], "expected_turn_count": len(turns)}
+            state = client.post(base + "/brief-dialogue/answers", body).json()
+        pending = state["snapshot"]["turns"][-1]
+        assert (state["status"], pending["field"], pending["answer"]) == (
+            "BRIEF_QUESTION_ASKED",
+            "non_functional_requirements",
+            None,
+        )
+        assert pending["question"] == (
+            "Quali qualità deve avere il prodotto, per esempio velocità o sicurezza?"
+        )
+        assert state["progress"]["open_essential_fields"] == []
+        answered = client.post(
+            base + "/brief-dialogue/answers",
+            {
+                "kind": "ITEM_LIST",
+                "items": ["Si apre in due secondi"],
+                "expected_turn_count": len(state["snapshot"]["turns"]),
+            },
+        ).json()
+        assert answered["status"] == "BRIEF_DIALOGUE_READY"
+        synthesis = client.post(
+            base + "/brief-dialogue/synthesis",
+            {"expected_turn_count": len(answered["snapshot"]["turns"])},
+        ).json()
+        assert synthesis["brief_version"]["brief"]["non_functional_requirements"] == [
+            "Si apre in due secondi"
+        ]
+        for wrong in ("problem", "name", "unknown"):
+            with pytest.raises(ValueError):
+                studio.ask_after_essentials(wrong)
+        with pytest.raises(ValueError):
+            studio.ask_after_essentials()
+
+
+def test_a_second_knowledge_version_without_a_changed_step() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        assert client.post(base + "/knowledge-packages").status == 201
+        assert client.post(base + "/knowledge-packages").status == 200
+        seeded.mark_knowledge_changed()
+        second = client.post(base + "/knowledge-packages")
+        assert (second.status, second.json()["version"]["version_number"]) == (201, 2)
+        seeded.fingerprint = None
+        third = client.post(base + "/knowledge-packages")
+        assert (third.status, third.json()["version"]["version_number"]) == (201, 3)
+        assert [item["version_number"] for item in seeded.knowledge_versions()] == [1, 2, 3]
+
+
+def test_a_hosted_studio_without_a_budget_charges_without_a_ceiling() -> None:
+    with FakeStudio(budget_usd=None, language="en", job_polls=0) as studio:
+        client = signed_in(studio)
+        base = new_project(client, "Tip calculator")
+        assert client.get("/model-runtime/budget").json() == {
+            "detail": {"code": "GENERATION_BUDGET_NOT_CONFIGURED"}
+        }
+        started = client.post(base + "/brief-dialogue", {"statement": "A tip calculator."}).json()
+        assert (
+            started["snapshot"]["turns"][0]["question"] == "Which problem does the project solve?"
+        )
+        assert studio.spent_microusd == COSTS["BRIEF_QUESTION"]
+        seeded = studio.seed_project(owner=EMAIL, name="Seed", through="twins")
+        personas = client.get(f"/projects/{seeded.id}/user-modeling/personas").json()
+        assert {item["profile"]["name"] for item in personas} == {
+            "Evening shift waiter",
+            "Pizzeria owner",
+        }
+        identifiers = [item["persona_id"] for item in personas]
+        assert identifiers == sorted(identifiers)
+
+
+def test_invalid_bodies_answer_422_like_the_real_api() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        missing = client.post("/projects", {"display_name": "Calcolo mancia"})
+        assert missing.json() == {
+            "detail": "invalid_request",
+            "errors": [{"loc": ["body", "mode"], "type": "missing"}],
+        }
+        extra = client.post(
+            "/projects", {"display_name": "A", "mode": "GREENFIELD_GENERATION", "x": 1}
+        )
+        assert extra.json()["errors"] == [{"loc": ["body", "x"], "type": "extra_forbidden"}]
+        empty = client.post("/projects")
+        assert empty.json()["errors"] == [{"loc": ["body"], "type": "missing"}]
+        broken = client.send(
+            "POST", "/projects", content=b"{", headers={"Content-Type": "application/json"}
+        )
+        assert broken.json()["errors"] == [{"loc": ["body", 0], "type": "json_invalid"}]
+        text = client.send(
+            "POST", "/projects", content=b"{}", headers={"Content-Type": "text/plain"}
+        )
+        assert text.status == 422
+
+
+def test_requests_are_recorded_with_lower_case_headers() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        client.get("/projects?limit=3")
+        recorded = studio.requests[-1]
+        assert (recorded.method, recorded.path, recorded.query) == (
+            "GET",
+            "/api/v1/projects",
+            "limit=3",
+        )
+        assert recorded.headers["authorization"] == f"Bearer {client.token}"
+        assert (
+            studio.requests[0].body == json.dumps({"email": EMAIL, "password": PASSWORD}).encode()
+        )
+
+
+def test_the_archive_of_the_support_folder_can_be_imported() -> None:
+    with FakeStudio() as studio:
+        client = signed_in(studio)
+        content = valid_archive(project_name="Lista della spesa")
+        imported = client.post(
+            "/project-imports",
+            content=multipart({}, {"archive": ("folder.zip", "application/zip", content)}),
+            headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+        )
+        assert imported.json()["project"]["display_name"] == "Lista della spesa"
+        broken = client.post(
+            "/project-imports",
+            content=multipart({}, {"archive": ("folder.zip", "application/zip", b"not a zip")}),
+            headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+        )
+        assert (broken.status, broken.json()["detail"]["code"]) == (422, "FOLDER_ARCHIVE_INVALID")
+        absent = client.post(
+            "/project-imports",
+            content=multipart({"display_name": "Senza cartella"}, {}),
+            headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
+        )
+        assert absent.json()["errors"] == [{"loc": ["body", "archive"], "type": "missing"}]
+
+
+def test_the_server_closes_its_socket_and_joins_its_threads(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    before = {thread.ident for thread in threading.enumerate()}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with FakeStudio() as studio:
+            assert studio.running
+            client = Client(studio)
+            for _ in range(5):
+                assert client.get("/health").status == 200
+            assert client.get("/missing").status == 404
+        gc.collect()
+    assert not studio.running
+    assert {thread.ident for thread in threading.enumerate()} <= before
+    assert [item for item in caught if issubclass(item.category, ResourceWarning)] == []
+    assert capfd.readouterr() == ("", "")
+    assert studio.errors == []
+    with pytest.raises(RuntimeError):
+        _ = studio.address
+
+
+def test_two_instances_share_nothing() -> None:
+    with FakeStudio() as first, FakeStudio() as second:
+        first.add_account(EMAIL, PASSWORD)
+        assert first.address != second.address
+        assert Client(second).login().status == 401
+        project = first.seed_project(owner=EMAIL, name="Solo qui", through="brief")
+        with pytest.raises(KeyError):
+            second.project(project.id)
+
+
+def test_the_clock_is_injected_and_never_goes_back() -> None:
+    moments = iter(
+        [datetime(2026, 9, 29, 12, 0, tzinfo=UTC), datetime(2026, 9, 29, 11, 0, tzinfo=UTC)]
+    )
+    start = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+    with FakeStudio(now=lambda: next(moments, start + timedelta(hours=1))) as studio:
+        assert studio.now() == start
+        assert studio.now() == start
+        assert studio.now() == start + timedelta(hours=1)
+    earlier = datetime(2026, 1, 5, 7, 30, tzinfo=UTC)
+    with FakeStudio(now=lambda: earlier) as studio:
+        assert studio.now() == earlier
+    with FakeStudio() as studio:
+        assert studio.now() + timedelta(seconds=1) == studio.now()
