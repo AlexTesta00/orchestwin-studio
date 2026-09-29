@@ -1371,7 +1371,49 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.emitted("open-chat")?.[0]?.[0]).toEqual(twinVersion);
   });
 
-  it("proposes the user profiles by itself once the team is approved and no profile exists", async () => {
+  it("proposes the user profiles by itself only right after the owner approves the team", async () => {
+    const team = useTeamStore();
+    team.projectId = PROJECT_ID;
+    team.readiness = { status: "TEAM_APPROVAL_REQUIRED" };
+    const store = useUserModelingStore();
+    const load = vi.spyOn(store, "load").mockResolvedValue(undefined);
+    const propose = vi
+      .spyOn(store, "proposePersonas")
+      .mockResolvedValue({} as PersonaProposalCommandPayload);
+
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("en")] },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        locale: "en",
+        autoLoad: true,
+        upstream: "team-1:PENDING_APPROVAL",
+      },
+    });
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(propose).not.toHaveBeenCalled();
+
+    team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
+    await wrapper.setProps({ upstream: "team-1:APPROVED" });
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(propose).toHaveBeenCalledTimes(1);
+    expect(propose).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+
+    await wrapper.setProps({ upstream: null });
+    await wrapper.setProps({ upstream: "team-1:APPROVED" });
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(propose).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("offers the proposal of the user profiles instead of starting it when the team was approved before", async () => {
     const team = useTeamStore();
     team.projectId = PROJECT_ID;
     team.readiness = { status: "READY_FOR_MAIN_WORKFLOW" };
@@ -1383,14 +1425,24 @@ describe("ProjectUserModelingFlow", () => {
 
     const wrapper = mount(ProjectUserModelingFlow, {
       global: { plugins: [createAppI18n("en")] },
-      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "en", autoLoad: true },
+      props: {
+        projectId: PROJECT_ID,
+        accessToken: ACCESS_TOKEN,
+        locale: "en",
+        autoLoad: true,
+        upstream: "team-1:APPROVED",
+      },
     });
     await flushPromises();
 
-    expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
-    expect(propose).toHaveBeenCalledTimes(1);
-    expect(propose).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    await wrapper.setProps({ upstream: "team-2:APPROVED" });
+    await flushPromises();
 
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(propose).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="propose-personas"]').trigger("click");
     await flushPromises();
 
     expect(propose).toHaveBeenCalledTimes(1);

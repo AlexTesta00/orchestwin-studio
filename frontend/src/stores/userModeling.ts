@@ -37,6 +37,7 @@ interface UserModelingState {
   projectId: string | null;
   projectEpoch: number;
   readSequence: number;
+  loadSequence: number;
 
   personaVersions: PersonaVersionPayload[];
   twinVersions: UserTwinVersionPayload[];
@@ -167,6 +168,7 @@ export const useUserModelingStore = defineStore("userModeling", {
     projectId: null,
     projectEpoch: 0,
     readSequence: 0,
+    loadSequence: 0,
 
     personaVersions: [],
     twinVersions: [],
@@ -313,6 +315,7 @@ export const useUserModelingStore = defineStore("userModeling", {
 
       this.beginOperation("load");
       const sequence = ++this.readSequence;
+      const ticket = ++this.loadSequence;
 
       try {
         const readiness = await userModelingApi.getReadiness(projectId, accessToken);
@@ -363,7 +366,9 @@ export const useUserModelingStore = defineStore("userModeling", {
 
         throw error;
       } finally {
-        this.endOperation("load", projectId, epoch);
+        if (ticket === this.loadSequence) {
+          this.endOperation("load", projectId, epoch);
+        }
       }
     },
 

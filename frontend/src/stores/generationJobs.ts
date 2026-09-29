@@ -72,11 +72,8 @@ interface RunningListing {
   project: string;
   epoch: number;
   api: GenerationJobsApi;
-  at: number;
   promise: Promise<GenerationRequestJob[]>;
 }
-
-const LISTING_REUSE_MILLISECONDS = 2000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -97,7 +94,7 @@ function bodyCode(body: unknown): string | null {
     return body.detail;
   }
 
-  return isRecord(body.detail) ? firstText(body.detail.code) : null;
+  return isRecord(body.detail) ? firstText(body.detail.proposal_issue, body.detail.code) : null;
 }
 
 export function settledCode(job: GenerationRequestJob): string | null {
@@ -243,27 +240,25 @@ export const useGenerationJobsStore = defineStore("generationJobs", () => {
     authorize: AuthorizedGenerationRequest,
     api: GenerationJobsApi,
   ): Promise<GenerationRequestJob[]> {
-    const now = Date.now();
-
     if (
       listing !== null &&
       listing.project === project &&
       listing.epoch === epoch &&
-      listing.api === api &&
-      now - listing.at < LISTING_REUSE_MILLISECONDS
+      listing.api === api
     ) {
       return listing.promise;
     }
 
     const promise = authorize((token) => api.list(project, token, "RUNNING"));
-    const current: RunningListing = { project, epoch, api, at: now, promise };
-
-    listing = current;
-    promise.catch(() => {
+    const current: RunningListing = { project, epoch, api, promise };
+    const release = () => {
       if (listing === current) {
         listing = null;
       }
-    });
+    };
+
+    listing = current;
+    promise.then(release, release);
     return promise;
   }
 

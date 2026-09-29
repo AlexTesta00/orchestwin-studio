@@ -253,6 +253,7 @@ import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { generationProgress, modelFeedback } from "./modelFeedback";
 import { elementNames, type ScreenName, type WorkflowName } from "./screenNames";
 import { rosterAvatar, type TwinRoster } from "./twinIdentity";
+import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 import { workflowStatusLabel } from "./workflowLabels";
 import { designApi, type DesignApi } from "../api/design";
 import { designIterationsApi, type DesignIterationsApi } from "../api/designIterations";
@@ -366,12 +367,14 @@ const props = withDefaults(
     iterationsApi?: DesignIterationsApi;
     pinsApi?: DesignReviewPinsApi;
     usageApi?: ModelUsageApi;
+    upstream?: UpstreamValue;
     active?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
     prerequisiteReady: true,
+    upstream: null,
     active: true,
   },
 );
@@ -729,6 +732,7 @@ const previewAlternativeId = ref<string | null>(null);
 const declarative = reactive<Record<string, DeclarativeEntry>>({});
 const declarativeBusy = ref<string | null>(null);
 const thumbnails = reactive<Record<string, "loading" | "missing" | "failed">>({});
+const ensuring = reactive<Record<string, number>>({});
 const iterationScreen = ref<string | null>(null);
 const requestOpen = ref(false);
 const keepAsRule = ref(false);
@@ -1092,7 +1096,8 @@ const thumbnailWants = computed<ThumbnailWant[]>(() => {
       entry.state === "drawing" ||
       entry.state === "rejected" ||
       entry.state === "failed" ||
-      mockups.isChecking(alternative.id)
+      mockups.isChecking(alternative.id) ||
+      (ensuring[alternative.id] ?? 0) > 0
     ) {
       continue;
     }
@@ -2392,9 +2397,22 @@ async function loadUsage(): Promise<void> {
   }
 }
 
+function holdThumbnail(alternativeId: string): void {
+  ensuring[alternativeId] = (ensuring[alternativeId] ?? 0) + 1;
+}
+
+function releaseThumbnail(alternativeId: string): void {
+  const remaining = (ensuring[alternativeId] ?? 1) - 1;
+  if (remaining > 0) {
+    ensuring[alternativeId] = remaining;
+  } else {
+    delete ensuring[alternativeId];
+  }
+}
+
 async function prepareMockups(): Promise<void> {
   const version = current.value;
-  if (version === null || !stepShown.value) {
+  if (version === null || !stepShown.value || !props.active) {
     return;
   }
   const key = `${version.id}|${version.content_hash}`;
@@ -2402,18 +2420,33 @@ async function prepareMockups(): Promise<void> {
     return;
   }
   prepared.add(key);
+  const alternativeIds = version.package.alternatives.map((alternative) => alternative.id);
+  alternativeIds.forEach(holdThumbnail);
   const loaded = await mockups.loadCapabilities(authorizedRequest, { api: mockupsApi.value });
   if (current.value?.id !== version.id || current.value.content_hash !== version.content_hash) {
+    alternativeIds.forEach(releaseThumbnail);
     return;
   }
   if (loaded?.generated_mockups === true) {
     const draw = mockups.wasPrepared(props.projectId, version.id, version.content_hash);
     for (const alternative of version.package.alternatives) {
-      void mockups.ensure(alternative.id, authorizedRequest, {
-        api: mockupsApi.value,
-        signal: lifetime.signal,
-        draw,
-      });
+      void mockups
+        .ensure(alternative.id, authorizedRequest, {
+          api: mockupsApi.value,
+          signal: lifetime.signal,
+          draw,
+        })
+        .then(
+          (outcome) => {
+            if (outcome === "missing" || outcome === "chosen") {
+              thumbnails[thumbnailWant(alternative).key] = "missing";
+            }
+          },
+          () => undefined,
+        )
+        .finally(() => {
+          releaseThumbnail(alternative.id);
+        });
     }
     if (loaded.iterations) {
       void iterations.recover(authorizedRequest, {
@@ -2426,6 +2459,7 @@ async function prepareMockups(): Promise<void> {
         .catch(() => undefined);
     }
   } else {
+    alternativeIds.forEach(releaseThumbnail);
     for (const alternative of version.package.alternatives) {
       void loadDeclarative(alternative.id);
     }
@@ -2554,6 +2588,19 @@ watch(
   { immediate: true },
 );
 
+watchUpstream(
+  () => props.upstream,
+  (changed) => {
+    if (!changed) {
+      return;
+    }
+    nextStepRefresh.value++;
+    if (props.autoLoad) {
+      void load();
+    }
+  },
+);
+
 watch(
   () => [props.projectId, current.value?.id, current.value?.content_hash] as const,
   () => {
@@ -2573,7 +2620,7 @@ watch(
 watch(
   () => [thumbnailWants.value, stepShown.value] as const,
   ([wants, shown]) => {
-    if (!shown) {
+    if (!shown || !props.active) {
       return;
     }
     for (const want of wants) {
