@@ -81,6 +81,8 @@ const messages = {
 const TWIN_COLUMN = 170;
 const CELL_MINIMUM = 170;
 const SPACING = 8;
+const ROW_GRID =
+  "grid grid-cols-[170px_repeat(var(--twin-matrix-alternatives),minmax(0,1fr))] gap-2";
 
 const TONES = {
   critical: "bg-fail-on-night/12 text-fail-on-night",
@@ -238,20 +240,17 @@ onBeforeUnmount(() => {
     <div ref="area" :data-layout="wide ? 'table' : 'stack'" data-testid="design-twin-matrix-area">
       <table
         role="table"
-        :class="
-          wide
-            ? '-m-2 w-[calc(100%+16px)] table-fixed border-separate border-spacing-2'
-            : 'block w-full'
-        "
+        :class="wide ? 'grid w-full gap-2' : 'block w-full'"
+        :style="wide ? { '--twin-matrix-alternatives': alternatives.length } : undefined"
       >
         <caption class="sr-only">
           {{
             copy.caption
           }}
         </caption>
-        <thead role="rowgroup" :class="wide ? '' : 'sr-only'">
-          <tr role="row">
-            <th role="columnheader" scope="col" class="w-[170px] p-0">
+        <thead role="rowgroup" :class="wide ? 'block' : 'sr-only'">
+          <tr role="row" :class="wide ? ROW_GRID : undefined">
+            <th role="columnheader" scope="col" class="p-0">
               <span class="sr-only">{{ copy.twin }}</span>
             </th>
             <th
@@ -259,20 +258,20 @@ onBeforeUnmount(() => {
               :key="alternative.id"
               role="columnheader"
               scope="col"
-              class="px-1 pb-0.5 text-left align-bottom font-mono text-[11px] font-normal tracking-label break-words text-on-night-3 uppercase"
+              class="self-end px-1 pb-0.5 text-left font-mono text-[11px] font-normal tracking-label break-words text-on-night-3 uppercase"
               :data-alternative="alternative.id"
             >
               {{ alternative.code }} · {{ alternative.title }}
             </th>
           </tr>
         </thead>
-        <tbody role="rowgroup" :class="wide ? '' : 'grid gap-3'">
+        <tbody role="rowgroup" :class="wide ? 'grid gap-2' : 'grid gap-3'">
           <tr
             v-for="row in rows"
             :key="row.twin.id"
             role="row"
             :class="
-              wide ? '' : 'grid gap-2 rounded-tile border border-night-line bg-on-night/3 p-3'
+              wide ? ROW_GRID : 'grid gap-2 rounded-tile border border-night-line bg-on-night/3 p-3'
             "
             :data-twin="row.twin.id"
             data-testid="design-twin-matrix-row"
@@ -280,7 +279,7 @@ onBeforeUnmount(() => {
             <th
               role="rowheader"
               scope="row"
-              :class="['p-0 text-left font-semibold', wide ? 'pr-2 align-middle' : 'pb-1']"
+              :class="['p-0 text-left font-semibold', wide ? 'flex items-center pr-2' : 'pb-1']"
             >
               <span class="flex items-center gap-2.5 text-sm leading-[1.3]">
                 <span
@@ -306,13 +305,13 @@ onBeforeUnmount(() => {
               v-for="entry in row.cells"
               :key="entry.alternative.id"
               role="cell"
-              :class="['p-0 align-top', wide ? 'h-px' : '']"
+              :class="['p-0', wide ? 'flex' : 'align-top']"
             >
               <button
                 type="button"
                 :aria-pressed="entry.selected ? 'true' : 'false'"
                 :class="[
-                  'flex h-full min-h-24 w-full flex-col items-start gap-1.5 rounded-field text-left text-on-night transition-colors duration-150 hover:bg-night-hover',
+                  'flex min-h-24 w-full flex-col items-start gap-1.5 rounded-field text-left text-on-night transition-colors duration-150 hover:bg-night-hover',
                   entry.selected
                     ? 'border-2 border-petrol-on-night bg-on-night/6 px-[13px] py-[11px]'
                     : 'border border-night-line bg-on-night/3 px-3.5 py-3',
