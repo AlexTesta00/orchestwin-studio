@@ -760,6 +760,33 @@ VISUAL_DIMENSIONS: Final = MappingProxyType(
     }
 )
 VISUAL_DIMENSION_NAMES: Final = tuple(VISUAL_DIMENSIONS)
+_RETIRED: Final = {
+    "heading_family": frozenset({FontFamily.MONOSPACE, FontFamily.SCRIPT}),
+    "background": frozenset(
+        {BackgroundTreatment.DOTS, BackgroundTreatment.GRID, BackgroundTreatment.STRIPES}
+    ),
+}
+RETIRED_VISUAL_VALUES: Final = MappingProxyType(
+    {name: _RETIRED.get(name, frozenset()) for name in VISUAL_DIMENSION_NAMES}
+)
+_STRUCTURE_DIMENSIONS: Final = (
+    "corners",
+    "density",
+    "buttons",
+    "inputs",
+    "elevation",
+    "borders",
+    "header",
+    "background",
+    "emphasis",
+    "tone",
+)
+
+
+def offered_visual_values(name: str) -> tuple[StrEnum, ...]:
+    return tuple(
+        item for item in VISUAL_DIMENSIONS[name] if item not in RETIRED_VISUAL_VALUES[name]
+    )
 
 
 def validate_visual_choices(choices: VisualChoices) -> None:
@@ -1025,6 +1052,45 @@ def _fit_clause(spec: ArchetypeSpec) -> str:
     return clause
 
 
+def _series(values: Iterable[str], conjunction: str = "and") -> str:
+    items = list(values)
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} {conjunction} {items[-1]}"
+
+
+def _typography_clause() -> str:
+    headings = ", ".join(
+        f"{family.value} ({FONTS[family].category})"
+        for family in offered_visual_values("heading_family")
+    )
+    bodies = offered_visual_values("body_family")
+    readable = ", ".join(family.value for family in bodies if FONTS[family].body_safe)
+    clause = (
+        f"Typography: heading_family is one of {headings}; body_family is one of the readable "
+        f"{readable}"
+    )
+    if FontFamily.MONOSPACE in bodies:
+        tones = _series(
+            (tone.value for tone in DesignTone if tone in MONOSPACE_BODY_TONES), conjunction="or"
+        )
+        clause += f", or MONOSPACE only with {tones} tones"
+    return clause + "; type_scale, heading_case and heading_weight complete the typography."
+
+
+def _structure_clause() -> str:
+    free = [name for name in _STRUCTURE_DIMENSIONS if not RETIRED_VISUAL_VALUES[name]]
+    limited = "".join(
+        f"{name} is one of {', '.join(item.value for item in offered_visual_values(name))}; "
+        for name in _STRUCTURE_DIMENSIONS
+        if RETIRED_VISUAL_VALUES[name]
+    )
+    return (
+        f"Shape and structure: {_series(free)} follow the schema enums; {limited}navigation "
+        "must be one listed for the chosen archetype."
+    )
+
+
 def visual_catalog_summary() -> str:
     lines = [
         f"Visual catalog version {VISUAL_CATALOG_VERSION}. Every alternative sets one value per "
@@ -1038,17 +1104,10 @@ def visual_catalog_summary() -> str:
         )
         + ".",
         "Colour: hue_family, color_scheme, color_mode, saturation and surface_tone are resolved "
-        "into a verified palette; DARK and HIGH_CONTRAST modes are real options, not defaults. "
-        "Typography: heading_family and body_family, with type_scale, heading_case and "
-        "heading_weight, from "
-        + ", ".join(f"{key.value} ({spec.category})" for key, spec in FONTS.items())
-        + ". Body families must be readable: never SCRIPT, DISPLAY_HEAVY or MODERN_SERIF; "
-        "MONOSPACE bodies only with TECHNICAL, FUTURISTIC or CLINICAL tones. SCRIPT headings "
-        "only with PLAYFUL, ARTISANAL, LUXURIOUS, WARM or RUSTIC tones and SENTENCE case; "
-        "Shape and structure: corners, density, buttons, inputs, elevation, borders, "
-        "header, background, emphasis and tone follow the schema enums; navigation must be one "
-        "listed for the chosen archetype. "
-        "HIGH_CONTRAST modes require FILLED or OUTLINED buttons, visible borders and no SCRIPT. "
+        "into a verified palette; DARK and HIGH_CONTRAST modes are real options, not defaults.",
+        _typography_clause(),
+        _structure_clause(),
+        "HIGH_CONTRAST modes require FILLED or OUTLINED buttons and visible borders. "
         "Alternatives must use different archetypes, different hue families and differ in at "
         f"least {DISTINCT_VISUAL_DIMENSIONS} further dimensions; hue families closer than "
         f"{HUE_FAMILY_SEPARATION_DEGREES:.0f} degrees count as the same family unless one of "
@@ -1148,6 +1207,7 @@ __all__ = [
     "MODES",
     "NEUTRAL_VISUAL_CHOICES",
     "PALETTE_ROLES",
+    "RETIRED_VISUAL_VALUES",
     "VISUAL_CATALOG_CONTENT_HASH",
     "VISUAL_CATALOG_VERSION",
     "VISUAL_DIMENSIONS",
@@ -1179,6 +1239,7 @@ __all__ = [
     "TypeScale",
     "VisualChoices",
     "hue_families_are_distinct",
+    "offered_visual_values",
     "require_distinct_visual_choices",
     "resolve_palette",
     "resolve_typography",

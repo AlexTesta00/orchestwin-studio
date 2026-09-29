@@ -13,6 +13,7 @@ from orchestwin.artifacts.visual_catalog import (
     HUES,
     MODES,
     PALETTE_ROLES,
+    RETIRED_VISUAL_VALUES,
     VISUAL_CATALOG_CONTENT_HASH,
     VISUAL_CATALOG_VERSION,
     VISUAL_DIMENSION_NAMES,
@@ -40,6 +41,7 @@ from orchestwin.artifacts.visual_catalog import (
     TypeScale,
     VisualChoices,
     hue_families_are_distinct,
+    offered_visual_values,
     require_distinct_visual_choices,
     resolve_palette,
     resolve_typography,
@@ -52,6 +54,7 @@ from orchestwin.artifacts.visual_catalog import (
 from orchestwin.artifacts.visual_color import colour_distance, contrast_ratio, is_hex_colour
 
 PALETTE_SPACE = tuple(itertools.product(HueFamily, ColorScheme, ColorMode, Saturation, SurfaceTone))
+STORED_CATALOG_HASH = "497c468b99de2402a2201e933754b4920f9e1e563c0e9668363f63b700cc56f7"
 
 
 def choices(**overrides) -> VisualChoices:
@@ -348,7 +351,7 @@ def test_summary_and_snapshot_expose_every_dimension():
     assert len(summary) < 3400
     for name in VISUAL_DIMENSIONS:
         assert name in summary
-    for item in (*LayoutArchetype, *FontFamily):
+    for item in (*LayoutArchetype, *offered_visual_values("heading_family")):
         assert item.value in summary, item
     assert "a workflow of at least 3 steps" in summary
     assert "at least 2 information areas" in summary
@@ -357,3 +360,85 @@ def test_summary_and_snapshot_expose_every_dimension():
     assert set(snapshot["dimensions"]) == set(VISUAL_DIMENSIONS)
     assert visual_catalog_content_hash() == VISUAL_CATALOG_CONTENT_HASH
     assert len(VISUAL_CATALOG_CONTENT_HASH) == 64
+
+
+def test_the_retired_values_are_listed_for_every_dimension_and_stay_in_the_enumerations():
+    assert tuple(RETIRED_VISUAL_VALUES) == VISUAL_DIMENSION_NAMES
+    assert {name: values for name, values in RETIRED_VISUAL_VALUES.items() if values} == {
+        "heading_family": {FontFamily.MONOSPACE, FontFamily.SCRIPT},
+        "background": {
+            BackgroundTreatment.DOTS,
+            BackgroundTreatment.GRID,
+            BackgroundTreatment.STRIPES,
+        },
+    }
+    assert RETIRED_VISUAL_VALUES["body_family"] == frozenset()
+    assert [item.value for item in BackgroundTreatment] == [
+        "PLAIN",
+        "TINTED",
+        "GRADIENT",
+        "DOTS",
+        "GRID",
+        "STRIPES",
+    ]
+    assert len(FontFamily) == 14 and set(FONTS) == set(FontFamily)
+    for name, enum in VISUAL_DIMENSIONS.items():
+        assert RETIRED_VISUAL_VALUES[name] <= set(enum)
+        assert offered_visual_values(name) == tuple(
+            item for item in enum if item not in RETIRED_VISUAL_VALUES[name]
+        )
+        assert len(offered_visual_values(name)) >= 2
+    assert offered_visual_values("background") == (
+        BackgroundTreatment.PLAIN,
+        BackgroundTreatment.TINTED,
+        BackgroundTreatment.GRADIENT,
+    )
+    assert FontFamily.MONOSPACE in offered_visual_values("body_family")
+
+
+def test_values_that_are_no_longer_offered_still_validate_for_stored_designs():
+    for background in (BackgroundTreatment.DOTS, BackgroundTreatment.GRID):
+        assert choices(background=background).background is background
+    assert choices(background=BackgroundTreatment.STRIPES).to_snapshot()["background"] == "STRIPES"
+    assert choices(heading_family=FontFamily.MONOSPACE).heading_family is FontFamily.MONOSPACE
+    script = choices(heading_family=FontFamily.SCRIPT, tone=DesignTone.RUSTIC)
+    assert VisualChoices.from_snapshot(script.to_snapshot()) == script
+    stored = resolve_visual_tokens(
+        choices(
+            background=BackgroundTreatment.GRID,
+            heading_family=FontFamily.SCRIPT,
+            tone=DesignTone.WARM,
+        )
+    )
+    assert stored["--vl-font-heading"] == FONTS[FontFamily.SCRIPT].stack
+
+
+def test_the_catalog_keeps_the_version_and_the_hash_that_stored_designs_carry():
+    assert VISUAL_CATALOG_VERSION == 1
+    assert VISUAL_CATALOG_CONTENT_HASH == STORED_CATALOG_HASH
+    assert "retired" not in visual_catalog_snapshot()
+
+
+def test_the_summary_lists_only_the_values_that_are_offered():
+    summary = visual_catalog_summary()
+    headings = summary.split("heading_family is one of ")[1].split(";")[0]
+    assert headings == ", ".join(
+        f"{family.value} ({FONTS[family].category})"
+        for family in offered_visual_values("heading_family")
+    )
+    assert "MONOSPACE" not in headings and "SCRIPT" not in headings
+    bodies = summary.split("body_family is one of the readable ")[1].split(";")[0]
+    assert bodies == (
+        "HUMANIST_SANS, GEOMETRIC_SANS, GROTESQUE_SANS, SOFT_SANS, NARROW_SANS, WIDE_SANS, "
+        "SYSTEM_UI, TRANSITIONAL_SERIF, OLD_STYLE_SERIF, SLAB_SERIF, or MONOSPACE only with "
+        "TECHNICAL, FUTURISTIC or CLINICAL tones"
+    )
+    assert "background is one of PLAIN, TINTED, GRADIENT;" in summary
+    assert (
+        "Shape and structure: corners, density, buttons, inputs, elevation, borders, header, "
+        "emphasis and tone follow the schema enums;"
+    ) in summary
+    assert "HIGH_CONTRAST modes require FILLED or OUTLINED buttons and visible borders." in summary
+    for retired in ("SCRIPT", "DOTS", "GRID", "STRIPES"):
+        assert retired not in summary
+    assert summary.count("MONOSPACE") == 1

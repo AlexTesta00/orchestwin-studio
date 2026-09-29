@@ -10,20 +10,17 @@ from orchestwin.artifacts.visual_catalog import (
     FONTS,
     MODES,
     SCRIPT_TONES,
-    BackgroundTreatment,
     ColorMode,
-    ColorScheme,
-    CornerStyle,
     DesignTone,
     FontFamily,
-    HeaderStyle,
     HeadingCase,
     HueFamily,
     VisualChoices,
     hue_families_are_distinct,
+    offered_visual_values,
 )
 
-VISUAL_EXPLORATION_VERSION: Final = 1
+VISUAL_EXPLORATION_VERSION: Final = 2
 EXPLORED_ALTERNATIVES: Final = ("DES-001", "DES-002")
 EXPLORED_DIMENSIONS: Final = (
     "hue_family",
@@ -37,6 +34,7 @@ EXPLORED_DIMENSIONS: Final = (
 HUE_GROUP_SIZE: Final = 5
 HEADING_GROUP_SIZE: Final = 3
 PAIR_GROUP_SIZE: Final = 2
+BACKGROUND_GROUP_SIZE: Final = 1
 NON_LIGHT_PROJECT_SHARE: Final = 3
 NON_LIGHT_MODES: Final = (
     ColorMode.DARK,
@@ -57,7 +55,7 @@ def _split(generator: random.Random, values: Sequence, size: int) -> tuple[tuple
 
 
 def _hue_groups(generator: random.Random) -> tuple[tuple[HueFamily, ...], tuple[HueFamily, ...]]:
-    hues = list(HueFamily)
+    hues = list(offered_visual_values("hue_family"))
     for _ in range(_HUE_ATTEMPTS):
         shuffled = generator.sample(hues, len(hues))
         first = tuple(shuffled[:HUE_GROUP_SIZE])
@@ -73,15 +71,19 @@ def _hue_groups(generator: random.Random) -> tuple[tuple[HueFamily, ...], tuple[
 
 def visual_exploration(project_id: UUID) -> dict[str, dict[str, tuple[str, ...]]]:
     generator = _generator(project_id)
-    readable = [family for family, spec in FONTS.items() if spec.body_safe]
+    readable = [
+        family for family in offered_visual_values("body_family") if FONTS[family].body_safe
+    ]
     groups = {
         "hue_family": _hue_groups(generator),
-        "heading_family": _split(generator, list(FontFamily), HEADING_GROUP_SIZE),
+        "heading_family": _split(
+            generator, offered_visual_values("heading_family"), HEADING_GROUP_SIZE
+        ),
         "body_family": _split(generator, readable, PAIR_GROUP_SIZE),
-        "color_scheme": _split(generator, list(ColorScheme), PAIR_GROUP_SIZE),
-        "background": _split(generator, list(BackgroundTreatment), PAIR_GROUP_SIZE),
-        "corners": _split(generator, list(CornerStyle), PAIR_GROUP_SIZE),
-        "header": _split(generator, list(HeaderStyle), PAIR_GROUP_SIZE),
+        "color_scheme": _split(generator, offered_visual_values("color_scheme"), PAIR_GROUP_SIZE),
+        "background": _split(generator, offered_visual_values("background"), BACKGROUND_GROUP_SIZE),
+        "corners": _split(generator, offered_visual_values("corners"), PAIR_GROUP_SIZE),
+        "header": _split(generator, offered_visual_values("header"), PAIR_GROUP_SIZE),
     }
     exploration = {
         code: {
@@ -148,6 +150,7 @@ def exploration_bindings(
 
 
 __all__ = [
+    "BACKGROUND_GROUP_SIZE",
     "EXPLORED_ALTERNATIVES",
     "EXPLORED_DIMENSIONS",
     "HEADING_GROUP_SIZE",
