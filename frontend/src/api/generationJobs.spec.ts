@@ -514,6 +514,27 @@ describe("Generation Jobs API client", () => {
     );
   });
 
+  it("reads the job of a review of a commit started from the terminal", () => {
+    const review = {
+      ...job(),
+      operation: "CODE_CHANGE_REVIEW",
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:03:00+00:00",
+      response: { status_code: 201, body: { status: "REVIEWED", run: { id: "run-1" } } },
+    };
+
+    expect(generationJobOf(review)).toEqual(
+      job({
+        operation: "CODE_CHANGE_REVIEW",
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:03:00+00:00",
+        response: { status_code: 201, body: { status: "REVIEWED", run: { id: "run-1" } } },
+      }),
+    );
+  });
+
   it("names a missing or cancelled job as a lost generation", () => {
     expect(isGenerationLost(GENERATION_JOB_NOT_FOUND)).toBe(true);
     expect(isGenerationLost(GENERATION_JOB_CANCELLED)).toBe(true);

@@ -63,6 +63,31 @@ describe("GenerationJobNotice", () => {
     expect(wrapper.text()).toContain("You can leave this page and come back later");
   });
 
+  it("names the review of a commit started from the terminal in both languages", () => {
+    const english = mount(GenerationJobNotice, {
+      props: { job: job({ operation: "CODE_CHANGE_REVIEW" }), locale: "en" },
+    });
+    const italian = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation: "CODE_CHANGE_REVIEW", code: "PROVIDER_UNAVAILABLE", lost: false },
+        locale: "it",
+      },
+    });
+
+    expect(english.get("[data-testid='generation-job-notice']").attributes("data-operation")).toBe(
+      "CODE_CHANGE_REVIEW",
+    );
+    expect(english.get("[role='status']").text()).toBe(
+      "The Studio is generating the twins' review of a commit.",
+    );
+    expect(italian.get("[data-testid='generation-job-failure']").text()).toContain(
+      "La generazione della revisione dei twin su un commit non è riuscita.",
+    );
+    english.unmount();
+    italian.unmount();
+  });
+
   it("says in plain words that an interrupted generation can be started again", async () => {
     const wrapper = mount(GenerationJobNotice, {
       props: {

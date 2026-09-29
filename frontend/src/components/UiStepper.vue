@@ -14,6 +14,7 @@ export interface StepItem {
   max?: number;
   index?: number;
   note?: string;
+  open?: boolean;
 }
 
 const props = withDefaults(
@@ -82,11 +83,15 @@ function numberClass(step: StepItem): string {
   return palette.value.number.idle;
 }
 
+function locked(step: StepItem): boolean {
+  return step.status === "pending" && step.open !== true;
+}
+
 function titleClass(step: StepItem): string {
   if (step.key === props.active) {
     return palette.value.title.active;
   }
-  return step.status === "pending" ? palette.value.title.locked : palette.value.title.available;
+  return locked(step) ? palette.value.title.locked : palette.value.title.available;
 }
 
 function meta(step: StepItem): string {
@@ -115,13 +120,13 @@ function meta(step: StepItem): string {
           :class="[
             'group grid min-h-[66px] w-full grid-cols-[104px_minmax(0,1fr)] items-end gap-x-2.5 border-b text-left',
             palette.line,
-            step.status === 'pending' ? 'cursor-not-allowed' : 'cursor-pointer',
+            locked(step) ? 'cursor-not-allowed' : 'cursor-pointer',
           ]"
-          :disabled="step.status === 'pending'"
+          :disabled="locked(step)"
           :aria-current="step.status === 'current' ? 'step' : undefined"
           :data-status="step.status"
           :data-active="step.key === active ? 'true' : undefined"
-          :data-stage="step.status === 'pending' ? undefined : (step.index ?? index)"
+          :data-stage="locked(step) ? undefined : (step.index ?? index)"
           @click="emit('select', step.key)"
         >
           <span class="block h-[46px] overflow-hidden" aria-hidden="true">

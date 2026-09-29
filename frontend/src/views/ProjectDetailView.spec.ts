@@ -234,7 +234,11 @@ describe("progressive project workspace", () => {
     expect(wrapper.findComponent({ name: "ProjectDesignFlow" }).exists()).toBe(true);
     useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "5",
+    ]);
     expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(false);
     wrapper.unmount();
@@ -280,12 +284,202 @@ describe("progressive project workspace", () => {
     expect(wrapper.findAll("[data-stage]")).toHaveLength(6);
     stores.requirements.$patch({ current: { content_hash: "revised-hash" } });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(4);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "2",
+      "3",
+      "5",
+    ]);
     expect(wrapper.get('[data-testid="stage-requirements"]').isVisible()).toBe(true);
     stores.clarification.$patch({ projectId: "another-project" });
     await flushPromises();
     expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
     expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("opens the package step as soon as the brief is approved while the later steps keep their own rules", async () => {
+    const pinia = createPinia();
+    const wrapper = mountWorkspace(pinia);
+    await flushPromises();
+    const packageStep = () => wrapper.get('[data-testid="stepper"] li:last-child button');
+    const header = () => wrapper.findComponent({ name: "UiStepHeader" });
+    expect(packageStep().attributes("disabled")).toBeDefined();
+
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+
+    expect(packageStep().attributes("disabled")).toBeUndefined();
+    expect(packageStep().attributes("data-status")).toBe("pending");
+    expect(packageStep().attributes("aria-current")).toBeUndefined();
+    expect(packageStep().text()).toContain("Partial folder");
+    expect(wrapper.find('[data-stage="2"]').exists()).toBe(false);
+    expect(header().props("status")).toBe("current");
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(false);
+    expect(header().props("title")).toBe("Package");
+    expect(header().props("status")).toBe("pending");
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="step-read-only"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toBe(
+      "The project goes on at the Team step: the folder holds only the steps approved so far.",
+    );
+    expect(wrapper.findComponent({ name: "ProjectDesignPackagePanel" }).props("stages")).toEqual([
+      { label: "Brief", version: 1, approved: true },
+      { label: "Team", version: null, approved: false },
+      { label: "User Twins", version: null, approved: false },
+      { label: "Requirements", version: null, approved: false },
+      { label: "Design", version: null, approved: false },
+    ]);
+    expect(
+      wrapper
+        .findAllComponents({ name: "UiTechnicalDetails" })
+        .find((row) => row.attributes("data-testid") === "technical-details")
+        ?.props("summary"),
+    ).toBe("No folder prepared yet");
+
+    await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(false);
+    expect(wrapper.get("#step-decision-bar").isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("keeps the opened package step while a later step is approved and closes it with the approval of the brief", async () => {
+    const pinia = createPinia();
+    const wrapper = mountWorkspace(pinia);
+    await flushPromises();
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+
+    useTeamStore(pinia).$patch({
+      projectId: "first",
+      currentVersion: {
+        id: "team",
+        content_hash: "team-hash",
+        version_number: 1,
+        brief_version_number: 1,
+        brief_content_hash: "brief-hash",
+      },
+      gate: gate("team"),
+      readiness: { status: "READY_FOR_MAIN_WORKFLOW" },
+    });
+    await flushPromises();
+
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "2",
+      "5",
+    ]);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toContain(
+      "goes on at the User Twins step",
+    );
+
+    useClarificationStore(pinia).$patch({ projectId: "another-project" });
+    await flushPromises();
+
+    expect(wrapper.findAll("[data-stage]")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("names the partial folder and the way back in Italian", async () => {
+    const pinia = createPinia();
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createAppI18n("it")],
+        stubs: { UiStepper: false },
+      },
+    });
+    await flushPromises();
+    useClarificationStore(pinia).$patch({ projectId: "first", gate: gate("brief") });
+    await flushPromises();
+
+    expect(wrapper.get('[data-stage="5"]').text()).toContain("Cartella parziale");
+    await wrapper.get('[data-stage="5"]').trigger("click");
+
+    expect(wrapper.get('[data-testid="step-ahead"] p').text()).toBe(
+      "Il progetto continua dal passo Squadra: la cartella contiene solo i passi approvati finora.",
+    );
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("reads the drawn mockup of the package only once the design is approved", async () => {
+    const pinia = createPinia();
+    const { design } = hydrateStages(pinia);
+    const version = {
+      ...SELECTED_DESIGN_VERSION,
+      id: "design",
+      project_id: "first",
+      content_hash: "design-hash",
+      package: {
+        ...SELECTED_DESIGN_VERSION.package,
+        generated_mockup: {
+          mockup: {
+            contract_version: 1,
+            design_alternative_id: DESIGN_ALTERNATIVE_ID,
+            title: "Reservation desk",
+            styles: ".desk{display:grid}",
+            screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT" as const, markup: "" }],
+          },
+          requirement_ids_by_code: {},
+        },
+      },
+    };
+    design.$patch({ current: version, readiness: { status: "DESIGN_APPROVAL_REQUIRED" } });
+    useDesignMockupsStore(pinia).activate("first", version);
+    const readDocument = vi.spyOn(designMockupsApi, "document").mockResolvedValue({
+      html: "<!doctype html><html><body><h1>Desk</h1></body></html>",
+      content_hash: "c".repeat(64),
+      source: "applied",
+      alternative_id: DESIGN_ALTERNATIVE_ID,
+      title: "Reservation desk",
+      entry_screen: "SCR-001",
+      screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT" }],
+    });
+    const PackageStep = defineComponent({
+      name: "ProjectDesignPackagePanel",
+      setup(_props, { slots }) {
+        return () => h("div", { "data-testid": "package-stub" }, slots.preview?.({}));
+      },
+    });
+    const wrapper = shallowMount(ProjectDetailView, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, createAppI18n("en")],
+        stubs: { UiStepper: false, ProjectDesignPackagePanel: PackageStep },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(readDocument).not.toHaveBeenCalled();
+
+    design.$patch({ readiness: { status: "READY_FOR_ARCHITECTURE_PLANNING" } });
+    await flushPromises();
+
+    expect(readDocument).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.find('[data-testid="step-ahead"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -311,7 +505,11 @@ describe("progressive project workspace", () => {
     );
     clarification.$patch({ gate: gate("clarified-brief") });
     await flushPromises();
-    expect(wrapper.findAll("[data-stage]")).toHaveLength(2);
+    expect(wrapper.findAll("[data-stage]").map((step) => step.attributes("data-stage"))).toEqual([
+      "0",
+      "1",
+      "5",
+    ]);
     wrapper.unmount();
   });
 
@@ -1668,6 +1866,16 @@ function missing(code: string): Reply {
   return { status: 404, body: { detail: { code } } };
 }
 
+const DEVELOPMENT_STATE = {
+  project_id: OPEN,
+  reference: { requirements: null, design: null },
+  aligned: null,
+  pending_changes: 0,
+  latest_change: null,
+  tasks: [],
+  review_available: false,
+};
+
 type StoreGroup = "clarification" | "team" | "twins" | "requirements" | "design";
 
 const ORDERS: [string, StoreGroup[]][] = [
@@ -1764,6 +1972,8 @@ function fakeStudio(served: Served) {
       [`${base}/design/discussions`]: () => ok([]),
       [`${base}/insight-applications`]: () => ok([]),
       [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
+      [`${base}/alignment`]: () => ok(DEVELOPMENT_STATE),
+      [`${base}/code-changes`]: () => ok({ items: [] }),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
         ok(served.latest[query.get("alternative_id") ?? ""] ?? null),
@@ -2062,6 +2272,8 @@ const OPENING_READINGS: Record<string, number> = {
   "…/design/discussions": 1,
   "…/insight-applications": 1,
   "…/knowledge-packages": 1,
+  "…/alignment": 1,
+  "…/code-changes": 1,
   [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,
 };
 
@@ -2163,6 +2375,32 @@ describe("readings of the project page", () => {
 
     expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
     expect(studio.readings(secondPass)).toEqual({});
+    expect(studio.writes()).toEqual([]);
+  });
+
+  it("opens the folder of a project in progress without reading or writing anything more", async () => {
+    const studio = fakeStudio(teamWaitingProject());
+    const wrapper = await openInOrder(studio, []);
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    const from = studio.calls.length;
+
+    await wrapper.get('[data-stage="5"]').trigger("click");
+    await settle();
+
+    expect(studio.readings(from)).toEqual({});
+    expect(studio.writes()).toEqual([]);
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(wrapper.get('[data-testid="package-partial"]').text().replace(/\s+/g, " ")).toBe(
+      "The folder holds 1 of 5 steps: Team, User Twins, Requirements and Design are still to approve. Each step joins the folder when you approve it.",
+    );
+    expect(wrapper.get('[data-testid="download-package"]').attributes("disabled")).toBeUndefined();
+    expect(wrapper.find('[data-testid="development-panel"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+    await settle();
+
+    expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+    expect(studio.readings(from)).toEqual({});
     expect(studio.writes()).toEqual([]);
   });
 

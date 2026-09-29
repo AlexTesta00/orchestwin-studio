@@ -42,7 +42,8 @@ export type GenerationOperation =
   | "DESIGN_REGENERATION"
   | "DESIGN_EVALUATION"
   | "DISCUSSION_START"
-  | "DISCUSSION_ROUND";
+  | "DISCUSSION_ROUND"
+  | "CODE_CHANGE_REVIEW";
 
 export interface GenerationJobResponsePayload {
   status_code: number;
