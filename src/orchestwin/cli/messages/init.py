@@ -114,6 +114,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": 'Passo "{step}" approvato (versione {version}). Salvato in {path}.',
         "en": 'Step "{step}" approved (version {version}). Saved in {path}.',
     },
+    "init.folder_updated": {
+        "it": "Cartella di conoscenza aggiornata in orchestwin/ (versione {version}): contiene i "
+        "passi approvati finora.",
+        "en": "Knowledge folder updated in orchestwin/ (version {version}): it holds the steps "
+        "approved so far.",
+    },
+    "init.folder_not_updated": {
+        "it": "La cartella di conoscenza non è stata aggiornata ({code}): il percorso continua, e "
+        "puoi scaricarla più tardi con `ut package publish`.",
+        "en": "The knowledge folder was not updated ({code}): the path goes on, and you can "
+        "download it later with `ut package publish`.",
+    },
     "init.until_stop": {
         "it": 'Mi fermo dopo il passo "{step}", come chiesto con --until. Rilancia `ut init` '
         'per continuare con il passo "{next}".',

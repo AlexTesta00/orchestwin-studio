@@ -164,6 +164,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Il file degli accessi è occupato da un altro comando ut ({path}). Riprova tra poco.",
         "en": "The sign-in file is busy with another ut command ({path}). Try again in a moment.",
     },
+    "errors.GIT_NOT_AVAILABLE": {
+        "it": "Il programma git non è installato o non si trova (GIT_NOT_AVAILABLE): installalo, "
+        "poi riprova.",
+        "en": "The git program is not installed or cannot be found (GIT_NOT_AVAILABLE): install "
+        "it, then try again.",
+    },
+    "errors.GIT_FAILED": {
+        "it": "git ha risposto con un errore: {detail} (GIT_FAILED).",
+        "en": "git answered with an error: {detail} (GIT_FAILED).",
+    },
+    "errors.GIT_COMMIT_UNKNOWN": {
+        "it": "Il commit {commit} non è nella storia di questo repository, forse perché la storia "
+        "è stata riscritta (GIT_COMMIT_UNKNOWN). Indica un commit di questo repository con "
+        "--since.",
+        "en": "The commit {commit} is not in the history of this repository, perhaps because the "
+        "history was rewritten (GIT_COMMIT_UNKNOWN). Give a commit of this repository with "
+        "--since.",
+    },
+    "errors.ALIGN_NO_GIT": {
+        "it": "La cartella {folder} non è dentro un repository git (ALIGN_NO_GIT): creane uno con "
+        "`git init` e salva il codice in un commit, poi riprova.",
+        "en": "The folder {folder} is not inside a git repository (ALIGN_NO_GIT): create one "
+        "with `git init` and save the code in a commit, then try again.",
+    },
+    "errors.ALIGN_DESIGN_REQUIRED": {
+        "it": "Il design non è ancora approvato (ALIGN_DESIGN_REQUIRED): sceglilo e approvalo "
+        "con `ut design`, poi il codice potrà essere allineato.",
+        "en": "The design is not approved yet (ALIGN_DESIGN_REQUIRED): choose and approve it "
+        "with `ut design`, then the code can be aligned with it.",
+    },
     "errors.API_FAILURE": {
         "it": "Lo Studio ha risposto con un errore (stato {http_status}, {code}).",
         "en": "The Studio answered with an error (status {http_status}, {code}).",

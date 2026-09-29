@@ -5,10 +5,11 @@ import getpass
 import io
 import locale
 import os
+import subprocess
 import sys
 import time
 import webbrowser
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,41 @@ from orchestwin.cli.http import Transport, UrlTransport
 
 LANGUAGE_VARIABLES: Final = ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE")
 NEUTRAL_LOCALES: Final = frozenset({"c", "posix"})
+MISSING_PROGRAM_STATUS: Final = 127
+TIMEOUT_STATUS: Final = 124
+NOT_STARTED_STATUS: Final = 126
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessResult:
+    status: int
+    output: str
+    errors: str
+
+
+def default_run_process(
+    arguments: Sequence[str], folder: Path, timeout_seconds: float
+) -> ProcessResult:
+    command = [str(argument) for argument in arguments]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=folder,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except FileNotFoundError:
+        return ProcessResult(MISSING_PROGRAM_STATUS, "", f"{command[0]}: not found")
+    except subprocess.TimeoutExpired:
+        return ProcessResult(TIMEOUT_STATUS, "", "timeout")
+    except OSError as error:
+        return ProcessResult(NOT_STARTED_STATUS, "", f"{command[0]}: {error}")
+    return ProcessResult(completed.returncode, completed.stdout or "", completed.stderr or "")
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +73,7 @@ class Environment:
     open_browser: Callable[[str], bool]
     transport: Transport
     system_language: str | None
+    run_process: Callable[[Sequence[str], Path, float], ProcessResult] = default_run_process
 
 
 def real_environment() -> Environment:
@@ -64,6 +101,7 @@ def real_environment() -> Environment:
         open_browser=webbrowser.open,
         transport=UrlTransport(),
         system_language=system_language(variables, sys.platform),
+        run_process=default_run_process,
     )
 
 
