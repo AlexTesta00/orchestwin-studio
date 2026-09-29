@@ -280,6 +280,37 @@ describe("Requirements store", () => {
     expect(store.isBusy).toBe(false);
   });
 
+  it("stays loading until the last of two loads that overlap has finished", async () => {
+    const store = useRequirementsStore();
+    const api = new FakeRequirementsApi();
+    let release: () => void = () => undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let first = true;
+    api.history = async () => {
+      if (first) {
+        first = false;
+        return [];
+      }
+      await waiting;
+      return [VERSION];
+    };
+
+    const earlier = store.load(PROJECT_ID, authorize, api);
+    const later = store.load(PROJECT_ID, authorize, api);
+    await earlier;
+
+    expect(store.pending.load).toBe(true);
+    expect(store.isBusy).toBe(true);
+
+    release();
+    await later;
+
+    expect(store.pending.load).toBe(false);
+    expect(store.history).toEqual([VERSION]);
+  });
+
   it("generates and refreshes the current specification state", async () => {
     const store = useRequirementsStore();
     const api = new FakeRequirementsApi();

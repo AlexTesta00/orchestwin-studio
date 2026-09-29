@@ -158,7 +158,7 @@ describe("generation jobs store", () => {
     expect(store.isOwn(JOB_ID)).toBe(false);
   });
 
-  it("shares one reading of the running jobs among the steps that open together", async () => {
+  it("shares the reading of the running jobs only while it is in flight", async () => {
     const store = useGenerationJobsStore();
     const api = fakeApi([job()], []);
 
@@ -166,14 +166,25 @@ describe("generation jobs store", () => {
       store.resume(PROJECT_ID, ["REQUIREMENTS_PROPOSAL"], authorize, api),
       store.resume(PROJECT_ID, ["DESIGN_EVALUATION"], authorize, api),
     ]);
-    await vi.advanceTimersByTimeAsync(1000);
-    await store.resume(PROJECT_ID, ["DESIGN_PROPOSAL"], authorize, api);
 
     expect(api.list).toHaveBeenCalledOnce();
 
-    await vi.advanceTimersByTimeAsync(1500);
     await store.resume(PROJECT_ID, ["DESIGN_PROPOSAL"], authorize, api);
 
+    expect(api.list).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again after a failed reading of the running jobs", async () => {
+    const store = useGenerationJobsStore();
+    const api = fakeApi([job()], []);
+    api.list.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await expect(
+      store.resume(PROJECT_ID, ["REQUIREMENTS_PROPOSAL"], authorize, api),
+    ).rejects.toThrow("Failed to fetch");
+    const found = await store.resume(PROJECT_ID, ["REQUIREMENTS_PROPOSAL"], authorize, api);
+
+    expect(found.map((item) => item.job_id)).toEqual([JOB_ID]);
     expect(api.list).toHaveBeenCalledTimes(2);
   });
 
@@ -273,6 +284,23 @@ describe("generation jobs store", () => {
         }),
       ),
     ).toBe("GENERATION_JOB_CANCELLED");
+  });
+
+  it("reads the reason of a proposal refused in a job before the code of the refusal", () => {
+    const refused = (detail: Record<string, unknown>) => settledCode(finished(409, { detail }));
+
+    expect(refused({ code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" })).toBe(
+      "UX_DESIGNER_REQUIRED",
+    );
+    expect(refused({ proposal_issue: "REQUIREMENTS_ANALYST_REQUIRED" })).toBe(
+      "REQUIREMENTS_ANALYST_REQUIRED",
+    );
+    expect(refused({ code: "PROPOSAL_REJECTED" })).toBe("PROPOSAL_REJECTED");
+    expect(refused({ code: "PROPOSAL_REJECTED", proposal_issue: null })).toBe("PROPOSAL_REJECTED");
+    expect(refused({ code: "PROPOSAL_REJECTED", proposal_issue: 409 })).toBe("PROPOSAL_REJECTED");
+    expect(refused({ code: "PROPOSAL_REJECTED", proposal_issue: "" })).toBe("PROPOSAL_REJECTED");
+    expect(refused({ code: "REQUIREMENTS_UNCHANGED" })).toBe("REQUIREMENTS_UNCHANGED");
+    expect(refused({ proposal_issue: 409 })).toBe("GENERATION_FAILED");
   });
 });
 

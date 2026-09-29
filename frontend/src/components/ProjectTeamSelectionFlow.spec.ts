@@ -9,6 +9,7 @@ import type {
   AgentTeamApi,
   OwnerAgentRationaleInput,
   TeamProposalVersionResponse,
+  TeamSelectionReasonResponse,
 } from "@/api/team-contracts";
 import type { HumanGateResponse, HumanGateStatus } from "@/api/workflow-contracts";
 import { ApiError } from "@/api/client";
@@ -46,6 +47,24 @@ const CATALOG: AgentCatalogResponse = {
       supported_project_modes: ["GREENFIELD_GENERATION"],
       name_key: "agentCatalog.roles.mobile_engineer.name",
       description_key: "agentCatalog.roles.mobile_engineer.description",
+      is_always_present: false,
+    },
+  ],
+};
+
+const ACCESSIBILITY_CATALOG: AgentCatalogResponse = {
+  ...CATALOG,
+  agents: [
+    ...CATALOG.agents,
+    {
+      agent_id: "ACCESSIBILITY_REVIEWER",
+      catalog_version: 1,
+      kind: "SPECIALIST",
+      selection_policy: "OWNER_SELECTABLE",
+      capabilities: ["ACCESSIBILITY_REVIEW"],
+      supported_project_modes: ["GREENFIELD_GENERATION"],
+      name_key: "agentCatalog.roles.accessibility_reviewer.name",
+      description_key: "agentCatalog.roles.accessibility_reviewer.description",
       is_always_present: false,
     },
   ],
@@ -136,6 +155,41 @@ function proposalVersion(
 
     created_by_user_id: "owner-id",
     created_at: "2026-08-12T12:00:00Z",
+  };
+}
+
+function accessibilityVersion(briefAsksForAccessibility: boolean): TeamProposalVersionResponse {
+  const version = proposalVersion(["REQUIREMENTS_ANALYST"]);
+  const reasons: TeamSelectionReasonResponse[] = [
+    { code: "CORE_ACCESSIBILITY_DISCIPLINE", evidence: { fields: [], terms: [] } },
+  ];
+  if (briefAsksForAccessibility) {
+    reasons.push({
+      code: "ACCESSIBILITY_REQUIREMENT_SIGNAL",
+      evidence: { fields: ["non_functional_requirements"], terms: ["wcag"] },
+    });
+  }
+  return {
+    ...version,
+    selected_agent_ids: [...version.selected_agent_ids, "ACCESSIBILITY_REVIEWER"],
+    role_constraints: [
+      ...version.role_constraints,
+      { agent_id: "ACCESSIBILITY_REVIEWER", kind: "MANDATORY", owner_editable: false, reasons },
+    ],
+    members: [
+      ...version.members,
+      {
+        agent_id: "ACCESSIBILITY_REVIEWER",
+        source: "DETERMINISTIC_MANDATORY",
+        justifications: reasons.map((reason) => ({
+          kind: "DETERMINISTIC_RULE" as const,
+          code: reason.code,
+          evidence_fields: reason.evidence.fields,
+          evidence_terms: reason.evidence.terms,
+          statement: null,
+        })),
+      },
+    ],
   };
 }
 
@@ -908,5 +962,82 @@ describe("ProjectTeamSelectionFlow", () => {
     expect(wrapper.get('[data-testid="team-operation-live"]').text()).toBe("");
     await openTechnicalDetails(wrapper);
     expect(wrapper.get('[data-testid="team-technical-details"]').text()).toContain("Something new");
+  });
+
+  it("reads the team again once when the brief before it changes, not when it only reloads", async () => {
+    const version = proposalVersion(["REQUIREMENTS_ANALYST"]);
+    const api = fakeApi({ current: version, history: [version], gate: null });
+    const wrapper = mountFlow(api);
+    await flushPromises();
+    expect(api.getCurrentProjectTeamProposal).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "brief-1:PENDING_APPROVAL" });
+    await wrapper.setProps({ upstream: null });
+    await wrapper.setProps({ upstream: "brief-1:PENDING_APPROVAL" });
+    await flushPromises();
+    expect(api.getCurrentProjectTeamProposal).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "brief-1:APPROVED" });
+    await flushPromises();
+    expect(api.getCurrentProjectTeamProposal).toHaveBeenCalledTimes(2);
+    expect(api.getAgentCatalog).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the team again after the action that is running when the brief changes", async () => {
+    const version = proposalVersion(["REQUIREMENTS_ANALYST"]);
+    const api = fakeApi({ current: version, history: [version], gate: null });
+    const wrapper = mountFlow(api);
+    await flushPromises();
+    await wrapper.setProps({ upstream: "brief-1:PENDING_APPROVAL" });
+    let release: () => void = () => undefined;
+    api.getAgentCatalog.mockImplementationOnce(
+      () =>
+        new Promise<AgentCatalogResponse>((resolve) => {
+          release = () => resolve(CATALOG);
+        }),
+    );
+
+    await wrapper.setProps({ upstream: "brief-1:APPROVED" });
+    await wrapper.setProps({ upstream: "brief-2:DRAFT" });
+    await flushPromises();
+    expect(api.getAgentCatalog).toHaveBeenCalledTimes(2);
+
+    release();
+    await flushPromises();
+    expect(api.getAgentCatalog).toHaveBeenCalledTimes(3);
+    expect(api.getCurrentProjectTeamProposal).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the accessibility specialist among the essential roles with what the brief asks", async () => {
+    const api = fakeApi({ current: accessibilityVersion(true), history: [], gate: null });
+    api.getAgentCatalog.mockImplementation(async () => ACCESSIBILITY_CATALOG);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+
+    const card = wrapper.get('[data-team-group="core"][data-agent-id="ACCESSIBILITY_REVIEWER"]');
+    expect(card.get("h3").text()).toBe("Accessibility specialist");
+    expect(card.text()).toContain("Why: The brief contains accessibility requirements");
+    expect(wrapper.find('[data-testid="role-ACCESSIBILITY_REVIEWER"]').exists()).toBe(false);
+
+    await openTechnicalDetails(wrapper);
+    expect(wrapper.get('[data-testid="team-technical-details"]').text()).toContain(
+      "Accessibility is part of every project · The brief contains accessibility requirements",
+    );
+  });
+
+  it("says in Italian that accessibility is part of every project", async () => {
+    const api = fakeApi({ current: accessibilityVersion(false), history: [], gate: null });
+    api.getAgentCatalog.mockImplementation(async () => ACCESSIBILITY_CATALOG);
+    const wrapper = mountFlow(api, undefined, "it");
+    await flushPromises();
+
+    const card = wrapper.get('[data-team-group="core"][data-agent-id="ACCESSIBILITY_REVIEWER"]');
+    expect(card.get("h3").text()).toBe("Specialista dell'accessibilità");
+    expect(card.text()).not.toContain("Perché:");
+
+    await openTechnicalDetails(wrapper);
+    expect(wrapper.get('[data-testid="team-technical-details"]').text()).toContain(
+      "L'accessibilità fa parte di ogni progetto",
+    );
   });
 });

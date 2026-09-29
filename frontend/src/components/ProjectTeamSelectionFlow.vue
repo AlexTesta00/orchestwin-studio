@@ -31,15 +31,17 @@ import UiStateBlock from "./UiStateBlock.vue";
 import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 import { roleAvatar, roleSteps, twinIdentity } from "./twinIdentity";
+import { type UpstreamValue, watchUpstream } from "./upstreamChange";
 
 const props = withDefaults(
   defineProps<{
     projectId: string;
     api?: AgentTeamApi;
     authorize?: TeamAuthorizedRequest;
+    upstream?: UpstreamValue;
     active?: boolean;
   }>(),
-  { active: true },
+  { upstream: null, active: true },
 );
 
 const auth = useAuthStore();
@@ -253,6 +255,7 @@ const { t, te, locale } = useI18n({
           CORE_USER_CENTERED_DESIGN: "Core user-centered design discipline",
           CORE_ARCHITECTURE_DISCIPLINE: "Core architecture discipline",
           CORE_QUALITY_DISCIPLINE: "Core quality and testing discipline",
+          CORE_ACCESSIBILITY_DISCIPLINE: "Accessibility is part of every project",
           BROWNFIELD_INTEGRATION: "Brownfield integration is required",
           USER_INTERFACE_SIGNAL: "The brief requires a user interface",
           WEB_DELIVERY_SIGNAL: "The brief requires web delivery",
@@ -495,6 +498,7 @@ const { t, te, locale } = useI18n({
           CORE_USER_CENTERED_DESIGN: "Disciplina fondamentale di User-Centered Design",
           CORE_ARCHITECTURE_DISCIPLINE: "Disciplina fondamentale di architettura",
           CORE_QUALITY_DISCIPLINE: "Disciplina fondamentale di qualità e testing",
+          CORE_ACCESSIBILITY_DISCIPLINE: "L'accessibilità fa parte di ogni progetto",
           BROWNFIELD_INTEGRATION: "È richiesta l'integrazione brownfield",
           USER_INTERFACE_SIGNAL: "Il brief richiede un'interfaccia utente",
           WEB_DELIVERY_SIGNAL: "Il brief richiede una soluzione web",
@@ -786,6 +790,29 @@ watch(
   () => props.projectId,
   async () => {
     await load();
+  },
+);
+
+let reloadWhenIdle = false;
+
+watchUpstream(
+  () => props.upstream,
+  (changed) => {
+    if (!changed) return;
+    if (store.busy) {
+      reloadWhenIdle = true;
+      return;
+    }
+    void load();
+  },
+);
+
+watch(
+  () => store.busy,
+  (busy) => {
+    if (busy || !reloadWhenIdle) return;
+    reloadWhenIdle = false;
+    void load();
   },
 );
 

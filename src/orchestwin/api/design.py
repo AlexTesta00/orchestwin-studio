@@ -1124,7 +1124,8 @@ def _raise_generation_failure(result: DesignGenerationResult) -> None:
         raise _not_found("PROJECT_NOT_FOUND")
 
     raise _conflict(
-        result.issue.value if result.issue is not None else "DESIGN_GENERATION_REJECTED"
+        result.issue.value if result.issue is not None else "DESIGN_GENERATION_REJECTED",
+        proposal_issue=result.proposal_issue,
     )
 
 
@@ -1191,11 +1192,20 @@ def _not_found(code: str) -> HTTPException:
     )
 
 
-def _conflict(code: str) -> HTTPException:
+def _conflict(
+    code: str,
+    *,
+    proposal_issue: DesignProposalIssueCode | None = None,
+) -> HTTPException:
     """Return one typed state or governance conflict."""
+    detail = {"code": code}
+
+    if proposal_issue is not None:
+        detail["proposal_issue"] = proposal_issue.value
+
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
-        detail={"code": code},
+        detail=detail,
     )
 
 

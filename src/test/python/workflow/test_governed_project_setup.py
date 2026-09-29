@@ -402,23 +402,21 @@ def revised_team_version(
     current: TeamProposalVersion,
 ) -> TeamProposalVersion:
     """Create one newer team version with another optional role."""
-    constraint = current.proposal.constraints.constraint_for(AgentIdentifier.ACCESSIBILITY_REVIEWER)
+    constraint = current.proposal.constraints.constraint_for(AgentIdentifier.SECURITY_REVIEWER)
 
     if constraint.kind is not TeamRoleConstraintKind.OPTIONAL:
-        raise AssertionError(
-            "Accessibility Reviewer must remain optional for the acceptance fixture"
-        )
+        raise AssertionError("Security Reviewer must remain optional for the acceptance fixture")
 
-    accessibility_member = owner_added_member(
-        agent_id=(AgentIdentifier.ACCESSIBILITY_REVIEWER),
-        statement=("The owner wants an explicit accessibility review before implementation."),
+    security_member = owner_added_member(
+        agent_id=(AgentIdentifier.SECURITY_REVIEWER),
+        statement=("The owner wants an explicit security review before implementation."),
     )
     proposal = replace(
         current.proposal,
         members=(
             catalog_ordered_members(
                 *current.proposal.members,
-                accessibility_member,
+                security_member,
             )
         ),
     )

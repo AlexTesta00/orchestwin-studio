@@ -23,9 +23,11 @@ from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.evaluation.proposer_evaluator import TWIN_REVIEW_TASK
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.models.design import DesignProposalIssueCode
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
+from orchestwin.models.requirements import RequirementsProposalIssueCode
 from orchestwin.projects.design_application import (
     DesignGenerationIssueCode,
     DesignGenerationResult,
@@ -310,6 +312,52 @@ def test_every_operation_answers_the_same_with_and_without_the_preference(
     if type(scripted.outcome) is RuntimeError:
         assert expected == {"status_code": 500, "body": SERVER_ERROR}
         assert "secret" not in str(job)
+
+
+REASONED_REFUSALS = [
+    (
+        "DESIGN_PROPOSAL",
+        DesignGenerationResult(
+            status=DesignGenerationStatus.REJECTED,
+            issue=DesignGenerationIssueCode.PROPOSAL_REJECTED,
+            proposal_issue=DesignProposalIssueCode.UX_DESIGNER_REQUIRED,
+        ),
+        "UX_DESIGNER_REQUIRED",
+    ),
+    (
+        "REQUIREMENTS_PROPOSAL",
+        RequirementsGenerationResult(
+            status=RequirementsGenerationStatus.REJECTED,
+            issue=RequirementsGenerationIssueCode.PROPOSAL_REJECTED,
+            proposal_issue=RequirementsProposalIssueCode.REQUIREMENTS_ANALYST_REQUIRED,
+        ),
+        "REQUIREMENTS_ANALYST_REQUIRED",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("operation", "outcome", "reason"),
+    REASONED_REFUSALS,
+    ids=[case[0] for case in REASONED_REFUSALS],
+)
+def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
+    operation, outcome, reason, monkeypatch
+):
+    application = studio(Scripted(outcome), monkeypatch)
+    path = f"{PROJECT_PATH}{ROUTES[operation][0]}"
+    with TestClient(application) as client:
+        synchronous = client.post(path)
+        started = client.post(path, headers=ASYNC)
+        job_id = started.json()["job_id"]
+        client.portal.call(application.state.generation_jobs.wait, UUID(job_id))
+        job = client.get(f"{JOBS}/{job_id}").json()
+    refusal = {
+        "status_code": 409,
+        "body": {"detail": {"code": "PROPOSAL_REJECTED", "proposal_issue": reason}},
+    }
+    assert answered(synchronous) == refusal
+    assert (job["operation"], job["status"], job["response"]) == (operation, "FAILED", refusal)
 
 
 @pytest.mark.parametrize(

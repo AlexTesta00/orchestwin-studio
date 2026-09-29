@@ -1327,6 +1327,31 @@ describe("ProjectRequirementsFlow", () => {
     expect(requirementsAlignmentApi.status).not.toHaveBeenCalled();
   });
 
+  it("reads the requirements and their alignment with the twins again once when the twins change", async () => {
+    const api = readyApi();
+    const readiness = vi.spyOn(api, "readiness");
+    const wrapper = mountFlow(api, true);
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(1);
+    expect(requirementsAlignmentApi.status).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "twins-1:APPROVED" });
+    await wrapper.setProps({ upstream: null });
+    await wrapper.setProps({ upstream: "twins-1:APPROVED" });
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(1);
+    expect(requirementsAlignmentApi.status).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ upstream: "twins-2:APPROVED" });
+    await flushPromises();
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(requirementsAlignmentApi.status).toHaveBeenCalledTimes(2);
+    expect(wrapper.getComponent(RequirementsTwinAlignment).props("refreshKey")).toBe(
+      `${VERSION.content_hash}:0:1`,
+    );
+    wrapper.unmount();
+  });
+
   it("checks the twins again when a proposed change appears", async () => {
     const api = readyApi();
     const wrapper = mountFlow(api, true);
@@ -1337,7 +1362,7 @@ describe("ProjectRequirementsFlow", () => {
     await flushPromises();
 
     expect(wrapper.getComponent(RequirementsTwinAlignment).props("refreshKey")).toBe(
-      `${VERSION.content_hash}:1`,
+      `${VERSION.content_hash}:1:0`,
     );
     expect(requirementsAlignmentApi.status).toHaveBeenCalledTimes(2);
   });
@@ -1383,7 +1408,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(alignment.props()).toMatchObject({
       projectId: PROJECT_ID,
       locale: "en",
-      refreshKey: `${VERSION.content_hash}:0`,
+      refreshKey: `${VERSION.content_hash}:0:0`,
     });
     expect(status).toHaveBeenCalledWith(PROJECT_ID, "access-token");
     expect(
@@ -1399,7 +1424,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(realign).toHaveBeenCalledWith(PROJECT_ID, "access-token");
     expect(readiness).toHaveBeenCalledTimes(2);
     expect(wrapper.text()).toContain("Version 2");
-    expect(alignment.props("refreshKey")).toBe(`${realignedVersion.content_hash}:0`);
+    expect(alignment.props("refreshKey")).toBe(`${realignedVersion.content_hash}:0:0`);
     expect(status).toHaveBeenCalledTimes(2);
     expect(wrapper.get('[data-testid="requirements-twin-alignment-done"]').text()).toContain(
       "Version 2 of the requirements is ready with the same content. Approve it again below.",
@@ -1978,6 +2003,206 @@ describe("ProjectRequirementsFlow and requirements still being written", () => {
     expect(
       wrapper.get('[data-testid="requirements-pending-change"]').attributes("data-origin"),
     ).toBe("request");
+    wrapper.unmount();
+  });
+});
+
+describe("ProjectRequirementsFlow and a refused proposal", () => {
+  const NO_ANALYST = { code: "PROPOSAL_REJECTED", proposal_issue: "REQUIREMENTS_ANALYST_REQUIRED" };
+  const FEW_FACTS = { code: "PROPOSAL_REJECTED", proposal_issue: "GROUNDED_INPUT_REQUIRED" };
+  const NO_REASON = { code: "PROPOSAL_REJECTED" };
+  const ANALYST_MISSING = {
+    en: "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
+    it: "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+  };
+  const FACTS_MISSING = {
+    en: "The approved steps do not give the model enough facts for this proposal. Add details to the brief or to the earlier steps, then try again.",
+    it: "I passi approvati non danno al modello abbastanza informazioni per questa proposta. Aggiungi dettagli al brief o ai passi precedenti, poi riprova.",
+  };
+  const NOT_PREPARED = {
+    en: "The model could not prepare this proposal from the approved steps. Your project is unchanged. You can try again.",
+    it: "Il modello non è riuscito a preparare questa proposta a partire dai passi approvati. Il progetto è invariato. Puoi riprovare.",
+  };
+  const NOT_SUCCEEDED = {
+    en: "The generation of the requirements did not succeed.",
+    it: "La generazione dei requisiti non è riuscita.",
+  };
+  const CHANGE = "Add the search by name.";
+
+  function refusedJob(
+    operation: GenerationRequestJob["operation"],
+    detail: Record<string, string> | null,
+  ): GenerationRequestJob {
+    return {
+      job_id: "00000000-0000-4000-8000-0000000009cd",
+      kind: "REQUEST",
+      operation,
+      status: detail === null ? "RUNNING" : "FAILED",
+      stage: detail === null ? "GENERATING" : null,
+      attempt: 1,
+      started_at: NOW,
+      finished_at: detail === null ? null : NOW,
+      alternative_id: null,
+      failure: null,
+      response: detail === null ? null : { status_code: 409, body: { detail } },
+    };
+  }
+
+  function refusing(
+    operation: GenerationRequestJob["operation"],
+    detail: Record<string, string>,
+    background: boolean,
+  ) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      if (!background) {
+        return new Response(JSON.stringify({ detail }), { status: 409 });
+      }
+      const posted = init?.method === "POST";
+      return new Response(JSON.stringify(refusedJob(operation, posted ? null : detail)), {
+        status: posted ? 202 : 200,
+      });
+    });
+  }
+
+  async function proposeRefused(
+    detail: Record<string, string>,
+    background: boolean,
+    locale: "en" | "it",
+  ) {
+    const api = new FakeApi();
+    const fetchImpl = refusing("REQUIREMENTS_PROPOSAL", detail, background);
+    const real = createRequirementsApi({ fetchImpl });
+    vi.spyOn(api, "generate").mockImplementation(((projectId: string, token: string) =>
+      real.generate(projectId, token)) as unknown as FakeApi["generate"]);
+    const wrapper = mountFlow(api, false, { locale });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await wrapper.get('[data-testid="generate-requirements"]').trigger("click");
+    await vi.advanceTimersByTimeAsync(2050);
+
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(wrapper.find('[data-testid="requirements-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="generation-job-notice"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="generation-job-failure"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
+    return wrapper;
+  }
+
+  async function changeRefused(
+    detail: Record<string, string>,
+    background: boolean,
+    locale: "en" | "it",
+  ) {
+    const api = readyApi(PENDING_GATE);
+    const real = createRequirementsApi({
+      fetchImpl: refusing("REQUIREMENTS_CHANGE", detail, background),
+    });
+    vi.spyOn(api, "requestChange").mockImplementation((projectId, request) => {
+      api.calls.push("request-change");
+      api.changeRequests.push(request);
+      return real.requestChange(projectId, request, "access-token");
+    });
+    const wrapper = mountFlow(api, true, { locale, attach: true });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await wrapper.get('[data-testid="decision-secondary"]').trigger("click");
+    await wrapper.get('[data-testid="decision-note"]').setValue(CHANGE);
+    await wrapper.get('[data-testid="decision-send"]').trigger("click");
+    await vi.advanceTimersByTimeAsync(2050);
+
+    expect(api.calls).toEqual(["decide:REQUEST_REVISION", "request-change"]);
+    expect(api.changeRequests).toEqual([CHANGE]);
+    expect(noteOf(wrapper)).toBe(CHANGE);
+    expect(wrapper.find('[data-testid="requirements-error"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
+    return { wrapper, failure: wrapper.get('[data-testid="generation-job-failure"]') };
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
+    clearFollowedGenerations();
+    vi.useFakeTimers();
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
+    document.body.innerHTML = "";
+  });
+
+  it.each([
+    { how: "at once", background: false, locale: "en" },
+    { how: "at once", background: false, locale: "it" },
+    { how: "through a job", background: true, locale: "en" },
+    { how: "through a job", background: true, locale: "it" },
+  ] as const)(
+    "says that the team has no analyst when the first proposal is refused $how ($locale)",
+    async ({ background, locale }) => {
+      const wrapper = await proposeRefused(NO_ANALYST, background, locale);
+
+      expect(wrapper.get('[data-testid="requirements-error"]').text()).toBe(
+        ANALYST_MISSING[locale],
+      );
+      expect(wrapper.text()).not.toContain("REQUIREMENTS_ANALYST_REQUIRED");
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    { how: "at once", background: false, locale: "en" },
+    { how: "at once", background: false, locale: "it" },
+    { how: "through a job", background: true, locale: "en" },
+    { how: "through a job", background: true, locale: "it" },
+  ] as const)(
+    "says that the approved steps give too few facts when a change is refused $how ($locale)",
+    async ({ background, locale }) => {
+      const { wrapper, failure } = await changeRefused(FEW_FACTS, background, locale);
+
+      expect(failure.attributes("data-lost")).toBe("false");
+      expect(failure.text()).toContain(NOT_SUCCEEDED[locale]);
+      expect(failure.text()).toContain(FACTS_MISSING[locale]);
+      expect(wrapper.text()).not.toContain("GROUNDED_INPUT_REQUIRED");
+      wrapper.unmount();
+    },
+  );
+
+  it("says that the first proposal could not be prepared when it is refused without a reason", async () => {
+    const wrapper = await proposeRefused(NO_REASON, false, "en");
+
+    expect(wrapper.get('[data-testid="requirements-error"]').text()).toBe(NOT_PREPARED.en);
+    wrapper.unmount();
+  });
+
+  it("says that the change could not be prepared when a job refuses it without a reason", async () => {
+    const { wrapper, failure } = await changeRefused(NO_REASON, true, "it");
+
+    expect(failure.text()).toContain(NOT_SUCCEEDED.it);
+    expect(failure.text()).toContain(NOT_PREPARED.it);
+    wrapper.unmount();
+  });
+
+  it("says why a change still being written before a reload was refused", async () => {
+    const api = revisionApi("Aggiungi la ricerca per nome.");
+    const requestChange = vi.spyOn(api, "requestChange");
+    vi.spyOn(generationJobsApi, "list").mockResolvedValue([
+      refusedJob("REQUIREMENTS_CHANGE", null),
+    ]);
+    vi.spyOn(generationJobsApi, "job").mockResolvedValue(
+      refusedJob("REQUIREMENTS_CHANGE", FEW_FACTS),
+    );
+    const wrapper = mountFlow(api, true, { locale: "it" });
+    await vi.advanceTimersByTimeAsync(2050);
+
+    const failure = wrapper.get('[data-testid="generation-job-failure"]');
+    expect(failure.text()).toContain(NOT_SUCCEEDED.it);
+    expect(failure.text()).toContain(FACTS_MISSING.it);
+    expect(wrapper.text()).not.toContain("GROUNDED_INPUT_REQUIRED");
+    expect(wrapper.text()).not.toContain("PROPOSAL_REJECTED");
+    expect(wrapper.find('[data-testid="requirements-error"]').exists()).toBe(false);
+    expect(requestChange).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

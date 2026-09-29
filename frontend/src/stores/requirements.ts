@@ -35,6 +35,7 @@ interface RequirementsState {
   projectId: string | null;
   projectEpoch: number;
   readSequence: number;
+  loadSequence: number;
   current: RequirementsSpecificationVersionPayload | null;
   history: RequirementsSpecificationVersionPayload[];
   diffs: Record<string, RequirementsSpecificationDiffPayload>;
@@ -113,6 +114,7 @@ export const useRequirementsStore = defineStore("requirements", {
     projectId: null,
     projectEpoch: 0,
     readSequence: 0,
+    loadSequence: 0,
     current: null,
     history: [],
     diffs: {},
@@ -258,6 +260,7 @@ export const useRequirementsStore = defineStore("requirements", {
       this.activateProject(projectId);
       const epoch = this.projectEpoch;
       this.begin("load");
+      const ticket = ++this.loadSequence;
 
       try {
         await this.refresh(projectId, api, authorize, epoch);
@@ -265,7 +268,9 @@ export const useRequirementsStore = defineStore("requirements", {
         this.capture(error, projectId, epoch);
         throw error;
       } finally {
-        this.finish("load", projectId, epoch);
+        if (ticket === this.loadSequence) {
+          this.finish("load", projectId, epoch);
+        }
       }
     },
 

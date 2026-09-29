@@ -1,18 +1,64 @@
 import { createPinia } from "pinia";
 import { defineComponent, h, reactive } from "vue";
 import { createI18n } from "vue-i18n";
-import { flushPromises, shallowMount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount, RouterLinkStub, shallowMount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/api/client";
 import type { ProjectBriefVersionResponse, ProjectResponse } from "@/api/contracts";
 import { designMockupsApi } from "@/api/designMockups";
+import { clearFollowedGenerations } from "@/api/generationJobs";
 import { projectImportsApi } from "@/api/projectImports";
+import type {
+  AgentCatalogResponse,
+  ProjectReadinessResponse,
+  TeamProposalVersionResponse,
+} from "@/api/team-contracts";
+import type { HumanGateResponse } from "@/api/workflow-contracts";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
 import { createAppI18n } from "@/i18n";
 import { useDesignMockupsStore } from "@/stores/designMockups";
-import { DESIGN_ALTERNATIVE_ID, SELECTED_DESIGN_VERSION } from "@/test/designFixtures";
+import {
+  BASE_DESIGN_PACKAGE,
+  DESIGN_ALTERNATIVE_ID,
+  DESIGN_CREATED_AT,
+  DESIGN_GATE_ID,
+  DESIGN_OWNER_ID,
+  DESIGN_PROJECT_ID,
+  SECOND_DESIGN_ALTERNATIVE_ID,
+  SELECTED_DESIGN_VERSION,
+  UNSELECTED_DESIGN_VERSION,
+} from "@/test/designFixtures";
+import { buildSelectedDesignPackage } from "@/test/prototypeFixtures";
+import type {
+  DesignPackageDiffPayload,
+  DesignPackagePayload,
+  DesignPackageVersionPayload,
+  DesignReadinessPayload,
+  HumanGatePayload as DesignGatePayload,
+} from "@/types/design";
+import type { DesignEvaluationRunPayload } from "@/types/designLoop";
+import type {
+  DesignMockupCapabilitiesPayload,
+  MockupDocumentPayload,
+  MockupResultPayload,
+  ModelUsagePayload,
+} from "@/types/designMockups";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
-import type { UserTwinVersionPayload } from "@/types/userModeling";
+import type {
+  HumanGatePayload as RequirementsGatePayload,
+  RequirementsCoveragePayload,
+  RequirementsReadinessPayload,
+  RequirementsSpecificationVersionPayload,
+  RequirementsTraceabilityPayload,
+} from "@/types/requirements";
+import type { RequirementsAlignmentPayload } from "@/types/requirementsAlignment";
+import type {
+  HumanGatePayload as TwinsGatePayload,
+  PersonaVersionPayload,
+  UserModelingReadinessPayload,
+  UserModelingSnapshotVersionPayload,
+  UserTwinVersionPayload,
+} from "@/types/userModeling";
 import { useClarificationStore } from "@/stores/clarification";
 import { useInsightTrayStore } from "@/stores/insightTray";
 import { useKnowledgePackagesStore } from "@/stores/knowledgePackages";
@@ -23,7 +69,16 @@ import { useDesignStore } from "@/stores/design";
 import ProjectDetailView from "./ProjectDetailView.vue";
 import { expectAccessible } from "@/test/axe";
 
-const state = vi.hoisted(() => ({ route: {} as { params: { projectId: string } } }));
+const state = vi.hoisted(() => {
+  const shared = {
+    route: {} as { params: { projectId: string } },
+    fetch: null as ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null,
+  };
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+    shared.fetch === null ? original.call(globalThis, input, init) : shared.fetch(input, init);
+  return shared;
+});
 vi.mock("vue-router", () => ({ useRoute: () => state.route }));
 vi.mock("@/stores/auth", () => ({
   useAuthStore: () => ({
@@ -855,4 +910,1478 @@ describe("progressive project workspace", () => {
     );
     wrapper.unmount();
   });
+});
+
+const OPEN = DESIGN_PROJECT_ID;
+const OWNER = DESIGN_OWNER_ID;
+const AT = DESIGN_CREATED_AT;
+
+const OPEN_PROJECT: ProjectResponse = {
+  id: OPEN,
+  display_name: "Loan register",
+  mode: "GREENFIELD_GENERATION",
+  current_brief_version: 1,
+  is_archived: false,
+  created_at: AT,
+  updated_at: AT,
+};
+
+const OPEN_BRIEF: ProjectBriefVersionResponse = {
+  id: "00000000-0000-4000-8000-000000000201",
+  project_id: OPEN,
+  version_number: 1,
+  schema_version: 1,
+  content_hash: "4".repeat(64),
+  created_by_user_id: OWNER,
+  created_at: AT,
+  brief: {
+    name: "Loan register",
+    description: "A register of the loans of a small library.",
+    problem: null,
+    goals: ["Know who has each book"],
+    target_users: ["Librarian"],
+    domain: null,
+    technical_constraints: null,
+    temporal_constraints: null,
+    budget: null,
+    functional_requirements: ["Record a loan"],
+    non_functional_requirements: null,
+    risks: null,
+    stakeholders: null,
+    available_artifacts: null,
+    definition_of_done: null,
+    unknown_fields: [],
+    provided_fields: ["name", "description", "goals", "target_users", "functional_requirements"],
+    missing_fields: [],
+  },
+};
+
+function workflowGate(
+  id: string,
+  type: "PROJECT_BRIEF" | "AGENT_TEAM",
+  artifact: { id: string; version_number: number; content_hash: string },
+  status: HumanGateResponse["status"] = "APPROVED",
+): HumanGateResponse {
+  return {
+    id,
+    project_id: OPEN,
+    owner_user_id: OWNER,
+    gate_type: type,
+    artifact: {
+      project_id: OPEN,
+      gate_type: type,
+      artifact_id: artifact.id,
+      version: artifact.version_number,
+      content_hash: artifact.content_hash,
+    },
+    iteration: 1,
+    max_iterations: 3,
+    status,
+    created_at: AT,
+    updated_at: AT,
+    event_sequence: 2,
+    resume_status: null,
+  };
+}
+
+const BRIEF_GATE = workflowGate(
+  "00000000-0000-4000-8000-000000000202",
+  "PROJECT_BRIEF",
+  OPEN_BRIEF,
+);
+
+const TEAM_CATALOG: AgentCatalogResponse = {
+  catalog_version: 1,
+  content_hash: "5".repeat(64),
+  agents: [
+    {
+      agent_id: "REQUIREMENTS_ANALYST",
+      catalog_version: 1,
+      kind: "SPECIALIST",
+      selection_policy: "ALWAYS_PRESENT",
+      capabilities: ["REQUIREMENTS_ANALYSIS"],
+      supported_project_modes: ["GREENFIELD_GENERATION"],
+      name_key: "agentCatalog.roles.requirements_analyst.name",
+      description_key: "agentCatalog.roles.requirements_analyst.description",
+      is_always_present: true,
+    },
+    {
+      agent_id: "MOBILE_ENGINEER",
+      catalog_version: 1,
+      kind: "SPECIALIST",
+      selection_policy: "OWNER_SELECTABLE",
+      capabilities: ["MOBILE_ENGINEERING"],
+      supported_project_modes: ["GREENFIELD_GENERATION"],
+      name_key: "agentCatalog.roles.mobile_engineer.name",
+      description_key: "agentCatalog.roles.mobile_engineer.description",
+      is_always_present: false,
+    },
+  ],
+};
+
+const TEAM_VERSION: TeamProposalVersionResponse = {
+  id: "00000000-0000-4000-8000-000000000211",
+  project_id: OPEN,
+  version_number: 1,
+  revision_kind: "PROPOSER_GENERATED",
+  based_on_version_number: null,
+  schema_version: 1,
+  provider_kind: "FAKE_DETERMINISTIC",
+  provider_id: "fake-deterministic-team-proposal",
+  provider_version: 1,
+  project_mode: "GREENFIELD_GENERATION",
+  brief_version_id: OPEN_BRIEF.id,
+  brief_version_number: OPEN_BRIEF.version_number,
+  brief_content_hash: OPEN_BRIEF.content_hash,
+  catalog_version: 1,
+  catalog_content_hash: TEAM_CATALOG.content_hash,
+  constraints_content_hash: "6".repeat(64),
+  content_hash: "7".repeat(64),
+  selected_agent_ids: ["REQUIREMENTS_ANALYST"],
+  role_constraints: [
+    {
+      agent_id: "REQUIREMENTS_ANALYST",
+      kind: "MANDATORY",
+      owner_editable: false,
+      reasons: [{ code: "CORE_REQUIREMENTS_DISCIPLINE", evidence: { fields: [], terms: [] } }],
+    },
+    { agent_id: "MOBILE_ENGINEER", kind: "OPTIONAL", owner_editable: true, reasons: [] },
+  ],
+  constraint_issues: [],
+  members: [
+    {
+      agent_id: "REQUIREMENTS_ANALYST",
+      source: "DETERMINISTIC_MANDATORY",
+      justifications: [
+        {
+          kind: "DETERMINISTIC_RULE",
+          code: "CORE_REQUIREMENTS_DISCIPLINE",
+          evidence_fields: [],
+          evidence_terms: [],
+          statement: null,
+        },
+      ],
+    },
+  ],
+  created_by_user_id: OWNER,
+  created_at: AT,
+};
+
+const TEAM_GATE = workflowGate("00000000-0000-4000-8000-000000000212", "AGENT_TEAM", TEAM_VERSION);
+
+const PERSONA: PersonaVersionPayload = {
+  id: "00000000-0000-4000-8000-000000000221",
+  project_id: OPEN,
+  persona_id: "00000000-0000-4000-8000-000000000222",
+  version_number: 2,
+  based_on_version_number: 1,
+  content_hash: "8".repeat(64),
+  created_by_user_id: OWNER,
+  created_at: AT,
+  profile: {
+    name: "Librarian",
+    source: "SYSTEM_PROPOSED",
+    kind: "PROTO_PERSONA",
+    confirmation_status: "CONFIRMED",
+    rejection_reason: null,
+    observations: [
+      {
+        observation_key: "persona.role",
+        value: { kind: "TEXT", text: "Librarian", items: [], reason: null },
+        epistemic_status: "USER_PROVIDED",
+        confidence: 1,
+        provenance: [
+          {
+            source_kind: "PROJECT_BRIEF",
+            source_id: OPEN_BRIEF.id,
+            source_version: 1,
+            content_hash: OPEN_BRIEF.content_hash,
+            locator: "target_users[0]",
+            summary: "Project target user",
+          },
+        ],
+        human_validation: "NOT_REQUIRED",
+        rationale: null,
+      },
+    ],
+  },
+};
+
+const TWIN: UserTwinVersionPayload = {
+  id: "00000000-0000-4000-8000-000000000223",
+  project_id: OPEN,
+  twin_id: "00000000-0000-4000-8000-000000000113",
+  version_number: 1,
+  based_on_version_number: null,
+  content_hash: "9".repeat(64),
+  created_by_user_id: OWNER,
+  created_at: AT,
+  profile: {
+    name: "Librarian User Twin",
+    persona_reference: {
+      persona_id: PERSONA.persona_id,
+      version_number: PERSONA.version_number,
+      content_hash: PERSONA.content_hash,
+      source: "SYSTEM_PROPOSED",
+      kind: "PROTO_PERSONA",
+      confirmation_status: "CONFIRMED",
+    },
+    project_brief_reference: {
+      artifact_id: OPEN_BRIEF.id,
+      version_number: 1,
+      content_hash: OPEN_BRIEF.content_hash,
+    },
+    agent_team_reference: {
+      artifact_id: TEAM_VERSION.id,
+      version_number: 1,
+      content_hash: TEAM_VERSION.content_hash,
+    },
+    catalog_version: 1,
+    catalog_content_hash: TEAM_CATALOG.content_hash,
+    validation_status: "OWNER_APPROVED_UT",
+    observations: [
+      {
+        observation_key: "user_twin.goals",
+        value: { kind: "ITEMS", text: null, items: ["Find a loan quickly"], reason: null },
+        epistemic_status: "MODEL_INFERRED",
+        confidence: 0.5,
+        provenance: [
+          {
+            source_kind: "MODEL_OUTPUT",
+            source_id: "fake-user-modeling",
+            source_version: 1,
+            content_hash: null,
+            locator: "user_twin.goals",
+            summary: "Deterministic model proposal",
+          },
+        ],
+        human_validation: "REQUIRED",
+        rationale: "The brief does not state this goal directly.",
+      },
+    ],
+  },
+};
+
+const SNAPSHOT: UserModelingSnapshotVersionPayload = {
+  id: "00000000-0000-4000-8000-000000000224",
+  project_id: OPEN,
+  version_number: 1,
+  based_on_version_number: null,
+  content_hash: "a1".repeat(32),
+  created_by_user_id: OWNER,
+  created_at: AT,
+  snapshot: {
+    project_id: OPEN,
+    project_brief_reference: TWIN.profile.project_brief_reference,
+    agent_team_reference: TWIN.profile.agent_team_reference,
+    catalog_version: 1,
+    catalog_content_hash: TEAM_CATALOG.content_hash,
+    persona_count: 1,
+    twin_count: 1,
+    persona_versions: [PERSONA],
+    twin_versions: [TWIN],
+  },
+};
+
+const TWINS_GATE: TwinsGatePayload = {
+  id: "00000000-0000-4000-8000-000000000225",
+  project_id: OPEN,
+  owner_user_id: OWNER,
+  gate_type: "USER_MODELING",
+  artifact: {
+    project_id: OPEN,
+    gate_type: "USER_MODELING",
+    artifact_id: SNAPSHOT.id,
+    version: 1,
+    content_hash: SNAPSHOT.content_hash,
+  },
+  iteration: 1,
+  max_iterations: 3,
+  status: "APPROVED",
+  created_at: AT,
+  updated_at: AT,
+  event_sequence: 2,
+};
+
+const TWINS_READINESS: UserModelingReadinessPayload = {
+  snapshot_exists: true,
+  snapshot_version_id: SNAPSHOT.id,
+  snapshot_version_number: 1,
+  snapshot_content_hash: SNAPSHOT.content_hash,
+  gate_exists: true,
+  gate_id: TWINS_GATE.id,
+  gate_status: "APPROVED",
+  approved_current_snapshot: true,
+  context_current: true,
+  workflow_state: "READY_FOR_REQUIREMENTS_DEFINITION",
+  twins: [
+    {
+      twin_id: TWIN.twin_id,
+      version_number: 1,
+      persisted_status: "OWNER_APPROVED_UT",
+      effective_status: "OWNER_APPROVED_UT",
+    },
+  ],
+};
+
+const REQUIREMENT_ID = "00000000-0000-4000-8000-000000000110";
+
+const REQUIREMENTS_VERSION: RequirementsSpecificationVersionPayload = {
+  id: "00000000-0000-4000-8000-000000000120",
+  project_id: OPEN,
+  version_number: 1,
+  based_on_version_number: null,
+  content_hash: "a".repeat(64),
+  created_by_user_id: OWNER,
+  created_at: AT,
+  specification: {
+    project_id: OPEN,
+    project_brief_reference: {
+      kind: "PROJECT_BRIEF",
+      artifact_id: OPEN_BRIEF.id,
+      version_number: 1,
+      content_hash: OPEN_BRIEF.content_hash,
+    },
+    agent_team_reference: {
+      kind: "AGENT_TEAM",
+      artifact_id: TEAM_VERSION.id,
+      version_number: 1,
+      content_hash: TEAM_VERSION.content_hash,
+    },
+    user_modeling_reference: {
+      kind: "USER_MODELING",
+      artifact_id: SNAPSHOT.id,
+      version_number: 1,
+      content_hash: SNAPSHOT.content_hash,
+    },
+    catalog_version: 1,
+    catalog_content_hash: TEAM_CATALOG.content_hash,
+    user_twin_references: [
+      {
+        twin_id: TWIN.twin_id,
+        version_number: 1,
+        content_hash: TWIN.content_hash,
+        name: TWIN.profile.name,
+      },
+    ],
+    requirements: [
+      {
+        id: REQUIREMENT_ID,
+        code: "REQ-001",
+        title: "Record a loan",
+        statement: "The system must record who borrows each book.",
+        kind: "FUNCTIONAL",
+        priority: "MUST",
+        sources: [
+          {
+            kind: "PROJECT_BRIEF",
+            source_id: OPEN_BRIEF.id,
+            source_version: 1,
+            content_hash: OPEN_BRIEF.content_hash,
+            locator: "functional_requirements[0]",
+          },
+        ],
+        user_twin_references: [],
+      },
+    ],
+    user_stories: [],
+    acceptance_criteria: [],
+    scenarios: [],
+    risks: [],
+    definition_of_done: [],
+  },
+};
+
+const REQUIREMENTS_GATE: RequirementsGatePayload = {
+  id: "00000000-0000-4000-8000-000000000231",
+  project_id: OPEN,
+  owner_user_id: OWNER,
+  gate_type: "REQUIREMENTS",
+  artifact: {
+    project_id: OPEN,
+    gate_type: "REQUIREMENTS",
+    artifact_id: REQUIREMENTS_VERSION.id,
+    version: 1,
+    content_hash: REQUIREMENTS_VERSION.content_hash,
+  },
+  iteration: 1,
+  max_iterations: 3,
+  status: "APPROVED",
+  created_at: AT,
+  updated_at: AT,
+  event_sequence: 2,
+  resume_status: null,
+};
+
+const REQUIREMENTS_READINESS: RequirementsReadinessPayload = {
+  status: "READY_FOR_DESIGN_EXPLORATION",
+  version: REQUIREMENTS_VERSION,
+  gate: REQUIREMENTS_GATE,
+  approved_current_specification: true,
+};
+
+const TRACEABILITY: RequirementsTraceabilityPayload = {
+  project_id: OPEN,
+  specification_version_id: REQUIREMENTS_VERSION.id,
+  specification_version_number: 1,
+  specification_content_hash: REQUIREMENTS_VERSION.content_hash,
+  content_hash: "b".repeat(64),
+  nodes: [],
+  links: [],
+};
+
+const COVERAGE: RequirementsCoveragePayload = {
+  project_id: OPEN,
+  specification_version_id: REQUIREMENTS_VERSION.id,
+  requirement_count: 1,
+  user_story_count: 0,
+  acceptance_criterion_count: 0,
+  requirement_ids_without_user_stories: [REQUIREMENT_ID],
+  requirement_ids_without_acceptance_criteria: [REQUIREMENT_ID],
+  user_story_ids_without_acceptance_criteria: [],
+  acceptance_criterion_ids_without_scenarios: [],
+  has_full_acceptance_coverage: false,
+};
+
+const ALIGNMENT: RequirementsAlignmentPayload = {
+  aligned: true,
+  issue: null,
+  requirements_version_number: 1,
+  snapshot_version_number: 1,
+  twins_approved: true,
+};
+
+const DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...SELECTED_DESIGN_VERSION,
+  package: {
+    ...SELECTED_DESIGN_VERSION.package,
+    generated_mockup: {
+      mockup: {
+        contract_version: 1,
+        design_alternative_id: DESIGN_ALTERNATIVE_ID,
+        title: "Loan desk",
+        styles: ".desk{display:grid}",
+        screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT", markup: "" }],
+      },
+      requirement_ids_by_code: {},
+    },
+  },
+};
+
+const OPEN_DESIGN_GATE: DesignGatePayload = {
+  id: DESIGN_GATE_ID,
+  project_id: OPEN,
+  owner_user_id: OWNER,
+  gate_type: "DESIGN",
+  artifact: {
+    project_id: OPEN,
+    gate_type: "DESIGN",
+    artifact_id: DESIGN_VERSION.id,
+    version: DESIGN_VERSION.version_number,
+    content_hash: DESIGN_VERSION.content_hash,
+  },
+  iteration: 1,
+  max_iterations: 3,
+  status: "APPROVED",
+  created_at: AT,
+  updated_at: AT,
+  event_sequence: 2,
+  resume_status: null,
+};
+
+const DESIGN_READINESS: DesignReadinessPayload = {
+  status: "READY_FOR_ARCHITECTURE_PLANNING",
+  version: DESIGN_VERSION,
+  gate: OPEN_DESIGN_GATE,
+  has_package: true,
+  package_ready_for_gate: true,
+  approved_current_package: true,
+};
+
+const CAPABILITIES: DesignMockupCapabilitiesPayload = {
+  generated_mockups: true,
+  iterations: true,
+  model: "hosted-model",
+  static_check: true,
+};
+
+const USAGE: ModelUsagePayload = {
+  items: [],
+  totals: { generations: 0, input_tokens: 0, output_tokens: 0, cost_microusd: 0 },
+};
+
+function mockupDocument(
+  alternativeId: string,
+  source: "applied" | "latest",
+): MockupDocumentPayload {
+  return {
+    html: "<!doctype html><html><body><h1>Desk</h1></body></html>",
+    content_hash: `${source === "applied" ? "c" : "d"}`.repeat(64),
+    source,
+    alternative_id: alternativeId,
+    title: "Loan desk",
+    entry_screen: "SCR-001",
+    screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT" }],
+  };
+}
+
+const PENDING_TEAM_GATE = workflowGate(
+  TEAM_GATE.id,
+  "AGENT_TEAM",
+  TEAM_VERSION,
+  "PENDING_APPROVAL",
+);
+
+const EDITED_TEAM: TeamProposalVersionResponse = {
+  ...TEAM_VERSION,
+  id: "00000000-0000-4000-8000-000000000213",
+  version_number: 2,
+  revision_kind: "OWNER_EDITED",
+  based_on_version_number: 1,
+  content_hash: "7a".repeat(32),
+};
+
+const NO_TWINS: UserModelingReadinessPayload = {
+  snapshot_exists: false,
+  snapshot_version_id: null,
+  snapshot_version_number: null,
+  snapshot_content_hash: null,
+  gate_exists: false,
+  gate_id: null,
+  gate_status: null,
+  approved_current_snapshot: false,
+  workflow_state: "USER_MODELING_REQUIRED",
+  twins: [],
+};
+
+const PROPOSED_PERSONA: PersonaVersionPayload = {
+  ...PERSONA,
+  version_number: 1,
+  based_on_version_number: null,
+  profile: { ...PERSONA.profile, confirmation_status: "PENDING_CONFIRMATION" },
+};
+
+const NO_REQUIREMENTS: RequirementsReadinessPayload = {
+  status: "REQUIREMENTS_REQUIRED",
+  version: null,
+  gate: null,
+  approved_current_specification: false,
+};
+
+const REVISED_REQUIREMENTS: RequirementsSpecificationVersionPayload = {
+  ...REQUIREMENTS_VERSION,
+  id: "00000000-0000-4000-8000-000000000121",
+  version_number: 2,
+  based_on_version_number: 1,
+  content_hash: "a2".repeat(32),
+};
+
+function approvedRequirements(
+  version: RequirementsSpecificationVersionPayload,
+): RequirementsReadinessPayload {
+  return {
+    status: "READY_FOR_DESIGN_EXPLORATION",
+    version,
+    gate: {
+      ...REQUIREMENTS_GATE,
+      artifact: {
+        ...REQUIREMENTS_GATE.artifact,
+        artifact_id: version.id,
+        version: version.version_number,
+        content_hash: version.content_hash,
+      },
+    },
+    approved_current_specification: true,
+  };
+}
+
+const NO_DESIGN: DesignReadinessPayload = {
+  status: "DESIGN_REQUIRED",
+  version: null,
+  gate: null,
+  has_package: false,
+  package_ready_for_gate: false,
+  approved_current_package: false,
+};
+
+const DRAFT_DESIGN_READINESS: DesignReadinessPayload = {
+  status: "DESIGN_REVIEW_REQUIRED",
+  version: UNSELECTED_DESIGN_VERSION,
+  gate: null,
+  has_package: true,
+  package_ready_for_gate: false,
+  approved_current_package: false,
+};
+
+const CHOICE_DIFF_ID = "00000000-0000-4000-8000-000000000241";
+const CHOSEN_DESIGN_ID = "00000000-0000-4000-8000-000000000242";
+
+function drawnMockup(alternativeId: string): MockupResultPayload {
+  return {
+    status: "MOCKUP_GENERATED",
+    generation_id: `${alternativeId}-generation`,
+    design_version_id: UNSELECTED_DESIGN_VERSION.id,
+    design_content_hash: UNSELECTED_DESIGN_VERSION.content_hash,
+    package: {
+      ...buildSelectedDesignPackage(BASE_DESIGN_PACKAGE, alternativeId),
+      generated_mockup: {
+        mockup: {
+          contract_version: 1,
+          design_alternative_id: alternativeId,
+          title: "Loan desk",
+          styles: ".desk{display:grid}",
+          screens: [{ code: "SCR-001", title: "Desk", state: "DEFAULT", markup: "" }],
+        },
+        requirement_ids_by_code: {},
+      },
+    },
+    approach: null,
+    changes: [],
+    warnings: [],
+    cost_microusd: null,
+  };
+}
+
+function twinReview(versionId: string, contentHash: string): DesignEvaluationRunPayload {
+  return {
+    schema_version: 1,
+    id: "00000000-0000-4000-8000-000000000251",
+    project_id: OPEN,
+    owner_user_id: OWNER,
+    design_version_id: versionId,
+    design_version_number: 2,
+    design_content_hash: contentHash,
+    alternative_id: DESIGN_ALTERNATIVE_ID,
+    alternative_code: "DES-001",
+    bundle: {},
+    responses: [
+      {
+        evaluation_run_id: "00000000-0000-4000-8000-000000000251",
+        artifact_bundle_id: "00000000-0000-4000-8000-000000000252",
+        artifact_bundle_hash: "b2".repeat(32),
+        twin_id: TWIN.twin_id,
+        twin_version: 1,
+        evaluator: {
+          evaluator_id: "proposer-design-twin-review",
+          evaluator_version: "1",
+          model_config_ref: "hosted-model",
+          prompt_version_ref: "twin-review-1",
+        },
+        findings: [],
+        summary: "The desk reads clearly.",
+        evidence_gaps: [],
+        is_simulated_feedback: true,
+        completed_at: AT,
+        content_hash: "b3".repeat(32),
+        disclaimer: "Simulated feedback.",
+      },
+    ],
+    started_at: AT,
+    completed_at: AT,
+    content_hash: "b4".repeat(32),
+  };
+}
+
+interface Served {
+  briefs: ProjectBriefVersionResponse[];
+  team: TeamProposalVersionResponse;
+  teamGate: HumanGateResponse;
+  teamReadiness: ProjectReadinessResponse["status"];
+  snapshot: UserModelingSnapshotVersionPayload | null;
+  twinsGate: TwinsGatePayload | null;
+  personas: PersonaVersionPayload[];
+  twinsReadiness: UserModelingReadinessPayload;
+  requirements: RequirementsReadinessPayload;
+  design: DesignReadinessPayload;
+  designHistory: DesignPackageVersionPayload[];
+  designDiffs: DesignPackageDiffPayload[];
+  latest: Record<string, MockupResultPayload>;
+  runs: DesignEvaluationRunPayload[];
+}
+
+function approvedProject(): Served {
+  return {
+    briefs: [OPEN_BRIEF],
+    team: TEAM_VERSION,
+    teamGate: TEAM_GATE,
+    teamReadiness: "READY_FOR_MAIN_WORKFLOW",
+    snapshot: SNAPSHOT,
+    twinsGate: TWINS_GATE,
+    personas: [PERSONA],
+    twinsReadiness: TWINS_READINESS,
+    requirements: REQUIREMENTS_READINESS,
+    design: DESIGN_READINESS,
+    designHistory: [DESIGN_VERSION],
+    designDiffs: [],
+    latest: {},
+    runs: [],
+  };
+}
+
+function teamApprovedProject(): Served {
+  return {
+    ...approvedProject(),
+    snapshot: null,
+    twinsGate: null,
+    personas: [],
+    twinsReadiness: NO_TWINS,
+    requirements: NO_REQUIREMENTS,
+    design: NO_DESIGN,
+    designHistory: [],
+  };
+}
+
+function teamWaitingProject(): Served {
+  return {
+    ...teamApprovedProject(),
+    teamGate: PENDING_TEAM_GATE,
+    teamReadiness: "TEAM_APPROVAL_REQUIRED",
+  };
+}
+
+function requirementsApprovedProject(): Served {
+  return { ...approvedProject(), design: NO_DESIGN, designHistory: [] };
+}
+
+function designToChooseProject(): Served {
+  return {
+    ...approvedProject(),
+    design: DRAFT_DESIGN_READINESS,
+    designHistory: [UNSELECTED_DESIGN_VERSION],
+    latest: {
+      [DESIGN_ALTERNATIVE_ID]: drawnMockup(DESIGN_ALTERNATIVE_ID),
+      [SECOND_DESIGN_ALTERNATIVE_ID]: drawnMockup(SECOND_DESIGN_ALTERNATIVE_ID),
+    },
+  };
+}
+
+interface Reply {
+  status: number;
+  body: unknown;
+}
+
+function ok(body: unknown): Reply {
+  return { status: 200, body };
+}
+
+function missing(code: string): Reply {
+  return { status: 404, body: { detail: { code } } };
+}
+
+type StoreGroup = "clarification" | "team" | "twins" | "requirements" | "design";
+
+const ORDERS: [string, StoreGroup[]][] = [
+  ["as they come", []],
+  ["from the first step to the last", ["clarification", "team", "twins", "requirements", "design"]],
+  ["from the last step to the first", ["design", "requirements", "twins", "team", "clarification"]],
+  ["with the team last", ["team"]],
+  ["with the brief last", ["clarification"]],
+];
+
+const authorize = <T>(operation: (accessToken: string) => Promise<T>): Promise<T> =>
+  operation("token");
+
+function fakeStudio(served: Served) {
+  const base = `/projects/${OPEN}`;
+  const calls: string[] = [];
+  const holds: { group: StoreGroup; gate: Promise<void> }[] = [];
+  const groups: Record<StoreGroup, (path: string) => boolean> = {
+    clarification: (path) =>
+      path.startsWith(`${base}/brief-assumptions`) ||
+      path.startsWith(`${base}/gates/project-brief/`),
+    team: (path) =>
+      path === "/agent-catalog" ||
+      path === `${base}/readiness` ||
+      path.startsWith(`${base}/team-proposals`) ||
+      path.startsWith(`${base}/gates/agent-team/`),
+    twins: (path) => path.startsWith(`${base}/user-modeling/`),
+    requirements: (path) => path.startsWith(`${base}/requirements`),
+    design: (path) =>
+      path === `${base}/design` ||
+      ["readiness", "revisions", "gate"].some((part) => path.startsWith(`${base}/design/${part}`)),
+  };
+
+  function documentOf(query: URLSearchParams): Reply {
+    const alternative = query.get("alternative_id") ?? "";
+    const version = served.design.version;
+    if (
+      query.get("source") === "applied" &&
+      (version?.package.generated_mockup ?? null) !== null &&
+      version?.package.owner_selected_alternative_id === alternative
+    ) {
+      return ok(mockupDocument(alternative, "applied"));
+    }
+    if (query.get("source") === "latest" && served.latest[alternative] !== undefined) {
+      return ok(mockupDocument(alternative, "latest"));
+    }
+    return missing("MOCKUP_NOT_FOUND");
+  }
+
+  function read(path: string, query: URLSearchParams): Reply {
+    const readings: Record<string, () => Reply> = {
+      [base]: () => ok(OPEN_PROJECT),
+      [`${base}/brief-versions`]: () => ok(served.briefs),
+      [`${base}/import`]: () => missing("PROJECT_IMPORT_NOT_FOUND"),
+      [`${base}/brief-dialogue`]: () => missing("BRIEF_DIALOGUE_NOT_FOUND"),
+      [`${base}/brief-assumptions`]: () => ok([]),
+      [`${base}/gates/project-brief/current`]: () => ok(BRIEF_GATE),
+      "/agent-catalog": () => ok(TEAM_CATALOG),
+      [`${base}/team-proposals`]: () => ok([served.team]),
+      [`${base}/team-proposals/current`]: () => ok(served.team),
+      [`${base}/gates/agent-team/current`]: () => ok(served.teamGate),
+      [`${base}/readiness`]: () => ok({ status: served.teamReadiness }),
+      [`${base}/generation-jobs`]: () => ok({ items: [] }),
+      [`${base}/user-modeling/readiness`]: () => ok(served.twinsReadiness),
+      [`${base}/user-modeling/snapshots/current`]: () =>
+        served.snapshot === null ? missing("SNAPSHOT_NOT_FOUND") : ok(served.snapshot),
+      [`${base}/user-modeling/snapshots`]: () =>
+        ok(served.snapshot === null ? [] : [served.snapshot]),
+      [`${base}/user-modeling/gate`]: () =>
+        served.twinsGate === null ? missing("GATE_NOT_FOUND") : ok(served.twinsGate),
+      [`${base}/user-modeling/gate/events`]: () => ok([]),
+      [`${base}/user-modeling/personas`]: () => ok(served.personas),
+      [`${base}/requirements/readiness`]: () => ok(served.requirements),
+      [`${base}/requirements`]: () =>
+        ok(served.requirements.version === null ? [] : [served.requirements.version]),
+      [`${base}/requirements/revisions`]: () => ok([]),
+      [`${base}/requirements/traceability`]: () => ok(TRACEABILITY),
+      [`${base}/requirements/coverage`]: () => ok(COVERAGE),
+      [`${base}/requirements/gate`]: () =>
+        served.requirements.gate === null
+          ? missing("GATE_NOT_FOUND")
+          : ok(served.requirements.gate),
+      [`${base}/requirements/gate/events`]: () => ok([]),
+      [`${base}/requirements/twin-alignment`]: () => ok(ALIGNMENT),
+      [`${base}/design/readiness`]: () => ok(served.design),
+      [`${base}/design`]: () => ok(served.designHistory),
+      [`${base}/design/revisions`]: () => ok(served.designDiffs),
+      [`${base}/design/gate`]: () =>
+        served.design.gate === null ? missing("GATE_NOT_FOUND") : ok(served.design.gate),
+      [`${base}/design/gate/events`]: () => ok([]),
+      [`${base}/design/evaluations`]: () => ok(served.runs),
+      [`${base}/design/evaluations/comparison`]: () => missing("DESIGN_COMPARISON_NOT_FOUND"),
+      [`${base}/design/evaluations/validations`]: () => ok([]),
+      [`${base}/design/discussions`]: () => ok([]),
+      [`${base}/insight-applications`]: () => ok([]),
+      [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
+      [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
+      [`${base}/design/mockups`]: () =>
+        ok(served.latest[query.get("alternative_id") ?? ""] ?? null),
+      [`${base}/design/mockups/document`]: () => documentOf(query),
+      [`${base}/design/iterations`]: () => ok({ items: [] }),
+      [`${base}/model-usage`]: () => ok(USAGE),
+    };
+    const reading = readings[path];
+    if (reading !== undefined) return reading();
+    if (path.startsWith(`${base}/gates/`) && path.endsWith("/events")) return ok([]);
+    return missing("UNKNOWN_ADDRESS");
+  }
+
+  function saveBrief(): Reply {
+    const saved: ProjectBriefVersionResponse = {
+      ...OPEN_BRIEF,
+      id: "00000000-0000-4000-8000-000000000203",
+      version_number: served.briefs.length + 1,
+      content_hash: "4b".repeat(32),
+    };
+    served.briefs = [...served.briefs, saved];
+    return ok(saved);
+  }
+
+  function approveTeam(): Reply {
+    served.teamGate = workflowGate(TEAM_GATE.id, "AGENT_TEAM", served.team);
+    served.teamReadiness = "READY_FOR_MAIN_WORKFLOW";
+    return ok({ status: "APPLIED", gate: served.teamGate, event: null, issue: null });
+  }
+
+  function proposePersonas(): Reply {
+    served.personas = [PROPOSED_PERSONA];
+    return ok({
+      status: "CREATED",
+      issue: null,
+      candidate_issue: null,
+      proposal_issue: null,
+      versions: served.personas,
+    });
+  }
+
+  function proposeDesign(): Reply {
+    served.design = DRAFT_DESIGN_READINESS;
+    served.designHistory = [UNSELECTED_DESIGN_VERSION];
+    return ok({
+      status: "CREATED",
+      version: UNSELECTED_DESIGN_VERSION,
+      issue: null,
+      proposal_issue: null,
+      persistence_status: null,
+    });
+  }
+
+  function drawMockup(body: unknown): Reply {
+    const alternative = (body as { alternative_id: string }).alternative_id;
+    const result = drawnMockup(alternative);
+    served.latest[alternative] = result;
+    return ok({
+      job_id: `${alternative}-job`,
+      kind: "MOCKUP",
+      status: "SUCCEEDED",
+      stage: null,
+      attempt: 1,
+      started_at: AT,
+      finished_at: AT,
+      alternative_id: alternative,
+      result,
+      failure: null,
+    });
+  }
+
+  function proposeRevision(body: unknown): Reply {
+    const proposed = (body as { package: DesignPackagePayload }).package;
+    const diff: DesignPackageDiffPayload = {
+      id: CHOICE_DIFF_ID,
+      project_id: OPEN,
+      owner_user_id: OWNER,
+      base_version_id: UNSELECTED_DESIGN_VERSION.id,
+      base_version_number: 1,
+      base_content_hash: UNSELECTED_DESIGN_VERSION.content_hash,
+      proposed_package: proposed,
+      proposal_hash: "5".repeat(64),
+      changes: [
+        {
+          kind: "REPLACE",
+          artifact_kind: "SELECTION",
+          artifact_id: proposed.owner_selected_alternative_id ?? "",
+          before: null,
+          after: { owner_selected_alternative_id: proposed.owner_selected_alternative_id },
+        },
+      ],
+      status: "PROPOSED",
+      created_at: AT,
+      decided_by_user_id: null,
+      decided_at: null,
+      decision_reason: null,
+      applied_version_id: null,
+      content_hash: "6".repeat(64),
+    };
+    served.designDiffs = [diff];
+    return ok({
+      status: "CREATED",
+      diff,
+      version: null,
+      issue: null,
+      domain_issue: null,
+      diff_persistence_status: null,
+      version_persistence_status: null,
+    });
+  }
+
+  function applyRevision(): Reply {
+    const diff = served.designDiffs[0];
+    if (diff === undefined) return missing("DESIGN_DIFF_NOT_FOUND");
+    const version: DesignPackageVersionPayload = {
+      ...UNSELECTED_DESIGN_VERSION,
+      id: CHOSEN_DESIGN_ID,
+      version_number: 2,
+      based_on_version_number: 1,
+      content_hash: "2".repeat(64),
+      package: diff.proposed_package,
+      ready_for_gate: true,
+    };
+    const applied: DesignPackageDiffPayload = {
+      ...diff,
+      status: "APPROVED",
+      decided_by_user_id: OWNER,
+      decided_at: AT,
+      applied_version_id: version.id,
+    };
+    served.designDiffs = [applied];
+    served.designHistory = [UNSELECTED_DESIGN_VERSION, version];
+    served.design = {
+      status: "DESIGN_APPROVAL_REQUIRED",
+      version,
+      gate: null,
+      has_package: true,
+      package_ready_for_gate: true,
+      approved_current_package: false,
+    };
+    return ok({
+      status: "APPLIED",
+      diff: applied,
+      version,
+      issue: null,
+      domain_issue: null,
+      diff_persistence_status: null,
+      version_persistence_status: null,
+    });
+  }
+
+  function reviewDesign(body: unknown): Reply {
+    const request = body as { design_version_id: string; design_content_hash: string };
+    const run = twinReview(request.design_version_id, request.design_content_hash);
+    served.runs = [run];
+    return ok(run);
+  }
+
+  function write(path: string, body: unknown): Reply {
+    const commands: Record<string, () => Reply> = {
+      [`${base}/brief-versions`]: saveBrief,
+      [`${base}/gates/agent-team/decisions`]: approveTeam,
+      [`${base}/user-modeling/personas/proposals`]: proposePersonas,
+      [`${base}/design/proposals`]: proposeDesign,
+      [`${base}/design/mockups/jobs`]: () => drawMockup(body),
+      [`${base}/design/revisions`]: () => proposeRevision(body),
+      [`${base}/design/revisions/${CHOICE_DIFF_ID}/decision`]: applyRevision,
+      [`${base}/design/evaluations`]: () => reviewDesign(body),
+    };
+    return commands[path]?.() ?? missing("UNKNOWN_ADDRESS");
+  }
+
+  async function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const raw =
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const url = new URL(raw, "http://studio.test");
+    const method = (init?.method ?? "GET").toUpperCase();
+    const path = url.pathname.replace(/^\/api\/v1/, "");
+    calls.push(`${method} ${path}${url.search}`);
+    await Promise.all(
+      holds.filter((entry) => groups[entry.group](path)).map((entry) => entry.gate),
+    );
+    const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : null;
+    const reply = method === "GET" ? read(path, url.searchParams) : write(path, body);
+    return new Response(JSON.stringify(reply.body), {
+      status: reply.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  function hold(group: StoreGroup): () => void {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const entry = { group, gate };
+    holds.push(entry);
+    return () => {
+      holds.splice(holds.indexOf(entry), 1);
+      open();
+    };
+  }
+
+  function readings(from = 0): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const call of calls.slice(from)) {
+      if (call.startsWith("GET ")) {
+        const address = call.slice(4).replace(base, "…");
+        counts[address] = (counts[address] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  function writes(from = 0): string[] {
+    return calls
+      .slice(from)
+      .filter((call) => !call.startsWith("GET "))
+      .map((call) => call.replace(base, "…"));
+  }
+
+  return { served, calls, fetch, hold, readings, writes };
+}
+
+type Studio = ReturnType<typeof fakeStudio>;
+
+async function settle(): Promise<void> {
+  for (let round = 0; round < 30; round += 1) {
+    await flushPromises();
+  }
+}
+
+const openedPages: { unmount: () => void }[] = [];
+
+function openStudio(studio: Studio, pinia = createPinia()) {
+  state.fetch = studio.fetch;
+  const wrapper = mount(ProjectDetailView, {
+    attachTo: document.body,
+    global: {
+      plugins: [pinia, createAppI18n("en")],
+      stubs: { RouterLink: RouterLinkStub },
+    },
+  });
+  openedPages.push(wrapper);
+  return wrapper;
+}
+
+async function openInOrder(studio: Studio, order: readonly StoreGroup[], pinia = createPinia()) {
+  const releases = order.map((group) => studio.hold(group));
+  const wrapper = openStudio(studio, pinia);
+  await settle();
+  for (const release of releases) {
+    release();
+    await settle();
+  }
+  return wrapper;
+}
+
+const OPENING_READINGS: Record<string, number> = {
+  "…": 1,
+  "…/brief-versions": 1,
+  "…/import": 1,
+  "…/brief-dialogue": 1,
+  "…/brief-assumptions": 1,
+  "…/gates/project-brief/current": 1,
+  [`…/gates/project-brief/${BRIEF_GATE.id}/events`]: 1,
+  "/agent-catalog": 1,
+  "…/team-proposals": 1,
+  "…/team-proposals/current": 1,
+  "…/gates/agent-team/current": 1,
+  [`…/gates/agent-team/${TEAM_GATE.id}/events`]: 1,
+  "…/readiness": 1,
+  "…/generation-jobs?status=RUNNING": 2,
+  "…/user-modeling/readiness": 1,
+  "…/user-modeling/snapshots/current": 1,
+  "…/user-modeling/snapshots": 1,
+  "…/user-modeling/gate": 1,
+  "…/user-modeling/gate/events": 1,
+  "…/user-modeling/personas": 1,
+  "…/requirements/readiness": 2,
+  "…/requirements": 1,
+  "…/requirements/revisions": 1,
+  "…/requirements/traceability": 1,
+  "…/requirements/coverage": 1,
+  "…/requirements/gate": 1,
+  "…/requirements/gate/events": 1,
+  "…/requirements/twin-alignment": 1,
+  "…/design/readiness": 1,
+  "…/design": 1,
+  "…/design/revisions": 1,
+  "…/design/gate": 1,
+  "…/design/gate/events": 1,
+  "…/design/evaluations": 1,
+  "…/design/evaluations/comparison": 1,
+  "…/design/evaluations/validations": 1,
+  "…/design/discussions": 1,
+  "…/insight-applications": 1,
+  "…/knowledge-packages": 1,
+  [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,
+};
+
+const TEAM_READINGS: Record<string, number> = {
+  "/agent-catalog": 1,
+  "…/team-proposals": 1,
+  "…/team-proposals/current": 1,
+  "…/gates/agent-team/current": 1,
+  [`…/gates/agent-team/${TEAM_GATE.id}/events`]: 1,
+  "…/readiness": 1,
+};
+
+const APPROVED_TWINS_READINGS: Record<string, number> = {
+  "…/user-modeling/readiness": 1,
+  "…/user-modeling/snapshots/current": 1,
+  "…/user-modeling/snapshots": 1,
+  "…/user-modeling/gate": 1,
+  "…/user-modeling/gate/events": 1,
+  "…/user-modeling/personas": 1,
+};
+
+const APPROVED_REQUIREMENTS_READINGS: Record<string, number> = {
+  "…/requirements/readiness": 1,
+  "…/requirements": 1,
+  "…/requirements/revisions": 1,
+  "…/requirements/traceability": 1,
+  "…/requirements/coverage": 1,
+  "…/requirements/gate": 1,
+  "…/requirements/gate/events": 1,
+  "…/requirements/twin-alignment": 1,
+};
+
+const APPROVED_DESIGN_READINGS: Record<string, number> = {
+  "…/design/readiness": 1,
+  "…/design": 1,
+  "…/design/revisions": 1,
+  "…/design/gate": 1,
+  "…/design/gate/events": 1,
+};
+
+const FIRST_DESIGN_VIEW: Record<string, number> = {
+  "…/design/mockups/capabilities": 1,
+  [`…/design/mockups?alternative_id=${DESIGN_ALTERNATIVE_ID}`]: 1,
+  [`…/design/mockups?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}`]: 1,
+  [`…/design/mockups/document?alternative_id=${SECOND_DESIGN_ALTERNATIVE_ID}&source=latest`]: 1,
+  "…/design/iterations": 1,
+  "…/model-usage": 1,
+};
+
+describe("readings of the project page", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    state.route = reactive({ params: { projectId: OPEN } });
+    sessionStorage.clear();
+    clearFollowedGenerations();
+  });
+
+  afterEach(() => {
+    for (const page of openedPages.splice(0)) {
+      page.unmount();
+    }
+    state.fetch = null;
+    clearFollowedGenerations();
+  });
+
+  it.each(ORDERS)(
+    "reads every address of a project with five approved steps once, the stores finishing %s",
+    async (_order, order) => {
+      const studio = fakeStudio(approvedProject());
+      const wrapper = await openInOrder(studio, order);
+
+      expect(studio.readings()).toEqual(OPENING_READINGS);
+      expect(studio.writes()).toEqual([]);
+      expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+      expect(wrapper.find('[data-testid="package-preview-generated"]').exists()).toBe(true);
+    },
+  );
+
+  it("asks nothing again when the owner moves along the steps or back to the current one", async () => {
+    const studio = fakeStudio(approvedProject());
+    const wrapper = await openInOrder(studio, []);
+    const firstPass: Record<string, number>[] = [];
+
+    for (const stage of [0, 1, 2, 3, 4, 5]) {
+      const from = studio.calls.length;
+      await wrapper.get(`[data-stage="${stage}"]`).trigger("click");
+      await settle();
+      firstPass.push(studio.readings(from));
+    }
+
+    expect(firstPass).toEqual([{}, {}, {}, {}, FIRST_DESIGN_VIEW, {}]);
+    const secondPass = studio.calls.length;
+    for (const stage of [4, 3, 2, 1, 0]) {
+      await wrapper.get(`[data-stage="${stage}"]`).trigger("click");
+      await settle();
+    }
+    await wrapper.get('[data-testid="back-to-current"]').trigger("click");
+    await settle();
+
+    expect(wrapper.get('[data-testid="stage-package"]').isVisible()).toBe(true);
+    expect(studio.readings(secondPass)).toEqual({});
+    expect(studio.writes()).toEqual([]);
+  });
+
+  it("keeps each step mounted once for the project while the stores before it load", async () => {
+    const studio = fakeStudio(approvedProject());
+    const releaseTeam = studio.hold("team");
+    const wrapper = openStudio(studio);
+    await settle();
+    const steps = [
+      "ProjectTeamSelectionFlow",
+      "ProjectUserModelingFlow",
+      "ProjectRequirementsFlow",
+      "ProjectDesignFlow",
+    ];
+    const instances = steps.map((name) => wrapper.findComponent({ name }).vm);
+    const upstream = (name: string) => wrapper.findComponent({ name }).props("upstream");
+
+    expect(upstream("ProjectTeamSelectionFlow")).toBe(`${OPEN_BRIEF.id}:APPROVED`);
+    expect(upstream("ProjectUserModelingFlow")).toBeNull();
+    expect(upstream("ProjectRequirementsFlow")).toBeNull();
+    expect(upstream("ProjectDesignFlow")).toBeNull();
+
+    releaseTeam();
+    await settle();
+
+    const team = `${OPEN_BRIEF.id}:APPROVED:${TEAM_VERSION.id}:APPROVED`;
+    const twins = `${team}:${SNAPSHOT.id}:APPROVED`;
+    expect(upstream("ProjectUserModelingFlow")).toBe(team);
+    expect(upstream("ProjectRequirementsFlow")).toBe(twins);
+    expect(upstream("ProjectDesignFlow")).toBe(`${twins}:${REQUIREMENTS_VERSION.id}:APPROVED`);
+    expect(steps.map((name) => wrapper.findComponent({ name }).vm)).toEqual(instances);
+    expect(studio.readings()).toEqual(OPENING_READINGS);
+  });
+
+  it("loads the later steps again once when a step before them changes, not when a store only reads again", async () => {
+    const studio = fakeStudio(approvedProject());
+    const pinia = createPinia();
+    const wrapper = await openInOrder(studio, [], pinia);
+    const team = useTeamStore(pinia);
+
+    let from = studio.calls.length;
+    await team.load(OPEN, apiClient, authorize);
+    await settle();
+    expect(studio.readings(from)).toEqual(TEAM_READINGS);
+
+    from = studio.calls.length;
+    await useUserModelingStore(pinia).load(OPEN, "token");
+    await settle();
+    expect(studio.readings(from)).toEqual(APPROVED_TWINS_READINGS);
+
+    studio.served.team = EDITED_TEAM;
+    studio.served.teamGate = workflowGate(TEAM_GATE.id, "AGENT_TEAM", EDITED_TEAM);
+    from = studio.calls.length;
+    await team.load(OPEN, apiClient, authorize);
+    await settle();
+
+    expect(studio.readings(from)).toEqual({
+      ...TEAM_READINGS,
+      ...APPROVED_TWINS_READINGS,
+      ...APPROVED_REQUIREMENTS_READINGS,
+      ...APPROVED_DESIGN_READINGS,
+      "…/requirements/readiness": 2,
+    });
+    expect(wrapper.findComponent({ name: "ProjectUserModelingFlow" }).props("upstream")).toBe(
+      `${OPEN_BRIEF.id}:APPROVED:${EDITED_TEAM.id}:APPROVED`,
+    );
+    expect(studio.writes()).toEqual([]);
+  });
+
+  it("keeps the later steps when the owner saves a new brief and loads each of them again once", async () => {
+    const studio = fakeStudio(approvedProject());
+    const wrapper = await openInOrder(studio, []);
+    const steps = [
+      "ProjectTeamSelectionFlow",
+      "ProjectUserModelingFlow",
+      "ProjectRequirementsFlow",
+      "ProjectDesignFlow",
+    ];
+    const instances = steps.map((name) => wrapper.findComponent({ name }).vm);
+    const from = studio.calls.length;
+
+    wrapper.findComponent({ name: "ProjectBriefEditor" }).vm.$emit("submit", OPEN_BRIEF.brief);
+    await settle();
+
+    expect(studio.writes(from)).toEqual(["POST …/brief-versions"]);
+    expect(studio.readings(from)).toEqual({
+      "…": 1,
+      "…/brief-versions": 1,
+      "…/brief-dialogue": 1,
+      "…/brief-assumptions": 1,
+      "…/gates/project-brief/current": 1,
+      [`…/gates/project-brief/${BRIEF_GATE.id}/events`]: 1,
+      ...TEAM_READINGS,
+      ...APPROVED_TWINS_READINGS,
+      ...APPROVED_REQUIREMENTS_READINGS,
+      ...APPROVED_DESIGN_READINGS,
+      "…/requirements/readiness": 2,
+    });
+    expect(steps.map((name) => wrapper.findComponent({ name }).vm)).toEqual(instances);
+    expect(wrapper.get('[data-testid="stage-brief"]').isVisible()).toBe(true);
+  });
+
+  it.each(ORDERS)(
+    "after the owner approves the team the later steps load again once and the first profiles are proposed once, the stores finishing %s",
+    async (_order, order) => {
+      const studio = fakeStudio(teamWaitingProject());
+      const wrapper = await openInOrder(studio, order);
+      expect(studio.writes()).toEqual([]);
+      expect(wrapper.get('[data-testid="stage-team"]').isVisible()).toBe(true);
+      const from = studio.calls.length;
+
+      await wrapper
+        .get('[data-testid="team-decision"] [data-testid="decision-primary"]')
+        .trigger("click");
+      await settle();
+
+      expect(studio.writes(from)).toEqual([
+        "POST …/gates/agent-team/decisions",
+        "POST …/user-modeling/personas/proposals",
+      ]);
+      expect(studio.readings(from)).toEqual({
+        ...TEAM_READINGS,
+        "…/user-modeling/readiness": 1,
+        "…/user-modeling/snapshots": 1,
+        "…/user-modeling/personas": 1,
+        "…/requirements/readiness": 1,
+        "…/requirements": 1,
+        "…/requirements/revisions": 1,
+        "…/design/readiness": 1,
+        "…/design": 1,
+        "…/design/revisions": 1,
+      });
+      expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+      await settle();
+      expect(studio.writes(from)).toHaveLength(2);
+    },
+  );
+
+  it.each(ORDERS)(
+    "does not propose the first profiles by itself when the team was already approved, the stores finishing %s",
+    async (_order, order) => {
+      const studio = fakeStudio(teamApprovedProject());
+      const pinia = createPinia();
+      const wrapper = await openInOrder(studio, order, pinia);
+      expect(wrapper.get('[data-testid="stage-twins"]').isVisible()).toBe(true);
+      expect(wrapper.find('[data-testid="propose-personas"]').exists()).toBe(true);
+
+      studio.served.team = EDITED_TEAM;
+      studio.served.teamGate = workflowGate(TEAM_GATE.id, "AGENT_TEAM", EDITED_TEAM);
+      await useTeamStore(pinia).load(OPEN, apiClient, authorize);
+      await settle();
+      expect(studio.writes()).toEqual([]);
+
+      await wrapper.get('[data-testid="propose-personas"]').trigger("click");
+      await settle();
+      expect(studio.writes()).toEqual(["POST …/user-modeling/personas/proposals"]);
+    },
+  );
+
+  it.each(ORDERS)(
+    "draws the two mockups only right after the owner asks for the design alternatives, the stores finishing %s",
+    async (_order, order) => {
+      const studio = fakeStudio(requirementsApprovedProject());
+      const pinia = createPinia();
+      const wrapper = await openInOrder(studio, order, pinia);
+      const requirements = useRequirementsStore(pinia);
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+
+      studio.served.requirements = approvedRequirements(REVISED_REQUIREMENTS);
+      await requirements.load(OPEN, authorize);
+      await settle();
+      expect(studio.writes()).toEqual([]);
+
+      await wrapper.get('[data-testid="generate-design"]').trigger("click");
+      await settle();
+      expect(studio.writes()).toEqual([
+        "POST …/design/proposals",
+        "POST …/design/mockups/jobs",
+        "POST …/design/mockups/jobs",
+      ]);
+      expect(Object.keys(studio.served.latest).sort()).toEqual(
+        [DESIGN_ALTERNATIVE_ID, SECOND_DESIGN_ALTERNATIVE_ID].sort(),
+      );
+
+      studio.served.requirements = approvedRequirements(REQUIREMENTS_VERSION);
+      await requirements.load(OPEN, authorize);
+      await settle();
+      expect(studio.writes()).toHaveLength(3);
+    },
+  );
+
+  it.each(ORDERS)(
+    "starts the review of the twins only right after the owner chooses an alternative, the stores finishing %s",
+    async (_order, order) => {
+      const studio = fakeStudio(designToChooseProject());
+      const pinia = createPinia();
+      const wrapper = await openInOrder(studio, order, pinia);
+      const requirements = useRequirementsStore(pinia);
+      expect(wrapper.get('[data-testid="stage-design"]').isVisible()).toBe(true);
+
+      studio.served.requirements = approvedRequirements(REVISED_REQUIREMENTS);
+      await requirements.load(OPEN, authorize);
+      await settle();
+      expect(studio.writes()).toEqual([]);
+
+      await wrapper
+        .get(`[data-testid="alternative-choose"][data-alternative-id="${DESIGN_ALTERNATIVE_ID}"]`)
+        .trigger("click");
+      await settle();
+      expect(studio.writes()).toEqual([
+        "POST …/design/revisions",
+        `POST …/design/revisions/${CHOICE_DIFF_ID}/decision`,
+        "POST …/design/evaluations",
+      ]);
+
+      studio.served.requirements = approvedRequirements(REQUIREMENTS_VERSION);
+      await requirements.load(OPEN, authorize);
+      await settle();
+      expect(studio.writes()).toHaveLength(3);
+    },
+  );
 });
