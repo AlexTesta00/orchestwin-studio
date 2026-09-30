@@ -8,6 +8,7 @@ from uuid import UUID
 
 from orchestwin.knowledge.state import (
     FEEDBACK_CHANGES,
+    FEEDBACK_LEARNING,
     FEEDBACK_TESTS,
     STATE_DOCUMENT,
     STATE_FOLDER,
@@ -46,6 +47,7 @@ FEEDBACK_REVIEWS: Final = f"{FEEDBACK_FOLDER}/reviews.json"
 FEEDBACK_DISCUSSIONS: Final = f"{FEEDBACK_FOLDER}/discussions.json"
 FEEDBACK_INSIGHTS: Final = f"{FEEDBACK_FOLDER}/insights.json"
 FEEDBACK_TEXT: Final = f"{FEEDBACK_FOLDER}/feedback.md"
+SCHEMA_FILE_NAMES: Final = {"learning": "learned"}
 
 _SLUG_LIMIT: Final = 48
 _SLUG_SEPARATORS: Final = re.compile(r"[^a-z0-9]+")
@@ -60,7 +62,7 @@ def stage_text(stage: str) -> str:
 
 
 def schema_document(name: str) -> str:
-    return f"{SCHEMA_FOLDER}/{name}.schema.json"
+    return f"{SCHEMA_FOLDER}/{SCHEMA_FILE_NAMES.get(name, name)}.schema.json"
 
 
 def twin_slug(name: str, twin_id: UUID | str) -> str:
@@ -97,6 +99,7 @@ __all__ = [
     "FEEDBACK_DISCUSSIONS",
     "FEEDBACK_FOLDER",
     "FEEDBACK_INSIGHTS",
+    "FEEDBACK_LEARNING",
     "FEEDBACK_REVIEWS",
     "FEEDBACK_TESTS",
     "FEEDBACK_TEXT",
@@ -105,6 +108,7 @@ __all__ = [
     "KNOWLEDGE_INDEX",
     "KNOWLEDGE_MANIFEST",
     "KNOWLEDGE_SCHEMA_VERSION",
+    "SCHEMA_FILE_NAMES",
     "SCHEMA_FOLDER",
     "STAGES",
     "STAGE_LABELS",

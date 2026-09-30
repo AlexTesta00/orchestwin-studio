@@ -41,6 +41,7 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_FOLDER,
     FEEDBACK_INSIGHTS,
+    FEEDBACK_LEARNING,
     FEEDBACK_REVIEWS,
     FEEDBACK_TESTS,
     FEEDBACK_TEXT,
@@ -63,6 +64,10 @@ from orchestwin.knowledge.state_documents import (
     acceptance_runs,
     change_reviews_document,
     development_lines,
+    learned_observations,
+    learning_document,
+    learning_lines,
+    stale_reviews,
     state_document,
     state_markdown,
     test_lines,
@@ -331,6 +336,7 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         files[stage_text("team")] = team_markdown(sources.team, sources.team_gate)
     if "twins" in present:
         files[stage_text("twins")] = twins_markdown(sources.modeling, sources.modeling_gate)
+        files[FEEDBACK_LEARNING] = json_text(learning_document(sources))
     if "requirements" in present:
         files.update(_requirement_files(sources, package))
     for stage in present:
@@ -423,6 +429,7 @@ def _state_entry(sources: KnowledgeSources) -> dict[str, object]:
         "text": STATE_TEXT,
         "changes": len(state.changes),
         "pending_changes": state.pending_changes,
+        "stale_reviews": stale_reviews(sources),
         "aligned_commit": None if commit is None else str(commit),
         "open_tasks": state.open_tasks,
     }
@@ -430,7 +437,7 @@ def _state_entry(sources: KnowledgeSources) -> dict[str, object]:
 
 def _feedback_entry(sources: KnowledgeSources) -> dict[str, object]:
     exported = "design" in sources.present_stages
-    return {
+    entry: dict[str, object] = {
         "folder": FEEDBACK_FOLDER,
         "text": FEEDBACK_TEXT if exported else None,
         "reviews_document": FEEDBACK_REVIEWS if exported else None,
@@ -442,6 +449,10 @@ def _feedback_entry(sources: KnowledgeSources) -> dict[str, object]:
         "tests": FEEDBACK_TESTS,
         "test_runs": len(acceptance_runs(sources)),
     }
+    if "twins" in sources.present_stages:
+        entry["learned"] = FEEDBACK_LEARNING
+        entry["learned_observations"] = learned_observations(sources)
+    return entry
 
 
 def folder_manifest(
@@ -501,7 +512,12 @@ def build_knowledge_folder(
     )
     files[KNOWLEDGE_MANIFEST] = json_text(manifest)
     files[KNOWLEDGE_INDEX] = index_markdown(
-        manifest, development=[*development_lines(sources), *test_lines(sources)]
+        manifest,
+        development=[
+            *development_lines(sources),
+            *test_lines(sources),
+            *learning_lines(sources),
+        ],
     )
     return KnowledgeFolder(
         project_id=sources.project_id,
