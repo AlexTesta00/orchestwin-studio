@@ -40,6 +40,7 @@ ESTIMATES: Final[Mapping[str, Estimate]] = MappingProxyType(
         "CODE_ALIGNMENT": Estimate(0.15, 0.30, 1.0),
         "TEST_PLAN": Estimate(0.15, 0.30, 2.0),
         "TEST_REVIEW": Estimate(0.10, 0.20, 1.0),
+        "TWIN_UPDATE": Estimate(0.10, 0.25, 1.0),
     }
 )
 
