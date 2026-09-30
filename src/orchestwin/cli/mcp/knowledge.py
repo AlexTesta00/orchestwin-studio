@@ -21,6 +21,8 @@ STAGES: Final = ("brief", "team", "twins", "requirements", "design")
 STATE_DOCUMENT: Final = "state/state.json"
 CHANGES_DOCUMENT: Final = "twins/feedback/changes.json"
 REVIEWS_DOCUMENT: Final = "twins/feedback/reviews.json"
+TESTS_DOCUMENT: Final = "twins/feedback/tests.json"
+TESTS_KIND: Final = "orchestwin.test-reviews"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -133,6 +135,18 @@ class Knowledge:
         document = self.document(_text(feedback.get("changes")) or CHANGES_DOCUMENT)
         return [] if document is None else mappings(document.get("runs"))
 
+    def test_runs(self) -> tuple[Mapping[str, object], ...]:
+        if self.schema_version < STATE_SCHEMA:
+            return ()
+        declared = _text(_mapping(self.manifest.get("feedback")).get("tests"))
+        relative = declared or TESTS_DOCUMENT
+        document = self.document(relative, required=declared is not None)
+        if document is None:
+            return ()
+        if document.get("kind") != TESTS_KIND:
+            raise FolderProblem(FOLDER_UNREADABLE, path=relative)
+        return tuple(mappings(document.get("runs")))
+
     def design_reviews(self) -> int:
         relative = _text(_mapping(self.manifest.get("feedback")).get("reviews_document"))
         if relative is None:
@@ -189,6 +203,10 @@ def load(root: Path) -> Knowledge:
         approved=approved,
         pending=pending,
     )
+
+
+def test_runs(root: Path) -> tuple[Mapping[str, object], ...]:
+    return load(root).test_runs()
 
 
 def requirements_view(document: Mapping[str, object]) -> dict[str, object]:

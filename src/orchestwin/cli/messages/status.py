@@ -75,6 +75,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
         "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
     },
+    "status.tests": {
+        "it": "Verifica dei criteri: ultima esecuzione il {date}: {passed} superati, {failed} "
+        "falliti, {blocked} bloccati, {not_covered} non coperti.",
+        "en": "Acceptance tests: latest run on {date}: {passed} passed, {failed} failed, "
+        "{blocked} blocked, {not_covered} not covered.",
+    },
     "status.folder_unreadable": {
         "it": "La cartella di conoscenza qui non si legge ({code}): controllala con "
         "`ut package verify`.",

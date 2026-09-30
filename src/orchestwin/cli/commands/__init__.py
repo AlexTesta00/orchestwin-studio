@@ -9,8 +9,9 @@ from orchestwin.cli.commands import (
     mcp,
     package,
     status,
+    test,
     twins,
     watch,
 )
 
-COMMANDS = (login, logout, status, init, design, twins, package, align, watch, mcp)
+COMMANDS = (login, logout, status, init, design, twins, package, align, watch, mcp, test)

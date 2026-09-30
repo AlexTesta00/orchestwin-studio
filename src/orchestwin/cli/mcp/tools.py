@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import twin_chat
+from orchestwin.cli.context import CommandContext
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows.review import review_locale
 from orchestwin.cli.flows.twin_conversation import model_failure
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
-    from orchestwin.cli.context import CommandContext
     from orchestwin.cli.project import ProjectLink
 
 PROJECT_STATE: Final = "project_state"
@@ -39,16 +39,31 @@ GET_DESIGN: Final = "get_design"
 GET_FEEDBACK: Final = "get_feedback"
 ASK_TWIN: Final = "ask_twin"
 REVIEW_CHANGES: Final = "review_changes"
+GET_TEST_RESULTS: Final = "get_test_results"
+RUN_TESTS: Final = "run_tests"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
 CODES: Final = "codes"
 COMMIT: Final = "commit"
 REVISION: Final = "revision"
+CRITERIA: Final = "criteria"
+APPLICATION: Final = "application"
+BROWSER: Final = "browser"
+FLAG: Final = "flag"
+REVIEW: Final = "review"
+NEW_PLAN: Final = "new_plan"
 HASH_PATTERN: Final = "^[0-9a-fA-F]{7,64}$"
 REVISION_PATTERN: Final = "^(?:[0-9a-fA-F]{7,64}|HEAD)$"
 HEAD: Final = "HEAD"
 CODE_LENGTH: Final = 20
+APPLICATION_FIELDS: Final = ("kind", "address")
+APPLICATION_KINDS: Final = ("URL", "STATIC")
+ALL_BROWSERS: Final = "all"
+BROWSER_CHOICES: Final = ("chrome", "firefox", ALL_BROWSERS)
+ADDRESS_LENGTH: Final = 500
+CRITERIA_LIMIT: Final = 20
+TEST_RESULTS_LIMIT: Final = 20
 INVALID_KEYS: Final[Mapping[str, str]] = MappingProxyType(
     {
         TEXT: "mcp.argument_text",
@@ -57,6 +72,10 @@ INVALID_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         CODES: "mcp.argument_codes",
         COMMIT: "mcp.argument_commit",
         REVISION: "mcp.argument_revision",
+        CRITERIA: "mcp.argument_criteria",
+        APPLICATION: "mcp.argument_application",
+        BROWSER: "mcp.argument_browser",
+        FLAG: "mcp.argument_flag",
     }
 )
 SPEND_REQUIRED: Final = "SPEND_REQUIRED"
@@ -75,6 +94,8 @@ ANSWER_FAILED_KEY: Final = "mcp.errors.TWIN_ANSWER_FAILED"
 TWIN_CHAT: Final = "TWIN_CHAT"
 CODE_CHANGE_REVIEW: Final = "CODE_CHANGE_REVIEW"
 CODE_ALIGNMENT: Final = "CODE_ALIGNMENT"
+TEST_PLAN: Final = "TEST_PLAN"
+TEST_REVIEW: Final = "TEST_REVIEW"
 DECIDE_WITH: Final = "ut align"
 OPEN_TASK: Final = "OPEN"
 REVIEW_LIMIT_SECONDS: Final = 900.0
@@ -113,8 +134,12 @@ class Session:
     link: ProjectLink
     language: str
 
+    @property
+    def knowledge_root(self) -> Path:
+        return self.project.root / self.link.knowledge_folder
+
     def knowledge(self) -> Knowledge:
-        return knowledge.load(self.project.root / self.link.knowledge_folder)
+        return knowledge.load(self.knowledge_root)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +169,29 @@ class Parameter:
                 "maxItems": self.maximum,
                 "description": description,
             }
+        if self.kind == CRITERIA:
+            return {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1, "maxLength": CODE_LENGTH},
+                "minItems": self.minimum,
+                "maxItems": self.maximum,
+                "description": description,
+            }
+        if self.kind == APPLICATION:
+            return {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": list(APPLICATION_KINDS)},
+                    "address": {"type": "string", "minLength": 1, "maxLength": self.maximum},
+                },
+                "required": list(APPLICATION_FIELDS),
+                "additionalProperties": False,
+                "description": description,
+            }
+        if self.kind == BROWSER:
+            return {"type": "string", "enum": list(BROWSER_CHOICES), "description": description}
+        if self.kind == FLAG:
+            return {"type": "boolean", "default": self.default, "description": description}
         if self.kind == COMMIT:
             return {"type": "string", "pattern": HASH_PATTERN, "description": description}
         if self.kind == REVISION:
@@ -160,11 +208,23 @@ class Parameter:
             return self._count(raw, tool)
         if self.kind == CODES:
             return self._codes(raw, tool)
+        if self.kind == CRITERIA:
+            return self._criteria(raw, tool)
+        if self.kind == APPLICATION:
+            return self._application(raw, tool)
+        if self.kind == FLAG:
+            if not isinstance(raw, bool):
+                raise self.invalid(tool)
+            return raw
         if self.kind == TWIN and _whole(raw):
             raw = str(raw)
         if not isinstance(raw, str):
             raise self.invalid(tool)
         value = " ".join(raw.split())
+        if self.kind == BROWSER:
+            if value.lower() not in BROWSER_CHOICES:
+                raise self.invalid(tool)
+            return value.lower()
         if self.kind == REVISION and value.upper() == HEAD:
             return None
         if self.kind in (COMMIT, REVISION):
@@ -203,6 +263,23 @@ class Parameter:
             codes.append(code)
         return tuple(codes)
 
+    def _criteria(self, raw: object, tool: str) -> tuple[str, ...]:
+        codes = self._codes(raw, tool)
+        if len(codes) < self.minimum:
+            raise self.invalid(tool)
+        return tuple(dict.fromkeys(codes))
+
+    def _application(self, raw: object, tool: str) -> dict[str, str]:
+        if not isinstance(raw, dict) or set(raw) != set(APPLICATION_FIELDS):
+            raise self.invalid(tool)
+        kind, address = raw["kind"], raw["address"]
+        if not isinstance(kind, str) or not isinstance(address, str):
+            raise self.invalid(tool)
+        kind, address = kind.strip().upper(), address.strip()
+        if kind not in APPLICATION_KINDS or not 1 <= len(address) <= self.maximum:
+            raise self.invalid(tool)
+        return {"kind": kind, "address": address}
+
 
 @dataclass(frozen=True, slots=True)
 class Tool:
@@ -226,6 +303,10 @@ class Tool:
         if self.name == REVIEW_CHANGES and review_estimate(1) is None:
             key = "mcp.describe_review_changes_plain"
         description = context.text(key, **prices(context.language))
+        figures = acceptance_prices(context.language) if self.name == RUN_TESTS else None
+        if figures is not None:
+            estimate = context.text("mcp.describe_run_tests_estimate", **figures)
+            description = f"{description} {estimate}"
         if self.paid and not spend:
             description = f"{description} {context.text('mcp.describe_disabled')}"
         return {
@@ -283,11 +364,11 @@ class Tools:
         except (ToolError, FolderProblem, CliError) as error:
             if isinstance(error, CliError) and error.code == INTERRUPTED:
                 raise KeyboardInterrupt from None
-            return self._failure(error, session)
+            return self._failure(error, session, tool.name)
         return tool_result(document)
 
     def _failure(
-        self, error: ToolError | FolderProblem | CliError, session: Session | None
+        self, error: ToolError | FolderProblem | CliError, session: Session | None, tool: str
     ) -> dict[str, object]:
         language = self._context.language if session is None else session.language
         if isinstance(error, FolderProblem):
@@ -299,7 +380,13 @@ class Tools:
             written = sentence(error.code, error.key, error.values, language)
             return failure_with(tool_failure(error.code, written), error.extra)
         status = error.http_status if isinstance(error, ApiFailure) else None
-        written = sentence(error.code, None, error.values, language, http_status=status)
+        written = sentence(
+            error.code,
+            f"mcp.errors.{tool}.{error.code}",
+            error.values,
+            language,
+            http_status=status,
+        )
         return tool_failure(error.code, written)
 
 
@@ -363,6 +450,15 @@ def review_estimate(twins: int) -> costs.Estimate | None:
     if CODE_CHANGE_REVIEW not in costs.ESTIMATES or CODE_ALIGNMENT not in costs.ESTIMATES:
         return None
     return costs.estimate([CODE_CHANGE_REVIEW] * max(twins, 0) + [CODE_ALIGNMENT])
+
+
+def acceptance_prices(language: str) -> dict[str, str] | None:
+    if TEST_PLAN not in costs.ESTIMATES or TEST_REVIEW not in costs.ESTIMATES:
+        return None
+    return {
+        "plan": costs.amount_text(costs.estimate([TEST_PLAN]), language),
+        "review": costs.amount_text(costs.estimate([TEST_REVIEW]), language),
+    }
 
 
 def stage_name(stage: str, language: str) -> str:
@@ -673,6 +769,46 @@ def review_changes(session: Session, values: Mapping[str, object]) -> dict[str, 
     return answer
 
 
+def get_test_results(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    runs = knowledge.test_runs(session.knowledge_root)
+    limit = values.get("limit")
+    count = limit if isinstance(limit, int) else 1
+    return {"runs": [_plain(run) for run in runs[:count]]}
+
+
+def run_tests(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    from orchestwin.cli.flows import test_run
+
+    browser = values.get(BROWSER)
+    criteria = values.get(CRITERIA)
+    request = test_run.TestRequest(
+        application=values.get(APPLICATION),
+        browsers=(browser,) if isinstance(browser, str) else (ALL_BROWSERS,),
+        criteria=criteria if isinstance(criteria, tuple) else (),
+        new_plan=values.get(NEW_PLAN) is True,
+        review=values.get(REVIEW) is not False,
+    )
+    outcome = test_run.execute(spending_context(session.context), request)
+    return {
+        "run": _plain(outcome.run),
+        "critiques": [_plain(item) for item in outcome.critiques],
+        "report": str(outcome.report),
+        "folder": str(outcome.folder),
+    }
+
+
+def spending_context(context: CommandContext) -> CommandContext:
+    return CommandContext(
+        context.environment,
+        context.console,
+        language=context.language,
+        assume_yes=True,
+        debug=context.debug,
+        directory=context.directory,
+        sessions=context.sessions,
+    )
+
+
 def find_commit(context: CommandContext, git: ModuleType, root: Path, wanted: str | None) -> object:
     full = git.head(context, root) if wanted is None else git.resolve(context, root, wanted)
     if full is None and wanted is None:
@@ -753,6 +889,14 @@ def _mapping_or_none(value: object) -> dict[str, object] | None:
     return dict(value) if isinstance(value, Mapping) else None
 
 
+def _plain(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_plain(item) for item in value]
+    return value
+
+
 def _whole(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -820,6 +964,33 @@ TOOLS: Final = (
         "mcp.describe_review_changes",
         review_changes,
         (Parameter(COMMIT, REVISION, "mcp.parameter_review_commit"),),
+        paid=True,
+    ),
+    Tool(
+        GET_TEST_RESULTS,
+        "mcp.title_get_test_results",
+        "mcp.describe_get_test_results",
+        get_test_results,
+        (
+            Parameter(
+                "limit", COUNT, "mcp.parameter_test_limit", maximum=TEST_RESULTS_LIMIT, default=1
+            ),
+        ),
+    ),
+    Tool(
+        RUN_TESTS,
+        "mcp.title_run_tests",
+        "mcp.describe_run_tests",
+        run_tests,
+        (
+            Parameter(
+                APPLICATION, APPLICATION, "mcp.parameter_application", maximum=ADDRESS_LENGTH
+            ),
+            Parameter(BROWSER, BROWSER, "mcp.parameter_browser"),
+            Parameter(CRITERIA, CRITERIA, "mcp.parameter_criteria", maximum=CRITERIA_LIMIT),
+            Parameter(REVIEW, FLAG, "mcp.parameter_review", default=True),
+            Parameter(NEW_PLAN, FLAG, "mcp.parameter_new_plan", default=False),
+        ),
         paid=True,
     ),
 )
