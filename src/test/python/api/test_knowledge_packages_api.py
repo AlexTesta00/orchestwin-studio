@@ -27,6 +27,7 @@ from src.test.python.artifacts.design_fixtures import OWNER_ID, PROJECT_ID
 from src.test.python.knowledge.knowledge_fixtures import (
     ALIGNED_COMMIT,
     PUBLISHED_AT,
+    development_sources,
     partial_sources,
     real_sources,
     sources,
@@ -77,14 +78,29 @@ def schema_two(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
     manifest = json.loads(json.dumps(version.manifest))
     for key in ("progress", "state"):
         del manifest[key]
-    for key in ("changes", "change_reviews", "tests", "test_runs"):
-        del manifest["feedback"][key]
+    for key in (
+        "changes",
+        "change_reviews",
+        "tests",
+        "test_runs",
+        "learned",
+        "learned_observations",
+    ):
+        manifest["feedback"].pop(key, None)
     manifest["schema_version"] = 2
     return replace(version, schema_version=2, manifest=manifest)
 
 
-def before_tests(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
+def before_learning(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
     manifest = json.loads(json.dumps(version.manifest))
+    del manifest["state"]["stale_reviews"]
+    for key in ("learned", "learned_observations"):
+        del manifest["feedback"][key]
+    return replace(version, manifest=manifest)
+
+
+def before_tests(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
+    manifest = json.loads(json.dumps(before_learning(version).manifest))
     for key in ("tests", "test_runs"):
         del manifest["feedback"][key]
     return replace(version, manifest=manifest)
@@ -172,11 +188,13 @@ def test_publication_of_a_new_version_answers_created_with_its_summary() -> None
         "insights": 1,
         "change_reviews": 0,
         "test_runs": 0,
+        "learned_observations": 0,
     }
     assert version["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
     assert version["state"] == {
         "changes": 0,
         "pending_changes": 0,
+        "stale_reviews": 0,
         "aligned_commit": None,
         "open_tasks": 0,
     }
@@ -205,6 +223,7 @@ def test_a_folder_of_the_first_steps_lists_only_the_approved_stages() -> None:
             "insights",
             "change_reviews",
             "test_runs",
+            "learned_observations",
         ),
         0,
     )
@@ -212,7 +231,19 @@ def test_a_folder_of_the_first_steps_lists_only_the_approved_stages() -> None:
     assert version["table_count"] == 0
     assert len(version["twins"]) == 2
     assert "state/state.json" in version["entries"]
+    assert "twins/feedback/learned.json" in version["entries"]
     assert "requirements/requirements.json" not in version["entries"]
+
+
+def test_a_folder_without_the_twins_has_no_count_of_learned_observations() -> None:
+    service = FakeKnowledgePackageService(package=partial_sources("team"))
+
+    version = client(service).post(PATH).json()["version"]
+
+    assert "learned_observations" not in version["feedback"]
+    assert version["feedback"]["test_runs"] == 0
+    assert version["state"]["stale_reviews"] == 0
+    assert "twins/feedback/learned.json" not in version["entries"]
 
 
 def test_the_state_of_the_development_reaches_the_summary() -> None:
@@ -223,10 +254,47 @@ def test_the_state_of_the_development_reaches_the_summary() -> None:
     assert version["state"] == {
         "changes": 2,
         "pending_changes": 1,
+        "stale_reviews": 0,
         "aligned_commit": ALIGNED_COMMIT,
         "open_tasks": 1,
     }
     assert version["feedback"]["change_reviews"] == 1
+    assert version["feedback"]["test_runs"] == 1
+
+
+def test_the_stale_reviews_and_the_learned_observations_reach_the_summary() -> None:
+    service = FakeKnowledgePackageService(package=real_sources(state=development_sources()))
+
+    version = client(service).post(PATH).json()["version"]
+
+    assert version["state"] == {
+        "changes": 3,
+        "pending_changes": 2,
+        "stale_reviews": 1,
+        "aligned_commit": ALIGNED_COMMIT,
+        "open_tasks": 4,
+    }
+    assert list(version["state"]) == [
+        "changes",
+        "pending_changes",
+        "stale_reviews",
+        "aligned_commit",
+        "open_tasks",
+    ]
+    assert version["feedback"]["learned_observations"] == 2
+    assert list(version["feedback"])[-2:] == ["test_runs", "learned_observations"]
+
+
+def test_a_folder_published_before_the_twins_learned_has_no_new_counts() -> None:
+    service = FakeKnowledgePackageService(package=real_sources(state=development_sources()))
+    service.version = before_learning(service.version)
+
+    version = client(service).get(PATH).json()["versions"][0]
+
+    assert version["schema_version"] == 3
+    assert "stale_reviews" not in version["state"]
+    assert "learned_observations" not in version["feedback"]
+    assert version["state"]["pending_changes"] == 2
     assert version["feedback"]["test_runs"] == 1
 
 
@@ -238,6 +306,7 @@ def test_a_folder_published_before_the_acceptance_tests_has_no_test_count() -> N
 
     assert version["schema_version"] == 3
     assert "test_runs" not in version["feedback"]
+    assert "learned_observations" not in version["feedback"]
     assert version["feedback"]["change_reviews"] == 1
 
 
@@ -259,6 +328,7 @@ def test_a_stored_folder_of_schema_two_is_summarised_as_complete_without_changes
     assert version["feedback"]["change_reviews"] == 0
     assert version["feedback"]["reviews"] == 2
     assert "test_runs" not in version["feedback"]
+    assert "learned_observations" not in version["feedback"]
 
 
 def test_publication_of_an_unchanged_project_answers_ok_and_reused() -> None:
@@ -353,9 +423,14 @@ def test_packages_are_registered_in_openapi_and_application_state() -> None:
     collection = paths["/api/v1/projects/{project_id}/knowledge-packages"]
     archive = paths["/api/v1/projects/{project_id}/knowledge-packages/{version_number}/archive"]
     feedback = document["components"]["schemas"]["PackageFeedbackPayload"]
+    state = document["components"]["schemas"]["PackageStatePayload"]
 
     assert "test_runs" in feedback["properties"]
     assert "test_runs" not in feedback["required"]
+    assert "learned_observations" in feedback["properties"]
+    assert "learned_observations" not in feedback["required"]
+    assert "stale_reviews" in state["properties"]
+    assert "stale_reviews" not in state["required"]
     assert "change_reviews" in feedback["required"]
     assert collection["post"]["operationId"] == "publishKnowledgePackage"
     assert collection["get"]["operationId"] == "listKnowledgePackages"

@@ -16,6 +16,7 @@ from orchestwin.artifacts.design_gate import design_artifact_reference
 from orchestwin.knowledge.folder import file_digests, folder_content_hash, json_text
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_LEARNING,
     FEEDBACK_TESTS,
     FEEDBACK_TEXT,
     KNOWLEDGE_INDEX,
@@ -264,17 +265,32 @@ STAGE_GATES = {
 }
 ALIGNED_COMMIT = "9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
 PENDING_COMMIT = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
+STALE_COMMIT = "7c3e1a9b5d2f8e4a6c0b9d7f1e3a5c8b2d4f6a19"
 FIRST_COMMIT = "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c"
 CHANGE_RUN = "00000000-0000-4000-8000-00000000d001"
+STALE_RUN = "00000000-0000-4000-8000-00000000d003"
 TEST_RUN = "00000000-0000-4000-8000-00000000e101"
+TWIN_UPDATE = "00000000-0000-4000-8000-00000000f001"
 RECEPTION_TWIN = "e98bf864-69ba-4198-85f9-d4e932c54a3d"
 VOLUNTEER_TWIN = "f921405b-21d5-4ef6-b99c-fe0dcb1033b5"
+RECEPTION_NAME = "Addetti all'accoglienza"
+VOLUNTEER_NAME = "Organizzatori volontari"
 SCHEMA_ID = "urn:orchestwin:knowledge-folder"
 OLDER_DOCUMENTS = frozenset({"twin", "reviews", "discussions", "insights"})
 TEST_SECTIONS = {
     STATE_TEXT: ("\n## Acceptance tests", "\n## Verifica dei criteri"),
     FEEDBACK_TEXT: ("\n## Critiques on the acceptance tests",),
 }
+LEARNING_SECTIONS = {
+    STATE_TEXT: ("\n## What the twins learned", "\n## Cosa hanno imparato i twin"),
+    FEEDBACK_TEXT: ("\n## Learned during development",),
+}
+CURRENT_REFERENCE = {
+    "requirements_version_number": 2,
+    "design_version_number": 4,
+    "alternative_code": "DES-002",
+}
+EARLIER_REFERENCE = {**CURRENT_REFERENCE, "design_version_number": 3}
 SERVED_AT = "http://127.0.0.1:41234/"
 
 
@@ -527,16 +543,66 @@ def test_run() -> dict[str, object]:
     }
 
 
-def _without_tests(path: str, text: str) -> str:
-    for heading in TEST_SECTIONS.get(path, ()):
+def _without(path: str, text: str, sections: Mapping[str, tuple[str, ...]]) -> str:
+    for heading in sections.get(path, ()):
         text = text.split(heading, 1)[0]
     return text
 
 
+def _earlier_task(task: Mapping[str, object]) -> bool:
+    origin = task.get("origin")
+    kind = origin.get("kind") if isinstance(origin, Mapping) else "CODE_CHANGE"
+    return (
+        kind == "CODE_CHANGE"
+        and task.get("status") != "DROPPED"
+        and task.get("from_commit") is not None
+    )
+
+
+def _state_before_learning(text: str) -> str:
+    document = json.loads(text)
+    document["tasks"] = [task for task in document["tasks"] if _earlier_task(task)]
+    for task in document["tasks"]:
+        for key in ("origin", "closed_at", "note"):
+            task.pop(key, None)
+        task["about"].pop("criteria", None)
+    for change in document["changes"]:
+        if isinstance(change["review"], dict):
+            for key in ("reference", "stale"):
+                change["review"].pop(key, None)
+    return json_text(document)
+
+
+def files_before_learning(files: Mapping[str, str]) -> dict[str, str]:
+    dropped = {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, FEEDBACK_LEARNING, schema_document("learning")}
+    earlier: dict[str, str] = {}
+    for path, text in files.items():
+        if path in dropped:
+            continue
+        if path == STATE_DOCUMENT:
+            text = _state_before_learning(text)
+        earlier[path] = _without(path, text, LEARNING_SECTIONS)
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    del manifest["state"]["stale_reviews"]
+    for key in ("learned", "learned_observations"):
+        manifest["feedback"].pop(key, None)
+    del manifest["schemas"]["learning"]
+    manifest["files"] = file_digests(earlier)
+    manifest["package"]["content_hash"] = folder_content_hash(earlier)
+    return {
+        **earlier,
+        KNOWLEDGE_MANIFEST: json_text(manifest),
+        KNOWLEDGE_INDEX: files[KNOWLEDGE_INDEX],
+    }
+
+
 def files_before_tests(files: Mapping[str, str]) -> dict[str, str]:
+    files = files_before_learning(files)
     dropped = {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, FEEDBACK_TESTS, schema_document("tests")}
     earlier = {
-        path: _without_tests(path, text) for path, text in files.items() if path not in dropped
+        path: _without(path, text, TEST_SECTIONS)
+        for path, text in files.items()
+        if path not in dropped
     }
     manifest = json.loads(files[KNOWLEDGE_MANIFEST])
     for key in ("tests", "test_runs"):
@@ -559,9 +625,11 @@ def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
         STATE_TEXT,
         FEEDBACK_CHANGES,
         FEEDBACK_TESTS,
+        FEEDBACK_LEARNING,
         schema_document("state"),
         schema_document("changes"),
         schema_document("tests"),
+        schema_document("learning"),
     }
     older: dict[str, str] = {}
     for path, text in files.items():
@@ -578,9 +646,16 @@ def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
     manifest["schema_version"] = 2
     for key in ("progress", "state"):
         del manifest[key]
-    for key in ("changes", "change_reviews", "tests", "test_runs"):
+    for key in (
+        "changes",
+        "change_reviews",
+        "tests",
+        "test_runs",
+        "learned",
+        "learned_observations",
+    ):
         manifest["feedback"].pop(key, None)
-    for name in ("state", "changes", "tests"):
+    for name in ("state", "changes", "tests", "learning"):
         manifest["schemas"].pop(name, None)
     manifest["files"] = file_digests(older)
     manifest["package"]["content_hash"] = folder_content_hash(older)
@@ -651,4 +726,184 @@ def state_sources() -> ProjectStateSources:
             },
         ),
         tests=(test_run(),),
+    )
+
+
+def task_origin(
+    kind: str,
+    *,
+    commit: str | None = None,
+    test_run_id: str | None = None,
+    finding: str | None = None,
+) -> dict[str, object]:
+    twin = finding is not None
+    return {
+        "kind": kind,
+        "commit": commit,
+        "test_run_id": test_run_id,
+        "twin_id": RECEPTION_TWIN if twin else None,
+        "twin_name": RECEPTION_NAME if twin else None,
+        "finding": finding,
+    }
+
+
+def code_task(
+    number: int,
+    text: str,
+    source: dict[str, object],
+    *,
+    about: tuple[list[str], list[str], list[str]] = ([], [], []),
+    created_at: str = "2026-09-29T11:00:00+00:00",
+    status: str = "OPEN",
+    closed_at: str | None = None,
+    note: str | None = None,
+) -> dict[str, object]:
+    requirements, screens, criteria = about
+    return {
+        "code": f"TSK-{number:03d}",
+        "text": text,
+        "about": {"requirements": requirements, "screens": screens, "criteria": criteria},
+        "origin": source,
+        "from_commit": source["commit"],
+        "created_at": created_at,
+        "status": status,
+        "closed_at": closed_at,
+        "note": note,
+    }
+
+
+def development_tasks() -> tuple[dict[str, object], ...]:
+    return (
+        dict(state_sources().tasks[0]),
+        code_task(
+            2,
+            "Ingrandire il pulsante di conferma sul tablet.",
+            task_origin(
+                "CODE_CHANGE",
+                commit=PENDING_COMMIT,
+                finding="Il pulsante di conferma è piccolo sul tablet.",
+            ),
+            about=([], ["SCR-002"], []),
+            created_at="2026-09-28T11:40:00+00:00",
+        ),
+        code_task(
+            3,
+            "Mostrare un messaggio accanto al campo del nome.",
+            task_origin(
+                "TEST_RUN", test_run_id=TEST_RUN, finding="Un ospite senza nome entra nella lista."
+            ),
+            about=(["REQ-003"], ["SCR-002"], ["AC-002"]),
+            created_at="2026-09-29T10:30:00+00:00",
+        ),
+        code_task(
+            4,
+            "Aggiungere il logo del workshop in alto.",
+            task_origin("OWNER"),
+            about=([], ["SCR-001"], []),
+        ),
+        code_task(
+            5,
+            "Scrivere il titolo della pagina in italiano.",
+            task_origin("OWNER"),
+            created_at="2026-09-29T11:05:00+00:00",
+            status="DONE",
+            closed_at="2026-09-29T12:00:00+00:00",
+        ),
+        code_task(
+            6,
+            "Provare la lista sul tablet.",
+            task_origin(
+                "TEST_RUN", test_run_id=TEST_RUN, finding="Nessuno ha provato la lista sul tablet."
+            ),
+            about=([], [], ["AC-003"]),
+            created_at="2026-09-29T11:10:00+00:00",
+            status="DROPPED",
+            closed_at="2026-09-29T12:30:00+00:00",
+            note="La prova sul tablet la fa una persona.",
+        ),
+    )
+
+
+def stale_change() -> dict[str, object]:
+    return {
+        "commit": STALE_COMMIT,
+        "parent": ALIGNED_COMMIT,
+        "committed_at": "2026-09-28T10:20:00+00:00",
+        "author": "Alex Testa",
+        "message": "Filtro della lista per tavolo",
+        "files": [{"path": "src/app.js", "kind": "MODIFIED", "added": 30, "removed": 4}],
+        "recorded_at": "2026-09-28T10:25:00+00:00",
+        "review": {
+            "run_id": STALE_RUN,
+            "reviewed_at": "2026-09-28T10:40:00+00:00",
+            "verdict": "DESIGN_OUTDATED",
+            "summary": "Il filtro per tavolo non è nel design approvato.",
+            "reference": dict(EARLIER_REFERENCE),
+        },
+        "decision": {
+            "kind": "DESIGN_CHANGE",
+            "decided_at": "2026-09-28T10:45:00+00:00",
+            "note": None,
+        },
+    }
+
+
+def learned_entry() -> dict[str, object]:
+    return {
+        "twin_id": RECEPTION_TWIN,
+        "twin_name": RECEPTION_NAME,
+        "profile_version_number": 1,
+        "development_version_number": 3,
+        "label": "1.3",
+        "observations": [
+            {
+                "code": "OBS-001",
+                "statement": "Gli addetti lavorano in piedi e tengono il tablet con una mano sola.",
+                "basis": "I rilievi sul pulsante di conferma piccolo, tornati su due commit.",
+                "source": "TWIN_CRITIQUE",
+                "about": {"requirement": None, "screen": "SCR-002"},
+                "contradicts_profile": "Il profilo dice che gli addetti lavorano seduti al banco.",
+                "added_in_version": 1,
+                "approved_at": "2026-09-29T11:00:00+00:00",
+                "update_id": TWIN_UPDATE,
+            },
+            {
+                "code": "OBS-003",
+                "statement": "Gli addetti leggono la lista da due metri, mentre accolgono gli ospiti.",
+                "basis": None,
+                "source": "OWNER",
+                "about": {"requirement": "REQ-002", "screen": "SCR-001"},
+                "contradicts_profile": None,
+                "added_in_version": 3,
+                "approved_at": "2026-09-30T09:00:00+00:00",
+                "update_id": None,
+            },
+        ],
+        "retired": [
+            {
+                "code": "OBS-002",
+                "statement": "Gli addetti preferiscono usare il telefono.",
+                "retired_in_version": 2,
+                "retired_at": "2026-09-29T15:00:00+00:00",
+                "reason": "Non vale per tutte le sedi.",
+            }
+        ],
+    }
+
+
+def development_sources() -> ProjectStateSources:
+    earlier = state_sources()
+    pending, aligned = earlier.changes
+    reviewed = {**pending["review"], "reference": dict(CURRENT_REFERENCE)}
+    return ProjectStateSources(
+        aligned={**earlier.aligned, "design_version_number": 3},
+        changes=(
+            {**pending, "parent": STALE_COMMIT, "review": reviewed},
+            stale_change(),
+            aligned,
+        ),
+        runs=earlier.runs,
+        tasks=development_tasks(),
+        tests=earlier.tests,
+        learning=(learned_entry(),),
     )

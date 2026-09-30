@@ -5,6 +5,7 @@ from uuid import UUID
 
 from orchestwin.artifacts.design_discussion import DiscussionStatus
 from orchestwin.artifacts.design_finding_validations import create_finding_validation
+from orchestwin.knowledge import state_documents
 from orchestwin.knowledge.feedback import (
     DISCUSSIONS_KIND,
     INSIGHTS_KIND,
@@ -31,8 +32,11 @@ from .knowledge_fixtures import (
     VOLUNTEER_TWIN,
     applications,
     change_run,
+    development_sources,
     discussions,
     evaluation_runs,
+    learned_entry,
+    partial_sources,
     real_sources,
     sources,
     state_sources,
@@ -42,6 +46,21 @@ from .knowledge_fixtures import test_run as acceptance_run
 
 CODE_CRITIQUES = "## Critiques on the code changes\n\n"
 TEST_CRITIQUES = "\n## Critiques on the acceptance tests\n\n"
+LEARNED_HEADING = "\n## Learned during development\n\n"
+LEARNED_SECTION = (
+    "## Learned during development",
+    "",
+    "Addetti all'accoglienza, version 1.3, has 2 active learned observations. OBS-001 (from its "
+    "own critiques, approved by the owner on 2026-09-29 11:00+00:00): Gli addetti lavorano in "
+    "piedi e tengono il tablet con una mano sola. Basis: I rilievi sul pulsante di conferma "
+    "piccolo, tornati su due commit. Warning, it contradicts the profile: Il profilo dice che gli "
+    "addetti lavorano seduti al banco. OBS-003 (written by the owner on 2026-09-30 "
+    "09:00+00:00): Gli addetti leggono la lista da due metri, mentre accolgono gli ospiti. "
+    "Retired observation: OBS-002.",
+    "",
+    "Organizzatori volontari, version 1.0, has learned nothing yet.",
+    "",
+)
 NEWEST_TEST_RUN = (
     "The run of 2026-09-29 10:05+00:00 checked the static folder `dist` in Chrome 151.0.7922.76 "
     "and Firefox 156.0.1, against requirements version 2 and design version 4, alternative "
@@ -219,7 +238,9 @@ def test_feedback_text_without_records_says_so() -> None:
     assert text.endswith(
         "## Critiques on the code changes\n\nNo code change has been reviewed yet.\n\n"
         "## Critiques on the acceptance tests\n\nNo run of the acceptance tests is recorded yet: "
-        "`ut test` runs them on the application and records the result in the Studio.\n"
+        "`ut test` runs them on the application and records the result in the Studio.\n\n"
+        "## Learned during development\n\nReceptionist Twin, version 1.0, has learned nothing "
+        "yet.\n"
     )
 
 
@@ -302,10 +323,10 @@ def test_feedback_text_ends_with_one_paragraph_for_every_test_run_newest_first()
     package = sources(state=replace(state_sources(), tests=runs))
 
     text = feedback_markdown(package)
-    section = text.split(TEST_CRITIQUES, 1)[1]
+    section = text.split(TEST_CRITIQUES, 1)[1].split(LEARNED_HEADING, 1)[0]
     paragraphs = [item.strip() for item in section.split("\n\n") if item.strip()]
 
-    assert text.endswith(f"{paragraphs[-1]}\n")
+    assert section.endswith(f"{paragraphs[-1]}\n")
     assert len(paragraphs) == 3
     assert paragraphs[0] == NEWEST_TEST_RUN
     assert paragraphs[1].startswith("The run of 2026-09-29 08:00+00:00 checked")
@@ -327,8 +348,60 @@ def test_feedback_text_speaks_english_about_the_test_runs_of_an_italian_project(
     text = feedback_markdown(real_sources(state=state_sources()))
 
     assert "## Critiques on the code changes" in text
-    assert text.endswith(f"{TEST_CRITIQUES}{NEWEST_TEST_RUN}\n")
+    assert f"{TEST_CRITIQUES}{NEWEST_TEST_RUN}\n{LEARNED_HEADING}" in text
     assert "Critiche sui test" not in text
+
+
+def test_feedback_text_ends_with_what_every_twin_learned() -> None:
+    text = feedback_markdown(real_sources(state=development_sources()))
+
+    assert text.endswith("\n".join(LEARNED_SECTION))
+    assert text.index("## Critiques on the acceptance tests") < text.index(
+        "## Learned during development"
+    )
+
+
+def test_feedback_text_names_the_retired_observations_and_the_singular() -> None:
+    entry = learned_entry()
+    retired = {**entry["retired"][0], "code": "OBS-004", "reason": None}
+    one = {**entry, "observations": entry["observations"][1:]}
+    none_active = {**entry, "observations": [], "retired": [*entry["retired"], retired]}
+
+    single = feedback_markdown(real_sources(state=replace(development_sources(), learning=(one,))))
+    empty = feedback_markdown(
+        real_sources(state=replace(development_sources(), learning=(none_active,)))
+    )
+
+    assert (
+        "Addetti all'accoglienza, version 1.3, has 1 active learned observation. OBS-003 (written "
+        "by the owner on 2026-09-30 09:00+00:00): Gli addetti leggono la lista da due metri, "
+        "mentre accolgono gli ospiti. Retired observation: OBS-002.\n"
+    ) in single
+    assert "Basis:" not in single and "Warning" not in single
+    assert (
+        "Addetti all'accoglienza, version 1.3, has no active learned observation. Retired "
+        "observations: OBS-002, OBS-004.\n"
+    ) in empty
+
+
+def test_feedback_text_leaves_out_what_a_twin_outside_the_folder_learned() -> None:
+    package = replace(sources(), state=development_sources())
+    text = feedback_markdown(package)
+
+    assert text.endswith(
+        "## Learned during development\n\nReceptionist Twin, version 1.0, has learned nothing "
+        "yet.\n"
+    )
+    assert "OBS-001" not in text
+
+
+def test_the_section_on_learning_without_twins_says_that_no_twin_learned() -> None:
+    assert state_documents.learning_feedback_lines(partial_sources("team")) == [
+        "## Learned during development",
+        "",
+        "No twin has learned anything yet during the development.",
+        "",
+    ]
 
 
 def test_feedback_counts_are_zero_while_the_design_is_not_approved() -> None:

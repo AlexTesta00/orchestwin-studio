@@ -26,6 +26,7 @@ from orchestwin.knowledge.layout import (
     KNOWLEDGE_MANIFEST,
     STAGE_PAYLOAD_KEYS,
     STAGES,
+    schema_document,
     stage_document,
 )
 from orchestwin.knowledge.schema import SCHEMA_NAMES, schema_files
@@ -33,7 +34,13 @@ from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.knowledge.tables import TABLE_COLUMNS
 from orchestwin.knowledge.twins import portable_twins
 
-from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, sources
+from .knowledge_fixtures import (
+    PROJECT_NAME,
+    PUBLISHED_AT,
+    development_sources,
+    real_sources,
+    sources,
+)
 from .knowledge_fixtures import test_run as acceptance_run
 
 STAGE_FILES = tuple(
@@ -51,6 +58,7 @@ STATE_FILES = (
     "state/state.md",
     "twins/feedback/changes.json",
     "twins/feedback/tests.json",
+    "twins/feedback/learned.json",
 )
 DIAGRAM_FILES = (
     "requirements/diagrams/use-cases.mmd",
@@ -156,6 +164,8 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "change_reviews": 0,
         "tests": "twins/feedback/tests.json",
         "test_runs": 0,
+        "learned": "twins/feedback/learned.json",
+        "learned_observations": 0,
     }
     assert manifest["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
     assert manifest["state"] == {
@@ -163,12 +173,14 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "text": "state/state.md",
         "changes": 0,
         "pending_changes": 0,
+        "stale_reviews": 0,
         "aligned_commit": None,
         "open_tasks": 0,
     }
-    assert manifest["schemas"] == {name: f"schema/{name}.schema.json" for name in SCHEMA_NAMES}
-    assert len(manifest["schemas"]) == 13
+    assert manifest["schemas"] == {name: schema_document(name) for name in SCHEMA_NAMES}
+    assert len(manifest["schemas"]) == 14
     assert manifest["schemas"]["tests"] == "schema/tests.schema.json"
+    assert manifest["schemas"]["learning"] == "schema/learned.schema.json"
 
 
 def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
@@ -335,6 +347,7 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
         "## Development state",
         "## Latest critiques on the code",
         "## Acceptance tests",
+        "## What the twins learned",
         "## Schema",
         "## Files",
     ]
@@ -344,6 +357,11 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
         "them on the application and records the result in the Studio.\n"
     ) in index
     assert "| tests | `schema/tests.schema.json` |" in index
+    assert "| learning | `schema/learned.schema.json` |" in index
+    assert (
+        "## What the twins learned\n\n- Receptionist Twin, version 1.0: it has learned nothing "
+        "yet.\n\n`twins/feedback/learned.json` holds what the twins learned"
+    ) in index
     assert "- Build against `requirements/requirements.md` and `design/design.md`" in index
     assert "- The state of the development is in `state/state.md` and `state/state.json`" in index
     assert "The Studio has recorded no change (commit) of the code yet." in index
@@ -423,3 +441,26 @@ def test_every_folder_carries_the_test_runs_and_they_change_the_content_hash() -
     assert tested.manifest["feedback"]["test_runs"] == 1
     assert tested.content_hash != empty.content_hash
     assert "## Critiques on the acceptance tests" in tested.files["twins/feedback/feedback.md"]
+
+
+def test_what_the_twins_learned_changes_the_content_hash_but_never_the_twin_documents() -> None:
+    package = real_sources()
+    plain = folder(package)
+    learned = folder(replace(package, state=development_sources()))
+    twin_files = [
+        path
+        for path in plain.files
+        if path.startswith("twins/") and not path.startswith("twins/feedback/")
+    ]
+
+    assert len(twin_files) == 6
+    assert {path: learned.files[path] for path in twin_files} == {
+        path: plain.files[path] for path in twin_files
+    }
+    assert learned.manifest["twins"] == plain.manifest["twins"]
+    assert learned.manifest["stages"]["twins"] == plain.manifest["stages"]["twins"]
+    assert (
+        learned.files["twins/feedback/learned.json"] != plain.files["twins/feedback/learned.json"]
+    )
+    assert learned.content_hash != plain.content_hash
+    assert "## Learned during development" in learned.files["twins/feedback/feedback.md"]

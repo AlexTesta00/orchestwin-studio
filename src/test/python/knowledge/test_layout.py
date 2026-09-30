@@ -8,7 +8,9 @@ from orchestwin.knowledge import state
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
     FEEDBACK_FOLDER,
+    FEEDBACK_LEARNING,
     KNOWLEDGE_SCHEMA_VERSION,
+    SCHEMA_FILE_NAMES,
     STAGE_LABELS,
     STAGE_PAYLOAD_KEYS,
     STAGES,
@@ -57,6 +59,14 @@ def test_the_paths_of_the_development_state_are_the_shared_ones() -> None:
     assert STATE_DOCUMENT is state.STATE_DOCUMENT
     assert STATE_TEXT is state.STATE_TEXT
     assert FEEDBACK_CHANGES is state.FEEDBACK_CHANGES
+
+
+def test_what_the_twins_learned_has_its_document_and_a_schema_named_after_it() -> None:
+    assert FEEDBACK_LEARNING == "twins/feedback/learned.json"
+    assert FEEDBACK_LEARNING is state.FEEDBACK_LEARNING
+    assert SCHEMA_FILE_NAMES == {"learning": "learned"}
+    assert schema_document("learning") == "schema/learned.schema.json"
+    assert schema_document("tests") == "schema/tests.schema.json"
 
 
 @pytest.mark.parametrize(
