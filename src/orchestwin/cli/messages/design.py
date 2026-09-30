@@ -179,7 +179,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Launch `ut design` to have the mockups drawn.",
     },
     "design.next_mockups_ready": {
-        "it": "Guarda le anteprime con `ut design open`, poi scegli con `ut design choose CODICE`.",
+        "it": "Guarda le anteprime con `ut design open`, poi scegli con `ut design choose CODE`.",
         "en": "Look at the previews with `ut design open`, then choose with `ut design choose "
         "CODE`.",
     },
@@ -196,7 +196,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "version to approve.",
     },
     "design.next_choose": {
-        "it": "Scegli un'alternativa con `ut design choose CODICE`.",
+        "it": "Scegli un'alternativa con `ut design choose CODE`.",
         "en": "Choose an alternative with `ut design choose CODE`.",
     },
     "design.next_chosen_approve": {

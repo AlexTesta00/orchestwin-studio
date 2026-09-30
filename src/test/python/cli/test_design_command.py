@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from orchestwin.cli.api import design as design_api
+from orchestwin.cli.messages import text
 
 from .support.terminal import link_folder, run_ut
 from .support.transports import NoNetwork
@@ -411,6 +412,21 @@ def test_show_tells_what_exists_without_generating(tmp_path: Path) -> None:
         "`ut design approve`.\n"
     )
     assert after == before
+
+
+def test_the_choice_names_the_code_with_the_same_word_in_both_languages(tmp_path: Path) -> None:
+    with design_session(tmp_path) as session:
+        ready(session)
+        run = session.ut("design", "show", language="it")
+
+    assert run.status == 0, run.errors
+    assert run.output.endswith(
+        "Guarda le anteprime con `ut design open`, poi scegli con `ut design choose CODE`.\n"
+    )
+    assert [text("design.next_choose", language) for language in ("it", "en")] == [
+        "Scegli un'alternativa con `ut design choose CODE`.",
+        "Choose an alternative with `ut design choose CODE`.",
+    ]
 
 
 def test_show_while_a_mockup_is_drawn(tmp_path: Path) -> None:
