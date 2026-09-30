@@ -9,13 +9,17 @@ import pytest
 
 from orchestwin.knowledge.archive import KnowledgeArchiveError, read_verified_folder, verify_folder
 from orchestwin.knowledge.layout import KNOWLEDGE_MANIFEST, STAGES
+from orchestwin.knowledge.schema import validate_document
 from orchestwin.knowledge.state import ProjectStateSources
+from orchestwin.projects import acceptance_tests as acceptance_domain
 from src.test.python.knowledge.knowledge_fixtures import state_sources
 
 from .support.folders import (
     ARCHIVE_PROJECT_ID,
     DEFAULT_PROJECT_NAME,
+    acceptance_run_document,
     partial_archive,
+    stage_folder,
     state_archive,
     valid_archive,
     valid_files,
@@ -30,7 +34,29 @@ EMPTY_STATE = {
     "aligned_commit": None,
     "open_tasks": 0,
 }
-STATE_FILES = {"state/state.json", "state/state.md", "twins/feedback/changes.json"}
+TESTS_DOCUMENT = "twins/feedback/tests.json"
+STATE_FILES = {
+    "state/state.json",
+    "state/state.md",
+    "twins/feedback/changes.json",
+    TESTS_DOCUMENT,
+}
+RUN_KEYS = [
+    "id",
+    "started_at",
+    "finished_at",
+    "recorded_at",
+    "application",
+    "browsers",
+    "reference",
+    "summary",
+    "criteria",
+    "not_covered",
+    "results",
+    "critiques",
+    "reviewed_at",
+    "cost_microusd",
+]
 
 
 def entries(content: bytes) -> dict[str, str]:
@@ -155,3 +181,76 @@ def test_a_state_archive_carries_the_development_state() -> None:
     assert document["tasks"] == list(state.tasks)
     assert reviews["runs"] == list(state.runs)
     assert content != valid_archive(project_name="Lista della spesa", version_number=4)
+
+
+def test_the_acceptance_run_document_follows_the_contract() -> None:
+    run = acceptance_run_document()
+    results = tuple(acceptance_domain.path_result_from_snapshot(item) for item in run["results"])
+    not_covered = tuple(
+        acceptance_domain.not_covered_from_snapshot(item) for item in run["not_covered"]
+    )
+    outcomes = acceptance_domain.criteria_outcomes(
+        tuple(item.path for item in results),
+        results,
+        not_covered,
+        [item["code"] for item in run["criteria"]],
+    )
+
+    assert list(run) == RUN_KEYS
+    assert acceptance_run_document() == run
+    assert acceptance_run_document() is not run
+    assert [item.to_snapshot() for item in results] == run["results"]
+    assert [item.to_snapshot() for item in outcomes] == run["criteria"]
+    assert acceptance_domain.run_summary(outcomes).to_snapshot() == run["summary"]
+    assert [
+        acceptance_domain.critique_from_snapshot(item).to_snapshot() for item in run["critiques"]
+    ] == run["critiques"]
+    assert [item["status"] for item in run["criteria"]] == ["PASSED", "FAILED", "NOT_COVERED"]
+    assert {result["browser"] for result in run["results"]} == {"chrome", "firefox"}
+    assert all(
+        step["screenshot"]
+        == f"{result['path']['code']}/{result['browser']}/{step['index']:02d}.png"
+        for result in run["results"]
+        for step in result["steps"]
+    )
+    validate_document(
+        "tests",
+        {
+            "schema_version": 3,
+            "kind": "orchestwin.test-reviews",
+            "project_id": ARCHIVE_PROJECT_ID,
+            "runs": [run],
+        },
+    )
+
+
+def test_a_state_archive_carries_the_acceptance_runs() -> None:
+    run = acceptance_run_document()
+    older = {**acceptance_run_document(), "id": "00000000-0000-4000-8000-00000000e000"}
+
+    content = state_archive(state=ProjectStateSources(tests=(run, older)))
+    verified = read_verified_folder(content)
+    document = json.loads(entries(content)[TESTS_DOCUMENT])
+    empty = json.loads(entries(valid_archive())[TESTS_DOCUMENT])
+
+    assert (document["kind"], document["schema_version"], document["project_id"]) == (
+        "orchestwin.test-reviews",
+        3,
+        ARCHIVE_PROJECT_ID,
+    )
+    assert document["runs"] == [run, older]
+    assert verified.manifest["feedback"]["tests"] == TESTS_DOCUMENT
+    assert verified.manifest["feedback"]["test_runs"] == 2
+    assert empty["runs"] == []
+    assert read_verified_folder(valid_archive()).manifest["feedback"]["test_runs"] == 0
+
+
+@pytest.mark.parametrize("through", STAGES)
+def test_a_folder_of_any_step_carries_the_acceptance_runs(through: str) -> None:
+    run = acceptance_run_document()
+
+    folder = stage_folder(through=through, state=ProjectStateSources(tests=(run,)))
+
+    assert json.loads(folder.files[TESTS_DOCUMENT])["runs"] == [run]
+    assert folder.manifest["feedback"]["test_runs"] == 1
+    assert verify_folder(dict(folder.files)).package_version == 1
