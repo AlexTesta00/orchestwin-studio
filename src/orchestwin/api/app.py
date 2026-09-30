@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
+from orchestwin.api.acceptance_tests import create_acceptance_test_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
@@ -213,6 +214,7 @@ def create_app(
         create_diagram_router(),
         create_knowledge_package_router(),
         create_code_change_router(),
+        create_acceptance_test_router(),
         create_twin_import_router(),
         create_requirements_realignment_router(),
         create_project_import_router(),

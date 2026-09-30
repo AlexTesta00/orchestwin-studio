@@ -42,6 +42,8 @@ class GenerationOperation(StrEnum):
     DISCUSSION_START = "DISCUSSION_START"
     DISCUSSION_ROUND = "DISCUSSION_ROUND"
     CODE_CHANGE_REVIEW = "CODE_CHANGE_REVIEW"
+    TEST_PLAN = "TEST_PLAN"
+    TEST_REVIEW = "TEST_REVIEW"
 
 
 class GenerationJobStatus(StrEnum):
