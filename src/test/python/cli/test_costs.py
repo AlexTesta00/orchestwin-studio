@@ -154,6 +154,8 @@ def test_the_estimates_of_the_contract() -> None:
     assert ESTIMATES["REQUIREMENTS_PROPOSAL"] == Estimate(0.20, 0.37, 2.0)
     assert ESTIMATES["CODE_CHANGE_REVIEW"] == Estimate(0.15, 0.25, 1.0)
     assert ESTIMATES["CODE_ALIGNMENT"] == Estimate(0.15, 0.30, 1.0)
+    assert ESTIMATES["TEST_PLAN"] == Estimate(0.15, 0.30, 2.0)
+    assert ESTIMATES["TEST_REVIEW"] == Estimate(0.10, 0.20, 1.0)
     assert set(ESTIMATES) == {
         "BRIEF_DIALOGUE",
         "TEAM_PROPOSAL",
@@ -168,7 +170,29 @@ def test_the_estimates_of_the_contract() -> None:
         "TWIN_CHAT",
         "CODE_CHANGE_REVIEW",
         "CODE_ALIGNMENT",
+        "TEST_PLAN",
+        "TEST_REVIEW",
     }
+
+
+def test_a_test_plan_is_never_asked_and_three_twins_reviewing_a_run_are(tmp_path: Path) -> None:
+    plan = estimate(["TEST_PLAN"])
+    review = estimate(["TEST_REVIEW"] * 3)
+    transport = with_budget().expect("GET", BUDGET_PATH, body=BUDGET)
+    context, bundle = prepared(tmp_path, transport, answers=("n",))
+
+    confirm_spending(context, context.client(), ["TEST_PLAN"])
+    with pytest.raises(CliError) as caught:
+        confirm_spending(context, context.client(), ["TEST_REVIEW"] * 3)
+
+    assert (plan.low_usd, plan.high_usd, plan.minutes) == (0.15, 0.3, 2.0)
+    assert (review.low_usd, review.high_usd, review.minutes) == (0.3, 0.6, 3.0)
+    assert caught.value.code == "SPENDING_REFUSED"
+    assert bundle.output.splitlines() == [
+        "Estimate: 0.15-0.30 USD, about 2 min. Credit left in the Studio: 25.13 USD.",
+        "Estimate: 0.30-0.60 USD, about 3 min. Credit left in the Studio: 25.13 USD.",
+        "Go ahead with this spending? [Y/n] ",
+    ]
 
 
 def test_a_review_of_code_changes_multiplies_the_twins_and_adds_the_verdict() -> None:

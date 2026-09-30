@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import json
+import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, ModuleType
 
 import pytest
 
-from orchestwin.cli import costs, jobs
-from orchestwin.cli.errors import CliError
+from orchestwin.cli import costs, flows, jobs
+from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import changes as changes_flow
 from orchestwin.cli.mcp import tools as tools_module
 from orchestwin.cli.mcp.knowledge import Knowledge
+from orchestwin.cli.mcp.protocol import RpcError
 from orchestwin.cli.mcp.server import quiet_context
 from orchestwin.cli.mcp.tools import Tools
 from src.test.python.knowledge.knowledge_fixtures import (
@@ -25,7 +29,7 @@ from src.test.python.knowledge.knowledge_fixtures import (
     state_sources,
 )
 
-from .support.folders import partial_archive, valid_archive
+from .support.folders import acceptance_run_document, partial_archive, valid_archive
 from .support.terminal import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -40,11 +44,14 @@ from .test_mcp_knowledge import (
     RECEPTION,
     STAGES,
     VOLUNTEERS,
+    declare_tests,
     edit_json,
     linked,
+    runs_newest_first,
     schema_two_folder,
     state_folder,
     with_archive,
+    with_test_runs,
 )
 
 BASE = f"{API}/projects/{PROJECT_ID}"
@@ -74,6 +81,84 @@ SPEND_IT = (
     "permetterlo avvia il server con `ut mcp --spend`; per Claude Code: `claude mcp add "
     "orchestwin-twins -- ut mcp --spend`. (SPEND_REQUIRED)"
 )
+TEST_FLOW = "orchestwin.cli.flows.test_run"
+TOOL_NAMES = [
+    "project_state",
+    "list_twins",
+    "get_twin",
+    "get_requirements",
+    "get_design",
+    "get_feedback",
+    "ask_twin",
+    "review_changes",
+    "get_test_results",
+    "run_tests",
+]
+RUN_FOLDER = ("tests", "20260929-100000")
+
+
+@dataclass(frozen=True, slots=True)
+class FakeTestRequest:
+    application: Mapping[str, object] | None = None
+    browsers: tuple[str, ...] = ("all",)
+    criteria: tuple[str, ...] = ()
+    new_plan: bool = False
+    review: bool = True
+    max_usd: float = 2.0
+
+
+@dataclass(frozen=True, slots=True)
+class FakeOutcome:
+    run: Mapping[str, object]
+    critiques: tuple[Mapping[str, object], ...]
+    folder: Path
+    report: Path
+
+
+def fake_test_flow(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    outcome: FakeOutcome | None = None,
+    failure: CliError | None = None,
+) -> list[tuple[object, object]]:
+    calls: list[tuple[object, object]] = []
+
+    def execute(context: object, request: object) -> FakeOutcome | None:
+        calls.append((context, request))
+        if failure is not None:
+            raise failure
+        return outcome
+
+    try:
+        module = importlib.import_module(TEST_FLOW)
+    except ModuleNotFoundError as error:
+        if error.name != TEST_FLOW:
+            raise
+        module = ModuleType(TEST_FLOW)
+        module.TestRequest = FakeTestRequest
+        monkeypatch.setitem(sys.modules, TEST_FLOW, module)
+        monkeypatch.setattr(flows, "test_run", module, raising=False)
+    monkeypatch.setattr(module, "execute", execute, raising=False)
+    return calls
+
+
+def request_fields(request: object) -> tuple[object, ...]:
+    return tuple(
+        getattr(request, name)
+        for name in ("application", "browsers", "criteria", "new_plan", "review")
+    )
+
+
+def outcome_of(project_root: Path) -> tuple[FakeOutcome, dict[str, object]]:
+    document = acceptance_run_document()
+    folder = project_root.joinpath(".orchestwin", *RUN_FOLDER)
+    outcome = FakeOutcome(
+        run=MappingProxyType(document),
+        critiques=tuple(MappingProxyType(item) for item in document["critiques"]),
+        folder=folder,
+        report=folder / "report.html",
+    )
+    return outcome, document
 
 
 def build(
@@ -755,6 +840,8 @@ def test_a_folder_that_cannot_be_read_is_a_tool_error(tmp_path: Path) -> None:
         ("get_feedback", {}),
         ("ask_twin", {"twin": "1", "question": "Ciao?"}),
         ("review_changes", {}),
+        ("get_test_results", {}),
+        ("run_tests", {}),
     ],
 )
 def test_without_a_linked_folder_every_tool_answers_the_same_error(
@@ -785,12 +872,17 @@ def test_a_link_that_cannot_be_read_is_a_tool_error(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("name", "arguments"),
-    [("ask_twin", {"twin": "1", "question": "Come lavori?"}), ("review_changes", {})],
+    [
+        ("ask_twin", {"twin": "1", "question": "Come lavori?"}),
+        ("review_changes", {}),
+        ("run_tests", {"application": {"kind": "URL", "address": "http://127.0.0.1:5173/"}}),
+    ],
 )
 def test_paid_tools_without_spend_are_refused_in_the_language_of_the_project(
-    tmp_path: Path, name: str, arguments: dict[str, object]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, arguments: dict[str, object]
 ) -> None:
     state_folder(tmp_path)
+    calls = fake_test_flow(monkeypatch)
     tools, _ = build(tmp_path)
 
     assert refused(tools, name, **arguments) == {
@@ -798,6 +890,7 @@ def test_paid_tools_without_spend_are_refused_in_the_language_of_the_project(
         "message": SPEND_IT.format(tool=name),
         "tool": name,
     }
+    assert calls == []
 
 
 def test_paid_tools_without_spend_are_refused_in_english_for_an_english_project(
@@ -1269,3 +1362,412 @@ def test_the_link_is_read_again_at_every_call(tmp_path: Path) -> None:
     assert before["code"] == "PROJECT_NOT_LINKED"
     assert after["project"]["language"] == "en"
     assert after["folder"] is None
+
+
+def with_test_estimates(monkeypatch: pytest.MonkeyPatch, *, present: bool) -> None:
+    estimates = {
+        name: value
+        for name, value in costs.ESTIMATES.items()
+        if name not in ("TEST_PLAN", "TEST_REVIEW")
+    }
+    if present:
+        estimates["TEST_PLAN"] = costs.Estimate(0.15, 0.30, 2.0)
+        estimates["TEST_REVIEW"] = costs.Estimate(0.10, 0.20, 1.0)
+    monkeypatch.setattr(costs, "ESTIMATES", MappingProxyType(estimates))
+
+
+def test_the_ten_tools_end_with_the_two_tools_of_the_tests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_test_estimates(monkeypatch, present=True)
+    free, _ = build(tmp_path / "free")
+
+    listed = free.definitions()
+    results, tests = listed[8], listed[9]
+
+    assert [tool["name"] for tool in listed] == TOOL_NAMES
+    assert results == {
+        "name": "get_test_results",
+        "title": "Outcome of the acceptance tests",
+        "description": "The latest runs of the acceptance tests on the application under "
+        "development, read from the knowledge folder: status of every criterion, outcome of "
+        "every path in every browser and the critiques of the twins. Free.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 1,
+                    "description": "How many runs of the tests to give, newest first: 1 to 20, "
+                    "usually 1.",
+                }
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    }
+    assert tests["title"] == "Check of the acceptance criteria"
+    assert tests["description"] == (
+        "Open the application under development in the browsers of this computer, check the "
+        "approved acceptance criteria along paths written by the model, record the outcome in "
+        "the Studio and have the twins criticize it. Paid. About 0.15-0.30 USD for a new test "
+        "plan and 0.10-0.20 USD per twin for the critiques. Not available now: the server was "
+        "started without --spend."
+    )
+    properties = tests["inputSchema"]["properties"]
+    assert list(properties) == ["application", "browser", "criteria", "review", "new_plan"]
+    assert {
+        name: {key: value for key, value in field.items() if key != "description"}
+        for name, field in properties.items()
+    } == {
+        "application": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["URL", "STATIC"]},
+                "address": {"type": "string", "minLength": 1, "maxLength": 500},
+            },
+            "required": ["kind", "address"],
+            "additionalProperties": False,
+        },
+        "browser": {"type": "string", "enum": ["chrome", "firefox", "all"]},
+        "criteria": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1, "maxLength": 20},
+            "minItems": 1,
+            "maxItems": 20,
+        },
+        "review": {"type": "boolean", "default": True},
+        "new_plan": {"type": "boolean", "default": False},
+    }
+    assert all(field["description"] for field in properties.values())
+    assert (tests["inputSchema"]["required"], tests["inputSchema"]["additionalProperties"]) == (
+        [],
+        False,
+    )
+    assert tests["annotations"] == {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    }
+
+
+def test_the_description_of_the_tests_carries_the_estimates_only_when_they_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_test_estimates(monkeypatch, present=True)
+    italian, _ = build(tmp_path / "italian", spend=True, language="it")
+    priced = italian.definitions()[9]["description"]
+    with_test_estimates(monkeypatch, present=False)
+    plain, _ = build(tmp_path / "plain", spend=True)
+
+    assert priced.endswith(
+        "A pagamento. Circa 0,15-0,30 USD per un nuovo piano dei test e 0,10-0,20 USD per twin "
+        "per le critiche."
+    )
+    assert plain.definitions()[9]["description"] == (
+        "Open the application under development in the browsers of this computer, check the "
+        "approved acceptance criteria along paths written by the model, record the outcome in "
+        "the Studio and have the twins criticize it. Paid."
+    )
+    assert tools_module.acceptance_prices("en") is None
+
+
+def test_the_test_results_give_the_latest_runs_from_the_folder(tmp_path: Path) -> None:
+    runs = runs_newest_first()
+    with_test_runs(tmp_path, runs)
+    tools, _ = build(tmp_path)
+
+    assert run(tools, "get_test_results") == {"runs": runs[:1]}
+    assert run(tools, "get_test_results", limit=2) == {"runs": runs}
+    assert run(tools, "get_test_results", limit=20.0) == {"runs": runs}
+
+
+def test_older_folders_have_no_test_results(tmp_path: Path) -> None:
+    schema_two_folder(tmp_path / "older")
+    project = state_folder(tmp_path / "undeclared")
+    (project.knowledge / "twins" / "feedback" / "tests.json").unlink(missing_ok=True)
+    declare_tests(project, declared=False)
+    older, _ = build(tmp_path / "older")
+    undeclared, _ = build(tmp_path / "undeclared")
+
+    assert run(older, "get_test_results") == {"runs": []}
+    assert run(undeclared, "get_test_results", limit=5) == {"runs": []}
+
+
+def test_the_test_results_answer_the_folder_problems(tmp_path: Path) -> None:
+    linked(tmp_path / "missing")
+    project = with_test_runs(tmp_path / "broken", runs_newest_first())
+    (project.knowledge / "twins" / "feedback" / "tests.json").unlink()
+    missing, _ = build(tmp_path / "missing")
+    broken, _ = build(tmp_path / "broken")
+
+    assert refused(missing, "get_test_results")["code"] == "FOLDER_MISSING"
+    assert refused(broken, "get_test_results") == {
+        "code": "FOLDER_UNREADABLE",
+        "message": "La cartella di conoscenza non si legge (orchestwin/twins/feedback/tests.json): "
+        "scaricala di nuovo con `ut package pull`. (FOLDER_UNREADABLE)",
+    }
+
+
+def test_running_the_tests_hands_the_request_to_the_flow_and_answers_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = state_folder(tmp_path)
+    outcome, document = outcome_of(project.root)
+    calls = fake_test_flow(monkeypatch, outcome=outcome)
+    tools, bundle = build(tmp_path, spend=True)
+
+    answer = run(
+        tools,
+        "run_tests",
+        application={"kind": " static ", "address": " dist "},
+        browser=" Firefox ",
+        criteria=["ac-002", " AC-001 ", "ac-002"],
+        review=False,
+        new_plan=True,
+    )
+
+    folder = project.root.joinpath(".orchestwin", *RUN_FOLDER)
+    assert answer == {
+        "run": document,
+        "critiques": document["critiques"],
+        "report": str(folder / "report.html"),
+        "folder": str(folder),
+    }
+    ((context, request),) = calls
+    module = importlib.import_module(TEST_FLOW)
+    assert isinstance(request, module.TestRequest)
+    assert request_fields(request) == (
+        {"kind": "STATIC", "address": "dist"},
+        ("firefox",),
+        ("AC-002", "AC-001"),
+        True,
+        False,
+    )
+    assert request.max_usd == 2.0
+    assert context.assume_yes is True
+    assert context.language == "en"
+    assert context.environment.stdout is bundle.environment.stderr
+    assert context.environment.stdin.read() == ""
+    assert context.directory == tmp_path / "project"
+    assert bundle.output == ""
+
+
+def test_running_the_tests_without_arguments_uses_the_saved_application_and_every_browser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = state_folder(tmp_path)
+    outcome, _ = outcome_of(project.root)
+    calls = fake_test_flow(monkeypatch, outcome=outcome)
+    tools, _ = build(tmp_path, spend=True)
+
+    run(tools, "run_tests")
+    run(tools, "run_tests", browser="all", review=True, new_plan=False)
+
+    assert [request_fields(request) for _, request in calls] == [
+        (None, ("all",), (), False, True),
+        (None, ("all",), (), False, True),
+    ]
+
+
+APPLICATION_KEY = "mcp.argument_application"
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments", "key"),
+    [
+        ("run_tests", {"application": "dist"}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": "FILE", "address": "dist"}}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": "URL"}}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": "URL", "address": "x", "port": 1}}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": "URL", "address": "   "}}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": "URL", "address": "a" * 501}}, APPLICATION_KEY),
+        ("run_tests", {"application": {"kind": 1, "address": "dist"}}, APPLICATION_KEY),
+        ("run_tests", {"browser": "safari"}, "mcp.argument_browser"),
+        ("run_tests", {"browser": 3}, "mcp.argument_browser"),
+        ("run_tests", {"criteria": []}, "mcp.argument_criteria"),
+        ("run_tests", {"criteria": ["AC-001"] * 21}, "mcp.argument_criteria"),
+        ("run_tests", {"criteria": [" "]}, "mcp.argument_criteria"),
+        ("run_tests", {"criteria": "AC-001"}, "mcp.argument_criteria"),
+        ("run_tests", {"review": "yes"}, "mcp.argument_flag"),
+        ("run_tests", {"new_plan": 1}, "mcp.argument_flag"),
+        ("run_tests", {"plan": "new"}, "mcp.argument_unknown"),
+        ("get_test_results", {"limit": 0}, "mcp.argument_count"),
+        ("get_test_results", {"limit": 21}, "mcp.argument_count"),
+        ("get_test_results", {"limit": "2"}, "mcp.argument_count"),
+    ],
+)
+def test_the_arguments_of_the_tools_of_the_tests_are_checked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    arguments: dict[str, object],
+    key: str,
+) -> None:
+    state_folder(tmp_path)
+    calls = fake_test_flow(monkeypatch)
+    tools, _ = build(tmp_path, spend=True)
+
+    with pytest.raises(RpcError) as refused_call:
+        tools.call(name, arguments)
+
+    error = refused_call.value
+    assert (error.code, error.word, error.key) == (-32602, "INVALID_ARGUMENTS", key)
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        (
+            CliError("TEST_DESIGN_REQUIRED"),
+            "I test di accettazione richiedono i requisiti e il design approvati nella cartella "
+            "di conoscenza: approvali con `ut init` e `ut design`, poi scarica di nuovo la "
+            "cartella con `ut package pull`. (TEST_DESIGN_REQUIRED)",
+        ),
+        (
+            CliError("TEST_APPLICATION_REQUIRED", status=2),
+            "Non so ancora quale applicazione verificare: richiama run_tests con application, "
+            "kind URL e l'indirizzo, oppure kind STATIC e la cartella dell'applicazione "
+            "costruita; le esecuzioni successive la ricordano. (TEST_APPLICATION_REQUIRED)",
+        ),
+        (
+            CliError("TEST_STATIC_INVALID", status=2),
+            "La cartella dell'applicazione non esiste oppure non contiene index.html: indica la "
+            "cartella con l'applicazione costruita. (TEST_STATIC_INVALID)",
+        ),
+        (
+            CliError("TEST_NO_BROWSER"),
+            "Su questo computer non trovo nessun browser: installa Google Chrome, Chromium, "
+            "Microsoft Edge oppure Mozilla Firefox, oppure indica il programma con "
+            "ORCHESTWIN_CHROME o ORCHESTWIN_FIREFOX. (TEST_NO_BROWSER)",
+        ),
+        (
+            CliError("TEST_MODEL_NOT_CONFIGURED"),
+            "Questo Studio non ha un modello collegato, quindi non può scrivere un nuovo piano dei "
+            "test; un piano già salvato su questo computer si esegue ancora con new_plan false. "
+            "Chi gestisce lo Studio può collegare un modello. (TEST_MODEL_NOT_CONFIGURED)",
+        ),
+        (
+            CliError("TEST_CRITERION_UNKNOWN", status=2),
+            "Alcuni codici di criteria non sono criteri del piano dei test: usa i codici che "
+            "elenca get_requirements, per esempio AC-001. (TEST_CRITERION_UNKNOWN)",
+        ),
+        (
+            CliError("BROWSER_NOT_FOUND", values={"program": "firefox"}),
+            "Il browser indicato non è installato su questo computer: scegline un altro con "
+            "browser, oppure all. (BROWSER_NOT_FOUND)",
+        ),
+        (
+            CliError("BROWSER_NOT_STARTED", values={"program": "chrome"}),
+            "Il browser chrome non è partito: controlla che si apra su questo computer, oppure "
+            "scegline un altro con browser. (BROWSER_NOT_STARTED)",
+        ),
+        (
+            CliError("BROWSER_PROTOCOL_ERROR", values={"program": "chrome", "detail": "closed"}),
+            "La comunicazione con il browser si è interrotta: riprova; se succede ancora, scegli "
+            "l'altro browser con browser. (BROWSER_PROTOCOL_ERROR)",
+        ),
+        (
+            CliError("PAGE_NOT_LOADED", values={"program": "chrome", "detail": "refused"}),
+            "L'applicazione non si è aperta nel browser: controlla che l'indirizzo risponda, "
+            "oppure che la cartella contenga index.html, poi riprova. (PAGE_NOT_LOADED)",
+        ),
+        (
+            CliError("ACTION_FAILED", values={"program": "firefox", "detail": "no node"}),
+            "Il browser non ha potuto eseguire un passo dei test: riprova, oppure chiedi un nuovo "
+            "piano con new_plan true, che è una nuova spesa. (ACTION_FAILED)",
+        ),
+        (
+            ApiFailure("REQUIREMENTS_APPROVAL_REQUIRED", http_status=409),
+            "Per verificare l'applicazione servono i requisiti approvati nello Studio: approvali "
+            "con `ut init`. (REQUIREMENTS_APPROVAL_REQUIRED)",
+        ),
+        (
+            ApiFailure("DESIGN_APPROVAL_REQUIRED", http_status=409),
+            "Per verificare l'applicazione serve il design approvato nello Studio: approvalo con "
+            "`ut design`. (DESIGN_APPROVAL_REQUIRED)",
+        ),
+        (
+            ApiFailure("USER_MODELING_APPROVAL_REQUIRED", http_status=409),
+            "I twin possono criticare i test solo quando sono approvati: confermali con "
+            "`ut init`, oppure richiama run_tests con review false. "
+            "(USER_MODELING_APPROVAL_REQUIRED)",
+        ),
+        (
+            ApiFailure("TEST_PLAN_NOT_FOUND", http_status=404),
+            "Il piano dei test salvato su questo computer non è più nello Studio: richiama "
+            "run_tests con new_plan true, che è una nuova spesa. (TEST_PLAN_NOT_FOUND)",
+        ),
+        (
+            ApiFailure("INVALID_PROVIDER_OUTPUT", http_status=502),
+            "Il modello ha risposto in un modo che lo Studio non può usare, quindi il piano dei "
+            "test o le critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa. "
+            "(INVALID_PROVIDER_OUTPUT)",
+        ),
+        (
+            CliError("GENERATION_STILL_RUNNING"),
+            "Il modello sta ancora lavorando nello Studio: richiama run_tests fra qualche minuto. "
+            "(GENERATION_STILL_RUNNING)",
+        ),
+        (
+            ApiFailure("GENERATION_BUDGET_EXCEEDED", http_status=402),
+            "Lo Studio ha rifiutato la generazione perché supererebbe un tetto di spesa. Chi "
+            "gestisce lo Studio può alzarlo. (GENERATION_BUDGET_EXCEEDED)",
+        ),
+        (
+            ApiFailure("BRAND_NEW", http_status=418),
+            "Lo Studio ha risposto con un errore (stato 418, BRAND_NEW).",
+        ),
+    ],
+)
+def test_a_failed_run_of_the_tests_is_a_tool_error_with_its_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: CliError, message: str
+) -> None:
+    state_folder(tmp_path)
+    calls = fake_test_flow(monkeypatch, failure=failure)
+    tools, _ = build(tmp_path, spend=True)
+
+    assert refused(tools, "run_tests") == {"code": failure.code, "message": message}
+    assert len(calls) == 1
+
+
+def test_the_sentences_for_the_tests_leave_the_other_tools_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = state_folder(tmp_path)
+    store_session(tmp_path)
+    fake_git(monkeypatch, root=project.root)
+
+    def still_running(*arguments: object, **options: object) -> object:
+        raise CliError("GENERATION_STILL_RUNNING")
+
+    monkeypatch.setattr(jobs, "generate", still_running)
+    transport = ScriptedTransport().expect("POST", CHANGES, status=201, body=recorded_change())
+    tools, _ = build(tmp_path, spend=True, transport=transport)
+
+    assert refused(tools, "review_changes") == {
+        "code": "GENERATION_STILL_RUNNING",
+        "message": "La revisione continua nello Studio: richiama review_changes con lo stesso "
+        "commit più tardi per leggerla. (GENERATION_STILL_RUNNING)",
+    }
+
+
+def test_an_interrupted_run_of_the_tests_stops_the_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_folder(tmp_path)
+    fake_test_flow(monkeypatch, failure=CliError("GENERATION_INTERRUPTED", status=130))
+    tools, _ = build(tmp_path, spend=True)
+
+    with pytest.raises(KeyboardInterrupt):
+        tools.call("run_tests", {})

@@ -12,6 +12,7 @@ from orchestwin.cli import folder as local_folder
 from orchestwin.cli.mcp import knowledge
 from orchestwin.cli.mcp.knowledge import FolderProblem
 from orchestwin.cli.project import ProjectFolder
+from orchestwin.knowledge.state import ProjectStateSources
 from src.test.python.knowledge.knowledge_fixtures import (
     ALIGNED_COMMIT,
     CHANGE_RUN,
@@ -23,12 +24,21 @@ from src.test.python.knowledge.knowledge_fixtures import (
     state_sources,
 )
 
-from .support.folders import partial_archive, state_archive, valid_archive, valid_files
+from .support.folders import (
+    ARCHIVE_PROJECT_ID,
+    acceptance_run_document,
+    partial_archive,
+    state_archive,
+    valid_archive,
+    valid_files,
+)
 from .support.terminal import link_folder
 
 STAGES = ("brief", "team", "twins", "requirements", "design")
 RECEPTION = "Addetti all'accoglienza"
 VOLUNTEERS = "Organizzatori volontari"
+TESTS_DOCUMENT = "twins/feedback/tests.json"
+OLDER_RUN = "00000000-0000-4000-8000-00000000e000"
 
 
 def linked(tmp_path: Path, *, language: str | None = "it") -> ProjectFolder:
@@ -72,6 +82,46 @@ def edit_json(path: Path, change: Callable[[dict], None]) -> None:
 
 def manifest_bytes(**values: object) -> bytes:
     return json.dumps({"kind": "orchestwin.knowledge-folder", **values}).encode("utf-8")
+
+
+def runs_newest_first() -> list[dict[str, object]]:
+    newer = acceptance_run_document()
+    older = {
+        **acceptance_run_document(),
+        "id": OLDER_RUN,
+        "recorded_at": "2026-09-28T10:01:13+00:00",
+    }
+    return [newer, older]
+
+
+def reviews_of_tests(runs: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "schema_version": 3,
+        "kind": "orchestwin.test-reviews",
+        "project_id": ARCHIVE_PROJECT_ID,
+        "runs": runs,
+    }
+
+
+def declare_tests(project: ProjectFolder, *, declared: bool, count: int = 0) -> None:
+    def change(manifest: dict) -> None:
+        feedback = manifest["feedback"]
+        feedback.pop("tests", None)
+        feedback.pop("test_runs", None)
+        if declared:
+            feedback["tests"] = TESTS_DOCUMENT
+            feedback["test_runs"] = count
+
+    edit_json(project.knowledge / "orchestwin.json", change)
+
+
+def with_test_runs(
+    tmp_path: Path, runs: list[dict[str, object]], *, language: str | None = "it"
+) -> ProjectFolder:
+    project = state_folder(tmp_path, language=language)
+    write_files(project.knowledge, {TESTS_DOCUMENT: json.dumps(reviews_of_tests(runs))})
+    declare_tests(project, declared=True, count=len(runs))
+    return project
 
 
 def test_a_schema_three_folder_gives_its_stages_its_state_and_its_twins(tmp_path: Path) -> None:
@@ -434,3 +484,94 @@ def test_a_valid_archive_reads_like_the_state_archive_without_changes(tmp_path: 
     assert found.complete is True
     assert state is not None
     assert (state["aligned"], state["changes"], state["tasks"]) == (None, [], [])
+
+
+def test_the_test_runs_come_from_the_folder_newest_first(tmp_path: Path) -> None:
+    runs = runs_newest_first()
+    project = with_test_runs(tmp_path, runs)
+
+    found = knowledge.test_runs(project.knowledge)
+
+    assert found == tuple(runs)
+    assert knowledge.load(project.knowledge).test_runs() == found
+
+
+def test_a_folder_built_with_test_runs_gives_them_back(tmp_path: Path) -> None:
+    run = acceptance_run_document()
+    project = with_archive(tmp_path, state_archive(state=ProjectStateSources(tests=(run,))))
+
+    assert knowledge.test_runs(project.knowledge) == (run,)
+    assert knowledge.test_runs(with_archive(tmp_path / "empty", valid_archive()).knowledge) == ()
+
+
+def test_a_folder_without_the_test_document_has_no_runs(tmp_path: Path) -> None:
+    older = schema_two_folder(tmp_path / "older")
+    undeclared = state_folder(tmp_path / "undeclared")
+    (undeclared.knowledge / "twins" / "feedback" / "tests.json").unlink(missing_ok=True)
+    declare_tests(undeclared, declared=False)
+
+    assert knowledge.test_runs(older.knowledge) == ()
+    assert knowledge.test_runs(undeclared.knowledge) == ()
+
+
+def test_an_undeclared_test_document_is_read_when_it_is_there(tmp_path: Path) -> None:
+    runs = runs_newest_first()
+    project = with_test_runs(tmp_path, runs)
+    declare_tests(project, declared=False)
+
+    assert knowledge.test_runs(project.knowledge) == tuple(runs)
+
+
+@pytest.mark.parametrize(
+    ("content", "manifest_path"),
+    [
+        (None, TESTS_DOCUMENT),
+        (b"{", TESTS_DOCUMENT),
+        (b"[]", TESTS_DOCUMENT),
+        (
+            json.dumps({**reviews_of_tests([]), "kind": "orchestwin.change-reviews"}).encode(),
+            TESTS_DOCUMENT,
+        ),
+        (json.dumps(reviews_of_tests([])).encode(), "../tests.json"),
+    ],
+)
+def test_a_declared_test_document_that_cannot_be_used_is_a_folder_problem(
+    tmp_path: Path, content: bytes | None, manifest_path: str
+) -> None:
+    project = with_test_runs(tmp_path, runs_newest_first())
+    path = project.knowledge / "twins" / "feedback" / "tests.json"
+    if content is None:
+        path.unlink()
+    else:
+        path.write_bytes(content)
+    edit_json(
+        project.knowledge / "orchestwin.json",
+        lambda manifest: manifest["feedback"].update(tests=manifest_path),
+    )
+
+    with pytest.raises(FolderProblem) as refused:
+        knowledge.test_runs(project.knowledge)
+
+    assert (refused.value.code, dict(refused.value.values)) == (
+        "FOLDER_UNREADABLE",
+        {"path": manifest_path},
+    )
+
+
+def test_only_the_runs_that_are_objects_are_kept(tmp_path: Path) -> None:
+    run = acceptance_run_document()
+    project = with_test_runs(tmp_path, [])
+    document = {**reviews_of_tests([]), "runs": [run, "run", 3, None]}
+    write_files(project.knowledge, {TESTS_DOCUMENT: json.dumps(document)})
+    other = with_test_runs(tmp_path / "other", [])
+    write_files(other.knowledge, {TESTS_DOCUMENT: json.dumps({**document, "runs": {"id": 1}})})
+
+    assert knowledge.test_runs(project.knowledge) == (run,)
+    assert knowledge.test_runs(other.knowledge) == ()
+
+
+def test_the_test_runs_of_a_missing_folder_are_a_folder_problem(tmp_path: Path) -> None:
+    with pytest.raises(FolderProblem) as refused:
+        knowledge.test_runs(tmp_path / "nothing")
+
+    assert refused.value.code == "FOLDER_MISSING"
