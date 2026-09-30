@@ -8,11 +8,15 @@ import pytest
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.twin_chat import (
     HISTORY_TURNS,
+    INSTRUCTION,
+    LEARNED_CHAT_INSTRUCTION,
     TwinChatOutput,
     answer_as_twin,
     bind_insights,
+    chat_instruction,
     twin_chat_context,
 )
+from orchestwin.models.twin_update import LEARNED_INSTRUCTION
 from orchestwin.projects.briefs import ProjectBrief
 from orchestwin.twins.conversations import TwinConversationTurn, TwinInsightKind
 from src.test.python.models.test_proposal_evidence import audited_generator
@@ -113,6 +117,114 @@ def test_answer_uses_the_twin_chat_task_with_the_grounding_instruction(tmp_path)
     assert insights[0].text == "Registrazione in pochi secondi."
     assert insights[0].confidence == 0.75
     assert insights[0].grounded_on == ("user_twin.recurring_tasks",)
+
+
+LEARNED = [
+    {
+        "code": "OBS-001",
+        "statement": "Il gruppo registra gli ospiti mentre parla al telefono.",
+        "source": "TWIN_CRITIQUE",
+    },
+    {"code": "OBS-003", "statement": "Il gruppo lavora anche di notte.", "source": "OWNER"},
+]
+
+
+def test_without_learned_observations_the_chat_sends_the_context_and_instruction_of_today():
+    twin = twin_version()
+    context = twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=brief(),
+        turns=history(2),
+        question="Come registri un ospite?",
+        learned=[],
+    )
+    assert context == twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=brief(),
+        turns=history(2),
+        question="Come registri un ospite?",
+    )
+    assert context["user_twin"] == {
+        "twin_id": str(twin.twin_id),
+        "version_number": twin.version_number,
+        "content_hash": twin.content_hash,
+        "profile": twin.profile.to_snapshot(),
+    }
+    assert chat_instruction(context) is INSTRUCTION
+    assert chat_instruction({}) is INSTRUCTION
+
+
+def test_the_learned_observations_join_the_twin_and_the_instruction_says_how_to_use_them():
+    twin = twin_version()
+    context = twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=None,
+        turns=(),
+        question="Come registri un ospite?",
+        learned=LEARNED,
+    )
+    assert list(context["user_twin"]) == [
+        "twin_id",
+        "version_number",
+        "content_hash",
+        "profile",
+        "learned",
+    ]
+    assert context["user_twin"]["learned"] == LEARNED
+    assert chat_instruction(context) == f"{INSTRUCTION} {LEARNED_CHAT_INSTRUCTION}"
+    assert LEARNED_CHAT_INSTRUCTION == (
+        "user_twin.learned lists what your user group learned during the development of the "
+        "application, each observation approved by the owner of the project: use it as you use "
+        "the profile, and where a learned observation and the profile disagree the learned "
+        "observation prevails; grounded_on still lists only keys of profile observations."
+    )
+    assert LEARNED_CHAT_INSTRUCTION != LEARNED_INSTRUCTION
+    assert " ".join(LEARNED_CHAT_INSTRUCTION.split()) == LEARNED_CHAT_INSTRUCTION
+
+
+def test_the_answer_with_learned_observations_sends_them_and_the_longer_instruction(tmp_path):
+    generator, transport = audited_generator(tmp_path, OUTPUT)
+    twin = twin_version()
+    context = twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=None,
+        turns=(),
+        question="Come registri un ospite?",
+        learned=LEARNED,
+    )
+    asyncio.run(answer_as_twin(generator, context=context))
+    payload = transport.calls[0]["payload"]
+    assert payload["messages"][0]["content"].endswith(f"{INSTRUCTION} {LEARNED_CHAT_INSTRUCTION}")
+    sent = json.loads(payload["messages"][1]["content"])["context"]
+    assert sent["user_twin"]["learned"] == LEARNED
+    folder = tmp_path / "plain"
+    folder.mkdir()
+    plain, plain_transport = audited_generator(folder, OUTPUT)
+    asyncio.run(
+        answer_as_twin(
+            plain,
+            context=twin_chat_context(
+                project_id=twin.project_id,
+                twin_version=twin,
+                brief=None,
+                turns=(),
+                question="Come registri un ospite?",
+            ),
+        )
+    )
+    system = plain_transport.calls[0]["payload"]["messages"][0]["content"]
+    assert system.endswith(INSTRUCTION)
+    assert "user_twin.learned" not in system
+    assert (
+        "learned"
+        not in json.loads(plain_transport.calls[0]["payload"]["messages"][1]["content"])["context"][
+            "user_twin"
+        ]
+    )
 
 
 @pytest.mark.parametrize(

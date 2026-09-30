@@ -16,6 +16,7 @@ from orchestwin.knowledge.state import (
     MAX_PATHS,
     MAX_RESULTS,
     MAX_SNAPSHOT_ELEMENTS,
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     MAX_SNAPSHOT_OPTIONS,
     MAX_SNAPSHOT_TEXT_LENGTH,
     MAX_STEP_DETAIL_LENGTH,
@@ -360,7 +361,8 @@ def test_texts_read_from_a_page_are_collapsed_and_cut(value, maximum, expected):
 def test_a_snapshot_round_trips_and_summarizes_itself():
     snapshot = page()
     document = snapshot.to_snapshot()
-    assert list(document) == ["url", "title", "text", "elements"]
+    assert list(document) == ["url", "title", "text", "hidden_text", "elements"]
+    assert document["hidden_text"] == ""
     assert document["elements"][2] == {
         "index": 2,
         "role": "combobox",
@@ -380,6 +382,47 @@ def test_a_snapshot_round_trips_and_summarizes_itself():
     assert domain.snapshot_summary_from_snapshot(summary.to_snapshot()) == summary
     empty = PageSnapshot(url="about:blank", title="", text="")
     assert empty.summary().elements == 0
+
+
+def test_a_snapshot_carries_the_text_that_the_page_hides_when_it_is_read():
+    hidden = "Mancia calcolata Totale da pagare"
+    snapshot = page(hidden_text=hidden)
+    document = snapshot.to_snapshot()
+    assert list(document) == ["url", "title", "text", "hidden_text", "elements"]
+    assert (document["text"], document["hidden_text"]) == (page().text, hidden)
+    assert page_snapshot_from_document(document) == snapshot
+    older = {key: value for key, value in page().to_snapshot().items() if key != "hidden_text"}
+    assert page_snapshot_from_document(older) == page()
+    assert page_snapshot_from_document(older).hidden_text == ""
+    assert PageSnapshot(url="about:blank", title="", text="").hidden_text == ""
+    assert snapshot.summary() == page().summary()
+    assert list(snapshot.summary().to_snapshot()) == ["url", "title", "elements", "text_length"]
+    assert snapshot.summary().text_length == len(page().text)
+    longest = "x" * MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
+    assert page(hidden_text=longest).hidden_text == longest
+    cut = cut_text("Sezione " * 1000, maximum=MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH)
+    assert page(hidden_text=cut).hidden_text.endswith(CUT_MARK)
+    with pytest.raises(ValueError, match="snapshot hidden text"):
+        page_snapshot_from_document({**document, "hidden_text": None})
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"hidden_text": "x" * (MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH + 1)},
+        {"hidden_text": "Mancia  calcolata"},
+        {"hidden_text": " Mancia calcolata"},
+        {"hidden_text": "Mancia calcolata "},
+        {"hidden_text": "Mancia\ncalcolata"},
+        {"hidden_text": "Mancia\x07calcolata"},
+        {"hidden_text": None},
+        {"hidden_text": 42},
+        {"hidden_text": ("Mancia calcolata",)},
+    ],
+)
+def test_a_hidden_text_over_the_limit_not_collapsed_or_not_a_text_is_refused(values):
+    with pytest.raises(ValueError, match="snapshot hidden text"):
+        page(**values)
 
 
 @pytest.mark.parametrize(

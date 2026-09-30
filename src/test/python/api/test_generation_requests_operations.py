@@ -32,6 +32,11 @@ from orchestwin.api.design_discussion import (
 from orchestwin.api.design_loop import DesignLoopApplication
 from orchestwin.api.generation_requests import PREFERENCE_APPLIED, RESPOND_ASYNC, SERVER_ERROR
 from orchestwin.api.services import ApplicationRuntime
+from orchestwin.api.twin_learning import (
+    TwinLearningApplication,
+    TwinUpdateResult,
+    TwinUpdateStatus,
+)
 from orchestwin.config import ApplicationSettings
 from orchestwin.evaluation.proposer_evaluator import TWIN_REVIEW_TASK
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
@@ -72,6 +77,7 @@ from src.test.python.projects.test_acceptance_tests import (
     sample_review,
 )
 from src.test.python.projects.test_code_changes import review_run
+from src.test.python.projects.test_twin_learning import TWIN, twin_update
 from src.test.python.twins.test_user_modeling_persistence import (
     persona_version,
     snapshot_version,
@@ -107,6 +113,7 @@ TEST_PLAN = {
     "snapshot": page().to_snapshot(),
 }
 TEST_REVIEW = {"locale": "it-IT", "again": False}
+TWIN_UPDATE = {"locale": "it-IT"}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -119,6 +126,7 @@ ROUTES = {
     "CODE_CHANGE_REVIEW": (f"/code-changes/{COMMIT}/reviews", CHANGE_REVIEW),
     "TEST_PLAN": ("/test-plans", TEST_PLAN),
     "TEST_REVIEW": (f"/test-runs/{RUN_ID}/reviews", TEST_REVIEW),
+    "TWIN_UPDATE": (f"/user-twins/{TWIN}/updates", TWIN_UPDATE),
 }
 
 
@@ -164,6 +172,7 @@ def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(CodeChangeApplication, "review", scripted)
     monkeypatch.setattr(AcceptanceTestApplication, "plan", scripted)
     monkeypatch.setattr(AcceptanceTestApplication, "review", scripted)
+    monkeypatch.setattr(TwinLearningApplication, "propose", scripted)
     commands = SimpleNamespace(
         propose_personas=scripted,
         generate_grounded_snapshot=scripted,
@@ -353,6 +362,24 @@ CASES = [
         lambda _: HTTPException(409, detail={"code": "USER_MODELING_APPROVAL_REQUIRED"}),
     ),
     ("TEST_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_UNAVAILABLE")),
+    (
+        "TWIN_UPDATE",
+        lambda _: TwinUpdateResult(status=TwinUpdateStatus.PROPOSED, update=twin_update()),
+    ),
+    (
+        "TWIN_UPDATE",
+        lambda _: HTTPException(
+            409,
+            detail={"code": "TWIN_UPDATE_PENDING", "update_id": str(twin_update().id)},
+        ),
+    ),
+    ("TWIN_UPDATE", lambda _: HTTPException(409, detail={"code": "TWIN_UPDATE_NOTHING_NEW"})),
+    (
+        "TWIN_UPDATE",
+        lambda _: HTTPException(503, detail={"code": "TWIN_UPDATE_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("TWIN_UPDATE", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("TWIN_UPDATE", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
 ]
 
 
@@ -450,6 +477,8 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("TEST_PLAN", {**TEST_PLAN, "snapshot": None}),
         ("TEST_PLAN", {**TEST_PLAN, "criteria": []}),
         ("TEST_REVIEW", {**TEST_REVIEW, "again": "maybe"}),
+        ("TWIN_UPDATE", {**TWIN_UPDATE, "locale": "?"}),
+        ("TWIN_UPDATE", {**TWIN_UPDATE, "again": True}),
     ],
 )
 def test_an_invalid_body_is_refused_at_once_with_or_without_the_preference(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import replace
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -188,7 +188,12 @@ def test_plans_runs_and_reviews_round_trip_into_the_project_state(database):
             )
             assert isinstance(sources, ProjectStateSources)
             assert sources.tests == folder
-            assert (sources.changes, sources.runs, sources.tasks) == ((), (), ())
+            assert (sources.changes, sources.runs, sources.tasks, sources.learning) == (
+                (),
+                (),
+                (),
+                (),
+            )
             assert not sources.is_empty
             empty = await SqlAlchemyProjectStateQueryService(db.session_factory).current(
                 owner_user_id=stranger_id, project_id=project
@@ -232,6 +237,67 @@ def test_the_folder_keeps_the_newest_runs_only(database):
                 owner_user_id=owner, project_id=project
             )
             assert len(sources.tests) == 20
+        finally:
+            await db.dispose()
+
+    run(scenario())
+
+
+def test_the_newest_reviewed_run_is_found_also_before_a_given_run(database):
+    async def scenario():
+        db = create_database_runtime(database)
+        try:
+            owner, project, _ = await seed(db)
+            plan, replan = plans()
+            base = recorded_run(plan, replan)
+            moments = (1, 2, 3, 4, 5, 5)
+            identifiers = [UUID(int=0xA000 + index) for index in range(len(moments))]
+            runs = [
+                replace(base, id=identifier, recorded_at=NOW + timedelta(days=1, minutes=minutes))
+                for identifier, minutes in zip(identifiers, moments, strict=True)
+            ]
+            oldest, second, third, fourth, fifth, sixth = runs
+            async with db.session_factory() as session, session.begin():
+                repository = SqlAlchemyAcceptanceTestRepository(session, owner_user_id=owner)
+                await repository.create_plan(plan)
+                await repository.create_plan(replan)
+                assert await repository.latest_reviewed_run(project) is None
+                for item in runs:
+                    assert await repository.create_run(item) is AcceptanceTestWriteStatus.RECORDED
+                for item in (oldest, third, fifth):
+                    review = sample_review(id=uuid4(), run_id=item.id)
+                    assert (
+                        await repository.create_review(review) is AcceptanceTestWriteStatus.RECORDED
+                    )
+            async with db.session_factory() as session:
+                repository = SqlAlchemyAcceptanceTestRepository(session, owner_user_id=owner)
+                listed = await repository.runs(project, limit=None)
+                newest = await repository.latest_reviewed_run(project)
+                found = {
+                    item.id: await repository.latest_reviewed_run(project, before=item)
+                    for item in runs
+                }
+                stranger = SqlAlchemyAcceptanceTestRepository(session, owner_user_id=uuid4())
+                assert await stranger.latest_reviewed_run(project) is None
+            assert [item.id for item in listed] == [
+                sixth.id,
+                fifth.id,
+                fourth.id,
+                third.id,
+                second.id,
+                oldest.id,
+            ]
+            assert newest.id == fifth.id
+            assert newest == next(item for item in listed if item.id == fifth.id)
+            assert newest.review is not None
+            assert {key: None if value is None else value.id for key, value in found.items()} == {
+                sixth.id: fifth.id,
+                fifth.id: third.id,
+                fourth.id: third.id,
+                third.id: oldest.id,
+                second.id: oldest.id,
+                oldest.id: None,
+            }
         finally:
             await db.dispose()
 
