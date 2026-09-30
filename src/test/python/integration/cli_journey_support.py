@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import IO, Final
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import SecretStr
 
@@ -36,17 +36,32 @@ from orchestwin.cli.http import Reply, UrlTransport, origin_of, unreachable
 from orchestwin.cli.main import main
 from orchestwin.cli.messages import text
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
-from orchestwin.persistence import DatabaseSettings, create_database_runtime
+from orchestwin.persistence import DatabaseRuntime, DatabaseSettings, create_database_runtime
 from orchestwin.projects.acceptance_tests import (
     SnapshotSummary,
     TestPlan,
+    TestReview,
+    TestRun,
     application_from_snapshot,
+    browser_from_snapshot,
+    build_test_run,
+    critique_from_snapshot,
     not_covered_from_snapshot,
     path_from_snapshot,
+    path_result_from_snapshot,
+)
+from orchestwin.projects.code_changes import (
+    ChangeReviewRun,
+    alignment_verdict_from_snapshot,
+    twin_critique_from_snapshot,
 )
 from orchestwin.projects.persistence.acceptance_tests import (
     AcceptanceTestWriteStatus,
     SqlAlchemyAcceptanceTestRepository,
+)
+from orchestwin.projects.persistence.code_changes import (
+    CodeChangeWriteStatus,
+    SqlAlchemyCodeChangeRepository,
 )
 
 HOST: Final = "127.0.0.1"
@@ -504,45 +519,14 @@ class Terminal:
         offline: bool = False,
         sleep: Callable[[float], None] = short_wait,
     ) -> Run:
-        directory.mkdir(parents=True, exist_ok=True)
-        transport = RecordingTransport(self.origin, offline=offline)
-        browser = Browser()
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        environment = Environment(
-            stdin=io.StringIO("".join(f"{answer}\n" for answer in answers)),
-            stdout=stdout,
-            stderr=stderr,
-            variables={
-                CONFIG_VARIABLE: str(self.config),
-                "NO_COLOR": "1",
-                "COLUMNS": TERMINAL_COLUMNS,
-            },
-            home=self.home,
-            working_directory=directory,
-            platform=sys.platform,
-            interactive=False,
-            now=utc_now,
-            monotonic=time.monotonic,
-            sleep=sleep,
-            read_secret=no_secret,
-            open_browser=browser.open,
-            transport=transport,
-            system_language=LANGUAGE,
-        )
-        status = main(list(arguments), environment=environment)
-        self.refused.extend(transport.refused)
-        run = Run(
-            arguments=tuple(arguments),
+        return self._run(
+            arguments,
             directory=directory,
-            status=status,
-            output=stdout.getvalue(),
-            errors=stderr.getvalue(),
-            opened=tuple(browser.opened),
-            exchanges=tuple(transport.exchanges),
+            variables={},
+            answers=answers,
+            offline=offline,
+            sleep=sleep,
         )
-        self.runs.append(run)
-        return run
 
     def session_document(self) -> Mapping[str, object]:
         if not self.sessions_file.is_file():
@@ -559,8 +543,27 @@ class Terminal:
         answers: Sequence[str] = (),
         sleep: Callable[[float], None] = short_wait,
     ) -> Run:
+        return self._run(
+            arguments,
+            directory=directory,
+            variables=machine_variables(machine),
+            answers=answers,
+            offline=False,
+            sleep=sleep,
+        )
+
+    def _run(
+        self,
+        arguments: Sequence[str],
+        *,
+        directory: Path,
+        variables: Mapping[str, str],
+        answers: Sequence[str],
+        offline: bool,
+        sleep: Callable[[float], None],
+    ) -> Run:
         directory.mkdir(parents=True, exist_ok=True)
-        transport = RecordingTransport(self.origin)
+        transport = RecordingTransport(self.origin, offline=offline)
         browser = Browser()
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -569,7 +572,7 @@ class Terminal:
             stdout=stdout,
             stderr=stderr,
             variables={
-                **machine_variables(machine),
+                **variables,
                 CONFIG_VARIABLE: str(self.config),
                 "NO_COLOR": "1",
                 "COLUMNS": TERMINAL_COLUMNS,
@@ -813,12 +816,21 @@ def installed_browsers(machine: Mapping[str, str], home: Path) -> tuple[BrowserP
 
 def insert_test_plan(scene: Scene, plan: Mapping[str, object], *, database_url: str) -> None:
     account = scene.api.document(ACCOUNT_PATH)
+    stored = stored_plan(
+        plan, project_id=UUID(scene.project_id), owner_user_id=UUID(str(account["id"]))
+    )
+    status = run_coroutine(store_test_plan(database_url, stored))
+    if status is not AcceptanceTestWriteStatus.RECORDED:
+        raise StudioFailure(f"the test plan was not stored: {status}")
+
+
+def stored_plan(plan: Mapping[str, object], *, project_id: UUID, owner_user_id: UUID) -> TestPlan:
     reference = plan["reference"]
     application = application_from_snapshot(plan["application"])
-    stored = TestPlan(
+    return TestPlan(
         id=UUID(str(plan["id"])),
-        project_id=UUID(scene.project_id),
-        owner_user_id=UUID(str(account["id"])),
+        project_id=project_id,
+        owner_user_id=owner_user_id,
         created_at=datetime.fromisoformat(str(plan["created_at"])),
         locale=str(plan["locale"]),
         requirements_version_number=reference["requirements_version_number"],
@@ -834,14 +846,10 @@ def insert_test_plan(scene: Scene, plan: Mapping[str, object], *, database_url: 
         ),
         cost_microusd=plan["cost_microusd"],
     )
-    status = run_coroutine(store_test_plan(database_url, stored))
-    if status is not AcceptanceTestWriteStatus.RECORDED:
-        raise StudioFailure(f"the test plan was not stored: {status}")
 
 
 async def store_test_plan(database_url: str, plan: TestPlan) -> AcceptanceTestWriteStatus:
-    settings = DatabaseSettings(url=SecretStr(database_url), _env_file=None)
-    runtime = create_database_runtime(settings)
+    runtime = database_runtime(database_url)
     try:
         async with runtime.session_factory() as session, session.begin():
             repository = SqlAlchemyAcceptanceTestRepository(
@@ -850,6 +858,131 @@ async def store_test_plan(database_url: str, plan: TestPlan) -> AcceptanceTestWr
             return await repository.create_plan(plan)
     finally:
         await runtime.dispose()
+
+
+def approved_reference(scene: Scene) -> dict[str, object]:
+    reference = scene.document("/alignment")["reference"]
+    requirements, design = reference["requirements"], reference["design"]
+    if requirements is None or design is None:
+        raise StudioFailure("the requirements and the design are not both approved")
+    return {
+        "requirements_version_number": requirements["version_number"],
+        "design_version_number": design["version_number"],
+        "alternative_code": design["alternative_code"],
+    }
+
+
+def insert_change_review(
+    scene: Scene, commit: str, review: Mapping[str, object], *, database_url: str
+) -> dict[str, object]:
+    account = scene.api.document(ACCOUNT_PATH)
+    run = run_coroutine(
+        store_change_review(
+            database_url,
+            owner_user_id=UUID(str(account["id"])),
+            project_id=UUID(scene.project_id),
+            commit=commit,
+            review=review,
+            reference=approved_reference(scene),
+        )
+    )
+    return run.to_snapshot()
+
+
+async def store_change_review(
+    database_url: str,
+    *,
+    owner_user_id: UUID,
+    project_id: UUID,
+    commit: str,
+    review: Mapping[str, object],
+    reference: Mapping[str, object],
+) -> ChangeReviewRun:
+    runtime = database_runtime(database_url)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyCodeChangeRepository(session, owner_user_id=owner_user_id)
+            change = await repository.get(project_id, commit)
+            if change is None:
+                raise StudioFailure(f"the commit {commit} is not recorded in the Studio")
+            run = ChangeReviewRun(
+                id=uuid4(),
+                change_id=change.id,
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+                commit=change.commit,
+                reviewed_at=utc_now(),
+                locale=str(review["locale"]),
+                requirements_version_number=reference["requirements_version_number"],
+                design_version_number=reference["design_version_number"],
+                alternative_code=reference["alternative_code"],
+                critiques=tuple(twin_critique_from_snapshot(item) for item in review["critiques"]),
+                alignment=alignment_verdict_from_snapshot(review["alignment"]),
+            )
+            status = await repository.create_run(run)
+    finally:
+        await runtime.dispose()
+    if status is not CodeChangeWriteStatus.RECORDED:
+        raise StudioFailure(f"the review of the commit {commit} was not stored: {status}")
+    return run
+
+
+def insert_test_run_review(
+    scene: Scene,
+    plan: Mapping[str, object],
+    run: Mapping[str, object],
+    review: Mapping[str, object],
+    *,
+    database_url: str,
+) -> dict[str, object]:
+    account = scene.api.document(ACCOUNT_PATH)
+    stored = stored_plan(
+        plan, project_id=UUID(scene.project_id), owner_user_id=UUID(str(account["id"]))
+    )
+    recorded = build_test_run(
+        run_id=uuid4(),
+        plans=(stored,),
+        started_at=datetime.fromisoformat(str(run["started_at"])),
+        finished_at=datetime.fromisoformat(str(run["finished_at"])),
+        recorded_at=utc_now(),
+        application=application_from_snapshot(run["application"]),
+        browsers=tuple(browser_from_snapshot(item) for item in run["browsers"]),
+        results=tuple(path_result_from_snapshot(item) for item in run["results"]),
+        not_covered=tuple(not_covered_from_snapshot(item) for item in run["not_covered"]),
+    )
+    reviewed = TestReview(
+        id=uuid4(),
+        run_id=recorded.id,
+        project_id=recorded.project_id,
+        owner_user_id=recorded.owner_user_id,
+        reviewed_at=utc_now(),
+        locale=str(review["locale"]),
+        critiques=tuple(critique_from_snapshot(item) for item in review["critiques"]),
+    )
+    statuses = run_coroutine(store_test_run_review(database_url, recorded, reviewed))
+    if statuses != (AcceptanceTestWriteStatus.RECORDED, AcceptanceTestWriteStatus.RECORDED):
+        raise StudioFailure(f"the test run and its review were not stored: {statuses}")
+    return recorded.with_review(reviewed).to_snapshot()
+
+
+async def store_test_run_review(
+    database_url: str, run: TestRun, review: TestReview
+) -> tuple[AcceptanceTestWriteStatus, AcceptanceTestWriteStatus]:
+    runtime = database_runtime(database_url)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyAcceptanceTestRepository(
+                session, owner_user_id=run.owner_user_id
+            )
+            recorded = await repository.create_run(run)
+            reviewed = await repository.create_review(review)
+            return recorded, reviewed
+    finally:
+        await runtime.dispose()
+
+
+def database_runtime(database_url: str) -> DatabaseRuntime:
+    return create_database_runtime(DatabaseSettings(url=SecretStr(database_url), _env_file=None))
 
 
 def run_coroutine(coroutine: Coroutine[object, object, object]) -> object:

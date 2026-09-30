@@ -102,6 +102,7 @@ MCP_TOOLS = (
     "review_changes",
     "get_test_results",
     "run_tests",
+    "get_tasks",
 )
 
 
@@ -424,7 +425,13 @@ def decide_without_a_review(scene: Scene, development: Development) -> None:
     assert (document["next_action"], document["next_command"], document["alignment"]) == (
         "DOWNLOAD_FOLDER",
         "ut align",
-        {"recorded": recorded, "pending": 0, "aligned_commit": newest, "open_tasks": 0},
+        {
+            "recorded": recorded,
+            "pending": 0,
+            "aligned_commit": newest,
+            "open_tasks": 0,
+            "stale_reviews": 0,
+        },
     ), as_json.transcript()
     publish_the_state(scene, newest, aligned, reference)
     offline = scene.ut("status", "--offline")
@@ -454,6 +461,7 @@ def publish_the_state(
     counts = {
         "changes": len(listed),
         "pending_changes": 0,
+        "stale_reviews": 0,
         "aligned_commit": newest,
         "open_tasks": 0,
     }

@@ -41,7 +41,13 @@ STAGES = (*INIT_STAGES, "design")
 INIT_FOLDER = len(INIT_STAGES)
 COMPLETE_FOLDER = len(STAGES)
 SCHEMA_VERSION = 3
-EMPTY_STATE = {"changes": 0, "pending_changes": 0, "aligned_commit": None, "open_tasks": 0}
+EMPTY_STATE = {
+    "changes": 0,
+    "pending_changes": 0,
+    "stale_reviews": 0,
+    "aligned_commit": None,
+    "open_tasks": 0,
+}
 STATE_KIND = "orchestwin.project-state"
 CHANGES_KIND = "orchestwin.change-reviews"
 DESIGN_ANSWERS = ("choose", "1", "approve", "leave")
@@ -382,6 +388,7 @@ def show_the_state(scene: Scene) -> None:
     )
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
+    twins = scene.document("/user-modeling/snapshots/current")["snapshot"]["twin_versions"]
     budget = scene.api.request("GET", "/model-runtime/budget")
     assert (budget.status, budget.code) == (503, "REAL_MODEL_RUNTIME_NOT_CONFIGURED")
     assert scene.folder_numbers() == list(range(INIT_FOLDER, 0, -1))
@@ -417,6 +424,17 @@ def show_the_state(scene: Scene) -> None:
         "spending": None,
         "alignment": None,
         "tests": None,
+        "learning": {
+            "twins": [
+                {
+                    "twin_id": twin["twin_id"],
+                    "name": " ".join(twin["profile"]["name"].split()),
+                    "label": f"{twin['version_number']}.0",
+                    "observations": 0,
+                }
+                for twin in twins
+            ]
+        },
     }, as_json.transcript()
 
 
