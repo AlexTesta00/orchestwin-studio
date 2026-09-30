@@ -11,6 +11,7 @@ from orchestwin.cli.browser.snapshot import (
     FIELD_SCRIPT,
     FOCUS_SCRIPT,
     MAX_SNAPSHOT_ELEMENTS,
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     MAX_SNAPSHOT_OPTIONS,
     MAX_SNAPSHOT_TEXT_LENGTH,
     MAX_TARGET_NAME_LENGTH,
@@ -133,12 +134,14 @@ class PageSnapshot:
     title: str
     text: str
     elements: tuple[Element, ...]
+    hidden_text: str = ""
 
     def document(self) -> dict[str, object]:
         return {
             "url": self.url,
             "title": self.title,
             "text": self.text,
+            "hidden_text": self.hidden_text,
             "elements": [element.document() for element in self.elements],
         }
 
@@ -412,6 +415,7 @@ def snapshot_from_document(document: object) -> PageSnapshot:
         url=_text(document, "url"),
         title=shortened(collapsed(_text(document, "title")), MAX_TARGET_NAME_LENGTH),
         text=shortened(collapsed(_text(document, "text")), MAX_SNAPSHOT_TEXT_LENGTH),
+        hidden_text=shortened(collapsed(_hidden_text(document)), MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH),
         elements=tuple(_element(item, position) for position, item in enumerate(elements)),
     )
 
@@ -457,6 +461,10 @@ def _text(document: Mapping[str, object], key: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{key} is not text")
     return value
+
+
+def _hidden_text(document: Mapping[str, object]) -> str:
+    return _text(document, "hidden_text") if "hidden_text" in document else ""
 
 
 def _is_number(value: object) -> bool:

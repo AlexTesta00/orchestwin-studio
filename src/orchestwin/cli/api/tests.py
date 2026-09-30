@@ -232,6 +232,13 @@ def latest_run(document: Mapping[str, object]) -> Mapping[str, object] | None:
     return value if isinstance(value, Mapping) else None
 
 
+def latest_review(document: Mapping[str, object]) -> Mapping[str, object] | None:
+    value = document.get("latest_review")
+    if isinstance(value, Mapping) and isinstance(value.get("run_id"), str) and value["run_id"]:
+        return value
+    return None
+
+
 def criteria_of(run: Mapping[str, object]) -> list[Mapping[str, object]]:
     return mappings(run.get("criteria"))
 

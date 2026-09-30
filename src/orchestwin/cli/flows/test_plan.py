@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import jobs
 from orchestwin.cli.api import tests as tests_api
+from orchestwin.cli.browser.snapshot import (
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
+    MAX_SNAPSHOT_TEXT_LENGTH,
+)
+from orchestwin.cli.browser.targets import matches_text
 from orchestwin.cli.errors import BUDGET_CODES, ApiFailure, CliError
 from orchestwin.cli.project import json_bytes, read_json, write_atomically
 
@@ -25,6 +30,18 @@ REQUIREMENTS_STAGE: Final = "requirements"
 DESIGN_STAGE: Final = "design"
 STALE_KEY: Final = "test.plan_stale"
 UNCOVERED_KEY: Final = "test.plan_uncovered"
+VISIBLE_AT_OPENING: Final = "VISIBLE_AT_OPENING"
+HIDDEN_AT_OPENING: Final = "HIDDEN_AT_OPENING"
+ABSENT_VISIBLE_AT_OPENING: Final = "ABSENT_VISIBLE_AT_OPENING"
+NEVER_ON_PAGE: Final = "NEVER_ON_PAGE"
+WEAK_KINDS: Final = (
+    VISIBLE_AT_OPENING,
+    HIDDEN_AT_OPENING,
+    ABSENT_VISIBLE_AT_OPENING,
+    NEVER_ON_PAGE,
+)
+WEAK_FIELDS: Final = ("path", "step", "kind", "text")
+WEAK_EXPECTATIONS: Final = "weak_expectations"
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +50,7 @@ class SavedPlan:
     application: Mapping[str, object]
     plan: Mapping[str, object]
     replans: tuple[Mapping[str, object], ...] = ()
+    weak: tuple[Mapping[str, object], ...] = ()
 
     @property
     def plan_id(self) -> str:
@@ -80,12 +98,25 @@ class SavedPlan:
         named = {code for path in self.paths() for code in tests_api.texts(path.get("criteria"))}
         return named | {str(item["criterion"]) for item in self.not_covered()}
 
-    def with_replan(self, replan: Mapping[str, object], *, saved_at: str) -> SavedPlan:
+    def weak_of(self, *codes: str) -> list[Mapping[str, object]]:
+        wanted = set(codes)
+        return [item for item in self.weak if item.get("path") in wanted]
+
+    def with_replan(
+        self,
+        replan: Mapping[str, object],
+        *,
+        saved_at: str,
+        weak: Sequence[Mapping[str, object]] = (),
+    ) -> SavedPlan:
+        replaced = set(tests_api.texts(replan.get("replan_of")))
+        kept = [item for item in self.weak if item.get("path") not in replaced]
         return SavedPlan(
             saved_at=saved_at,
             application=self.application,
             plan=self.plan,
             replans=(*self.replans, replan),
+            weak=(*kept, *weak),
         )
 
     def document(self) -> dict[str, object]:
@@ -95,6 +126,7 @@ class SavedPlan:
             "application": dict(self.application),
             "plan": self.plan,
             "replans": list(self.replans),
+            WEAK_EXPECTATIONS: [dict(item) for item in self.weak],
         }
 
 
@@ -139,7 +171,72 @@ def saved_plan_from(document: object) -> SavedPlan | None:
         application=application if isinstance(application, Mapping) else {},
         plan=plan,
         replans=tuple(replans),
+        weak=weak_items(document.get(WEAK_EXPECTATIONS)),
     )
+
+
+def weak_items(value: object) -> tuple[Mapping[str, object], ...]:
+    if not isinstance(value, list):
+        return ()
+    items = [_weak_item(item) for item in value]
+    if any(item is None for item in items):
+        return ()
+    return tuple(item for item in items if item is not None)
+
+
+def weak_expectations(
+    paths: Sequence[Mapping[str, object]], snapshot: Mapping[str, object]
+) -> list[dict[str, object]]:
+    shown = _page_text(snapshot.get("text"))
+    hidden = _page_text(snapshot.get("hidden_text"))
+    whole = _whole(shown, MAX_SNAPSHOT_TEXT_LENGTH)
+    whole = whole and _whole(hidden, MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH)
+    found: list[dict[str, object]] = []
+    for path in tests_api.mappings(list(paths)):
+        code = path.get("code")
+        if not isinstance(code, str) or not code:
+            continue
+        for index, step in enumerate(tests_api.mappings(path.get("steps")), start=1):
+            expect = step.get("expect")
+            if not isinstance(expect, Mapping):
+                continue
+            text = expect.get("text")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            kind = _weak_kind(step.get("action"), expect.get("kind"), text, shown, hidden, whole)
+            if kind is not None:
+                found.append({"path": code, "step": index, "kind": kind, "text": text})
+    return found
+
+
+def weakly_passed(run: Mapping[str, object], weak: Sequence[Mapping[str, object]]) -> list[str]:
+    marked = {
+        (str(item.get("path")), step)
+        for item in weak
+        if (step := _number(item.get("step"))) is not None
+    }
+    paths: dict[str, Mapping[str, object]] = {}
+    for result in tests_api.results_of(run):
+        path = result.get("path")
+        if isinstance(path, Mapping) and isinstance(path.get("code"), str):
+            paths.setdefault(str(path["code"]), path)
+    found: list[str] = []
+    for item in tests_api.criteria_of(run):
+        code = item.get("code")
+        names = tests_api.texts(item.get("paths"))
+        if item.get("status") != tests_api.PASSED or not isinstance(code, str) or not names:
+            continue
+        if any(name not in paths for name in names):
+            continue
+        expectations = [
+            (name, index)
+            for name in names
+            for index, step in enumerate(tests_api.mappings(paths[name].get("steps")), start=1)
+            if isinstance(step.get("expect"), Mapping)
+        ]
+        if expectations and all(pair in marked for pair in expectations):
+            found.append(code)
+    return found
 
 
 def valid_plan(plan: object) -> bool:
@@ -293,6 +390,42 @@ def plan_cost_usd(plan: Mapping[str, object], fallback: float) -> float:
     if isinstance(cost, int) and not isinstance(cost, bool) and cost >= 0:
         return cost / MICRO_USD
     return fallback
+
+
+def _weak_kind(
+    action: object, kind: object, text: str, shown: str, hidden: str, whole: bool
+) -> str | None:
+    if kind == tests_api.TEXT_VISIBLE:
+        if matches_text(shown, text):
+            return None if action == tests_api.OPEN else VISIBLE_AT_OPENING
+        return HIDDEN_AT_OPENING if matches_text(hidden, text) else None
+    if kind != tests_api.TEXT_ABSENT:
+        return None
+    if matches_text(shown, text):
+        return ABSENT_VISIBLE_AT_OPENING
+    if whole and not matches_text(hidden, text):
+        return NEVER_ON_PAGE
+    return None
+
+
+def _weak_item(value: object) -> dict[str, object] | None:
+    if not isinstance(value, Mapping) or not all(key in value for key in WEAK_FIELDS):
+        return None
+    path, step, kind, text = (value[key] for key in WEAK_FIELDS)
+    number = _number(step)
+    if not isinstance(path, str) or not path or kind not in WEAK_KINDS:
+        return None
+    if number is None or number < 1 or not isinstance(text, str) or not text.strip():
+        return None
+    return {"path": path, "step": number, "kind": kind, "text": text}
+
+
+def _page_text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _whole(text: str, limit: int) -> bool:
+    return len(text) < limit - 1
 
 
 def _number(value: object) -> int | None:

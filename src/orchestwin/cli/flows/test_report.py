@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs
 from orchestwin.cli.api import tests as tests_api
-from orchestwin.cli.flows import align_review
+from orchestwin.cli.flows import align_review, test_plan
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.project import json_bytes, read_json, write_atomically
 
@@ -68,6 +68,12 @@ SEVERITY_KEYS: Final[Mapping[str, str]] = {
     "MEDIUM": "test.severity_medium",
     "HIGH": "test.severity_high",
 }
+WEAK_KEYS: Final[Mapping[str, str]] = {
+    test_plan.VISIBLE_AT_OPENING: "test.weak_visible",
+    test_plan.HIDDEN_AT_OPENING: "test.weak_hidden",
+    test_plan.ABSENT_VISIBLE_AT_OPENING: "test.weak_absent_visible",
+    test_plan.NEVER_ON_PAGE: "test.weak_absent",
+}
 STATUS_CLASSES: Final[Mapping[str, str]] = {
     tests_api.PASSED: "passed",
     tests_api.DONE: "passed",
@@ -99,6 +105,8 @@ STYLES: Final = (
     ".chip.failed{background:#fbe7e6;color:#8f1d16}"
     ".chip.blocked{background:#fdf0dc;color:#7a4a00}"
     ".chip.muted{background:#eceff2;color:#48525c}"
+    ".chip.weak{background:#efe7fb;color:#4a2485}"
+    ".weak{color:#4a2485}"
     ".muted{color:#48525c}"
     "ol,ul{margin:8px 0 0;padding-left:24px;display:grid;gap:12px}"
     ".detail{font-style:italic}"
@@ -202,6 +210,7 @@ def write_report(
     names: Names,
     labels: Mapping[str, str],
     first_attempt: Sequence[Mapping[str, object]] = (),
+    weak: Sequence[Mapping[str, object]] = (),
 ) -> Path:
     page = report_html(
         context,
@@ -210,6 +219,7 @@ def write_report(
         names=names,
         labels=labels,
         first_attempt=first_attempt,
+        weak=weak,
     )
     path = folder / REPORT_NAME
     write_atomically(path, page.encode("utf-8"))
@@ -224,6 +234,7 @@ def report_html(
     names: Names,
     labels: Mapping[str, str],
     first_attempt: Sequence[Mapping[str, object]] = (),
+    weak: Sequence[Mapping[str, object]] = (),
 ) -> str:
     title = context.text("test.report_title", name=project_name)
     lead = context.text(
@@ -232,8 +243,10 @@ def report_html(
         application=application_text(context, run.get("application")),
         browsers=browsers_text(run.get("browsers"), labels),
     )
+    marks = weak_marks(run, weak)
     sections = [
-        _criterion_section(context, run, item, names, labels) for item in tests_api.criteria_of(run)
+        _criterion_section(context, run, item, names, labels, marks)
+        for item in tests_api.criteria_of(run)
     ]
     lines = [
         "<!doctype html>",
@@ -250,9 +263,11 @@ def report_html(
         f"<h1>{_escape(title)}</h1>",
         f'<p class="lead">{_escape(lead)}</p>',
         f'<p class="summary">{_escape(summary_text(context, run))}</p>',
-        *sections,
-        _critiques_section(context, run, names),
     ]
+    if marks:
+        counted = context.text("test.report_weak", count=len(marks))
+        lines.append(f'<p class="weak">{_escape(counted)}</p>')
+    lines.extend([*sections, _critiques_section(context, run, names)])
     if first_attempt:
         lines.append(_first_attempt_section(context, first_attempt, labels))
     lines.extend(["</main>", "</body>", "</html>"])
@@ -322,6 +337,41 @@ def show_table(
 
 def show_summary(context: CommandContext, run: Mapping[str, object]) -> None:
     context.console.write(summary_text(context, run))
+
+
+def show_weak(context: CommandContext, weak: Sequence[Mapping[str, object]]) -> None:
+    lines = [line for line in (weak_sentence(context, item) for item in weak) if line]
+    if not lines:
+        return
+    context.console.say("test.weak_count", count=len(lines))
+    context.console.items(lines)
+
+
+def weak_sentence(context: CommandContext, item: Mapping[str, object]) -> str:
+    kind = item.get("kind")
+    key = WEAK_KEYS.get(kind) if isinstance(kind, str) else None
+    if key is None:
+        return ""
+    return context.text(
+        key,
+        path=str(item.get("path") or "-"),
+        step=item.get("step"),
+        text=_text(item.get("text")),
+    )
+
+
+def weak_marks(
+    run: Mapping[str, object], weak: Sequence[Mapping[str, object]]
+) -> dict[tuple[str, int], Mapping[str, object]]:
+    shown = {str(_path(result).get("code") or "") for result in tests_api.results_of(run)}
+    marks: dict[tuple[str, int], Mapping[str, object]] = {}
+    for item in weak:
+        path, step, kind = item.get("path"), item.get("step"), item.get("kind")
+        if not isinstance(path, str) or path not in shown or not isinstance(kind, str):
+            continue
+        if kind in WEAK_KEYS and isinstance(step, int) and not isinstance(step, bool):
+            marks.setdefault((path, step), item)
+    return marks
 
 
 def show_review(
@@ -482,6 +532,7 @@ def _criterion_section(
     item: Mapping[str, object],
     names: Names,
     labels: Mapping[str, str],
+    marks: Mapping[tuple[str, int], Mapping[str, object]],
 ) -> str:
     code = str(item.get("code") or "-")
     status = item.get("status")
@@ -510,13 +561,16 @@ def _criterion_section(
         parts.append(f'<p class="muted">{_escape(text)}</p>')
     elif not results:
         parts.append(f'<p class="muted">{_escape(context.text("test.report_not_run"))}</p>')
-    parts.extend(_result_article(context, result, labels) for result in results)
+    parts.extend(_result_article(context, result, labels, marks) for result in results)
     parts.append("</section>")
     return "\n".join(parts)
 
 
 def _result_article(
-    context: CommandContext, result: Mapping[str, object], labels: Mapping[str, str]
+    context: CommandContext,
+    result: Mapping[str, object],
+    labels: Mapping[str, str],
+    marks: Mapping[tuple[str, int], Mapping[str, object]] | None = None,
 ) -> str:
     path = _path(result)
     code = str(path.get("code") or "-")
@@ -536,6 +590,11 @@ def _result_article(
         item = [
             f'<li class="step">{_chip(context, step.get("status"), step=True)} {_escape(described)}'
         ]
+        mark = (marks or {}).get((code, position))
+        if mark is not None:
+            word = context.text("test.report_weak_mark")
+            item.append(f' <span class="chip weak">{_escape(word)}</span>')
+            item.append(f'<p class="weak">{_escape(weak_sentence(context, mark))}</p>')
         detail = _text(step.get("detail"))
         if detail:
             item.append(f'<p class="detail">{_escape(detail)}</p>')
