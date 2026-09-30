@@ -10,6 +10,13 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from orchestwin.api.acceptance_tests import (
+    AcceptanceTestApplication,
+    TestPlanResult,
+    TestPlanStatus,
+    TestReviewResult,
+    TestReviewStatus,
+)
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
 from orchestwin.api.code_changes import (
@@ -58,6 +65,12 @@ from src.test.python.artifacts.test_design_package_extension import (
     extended_version,
     fixture_package,
 )
+from src.test.python.projects.test_acceptance_tests import (
+    RUN_ID,
+    page,
+    sample_plan,
+    sample_review,
+)
 from src.test.python.projects.test_code_changes import review_run
 from src.test.python.twins.test_user_modeling_persistence import (
     persona_version,
@@ -88,6 +101,12 @@ OPENING = {
 ROUND = {"expected_round_count": 1, "owner_note": "Siate concreti."}
 COMMIT = "a1" * 20
 CHANGE_REVIEW = {"locale": "it-IT", "again": False}
+TEST_PLAN = {
+    "locale": "it-IT",
+    "application": {"kind": "STATIC", "address": "dist"},
+    "snapshot": page().to_snapshot(),
+}
+TEST_REVIEW = {"locale": "it-IT", "again": False}
 ROUTES = {
     "PERSONA_PROPOSAL": ("/user-modeling/personas/proposals", None),
     "USER_TWIN_GENERATION": ("/user-modeling/snapshots/generate", None),
@@ -98,6 +117,8 @@ ROUTES = {
     "DISCUSSION_START": ("/design/discussions", OPENING),
     "DISCUSSION_ROUND": (f"/design/discussions/{DISCUSSION_ID}/rounds", ROUND),
     "CODE_CHANGE_REVIEW": (f"/code-changes/{COMMIT}/reviews", CHANGE_REVIEW),
+    "TEST_PLAN": ("/test-plans", TEST_PLAN),
+    "TEST_REVIEW": (f"/test-runs/{RUN_ID}/reviews", TEST_REVIEW),
 }
 
 
@@ -141,6 +162,8 @@ def studio(scripted: Scripted, monkeypatch):
     monkeypatch.setattr(DesignDiscussionApplication, "start", scripted)
     monkeypatch.setattr(DesignDiscussionApplication, "next_round", scripted)
     monkeypatch.setattr(CodeChangeApplication, "review", scripted)
+    monkeypatch.setattr(AcceptanceTestApplication, "plan", scripted)
+    monkeypatch.setattr(AcceptanceTestApplication, "review", scripted)
     commands = SimpleNamespace(
         propose_personas=scripted,
         generate_grounded_snapshot=scripted,
@@ -299,6 +322,37 @@ CASES = [
     ),
     ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
     ("CODE_CHANGE_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
+        "TEST_PLAN",
+        lambda _: TestPlanResult(status=TestPlanStatus.PLANNED, plan=sample_plan()),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(409, detail={"code": "REQUIREMENTS_APPROVAL_REQUIRED"}),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(
+            422, detail={"code": "ACCEPTANCE_CRITERION_UNKNOWN", "codes": ["AC-009"]}
+        ),
+    ),
+    (
+        "TEST_PLAN",
+        lambda _: HTTPException(503, detail={"code": "TEST_MODEL_NOT_CONFIGURED"}),
+    ),
+    ("TEST_PLAN", lambda _: ProposalGenerationError("INVALID_PROVIDER_OUTPUT")),
+    ("TEST_PLAN", lambda _: ProposalGenerationError("GENERATION_BUDGET_EXCEEDED")),
+    (
+        "TEST_REVIEW",
+        lambda _: TestReviewResult(status=TestReviewStatus.REVIEWED, review=sample_review()),
+    ),
+    ("TEST_REVIEW", lambda _: HTTPException(404, detail={"code": "TEST_RUN_NOT_FOUND"})),
+    ("TEST_REVIEW", lambda _: HTTPException(409, detail={"code": "TEST_REVIEW_EXISTS"})),
+    (
+        "TEST_REVIEW",
+        lambda _: HTTPException(409, detail={"code": "USER_MODELING_APPROVAL_REQUIRED"}),
+    ),
+    ("TEST_REVIEW", lambda _: ProposalGenerationError("GENERATION_BUDGET_UNAVAILABLE")),
 ]
 
 
@@ -392,6 +446,10 @@ def test_a_refused_proposal_gives_its_reason_with_and_without_the_preference(
         ("DISCUSSION_ROUND", {**ROUND, "expected_round_count": 0}),
         ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "locale": "?"}),
         ("CODE_CHANGE_REVIEW", {**CHANGE_REVIEW, "again": "maybe"}),
+        ("TEST_PLAN", {**TEST_PLAN, "locale": "?"}),
+        ("TEST_PLAN", {**TEST_PLAN, "snapshot": None}),
+        ("TEST_PLAN", {**TEST_PLAN, "criteria": []}),
+        ("TEST_REVIEW", {**TEST_REVIEW, "again": "maybe"}),
     ],
 )
 def test_an_invalid_body_is_refused_at_once_with_or_without_the_preference(
