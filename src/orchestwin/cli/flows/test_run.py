@@ -11,6 +11,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from orchestwin.cli import costs, jobs
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli.api import changes as changes_api
+from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.browser import (
     BrowserError,
@@ -22,7 +24,14 @@ from orchestwin.cli.browser import (
 )
 from orchestwin.cli.console import ProgressOutcome
 from orchestwin.cli.errors import USAGE_STATUS, ApiFailure, CliError
-from orchestwin.cli.flows import align_review, publish, test_plan, test_report, test_settings
+from orchestwin.cli.flows import (
+    align_review,
+    publish,
+    task_selection,
+    test_plan,
+    test_report,
+    test_settings,
+)
 from orchestwin.cli.flows.test_server import StaticServer
 from orchestwin.cli.http import is_loopback
 from orchestwin.cli.messages import known
@@ -49,6 +58,7 @@ WEB_SCHEMES: Final = ("http", "https")
 STAGES: Final = ("requirements", "design")
 SPENDING_REFUSED: Final = "SPENDING_REFUSED"
 INTERRUPTED: Final = "GENERATION_INTERRUPTED"
+INPUT_CLOSED: Final = "INPUT_CLOSED"
 CRITERION_PATTERN: Final = re.compile(r"AC-[0-9]{3,6}")
 UNSAFE_SEGMENT: Final = re.compile(r"[^A-Za-z0-9_-]+")
 UNSAFE_FOLDER: Final = re.compile(r"[\\:]+")
@@ -70,6 +80,7 @@ class TestRequest:
     new_plan: bool = False
     review: bool = True
     max_usd: float = 2.0
+    offer_tasks: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +91,7 @@ class TestOutcome:
     critiques: tuple[Mapping[str, object], ...]
     folder: Path
     report: Path
+    weak: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,28 +267,35 @@ def execute(context: CommandContext, request: TestRequest) -> TestOutcome:
         finished = context.environment.now()
     labels = {browser.name: browser.label for browser in browsers}
     first_attempt = [outcome.document() for outcome in execution.first_attempt]
+    weak = tuple(execution.saved.weak_of(*(outcome.code for outcome in execution.results)))
     body = run_body(ready, execution, browsers, started=started, finished=finished)
     test_report.write_run(folder, body, first_attempt=first_attempt)
     _, document = tests_api.record(ready.client, ready.project_id, body)
     run = recorded_run(document)
     names = test_report.names(ready.project)
-    report = write_files(context, ready, folder, run, names, labels, first_attempt)
+    report = write_files(context, ready, folder, run, names, labels, first_attempt, weak)
     console.write()
     test_report.show_table(context, run, labels)
     test_report.show_summary(context, run)
+    for code in test_plan.weakly_passed(run, weak):
+        console.say("test.weak_criterion", code=code)
     console.say("test.report_written", path=str(report))
+    tasks = open_tasks(ready)
+    passed_tasks(context, run, tasks)
     critiques: tuple[Mapping[str, object], ...] = ()
     if request.review:
         review = review_run(context, ready, run, available=available)
         if review is not None:
             critiques = tuple(tests_api.critiques_of(review))
             run = with_review(run, review)
-            report = write_files(context, ready, folder, run, names, labels, first_attempt)
+            report = write_files(context, ready, folder, run, names, labels, first_attempt, weak)
             test_report.show_review(
                 context, critiques, names, cost_microusd=review.get("cost_microusd")
             )
+            if request.offer_tasks:
+                offer_tasks(context, ready, run, tasks)
     publish_folder(context, ready)
-    return TestOutcome(run=run, critiques=critiques, folder=folder, report=report)
+    return TestOutcome(run=run, critiques=critiques, folder=folder, report=report, weak=weak)
 
 
 def prepare(context: CommandContext, request: TestRequest) -> Prepared:
@@ -505,6 +524,10 @@ def plan_for(
             paths=len(saved.paths()),
             not_covered=len(saved.not_covered()),
         )
+        selected = selection(saved.paths(), ready.criteria)
+        weak = saved.weak_of(*(str(path.get("code")) for path in selected))
+        if weak:
+            console.say("test.weak_reused", count=len(weak))
         return saved, 0.0
     if choice.key is not None:
         console.say(choice.key, **choice.values)
@@ -512,14 +535,17 @@ def plan_for(
     if snapshot is None:
         raise ApiFailure("API_FAILURE", http_status=200)
     costs.confirm_spending(context, ready.client, [tests_api.PLAN_OPERATION])
-    body = test_plan.plan_body(ready.locale, ready.application.document(), snapshot.document())
+    sent = snapshot.document()
+    body = test_plan.plan_body(ready.locale, ready.application.document(), sent)
     plan = test_plan.request_plan(
         context, ready.client, ready.project, body, label=context.text("test.plan_label")
     )
+    weak = test_plan.weak_expectations(tests_api.mappings(plan.get("paths")), sent)
     saved = test_plan.SavedPlan(
         saved_at=_now_text(context),
         application=ready.application.document(),
         plan=plan,
+        weak=tuple(weak),
     )
     test_plan.save_plan(ready.project, saved)
     console.say("test.plan_written", paths=len(saved.paths()), not_covered=len(saved.not_covered()))
@@ -533,6 +559,7 @@ def plan_for(
     ]
     if lines:
         console.items(lines)
+    test_report.show_weak(context, weak)
     estimate = costs.ESTIMATES[tests_api.PLAN_OPERATION].high_usd
     spent = test_plan.plan_cost_usd(plan, estimate)
     if spent > 0:
@@ -619,14 +646,14 @@ def replan(
     chosen = list(blocked[: tests_api.MAX_EARLIER_PATHS])
     console.say("test.replan", codes=", ".join(outcome.code for outcome in chosen))
     try:
-        snapshot = runner.snapshot(browser)
+        sent = runner.snapshot(browser).document()
         criteria = tests_api.ordered(
             [code for outcome in chosen for code in tests_api.texts(outcome.path.get("criteria"))]
         )
         body = test_plan.plan_body(
             ready.locale,
             ready.application.document(),
-            snapshot.document(),
+            sent,
             criteria=criteria,
             earlier=[outcome.earlier() for outcome in chosen],
         )
@@ -639,13 +666,15 @@ def replan(
             raise
         console.say("test.replan_failed", code=_error_code(error))
         return None
-    updated = saved.with_replan(plan, saved_at=_now_text(context))
+    weak = test_plan.weak_expectations(tests_api.mappings(plan.get("paths")), sent)
+    updated = saved.with_replan(plan, saved_at=_now_text(context), weak=weak)
     test_plan.save_plan(ready.project, updated)
     codes = [str(path.get("code") or "-") for path in tests_api.mappings(plan.get("paths"))]
     if codes:
         console.say("test.replan_done", codes=", ".join(codes))
     else:
         console.say("test.replan_empty")
+    test_report.show_weak(context, weak)
     return updated
 
 
@@ -991,6 +1020,7 @@ def write_files(
     names: Names,
     labels: Mapping[str, str],
     first_attempt: Sequence[Mapping[str, object]],
+    weak: Sequence[Mapping[str, object]] = (),
 ) -> Path:
     test_report.write_run(folder, run, first_attempt=first_attempt)
     test_report.write_latest(test_plan.tests_folder(ready.project), folder, run)
@@ -1002,6 +1032,7 @@ def write_files(
         names=names,
         labels=labels,
         first_attempt=first_attempt,
+        weak=weak,
     )
 
 
@@ -1078,6 +1109,64 @@ def with_review(run: Mapping[str, object], review: Mapping[str, object]) -> dict
         "reviewed_at": review.get("reviewed_at"),
         "cost_microusd": total,
     }
+
+
+def open_tasks(ready: Prepared) -> tuple[Mapping[str, object], ...]:
+    try:
+        document = changes_api.alignment(ready.client, ready.project_id)
+    except CliError:
+        return ()
+    return tuple(changes_api.open_tasks(document))
+
+
+def passed_tasks(
+    context: CommandContext, run: Mapping[str, object], tasks: Sequence[Mapping[str, object]]
+) -> None:
+    passed = {
+        str(item.get("code"))
+        for item in tests_api.criteria_of(run)
+        if item.get("status") == tests_api.PASSED and isinstance(item.get("code"), str)
+    }
+    if not passed:
+        return
+    for task in tasks:
+        codes = [code for code in tasks_api.criteria_of(task) if code in passed]
+        if tasks_api.is_open(task) and codes:
+            code = tasks_api.task_code(task)
+            context.console.say("test.task_maybe_done", task=code, criteria=", ".join(codes))
+
+
+def offer_tasks(
+    context: CommandContext,
+    ready: Prepared,
+    run: Mapping[str, object],
+    tasks: Sequence[Mapping[str, object]],
+) -> None:
+    console = context.console
+    candidates = task_selection.candidates_of_run(run, tasks)
+    if not any(item.offered for item in candidates):
+        return
+    console.write()
+    console.say("test.tasks_intro")
+    try:
+        chosen = task_selection.choose(context, candidates, question_key="test.tasks_question")
+    except CliError as error:
+        if error.code != INPUT_CLOSED:
+            raise
+        console.say("test.tasks_later")
+        return
+    if not chosen:
+        console.say("test.tasks_none")
+        return
+    items = [tasks_api.finding_item(item.source) for item in chosen if item.source is not None]
+    try:
+        count, created = tasks_api.create_all(ready.client, ready.project_id, items)
+    except CliError as error:
+        console.say("test.tasks_failed", code=_error_code(error))
+        return
+    console.say("test.tasks_created", count=count)
+    console.items([f"{tasks_api.task_code(task)}: {tasks_api.task_text(task)}" for task in created])
+    console.say("test.tasks_next")
 
 
 def publish_folder(context: CommandContext, ready: Prepared) -> None:

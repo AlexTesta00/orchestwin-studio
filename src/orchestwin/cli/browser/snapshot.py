@@ -7,6 +7,7 @@ from typing import Final
 
 MAX_SNAPSHOT_ELEMENTS: Final = 150
 MAX_SNAPSHOT_TEXT_LENGTH: Final = 6000
+MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH: Final = 3000
 MAX_SNAPSHOT_OPTIONS: Final = 20
 MAX_TARGET_NAME_LENGTH: Final = 200
 MAX_VALUE_LENGTH: Final = 200
@@ -305,6 +306,63 @@ _SNAPSHOT_TEMPLATE: Final = r"""() => {
     walk(root, root.nodeType !== 1 || styleOf(root).visibility === "visible");
     return collapse(parts.join(""));
   };
+  const hiddenTextOf = (root) => {
+    const parts = [];
+    let size = 0;
+    const budget = limits.hidden * 2;
+    const walk = (node, visible, forced) => {
+      const whole = node.localName === "details" && !node.shadowRoot;
+      const shown = whole && !forced && !node.open ? childrenOf(node) : null;
+      for (const child of whole ? Array.from(node.childNodes) : childrenOf(node)) {
+        if (size >= budget) {
+          return;
+        }
+        const hidden = forced || (shown !== null && !shown.includes(child));
+        if (child.nodeType === 3) {
+          if (hidden || !visible) {
+            parts.push(child.data);
+            size += child.data.length;
+          }
+          continue;
+        }
+        if (child.nodeType !== 1) {
+          continue;
+        }
+        const tag = child.localName;
+        if (hiddenTags.has(tag)) {
+          continue;
+        }
+        const style = styleOf(child);
+        const gone = hidden || concealed(child, style, true);
+        const own = style.visibility === "visible";
+        if (tag === "img" || (tag === "input" && typeOf(child) === "image")) {
+          const alt = collapse(child.getAttribute("alt"));
+          if (alt && (gone || !own)) {
+            parts.push(" " + alt + " ");
+            size += alt.length;
+          }
+          continue;
+        }
+        if (tag === "br") {
+          parts.push(" ");
+          continue;
+        }
+        if (opaqueTags.has(tag)) {
+          continue;
+        }
+        const block = !inline(style);
+        if (block) {
+          parts.push(" ");
+        }
+        walk(child, own, gone || clipped(child, style));
+        if (block) {
+          parts.push(" ");
+        }
+      }
+    };
+    walk(root, root.nodeType !== 1 || styleOf(root).visibility === "visible", false);
+    return collapse(parts.join(""));
+  };
   const labelShown = (element) =>
     Boolean(element.labels) &&
     Array.from(element.labels).some((label) => {
@@ -573,11 +631,12 @@ _SNAPSHOT_TEMPLATE: Final = r"""() => {
     };
   });
   const text = body ? cut(textOf(body, { names: false, budget: limits.text * 2, exclude: null }), limits.text) : "";
+  const hiddenText = body ? cut(hiddenTextOf(body), limits.hidden) : "";
   for (const item of marked) {
     item.removeAttribute(attribute);
   }
   kept.forEach((entry, index) => entry.element.setAttribute(attribute, String(index)));
-  return { url: String(location.href), title: collapse(document.title), text, elements };
+  return { url: String(location.href), title: collapse(document.title), text, hidden_text: hiddenText, elements };
 }"""
 
 _FIND: Final = r"""const find = (index) => {
@@ -749,6 +808,7 @@ SNAPSHOT_SCRIPT: Final = (
             {
                 "elements": MAX_SNAPSHOT_ELEMENTS,
                 "text": MAX_SNAPSHOT_TEXT_LENGTH,
+                "hidden": MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
                 "name": MAX_TARGET_NAME_LENGTH,
                 "value": MAX_VALUE_LENGTH,
                 "options": MAX_SNAPSHOT_OPTIONS,

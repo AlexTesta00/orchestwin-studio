@@ -36,6 +36,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "--plan", choices=PLAN_CHOICES, default=LATEST_PLAN, help="test.option_plan"
     )
     parser.add_argument("--no-review", action="store_true", help="test.option_no_review")
+    parser.add_argument("--no-tasks", action="store_true", help="test.option_no_tasks")
     parser.add_argument(
         "--max-usd",
         type=float,
@@ -58,6 +59,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         new_plan=arguments.plan == NEW_PLAN,
         review=not arguments.no_review,
         max_usd=cap,
+        offer_tasks=not arguments.no_tasks and not arguments.json,
     )
     working = diagnostic_context(context) if arguments.json else context
     outcome = test_run.execute(working, request)

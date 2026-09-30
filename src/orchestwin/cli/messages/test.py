@@ -32,6 +32,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "non chiede ai twin di criticare l'esecuzione (nessuna spesa per le critiche)",
         "en": "do not ask the twins to criticize the run (no spending for the critiques)",
     },
+    "test.option_no_tasks": {
+        "it": "non chiede quali rilievi dei twin diventano compiti per il codice",
+        "en": "do not ask which findings of the twins become tasks for the code",
+    },
     "test.option_max_usd": {
         "it": "spesa massima in USD per i piani di questa esecuzione: un secondo piano per i "
         "percorsi bloccati parte solo se resta entro questa cifra (predefinito 2.00)",
@@ -100,6 +104,41 @@ MESSAGES: dict[str, dict[str, str]] = {
     "test.plan_cost": {
         "it": "Costo del piano: {amount} USD.",
         "en": "Cost of the plan: {amount} USD.",
+    },
+    "test.weak_count": {
+        "it": "Attese che provano poco: {count}.",
+        "en": "Expectations that prove little: {count}.",
+    },
+    "test.weak_visible": {
+        "it": "{path}, passo {step}: la pagina mostra «{text}» già quando si apre, quindi questa "
+        "attesa è vera prima di fare qualunque cosa.",
+        "en": '{path}, step {step}: the page shows "{text}" as soon as it opens, so this '
+        "expectation holds before anything is done.",
+    },
+    "test.weak_hidden": {
+        "it": "{path}, passo {step}: «{text}» è già nella pagina quando si apre, in una parte "
+        "nascosta, quindi questa attesa prova soltanto che quella parte è comparsa.",
+        "en": '{path}, step {step}: "{text}" is already in the page when it opens, in a hidden '
+        "part, so this expectation proves only that the part appeared.",
+    },
+    "test.weak_absent_visible": {
+        "it": "{path}, passo {step}: «{text}» è già visibile quando la pagina si apre, quindi che "
+        "manchi non si può verificare: questa attesa fallisce anche quando l'applicazione è "
+        "giusta.",
+        "en": '{path}, step {step}: "{text}" is already visible when the page opens, so its '
+        "absence cannot be verified: this expectation fails even when the application is right.",
+    },
+    "test.weak_absent": {
+        "it": "{path}, passo {step}: la pagina, quando si apre, non contiene «{text}» da nessuna "
+        "parte, nemmeno nelle parti nascoste, quindi che manchi prova poco.",
+        "en": '{path}, step {step}: the page as it opens does not hold "{text}" anywhere, not '
+        "even in its hidden parts, so its absence proves little.",
+    },
+    "test.weak_reused": {
+        "it": "Attese che provano poco nei percorsi di questa esecuzione: {count}. Il rapporto le "
+        "segna sui loro passi.",
+        "en": "Expectations that prove little in the paths of this run: {count}. The report "
+        "marks them on their steps.",
     },
     "test.path_label": {
         "it": "Percorso {code} in {browser}: {heading}",
@@ -194,15 +233,25 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Criteria: {passed} passed, {failed} failed, {blocked} blocked, {not_covered} not "
         "covered, {not_run} not run.",
     },
+    "test.weak_criterion": {
+        "it": "{code} è superato soltanto con attese che provano poco: conferma a mano, con il "
+        "rapporto, che l'applicazione fa quello che il criterio chiede.",
+        "en": "{code} passed only through expectations that prove little: confirm by hand, with "
+        "the report, that the application does what the criterion asks.",
+    },
     "test.report_written": {
         "it": "Rapporto con i passi e le schermate: {path}",
         "en": "Report with the steps and the screenshots: {path}",
     },
     "test.failed_summary": {
         "it": "Alcuni criteri sono falliti o bloccati: il rapporto mostra ogni passo con la sua "
-        "schermata. Correggi l'applicazione, poi rilancia `ut test`.",
+        "schermata. Se sbaglia l'applicazione, correggila e rilancia `ut test`. Se invece "
+        "l'applicazione è giusta e il test cerca un testo o un elemento che la pagina non ha più, "
+        "fai riscrivere i percorsi con `ut test --plan new`.",
         "en": "Some criteria failed or were blocked: the report shows every step with its "
-        "screenshot. Fix the application, then launch `ut test` again.",
+        "screenshot. If the application is wrong, fix it and launch `ut test` again. If the "
+        "application is right and the test looks for a text or an element that the page no "
+        "longer has, have the paths written again with `ut test --plan new`.",
     },
     "test.reviewing": {
         "it": "Ora i twin criticano l'esecuzione: twin {twins}, una generazione ciascuno.",
@@ -276,6 +325,48 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "{finding} Cosa fare: {action}",
         "en": "{finding} What to do: {action}",
     },
+    "test.task_maybe_done": {
+        "it": "Il compito aperto {task} riguarda {criteria}, che questa esecuzione supera: se è "
+        "fatto, chiudilo con `ut tasks done {task}`.",
+        "en": "The open task {task} is about {criteria}, which this run passes: if it is done, "
+        "close it with `ut tasks done {task}`.",
+    },
+    "test.tasks_intro": {
+        "it": "Rilievi dei twin su questa esecuzione che possono diventare compiti per il codice:",
+        "en": "Findings of the twins on this run that can become tasks for the code:",
+    },
+    "test.tasks_question": {
+        "it": "Quali diventano compiti? Scrivi i numeri separati da virgole o spazi, a per tutti; "
+        "Invio per nessuno:",
+        "en": "Which become tasks? Type their numbers separated by commas or spaces, a for all; "
+        "Enter for none:",
+    },
+    "test.tasks_created": {
+        "it": "Compiti creati: {count}.",
+        "en": "Tasks created: {count}.",
+    },
+    "test.tasks_next": {
+        "it": "`ut code` affida i compiti aperti all'agente di programmazione; `ut tasks` li "
+        "mostra tutti.",
+        "en": "`ut code` hands the open tasks to the coding agent; `ut tasks` shows them all.",
+    },
+    "test.tasks_none": {
+        "it": "Nessun rilievo è diventato un compito: `ut tasks from-test` li propone di nuovo "
+        "quando vuoi.",
+        "en": "No finding became a task: `ut tasks from-test` offers them again whenever you want.",
+    },
+    "test.tasks_later": {
+        "it": "L'input si è chiuso prima della risposta: nessun compito creato. "
+        "`ut tasks from-test` propone di nuovo questi rilievi.",
+        "en": "The input closed before the answer: no task was created. `ut tasks from-test` "
+        "offers these findings again.",
+    },
+    "test.tasks_failed": {
+        "it": "I compiti non sono stati creati ({code}): `ut tasks from-test` propone di nuovo "
+        "questi rilievi.",
+        "en": "The tasks were not created ({code}): `ut tasks from-test` offers these findings "
+        "again.",
+    },
     "test.folder_updated": {
         "it": "Cartella di conoscenza aggiornata in orchestwin/ (versione {version}): "
         "orchestwin/twins/feedback/tests.json contiene le esecuzioni con le critiche dei twin.",
@@ -332,6 +423,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "These paths got blocked in the first browser and were replaced by a new plan: "
         "the Studio records only the paths that replace them.",
     },
+    "test.report_weak": {
+        "it": "Attese che provano poco: {count}. Ognuna è segnata sul suo passo con il motivo; un "
+        "criterio superato soltanto con queste attese va confermato a mano.",
+        "en": "Expectations that prove little: {count}. Each one is marked on its step with the "
+        "reason; a criterion passed only through them needs to be confirmed by hand.",
+    },
+    "test.report_weak_mark": {"it": "prova poco", "en": "proves little"},
     "test.step_done": {"it": "fatto", "en": "done"},
     "test.step_failed": {"it": "non superato", "en": "failed"},
     "test.step_blocked": {"it": "bloccato", "en": "blocked"},
@@ -389,7 +487,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "test.errors.TEST_APPLICATION_REQUIRED": {
         "it": "Non so ancora quale applicazione verificare (TEST_APPLICATION_REQUIRED): lancia "
-        "`ut test --url INDIRIZZO` oppure `ut test --static CARTELLA`; le volte successive "
+        "`ut test --url ADDRESS` oppure `ut test --static FOLDER`; le volte successive "
         "`ut test` la ricorda.",
         "en": "Which application to verify is not known yet (TEST_APPLICATION_REQUIRED): launch "
         "`ut test --url ADDRESS` or `ut test --static FOLDER`; the next times `ut test` "
