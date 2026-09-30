@@ -417,6 +417,43 @@ describe("useGenerationResume", () => {
     expect(resume.job.value).toBeNull();
   });
 
+  it("finds on request a job started after its step opened and lets the step reload when it ends", async () => {
+    const api = fakeApi([], [finished(201, {})]);
+    const onSettled = vi.fn();
+    const { resume, wrapper } = host(["TWIN_UPDATE"], api, onSettled);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resume.job.value).toBeNull();
+
+    api.list.mockResolvedValueOnce([job({ operation: "TWIN_UPDATE" })]);
+    await resume.recheck();
+
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(resume.checked.value).toBe(true);
+    expect(resume.job.value?.operation).toBe("TWIN_UPDATE");
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(resume.job.value).toBeNull();
+    expect(onSettled).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
+  it("waits once for a job that a second check finds again", async () => {
+    const api = fakeApi([job()], [job(), finished(201, {})]);
+    const onSettled = vi.fn();
+    const { resume, wrapper } = host(["REQUIREMENTS_PROPOSAL"], api, onSettled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    await resume.recheck();
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(api.job).toHaveBeenCalledTimes(2);
+    expect(onSettled).toHaveBeenCalledOnce();
+    expect(resume.job.value).toBeNull();
+    wrapper.unmount();
+  });
+
   it("checks again when the project changes and ignores the jobs of the previous one", async () => {
     const api = fakeApi([job()], []);
     const onSettled = vi.fn();

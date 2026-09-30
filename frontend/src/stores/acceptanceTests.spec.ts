@@ -111,6 +111,83 @@ describe("Acceptance Tests store", () => {
     expect(store.latestRun).toBeNull();
     expect(store.criteria).toEqual([]);
     expect(store.critiques).toEqual([]);
+    expect(store.latestRunStale).toBe(false);
+    expect(store.latestReview).toBeNull();
+  });
+
+  it("says whether the latest run is stale and gives the latest review of an older run", async () => {
+    const latestReview = {
+      run_id: "55555555-5555-4555-8555-555555555555",
+      finished_at: "2026-09-28T10:04:00+00:00",
+      reviewed_at: "2026-09-28T10:06:00+00:00",
+      critiques: [CRITIQUE],
+    };
+    const store = useAcceptanceTestsStore();
+
+    await store.load(
+      PROJECT_ID,
+      authorize,
+      fakeApi(async () => ({
+        ...overview({ ...RUN, critiques: [], reviewed_at: null }),
+        latest_run_stale: true,
+        latest_review: latestReview,
+      })),
+    );
+
+    expect(store.latestRunStale).toBe(true);
+    expect(store.latestReview).toEqual(latestReview);
+    expect(store.critiques).toEqual([]);
+  });
+
+  it("reads an overview of the previous sprint as fresh and without an older review", async () => {
+    const store = useAcceptanceTestsStore();
+
+    await store.load(PROJECT_ID, authorize, fakeApi());
+
+    expect(store.overview).not.toHaveProperty("latest_run_stale");
+    expect(store.latestRunStale).toBe(false);
+    expect(store.latestReview).toBeNull();
+  });
+
+  it("reads the overview again on reload and keeps the newest answer", async () => {
+    const older = deferred<AcceptanceTestsOverviewPayload>();
+    const newer = { ...overview(), runs: 2 };
+    const read = vi
+      .fn<AcceptanceTestsApi["overview"]>()
+      .mockResolvedValueOnce(overview())
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce(newer);
+    const store = useAcceptanceTestsStore();
+
+    await store.load(PROJECT_ID, authorize, { overview: read });
+    const slow = store.reload(PROJECT_ID, authorize, { overview: read });
+    await store.reload(PROJECT_ID, authorize, { overview: read });
+    older.resolve({ ...overview(), runs: 9 });
+    await slow;
+
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(store.overview).toEqual(newer);
+    expect(store.pending.load).toBe(false);
+  });
+
+  it("keeps the overview it has when a reload fails and says why", async () => {
+    const missing = failure(503, "DATABASE_UNAVAILABLE");
+    const read = vi
+      .fn<AcceptanceTestsApi["overview"]>()
+      .mockResolvedValueOnce(overview())
+      .mockRejectedValueOnce(missing);
+    const store = useAcceptanceTestsStore();
+
+    await store.load(PROJECT_ID, authorize, { overview: read });
+    await expect(store.reload(PROJECT_ID, authorize, { overview: read })).rejects.toBe(missing);
+
+    expect(store.overview).toEqual(overview());
+    expect(store.failure).toEqual({
+      message: "The acceptance tests request failed",
+      code: "DATABASE_UNAVAILABLE",
+      status: 503,
+    });
+    expect(store.pending.load).toBe(false);
   });
 
   it("loads the overview of the project and exposes the latest run, its criteria and critiques", async () => {

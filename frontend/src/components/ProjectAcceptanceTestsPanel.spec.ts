@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 
 import { flushPromises, mount } from "@vue/test-utils";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProjectAcceptanceTestsPanel from "./ProjectAcceptanceTestsPanel.vue";
 import { createAppI18n } from "@/i18n";
@@ -10,13 +10,20 @@ import { expectAccessible } from "@/test/axe";
 import { SELECTED_DESIGN_VERSION } from "@/test/designFixtures";
 
 import { AcceptanceTestsApiError, type AcceptanceTestsApi } from "../api/acceptanceTests";
+import {
+  clearFollowedGenerations,
+  type GenerationJobsApi,
+  type GenerationRequestJob,
+} from "../api/generationJobs";
 import { useDesignStore } from "../stores/design";
 import { useRequirementsStore } from "../stores/requirements";
 import type {
   AcceptanceTestsOverviewPayload,
+  LatestTestReviewPayload,
   TestResultPayload,
   TestRunPayload,
 } from "../types/acceptanceTests";
+import type { GenerationOperation } from "../types/designMockups";
 import type { RequirementsSpecificationVersionPayload } from "../types/requirements";
 
 type Locale = "en" | "it";
@@ -25,6 +32,8 @@ const PROJECT_ID = SELECTED_DESIGN_VERSION.project_id;
 const SECOND_PROJECT_ID = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "test-token-not-real";
 const RUN_ID = "33333333-3333-4333-8333-333333333333";
+const EARLIER_RUN_ID = "44444444-4444-4444-8444-444444444444";
+const JOB_ID = "00000000-0000-4000-8000-0000000009bb";
 
 function result(code: string, browser: "chrome" | "firefox"): TestResultPayload {
   return {
@@ -153,11 +162,72 @@ function requirementsVersion(): RequirementsSpecificationVersionPayload {
   } as unknown as RequirementsSpecificationVersionPayload;
 }
 
+const EARLIER_REVIEW: LatestTestReviewPayload = {
+  run_id: EARLIER_RUN_ID,
+  finished_at: "2026-09-28T16:04:00+00:00",
+  reviewed_at: "2026-09-28T16:06:00+00:00",
+  critiques: [
+    {
+      twin_id: "66666666-6666-4666-8666-666666666666",
+      twin_name: "Restaurant manager",
+      verdict: "DRIFT",
+      summary: "The list of the day did not open at all.",
+      findings: [
+        {
+          severity: "HIGH",
+          text: "The list stayed empty in both browsers.",
+          about: { criterion: "AC-001", requirement: "REQ-003", screen: null },
+          action: "Load the guests of the day when the list opens.",
+        },
+      ],
+    },
+  ],
+};
+
+const UNREVIEWED_RUN: TestRunPayload = { ...RUN, critiques: [], reviewed_at: null };
+
 function testsApi(read: AcceptanceTestsApi["overview"] = async () => overview()) {
   return { overview: vi.fn<AcceptanceTestsApi["overview"]>(read) };
 }
 
-function mountPanel(api: AcceptanceTestsApi, locale: Locale = "en") {
+function generation(
+  operation: GenerationOperation,
+  overrides: Partial<GenerationRequestJob> = {},
+): GenerationRequestJob {
+  return {
+    job_id: JOB_ID,
+    kind: "REQUEST",
+    operation,
+    status: "RUNNING",
+    stage: "GENERATING",
+    attempt: 1,
+    started_at: "2026-09-29T10:10:00+00:00",
+    finished_at: null,
+    alternative_id: null,
+    failure: null,
+    response: null,
+    ...overrides,
+  };
+}
+
+function jobsApi(running: GenerationRequestJob[] = [], reads: GenerationRequestJob[] = []) {
+  return {
+    list: vi.fn<GenerationJobsApi["list"]>(async () => running),
+    job: vi.fn<GenerationJobsApi["job"]>(async () => {
+      const next = reads.shift();
+      if (next === undefined) {
+        throw new TypeError("Failed to fetch");
+      }
+      return next;
+    }),
+  };
+}
+
+function mountPanel(
+  api: AcceptanceTestsApi,
+  locale: Locale = "en",
+  jobs: GenerationJobsApi = jobsApi(),
+) {
   return mount(ProjectAcceptanceTestsPanel, {
     global: { plugins: [createAppI18n(locale)] },
     props: {
@@ -165,6 +235,7 @@ function mountPanel(api: AcceptanceTestsApi, locale: Locale = "en") {
       locale,
       authorize: (operation) => operation(TOKEN),
       api,
+      jobsApi: jobs,
     },
     attachTo: document.body,
   });
@@ -189,8 +260,14 @@ describe("ProjectAcceptanceTestsPanel", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     document.body.innerHTML = "";
+    clearFollowedGenerations();
     useDesignStore().$patch({ projectId: PROJECT_ID, current: SELECTED_DESIGN_VERSION });
     useRequirementsStore().$patch({ projectId: PROJECT_ID, current: requirementsVersion() });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    clearFollowedGenerations();
   });
 
   it.each([
@@ -460,7 +537,7 @@ describe("ProjectAcceptanceTestsPanel", () => {
     wrapper.unmount();
   });
 
-  it("closes with the two commands of the terminal and offers no button", async () => {
+  it("closes with the two commands of the terminal and offers only the control that reads again", async () => {
     const wrapper = mountPanel(testsApi());
     await flushPromises();
 
@@ -472,11 +549,248 @@ describe("ProjectAcceptanceTestsPanel", () => {
       "ut test",
       "ut test --plan new",
     ]);
-    expect(wrapper.findAll("button")).toHaveLength(0);
+    expect(wrapper.findAll("button").map((button) => button.attributes("data-testid"))).toEqual([
+      "acceptance-refresh",
+    ]);
+    const refresh = wrapper.get('[data-testid="acceptance-refresh"]');
+    expect(refresh.text()).toBe("Read again");
+    expect(refresh.attributes("aria-describedby")).toBe("acceptance-tests-title");
     expect(wrapper.findAll("a")).toHaveLength(0);
     expect(wrapper.findAll("input, select, textarea")).toHaveLength(0);
     wrapper.unmount();
   });
+
+  it.each([
+    ["en", "Read again"],
+    ["it", "Rileggi"],
+  ] as const)(
+    "reads the acceptance tests again with the control named in %s and asks for the running jobs",
+    async (locale, label) => {
+      let release: (value: AcceptanceTestsOverviewPayload) => void = () => undefined;
+      const later = new Promise<AcceptanceTestsOverviewPayload>((resolve) => {
+        release = resolve;
+      });
+      const read = vi
+        .fn<AcceptanceTestsApi["overview"]>()
+        .mockResolvedValueOnce(overview(null))
+        .mockImplementationOnce(() => later);
+      const jobs = jobsApi();
+      const wrapper = mountPanel({ overview: read }, locale, jobs);
+      await flushPromises();
+      expect(wrapper.find('[data-testid="acceptance-empty"]').exists()).toBe(true);
+
+      const refresh = wrapper.get('[data-testid="acceptance-refresh"]');
+      expect(refresh.text()).toBe(label);
+      await refresh.trigger("click");
+
+      expect(
+        wrapper.get('[data-testid="acceptance-refresh"]').attributes("disabled"),
+      ).toBeDefined();
+      expect(wrapper.get('[data-testid="acceptance-state"]').attributes("aria-busy")).toBe("true");
+      expect(wrapper.find('[data-testid="acceptance-empty"]').exists()).toBe(true);
+
+      release(overview());
+      await flushPromises();
+
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(jobs.list).toHaveBeenCalledTimes(2);
+      expect(jobs.list).toHaveBeenLastCalledWith(PROJECT_ID, TOKEN, "RUNNING");
+      expect(wrapper.findAll('[data-testid="acceptance-criterion"]')).toHaveLength(6);
+      expect(
+        wrapper.get('[data-testid="acceptance-refresh"]').attributes("disabled"),
+      ).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps what it showed when reading again fails and says why", async () => {
+    const read = vi
+      .fn<AcceptanceTestsApi["overview"]>()
+      .mockResolvedValueOnce(overview())
+      .mockRejectedValueOnce(
+        new AcceptanceTestsApiError("The acceptance tests request failed", {
+          status: 503,
+          code: "DATABASE_UNAVAILABLE",
+          payload: null,
+        }),
+      );
+    const wrapper = mountPanel({ overview: read });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="acceptance-refresh"]').trigger("click");
+    await flushPromises();
+
+    expect(spoken(wrapper.get('[data-testid="acceptance-error"]'))).toBe(
+      "The acceptance tests could not be loaded (DATABASE_UNAVAILABLE).",
+    );
+    expect(wrapper.findAll('[data-testid="acceptance-criterion"]')).toHaveLength(6);
+    expect(wrapper.find('[data-testid="acceptance-loading"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      `No twin has commented on the latest run yet: here are their comments on the run of ${dated(EARLIER_REVIEW.finished_at, "en")}.`,
+      "Off course",
+    ],
+    [
+      "it",
+      `Nessun twin ha ancora commentato l'ultima verifica: ecco i loro commenti sulla verifica del ${dated(EARLIER_REVIEW.finished_at, "it")}.`,
+      "Fuori strada",
+    ],
+  ] as const)(
+    "shows in %s the critiques of the latest review when the latest run has none",
+    async (locale, sentence, verdict) => {
+      const wrapper = mountPanel(
+        testsApi(async () => ({
+          ...overview(UNREVIEWED_RUN),
+          latest_run_stale: false,
+          latest_review: EARLIER_REVIEW,
+        })),
+        locale,
+      );
+      await flushPromises();
+
+      const critiques = wrapper.get('[data-testid="acceptance-critiques"]');
+      expect(critiques.get('[data-testid="acceptance-earlier-review"]').text()).toBe(sentence);
+      const blocks = critiques.findAll('[data-testid="acceptance-critique"]');
+      expect(blocks.map((block) => block.get("h4").text())).toEqual(["Restaurant manager"]);
+      const chip = blocks[0]!.get('[data-testid="acceptance-critique-verdict"]');
+      expect(chip.text()).toBe(verdict);
+      expect(chip.attributes("data-status")).toBe("failed");
+      expect(blocks[0]!.findAll('[data-testid="acceptance-subject"]').map(spoken)).toEqual([
+        "AC-001",
+        "REQ-003 · Guests are checked in quickly",
+      ]);
+      expect(critiques.find('[data-testid="acceptance-no-review"]').exists()).toBe(false);
+      expect(critiques.find('[data-testid="acceptance-reviewed"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
+
+  it("keeps the critiques of the latest run when it has its own", async () => {
+    const wrapper = mountPanel(
+      testsApi(async () => ({
+        ...overview(),
+        latest_run_stale: false,
+        latest_review: {
+          run_id: RUN_ID,
+          finished_at: RUN.finished_at,
+          reviewed_at: RUN.reviewed_at!,
+          critiques: RUN.critiques,
+        },
+      })),
+    );
+    await flushPromises();
+
+    const critiques = wrapper.get('[data-testid="acceptance-critiques"]');
+    expect(critiques.find('[data-testid="acceptance-earlier-review"]').exists()).toBe(false);
+    expect(
+      critiques.findAll('[data-testid="acceptance-critique"] h4').map((item) => item.text()),
+    ).toEqual(["Reception staff", "Restaurant manager"]);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["no review at all", null],
+    [
+      "a review of the same run without critiques",
+      { ...EARLIER_REVIEW, run_id: RUN_ID, critiques: [] },
+    ],
+    ["an older review without critiques", { ...EARLIER_REVIEW, critiques: [] }],
+  ])("says that no twin has commented with %s", async (_case, latestReview) => {
+    const wrapper = mountPanel(
+      testsApi(async () => ({ ...overview(UNREVIEWED_RUN), latest_review: latestReview })),
+    );
+    await flushPromises();
+
+    const critiques = wrapper.get('[data-testid="acceptance-critiques"]');
+    expect(critiques.find('[data-testid="acceptance-no-review"]').exists()).toBe(true);
+    expect(critiques.find('[data-testid="acceptance-earlier-review"]').exists()).toBe(false);
+    expect(critiques.findAll('[data-testid="acceptance-critique"]')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "This run was made against earlier versions of the requirements or of the design: launch ut test to check the application against the approved ones.",
+    ],
+    [
+      "it",
+      "Questa verifica è stata fatta su versioni precedenti dei requisiti o del design: lancia ut test per controllare l'applicazione su quelle approvate.",
+    ],
+  ] as const)(
+    "says in %s when the latest run was made against earlier versions",
+    async (locale, sentence) => {
+      const wrapper = mountPanel(
+        testsApi(async () => ({ ...overview(), latest_run_stale: true, latest_review: null })),
+        locale,
+      );
+      await flushPromises();
+
+      const stale = wrapper.get('[data-testid="acceptance-run"] [data-testid="acceptance-stale"]');
+      expect(spoken(stale)).toBe(sentence);
+      expect(stale.findAll("code").map((item) => item.text())).toEqual(["ut test"]);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["a fresh run", { latest_run_stale: false }],
+    ["an overview of the previous sprint", {}],
+  ])("says nothing about earlier versions for %s", async (_case, extra) => {
+    const wrapper = mountPanel(testsApi(async () => ({ ...overview(), ...extra })));
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="acceptance-stale"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="acceptance-critique"]')).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["TEST_PLAN", "en", "The Studio is generating the paths that verify the acceptance criteria."],
+    ["TEST_REVIEW", "it", "Lo Studio sta generando la revisione dei twin sui risultati dei test."],
+  ] as const)(
+    "announces the %s started by ut test in %s and reads the tests again when it ends",
+    async (operation, locale, sentence) => {
+      vi.useFakeTimers();
+      const read = vi
+        .fn<AcceptanceTestsApi["overview"]>()
+        .mockResolvedValueOnce(overview(UNREVIEWED_RUN))
+        .mockResolvedValueOnce(overview());
+      const jobs = jobsApi(
+        [generation(operation)],
+        [
+          generation(operation, {
+            status: "SUCCEEDED",
+            stage: null,
+            finished_at: "2026-09-29T10:12:00+00:00",
+            response: { status_code: 201, body: { status: "REVIEWED" } },
+          }),
+        ],
+      );
+      const wrapper = mountPanel({ overview: read }, locale, jobs);
+      await vi.advanceTimersByTimeAsync(50);
+
+      const notice = wrapper.get(
+        '[data-testid="acceptance-job"] [data-testid="generation-job-notice"]',
+      );
+      expect(notice.attributes("data-operation")).toBe(operation);
+      expect(notice.get('[role="status"]').text()).toBe(sentence);
+      expect(wrapper.findAll('[data-testid="acceptance-critique"]')).toHaveLength(0);
+      expect(wrapper.findAll("button")).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2050);
+
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(wrapper.find('[data-testid="acceptance-job"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="generation-job-failure"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-testid="acceptance-critique"]')).toHaveLength(2);
+      wrapper.unmount();
+    },
+  );
 
   it("speaks Italian", async () => {
     const wrapper = mountPanel(testsApi(), "it");
@@ -693,6 +1007,32 @@ describe("ProjectAcceptanceTestsPanel", () => {
       }),
     );
     await flushPromises();
+
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("has no axe violations with a stale run and the critiques of an earlier review", async () => {
+    const wrapper = mountPanel(
+      testsApi(async () => ({
+        ...overview(UNREVIEWED_RUN),
+        latest_run_stale: true,
+        latest_review: EARLIER_REVIEW,
+      })),
+      "it",
+    );
+    await flushPromises();
+
+    await expectAccessible(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("has no axe violations while a job started by ut test runs", async () => {
+    vi.useFakeTimers();
+    const wrapper = mountPanel(testsApi(), "en", jobsApi([generation("TEST_REVIEW")], []));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(wrapper.find('[data-testid="acceptance-job"]').exists()).toBe(true);
+    vi.useRealTimers();
 
     await expectAccessible(wrapper.element);
     wrapper.unmount();

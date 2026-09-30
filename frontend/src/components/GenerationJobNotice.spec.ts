@@ -132,6 +132,41 @@ describe("GenerationJobNotice", () => {
     stopped.unmount();
   });
 
+  it.each([
+    [
+      "en",
+      "The Studio is generating the proposal of what a twin learned.",
+      "The generation of the proposal of what a twin learned did not succeed.",
+    ],
+    [
+      "it",
+      "Lo Studio sta generando la proposta di ciò che un twin ha imparato.",
+      "La generazione della proposta di ciò che un twin ha imparato non è riuscita.",
+    ],
+  ] as const)(
+    "names the update of a twin started by ut twins update in %s",
+    (locale, running, failed) => {
+      const started = mount(GenerationJobNotice, {
+        props: { job: job({ operation: "TWIN_UPDATE" }), locale },
+      });
+      const stopped = mount(GenerationJobNotice, {
+        props: {
+          job: null,
+          failure: { operation: "TWIN_UPDATE", code: "PROVIDER_UNAVAILABLE", lost: false },
+          locale,
+        },
+      });
+
+      expect(
+        started.get("[data-testid='generation-job-notice']").attributes("data-operation"),
+      ).toBe("TWIN_UPDATE");
+      expect(started.get("[role='status']").text()).toBe(running);
+      expect(stopped.get("[data-testid='generation-job-failure']").text()).toContain(failed);
+      started.unmount();
+      stopped.unmount();
+    },
+  );
+
   it("says in plain words that an interrupted generation can be started again", async () => {
     const wrapper = mount(GenerationJobNotice, {
       props: {
