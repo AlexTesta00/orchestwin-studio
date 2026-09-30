@@ -34,6 +34,7 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_INSIGHTS,
+    FEEDBACK_LEARNING,
     FEEDBACK_REVIEWS,
     FEEDBACK_TESTS,
     KNOWLEDGE_MANIFEST,
@@ -55,7 +56,15 @@ from orchestwin.knowledge.schema import (
     validate_files,
 )
 from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources, knowledge_feedback
-from orchestwin.knowledge.state import MAX_FOLDER_TEST_RUNS
+from orchestwin.knowledge.state import (
+    MAX_BASIS_LENGTH,
+    MAX_FINDING_LENGTH,
+    MAX_FOLDER_TEST_RUNS,
+    MAX_LEARNED_OBSERVATIONS,
+    MAX_OBSERVATION_LENGTH,
+    MAX_TASK_NOTE_LENGTH,
+)
+from orchestwin.knowledge.state_documents import learning_document, state_document
 from orchestwin.projects.brief_gate import project_brief_artifact_reference
 from orchestwin.projects.briefs import BriefField
 from orchestwin.projects.insight_applications import (
@@ -93,6 +102,7 @@ from src.test.python.projects.test_insight_applications import application
 from src.test.python.twins.test_user_modeling_gate import snapshot_version
 from src.test.python.workflow.test_governed_project_setup import build_ready_project
 
+from .knowledge_fixtures import development_sources, files_before_learning, real_sources
 from .knowledge_fixtures import test_run as acceptance_run
 
 NOW: Final = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
@@ -305,9 +315,10 @@ def test_schema_files_publish_one_valid_json_schema_for_every_document_kind() ->
         env={**os.environ, "PYTHONHASHSEED": "7"},
     )
 
-    assert list(files) == [f"schema/{name}.schema.json" for name in SCHEMA_NAMES]
-    assert len(files) == 13
-    assert SCHEMA_NAMES[-3:] == ("state", "changes", "tests")
+    assert list(files) == [schema_document(name) for name in SCHEMA_NAMES]
+    assert len(files) == 14
+    assert SCHEMA_NAMES[-4:] == ("state", "changes", "tests", "learning")
+    assert list(files)[-1] == "schema/learned.schema.json"
     assert schema_files() == files
     assert fresh.stdout.strip() == (
         hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
@@ -375,6 +386,7 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
     assert names[STATE_DOCUMENT] == "state"
     assert names[FEEDBACK_CHANGES] == "changes"
     assert names[FEEDBACK_TESTS] == "tests"
+    assert names[FEEDBACK_LEARNING] == "learning"
     assert names[STATE_TEXT] is None
     assert twins == [path for path in folder.files if path.endswith("/twin.json")]
     assert len(twins) == 1
@@ -438,6 +450,20 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
         ("manifest", ("feedback", "tests"), "twins/feedback/runs.json", "feedback.tests"),
         ("manifest", ("feedback", "test_runs"), None, "feedback.test_runs"),
         ("manifest", ("feedback", "test_runs"), -1, "feedback.test_runs"),
+        ("manifest", ("feedback", "learned"), REMOVED, "feedback"),
+        ("manifest", ("feedback", "learned_observations"), REMOVED, "feedback"),
+        ("manifest", ("feedback", "learned"), "twins/feedback/learning.json", "feedback.learned"),
+        ("manifest", ("feedback", "learned_observations"), -1, "feedback.learned_observations"),
+        ("manifest", ("state", "stale_reviews"), None, "state.stale_reviews"),
+        ("manifest", ("state", "stale_reviews"), "1", "state.stale_reviews"),
+        ("learning", ("schema_version",), 2, "schema_version"),
+        ("learning", ("kind",), "orchestwin.test-reviews", "kind"),
+        (
+            "learning",
+            ("twins", 0, "profile_version_number"),
+            0,
+            "twins[0].profile_version_number",
+        ),
         ("tests", ("schema_version",), 2, "schema_version"),
         ("tests", ("kind",), "orchestwin.change-reviews", "kind"),
         ("state", ("schema_version",), 2, "schema_version"),
@@ -576,8 +602,190 @@ def test_the_folder_keeps_at_most_twenty_runs_and_the_manifest_their_count() -> 
     assert MAX_FOLDER_TEST_RUNS == 20
     assert caught.value.location == "runs"
     assert not Draft202012Validator(knowledge_schemas()["tests"]).is_valid(document)
-    assert feedback["dependentRequired"] == {"tests": ["test_runs"], "test_runs": ["tests"]}
+    assert feedback["dependentRequired"] == {
+        "tests": ["test_runs"],
+        "test_runs": ["tests"],
+        "learned": ["learned_observations"],
+        "learned_observations": ["learned"],
+    }
     assert feedback["properties"]["tests"]["const"] == FEEDBACK_TESTS
+    assert feedback["properties"]["learned"]["const"] == FEEDBACK_LEARNING
+
+
+def development_document(name: str) -> dict[str, Any]:
+    package = real_sources(state=development_sources())
+    document = state_document(package) if name == "state" else learning_document(package)
+    return json.loads(json.dumps(document))
+
+
+def located(keys: tuple[str | int, ...]) -> str:
+    location = ""
+    for key in keys:
+        location += f"[{key}]" if isinstance(key, int) else (f".{key}" if location else key)
+    return location
+
+
+@pytest.mark.parametrize("name", ["state", "learning"])
+def test_both_validators_accept_the_tasks_the_reviews_and_what_the_twins_learned(
+    name: str,
+) -> None:
+    document = development_document(name)
+    published = Draft202012Validator(knowledge_schemas()[name])
+
+    validate_document(name, document)
+
+    assert [error.message for error in published.iter_errors(document)] == []
+
+
+def test_both_validators_accept_the_documents_of_a_folder_published_before_learning() -> None:
+    folder = build_knowledge_folder(
+        real_sources(state=development_sources()), version_number=1, created_at=PUBLISHED_AT
+    )
+    files = files_before_learning(folder.files)
+
+    for path, name in ((STATE_DOCUMENT, "state"), (KNOWLEDGE_MANIFEST, "manifest")):
+        payload = json.loads(files[path])
+        validate_document(name, payload)
+        assert Draft202012Validator(knowledge_schemas()[name]).is_valid(payload), path
+    assert "origin" not in json.loads(files[STATE_DOCUMENT])["tasks"][0]
+
+
+@pytest.mark.parametrize(
+    ("name", "keys", "value"),
+    [
+        ("state", ("tasks", 0, "status"), "CLOSED"),
+        ("state", ("tasks", 1, "origin", "kind"), "COMMIT"),
+        ("state", ("tasks", 1, "origin"), None),
+        ("state", ("tasks", 1, "origin", "twin_id"), "twin"),
+        ("state", ("tasks", 1, "origin", "twin_name"), ""),
+        ("state", ("tasks", 1, "origin", "test_run_id"), REMOVED),
+        ("state", ("tasks", 2, "about", "criteria", 0), "REQ-003"),
+        ("state", ("tasks", 2, "about", "criteria"), None),
+        ("state", ("tasks", 2, "from_commit"), "not-a-commit"),
+        ("state", ("tasks", 2, "from_commit"), REMOVED),
+        ("state", ("tasks", 4, "closed_at"), "2026-09-29 12:00"),
+        ("state", ("changes", 1, "review", "reference", "design_version_number"), 0),
+        ("state", ("changes", 1, "review", "reference", "alternative_code"), "DES-2"),
+        ("state", ("changes", 1, "review", "stale"), None),
+        ("state", ("changes", 1, "review", "stale"), "yes"),
+        ("learning", ("twins", 0, "label"), "1"),
+        ("learning", ("twins", 0, "label"), "1.03"),
+        ("learning", ("twins", 0, "label"), "0.1"),
+        ("learning", ("twins", 0, "twin_name"), ""),
+        ("learning", ("twins", 0, "development_version_number"), -1),
+        ("learning", ("twins", 0, "observations", 0, "code"), "TSK-001"),
+        ("learning", ("twins", 0, "observations", 0, "code"), "OBS-01"),
+        ("learning", ("twins", 0, "observations", 0, "source"), "MODEL"),
+        ("learning", ("twins", 0, "observations", 0, "statement"), ""),
+        ("learning", ("twins", 0, "observations", 0, "basis"), ""),
+        ("learning", ("twins", 0, "observations", 0, "contradicts_profile"), ""),
+        ("learning", ("twins", 0, "observations", 0, "about", "requirement"), "SCR-001"),
+        ("learning", ("twins", 0, "observations", 0, "added_in_version"), 0),
+        ("learning", ("twins", 0, "observations", 0, "approved_at"), "ieri"),
+        ("learning", ("twins", 0, "observations", 0, "update_id"), "update"),
+        ("learning", ("twins", 0, "observations", 1, "basis"), REMOVED),
+        ("learning", ("twins", 0, "retired", 0, "code"), "OBS-2"),
+        ("learning", ("twins", 0, "retired", 0, "retired_in_version"), 0),
+        ("learning", ("twins", 0, "retired"), REMOVED),
+    ],
+)
+def test_both_validators_reject_a_task_a_review_or_a_learned_observation_out_of_the_contract(
+    name: str, keys: tuple[str | int, ...], value: object
+) -> None:
+    document = changed(development_document(name), keys, value)
+
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_document(name, document)
+
+    assert not Draft202012Validator(knowledge_schemas()[name]).is_valid(document)
+    assert caught.value.code == "DOCUMENT_INVALID"
+    assert caught.value.location == located(keys)
+
+
+@pytest.mark.parametrize(
+    ("name", "keys", "limit"),
+    [
+        ("learning", ("twins", 0, "observations", 0, "statement"), MAX_OBSERVATION_LENGTH),
+        ("learning", ("twins", 0, "observations", 0, "basis"), MAX_BASIS_LENGTH),
+        ("learning", ("twins", 0, "observations", 0, "contradicts_profile"), MAX_BASIS_LENGTH),
+        ("learning", ("twins", 0, "retired", 0, "statement"), MAX_OBSERVATION_LENGTH),
+        ("learning", ("twins", 0, "retired", 0, "reason"), MAX_TASK_NOTE_LENGTH),
+        ("state", ("tasks", 5, "note"), MAX_TASK_NOTE_LENGTH),
+        ("state", ("tasks", 2, "origin", "finding"), MAX_FINDING_LENGTH),
+    ],
+)
+def test_both_validators_hold_the_text_limits_of_the_contract(
+    name: str, keys: tuple[str | int, ...], limit: int
+) -> None:
+    document = development_document(name)
+    at_limit = changed(document, keys, "x" * limit)
+    beyond = changed(document, keys, "x" * (limit + 1))
+    published = Draft202012Validator(knowledge_schemas()[name])
+
+    validate_document(name, at_limit)
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_document(name, beyond)
+
+    assert published.is_valid(at_limit)
+    assert not published.is_valid(beyond)
+    assert caught.value.location == located(keys)
+
+
+def test_a_twin_keeps_at_most_twenty_active_learned_observations() -> None:
+    document = development_document("learning")
+    observation = document["twins"][0]["observations"][0]
+    most = changed(document, ("twins", 0, "observations"), [observation] * MAX_LEARNED_OBSERVATIONS)
+    beyond = changed(
+        document, ("twins", 0, "observations"), [observation] * (MAX_LEARNED_OBSERVATIONS + 1)
+    )
+    retired = changed(document, ("twins", 0, "retired"), document["twins"][0]["retired"] * 30)
+    published = Draft202012Validator(knowledge_schemas()["learning"])
+
+    validate_document("learning", most)
+    validate_document("learning", retired)
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_document("learning", beyond)
+
+    assert MAX_LEARNED_OBSERVATIONS == 20
+    assert published.is_valid(most) and published.is_valid(retired)
+    assert not published.is_valid(beyond)
+    assert caught.value.location == "twins[0].observations"
+
+
+def test_the_published_schemas_leave_the_new_keys_optional() -> None:
+    schemas = knowledge_schemas()
+    state = schemas["state"]["$defs"]
+    manifest = schemas["manifest"]["$defs"]
+
+    assert state["CodeTask"]["required"] == [
+        "code",
+        "text",
+        "about",
+        "from_commit",
+        "created_at",
+        "status",
+    ]
+    assert state["TaskSubjects"]["required"] == ["requirements", "screens"]
+    assert state["ChangeReviewSummary"]["required"] == [
+        "run_id",
+        "reviewed_at",
+        "verdict",
+        "summary",
+    ]
+    assert {"type": "null"} in state["CodeTask"]["properties"]["closed_at"]["anyOf"]
+    assert {"type": "null"} in state["CodeTask"]["properties"]["note"]["anyOf"]
+    assert {"type": "null"} in state["ChangeReviewSummary"]["properties"]["reference"]["anyOf"]
+    assert state["CodeTask"]["properties"]["origin"]["$ref"] == "#/$defs/TaskOrigin"
+    assert state["ChangeReviewSummary"]["properties"]["stale"]["type"] == "boolean"
+    assert state["CodeTask"]["properties"]["status"]["enum"] == ["OPEN", "DONE", "DROPPED"]
+    assert state["TaskOrigin"]["properties"]["kind"]["enum"] == ["CODE_CHANGE", "TEST_RUN", "OWNER"]
+    assert "stale_reviews" not in manifest["StateEntry"]["required"]
+    assert "learned" not in manifest["FeedbackSummary"]["required"]
+    assert schemas["learning"]["$id"] == "urn:orchestwin:knowledge-folder:3:learning"
+    assert schemas["learning"]["$defs"]["LearnedObservation"]["properties"]["source"]["enum"] == [
+        "TWIN_CRITIQUE",
+        "OWNER",
+    ]
 
 
 def test_unknown_properties_are_accepted_at_the_top_level_and_in_nested_objects() -> None:

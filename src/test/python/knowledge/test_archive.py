@@ -19,9 +19,21 @@ from orchestwin.knowledge.archive import (
     within_depth,
 )
 from orchestwin.knowledge.folder import build_knowledge_folder, folder_archive, json_text
-from orchestwin.knowledge.layout import FEEDBACK_TESTS, KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST
+from orchestwin.knowledge.layout import (
+    FEEDBACK_LEARNING,
+    FEEDBACK_TESTS,
+    KNOWLEDGE_INDEX,
+    KNOWLEDGE_MANIFEST,
+)
 
-from .knowledge_fixtures import PUBLISHED_AT, REAL_PROJECT_ID, real_sources, state_sources
+from .knowledge_fixtures import (
+    PUBLISHED_AT,
+    REAL_PROJECT_ID,
+    development_sources,
+    learned_entry,
+    real_sources,
+    state_sources,
+)
 from .knowledge_fixtures import test_run as acceptance_run
 
 
@@ -275,6 +287,34 @@ def test_a_removed_or_edited_test_document_is_detected() -> None:
 
     assert (missing.code, missing.detail) == ("FOLDER_DOCUMENT_MISSING", FEEDBACK_TESTS)
     assert (tampered.code, tampered.detail) == ("FOLDER_TAMPERED", FEEDBACK_TESTS)
+
+
+def test_a_folder_with_learned_observations_reads_back_with_its_document() -> None:
+    built = build_knowledge_folder(
+        real_sources(state=development_sources()), version_number=3, created_at=PUBLISHED_AT
+    )
+
+    verified = read_verified_folder(folder_archive(built).content)
+
+    assert verified.manifest["feedback"]["learned"] == FEEDBACK_LEARNING
+    assert verified.manifest["feedback"]["learned_observations"] == 2
+    assert verified.manifest["state"]["stale_reviews"] == 1
+    assert json.loads(verified.files[FEEDBACK_LEARNING])["twins"][0] == learned_entry()
+    assert "learning" not in verified.documents
+
+
+def test_a_removed_or_edited_learning_document_is_detected() -> None:
+    files = build_knowledge_folder(
+        real_sources(state=development_sources()), version_number=3, created_at=PUBLISHED_AT
+    ).files
+    removed = {path: text for path, text in files.items() if path != FEEDBACK_LEARNING}
+    edited = {**files, FEEDBACK_LEARNING: files[FEEDBACK_LEARNING].replace("OBS-003", "OBS-004")}
+
+    missing = failure(lambda: verify_folder(removed))
+    tampered = failure(lambda: verify_folder(edited))
+
+    assert (missing.code, missing.detail) == ("FOLDER_DOCUMENT_MISSING", FEEDBACK_LEARNING)
+    assert (tampered.code, tampered.detail) == ("FOLDER_TAMPERED", FEEDBACK_LEARNING)
 
 
 def test_document_that_breaks_its_schema_is_reported_with_its_location() -> None:
