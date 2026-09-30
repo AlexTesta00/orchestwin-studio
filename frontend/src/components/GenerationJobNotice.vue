@@ -86,6 +86,10 @@ const messages = {
         what: "the twins' review of the test results",
         of: "of the twins' review of the test results",
       },
+      TWIN_UPDATE: {
+        what: "the proposal of what a twin learned",
+        of: "of the proposal of what a twin learned",
+      },
     } satisfies Record<GenerationOperation, Subject>,
   },
   it: {
@@ -136,6 +140,10 @@ const messages = {
       TEST_REVIEW: {
         what: "la revisione dei twin sui risultati dei test",
         of: "della revisione dei twin sui risultati dei test",
+      },
+      TWIN_UPDATE: {
+        what: "la proposta di ciò che un twin ha imparato",
+        of: "della proposta di ciò che un twin ha imparato",
       },
     } satisfies Record<GenerationOperation, Subject>,
   },

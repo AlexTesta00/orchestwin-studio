@@ -23,6 +23,7 @@ export interface PackageFeedbackPayload {
   insights: number;
   change_reviews: number;
   test_runs?: number;
+  learned_observations?: number;
 }
 
 export interface PackageProgressPayload {
@@ -36,6 +37,7 @@ export interface PackageStatePayload {
   pending_changes: number;
   aligned_commit: string | null;
   open_tasks: number;
+  stale_reviews?: number;
 }
 
 export interface KnowledgePackageVersionPayload {

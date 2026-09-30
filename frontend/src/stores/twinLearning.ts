@@ -1,45 +1,36 @@
 import { defineStore } from "pinia";
 
-import {
-  AcceptanceTestsApiError,
-  acceptanceTestsApi,
-  type AcceptanceTestsApi,
-} from "../api/acceptanceTests";
-import type {
-  AcceptanceTestsOverviewPayload,
-  CriterionOutcomePayload,
-  LatestTestReviewPayload,
-  TestCritiquePayload,
-  TestRunPayload,
-} from "../types/acceptanceTests";
+import { TwinLearningApiError, twinLearningApi, type TwinLearningApi } from "../api/twinLearning";
+import type { LearningTwinPayload, TwinLearningPayload } from "../types/twinLearning";
 
 export type AuthorizedRequest = <T>(operation: (accessToken: string) => Promise<T>) => Promise<T>;
 
-export type AcceptanceTestsOperation = "load";
+export type TwinLearningOperation = "load";
 
-export interface AcceptanceTestsStoreError {
+export interface TwinLearningStoreError {
   message: string;
   code: string | null;
   status: number | null;
 }
 
-interface AcceptanceTestsState {
+interface TwinLearningState {
   projectId: string | null;
   projectEpoch: number;
   loadSequence: number;
-  overview: AcceptanceTestsOverviewPayload | null;
-  pending: Record<AcceptanceTestsOperation, boolean>;
-  failure: AcceptanceTestsStoreError | null;
+  overview: TwinLearningPayload | null;
+  absent: boolean;
+  pending: Record<TwinLearningOperation, boolean>;
+  failure: TwinLearningStoreError | null;
 }
 
-function emptyPending(): Record<AcceptanceTestsOperation, boolean> {
+function emptyPending(): Record<TwinLearningOperation, boolean> {
   return {
     load: false,
   };
 }
 
-function storeError(error: unknown): AcceptanceTestsStoreError {
-  if (error instanceof AcceptanceTestsApiError) {
+function storeError(error: unknown): TwinLearningStoreError {
+  if (error instanceof TwinLearningApiError) {
     return {
       message: error.message,
       code: error.code,
@@ -56,41 +47,34 @@ function storeError(error: unknown): AcceptanceTestsStoreError {
   }
 
   return {
-    message: "An unexpected acceptance tests error occurred",
+    message: "An unexpected twin learning error occurred",
     code: null,
     status: null,
   };
 }
 
-export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
-  state: (): AcceptanceTestsState => ({
+export const useTwinLearningStore = defineStore("twinLearning", {
+  state: (): TwinLearningState => ({
     projectId: null,
     projectEpoch: 0,
     loadSequence: 0,
     overview: null,
+    absent: false,
     pending: emptyPending(),
     failure: null,
   }),
 
   getters: {
-    latestRun(state): TestRunPayload | null {
-      return state.overview?.latest_run ?? null;
+    loaded(state): boolean {
+      return state.overview !== null || state.absent;
     },
 
-    criteria(state): CriterionOutcomePayload[] {
-      return state.overview?.latest_run?.criteria ?? [];
+    twins(state): LearningTwinPayload[] {
+      return state.overview?.twins ?? [];
     },
 
-    critiques(state): TestCritiquePayload[] {
-      return state.overview?.latest_run?.critiques ?? [];
-    },
-
-    latestRunStale(state): boolean {
-      return state.overview?.latest_run_stale === true;
-    },
-
-    latestReview(state): LatestTestReviewPayload | null {
-      return state.overview?.latest_review ?? null;
+    updateAvailable(state): boolean {
+      return state.overview?.update_available === true;
     },
   },
 
@@ -103,6 +87,7 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
       this.projectId = projectId;
       this.projectEpoch += 1;
       this.overview = null;
+      this.absent = false;
       this.pending = emptyPending();
       this.failure = null;
     },
@@ -114,11 +99,11 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
     async load(
       projectId: string,
       authorize: AuthorizedRequest,
-      api: AcceptanceTestsApi = acceptanceTestsApi,
-    ): Promise<AcceptanceTestsOverviewPayload | null> {
+      api: TwinLearningApi = twinLearningApi,
+    ): Promise<TwinLearningPayload | null> {
       this.activateProject(projectId);
 
-      if (this.overview !== null || this.pending.load) {
+      if (this.loaded || this.pending.load) {
         return this.overview;
       }
 
@@ -128,8 +113,8 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
     async reload(
       projectId: string,
       authorize: AuthorizedRequest,
-      api: AcceptanceTestsApi = acceptanceTestsApi,
-    ): Promise<AcceptanceTestsOverviewPayload | null> {
+      api: TwinLearningApi = twinLearningApi,
+    ): Promise<TwinLearningPayload | null> {
       this.activateProject(projectId);
       return this.readOverview(projectId, authorize, api);
     },
@@ -137,8 +122,8 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
     async readOverview(
       projectId: string,
       authorize: AuthorizedRequest,
-      api: AcceptanceTestsApi,
-    ): Promise<AcceptanceTestsOverviewPayload | null> {
+      api: TwinLearningApi,
+    ): Promise<TwinLearningPayload | null> {
       const epoch = this.projectEpoch;
       const sequence = ++this.loadSequence;
       const latest = () => this.isCurrent(projectId, epoch) && sequence === this.loadSequence;
@@ -150,6 +135,7 @@ export const useAcceptanceTestsStore = defineStore("acceptanceTests", {
 
         if (latest()) {
           this.overview = overview;
+          this.absent = overview === null;
         }
 
         return overview;
