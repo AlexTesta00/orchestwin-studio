@@ -27,6 +27,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "open again the decision on a commit already reviewed (hash or name of a commit), "
         "without new reviews and without recording anything else",
     },
+    "align.option_recheck": {
+        "it": "fa esaminare di nuovo ai twin i commit in attesa il cui esame è stato fatto con "
+        "versioni precedenti dei requisiti o del design",
+        "en": "have the twins review again the waiting commits whose review was made against "
+        "earlier versions of the requirements or of the design",
+    },
     "align.heading": {"it": "Allineamento di «{name}»", "en": 'Alignment of "{name}"'},
     "align.reference": {
         "it": "Riferimento approvato: requisiti versione {requirements}, design versione "
@@ -92,6 +98,44 @@ MESSAGES: dict[str, dict[str, str]] = {
         "davvero.",
         "en": "Estimate of these reviews: {amount} USD, about {minutes}. Without --dry-run they "
         "really start.",
+    },
+    "align.recheck_none": {
+        "it": "Nessun esame è stato fatto con versioni precedenti dei requisiti o del design: non "
+        "c'è niente da far esaminare di nuovo.",
+        "en": "No review was made against earlier versions of the requirements or of the design: "
+        "there is nothing to review again.",
+    },
+    "align.recheck_list": {
+        "it": "Esami fatti con versioni precedenti dei requisiti o del design, da rifare con i "
+        "requisiti versione {requirements} e il design versione {design} (alternativa "
+        "{alternative}): {count}.",
+        "en": "Reviews made against earlier versions of the requirements or of the design, to do "
+        "again with requirements version {requirements} and design version {design} "
+        "(alternative {alternative}): {count}.",
+    },
+    "align.recheck_line": {
+        "it": "{commit}  {date}  {line}  (esaminato con i requisiti versione {requirements} e il "
+        "design versione {design}, alternativa {alternative})",
+        "en": "{commit}  {date}  {line}  (reviewed with requirements version {requirements} and "
+        "design version {design}, alternative {alternative})",
+    },
+    "align.recheck_dry_run": {
+        "it": "Prova senza spesa (--dry-run): i twin esaminerebbero di nuovo questi commit.",
+        "en": "Trial without spending (--dry-run): the twins would review these commits again.",
+    },
+    "align.recheck_reviewing": {
+        "it": "Commit da far esaminare di nuovo ai twin: {count}. Twin in ogni esame: {twins}. "
+        "Ogni twin dà di nuovo la sua opinione, con le versioni approvate adesso, poi il modello "
+        "dice se codice, design e requisiti sono ancora allineati.",
+        "en": "Commits for the twins to review again: {count}. Twins in each review: {twins}. "
+        "Each twin gives its opinion again, against the versions approved now, then the model "
+        "says whether code, design and requirements are still aligned.",
+    },
+    "align.recheck_hint": {
+        "it": "Esami fatti con versioni precedenti dei requisiti o del design: {count}. "
+        "`ut align --recheck` fa riesaminare quei commit ai twin.",
+        "en": "Reviews made against earlier versions of the requirements or of the design: "
+        "{count}. `ut align --recheck` has the twins review those commits again.",
     },
     "align.reviews_none": {
         "it": "Ogni commit da considerare ha già un esame dei twin.",
@@ -391,6 +435,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Write the tasks for the code, one per line (at most {limit}); an empty line ends "
         "the list.",
     },
+    "align.findings_intro": {
+        "it": "Rilievi dei twin su questo commit che possono diventare compiti:",
+        "en": "Findings of the twins on this commit that can become tasks:",
+    },
+    "align.findings_intro_verdict": {
+        "it": "Compiti proposti dal modello e rilievi dei twin su questo commit:",
+        "en": "Tasks proposed by the model and findings of the twins on this commit:",
+    },
+    "align.findings_question": {
+        "it": "Quali rilievi diventano compiti? Scrivi i numeri separati da virgole o spazi, a per "
+        "tutti; Invio per nessuno:",
+        "en": "Which findings become tasks? Type their numbers separated by commas or spaces, a "
+        "for all; Enter for none:",
+    },
+    "align.findings_question_verdict": {
+        "it": "Quali diventano compiti? Scrivi i numeri separati da virgole o spazi, a per tutti; "
+        "Invio per i compiti proposti dal modello:",
+        "en": "Which become tasks? Type their numbers separated by commas or spaces, a for all; "
+        "Enter for the tasks proposed by the model:",
+    },
     "align.task_too_long": {
         "it": "Un compito ha al massimo {limit} caratteri: scrivilo più breve.",
         "en": "A task has at most {limit} characters: write it shorter.",
@@ -439,6 +503,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "align.errors.ALIGN_DECIDE_ALONE": {
         "it": "--decide si usa da solo: non va insieme a --since, --latest o --dry-run.",
         "en": "--decide goes alone: it cannot be used with --since, --latest or --dry-run.",
+    },
+    "align.errors.ALIGN_RECHECK_ALONE": {
+        "it": "--recheck non va insieme a --since o --decide: usalo da solo, oppure con --latest "
+        "e --dry-run.",
+        "en": "--recheck cannot be used with --since or --decide: use it alone, or with --latest "
+        "and --dry-run.",
+    },
+    "align.errors.TASK_SOURCE_INVALID": {
+        "it": "Un rilievo scelto non è più nell'ultimo esame del commit (TASK_SOURCE_INVALID): non "
+        "è stato registrato niente. Rilancia `ut align --decide` su quel commit.",
+        "en": "A chosen finding is no longer in the latest review of the commit "
+        "(TASK_SOURCE_INVALID): nothing was recorded. Launch `ut align --decide` on that commit "
+        "again.",
     },
     "align.errors.ALIGN_NOT_REVIEWED": {
         "it": "Il commit {commit} non ha ancora un esame dei twin nello Studio "

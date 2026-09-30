@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import costs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import requirements as requirements_api
+from orchestwin.cli.api import tasks as tasks_api
 from orchestwin.cli.console import Choice, selected_choice
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
@@ -16,7 +17,13 @@ from orchestwin.cli.errors import (
     CliError,
 )
 from orchestwin.cli.flows import changes as git
-from orchestwin.cli.flows import design_change, design_choice, design_state, init_requirements
+from orchestwin.cli.flows import (
+    design_change,
+    design_choice,
+    design_state,
+    init_requirements,
+    task_selection,
+)
 from orchestwin.cli.flows.align_review import project_text
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.flows.publish import publish_and_pull
@@ -24,6 +31,7 @@ from orchestwin.cli.flows.publish import publish_and_pull
 if TYPE_CHECKING:
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.align_review import Workspace
+    from orchestwin.cli.flows.task_selection import Candidate
 
 ATTEMPTS: Final = 5
 DROP: Final = "-"
@@ -65,8 +73,16 @@ NOT_STARTED: Final = frozenset(
 )
 UNRECORDABLE: Final = frozenset({SIGN_IN_STATUS, UNREACHABLE_STATUS})
 ENDING_STATUSES: Final = frozenset({SIGN_IN_STATUS, UNREACHABLE_STATUS, INTERRUPTED_STATUS})
-ENDING_CODES: Final = frozenset({"INPUT_CLOSED", "ANSWER_NOT_VALID"})
+INPUT_CLOSED: Final = "INPUT_CLOSED"
+ENDING_CODES: Final = frozenset({INPUT_CLOSED, "ANSWER_NOT_VALID"})
 PUBLISHED_AFTER: Final = frozenset({changes_api.ALIGNED, changes_api.CODE_TASKS})
+
+
+@dataclass(frozen=True, slots=True)
+class Chosen:
+    texts: tuple[str, ...] = ()
+    findings: tuple[Mapping[str, object], ...] = ()
+    before: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,16 +151,91 @@ def decide_one(
         return requirements_branch(context, workspace, item)
     proposed = [_text(task) for task in _list(item.alignment.get("code_tasks"))]
     proposed = [task for task in proposed if task]
+    verdict: tuple[Candidate, ...] = ()
     if choice.key == MODEL_TASKS and proposed:
         texts = edit_tasks(context, proposed)
     else:
         texts = ask_tasks(context)
-    if not texts:
+        verdict = task_selection.verdict_candidates(proposed)
+    chosen = choose_tasks(
+        context, workspace, item, verdict, room=changes_api.MAX_TASKS - len(texts)
+    )
+    texts = [*texts, *chosen.texts]
+    if not texts and not chosen.findings:
         console.say("align.tasks_none")
         return None, 0
-    record(workspace, item.commit, changes_api.CODE_TASKS, tasks=texts)
-    console.say("align.decided_tasks", count=len(texts))
+    answer = record(
+        workspace, item.commit, changes_api.CODE_TASKS, tasks=texts, findings=chosen.findings
+    )
+    console.say("align.decided_tasks", count=len(texts) + len(chosen.findings))
+    created = created_tasks(answer, chosen.before)
+    if created:
+        console.items(
+            [f"{tasks_api.task_code(task)}: {tasks_api.task_text(task)}" for task in created]
+        )
     return changes_api.CODE_TASKS, 0
+
+
+def choose_tasks(
+    context: CommandContext,
+    workspace: Workspace,
+    item: Reviewed,
+    verdict: Sequence[Candidate],
+    *,
+    room: int,
+) -> Chosen:
+    console = context.console
+    document = changes_api.alignment(workspace.client, workspace.project_id)
+    tasks = changes_api.open_tasks(document)
+    before = frozenset(tasks_api.task_code(task) for task in tasks)
+    if room <= 0:
+        return Chosen(before=before)
+    findings = task_selection.candidates_of_review(item.commit, item.run, tasks)
+    candidates = (*verdict, *findings)
+    if not candidates:
+        return Chosen(before=before)
+    console.say("align.findings_intro_verdict" if verdict else "align.findings_intro")
+    key = "align.findings_question_verdict" if verdict else "align.findings_question"
+    try:
+        picked = task_selection.choose(
+            context, candidates, question_key=key, default=verdict, limit=room
+        )
+    except CliError as error:
+        if error.code != INPUT_CLOSED:
+            raise
+        picked = tuple(verdict[:room])
+    return Chosen(
+        texts=tuple(candidate.text for candidate in picked if candidate.verdict),
+        findings=tuple(
+            candidate.source
+            for candidate in picked
+            if not candidate.verdict and candidate.source is not None
+        ),
+        before=before,
+    )
+
+
+def created_tasks(
+    answer: Mapping[str, object], before: frozenset[str]
+) -> list[Mapping[str, object]]:
+    alignment = answer.get("alignment")
+    found = changes_api.open_tasks(alignment) if isinstance(alignment, Mapping) else []
+    return [task for task in found if tasks_api.task_code(task) not in before]
+
+
+def recheck_hint(context: CommandContext, workspace: Workspace) -> None:
+    try:
+        document = changes_api.alignment(workspace.client, workspace.project_id)
+    except ApiFailure:
+        return
+    say_recheck(context, workspace, changes_api.stale_count(document))
+
+
+def say_recheck(context: CommandContext, workspace: Workspace, count: int) -> None:
+    if count <= 0 or workspace.hinted[-1:] == [count]:
+        return
+    workspace.hinted.append(count)
+    context.console.say("align.recheck_hint", count=count)
 
 
 def design_branch(
@@ -197,6 +288,8 @@ def design_branch(
             raise
         report(context, error, "design")
         return changes_api.DESIGN_CHANGE, error.status
+    if approval == 0:
+        recheck_hint(context, workspace)
     return changes_api.DESIGN_CHANGE, status or approval
 
 
@@ -273,6 +366,7 @@ def requirements_branch(
         return changes_api.REQUIREMENTS_CHANGE, error.status
     journey.conclude(REQUIREMENTS_STAGE, updated, gate)
     console.say("align.requirements_check_design")
+    recheck_hint(context, workspace)
     return changes_api.REQUIREMENTS_CHANGE, 0
 
 
@@ -369,9 +463,16 @@ def record(
     *,
     note: str | None = None,
     tasks: Sequence[str] = (),
+    findings: Sequence[Mapping[str, object]] = (),
 ) -> Mapping[str, object]:
     return changes_api.decide(
-        workspace.client, workspace.project_id, commit, kind, note=note, tasks=tasks
+        workspace.client,
+        workspace.project_id,
+        commit,
+        kind,
+        note=note,
+        tasks=tasks,
+        findings=findings,
     )
 
 

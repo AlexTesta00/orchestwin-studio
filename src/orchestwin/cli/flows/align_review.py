@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -50,6 +50,7 @@ class Workspace:
     project_id: str
     root: Path
     alignment: Mapping[str, object]
+    hinted: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +59,7 @@ class Titles:
     screens: Mapping[str, str]
 
 
-def prepare(context: CommandContext) -> Workspace:
+def prepare(context: CommandContext, *, repository: bool = True) -> Workspace:
     project = context.project()
     if project is None:
         raise CliError("PROJECT_NOT_LINKED")
@@ -67,7 +68,7 @@ def prepare(context: CommandContext) -> Workspace:
     session = context.sessions.read(client.studio)
     if session is None or not session.signed_in:
         raise CliError("NOT_SIGNED_IN", values={"studio": client.studio.origin})
-    root = git.repository_root(context, project.root)
+    root = git.repository_root(context, project.root) if repository else project.root
     if root is None:
         raise CliError("ALIGN_NO_GIT", values={"folder": str(project.root)})
     document = changes_api.alignment(client, link.project_id)
@@ -178,7 +179,12 @@ def locale(context: CommandContext, project: ProjectFolder) -> str:
 
 
 def review(
-    context: CommandContext, workspace: Workspace, commit: str, *, locale: str
+    context: CommandContext,
+    workspace: Workspace,
+    commit: str,
+    *,
+    locale: str,
+    again: bool = False,
 ) -> Mapping[str, object]:
     label = context.text("align.review_label", commit=git.short(commit))
     result = jobs.generate(
@@ -186,7 +192,7 @@ def review(
         workspace.client,
         workspace.project_id,
         changes_api.review_path(workspace.project_id, commit),
-        changes_api.review_body(locale, False),
+        changes_api.review_body(locale, again),
         label=label,
     )
     body = result.body

@@ -27,8 +27,10 @@ if TYPE_CHECKING:
 NAME = "status"
 SCHEMA_VERSION: Final = 1
 HEALTHY: Final = 200
+SERVER_ERROR: Final = 500
 SHORT_COMMIT: Final = 7
 DESIGN_STAGE: Final = "design"
+TWINS_STAGE: Final = "twins"
 FEEDBACK_TESTS: Final = "twins/feedback/tests.json"
 FROM_STUDIO: Final = "studio"
 FROM_FOLDER: Final = "folder"
@@ -56,6 +58,22 @@ STAGE_ORDER: Final = {
 
 
 @dataclass(frozen=True, slots=True)
+class TwinLearning:
+    twin_id: str
+    name: str
+    label: str
+    observations: int
+
+    def document(self) -> dict[str, object]:
+        return {
+            "twin_id": self.twin_id,
+            "name": self.name,
+            "label": self.label,
+            "observations": self.observations,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Report:
     source: str
     reason: str | None
@@ -77,6 +95,8 @@ class Report:
     alignment: StateSummary | None = None
     local_complete: bool = False
     tests: AcceptanceSummary | None = None
+    stale_reviews: int = 0
+    learning: tuple[TwinLearning, ...] | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -134,9 +154,13 @@ class Report:
                     "pending": self.alignment.pending_changes,
                     "aligned_commit": self.alignment.aligned_commit,
                     "open_tasks": self.alignment.open_tasks,
+                    "stale_reviews": self.stale_reviews,
                 }
             ),
             "tests": None if self.tests is None else self.tests.document(),
+            "learning": (
+                {"twins": [twin.document() for twin in self.learning]} if self.learning else None
+            ),
         }
 
 
@@ -149,6 +173,8 @@ class _Studio:
     remaining_usd: float | None
     alignment: StateSummary | None = None
     tests: AcceptanceSummary | None = None
+    stale_reviews: int = 0
+    learning: tuple[TwinLearning, ...] | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -205,6 +231,8 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         remaining_usd=found.remaining_usd,
         alignment=found.alignment,
         tests=found.tests if found.tests is not None else local_tests(project),
+        stale_reviews=found.stale_reviews,
+        learning=found.learning if found.learning is not None else local_learning(project),
     )
 
 
@@ -239,31 +267,49 @@ def show(context: CommandContext, report: Report) -> None:
         console.say("status.next", action=next_action_text(context, report.next_action))
     _folder_lines(context, report)
     if report.alignment is not None:
-        show_alignment(context, report.alignment)
+        show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
     if report.tests is not None:
         show_tests(context, report.tests)
+    show_learning(context, report.learning)
     _spending_line(context, report)
 
 
-def show_alignment(context: CommandContext, summary: StateSummary) -> None:
-    console = context.console
+def show_alignment(
+    context: CommandContext, summary: StateSummary, *, stale_reviews: int = 0
+) -> None:
     if summary.changes == 0:
-        console.say("status.alignment_none")
+        line = context.text("status.alignment_none")
     elif summary.aligned_commit is None:
-        console.say(
+        line = context.text(
             "status.alignment_not_aligned",
             recorded=summary.changes,
             pending=summary.pending_changes,
             tasks=summary.open_tasks,
         )
     else:
-        console.say(
+        line = context.text(
             "status.alignment",
             recorded=summary.changes,
             pending=summary.pending_changes,
             commit=summary.aligned_commit[:SHORT_COMMIT],
             tasks=summary.open_tasks,
         )
+    if stale_reviews > 0:
+        stale = context.text("status.stale_reviews", count=stale_reviews)
+        line = f"{line} {stale}"
+    context.console.write(line)
+
+
+def show_learning(context: CommandContext, learning: tuple[TwinLearning, ...] | None) -> None:
+    if not learning or not any(twin.observations > 0 for twin in learning):
+        return
+    twins = "; ".join(
+        context.text(
+            "status.learning_twin", name=twin.name, label=twin.label, count=twin.observations
+        )
+        for twin in learning
+    )
+    context.console.say("status.learning", twins=twins)
 
 
 def show_tests(context: CommandContext, tests: AcceptanceSummary) -> None:
@@ -278,6 +324,64 @@ def show_tests(context: CommandContext, tests: AcceptanceSummary) -> None:
         blocked=numbers.get("blocked", 0),
         not_covered=numbers.get("not_covered", 0),
     )
+
+
+def local_learning(project: ProjectFolder) -> tuple[TwinLearning, ...] | None:
+    manifest = read_json(project.knowledge / knowledge.MANIFEST_NAME)
+    feedback = manifest.get("feedback") if isinstance(manifest, Mapping) else None
+    named = feedback.get("learned") if isinstance(feedback, Mapping) else None
+    if not isinstance(named, str) or not _inside(named):
+        return None
+    document = read_json(project.knowledge.joinpath(*named.split("/")))
+    if not isinstance(document, Mapping):
+        return None
+    return learning_of(document.get("twins"))
+
+
+def local_stale_reviews(project: ProjectFolder) -> int:
+    manifest = read_json(project.knowledge / knowledge.MANIFEST_NAME)
+    state = manifest.get("state") if isinstance(manifest, Mapping) else None
+    value = state.get("stale_reviews") if isinstance(state, Mapping) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def learning_of(entries: object) -> tuple[TwinLearning, ...]:
+    found: list[TwinLearning] = []
+    for entry in entries if isinstance(entries, list | tuple) else ():
+        if not isinstance(entry, Mapping):
+            continue
+        twin_id = entry.get("twin_id")
+        if not isinstance(twin_id, str) or not twin_id:
+            continue
+        name = entry.get("twin_name")
+        observations = entry.get("observations")
+        count = (
+            sum(1 for item in observations if isinstance(item, Mapping))
+            if isinstance(observations, list)
+            else 0
+        )
+        found.append(
+            TwinLearning(
+                twin_id=twin_id,
+                name=" ".join(name.split()) if isinstance(name, str) and name.strip() else "-",
+                label=learning_label(entry),
+                observations=count,
+            )
+        )
+    return tuple(found)
+
+
+def learning_label(entry: Mapping[str, object]) -> str:
+    label = entry.get("label")
+    if isinstance(label, str) and label.strip():
+        return label.strip()
+    profile = entry.get("profile_version_number")
+    development = entry.get("development_version_number")
+    if all(
+        isinstance(value, int) and not isinstance(value, bool) for value in (profile, development)
+    ):
+        return f"{profile}.{development}"
+    return "-"
 
 
 def local_tests(project: ProjectFolder) -> AcceptanceSummary | None:
@@ -374,19 +478,44 @@ def _studio_facts(
         found = project_api.get_project(client, link.project_id)
         steps = project_api.step_states(client, link.project_id)
         approved = _design_approved(steps)
-        alignment = changes_api.summary(client, link.project_id) if approved else None
+        development = changes_api.development(client, link.project_id) if approved else None
         tests = tests_api.summary(client, link.project_id) if approved else None
+        learning = studio_learning(client, link.project_id) if _twins_approved(steps) else None
         has_budget, spent, remaining = _spending(client, link.project_id)
     except CliError as error:
         reason = _offline_reason(error)
         if reason is None:
             raise
         return reason
-    return _Studio(found, steps, has_budget, spent, remaining, alignment, tests)
+    return _Studio(
+        found,
+        steps,
+        has_budget,
+        spent,
+        remaining,
+        alignment=None if development is None else development.summary,
+        tests=tests,
+        stale_reviews=0 if development is None else development.stale_reviews,
+        learning=learning,
+    )
+
+
+def studio_learning(client: StudioClient, project_id: str) -> tuple[TwinLearning, ...] | None:
+    try:
+        document = client.get(f"/projects/{project_id}/twin-learning")
+    except ApiFailure as failure:
+        if failure.http_status in changes_api.MISSING_ROUTE or failure.http_status >= SERVER_ERROR:
+            return None
+        raise
+    return learning_of(document.get("twins") if isinstance(document, Mapping) else None)
 
 
 def _design_approved(steps: tuple[project_api.StepState, ...]) -> bool:
     return any(step.stage == DESIGN_STAGE and step.approved for step in steps)
+
+
+def _twins_approved(steps: tuple[project_api.StepState, ...]) -> bool:
+    return any(step.stage == TWINS_STAGE and step.approved for step in steps)
 
 
 def _offline_reason(error: CliError) -> str | None:
@@ -433,6 +562,7 @@ def _folder_report(
     steps = folder_steps(project, local)
     current = project_api.current_stage(steps)
     state = None if local is None else local.state
+    alignment = state if _design_approved(steps) else None
     return Report(
         source=FROM_FOLDER,
         reason=reason,
@@ -451,11 +581,13 @@ def _folder_report(
         has_budget=False,
         spent_usd=None,
         remaining_usd=None,
-        alignment=state if _design_approved(steps) else None,
+        alignment=alignment,
         local_complete=local is not None
         and local.complete
         and set(knowledge.FOLDER_STAGES) <= set(local.progress),
         tests=local_tests(project),
+        stale_reviews=0 if alignment is None else local_stale_reviews(project),
+        learning=local_learning(project),
     )
 
 
