@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -13,8 +14,11 @@ from orchestwin.api.services import ApplicationRuntime
 from orchestwin.config import ApplicationSettings
 from orchestwin.identity.persistence.models import UserRecord
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
+from orchestwin.models.twin_chat import INSTRUCTION, LEARNED_CHAT_INSTRUCTION
 from orchestwin.persistence import create_database_runtime
 from orchestwin.projects.persistence.models import ProjectRecord
+from orchestwin.projects.persistence.twin_learning import SqlAlchemyTwinLearningRepository
+from orchestwin.projects.twin_learning import ObservationDraft
 from orchestwin.twins.persistence.repositories import (
     SqlAlchemyPersonaVersionRepository,
     SqlAlchemyUserTwinVersionRepository,
@@ -190,6 +194,63 @@ def test_twin_chat_records_audited_turns_in_an_append_only_conversation(database
                     await editor.execute(
                         sa.text("UPDATE twin_conversation_turns SET reply = 'edited'")
                     )
+        finally:
+            await db.dispose()
+
+    run(scenario())
+
+
+def test_twin_chat_sends_what_the_twin_learned_only_when_it_learned_something(database, tmp_path):
+    generator, transport = audited_generator(tmp_path, OUTPUT)
+
+    async def scenario():
+        db = create_database_runtime(database)
+        try:
+            owner, project = await seed(db)
+            twin = await seeded_twin(db, owner, project)
+            runtime = ApplicationRuntime(
+                database_runtime=db,
+                real_model_runtime=SimpleNamespace(
+                    user_modeling=SimpleNamespace(
+                        proposal_port=SimpleNamespace(generator=generator)
+                    )
+                ),
+                proposal_evidence_store=SqlAlchemyProposalEvidenceStore(db.session_factory),
+            )
+            path = f"/projects/{project}/user-twins/{twin.twin_id}/conversation/turns"
+            async with httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=client_app(runtime, owner)), base_url=BASE_URL
+            ) as client:
+                plain = await client.post(
+                    path, json={"question": "Come registri un ospite?", "expected_turn_count": 0}
+                )
+                assert plain.status_code == 201, plain.text
+                async with db.session_factory() as session, session.begin():
+                    learned = await SqlAlchemyTwinLearningRepository(
+                        session, owner_user_id=owner
+                    ).add(
+                        project,
+                        twin.twin_id,
+                        (ObservationDraft(statement="Il gruppo registra gli ospiti al telefono."),),
+                        approved_at=datetime(2026, 9, 30, 9, 0, tzinfo=UTC),
+                    )
+                    assert learned.status.value == "RECORDED"
+                grounded = await client.post(
+                    path, json={"question": "E di notte?", "expected_turn_count": 1}
+                )
+                assert grounded.status_code == 201, grounded.text
+            first, second = (call["payload"]["messages"] for call in transport.calls)
+            assert first[0]["content"].endswith(INSTRUCTION)
+            assert "user_twin.learned" not in first[0]["content"]
+            assert "learned" not in json.loads(first[1]["content"])["context"]["user_twin"]
+            assert second[0]["content"].endswith(f"{INSTRUCTION} {LEARNED_CHAT_INSTRUCTION}")
+            assert json.loads(second[1]["content"])["context"]["user_twin"]["learned"] == [
+                {
+                    "code": "OBS-001",
+                    "statement": "Il gruppo registra gli ospiti al telefono.",
+                    "source": "OWNER",
+                }
+            ]
         finally:
             await db.dispose()
 

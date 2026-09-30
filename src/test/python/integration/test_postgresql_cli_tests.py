@@ -114,6 +114,7 @@ MCP_PROTOCOL = "2025-06-18"
 MCP_CLIENT = {"name": "journey", "version": "1"}
 GET_TEST_RESULTS = "get_test_results"
 RUN_TESTS = "run_tests"
+GET_TASKS = "get_tasks"
 SPEND_REQUIRED = "SPEND_REQUIRED"
 
 
@@ -355,7 +356,7 @@ def show_the_tests(scene: Scene, acceptance: Acceptance) -> None:
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     document = json.loads(as_json.output)
-    assert list(document)[-1] == "tests", as_json.transcript()
+    assert list(document)[-2:] == ["tests", "learning"], as_json.transcript()
     assert document["tests"] == {
         "runs": len(acceptance.runs),
         "latest": {
@@ -396,7 +397,7 @@ def serve_the_results(scene: Scene, acceptance: Acceptance) -> None:
     answered = all(answer.get("jsonrpc") == "2.0" and "result" in answer for answer in answers)
     assert answered, run.transcript()
     names = [tool["name"] for tool in answers[1]["result"]["tools"]]
-    assert names[-2:] == [GET_TEST_RESULTS, RUN_TESTS], names
+    assert names[-3:] == [GET_TEST_RESULTS, RUN_TESTS, GET_TASKS], names
     document = read_json(scene.knowledge.joinpath(*TESTS_DOCUMENT))
     assert tool_document(answers[2]) == {"runs": document["runs"][:1]}
     assert document["runs"][0]["id"] == acceptance.runs[0]
