@@ -30,6 +30,7 @@ from orchestwin.knowledge.state import (
     MAX_RESULTS,
     MAX_SCREENSHOT_PATH_LENGTH,
     MAX_SNAPSHOT_ELEMENTS,
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     MAX_SNAPSHOT_OPTIONS,
     MAX_SNAPSHOT_TEXT_LENGTH,
     MAX_STEP_DETAIL_LENGTH,
@@ -423,11 +424,17 @@ class PageSnapshot:
     title: str
     text: str
     elements: tuple[SnapshotElement, ...] = ()
+    hidden_text: str = ""
 
     def __post_init__(self) -> None:
         _bounded(self.url, label="snapshot address", maximum=MAX_SNAPSHOT_URL_LENGTH)
         _bounded(self.title, label="snapshot title", maximum=MAX_SNAPSHOT_TITLE_LENGTH)
         _bounded(self.text, label="snapshot text", maximum=MAX_SNAPSHOT_TEXT_LENGTH)
+        _bounded(
+            self.hidden_text,
+            label="snapshot hidden text",
+            maximum=MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
+        )
         _tuple_of(self.elements, SnapshotElement, "snapshot elements")
         if len(self.elements) > MAX_SNAPSHOT_ELEMENTS:
             raise ValueError(f"a snapshot holds at most {MAX_SNAPSHOT_ELEMENTS} elements")
@@ -448,6 +455,7 @@ class PageSnapshot:
             "url": self.url,
             "title": self.title,
             "text": self.text,
+            "hidden_text": self.hidden_text,
             "elements": [item.to_snapshot() for item in self.elements],
         }
 
@@ -458,6 +466,7 @@ def page_snapshot_from_document(payload: Mapping[str, object]) -> PageSnapshot:
         title=payload["title"],
         text=payload["text"],
         elements=tuple(element_from_snapshot(item) for item in payload["elements"]),
+        hidden_text=payload.get("hidden_text", ""),
     )
 
 
