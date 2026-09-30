@@ -17,7 +17,11 @@ from orchestwin.knowledge.layout import (
     KNOWLEDGE_SCHEMA_VERSION,
 )
 from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources
-from orchestwin.knowledge.state_documents import change_critique_lines, test_critique_lines
+from orchestwin.knowledge.state_documents import (
+    change_critique_lines,
+    learning_feedback_lines,
+    test_critique_lines,
+)
 
 REVIEWS_KIND: Final = "orchestwin.twin-reviews"
 DISCUSSIONS_KIND: Final = "orchestwin.twin-discussions"
@@ -288,6 +292,7 @@ def feedback_markdown(sources: KnowledgeSources) -> str:
         *_insight_lines(sources),
         *change_critique_lines(sources),
         *test_critique_lines(sources),
+        *learning_feedback_lines(sources),
     ]
     return "\n".join(lines)
 

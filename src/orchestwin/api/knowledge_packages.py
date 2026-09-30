@@ -51,6 +51,7 @@ class PackageFeedbackPayload(ApiModel):
     insights: int
     change_reviews: int
     test_runs: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    learned_observations: int | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class PackageProgressPayload(ApiModel):
@@ -75,6 +76,7 @@ class PackageProgressPayload(ApiModel):
 class PackageStatePayload(ApiModel):
     changes: int
     pending_changes: int
+    stale_reviews: int | None = Field(default=None, exclude_if=lambda value: value is None)
     aligned_commit: str | None
     open_tasks: int
 
@@ -86,6 +88,7 @@ class PackageStatePayload(ApiModel):
         return cls(
             changes=state["changes"],
             pending_changes=state["pending_changes"],
+            stale_reviews=state.get("stale_reviews"),
             aligned_commit=state["aligned_commit"],
             open_tasks=state["open_tasks"],
         )
@@ -160,6 +163,7 @@ class KnowledgePackageVersionPayload(ApiModel):
                 insights=feedback["insights"],
                 change_reviews=feedback.get("change_reviews", 0),
                 test_runs=feedback.get("test_runs"),
+                learned_observations=feedback.get("learned_observations"),
             ),
             diagram_count=sum(len(view["diagrams"]) for view in views.values()),
             table_count=sum(len(view["tables"]) for view in views.values()),

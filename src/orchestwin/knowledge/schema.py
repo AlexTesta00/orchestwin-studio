@@ -71,6 +71,7 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_FOLDER,
     FEEDBACK_INSIGHTS,
+    FEEDBACK_LEARNING,
     FEEDBACK_REVIEWS,
     FEEDBACK_TESTS,
     KNOWLEDGE_FOLDER_KIND,
@@ -94,9 +95,11 @@ from orchestwin.knowledge.state import (
     CRITIQUE_VERDICTS,
     DECISIONS,
     FILE_KINDS,
+    LEARNING_SOURCES,
     MAX_ACTION_LENGTH,
     MAX_ADDRESS_LENGTH,
     MAX_AUTHOR_LENGTH,
+    MAX_BASIS_LENGTH,
     MAX_BROWSER_VERSION_LENGTH,
     MAX_BROWSERS,
     MAX_COMMIT_LENGTH,
@@ -107,9 +110,11 @@ from orchestwin.knowledge.state import (
     MAX_FINDING_LENGTH,
     MAX_FINDINGS,
     MAX_FOLDER_TEST_RUNS,
+    MAX_LEARNED_OBSERVATIONS,
     MAX_MESSAGE_LENGTH,
     MAX_MODEL_TASKS,
     MAX_NOTE_LENGTH,
+    MAX_OBSERVATION_LENGTH,
     MAX_PAGE_TEXT_LENGTH,
     MAX_PATH_HEADING_LENGTH,
     MAX_PATH_LENGTH,
@@ -123,16 +128,20 @@ from orchestwin.knowledge.state import (
     MAX_SUMMARY_LENGTH,
     MAX_TARGET_NAME_LENGTH,
     MAX_TASK_LENGTH,
+    MAX_TASK_NOTE_LENGTH,
     MIN_COMMIT_LENGTH,
+    OBSERVATION_CODE_PREFIX,
     PATH_STATUSES,
     SEVERITIES,
     STATE_KIND,
     STEP_STATUSES,
+    TASK_ORIGINS,
     TASK_STATUSES,
     TEST_ACTIONS,
     TEST_EXPECTATIONS,
     TEST_REVIEWS_KIND,
     TEST_ROLES,
+    TWIN_LEARNING_KIND,
     VERDICTS,
 )
 from orchestwin.models.team_proposals import (
@@ -192,6 +201,7 @@ SCHEMA_NAMES: Final = (
     "state",
     "changes",
     "tests",
+    "learning",
 )
 SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 MAX_DOCUMENT_DEPTH: Final = 64
@@ -218,7 +228,13 @@ _COMMIT_PATTERN: Final = rf"^[0-9a-f]{{{MIN_COMMIT_LENGTH},{MAX_COMMIT_LENGTH}}}
 _LOCALE_PATTERN: Final = r"^[a-z]{2,3}(-[A-Z]{2})?$"
 _SCREENSHOT_SEGMENT: Final = r"(?:[^/\\:.][^/\\:]*|\.|\.[^/\\:.][^/\\:]*|\.\.[^/\\:]+)"
 _SCREENSHOT_PATTERN: Final = rf"^{_SCREENSHOT_SEGMENT}(?:/{_SCREENSHOT_SEGMENT})*$"
-_FEEDBACK_TESTS_PAIR: Final = {"tests": ["test_runs"], "test_runs": ["tests"]}
+_LABEL_PATTERN: Final = r"^[1-9][0-9]*\.(0|[1-9][0-9]*)$"
+_FEEDBACK_PAIRS: Final = {
+    "tests": ["test_runs"],
+    "test_runs": ["tests"],
+    "learned": ["learned_observations"],
+    "learned_observations": ["learned"],
+}
 _STAGE_ORDER: Final = {"twins": ["team"], "requirements": ["twins"], "design": ["requirements"]}
 _MANIFEST_VERSION_RULES: Final = {
     "allOf": [
@@ -311,6 +327,11 @@ _TaskText = Annotated[str, Field(min_length=1, max_length=MAX_TASK_LENGTH)]
 _ChangedPath = Annotated[str, Field(min_length=1, max_length=MAX_PATH_LENGTH)]
 _CriterionCode = Annotated[str, Field(pattern=_code("AC"))]
 _PathCode = Annotated[str, Field(pattern=_code("TP"))]
+_ObservationCode = Annotated[str, Field(pattern=_code(OBSERVATION_CODE_PREFIX))]
+_OwnerNote = Annotated[str, Field(max_length=MAX_TASK_NOTE_LENGTH)]
+_TwinName = Annotated[str, Field(min_length=1)]
+_Statement = Annotated[str, Field(min_length=1, max_length=MAX_OBSERVATION_LENGTH)]
+_Basis = Annotated[str, Field(min_length=1, max_length=MAX_BASIS_LENGTH)]
 
 
 class KnowledgeSchemaError(Exception):
@@ -336,8 +357,9 @@ class KnowledgeSchemaError(Exception):
 class _KnowledgeJsonSchema(GenerateJsonSchema):
     def default_schema(self, schema: core_schema.WithDefaultSchema) -> JsonSchemaValue:
         inner = schema["schema"]
-        while inner["type"] in {"function-before", "nullable"}:
-            inner = inner["schema"]
+        if inner["type"] == "function-before":
+            while inner["type"] in {"function-before", "nullable"}:
+                inner = inner["schema"]
         return self.generate_inner(inner)
 
     def field_title_should_be_set(self, schema: object) -> bool:
@@ -1594,11 +1616,39 @@ class ChangedFile(_Record):
     removed: _Count = Field(description="Number of lines the commit removed from the file.")
 
 
+class RunReference(_Record):
+    requirements_version_number: _Version = Field(
+        description="Approved requirements version the change was reviewed against."
+    )
+    design_version_number: _Version = Field(
+        description="Approved design version the change was reviewed against."
+    )
+    alternative_code: _AlternativeCode | None = Field(
+        description="Code of the selected design alternative, like DES-002, or null."
+    )
+
+
 class ChangeReviewSummary(_Record):
     run_id: Uuid = Field(description="Latest review run of the change.")
     reviewed_at: Timestamp = Field(description="When that run completed.")
     verdict: Literal[VERDICTS] = Field(description="Alignment status decided by the model.")
     summary: _Summary = Field(description="Summary of the verdict.")
+    reference: RunReference | None = Field(
+        default=None,
+        description=(
+            "Approved versions that run was made against, or null when the Studio did not "
+            "record them; left out by folders published before the reviews could become stale."
+        ),
+    )
+    stale: Annotated[bool | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "True when the reference differs from the requirements version, the design version "
+            "or the selected alternative approved in this folder, so that the twins should "
+            "review the change again; false without a reference or without an approved design; "
+            "left out by folders published before the reviews could become stale."
+        ),
+    )
 
 
 class ChangeDecision(_Record):
@@ -1642,14 +1692,82 @@ class CodeSubjects(_Record):
     screens: list[_ScreenCode] = Field(description="Codes of the screens concerned, like SCR-002.")
 
 
+class TaskSubjects(CodeSubjects):
+    criteria: Annotated[list[_CriterionCode] | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Codes of the acceptance criteria concerned, like AC-007; left out by folders "
+            "published before the tasks had an origin."
+        ),
+    )
+
+
+class TaskOrigin(_Record):
+    kind: Literal[TASK_ORIGINS] = Field(
+        description=(
+            "CODE_CHANGE for a task that comes from the review of a commit, TEST_RUN for one "
+            "that comes from a run of the acceptance tests, OWNER for one the owner wrote."
+        )
+    )
+    commit: CommitHash | None = Field(
+        description="Commit whose review the task comes from, or null."
+    )
+    test_run_id: Uuid | None = Field(
+        description="Run of the acceptance tests whose review the task comes from, or null."
+    )
+    twin_id: Uuid | None = Field(
+        description=(
+            "User twin whose finding became the task, or null for a task that comes from the "
+            "alignment verdict or from the owner."
+        )
+    )
+    twin_name: _TwinName | None = Field(
+        description="Display name of that user twin when the task was created, or null."
+    )
+    finding: Annotated[str, Field(max_length=MAX_FINDING_LENGTH)] | None = Field(
+        description="Text of that finding, copied when the task was created, or null."
+    )
+
+
 class CodeTask(_Record):
     code: _TaskCode = Field(description="Code of the task, like TSK-001.")
     text: _TaskText = Field(description="What the code should do.")
-    about: CodeSubjects = Field(description="Requirements and screens the task is about.")
-    from_commit: CommitHash = Field(description="Commit whose decision created the task.")
+    about: TaskSubjects = Field(
+        description="Requirements, screens and acceptance criteria the task is about."
+    )
+    origin: Annotated[TaskOrigin | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Where the task comes from; left out by folders published before the tasks had an "
+            "origin, whose tasks all come from the decision on from_commit."
+        ),
+    )
+    from_commit: CommitHash | None = Field(
+        description=(
+            "Commit whose review the task comes from, the same as origin.commit, or null for a "
+            "task that does not come from a commit."
+        )
+    )
     created_at: Timestamp = Field(description="When the task was created.")
     status: Literal[TASK_STATUSES] = Field(
-        description="OPEN until a later change is decided aligned, then DONE."
+        description=(
+            "OPEN while the task waits; DONE once a later change is decided aligned or the owner "
+            "closes it; DROPPED once the owner decides that it is no longer wanted."
+        )
+    )
+    closed_at: Timestamp | None = Field(
+        default=None,
+        description=(
+            "When the task became DONE or DROPPED, or null; left out by folders published before "
+            "the tasks had an origin."
+        ),
+    )
+    note: _OwnerNote | None = Field(
+        default=None,
+        description=(
+            "Owner's note at the last change of status, or null; left out by folders published "
+            "before the tasks had an origin."
+        ),
     )
 
 
@@ -1666,19 +1784,7 @@ class StateDocument(_Record):
         description="Newest change the owner decided is aligned, or null before any."
     )
     changes: list[RecordedChange] = Field(description="Recorded changes, newest first.")
-    tasks: list[CodeTask] = Field(description="Tasks for the code, open and done.")
-
-
-class RunReference(_Record):
-    requirements_version_number: _Version = Field(
-        description="Approved requirements version the change was reviewed against."
-    )
-    design_version_number: _Version = Field(
-        description="Approved design version the change was reviewed against."
-    )
-    alternative_code: _AlternativeCode | None = Field(
-        description="Code of the selected design alternative, like DES-002, or null."
-    )
+    tasks: list[CodeTask] = Field(description="Tasks for the code: open, done and dropped.")
 
 
 class FindingSubject(_Record):
@@ -1984,6 +2090,100 @@ class TestReviewsDocument(_Record):
     )
 
 
+class ObservationSubject(_Record):
+    requirement: _RequirementCode | None = Field(
+        description="Code of the requirement the observation is about, or null."
+    )
+    screen: _ScreenCode | None = Field(
+        description="Code of the screen the observation is about, or null."
+    )
+
+
+class LearnedObservation(_Record):
+    code: _ObservationCode = Field(
+        description="Code of the observation, like OBS-001, unique in the project."
+    )
+    statement: _Statement = Field(
+        description="What the development brought out about the user group of the twin."
+    )
+    basis: _Basis | None = Field(
+        description=(
+            "Critiques, changes or test runs the observation rests on, or null for an observation "
+            "written by the owner."
+        )
+    )
+    source: Literal[LEARNING_SOURCES] = Field(
+        description=(
+            "TWIN_CRITIQUE when the twin proposed it from its own critiques and the owner approved "
+            "it, OWNER when the owner wrote it."
+        )
+    )
+    about: ObservationSubject = Field(
+        description="Requirement and screen the observation is about."
+    )
+    contradicts_profile: _Basis | None = Field(
+        description=(
+            "What the observation contradicts in the approved profile of the twin, or null; the "
+            "profile itself changes only through the Studio."
+        )
+    )
+    added_in_version: _Version = Field(
+        description="Development version of the twin that added the observation."
+    )
+    approved_at: Timestamp = Field(description="When the owner approved or wrote it.")
+    update_id: Uuid | None = Field(
+        description="Update proposal the observation comes from, or null."
+    )
+
+
+class RetiredObservation(_Record):
+    code: _ObservationCode = Field(description="Code of the retired observation.")
+    statement: _Statement = Field(description="What the observation said.")
+    retired_in_version: _Version = Field(
+        description="Development version of the twin that retired the observation."
+    )
+    retired_at: Timestamp = Field(description="When the owner retired it.")
+    reason: _OwnerNote | None = Field(description="Why the owner retired it, or null.")
+
+
+class TwinLearning(_Record):
+    twin_id: Uuid = Field(description="User twin of the approved user modeling.")
+    twin_name: _TwinName = Field(description="Display name of the user twin.")
+    profile_version_number: _Version = Field(
+        description="Approved profile version of the twin, which learning never changes."
+    )
+    development_version_number: _Count = Field(
+        description=(
+            "Development version of the twin: 0 before it learns anything, one more for every "
+            "approved update, every observation written by the owner and every retirement."
+        )
+    )
+    label: str = Field(
+        pattern=_LABEL_PATTERN,
+        description="Profile version and development version joined by a dot, like 1.2.",
+    )
+    observations: list[LearnedObservation] = Field(
+        max_length=MAX_LEARNED_OBSERVATIONS,
+        description="Active learned observations, oldest first.",
+    )
+    retired: list[RetiredObservation] = Field(
+        description="Learned observations that the owner retired."
+    )
+
+
+class TwinLearningDocument(_Record):
+    schema_version: Literal[KNOWLEDGE_SCHEMA_VERSION] = Field(
+        description="Version of the knowledge folder format."
+    )
+    kind: Literal[TWIN_LEARNING_KIND] = Field(
+        description="Kind of document, what the user twins learned during the development."
+    )
+    project_id: Uuid = Field(description="Project the twins belong to.")
+    twins: list[TwinLearning] = Field(
+        description="One entry for every twin of the approved user modeling, in its order."
+    )
+
+
 class FolderGenerator(_Record):
     name: str = Field(description="Name of the application that wrote the folder.")
     mermaid_version: str = Field(description="Mermaid version the diagrams are written for.")
@@ -2112,7 +2312,7 @@ class FolderViews(_Record):
 
 
 class FeedbackSummary(_Record):
-    model_config = ConfigDict(json_schema_extra={"dependentRequired": _FEEDBACK_TESTS_PAIR})
+    model_config = ConfigDict(json_schema_extra={"dependentRequired": _FEEDBACK_PAIRS})
 
     folder: str = Field(description="Folder that holds the twin feedback.")
     text: str | None = Field(
@@ -2154,11 +2354,30 @@ class FeedbackSummary(_Record):
         default=None,
         description="Number of acceptance test runs in that document, written together with tests.",
     )
+    learned: Annotated[Literal[FEEDBACK_LEARNING] | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Path of the document of what the user twins learned during the development; left "
+            "out, together with learned_observations, by folders without the user twins and by "
+            "folders published before the twins could learn."
+        ),
+    )
+    learned_observations: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Number of active learned observations of every twin in that document, written "
+            "together with learned."
+        ),
+    )
 
     @model_validator(mode="after")
-    def _tests_with_their_count(self) -> FeedbackSummary:
+    def _documents_with_their_count(self) -> FeedbackSummary:
         if (self.tests is None) != (self.test_runs is None):
             raise ValueError("tests and test_runs are written together or both left out")
+        if (self.learned is None) != (self.learned_observations is None):
+            raise ValueError(
+                "learned and learned_observations are written together or both left out"
+            )
         return self
 
 
@@ -2177,6 +2396,13 @@ class StateEntry(_Record):
     text: str = Field(description="Path of the Markdown text of the development state.")
     changes: _Count = Field(description="Number of recorded changes.")
     pending_changes: _Count = Field(description="Number of changes after the aligned point.")
+    stale_reviews: Annotated[_Count | None, _OPTIONAL] = Field(
+        default=None,
+        description=(
+            "Number of changes after the aligned point whose latest review is stale; left out by "
+            "folders published before the reviews could become stale."
+        ),
+    )
     aligned_commit: CommitHash | None = Field(
         description="Commit of the aligned point, or null before any."
     )
@@ -2273,6 +2499,7 @@ _MODELS: Final = {
     "state": StateDocument,
     "changes": ChangeReviewsDocument,
     "tests": TestReviewsDocument,
+    "learning": TwinLearningDocument,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
@@ -2337,9 +2564,10 @@ _SCHEMA_TEXTS: Final = {
         "Development state",
         "The development of the project outside the Studio, stored in "
         f"{STATE_DOCUMENT}: the approved requirements and design versions the code is expected "
-        "to implement, the commits recorded in the Studio with their latest verdict and the "
-        "owner's decision, the aligned point and the tasks for the code. The diff of a commit is "
-        f"never exported. {_WRITTEN_BY}",
+        "to implement, the commits recorded in the Studio with their latest verdict, the "
+        "versions that verdict was made against and the owner's decision, the aligned point and "
+        "the tasks for the code with where each comes from. The diff of a commit is never "
+        f"exported. {_WRITTEN_BY}",
     ),
     "changes": (
         "Twin critiques on the code changes",
@@ -2356,6 +2584,15 @@ _SCHEMA_TEXTS: Final = {
         "newest first. Screenshots are never exported; every critique is a model inference, not "
         f"empirical evidence. {_WRITTEN_BY}",
     ),
+    "learning": (
+        "What the user twins learned",
+        "What every approved user twin learned during the development of the application, "
+        f"stored in {FEEDBACK_LEARNING}: the observations about its user group that the owner "
+        "approved from the critiques of the twin or wrote directly, with the development version "
+        "of the twin that added them, and the observations the owner retired. The approved "
+        "profile of a twin never changes here; every observation is an assumption about a "
+        f"modelled user, not empirical evidence. {_WRITTEN_BY}",
+    ),
 }
 _DOCUMENT_PATHS: Final = {
     KNOWLEDGE_MANIFEST: "manifest",
@@ -2366,6 +2603,7 @@ _DOCUMENT_PATHS: Final = {
     STATE_DOCUMENT: "state",
     FEEDBACK_CHANGES: "changes",
     FEEDBACK_TESTS: "tests",
+    FEEDBACK_LEARNING: "learning",
 }
 
 

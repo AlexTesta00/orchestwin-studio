@@ -8,6 +8,7 @@ from uuid import UUID
 from orchestwin.knowledge.documents import counted
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_LEARNING,
     FEEDBACK_TESTS,
     KNOWLEDGE_SCHEMA_VERSION,
     STATE_DOCUMENT,
@@ -20,12 +21,16 @@ from orchestwin.knowledge.state import (
     MAX_FOLDER_TEST_RUNS,
     MAX_MESSAGE_LENGTH,
     MIN_COMMIT_LENGTH,
+    REFERENCE_KEYS,
     STATE_KIND,
     TEST_REVIEWS_KIND,
+    TWIN_LEARNING_KIND,
+    review_is_stale,
 )
 
 SHORT_MESSAGE_LENGTH: Final = 200
 _SUBJECTS_SHAPE: Final = {"requirements": [None], "screens": [None]}
+_REFERENCE_SHAPE: Final = dict.fromkeys(REFERENCE_KEYS)
 _CHANGE_SHAPE: Final = {
     "commit": None,
     "parent": None,
@@ -34,7 +39,14 @@ _CHANGE_SHAPE: Final = {
     "message": None,
     "files": [{"path": None, "kind": None, "added": None, "removed": None}],
     "recorded_at": None,
-    "review": {"run_id": None, "reviewed_at": None, "verdict": None, "summary": None},
+    "review": {
+        "run_id": None,
+        "reviewed_at": None,
+        "verdict": None,
+        "summary": None,
+        "reference": _REFERENCE_SHAPE,
+        "stale": None,
+    },
     "decision": {"kind": None, "decided_at": None, "note": None},
 }
 _ALIGNED_SHAPE: Final = {
@@ -46,10 +58,38 @@ _ALIGNED_SHAPE: Final = {
 _TASK_SHAPE: Final = {
     "code": None,
     "text": None,
-    "about": _SUBJECTS_SHAPE,
+    "about": {"requirements": [None], "screens": [None], "criteria": [None]},
+    "origin": {
+        "kind": None,
+        "commit": None,
+        "test_run_id": None,
+        "twin_id": None,
+        "twin_name": None,
+        "finding": None,
+    },
     "from_commit": None,
     "created_at": None,
     "status": None,
+    "closed_at": None,
+    "note": None,
+}
+_OBSERVATION_SHAPE: Final = {
+    "code": None,
+    "statement": None,
+    "basis": None,
+    "source": None,
+    "about": {"requirement": None, "screen": None},
+    "contradicts_profile": None,
+    "added_in_version": None,
+    "approved_at": None,
+    "update_id": None,
+}
+_RETIRED_SHAPE: Final = {
+    "code": None,
+    "statement": None,
+    "retired_in_version": None,
+    "retired_at": None,
+    "reason": None,
 }
 _RUN_SHAPE: Final = {
     "id": None,
@@ -182,13 +222,46 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         "change": "- `{commit}` of {when}: {message}. Verdict: {verdict}. Decision: {decision}.",
         "no_review": "not reviewed yet",
         "no_decision": "no decision yet",
-        "tasks": "## Open tasks",
-        "task": (
-            "- {code}: {text} (requirements {requirements}; screens {screens}; "
-            "from commit `{commit}`)."
+        "stale": (
+            " To re-review: reviewed against requirements version {requirements} and design "
+            "version {design}, alternative {alternative}."
         ),
+        "stale_count": (
+            "1 review was made against earlier versions of the requirements or of the design: "
+            "`ut align --recheck` has the twins review that commit again.",
+            "{count} reviews were made against earlier versions of the requirements or of the "
+            "design: `ut align --recheck` has the twins review those commits again.",
+        ),
+        "tasks": "## Open tasks",
+        "task": "- {code}: {text} ({details}).",
+        "about_requirements": "requirements {codes}",
+        "about_screens": "screens {codes}",
+        "about_criteria": "criteria {codes}",
+        "origins": {
+            "verdict": "from the decision on commit `{commit}`",
+            "change_finding": "from a finding of the twin {twin} on commit `{commit}`",
+            "test_finding": "from a finding of the twin {twin} on the acceptance tests",
+            "owner": "written by the owner",
+        },
         "no_codes": "none",
         "no_tasks": "There is no open task for the code.",
+        "closed": "## Closed tasks",
+        "done": "Done:",
+        "dropped": "Dropped:",
+        "done_on": "done on {when}",
+        "dropped_on": "dropped on {when}",
+        "note": "note: {note}",
+        "no_closed": "No task has been closed yet.",
+        "learning": "## What the twins learned",
+        "learned": "Observations learned by the twins during the development: {twins}.",
+        "learned_twin": "{name}, version {label}, {count}",
+        "observation_words": ("observation", "observations"),
+        "no_observation": "no observation",
+        "learned_document": (
+            "`{document}` holds them with where each comes from; `ut twins update` proposes new "
+            "ones."
+        ),
+        "no_twin_learned": "No twin has learned anything yet during the development.",
         "critiques": "## Latest critiques of the twins",
         "run": "Commit `{commit}`, reviewed on {when}. Verdict: {verdict}. {summary}",
         "design_request": "Design change request: {text}",
@@ -232,13 +305,45 @@ _TEXTS: Final[dict[str, dict[str, Any]]] = {
         ),
         "no_review": "non ancora rivisto",
         "no_decision": "nessuna decisione",
-        "tasks": "## Compiti aperti",
-        "task": (
-            "- {code}: {text} (requisiti {requirements}; schermate {screens}; "
-            "dal commit `{commit}`)."
+        "stale": (
+            " Da riesaminare: rivisto con i requisiti alla versione {requirements} e il design "
+            "alla versione {design}, alternativa {alternative}."
         ),
+        "stale_count": (
+            "1 revisione è stata fatta con versioni precedenti dei requisiti o del design: "
+            "`ut align --recheck` fa riesaminare quel commit ai twin.",
+            "{count} revisioni sono state fatte con versioni precedenti dei requisiti o del "
+            "design: `ut align --recheck` fa riesaminare quei commit ai twin.",
+        ),
+        "tasks": "## Compiti aperti",
+        "task": "- {code}: {text} ({details}).",
+        "about_requirements": "requisiti {codes}",
+        "about_screens": "schermate {codes}",
+        "about_criteria": "criteri {codes}",
+        "origins": {
+            "verdict": "dalla decisione sul commit `{commit}`",
+            "change_finding": "da un rilievo del twin {twin} sul commit `{commit}`",
+            "test_finding": "da un rilievo del twin {twin} sulla verifica dei criteri",
+            "owner": "scritto dal proprietario",
+        },
         "no_codes": "nessuno",
         "no_tasks": "Non c'è nessun compito aperto per il codice.",
+        "closed": "## Compiti chiusi",
+        "done": "Fatti:",
+        "dropped": "Abbandonati:",
+        "done_on": "fatto il {when}",
+        "dropped_on": "abbandonato il {when}",
+        "note": "nota: {note}",
+        "no_closed": "Nessun compito è stato ancora chiuso.",
+        "learning": "## Cosa hanno imparato i twin",
+        "learned": "Osservazioni apprese dai twin durante lo sviluppo: {twins}.",
+        "learned_twin": "{name}, versione {label}, {count}",
+        "observation_words": ("osservazione", "osservazioni"),
+        "no_observation": "nessuna osservazione",
+        "learned_document": (
+            "`{document}` le contiene con la loro origine; `ut twins update` ne propone di nuove."
+        ),
+        "no_twin_learned": "Nessun twin ha ancora appreso qualcosa durante lo sviluppo.",
         "critiques": "## Ultime critiche dei twin",
         "run": "Commit `{commit}`, rivisto il {when}. Verdetto: {verdict}. {summary}",
         "design_request": "Richiesta di modifica del design: {text}",
@@ -382,6 +487,29 @@ _TEST_VERDICT_WORDS: Final = {
     "CONCERN": "the results raise a concern",
     "DRIFT": "the application departs from what was approved",
 }
+_LEARNING_TEXTS: Final[dict[str, Any]] = {
+    "heading": "## What the twins learned",
+    "feedback_heading": "## Learned during development",
+    "twin": "{name}, version {label}",
+    "nothing": "it has learned nothing yet",
+    "none_active": "no active learned observation",
+    "index_document": (
+        "`{document}` holds what the twins learned during the development, with where every "
+        "observation comes from; `ut twins update` proposes new ones from their latest critiques."
+    ),
+    "active_words": ("active learned observation", "active learned observations"),
+    "has": "{twin}, has {count}.",
+    "has_nothing": "{twin}, has learned nothing yet.",
+    "has_none_active": "{twin}, has no active learned observation.",
+    "from_critiques": "from its own critiques, approved by the owner on {when}",
+    "from_owner": "written by the owner on {when}",
+    "observation": "{code} ({origin}): {statement}",
+    "basis": "Basis: {basis}",
+    "contradicts": "Warning, it contradicts the profile: {text}",
+    "retired_words": ("Retired observation", "Retired observations"),
+    "retired": "{words}: {codes}.",
+    "no_twin": "No twin has learned anything yet during the development.",
+}
 
 
 def _plain(value: object) -> object:
@@ -419,17 +547,41 @@ def _latest_review(change: Mapping[str, object], runs: Sequence[object]) -> obje
                 "reviewed_at": run.get("reviewed_at"),
                 "verdict": alignment.get("status"),
                 "summary": alignment.get("summary"),
+                "reference": run.get("reference"),
             }
     return None
 
 
-def _change(change: object, runs: Sequence[object]) -> object:
+def _change(change: object, runs: Sequence[object], current: Mapping[str, object] | None) -> object:
     source = _mapping(change)
     shaped = _shaped({**source, "review": _latest_review(source, runs)}, _CHANGE_SHAPE)
     message = shaped.get("message")
     if isinstance(message, str):
         shaped["message"] = message[:MAX_MESSAGE_LENGTH]
+    review = shaped.get("review")
+    if isinstance(review, dict):
+        reference = review["reference"]
+        review["stale"] = review_is_stale(
+            reference if isinstance(reference, Mapping) else None, current
+        )
     return shaped
+
+
+def _task(task: object) -> object:
+    source = _mapping(task)
+    about = _mapping(source.get("about"))
+    criteria = about.get("criteria")
+    origin = source.get("origin")
+    if not isinstance(origin, Mapping):
+        origin = {"kind": "CODE_CHANGE", "commit": source.get("from_commit")}
+    return _shaped(
+        {
+            **source,
+            "about": {**about, "criteria": [] if criteria is None else criteria},
+            "origin": origin,
+        },
+        _TASK_SHAPE,
+    )
 
 
 def _version_reference(version) -> dict[str, object]:
@@ -470,17 +622,39 @@ def development_reference(sources: KnowledgeSources) -> dict[str, object]:
     }
 
 
+def _reviewed_against(reference: Mapping[str, object]) -> dict[str, object] | None:
+    requirements = reference["requirements"]
+    design = reference["design"]
+    if not isinstance(requirements, Mapping) or not isinstance(design, Mapping):
+        return None
+    return {
+        "requirements_version_number": requirements["version_number"],
+        "design_version_number": design["version_number"],
+        "alternative_code": design["alternative_code"],
+    }
+
+
+def current_reference(sources: KnowledgeSources) -> dict[str, object] | None:
+    return _reviewed_against(development_reference(sources))
+
+
 def state_document(sources: KnowledgeSources) -> dict[str, object]:
     state = sources.state
+    reference = development_reference(sources)
+    current = _reviewed_against(reference)
     return {
         "schema_version": KNOWLEDGE_SCHEMA_VERSION,
         "kind": STATE_KIND,
         "project_id": str(sources.project_id),
-        "reference": development_reference(sources),
+        "reference": reference,
         "aligned": _shaped(state.aligned, _ALIGNED_SHAPE),
-        "changes": [_change(change, state.runs) for change in state.changes],
-        "tasks": [_shaped(task, _TASK_SHAPE) for task in state.tasks],
+        "changes": [_change(change, state.runs, current) for change in state.changes],
+        "tasks": [_task(task) for task in state.tasks],
     }
+
+
+def stale_reviews(sources: KnowledgeSources) -> int:
+    return _stale_count(state_document(sources))
 
 
 def change_reviews_document(sources: KnowledgeSources) -> dict[str, object]:
@@ -503,6 +677,52 @@ def test_reviews_document(sources: KnowledgeSources) -> dict[str, object]:
         "project_id": str(sources.project_id),
         "runs": [_shaped(run, _TEST_RUN_SHAPE) for run in acceptance_runs(sources)],
     }
+
+
+def _published_twins(sources: KnowledgeSources) -> list[Mapping[str, Any]]:
+    if "twins" not in sources.present_stages:
+        return []
+    return [_mapping(twin) for twin in sources.payload("twins")["twin_versions"]]
+
+
+def learning_entries(sources: KnowledgeSources) -> list[dict[str, object]]:
+    learned: dict[str, Mapping[str, Any]] = {}
+    for item in map(_mapping, sources.state.learning):
+        learned.setdefault(str(item.get("twin_id")), item)
+    entries = []
+    for twin in _published_twins(sources):
+        twin_id = str(twin["twin_id"])
+        source = learned.get(twin_id, {})
+        profile = twin["version_number"]
+        development = source.get("development_version_number")
+        development = 0 if development is None else development
+        entries.append(
+            {
+                "twin_id": twin_id,
+                "twin_name": _mapping(twin["profile"]).get("name"),
+                "profile_version_number": profile,
+                "development_version_number": development,
+                "label": f"{profile}.{development}",
+                "observations": [
+                    _shaped(item, _OBSERVATION_SHAPE) for item in source.get("observations") or ()
+                ],
+                "retired": [_shaped(item, _RETIRED_SHAPE) for item in source.get("retired") or ()],
+            }
+        )
+    return entries
+
+
+def learning_document(sources: KnowledgeSources) -> dict[str, object]:
+    return {
+        "schema_version": KNOWLEDGE_SCHEMA_VERSION,
+        "kind": TWIN_LEARNING_KIND,
+        "project_id": str(sources.project_id),
+        "twins": learning_entries(sources),
+    }
+
+
+def learned_observations(sources: KnowledgeSources) -> int:
+    return sum(len(entry["observations"]) for entry in learning_entries(sources))
 
 
 def state_language(language: str | None) -> str:
@@ -562,8 +782,32 @@ def _pending(document: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return pending
 
 
+def _tasks_in(document: Mapping[str, Any], status: str) -> list[Mapping[str, Any]]:
+    return [task for task in map(_mapping, document["tasks"]) if task.get("status") == status]
+
+
 def _open_tasks(document: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    return [task for task in map(_mapping, document["tasks"]) if task.get("status") == "OPEN"]
+    return _tasks_in(document, "OPEN")
+
+
+def _stale_count(document: Mapping[str, Any]) -> int:
+    return sum(
+        1 for change in _pending(document) if _mapping(change.get("review")).get("stale") is True
+    )
+
+
+def _origin_words(task: Mapping[str, Any], words: Mapping[str, str]) -> str:
+    origin = _mapping(task.get("origin"))
+    kind = origin.get("kind")
+    twin = _inline(origin.get("twin_name") or "")
+    commit = _short(origin.get("commit") or task.get("from_commit"))
+    if kind == "OWNER":
+        return words["owner"]
+    if kind == "TEST_RUN":
+        return words["test_finding"].format(twin=twin)
+    if twin:
+        return words["change_finding"].format(twin=twin, commit=commit)
+    return words["verdict"].format(commit=commit)
 
 
 def _reference_lines(document: Mapping[str, Any], texts: Mapping[str, Any]) -> list[str]:
@@ -631,45 +875,94 @@ def _pending_lines(
     for change in pending:
         review = _mapping(change.get("review"))
         decision = _mapping(change.get("decision"))
-        lines.append(
-            texts["change"].format(
-                commit=_short(change.get("commit")),
-                when=_when(change.get("committed_at")),
-                message=_headline(change.get("message")),
-                verdict=(
-                    _worded(_VERDICT_WORDS[language], review.get("verdict"))
-                    if review
-                    else texts["no_review"]
-                ),
-                decision=(
-                    _worded(_DECISION_WORDS[language], decision.get("kind"))
-                    if decision
-                    else texts["no_decision"]
-                ),
-            )
+        line = texts["change"].format(
+            commit=_short(change.get("commit")),
+            when=_when(change.get("committed_at")),
+            message=_headline(change.get("message")),
+            verdict=(
+                _worded(_VERDICT_WORDS[language], review.get("verdict"))
+                if review
+                else texts["no_review"]
+            ),
+            decision=(
+                _worded(_DECISION_WORDS[language], decision.get("kind"))
+                if decision
+                else texts["no_decision"]
+            ),
         )
+        if review.get("stale") is True:
+            reference = _mapping(review.get("reference"))
+            line += texts["stale"].format(
+                requirements=reference.get("requirements_version_number"),
+                design=reference.get("design_version_number"),
+                alternative=reference.get("alternative_code") or texts["no_alternative"],
+            )
+        lines.append(line)
     if pending:
         lines.append("")
+    stale = _stale_count(document)
+    if stale:
+        one, many = texts["stale_count"]
+        lines.extend([(one if stale == 1 else many).format(count=stale), ""])
     return lines
+
+
+def _task_line(task: Mapping[str, Any], texts: Mapping[str, Any], details: list[str]) -> str:
+    return texts["task"].format(
+        code=task.get("code"), text=_bare(task.get("text")), details="; ".join(details)
+    )
+
+
+def _open_task_line(task: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    about = _mapping(task.get("about"))
+    details = [
+        texts["about_requirements"].format(
+            codes=_codes(about.get("requirements"), texts["no_codes"])
+        ),
+        texts["about_screens"].format(codes=_codes(about.get("screens"), texts["no_codes"])),
+    ]
+    if about.get("criteria"):
+        details.append(
+            texts["about_criteria"].format(codes=_codes(about["criteria"], texts["no_codes"]))
+        )
+    return _task_line(task, texts, [*details, _origin_words(task, texts["origins"])])
+
+
+def _closed_task_line(task: Mapping[str, Any], texts: Mapping[str, Any], moment: str) -> str:
+    details = [_origin_words(task, texts["origins"])]
+    if task.get("closed_at") is not None:
+        details.append(texts[moment].format(when=_when(task["closed_at"])))
+    if task.get("note"):
+        details.append(texts["note"].format(note=_bare(task["note"])))
+    return _task_line(task, texts, details)
 
 
 def _task_lines(document: Mapping[str, Any], texts: Mapping[str, Any]) -> list[str]:
     lines = [texts["tasks"], ""]
     tasks = _open_tasks(document)
-    for task in tasks:
-        about = _mapping(task.get("about"))
-        lines.append(
-            texts["task"].format(
-                code=task.get("code"),
-                text=_bare(task.get("text")),
-                requirements=_codes(about.get("requirements"), texts["no_codes"]),
-                screens=_codes(about.get("screens"), texts["no_codes"]),
-                commit=_short(task.get("from_commit")),
-            )
-        )
+    lines.extend(_open_task_line(task, texts) for task in tasks)
     if not tasks:
         lines.append(texts["no_tasks"])
-    return [*lines, ""]
+    lines.extend(["", texts["closed"], ""])
+    closed = 0
+    for status, heading, moment in (
+        ("DONE", "done", "done_on"),
+        ("DROPPED", "dropped", "dropped_on"),
+    ):
+        group = _tasks_in(document, status)
+        if group:
+            closed += len(group)
+            lines.extend(
+                [
+                    texts[heading],
+                    "",
+                    *(_closed_task_line(task, texts, moment) for task in group),
+                    "",
+                ]
+            )
+    if not closed:
+        lines.extend([texts["no_closed"], ""])
+    return lines
 
 
 def _finding_line(finding: Mapping[str, Any], texts: Mapping[str, Any], language: str) -> str:
@@ -826,6 +1119,31 @@ def _test_state_lines(sources: KnowledgeSources, language: str) -> list[str]:
     return [texts["heading"], "", paragraph, ""]
 
 
+def _learning_state_lines(sources: KnowledgeSources, texts: Mapping[str, Any]) -> list[str]:
+    if "twins" not in sources.present_stages:
+        return []
+    entries = learning_entries(sources)
+    twins = "; ".join(
+        texts["learned_twin"].format(
+            name=_inline(entry["twin_name"]),
+            label=entry["label"],
+            count=(
+                counted(len(entry["observations"]), *texts["observation_words"])
+                if entry["observations"]
+                else texts["no_observation"]
+            ),
+        )
+        for entry in entries
+    )
+    paragraph = (
+        f"{texts['learned'].format(twins=twins)} "
+        f"{texts['learned_document'].format(document=FEEDBACK_LEARNING)}"
+        if entries
+        else texts["no_twin_learned"]
+    )
+    return [texts["learning"], "", paragraph, ""]
+
+
 def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
     words = state_language(language)
     texts = _TEXTS[words]
@@ -848,7 +1166,24 @@ def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
     else:
         lines.extend([texts["no_runs"], ""])
     lines.extend(_test_state_lines(sources, words))
+    lines.extend(_learning_state_lines(sources, texts))
     return "\n".join(lines)
+
+
+def _open_task_lines(document: Mapping[str, Any]) -> list[str]:
+    tasks = _open_tasks(document)
+    if not tasks:
+        return []
+    origins = _TEXTS["en"]["origins"]
+    return [
+        "The open tasks and where each comes from:",
+        "",
+        *(
+            f"- {task.get('code')}: {_bare(task.get('text'))} ({_origin_words(task, origins)})."
+            for task in tasks
+        ),
+        "",
+    ]
 
 
 def development_lines(sources: KnowledgeSources) -> list[str]:
@@ -857,6 +1192,7 @@ def development_lines(sources: KnowledgeSources) -> list[str]:
     aligned = document["aligned"]
     pending = len(_pending(document))
     tasks = len(_open_tasks(document))
+    stale = _stale_count(document)
     recorded = (
         f"The Studio has recorded {counted(len(document['changes']), 'change', 'changes')} "
         "(commits) of the code."
@@ -879,13 +1215,18 @@ def development_lines(sources: KnowledgeSources) -> list[str]:
         if tasks
         else "No task is open for the code."
     )
+    one, many = _TEXTS["en"]["stale_count"]
+    stale_sentence = (one if stale == 1 else many).format(count=stale) if stale else ""
+    summary = " ".join(
+        part for part in (recorded, point, waiting, stale_sentence, open_tasks) if part
+    )
     lines = [
         "## Development state",
         "",
-        f"{recorded} {point} {waiting} {open_tasks} `{STATE_TEXT}` explains the state in the "
-        f"language of the project; `{STATE_DOCUMENT}` and `{FEEDBACK_CHANGES}` hold the exact "
-        "records.",
+        f"{summary} `{STATE_TEXT}` explains the state in the language of the project; "
+        f"`{STATE_DOCUMENT}` and `{FEEDBACK_CHANGES}` hold the exact records.",
         "",
+        *_open_task_lines(document),
         "## Latest critiques on the code",
         "",
     ]
@@ -1025,14 +1366,100 @@ def test_critique_lines(sources: KnowledgeSources) -> list[str]:
     return lines
 
 
+def _twin_label(entry: Mapping[str, Any]) -> str:
+    return _LEARNING_TEXTS["twin"].format(name=_inline(entry["twin_name"]), label=entry["label"])
+
+
+def learning_lines(sources: KnowledgeSources) -> list[str]:
+    if "twins" not in sources.present_stages:
+        return []
+    texts = _LEARNING_TEXTS
+    lines = [texts["heading"], ""]
+    entries = learning_entries(sources)
+    for entry in entries:
+        observations = list(map(_mapping, entry["observations"]))
+        if observations:
+            lines.append(f"- {_twin_label(entry)}:")
+            lines.extend(
+                f"  - {item.get('code')}: {_sentence(item.get('statement'))}"
+                for item in observations
+            )
+        else:
+            summary = texts["none_active"] if entry["retired"] else texts["nothing"]
+            lines.append(f"- {_twin_label(entry)}: {summary}.")
+    if entries:
+        lines.append("")
+    return [*lines, texts["index_document"].format(document=FEEDBACK_LEARNING), ""]
+
+
+def _observation_text(item: Mapping[str, Any]) -> str:
+    texts = _LEARNING_TEXTS
+    template = texts["from_owner"] if item.get("source") == "OWNER" else texts["from_critiques"]
+    parts = [
+        texts["observation"].format(
+            code=item.get("code"),
+            origin=template.format(when=_when(item.get("approved_at"))),
+            statement=_sentence(item.get("statement")),
+        )
+    ]
+    if item.get("basis"):
+        parts.append(texts["basis"].format(basis=_sentence(item["basis"])))
+    if item.get("contradicts_profile"):
+        parts.append(texts["contradicts"].format(text=_sentence(item["contradicts_profile"])))
+    return " ".join(parts)
+
+
+def _learning_paragraph(entry: Mapping[str, Any]) -> str:
+    texts = _LEARNING_TEXTS
+    observations = list(map(_mapping, entry["observations"]))
+    retired = list(map(_mapping, entry["retired"]))
+    twin = _twin_label(entry)
+    if observations:
+        head = texts["has"].format(
+            twin=twin, count=counted(len(observations), *texts["active_words"])
+        )
+    elif retired:
+        head = texts["has_none_active"].format(twin=twin)
+    else:
+        head = texts["has_nothing"].format(twin=twin)
+    parts = [head, *(_observation_text(item) for item in observations)]
+    if retired:
+        one, many = texts["retired_words"]
+        parts.append(
+            texts["retired"].format(
+                words=one if len(retired) == 1 else many,
+                codes=", ".join(str(item.get("code")) for item in retired),
+            )
+        )
+    return " ".join(parts)
+
+
+def learning_feedback_lines(sources: KnowledgeSources) -> list[str]:
+    texts = _LEARNING_TEXTS
+    lines = [texts["feedback_heading"], ""]
+    entries = learning_entries(sources)
+    for entry in entries:
+        lines.extend([_learning_paragraph(entry), ""])
+    if not entries:
+        lines.extend([texts["no_twin"], ""])
+    return lines
+
+
 __all__ = [
     "SHORT_MESSAGE_LENGTH",
     "acceptance_runs",
     "change_critique_lines",
     "change_reviews_document",
+    "current_reference",
     "development_lines",
     "development_reference",
+    "learned_observations",
+    "learning_document",
+    "learning_entries",
+    "learning_feedback_lines",
+    "learning_lines",
     "selected_alternative_code",
+    "stale_reviews",
     "state_document",
     "state_language",
     "state_markdown",
