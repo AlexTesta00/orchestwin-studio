@@ -5,11 +5,12 @@ import getpass
 import io
 import locale
 import os
+import signal
 import subprocess
 import sys
 import time
 import webbrowser
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,6 +104,50 @@ def _program_name(command: Sequence[str]) -> str:
     return Path(command[0]).name if command else "program"
 
 
+def default_run_interactive(
+    arguments: Sequence[str], folder: Path, variables: Mapping[str, str]
+) -> int:
+    command = [str(argument) for argument in arguments]
+    try:
+        process = subprocess.Popen(command, cwd=folder, env=dict(variables))
+    except FileNotFoundError:
+        raise CliError(
+            "CODE_AGENT_NOT_STARTED",
+            status=1,
+            values={"program": _program_name(command), "detail": "program not found"},
+        ) from None
+    except OSError as error:
+        raise CliError(
+            "CODE_AGENT_NOT_STARTED",
+            status=1,
+            values={
+                "program": _program_name(command),
+                "detail": error.strerror or type(error).__name__,
+            },
+        ) from None
+    try:
+        with interrupts_left_to_the_program():
+            return process.wait()
+    except KeyboardInterrupt:
+        with interrupts_left_to_the_program():
+            process.wait()
+        raise
+
+
+@contextlib.contextmanager
+def interrupts_left_to_the_program() -> Iterator[None]:
+    try:
+        previous = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except (ValueError, OSError):
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, signal.default_int_handler if previous is None else previous)
+
+
 @dataclass(frozen=True, slots=True)
 class Environment:
     stdin: TextIO
@@ -123,6 +168,9 @@ class Environment:
     run_process: Callable[[Sequence[str], Path, float], ProcessResult] = default_run_process
     start_process: Callable[[Sequence[str], Path, Mapping[str, str]], RunningProcess] = (
         default_start_process
+    )
+    run_interactive: Callable[[Sequence[str], Path, Mapping[str, str]], int] = (
+        default_run_interactive
     )
 
 
@@ -153,6 +201,7 @@ def real_environment() -> Environment:
         system_language=system_language(variables, sys.platform),
         run_process=default_run_process,
         start_process=default_start_process,
+        run_interactive=default_run_interactive,
     )
 
 

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.messages import (
     align,
+    code,
     common,
     costs,
     design,
@@ -17,6 +18,7 @@ from orchestwin.cli.messages import (
     mcp,
     package,
     status,
+    tasks,
     test,
     twins,
     watch,
@@ -33,6 +35,7 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
         module.__name__.rsplit(".", 1)[1]: module.MESSAGES
         for module in (
             align,
+            code,
             common,
             costs,
             design,
@@ -44,6 +47,7 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
             mcp,
             package,
             status,
+            tasks,
             test,
             twins,
             watch,
