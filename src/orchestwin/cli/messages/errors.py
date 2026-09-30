@@ -194,6 +194,38 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The design is not approved yet (ALIGN_DESIGN_REQUIRED): choose and approve it "
         "with `ut design`, then the code can be aligned with it.",
     },
+    "errors.BROWSER_NOT_FOUND": {
+        "it": "Il browser {program} non si trova più su questo computer (BROWSER_NOT_FOUND: "
+        "{detail}). Installalo di nuovo, oppure indica dove si trova con la variabile "
+        "ORCHESTWIN_CHROME o ORCHESTWIN_FIREFOX.",
+        "en": "The browser {program} can no longer be found on this computer (BROWSER_NOT_FOUND: "
+        "{detail}). Install it again, or say where it is with the variable ORCHESTWIN_CHROME "
+        "or ORCHESTWIN_FIREFOX.",
+    },
+    "errors.BROWSER_NOT_STARTED": {
+        "it": "Il browser {program} non è partito (BROWSER_NOT_STARTED: {detail}). Controlla che "
+        "si apra normalmente su questo computer, poi riprova.",
+        "en": "The browser {program} did not start (BROWSER_NOT_STARTED: {detail}). Check that "
+        "it opens normally on this computer, then try again.",
+    },
+    "errors.BROWSER_PROTOCOL_ERROR": {
+        "it": "La comunicazione con il browser {program} si è interrotta (BROWSER_PROTOCOL_ERROR: "
+        "{detail}). Riprova; se succede ancora, aggiorna il browser.",
+        "en": "The conversation with the browser {program} broke off (BROWSER_PROTOCOL_ERROR: "
+        "{detail}). Try again; if it happens again, update the browser.",
+    },
+    "errors.PAGE_NOT_LOADED": {
+        "it": "Il browser {program} non è riuscito ad aprire la pagina (PAGE_NOT_LOADED: "
+        "{detail}). Controlla che l'applicazione sia avviata e che l'indirizzo sia giusto.",
+        "en": "The browser {program} could not open the page (PAGE_NOT_LOADED: {detail}). Check "
+        "that the application is running and that the address is right.",
+    },
+    "errors.ACTION_FAILED": {
+        "it": "Il browser {program} non è riuscito a compiere un'azione sulla pagina "
+        "(ACTION_FAILED: {detail}).",
+        "en": "The browser {program} could not carry out an action on the page (ACTION_FAILED: "
+        "{detail}).",
+    },
     "errors.API_FAILURE": {
         "it": "Lo Studio ha risposto con un errore (stato {http_status}, {code}).",
         "en": "The Studio answered with an error (status {http_status}, {code}).",

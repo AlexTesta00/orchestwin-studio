@@ -47,6 +47,7 @@ testpaths = ["src/test/python"]
 python_files = ["test_*.py"]
 markers = [
     "integration: requires a migrated PostgreSQL database",
+    "browser: launches the browsers installed on the machine",
 ]
 addopts = [
     "--strict-config",

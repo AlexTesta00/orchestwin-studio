@@ -13,8 +13,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, TextIO
+from typing import Final, Protocol, TextIO
 
+from orchestwin.cli.errors import CliError
 from orchestwin.cli.http import Transport, UrlTransport
 
 LANGUAGE_VARIABLES: Final = ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE")
@@ -22,6 +23,16 @@ NEUTRAL_LOCALES: Final = frozenset({"c", "posix"})
 MISSING_PROGRAM_STATUS: Final = 127
 TIMEOUT_STATUS: Final = 124
 NOT_STARTED_STATUS: Final = 126
+
+
+class RunningProcess(Protocol):
+    def poll(self) -> int | None: ...
+
+    def terminate(self) -> None: ...
+
+    def kill(self) -> None: ...
+
+    def wait(self, timeout: float | None = None) -> int: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +67,42 @@ def default_run_process(
     return ProcessResult(completed.returncode, completed.stdout or "", completed.stderr or "")
 
 
+def default_start_process(
+    arguments: Sequence[str], folder: Path, variables: Mapping[str, str]
+) -> RunningProcess:
+    command = [str(argument) for argument in arguments]
+    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    try:
+        return subprocess.Popen(
+            command,
+            cwd=folder,
+            env=dict(variables),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags,
+        )
+    except FileNotFoundError:
+        raise CliError(
+            "BROWSER_NOT_STARTED",
+            status=1,
+            values={"program": _program_name(command), "detail": "program not found"},
+        ) from None
+    except OSError as error:
+        raise CliError(
+            "BROWSER_NOT_STARTED",
+            status=1,
+            values={
+                "program": _program_name(command),
+                "detail": error.strerror or type(error).__name__,
+            },
+        ) from None
+
+
+def _program_name(command: Sequence[str]) -> str:
+    return Path(command[0]).name if command else "program"
+
+
 @dataclass(frozen=True, slots=True)
 class Environment:
     stdin: TextIO
@@ -74,6 +121,9 @@ class Environment:
     transport: Transport
     system_language: str | None
     run_process: Callable[[Sequence[str], Path, float], ProcessResult] = default_run_process
+    start_process: Callable[[Sequence[str], Path, Mapping[str, str]], RunningProcess] = (
+        default_start_process
+    )
 
 
 def real_environment() -> Environment:
@@ -102,6 +152,7 @@ def real_environment() -> Environment:
         transport=UrlTransport(),
         system_language=system_language(variables, sys.platform),
         run_process=default_run_process,
+        start_process=default_start_process,
     )
 
 
