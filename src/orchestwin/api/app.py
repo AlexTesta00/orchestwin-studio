@@ -46,6 +46,7 @@ from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
 from orchestwin.api.twin_imports import create_twin_import_router
+from orchestwin.api.twin_learning import create_twin_learning_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
 from orchestwin.config import ApplicationSettings, load_settings
@@ -215,6 +216,7 @@ def create_app(
         create_knowledge_package_router(),
         create_code_change_router(),
         create_acceptance_test_router(),
+        create_twin_learning_router(),
         create_twin_import_router(),
         create_requirements_realignment_router(),
         create_project_import_router(),
