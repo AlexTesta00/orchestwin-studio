@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -22,6 +23,8 @@ from orchestwin.knowledge.folder import (
 )
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_TESTS,
+    FEEDBACK_TEXT,
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
     STAGE_LABELS,
@@ -49,6 +52,7 @@ from orchestwin.knowledge.twins import portable_twins
 from .knowledge_fixtures import (
     PUBLISHED_AT,
     REAL_PROJECT_ID,
+    files_before_tests,
     partial_sources,
     real_sources,
     schema_two_files,
@@ -67,9 +71,11 @@ COMMON_FILES = frozenset(
         STATE_DOCUMENT,
         STATE_TEXT,
         FEEDBACK_CHANGES,
+        FEEDBACK_TESTS,
         *schema_files(),
     }
 )
+OTHER_PROJECT = "99999999-9999-4999-8999-999999999999"
 REQUIREMENT_DIAGRAMS = (
     "requirements/diagrams/use-cases.mmd",
     "requirements/diagrams/requirements.mmd",
@@ -156,7 +162,7 @@ def test_a_partial_folder_holds_only_the_approved_stages_and_the_state(through: 
     assert not set(DESIGN_ONLY) & set(folder.files)
     for stage in STAGES[len(present) :]:
         assert [path for path in folder.files if path.startswith(f"{stage}/")] == (
-            [FEEDBACK_CHANGES] if stage == "twins" else []
+            [FEEDBACK_CHANGES, FEEDBACK_TESTS] if stage == "twins" else []
         )
 
 
@@ -196,6 +202,8 @@ def test_the_manifest_of_a_partial_folder_states_its_progress(through: str) -> N
         "insights": 0,
         "changes": FEEDBACK_CHANGES,
         "change_reviews": 0,
+        "tests": FEEDBACK_TESTS,
+        "test_runs": 0,
     }
     assert bool(manifest["twins"]) is ("twins" in present)
     assert {entry["stage"] for entry in manifest["identifiers"]} == (
@@ -220,6 +228,7 @@ def test_the_index_of_a_partial_folder_names_the_next_step(through: str) -> None
     assert ("## Views" in headings) is ("requirements" in present)
     assert "## Development state" in headings
     assert "## Latest critiques on the code" in headings
+    assert headings[-3:] == ["## Acceptance tests", "## Schema", "## Files"]
     assert "The feedback of the twins on the design comes into this folder" in index
     assert "`design/design.json`" not in index
     assert f"`{stage_document(through)}`" in index
@@ -322,6 +331,7 @@ def test_a_folder_of_schema_two_still_verifies_and_imports() -> None:
     assert verified.complete is True
     assert "progress" not in manifest and "state" not in manifest
     assert STATE_DOCUMENT not in older and FEEDBACK_CHANGES not in older
+    assert FEEDBACK_TESTS not in older and "tests" not in manifest["feedback"]
     assert '"urn:orchestwin:knowledge-folder:2:manifest"' in older[schema_document("manifest")]
     assert json.loads(older["twins/feedback/reviews.json"])["schema_version"] == 2
     assert "Critiques on the code changes" not in older["twins/feedback/feedback.md"]
@@ -408,3 +418,116 @@ def test_the_project_of_a_partial_folder_is_the_project_of_its_documents() -> No
 
     assert verified.project_id == str(REAL_PROJECT_ID)
     assert verified.documents["brief"]["project_id"] == str(REAL_PROJECT_ID)
+
+
+@pytest.mark.parametrize("through", [*PARTIAL, "design"])
+def test_a_folder_published_before_the_acceptance_tests_still_verifies(through: str) -> None:
+    current = partial_folder(through, state=state_sources())
+    earlier = files_before_tests(current.files)
+
+    verified = read_verified_folder(archive_of(earlier))
+
+    manifest = json.loads(earlier[KNOWLEDGE_MANIFEST])
+    assert verified.schema_version == 3
+    assert verified.present_stages == STAGES[: STAGES.index(through) + 1]
+    assert "tests" not in manifest["feedback"] and "test_runs" not in manifest["feedback"]
+    assert "tests" not in manifest["schemas"]
+    assert FEEDBACK_TESTS not in earlier and schema_document("tests") not in earlier
+    assert "## Verifica dei criteri" not in earlier[STATE_TEXT]
+    assert "Critiques on the acceptance tests" not in earlier.get(FEEDBACK_TEXT, "")
+    assert verified.content_hash == folder_content_hash(earlier) != current.content_hash
+
+
+def test_a_complete_folder_published_before_the_acceptance_tests_still_imports() -> None:
+    earlier = files_before_tests(partial_folder("design", state=state_sources()).files)
+
+    imported = plan(verify_folder(earlier))
+
+    assert imported.origin.schema_version == 3
+    assert imported.project_id == NEW_PROJECT
+
+
+def test_a_complete_folder_with_test_runs_imports_the_same_project_as_without_them() -> None:
+    folder = partial_folder("design", state=state_sources())
+
+    tested = plan(verify_folder(folder.files))
+    untested = plan(verify_folder(files_before_tests(folder.files)))
+
+    assert json.loads(folder.files[FEEDBACK_TESTS])["runs"]
+    assert tested.origin.package_content_hash != untested.origin.package_content_hash
+    assert replace(tested, origin=untested.origin) == untested
+
+
+def test_a_folder_that_announces_the_test_runs_needs_their_document() -> None:
+    files = dict(partial_folder("team").files)
+    del files[FEEDBACK_TESTS]
+
+    refused = refusal(resealed(files))
+
+    assert (refused.code, refused.detail) == ("FOLDER_DOCUMENT_MISSING", FEEDBACK_TESTS)
+
+
+def test_a_test_document_of_another_project_is_refused() -> None:
+    files = dict(partial_folder("design", state=state_sources()).files)
+    files[FEEDBACK_TESTS] = json_text(
+        {**json.loads(files[FEEDBACK_TESTS]), "project_id": OTHER_PROJECT}
+    )
+
+    refused = refusal(resealed(files))
+
+    assert (refused.code, refused.detail) == ("FOLDER_TAMPERED", FEEDBACK_TESTS)
+
+
+@pytest.mark.parametrize(
+    ("keys", "value", "location"),
+    [
+        (("results", 0, "browser"), "safari", "runs[0].results[0].browser"),
+        (("summary", "passed"), -1, "runs[0].summary.passed"),
+        (
+            ("results", 1, "steps", 1, "screenshot"),
+            "../outside.png",
+            "runs[0].results[1].steps[1].screenshot",
+        ),
+        (
+            ("critiques", 0, "findings", 0, "about", "criterion"),
+            "REQ-003",
+            "runs[0].critiques[0].findings[0].about.criterion",
+        ),
+    ],
+)
+def test_a_test_document_that_breaks_its_schema_is_refused(
+    keys: tuple[str | int, ...], value: object, location: str
+) -> None:
+    files = dict(partial_folder("design", state=state_sources()).files)
+    document = json.loads(files[FEEDBACK_TESTS])
+    target = document["runs"][0]
+    for key in keys[:-1]:
+        target = target[key]
+    target[keys[-1]] = value
+    files[FEEDBACK_TESTS] = json_text(document)
+
+    refused = refusal(resealed(files))
+
+    assert (refused.code, refused.detail) == ("FOLDER_DOCUMENT_INVALID", f"tests: {location}")
+
+
+def test_a_test_document_that_the_manifest_does_not_announce_is_refused() -> None:
+    def unannounced(manifest: dict[str, object]) -> None:
+        del manifest["feedback"]["tests"]
+        del manifest["feedback"]["test_runs"]
+
+    refused = refusal(resealed(partial_folder("team").files, unannounced))
+
+    assert (refused.code, refused.detail) == ("FOLDER_TAMPERED", FEEDBACK_TESTS)
+
+
+@pytest.mark.parametrize("key", ["tests", "test_runs"])
+def test_the_manifest_announces_the_test_runs_together_with_their_count(key: str) -> None:
+    files = partial_folder("team").files
+
+    refused = refusal(resealed(files, lambda manifest: manifest["feedback"].pop(key)))
+
+    assert (refused.code, refused.detail) == (
+        "FOLDER_DOCUMENT_INVALID",
+        f"{KNOWLEDGE_MANIFEST}: feedback",
+    )

@@ -77,10 +77,17 @@ def schema_two(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
     manifest = json.loads(json.dumps(version.manifest))
     for key in ("progress", "state"):
         del manifest[key]
-    for key in ("changes", "change_reviews"):
+    for key in ("changes", "change_reviews", "tests", "test_runs"):
         del manifest["feedback"][key]
     manifest["schema_version"] = 2
     return replace(version, schema_version=2, manifest=manifest)
+
+
+def before_tests(version: KnowledgePackageVersion) -> KnowledgePackageVersion:
+    manifest = json.loads(json.dumps(version.manifest))
+    for key in ("tests", "test_runs"):
+        del manifest["feedback"][key]
+    return replace(version, manifest=manifest)
 
 
 class FakeKnowledgePackageService:
@@ -164,6 +171,7 @@ def test_publication_of_a_new_version_answers_created_with_its_summary() -> None
         "discussions": 1,
         "insights": 1,
         "change_reviews": 0,
+        "test_runs": 0,
     }
     assert version["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
     assert version["state"] == {
@@ -189,7 +197,16 @@ def test_a_folder_of_the_first_steps_lists_only_the_approved_stages() -> None:
         "complete": False,
     }
     assert version["feedback"] == dict.fromkeys(
-        ("reviews", "findings", "decisions", "discussions", "insights", "change_reviews"), 0
+        (
+            "reviews",
+            "findings",
+            "decisions",
+            "discussions",
+            "insights",
+            "change_reviews",
+            "test_runs",
+        ),
+        0,
     )
     assert version["diagram_count"] == 0
     assert version["table_count"] == 0
@@ -210,6 +227,18 @@ def test_the_state_of_the_development_reaches_the_summary() -> None:
         "open_tasks": 1,
     }
     assert version["feedback"]["change_reviews"] == 1
+    assert version["feedback"]["test_runs"] == 1
+
+
+def test_a_folder_published_before_the_acceptance_tests_has_no_test_count() -> None:
+    service = FakeKnowledgePackageService(package=real_sources(state=state_sources()))
+    service.version = before_tests(service.version)
+
+    version = client(service).get(PATH).json()["versions"][0]
+
+    assert version["schema_version"] == 3
+    assert "test_runs" not in version["feedback"]
+    assert version["feedback"]["change_reviews"] == 1
 
 
 def test_a_stored_folder_of_schema_two_is_summarised_as_complete_without_changes() -> None:
@@ -229,6 +258,7 @@ def test_a_stored_folder_of_schema_two_is_summarised_as_complete_without_changes
     }
     assert version["feedback"]["change_reviews"] == 0
     assert version["feedback"]["reviews"] == 2
+    assert "test_runs" not in version["feedback"]
 
 
 def test_publication_of_an_unchanged_project_answers_ok_and_reused() -> None:
@@ -318,10 +348,15 @@ def test_packages_are_registered_in_openapi_and_application_state() -> None:
         runtime=ApplicationRuntime(knowledge_package_service=service),
         auth_settings=AuthApiSettings(),
     )
-    paths = application.openapi()["paths"]
+    document = application.openapi()
+    paths = document["paths"]
     collection = paths["/api/v1/projects/{project_id}/knowledge-packages"]
     archive = paths["/api/v1/projects/{project_id}/knowledge-packages/{version_number}/archive"]
+    feedback = document["components"]["schemas"]["PackageFeedbackPayload"]
 
+    assert "test_runs" in feedback["properties"]
+    assert "test_runs" not in feedback["required"]
+    assert "change_reviews" in feedback["required"]
     assert collection["post"]["operationId"] == "publishKnowledgePackage"
     assert collection["get"]["operationId"] == "listKnowledgePackages"
     assert archive["get"]["operationId"] == "downloadKnowledgePackage"

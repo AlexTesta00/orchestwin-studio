@@ -29,10 +29,12 @@ from orchestwin.knowledge.layout import (
     stage_document,
 )
 from orchestwin.knowledge.schema import SCHEMA_NAMES, schema_files
+from orchestwin.knowledge.state import ProjectStateSources
 from orchestwin.knowledge.tables import TABLE_COLUMNS
 from orchestwin.knowledge.twins import portable_twins
 
 from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, sources
+from .knowledge_fixtures import test_run as acceptance_run
 
 STAGE_FILES = tuple(
     path for stage in STAGES for path in (f"{stage}/{stage}.json", f"{stage}/{stage}.md")
@@ -44,7 +46,12 @@ FEEDBACK_FILES = (
     "twins/feedback/insights.json",
     "twins/feedback/reviews.json",
 )
-STATE_FILES = ("state/state.json", "state/state.md", "twins/feedback/changes.json")
+STATE_FILES = (
+    "state/state.json",
+    "state/state.md",
+    "twins/feedback/changes.json",
+    "twins/feedback/tests.json",
+)
 DIAGRAM_FILES = (
     "requirements/diagrams/use-cases.mmd",
     "requirements/diagrams/requirements.mmd",
@@ -147,6 +154,8 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "insights": 1,
         "changes": "twins/feedback/changes.json",
         "change_reviews": 0,
+        "tests": "twins/feedback/tests.json",
+        "test_runs": 0,
     }
     assert manifest["progress"] == {"approved": list(STAGES), "pending": None, "complete": True}
     assert manifest["state"] == {
@@ -158,7 +167,8 @@ def test_manifest_indexes_package_project_stages_twins_views_and_feedback() -> N
         "open_tasks": 0,
     }
     assert manifest["schemas"] == {name: f"schema/{name}.schema.json" for name in SCHEMA_NAMES}
-    assert len(manifest["schemas"]) == 12
+    assert len(manifest["schemas"]) == 13
+    assert manifest["schemas"]["tests"] == "schema/tests.schema.json"
 
 
 def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
@@ -324,10 +334,16 @@ def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
         "## Twin feedback",
         "## Development state",
         "## Latest critiques on the code",
+        "## Acceptance tests",
         "## Schema",
         "## Files",
     ]
     assert "This folder holds 5 of 5 approved steps; every step is approved." in index
+    assert (
+        "## Acceptance tests\n\nNo run of the acceptance tests is recorded yet: `ut test` runs "
+        "them on the application and records the result in the Studio.\n"
+    ) in index
+    assert "| tests | `schema/tests.schema.json` |" in index
     assert "- Build against `requirements/requirements.md` and `design/design.md`" in index
     assert "- The state of the development is in `state/state.md` and `state/state.json`" in index
     assert "The Studio has recorded no change (commit) of the code yet." in index
@@ -390,3 +406,20 @@ def test_project_language_follows_the_requirement_texts() -> None:
 
     assert project_language(italian) == "it"
     assert project_language(empty) is None
+
+
+def test_every_folder_carries_the_test_runs_and_they_change_the_content_hash() -> None:
+    package = sources()
+    empty = folder(package)
+    tested = folder(replace(package, state=ProjectStateSources(tests=(acceptance_run(),))))
+
+    assert json.loads(empty.files["twins/feedback/tests.json"]) == {
+        "schema_version": 3,
+        "kind": "orchestwin.test-reviews",
+        "project_id": str(package.project_id),
+        "runs": [],
+    }
+    assert json.loads(tested.files["twins/feedback/tests.json"])["runs"] == [acceptance_run()]
+    assert tested.manifest["feedback"]["test_runs"] == 1
+    assert tested.content_hash != empty.content_hash
+    assert "## Critiques on the acceptance tests" in tested.files["twins/feedback/feedback.md"]
