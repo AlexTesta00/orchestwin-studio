@@ -37,6 +37,11 @@ STATUSES: Final[Mapping[str, int]] = MappingProxyType(
         "ANSWER_NOT_VALID": 1,
         "SESSION_FILE_LOCKED": 1,
         "API_FAILURE": 1,
+        "BROWSER_NOT_FOUND": 1,
+        "BROWSER_NOT_STARTED": 1,
+        "BROWSER_PROTOCOL_ERROR": 1,
+        "PAGE_NOT_LOADED": 1,
+        "ACTION_FAILED": 1,
     }
 )
 
