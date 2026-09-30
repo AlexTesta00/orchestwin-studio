@@ -1,7 +1,9 @@
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from orchestwin.models.twin_update import with_learned
 from orchestwin.twins.conversations import (
     MAX_INSIGHT_CHARACTERS,
     MAX_INSIGHT_GROUNDING,
@@ -47,18 +49,34 @@ INSTRUCTION = (
     "derives from, such as user_twin.frustrations. Insights are hypotheses for the team, not findings. "
     "Return the reply and the insights only."
 )
+LEARNED_CHAT_INSTRUCTION = (
+    "user_twin.learned lists what your user group learned during the development of the "
+    "application, each observation approved by the owner of the project: use it as you use the "
+    "profile, and where a learned observation and the profile disagree the learned observation "
+    "prevails; grounded_on still lists only keys of profile observations."
+)
 
 
-def twin_chat_context(*, project_id, twin_version, brief, turns, question):
+def chat_instruction(context):
+    twin = context.get("user_twin") if isinstance(context, Mapping) else None
+    if isinstance(twin, Mapping) and "learned" in twin:
+        return f"{INSTRUCTION} {LEARNED_CHAT_INSTRUCTION}"
+    return INSTRUCTION
+
+
+def twin_chat_context(*, project_id, twin_version, brief, turns, question, learned=()):
     return {
         "project_id": str(project_id),
         "purpose": "TWIN_CHAT",
-        "user_twin": {
-            "twin_id": str(twin_version.twin_id),
-            "version_number": twin_version.version_number,
-            "content_hash": twin_version.content_hash,
-            "profile": twin_version.profile.to_snapshot(),
-        },
+        "user_twin": with_learned(
+            {
+                "twin_id": str(twin_version.twin_id),
+                "version_number": twin_version.version_number,
+                "content_hash": twin_version.content_hash,
+                "profile": twin_version.profile.to_snapshot(),
+            },
+            learned,
+        ),
         "project_brief": None
         if brief is None
         else {"name": brief.name, "problem": brief.problem, "goals": list(brief.goals)},
@@ -75,7 +93,7 @@ async def answer_as_twin(generator, *, context):
         context=context,
         output_type=TwinChatOutput,
         max_output_tokens=min(TWIN_CHAT_OUTPUT_TOKENS, generator.configuration.max_output_tokens),
-        instruction=INSTRUCTION,
+        instruction=chat_instruction(context),
     )
 
 
