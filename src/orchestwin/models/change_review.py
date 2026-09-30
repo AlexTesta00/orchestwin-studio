@@ -39,6 +39,9 @@ ALIGNMENT_PURPOSE: Final = "CODE_ALIGNMENT"
 CRITIQUE_OUTPUT_TOKENS: Final = 2048
 ALIGNMENT_OUTPUT_TOKENS: Final = 3072
 MAX_EARLIER_FINDINGS: Final = 6
+EARLIER_THIS_COMMIT: Final = "THIS_COMMIT"
+EARLIER_PREVIOUS_COMMIT: Final = "PREVIOUS_COMMIT"
+EARLIER_SOURCES: Final = (EARLIER_PREVIOUS_COMMIT, EARLIER_THIS_COMMIT)
 MIN_SUMMARY_LENGTH: Final = 20
 MAX_SCREEN_ELEMENTS: Final = 40
 MAX_ELEMENT_LABEL_LENGTH: Final = 200
@@ -69,8 +72,12 @@ CRITIQUE_INSTRUCTION: Final = (
     "harms what you need, measured against the approved requirements and design: what it makes "
     "possible or better for you, what it breaks, removes or leaves out, and where the code "
     "departs from the approved design or requirements in a way that you would notice. "
-    "earlier_findings lists problems that you reported on an earlier commit that is not "
-    "aligned yet: mention them only when this change solves them or makes them worse. Write "
+    "earlier_findings lists problems that you reported earlier, and earlier_source says where: "
+    "PREVIOUS_COMMIT, on a previous commit that is not aligned yet, or THIS_COMMIT, on this "
+    "same commit when it was reviewed against an earlier version of the design or of the "
+    "requirements. For PREVIOUS_COMMIT mention them only when this change solves them or makes "
+    "them worse; for THIS_COMMIT judge them again against the design and the requirements as "
+    "they are now and keep only the ones that still hold. Write "
     "every text in the language of locale, every finding included, " + _ANOTHER_LANGUAGE + ". "
     "Answer in this order. First assessment, your verdict, decided before anything else: "
     "FINE when the change serves you or does not touch what you need, CONCERN when it works "
@@ -128,6 +135,28 @@ ALIGNMENT_INSTRUCTION: Final = (
     + ". Judge only what the commit and the critiques show: never invent code, data or "
     "behaviour and never claim to have run the code or to have validated anything. " + _AS_DATA
 )
+LEARNED_INSTRUCTION: Final = (
+    "user_twin.learned lists what your user group learned during the development of the "
+    "application, each observation approved by the owner of the project: ground your judgement "
+    "on it as on the profile, and where a learned observation and the profile disagree the "
+    "learned observation, which is newer, prevails."
+)
+
+
+def with_learned(
+    view: Mapping[str, object], learned: Iterable[Mapping[str, object]]
+) -> dict[str, object]:
+    items = [dict(item) for item in learned]
+    if not items:
+        return dict(view)
+    return {**view, "learned": items}
+
+
+def learned_instruction(instruction: str, context: Mapping[str, object]) -> str:
+    twin = context.get("user_twin")
+    if isinstance(twin, Mapping) and "learned" in twin:
+        return f"{instruction} {LEARNED_INSTRUCTION}"
+    return instruction
 
 
 class _Output(BaseModel):
@@ -251,14 +280,20 @@ def critique_context(
     twin,
     material: Mapping[str, object],
     earlier_findings: Iterable[str] = (),
+    earlier_source: str = EARLIER_PREVIOUS_COMMIT,
+    learned: Iterable[Mapping[str, object]] = (),
 ) -> dict[str, object]:
+    if earlier_source not in EARLIER_SOURCES:
+        raise ValueError("earlier findings come from this commit or from a previous one")
+    findings = list(earlier_findings)[:MAX_EARLIER_FINDINGS]
     return {
         "project_id": str(project_id),
         "purpose": CRITIQUE_PURPOSE,
         "locale": locale,
-        "user_twin": twin_view(twin),
+        "user_twin": with_learned(twin_view(twin), learned),
         **material,
-        "earlier_findings": list(earlier_findings)[:MAX_EARLIER_FINDINGS],
+        "earlier_findings": findings,
+        "earlier_source": earlier_source if findings else None,
     }
 
 
@@ -361,7 +396,7 @@ async def critique_change(generator, context: Mapping[str, object]):
         context=context,
         output_type=critique_output_type(*context_codes(context)),
         max_output_tokens=min(CRITIQUE_OUTPUT_TOKENS, route.configuration.max_output_tokens),
-        instruction=CRITIQUE_INSTRUCTION,
+        instruction=learned_instruction(CRITIQUE_INSTRUCTION, context),
         retry_schema_errors=False,
     )
 
@@ -489,6 +524,10 @@ __all__ = [
     "CRITIQUE_OUTPUT_TOKENS",
     "CRITIQUE_PURPOSE",
     "DIFF_CUT_LINE",
+    "EARLIER_PREVIOUS_COMMIT",
+    "EARLIER_SOURCES",
+    "EARLIER_THIS_COMMIT",
+    "LEARNED_INSTRUCTION",
     "MAX_EARLIER_FINDINGS",
     "MAX_ELEMENT_LABEL_LENGTH",
     "MAX_SCREEN_ELEMENTS",
@@ -510,7 +549,9 @@ __all__ = [
     "critique_view",
     "design_view",
     "judge_alignment",
+    "learned_instruction",
     "requirements_view",
     "review_material",
     "twin_view",
+    "with_learned",
 ]

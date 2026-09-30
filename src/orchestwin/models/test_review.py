@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -13,7 +13,13 @@ from orchestwin.knowledge.state import (
     MAX_SUMMARY_LENGTH,
     SEVERITIES,
 )
-from orchestwin.models.change_review import MIN_SUMMARY_LENGTH, context_codes, twin_view
+from orchestwin.models.change_review import (
+    MIN_SUMMARY_LENGTH,
+    context_codes,
+    learned_instruction,
+    twin_view,
+    with_learned,
+)
 from orchestwin.models.output_language import written_in_another_language
 from orchestwin.projects.acceptance_tests import TestCritique, TestFinding, cut_text
 from orchestwin.projects.code_changes import (
@@ -46,7 +52,10 @@ REVIEW_INSTRUCTION: Final = (
     "Speak in the first person as your user group and judge what these results mean for you: a "
     "criterion that failed and matters to you, a blocked path that hides whether something you "
     "need works, a criterion that passed but still leaves one of your needs uncovered, a "
-    "criterion not covered that you need to see verified. Write every text in the language of "
+    "criterion not covered that you need to see verified. earlier_findings lists the problems "
+    "that you reported on the previous run of these tests: mention them only when the new "
+    "results solve them or make them worse, and do not repeat a finding that the new results "
+    "no longer support. Write every text in the language of "
     "locale, every finding included, even when the application, its pages or parts of the "
     "context are written in another language. Answer in this order. First assessment, your "
     "verdict, decided before anything else: FINE when the results show that the application "
@@ -211,14 +220,17 @@ def critique_context(
     twin,
     material: Mapping[str, object],
     run_material: Mapping[str, object],
+    earlier_findings: Iterable[str] = (),
+    learned: Iterable[Mapping[str, object]] = (),
 ) -> dict[str, object]:
     return {
         "project_id": str(project_id),
         "purpose": REVIEW_PURPOSE,
         "locale": locale,
-        "user_twin": twin_view(twin),
+        "user_twin": with_learned(twin_view(twin), learned),
         **material,
         "run": dict(run_material),
+        "earlier_findings": list(earlier_findings)[:MAX_FINDINGS],
     }
 
 
@@ -273,7 +285,7 @@ async def critique_run(generator, context: Mapping[str, object]):
         context=context,
         output_type=review_output_type(*review_codes(context)),
         max_output_tokens=min(REVIEW_OUTPUT_TOKENS, route.configuration.max_output_tokens),
-        instruction=REVIEW_INSTRUCTION,
+        instruction=learned_instruction(REVIEW_INSTRUCTION, context),
         retry_schema_errors=False,
     )
 
