@@ -9,7 +9,7 @@ from pathlib import Path
 
 from orchestwin.cli.console import Console
 from orchestwin.cli.context import CommandContext
-from orchestwin.cli.environment import Environment, ProcessResult
+from orchestwin.cli.environment import Environment, ProcessResult, RunningProcess
 from orchestwin.cli.http import Transport
 from orchestwin.cli.main import main
 from orchestwin.cli.project import ProjectFolder, ProjectLink
@@ -20,10 +20,12 @@ from orchestwin.cli.session import (
     StudioSession,
 )
 
+from .browsers import no_browsers
 from .processes import no_processes
 from .transports import NoNetwork
 
 Runner = Callable[[Sequence[str], Path, float], ProcessResult]
+Starter = Callable[[Sequence[str], Path, Mapping[str, str]], RunningProcess]
 
 START = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 MONOTONIC_ORIGIN = 1000.0
@@ -116,6 +118,7 @@ def terminal(
     start: datetime | None = None,
     working_directory: Path | None = None,
     processes: Runner | None = None,
+    start_process: Starter | None = None,
 ) -> Terminal:
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
@@ -141,6 +144,7 @@ def terminal(
         transport=transport,
         system_language=language,
         run_process=no_processes if processes is None else processes,
+        start_process=no_browsers if start_process is None else start_process,
     )
     return Terminal(environment=environment, clock=clock, browser=browser, secrets=keeper)
 
@@ -157,6 +161,7 @@ def environment(
     language: str | None = "en",
     start: datetime | None = None,
     processes: Runner | None = None,
+    start_process: Starter | None = None,
 ) -> Environment:
     return terminal(
         tmp_path,
@@ -169,6 +174,7 @@ def environment(
         language=language,
         start=start,
         processes=processes,
+        start_process=start_process,
     ).environment
 
 
@@ -186,6 +192,7 @@ def run_ut(
     interactive: bool = False,
     start: datetime | None = None,
     processes: Runner | None = None,
+    start_process: Starter | None = None,
 ) -> Run:
     bundle = terminal(
         tmp_path,
@@ -199,6 +206,7 @@ def run_ut(
         start=start,
         working_directory=working_directory,
         processes=processes,
+        start_process=start_process,
     )
     status = main(list(arguments), environment=bundle.environment)
     return Run(

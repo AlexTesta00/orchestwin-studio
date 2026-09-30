@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import os
 import subprocess
 import sys
 from datetime import UTC
@@ -14,12 +15,14 @@ from orchestwin.cli.environment import (
     Environment,
     ProcessResult,
     default_run_process,
+    default_start_process,
     language_code,
     prepare_stream,
     real_environment,
     system_language,
     utc_now,
 )
+from orchestwin.cli.errors import CliError
 from orchestwin.cli.http import UrlTransport
 
 
@@ -56,16 +59,102 @@ def test_the_real_environment_reads_the_machine_once(monkeypatch: pytest.MonkeyP
     assert environment.home.is_absolute()
     assert environment.working_directory.is_absolute()
     assert environment.run_process is default_run_process
+    assert environment.start_process is default_start_process
     stdin.detach()
     stdout.detach()
     stderr.detach()
 
 
-def test_the_runner_of_processes_is_the_last_field_and_has_a_default() -> None:
+def test_the_starter_of_processes_is_the_last_field_and_both_runners_have_a_default() -> None:
+    fields = {field.name: field for field in dataclasses.fields(Environment)}
     last = dataclasses.fields(Environment)[-1]
 
-    assert last.name == "run_process"
-    assert last.default is default_run_process
+    assert last.name == "start_process"
+    assert last.default is default_start_process
+    assert fields["run_process"].default is default_run_process
+
+
+class RecordedPopen:
+    def __init__(self, command: list[str], **options: object) -> None:
+        self.command = command
+        self.options = options
+
+
+def test_a_started_process_has_no_shell_no_window_and_no_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[RecordedPopen] = []
+
+    def record(command: list[str], **options: object) -> RecordedPopen:
+        started.append(RecordedPopen(command, **options))
+        return started[-1]
+
+    monkeypatch.setattr(module.subprocess, "Popen", record)
+
+    process = default_start_process([Path("browser"), "--headless"], tmp_path, {"A": "1"})
+
+    assert process is started[0]
+    assert started[0].command == ["browser", "--headless"]
+    options = started[0].options
+    assert options["cwd"] == tmp_path
+    assert options["env"] == {"A": "1"}
+    assert options["stdin"] == subprocess.DEVNULL
+    assert options["stdout"] == subprocess.DEVNULL
+    assert options["stderr"] == subprocess.DEVNULL
+    assert "shell" not in options
+    expected = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    assert options["creationflags"] == expected
+
+
+def test_a_started_process_runs_in_its_folder_with_the_given_variables(tmp_path: Path) -> None:
+    code = (
+        "import os, sys\n"
+        "same = os.path.samefile(os.getcwd(), sys.argv[1])\n"
+        "sys.exit(0 if same and os.environ.get('ORCHESTWIN_PROBE') == 'yes' else 3)\n"
+    )
+    variables = {**os.environ, "ORCHESTWIN_PROBE": "yes"}
+
+    process = default_start_process(
+        [sys.executable, "-c", code, str(tmp_path)], tmp_path, variables
+    )
+
+    assert process.wait(timeout=60) == 0
+    assert process.poll() == 0
+
+
+def test_an_empty_program_ends_at_once(tmp_path: Path) -> None:
+    process = default_start_process([sys.executable, "-c", "pass"], tmp_path, dict(os.environ))
+
+    assert process.wait(timeout=60) == 0
+
+
+def test_a_missing_program_does_not_start(tmp_path: Path) -> None:
+    missing = tmp_path / "orchestwin-no-such-browser"
+
+    with pytest.raises(CliError) as caught:
+        default_start_process([missing, "--headless"], tmp_path, {})
+
+    assert caught.value.code == "BROWSER_NOT_STARTED"
+    assert caught.value.status == 1
+    assert caught.value.values == {
+        "program": "orchestwin-no-such-browser",
+        "detail": "program not found",
+    }
+
+
+def test_a_program_that_the_system_refuses_does_not_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refused(command: list[str], **options: object) -> RecordedPopen:
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(module.subprocess, "Popen", refused)
+
+    with pytest.raises(CliError) as caught:
+        default_start_process(["browser"], tmp_path, {})
+
+    assert caught.value.code == "BROWSER_NOT_STARTED"
+    assert caught.value.values == {"program": "browser", "detail": "denied"}
 
 
 def test_a_process_runs_in_its_folder_and_is_read_as_utf8(tmp_path: Path) -> None:
