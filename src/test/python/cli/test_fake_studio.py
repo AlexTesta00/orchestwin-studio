@@ -22,7 +22,7 @@ from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.projects.domain import ProjectMode
 
 from .support.fake_studio import COSTS, PREFIX, FakeStudio
-from .support.folders import partial_archive, valid_archive
+from .support.folders import folder_frame, partial_archive, valid_archive
 
 STEPS = ("brief", "team", "twins", "requirements", "design")
 EMAIL = "owner@example.com"
@@ -1268,6 +1268,7 @@ def test_a_folder_is_published_from_the_brief_on(through: str) -> None:
         assert version["state"] == {
             "changes": 0,
             "pending_changes": 0,
+            "stale_reviews": 0,
             "aligned_commit": None,
             "open_tasks": 0,
         }
@@ -1276,6 +1277,9 @@ def test_a_folder_is_published_from_the_brief_on(through: str) -> None:
         assert {"state/state.json", "state/state.md", "twins/feedback/changes.json"} <= entries
         assert ("design/design.json" in entries) is complete
         assert ("team/team.json" in entries) is (through != "brief")
+        twins = "twins" in present
+        assert ("twins/feedback/learned.json" in entries) is twins
+        assert version["feedback"].get("learned_observations") == (0 if twins else None)
         assert client.post(base + "/knowledge-packages").status == 200
         archive = client.get(base + "/knowledge-packages/1/archive")
         verified = read_verified_folder(archive.content)
@@ -1322,6 +1326,7 @@ def test_the_development_state_reaches_the_published_folder() -> None:
         assert version["state"] == {
             "changes": 1,
             "pending_changes": 0,
+            "stale_reviews": 0,
             "aligned_commit": commit,
             "open_tasks": 0,
         }
@@ -1331,7 +1336,13 @@ def test_the_development_state_reaches_the_published_folder() -> None:
         with zipfile.ZipFile(io.BytesIO(archive.content)) as folder:
             state = json.loads(folder.read("state/state.json").decode("utf-8"))
             reviews = json.loads(folder.read("twins/feedback/changes.json").decode("utf-8"))
-        assert state["changes"] == seeded.changes()
+        sources = studio._state_sources(seeded, "design")
+        assert state["changes"] == [
+            {**change, "review": {**change["review"], "stale": False}} for change in sources.changes
+        ]
+        assert [change["commit"] for change in state["changes"]] == [
+            change["commit"] for change in seeded.changes()
+        ]
         assert state["aligned"] == seeded.aligned()
         assert state["tasks"] == seeded.tasks()
         assert [task["status"] for task in state["tasks"]] == ["DONE"]
@@ -1612,12 +1623,257 @@ def test_the_helpers_of_the_tests_give_copies() -> None:
         run = record_tests(client, base, plan_tests(client, base))
         assert client.post(f"{base}/test-runs/{run['id']}/reviews", {}).status == 201
 
+        seeded.seed_tasks()
+        seeded.seed_learning(0)
+        seeded.seed_change()
+        seeded.seed_update(0)
+
         seeded.test_plans()[0]["paths"].clear()
         seeded.test_runs()[0]["critiques"].clear()
         seeded.test_reviews()[0]["critiques"].clear()
+        seeded.plan_requests()[0]["snapshot"]["hidden_text"] = "Cambiato"
+        seeded.tasks()[0]["origin"]["kind"] = "OWNER"
+        seeded.twin_learning()[0]["observations"].clear()
+        seeded.twin_updates()[0]["observations"].clear()
+        seeded.earlier_findings()[0]["twins"].clear()
 
         assert len(seeded.test_plans()[0]["paths"]) == 4
         assert len(seeded.test_runs()[0]["critiques"]) == 2
         assert len(seeded.test_reviews()[0]["critiques"]) == 2
         assert seeded.test_runs()[0]["critiques"] == seeded.test_reviews()[0]["critiques"]
+        assert seeded.plan_requests()[0]["snapshot"]["hidden_text"] == ""
+        assert seeded.tasks()[0]["origin"]["kind"] == "CODE_CHANGE"
+        assert len(seeded.twin_learning()[0]["observations"]) == 2
+        assert len(seeded.twin_updates()[0]["observations"]) == 2
+        assert len(seeded.earlier_findings()[0]["twins"]) == 2
+        assert studio.errors == []
+
+
+def test_the_plan_requests_keep_the_body_of_every_plan_with_its_defaults() -> None:
+    application = {"kind": "STATIC", "address": "dist"}
+    hidden = {**TEST_SNAPSHOT, "hidden_text": "  Totale\n per   persona  "}
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        first = plan_tests(client, base)
+        refused = client.post(
+            base + "/test-plans",
+            {"application": application, "snapshot": {**TEST_SNAPSHOT, "hidden_text": None}},
+        )
+        second = client.post(
+            base + "/test-plans",
+            {
+                "locale": "en-US",
+                "application": application,
+                "snapshot": hidden,
+                "criteria": ["ac-001"],
+            },
+        )
+
+        assert (refused.status, refused.json()["errors"]) == (
+            422,
+            [{"loc": ["body", "snapshot", "hidden_text"], "type": "string_type"}],
+        )
+        assert second.status == 201
+        assert seeded.plan_requests() == [
+            {
+                "locale": "en-US",
+                "application": application,
+                "snapshot": hidden,
+                "criteria": ["AC-001"],
+                "earlier": None,
+            },
+            {
+                "locale": "it-IT",
+                "application": application,
+                "snapshot": {**TEST_SNAPSHOT, "hidden_text": ""},
+                "criteria": None,
+                "earlier": None,
+            },
+        ]
+        assert [plan["id"] for plan in seeded.test_plans()] == [
+            second.json()["plan"]["id"],
+            first["id"],
+        ]
+        assert studio.errors == []
+
+
+def folder_document(client: Client, base: str, number: int, name: str) -> dict:
+    archive = client.get(f"{base}/knowledge-packages/{number}/archive")
+    read_verified_folder(archive.content)
+    with zipfile.ZipFile(io.BytesIO(archive.content)) as folder:
+        return json.loads(folder.read(name).decode("utf-8"))
+
+
+def test_the_tasks_the_stale_reviews_and_the_learning_reach_the_published_folder() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+
+        def publish() -> tuple[int, dict]:
+            reply = client.post(base + "/knowledge-packages")
+            return reply.status, reply.json()["version"]
+
+        statuses = [publish()[0]]
+        change = seeded.seed_change()
+        statuses.append(publish()[0])
+        seeded.seed_version("design")
+        statuses.append(publish()[0])
+        created = client.post(
+            base + "/code-tasks", {"tasks": [{"text": "Uno.", "source": {"kind": "OWNER"}}]}
+        )
+        statuses.append(publish()[0])
+        client.post(base + "/code-tasks/TSK-001/status", {"status": "DONE"})
+        statuses.append(publish()[0])
+        entry = seeded.seed_learning(0)
+        statuses.append(publish()[0])
+        seeded.seed_change()
+        statuses.append(publish()[0])
+        update = seeded.seed_update(0)
+        rejected = client.post(
+            f"{base}/twin-updates/{update['id']}/decision", {"decision": "REJECT"}
+        )
+        status, version = publish()
+        statuses.append(status)
+
+        number = version["version_number"]
+        state = folder_document(client, base, number, "state/state.json")
+        learned = folder_document(client, base, number, "twins/feedback/learned.json")
+        manifest = folder_document(client, base, number, "orchestwin.json")
+        assert (created.status, rejected.status) == (201, 200)
+        assert statuses == [201] * 7 + [200]
+        assert number == 7
+        assert version["state"]["stale_reviews"] == manifest["state"]["stale_reviews"] == 1
+        assert version["feedback"]["learned_observations"] == 2
+        assert [item["review"]["stale"] for item in state["changes"]] == [False, True]
+        assert state["changes"][1]["commit"] == change["commit"]
+        assert state["changes"][1]["review"]["reference"] == change["review"]["reference"]
+        assert state["tasks"] == seeded.tasks()
+        assert [task["status"] for task in state["tasks"]] == ["DONE"]
+        assert [twin["label"] for twin in learned["twins"]] == ["1.1", "1.0"]
+        assert learned["twins"][0]["observations"] == entry["observations"]
+        assert learned["twins"][0]["twin_id"] == manifest["twins"][0]["twin_id"]
+        assert learned["twins"][0]["twin_id"] != entry["twin_id"]
+        assert studio.errors == []
+
+
+def test_the_state_sources_follow_the_frame_of_the_published_folder() -> None:
+    with FakeStudio(twins=1, job_polls=0) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        older = seeded.seed_change()
+        seeded.seed_version("design")
+        newer = seeded.seed_change()
+        entry = seeded.seed_learning(0, ["Chi paga legge da lontano."])
+
+        complete = studio._state_sources(seeded, "design")
+        partial = studio._state_sources(seeded, "requirements")
+
+        frame = folder_frame("design")
+        reviews = {item["commit"]: item["review"] for item in complete.changes}
+        assert reviews[newer["commit"]]["reference"] == frame["reference"]
+        assert reviews[older["commit"]]["reference"] == older["review"]["reference"]
+        assert all("stale" not in review for review in reviews.values())
+        assert [item["review"]["reference"] for item in partial.changes] == [
+            newer["review"]["reference"],
+            older["review"]["reference"],
+        ]
+        (learning,) = complete.learning
+        twin = frame["twins"][0]
+        assert learning == {
+            **entry,
+            "twin_id": twin["twin_id"],
+            "twin_name": twin["twin_name"],
+            "profile_version_number": twin["profile_version_number"],
+            "label": f"{twin['profile_version_number']}.1",
+        }
+        assert partial.learning == complete.learning
+        assert studio._state_sources(seeded, "team").learning == ()
+        assert complete.tasks == tuple(seeded.tasks())
+        assert studio.errors == []
+
+
+def test_the_seeding_helpers_give_a_project_in_the_named_state() -> None:
+    with FakeStudio(language="en", job_polls=0) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        seeded = studio.seed_project(owner=EMAIL, name="Seed", through="design")
+        early = studio.seed_project(owner=EMAIL, name="Early", through="team")
+
+        first = seeded.seed_change()
+        second = seeded.seed_change("Show the shares", commit="ABCDEF1234567")
+        quiet = seeded.seed_change(reviewed=False)
+        run = seeded.seed_test_run()
+        passed = seeded.seed_test_run(failed=False, reviewed=False)
+        design = seeded.seed_version("design")
+        tasks = seeded.seed_tasks()
+        done = seeded.set_task_status("TSK-002", "DONE", "Done.")
+        added = seeded.add_tasks([{"text": "Write the manual.", "source": {"kind": "OWNER"}}])
+        learned = seeded.seed_learning(0)
+        written = seeded.seed_learning(1, ["The owner reads the bill at the till."], source="OWNER")
+        seeded.seed_change()
+        pending = seeded.seed_update(
+            0, [{"statement": "They pay in cash.", "contradicts_profile": "It pays by card."}]
+        )
+
+        assert (first["commit"], len(first["commit"])) != (second["commit"], 40)
+        assert (first["message"], first["parent"], second["parent"]) == (
+            "Add the split of the bill",
+            None,
+            first["commit"],
+        )
+        assert second["commit"] == "abcdef1234567"
+        assert first["review"]["stale"] is False
+        assert quiet["review"] is None
+        assert run["criteria"][0]["status"] == "FAILED"
+        assert len(run["critiques"]) == 2
+        assert {item["status"] for item in passed["criteria"]} == {"PASSED"}
+        assert passed["critiques"] == []
+        assert design["version_number"] == 3
+        assert seeded.approved("design")
+        assert [
+            (change["commit"], change["review"]["stale"])
+            for change in seeded.changes()
+            if change["review"]
+        ][1:] == [(second["commit"], True), (first["commit"], True)]
+        assert [task["origin"]["kind"] for task in tasks] == [
+            "CODE_CHANGE",
+            "CODE_CHANGE",
+            "TEST_RUN",
+            "OWNER",
+        ]
+        assert tasks[0]["origin"]["twin_id"] is None
+        assert tasks[0]["text"] == "Cover the tip calculation with an automated test."
+        assert tasks[3]["text"] == "Write the help text of the page."
+        assert tasks[2]["about"]["criteria"] == ["AC-001"]
+        assert (done["status"], done["note"]) == ("DONE", "Done.")
+        assert [task["code"] for task in added] == ["TSK-005"]
+        assert (learned["label"], len(learned["observations"])) == ("1.1", 2)
+        assert {item["source"] for item in learned["observations"]} == {"TWIN_CRITIQUE"}
+        assert seeded.twin_updates()[1]["status"] == "APPROVED"
+        assert (written["label"], written["observations"][0]["basis"]) == ("1.1", None)
+        assert pending["status"] == "PROPOSED"
+        assert pending["observations"][0]["contradicts_profile"] == "It pays by card."
+        assert pending["material"] == {"changes": 1, "tests": 0}
+        assert studio.spent_microusd == 0
+        failures = (
+            lambda: seeded.seed_change(commit=first["commit"]),
+            lambda: seeded.seed_change(commit="xyz"),
+            lambda: early.seed_change(),
+            lambda: early.seed_test_run(),
+            lambda: early.seed_learning(0),
+            lambda: seeded.seed_version("brief"),
+            lambda: seeded.set_task_status("TSK-099", "DONE"),
+            lambda: seeded.add_tasks([{"source": {"kind": "OWNER"}}]),
+            lambda: seeded.seed_update(0),
+            lambda: seeded.seed_learning(0),
+            lambda: seeded.seed_learning(5),
+            lambda: seeded.seed_learning(1, ["Same.", "same."], source="OWNER"),
+            lambda: seeded.seed_learning(1, source="NOBODY"),
+            lambda: seeded.seed_update(1, [{"statement": ""}]),
+        )
+        for failure in failures:
+            with pytest.raises(ValueError):
+                failure()
         assert studio.errors == []

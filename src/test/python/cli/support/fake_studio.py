@@ -85,6 +85,7 @@ from orchestwin.knowledge.state import (
     INTERACTIVE_ROLES,
     MAX_ADDRESS_LENGTH,
     MAX_AUTHOR_LENGTH,
+    MAX_BASIS_LENGTH,
     MAX_BROWSER_VERSION_LENGTH,
     MAX_BROWSERS,
     MAX_CRITERIA_PER_PATH,
@@ -92,9 +93,12 @@ from orchestwin.knowledge.state import (
     MAX_EARLIER_PATHS,
     MAX_EXPECTED_TEXT_LENGTH,
     MAX_FILES,
+    MAX_FINDINGS,
     MAX_FOLDER_TEST_RUNS,
+    MAX_LEARNED_OBSERVATIONS,
     MAX_MESSAGE_LENGTH,
     MAX_NOTE_LENGTH,
+    MAX_OBSERVATION_LENGTH,
     MAX_PAGE_TEXT_LENGTH,
     MAX_PATH_HEADING_LENGTH,
     MAX_PATH_LENGTH,
@@ -108,14 +112,22 @@ from orchestwin.knowledge.state import (
     MAX_STEPS,
     MAX_TARGET_NAME_LENGTH,
     MAX_TASK_LENGTH,
+    MAX_TASK_NOTE_LENGTH,
     MAX_TASKS,
+    MAX_UPDATE_CHANGES,
+    MAX_UPDATE_OBSERVATIONS,
+    MAX_UPDATE_TESTS,
+    OBSERVATION_CODE_PREFIX,
     PATH_STATUSES,
     STEP_STATUSES,
+    TASK_STATUSES,
     TEST_ACTIONS,
     TEST_EXPECTATIONS,
     TEST_KEYS,
     TEST_ROLES,
+    UPDATE_DECISIONS,
     ProjectStateSources,
+    review_is_stale,
 )
 from orchestwin.models.fake_design import (
     _ALTERNATIVE_TEMPLATES,
@@ -187,7 +199,7 @@ from orchestwin.workflow.gates import (
     transition_human_gate,
 )
 
-from .folders import stage_folder
+from .folders import folder_frame, stage_folder
 
 PREFIX = "/api/v1"
 EPOCH = datetime(2026, 9, 29, 8, 0, tzinfo=UTC)
@@ -231,6 +243,7 @@ REQUEST_OPERATIONS = (
     "CODE_CHANGE_REVIEW",
     "TEST_PLAN",
     "TEST_REVIEW",
+    "TWIN_UPDATE",
 )
 OPERATIONS = ("MOCKUP", "ITERATION", *REQUEST_OPERATIONS)
 GATE_ACTIONS = ("SUBMIT", "APPROVE", "REJECT", "REQUEST_REVISION", "PAUSE", "RESUME", "CANCEL")
@@ -253,6 +266,7 @@ COSTS = {
     "CODE_ALIGNMENT": 250_000,
     "TEST_PLAN": 200_000,
     "TEST_REVIEW": 150_000,
+    "TWIN_UPDATE": 150_000,
 }
 TASKS = {
     "BRIEF_QUESTION": "brief",
@@ -272,6 +286,7 @@ TASKS = {
     "CODE_ALIGNMENT": "user-twin-evaluation",
     "TEST_PLAN": "requirements",
     "TEST_REVIEW": "user-twin-evaluation",
+    "TWIN_UPDATE": "user-twin-evaluation",
 }
 PURPOSES = {
     "BRIEF_QUESTION": "BRIEF_QUESTION",
@@ -291,6 +306,7 @@ PURPOSES = {
     "CODE_ALIGNMENT": "CODE_ALIGNMENT",
     "TEST_PLAN": "TEST_PLAN",
     "TEST_REVIEW": "TEST_REVIEW",
+    "TWIN_UPDATE": "TWIN_UPDATE",
 }
 GATE_TYPES = {
     "brief": HumanGateType.PROJECT_BRIEF,
@@ -321,8 +337,9 @@ FEEDBACK_KEYS = (
     "insights",
     "change_reviews",
     "test_runs",
+    "learned_observations",
 )
-STATE_KEYS = ("changes", "pending_changes", "aligned_commit", "open_tasks")
+STATE_KEYS = ("changes", "pending_changes", "stale_reviews", "aligned_commit", "open_tasks")
 AGENT_ORDER = tuple(entry.agent_id.value for entry in all_agent_catalog_entries())
 ALWAYS_PRESENT = frozenset(
     entry.agent_id.value for entry in all_agent_catalog_entries() if entry.is_always_present
@@ -417,7 +434,7 @@ STEP_FIELDS = ("action", "target", "value", "expect")
 PATH_FIELDS = ("code", "heading", "criteria", "steps")
 EARLIER_FIELDS = (*PATH_FIELDS, "blocked_step", "detail", "snapshot")
 APPLICATION_FIELDS = ("kind", "address")
-SNAPSHOT_FIELDS = ("url", "title", "text", "elements")
+SNAPSHOT_FIELDS = ("url", "title", "text", "hidden_text", "elements")
 ELEMENT_FIELDS = ("index", "role", "name", "value", "state", "options")
 PLAN_FIELDS = ("locale", "application", "snapshot", "criteria", "earlier")
 RUN_FIELDS = (
@@ -434,6 +451,83 @@ BROWSER_FIELDS = ("name", "version")
 RESULT_FIELDS = ("path", "browser", "status", "seconds", "steps", "page_text")
 STEP_RESULT_FIELDS = ("index", "status", "detail", "url", "title", "screenshot")
 NOT_COVERED_FIELDS = ("criterion", "reason")
+TASK_CODE = re.compile(r"TSK-[0-9]{3,6}", re.IGNORECASE)
+OBSERVATION_CODE = re.compile(r"OBS-[0-9]{3,6}", re.IGNORECASE)
+REQUIREMENT_REFERENCE = re.compile(r"REQ-[0-9]{3,6}")
+SCREEN_REFERENCE = re.compile(r"SCR-[0-9]{3,6}")
+TASK_FILTERS = ("open", "all")
+TASK_FIELDS = ("tasks",)
+TASK_ITEM_FIELDS = ("text", "source")
+SOURCE_FIELDS = {
+    "OWNER": ("kind",),
+    "TEST_RUN": ("kind", "test_run_id", "twin_id", "finding"),
+    "CODE_CHANGE": ("kind", "commit", "twin_id", "finding"),
+}
+FINDING_FIELDS = ("twin_id", "finding")
+TASK_STATUS_FIELDS = ("status", "note")
+DECISION_FIELDS = ("kind", "note", "tasks", "findings")
+CLOSED_STATUSES = ("DONE", "DROPPED")
+UPDATE_FIELDS = ("locale",)
+UPDATE_DECISION_FIELDS = ("decision", "kept", "reason")
+KEPT_FIELDS = ("index", "statement")
+OBSERVATION_FIELDS = ("statement", "about")
+ABOUT_FIELDS = ("requirement", "screen")
+RETIRE_FIELDS = ("reason",)
+SEED_FILE = {"path": "src/app.js", "kind": "MODIFIED", "added": 12, "removed": 3}
+SEED_DIFF = "diff --git a/src/app.js b/src/app.js\n+// REQ-003 splits the bill\n"
+SEED_AUTHOR = "Test Author"
+SEED_ADDRESS = "dist"
+SEED_BROWSER = {"name": "chrome", "version": "151.0.7922.76"}
+SEED_PAGE = "http://127.0.0.1:41234/"
+PROPOSED_OBSERVATIONS = 2
+MAX_OBSERVATION_NUMBER = 999_999
+UNKNOWN_INDEX = "the proposal has no observation at this index"
+LEARNING_TEXTS = {
+    "it": {
+        "tests": "Un rilievo sulla verifica dei criteri.",
+        "commit": "Un rilievo sul commit {commit}.",
+        "learned": "Dalle ultime critiche ho imparato {count} cose sul mio gruppo.",
+        "nothing": "Le ultime critiche non mi insegnano nulla di nuovo.",
+    },
+    "en": {
+        "tests": "A finding on the acceptance tests.",
+        "commit": "A finding on the commit {commit}.",
+        "learned": "From the latest critiques I learned {count} things about my group.",
+        "nothing": "The latest critiques teach me nothing new.",
+    },
+}
+SEED_TEXTS = {
+    "it": {
+        "message": "Aggiunge la divisione del conto",
+        "owner_task": "Scrivere il testo di aiuto della pagina.",
+        "verdict_task": "Coprire il calcolo della mancia con un test automatico.",
+        "observations": (
+            (
+                "Chi paga al tavolo legge le cifre da lontano, spesso con poca luce.",
+                "Un rilievo ripetuto sui commit e sui test.",
+            ),
+            (
+                "Chi divide il conto vuole vedere subito la quota di ciascuno.",
+                "Un rilievo sulla verifica dei criteri.",
+            ),
+        ),
+    },
+    "en": {
+        "message": "Add the split of the bill",
+        "owner_task": "Write the help text of the page.",
+        "verdict_task": "Cover the tip calculation with an automated test.",
+        "observations": (
+            (
+                "People who pay at the table read the digits from a distance, often in dim light.",
+                "A finding repeated on the commits and the tests.",
+            ),
+            (
+                "People who split the bill want to see each share at once.",
+                "A finding on the acceptance tests.",
+            ),
+        ),
+    },
+}
 DISCLAIMER = (
     "This is simulated feedback based on the available profile, evidence, and project "
     "artifacts. It is a design hypothesis and not empirical evidence of real-user behavior."
@@ -1388,6 +1482,19 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/test-runs/{run_id}", "test_run"),
     Route("POST", "/projects/{project_id}/test-runs/{run_id}/reviews", "review_test_run"),
     Route("GET", "/projects/{project_id}/test-runs/{run_id}/reviews", "test_run_reviews"),
+    Route("GET", "/projects/{project_id}/code-tasks", "code_tasks"),
+    Route("POST", "/projects/{project_id}/code-tasks", "create_tasks"),
+    Route("POST", "/projects/{project_id}/code-tasks/{code}/status", "task_status"),
+    Route("GET", "/projects/{project_id}/twin-learning", "twin_learning"),
+    Route("POST", "/projects/{project_id}/user-twins/{twin_id}/updates", "propose_update"),
+    Route("GET", "/projects/{project_id}/twin-updates/{update_id}", "twin_update"),
+    Route("POST", "/projects/{project_id}/twin-updates/{update_id}/decision", "decide_update"),
+    Route("POST", "/projects/{project_id}/user-twins/{twin_id}/observations", "learn"),
+    Route(
+        "POST",
+        "/projects/{project_id}/user-twins/{twin_id}/observations/{code}/retire",
+        "retire_observation",
+    ),
 )
 
 
@@ -1706,6 +1813,19 @@ class _Fields:
             return None
         return value
 
+    def whole(self, name: str, *, minimum: int | None = None) -> int | None:
+        present, value = self._get(name, True)
+        if not present:
+            return None
+        kind, number = _lax_integer(value)
+        if kind is not None:
+            self._fail(name, kind)
+            return None
+        if minimum is not None and number < minimum:
+            self._fail(name, "greater_than_equal")
+            return None
+        return number
+
     def texts(
         self,
         name: str,
@@ -2005,8 +2125,13 @@ class FakeProject:
         self.code_tasks: list[dict[str, object]] = []
         self.decision_count = 0
         self.acceptance_plans: list[dict[str, object]] = []
+        self.acceptance_plan_requests: list[dict[str, object]] = []
         self.acceptance_runs: list[dict[str, object]] = []
         self.acceptance_reviews: list[dict[str, object]] = []
+        self.critique_contexts: list[dict[str, object]] = []
+        self.learned: list[dict[str, object]] = []
+        self.development: dict[str, int] = {}
+        self.updates: list[dict[str, object]] = []
 
     @property
     def owner(self) -> str:
@@ -2107,6 +2232,10 @@ class FakeProject:
         with self._studio._lock:
             return _copy(self.acceptance_plans)
 
+    def plan_requests(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.acceptance_plan_requests)
+
     def test_runs(self) -> list[dict[str, object]]:
         with self._studio._lock:
             return [self._studio._test_run_payload(self, record) for record in self.acceptance_runs]
@@ -2125,6 +2254,64 @@ class FakeProject:
                     item["statement"] = statement
                     return
             raise ValueError(f"the requirements have no acceptance criterion {code}")
+
+    def twin_learning(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return self._studio._learning_entries(self)
+
+    def twin_updates(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.updates)
+
+    def earlier_findings(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.critique_contexts)
+
+    def seed_change(
+        self, message: str | None = None, *, commit: str | None = None, reviewed: bool = True
+    ) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_change(self, message, commit, reviewed)
+
+    def seed_test_run(self, *, failed: bool = True, reviewed: bool = True) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_test_run(self, failed=failed, reviewed=reviewed)
+
+    def seed_version(self, stage: str) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_version(self, stage)
+
+    def add_tasks(self, items: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return self._studio._seeded(lambda: self._studio._add_tasks(self, items))
+
+    def seed_tasks(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return self._studio._seeded(lambda: self._studio._seed_tasks(self))
+
+    def set_task_status(self, code: str, status: str, note: str | None = None) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seeded(
+                lambda: self._studio._changed_task(self, code, {"status": status, "note": note})
+            )
+
+    def seed_learning(
+        self,
+        twin: int | str = 0,
+        statements: Sequence[str] | None = None,
+        *,
+        source: str = "TWIN_CRITIQUE",
+    ) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_learning(self, twin, statements, source)
+
+    def seed_update(
+        self,
+        twin: int | str = 0,
+        observations: Sequence[Mapping[str, object]] | None = None,
+    ) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_update(self, twin, observations)
 
 
 class FakeStudio:
@@ -6211,6 +6398,8 @@ class FakeStudio:
             f"decisions={project.decision_count}",
             f"tests={len(project.acceptance_runs)}",
             f"test_reviews={len(project.acceptance_reviews)}",
+            f"tasks={_digest(project.code_tasks)}",
+            f"learning={_digest(project.development)}",
         )
         if project.packages and project.fingerprint == fingerprint:
             return _Answer(200, {"reused": True, "version": project.packages[-1]})
@@ -6221,7 +6410,7 @@ class FakeStudio:
             project_name=project.name,
             version_number=number,
             created_at=created_at,
-            state=self._state_sources(project),
+            state=self._state_sources(project, present[-1]),
         )
         archive = folder_archive(folder)
         manifest = folder.manifest
@@ -6253,7 +6442,9 @@ class FakeStudio:
                 "pending": manifest["progress"]["pending"],
                 "complete": manifest["progress"]["complete"],
             },
-            "state": {key: manifest["state"][key] for key in STATE_KEYS},
+            "state": {
+                key: manifest["state"][key] for key in STATE_KEYS if key in manifest["state"]
+            },
             "twins": [
                 {
                     "twin_id": twin["twin_id"],
@@ -6451,12 +6642,43 @@ class FakeStudio:
             raise _Refusal(409, {"code": "CODE_CHANGE_AMBIGUOUS"})
         return found[0]
 
+    def _latest_run(self, project: FakeProject, commit: object) -> dict[str, object] | None:
+        return next((run for run in project.change_runs if run["commit"] == commit), None)
+
+    def _current_reference(self, project: FakeProject) -> dict[str, object] | None:
+        reference = self._alignment_reference(project)
+        requirements, design = reference["requirements"], reference["design"]
+        if requirements is None or design is None:
+            return None
+        return {
+            "requirements_version_number": requirements["version_number"],
+            "design_version_number": design["version_number"],
+            "alternative_code": design["alternative_code"],
+        }
+
     def _change_payload(
-        self, project: FakeProject, record: Mapping[str, object]
+        self,
+        project: FakeProject,
+        record: Mapping[str, object],
+        frame: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
-        latest = next(
-            (run for run in project.change_runs if run["commit"] == record["commit"]), None
-        )
+        latest = self._latest_run(project, record["commit"])
+        review = None
+        if latest is not None:
+            reference = dict(latest["reference"])
+            stale = review_is_stale(reference, self._current_reference(project))
+            review = {
+                "run_id": latest["id"],
+                "reviewed_at": latest["reviewed_at"],
+                "verdict": latest["alignment"]["status"],
+                "summary": latest["alignment"]["summary"],
+                "reference": reference,
+                "stale": stale,
+            }
+            if frame is not None:
+                del review["stale"]
+                if frame["reference"] is not None and not stale:
+                    review["reference"] = dict(frame["reference"])
         return {
             "commit": record["commit"],
             "parent": record["parent"],
@@ -6465,16 +6687,18 @@ class FakeStudio:
             "message": record["message"],
             "files": copy.deepcopy(record["files"]),
             "recorded_at": record["recorded_at"],
-            "review": None
-            if latest is None
-            else {
-                "run_id": latest["id"],
-                "reviewed_at": latest["reviewed_at"],
-                "verdict": latest["alignment"]["status"],
-                "summary": latest["alignment"]["summary"],
-            },
+            "review": review,
             "decision": copy.deepcopy(record["decision"]),
         }
+
+    def _stale_reviews(self, project: FakeProject) -> int:
+        current = self._current_reference(project)
+        count = 0
+        for record in self._pending(project):
+            latest = self._latest_run(project, record["commit"])
+            if latest is not None and review_is_stale(latest["reference"], current):
+                count += 1
+        return count
 
     def _aligned(self, project: FakeProject) -> dict[str, object] | None:
         record = next((item for item in project.code_changes if item["aligned"] is not None), None)
@@ -6517,10 +6741,9 @@ class FakeStudio:
             "reference": self._alignment_reference(project),
             "aligned": self._aligned(project),
             "pending_changes": len(self._pending(project)),
+            "stale_reviews": self._stale_reviews(project),
             "latest_change": None if latest is None else self._change_payload(project, latest),
-            "tasks": [
-                copy.deepcopy(task) for task in project.code_tasks if task["status"] == "OPEN"
-            ],
+            "tasks": self._task_list(project, every=False),
             "review_available": self.hosted,
         }
 
@@ -6638,9 +6861,58 @@ class FakeStudio:
         for operation in (*("CODE_CHANGE_REVIEW" for _ in twins), "CODE_ALIGNMENT"):
             self._record(project, operation)
             charged += COSTS[operation]
+        run = self._stored_change_run(project, record, twins, locale, reference, charged)
+        return _Answer(201, {"status": "REVIEWED", "run": copy.deepcopy(run)})
+
+    def _stored_change_run(
+        self,
+        project: FakeProject,
+        record: Mapping[str, object],
+        twins: Sequence[Mapping[str, object]],
+        locale: str,
+        reference: Mapping[str, object],
+        charged: int,
+    ) -> dict[str, object]:
+        previous = self._latest_run(project, record["commit"])
+        if previous is not None:
+            earlier, source = _findings_by_twin(previous["critiques"]), "THIS_COMMIT"
+        else:
+            earlier, source = self._previous_commit_findings(project, record), "PREVIOUS_COMMIT"
         run = self._change_run(project, record, twins, locale, reference, charged)
         project.change_runs.insert(0, run)
-        return _Answer(201, {"status": "REVIEWED", "run": copy.deepcopy(run)})
+        project.critique_contexts.insert(
+            0,
+            {
+                "kind": "CODE_CHANGE",
+                "run_id": run["id"],
+                "commit": record["commit"],
+                "twins": [
+                    {
+                        "twin_id": twin["twin_id"],
+                        "earlier_source": source if earlier.get(twin["twin_id"]) else None,
+                        "earlier_findings": earlier.get(twin["twin_id"], []),
+                    }
+                    for twin in twins
+                ],
+            },
+        )
+        return run
+
+    def _previous_commit_findings(
+        self, project: FakeProject, record: Mapping[str, object]
+    ) -> dict[str, list[str]]:
+        pending = self._pending(project)
+        index = next(
+            (place for place, item in enumerate(pending) if item["commit"] == record["commit"]),
+            None,
+        )
+        if index is None:
+            return {}
+        for older in pending[index + 1 :]:
+            latest = self._latest_run(project, older["commit"])
+            if latest is not None:
+                return _findings_by_twin(latest["critiques"])
+        return {}
 
     def _change_run(
         self,
@@ -6747,7 +7019,7 @@ class FakeStudio:
         }
 
     def _route_decide_change(self, call: _Call) -> _Answer:
-        fields = _Fields(call.json(), ("kind", "note", "tasks"))
+        fields = _Fields(call.json(), DECISION_FIELDS)
         kind = fields.choice("kind", DECISIONS)
         note = fields.text("note", required=False, nullable=True, maximum=MAX_NOTE_LENGTH)
         if note is not None:
@@ -6761,18 +7033,57 @@ class FakeStudio:
             item_maximum=MAX_TASK_LENGTH,
         )
         texts = fields.normalized("tasks", tasks, _task_texts) if tasks else []
+        findings = _models(
+            fields,
+            "findings",
+            FINDING_FIELDS,
+            _finding_of,
+            required=False,
+            maximum_items=MAX_TASKS,
+        )
         fields.check()
         texts = list(texts or [])
-        if (kind == "CODE_TASKS") != bool(texts):
+        if kind == "CODE_TASKS":
+            valid = 1 <= len(texts) + len(findings) <= MAX_TASKS
+        else:
+            valid = not texts and not findings
+        if not valid:
             raise _Invalid([_error(("body",), "value_error")])
         project = self._code_project(call)
         record = self._find_change(project, call.params["commit"])
-        latest = next(
-            (run for run in project.change_runs if run["commit"] == record["commit"]), None
+        self._decide(project, record, str(kind), note, texts, findings)
+        return _Answer(
+            200,
+            {
+                "status": "DECIDED",
+                "change": self._change_payload(project, record),
+                "alignment": self._alignment_payload(project),
+            },
         )
-        subjects = {"requirements": [], "screens": []}
+
+    def _decide(
+        self,
+        project: FakeProject,
+        record: dict[str, object],
+        kind: str,
+        note: str | None,
+        texts: Sequence[str],
+        findings: Sequence[Mapping[str, object]],
+    ) -> None:
+        sources = [
+            {
+                "kind": "CODE_CHANGE",
+                "commit": record["commit"],
+                "twin_id": item["twin_id"],
+                "finding": item["finding"],
+            }
+            for item in findings
+        ]
+        resolved = self._resolve_sources(project, sources)
+        latest = self._latest_run(project, record["commit"])
+        affected = {"requirements": [], "screens": []}
         if latest is not None:
-            subjects = copy.deepcopy(latest["alignment"]["affected"])
+            affected = copy.deepcopy(latest["alignment"]["affected"])
         moment = _iso(self._now())
         record["decision"] = {"kind": kind, "decided_at": moment, "note": note}
         record["aligned"] = None
@@ -6787,31 +7098,216 @@ class FakeStudio:
                 else requirements["version_number"],
                 "design_version_number": None if design is None else design["version_number"],
             }
-            places = {str(item["commit"]): place for place, item in enumerate(project.code_changes)}
-            aligned_place = places[str(record["commit"])]
-            for task in project.code_tasks:
-                if task["status"] == "OPEN" and places[str(task["from_commit"])] >= aligned_place:
-                    task["status"] = "DONE"
+            self._close_aligned_tasks(project, record, moment)
+        origin = _task_origin("CODE_CHANGE", commit=str(record["commit"]))
         for text in texts:
-            project.code_tasks.append(
-                {
-                    "code": f"TSK-{len(project.code_tasks) + 1:03d}",
-                    "text": text,
-                    "about": copy.deepcopy(subjects),
-                    "from_commit": record["commit"],
-                    "created_at": moment,
-                    "status": "OPEN",
-                }
+            self._new_task(
+                project,
+                text,
+                {**affected, "criteria": []},
+                origin,
+                moment,
             )
+        self._create_tasks(project, [_prepared_task(None, item) for item in resolved], moment)
         project.decision_count += 1
+
+    def _close_aligned_tasks(
+        self, project: FakeProject, record: Mapping[str, object], moment: str
+    ) -> None:
+        places = {str(item["commit"]): place for place, item in enumerate(project.code_changes)}
+        aligned_place = places[str(record["commit"])]
+        recorded = datetime.fromisoformat(str(record["recorded_at"]))
+        for task in project.code_tasks:
+            if task["status"] != "OPEN":
+                continue
+            origin = task["origin"]
+            if origin["kind"] == "CODE_CHANGE":
+                closed = places[str(origin["commit"])] >= aligned_place
+            else:
+                closed = datetime.fromisoformat(str(task["created_at"])) <= recorded
+            if closed:
+                task["status"] = "DONE"
+                task["closed_at"] = moment
+                task["note"] = None
+
+    def _task_list(self, project: FakeProject, *, every: bool) -> list[dict[str, object]]:
+        return [
+            copy.deepcopy(task) for task in project.code_tasks if every or task["status"] == "OPEN"
+        ]
+
+    def _find_task(self, project: FakeProject, code: str) -> dict[str, object]:
+        wanted = code.upper()
+        task = None
+        if TASK_CODE.fullmatch(wanted) is not None:
+            task = next((item for item in project.code_tasks if item["code"] == wanted), None)
+        if task is None:
+            raise _Refusal(404, {"code": "CODE_TASK_NOT_FOUND"})
+        return task
+
+    def _resolve_sources(
+        self, project: FakeProject, sources: Sequence[Mapping[str, object]]
+    ) -> list[dict[str, object]]:
+        runs: dict[int, dict[str, object]] = {}
+        changes: dict[int, dict[str, object]] = {}
+        refusals: list[_Refusal] = []
+        for index, source in enumerate(sources):
+            if source["kind"] == "TEST_RUN":
+                runs[index] = self._find_test_run(project, str(source["test_run_id"]))
+        for index, source in enumerate(sources):
+            if source["kind"] == "CODE_CHANGE":
+                try:
+                    changes[index] = self._find_change(project, str(source["commit"]))
+                except _Refusal as refusal:
+                    refusals.append(refusal)
+        if refusals:
+            raise min(refusals, key=lambda refusal: refusal.status == 409)
+        resolved: list[dict[str, object]] = []
+        for index, source in enumerate(sources):
+            if source["kind"] == "OWNER":
+                resolved.append({"origin": _task_origin("OWNER"), "finding": None})
+                continue
+            if source["kind"] == "TEST_RUN":
+                record = runs[index]
+                review = next(
+                    (item for item in project.acceptance_reviews if item["run_id"] == record["id"]),
+                    None,
+                )
+                critiques = [] if review is None else review["critiques"]
+                subject = {"test_run_id": str(record["id"])}
+            else:
+                record = changes[index]
+                latest = self._latest_run(project, record["commit"])
+                critiques = [] if latest is None else latest["critiques"]
+                subject = {"commit": str(record["commit"])}
+            critique = next(
+                (item for item in critiques if item["twin_id"] == source["twin_id"]), None
+            )
+            findings = [] if critique is None else critique["findings"]
+            position = int(source["finding"])
+            if position >= len(findings):
+                raise _Refusal(422, {"code": "TASK_SOURCE_INVALID", "index": index})
+            finding = findings[position]
+            origin = _task_origin(
+                str(source["kind"]),
+                **subject,
+                twin_id=str(critique["twin_id"]),
+                twin_name=str(critique["twin_name"]),
+                finding=str(finding["text"]),
+            )
+            resolved.append({"origin": origin, "finding": finding})
+        return resolved
+
+    def _new_task(
+        self,
+        project: FakeProject,
+        text: str,
+        about: Mapping[str, object],
+        origin: Mapping[str, object],
+        moment: str,
+    ) -> dict[str, object]:
+        task: dict[str, object] = {
+            "code": f"TSK-{len(project.code_tasks) + 1:03d}",
+            "text": text,
+            "about": {
+                "requirements": list(about["requirements"]),
+                "screens": list(about["screens"]),
+                "criteria": list(about["criteria"]),
+            },
+            "origin": dict(origin),
+            "from_commit": origin["commit"],
+            "created_at": moment,
+            "status": "OPEN",
+            "closed_at": None,
+            "note": None,
+        }
+        project.code_tasks.append(task)
+        return task
+
+    def _create_tasks(
+        self,
+        project: FakeProject,
+        prepared: Sequence[Mapping[str, object]],
+        moment: str,
+    ) -> tuple[int, list[dict[str, object]]]:
+        created = 0
+        tasks: list[dict[str, object]] = []
+        for item in prepared:
+            origin = item["origin"]
+            existing = None if origin["twin_id"] is None else _open_task(project, origin)
+            if existing is not None:
+                tasks.append(existing)
+                continue
+            tasks.append(self._new_task(project, item["text"], item["about"], origin, moment))
+            created += 1
+        return created, tasks
+
+    def _route_code_tasks(self, call: _Call) -> _Answer:
+        wanted = call.value("status")
+        if wanted is not None and wanted not in TASK_FILTERS:
+            raise _Invalid([_error(("query", "status"), "literal_error")])
+        project = self._code_project(call)
+        return _Answer(200, {"items": self._task_list(project, every=wanted == "all")})
+
+    def _route_create_tasks(self, call: _Call) -> _Answer:
+        items = _task_items(call.json())
+        project = self._code_project(call)
+        created, tasks = self._created_tasks(project, items)
         return _Answer(
-            200,
+            201,
             {
-                "status": "DECIDED",
-                "change": self._change_payload(project, record),
+                "status": "CREATED",
+                "created": created,
+                "tasks": copy.deepcopy(tasks),
                 "alignment": self._alignment_payload(project),
             },
         )
+
+    def _created_tasks(
+        self, project: FakeProject, items: Sequence[Mapping[str, object]]
+    ) -> tuple[int, list[dict[str, object]]]:
+        resolved = self._resolve_sources(project, [item["source"] for item in items])
+        prepared = [
+            _prepared_task(item["text"], found) for item, found in zip(items, resolved, strict=True)
+        ]
+        return self._create_tasks(project, prepared, _iso(self._now()))
+
+    def _route_task_status(self, call: _Call) -> _Answer:
+        status, note = _task_status_of(call.json())
+        project = self._code_project(call)
+        task = self._find_task(project, call.params["code"])
+        _set_task_status(task, status, note, _iso(self._now()))
+        return _Answer(
+            200,
+            {
+                "status": "UPDATED",
+                "task": copy.deepcopy(task),
+                "alignment": self._alignment_payload(project),
+            },
+        )
+
+    def _changed_task(
+        self, project: FakeProject, code: str, body: Mapping[str, object]
+    ) -> dict[str, object]:
+        status, note = _task_status_of(dict(body))
+        task = self._find_task(project, code)
+        _set_task_status(task, status, note, _iso(self._now()))
+        return copy.deepcopy(task)
+
+    def _add_tasks(
+        self, project: FakeProject, items: Sequence[Mapping[str, object]]
+    ) -> list[dict[str, object]]:
+        _, tasks = self._created_tasks(
+            project, _task_items({"tasks": [dict(item) for item in items]})
+        )
+        return copy.deepcopy(tasks)
+
+    def _seeded(self, work: Callable[[], object]) -> object:
+        try:
+            return work()
+        except _Refusal as refusal:
+            raise ValueError(f"the fake studio refuses: {refusal.detail}") from refusal
+        except _Invalid as invalid:
+            raise ValueError(f"the fake studio refuses: {invalid.errors}") from invalid
 
     def _find_test_plan(self, project: FakeProject, identifier: str) -> dict[str, object]:
         plan = next((item for item in project.acceptance_plans if item["id"] == identifier), None)
@@ -6842,6 +7338,8 @@ class FakeStudio:
     def _route_acceptance_tests(self, call: _Call) -> _Answer:
         project = self._code_project(call)
         runs = project.acceptance_runs
+        latest = runs[0] if runs else None
+        reviewed = self._latest_reviewed_run(project)
         return _Answer(
             200,
             {
@@ -6850,7 +7348,17 @@ class FakeStudio:
                 "plan_available": self.hosted,
                 "plans": len(project.acceptance_plans),
                 "runs": len(runs),
-                "latest_run": self._test_run_payload(project, runs[0]) if runs else None,
+                "latest_run": None if latest is None else self._test_run_payload(project, latest),
+                "latest_run_stale": latest is not None
+                and review_is_stale(latest["reference"], self._current_reference(project)),
+                "latest_review": None
+                if reviewed is None
+                else {
+                    "run_id": reviewed[0]["id"],
+                    "finished_at": reviewed[0]["finished_at"],
+                    "reviewed_at": reviewed[1]["reviewed_at"],
+                    "critiques": copy.deepcopy(reviewed[1]["critiques"]),
+                },
             },
         )
 
@@ -6928,6 +7436,7 @@ class FakeStudio:
             body, reference, [(code, statements[code]) for code in wanted], first
         )
         project.acceptance_plans.insert(0, plan)
+        project.acceptance_plan_requests.insert(0, _copy(dict(body)))
         return _Answer(201, {"status": "PLANNED", "plan": copy.deepcopy(plan)})
 
     def _test_plan(
@@ -7111,6 +7620,18 @@ class FakeStudio:
         for _ in twins:
             self._record(project, "TEST_REVIEW")
             charged += COSTS["TEST_REVIEW"]
+        review = self._stored_test_review(project, record, twins, locale, charged)
+        return _Answer(201, {"status": "REVIEWED", "review": copy.deepcopy(review)})
+
+    def _stored_test_review(
+        self,
+        project: FakeProject,
+        record: Mapping[str, object],
+        twins: Sequence[Mapping[str, object]],
+        locale: str,
+        charged: int,
+    ) -> dict[str, object]:
+        earlier = self._earlier_test_findings(project, record)
         review = {
             "id": self._new_id(),
             "run_id": record["id"],
@@ -7120,7 +7641,49 @@ class FakeStudio:
             "cost_microusd": charged,
         }
         project.acceptance_reviews.insert(0, review)
-        return _Answer(201, {"status": "REVIEWED", "review": copy.deepcopy(review)})
+        project.critique_contexts.insert(
+            0,
+            {
+                "kind": "TEST_RUN",
+                "review_id": review["id"],
+                "run_id": record["id"],
+                "twins": [
+                    {
+                        "twin_id": twin["twin_id"],
+                        "earlier_findings": earlier.get(twin["twin_id"], []),
+                    }
+                    for twin in twins
+                ],
+            },
+        )
+        return review
+
+    def _latest_test_review(self, project: FakeProject, run_id: object) -> dict[str, object] | None:
+        return next(
+            (review for review in project.acceptance_reviews if review["run_id"] == run_id), None
+        )
+
+    def _latest_reviewed_run(
+        self, project: FakeProject
+    ) -> tuple[dict[str, object], dict[str, object]] | None:
+        for record in project.acceptance_runs:
+            review = self._latest_test_review(project, record["id"])
+            if review is not None:
+                return record, review
+        return None
+
+    def _earlier_test_findings(
+        self, project: FakeProject, record: Mapping[str, object]
+    ) -> dict[str, list[str]]:
+        runs = project.acceptance_runs
+        index = next(
+            (place for place, item in enumerate(runs) if item["id"] == record["id"]), len(runs)
+        )
+        for older in runs[index + 1 :]:
+            review = self._latest_test_review(project, older["id"])
+            if review is not None:
+                return _findings_by_twin(review["critiques"])
+        return {}
 
     def _test_critiques(
         self,
@@ -7194,16 +7757,749 @@ class FakeStudio:
             },
         )
 
-    def _state_sources(self, project: FakeProject) -> ProjectStateSources:
+    def _learning_entry(
+        self, project: FakeProject, twin: Mapping[str, object]
+    ) -> dict[str, object]:
+        twin_id = str(twin["twin_id"])
+        version = int(twin["version_number"])
+        development = project.development.get(twin_id, 0)
+        own = [item for item in project.learned if item["twin_id"] == twin_id]
+        retired = sorted(
+            (item for item in own if item["retired"] is not None),
+            key=lambda item: (
+                int(item["retired"]["retired_in_version"]),
+                _code_number(item["code"]),
+            ),
+        )
+        return {
+            "twin_id": twin_id,
+            "twin_name": str(twin["profile"]["name"]),
+            "profile_version_number": version,
+            "development_version_number": development,
+            "label": f"{version}.{development}",
+            "observations": [_active_entry(item) for item in own if item["retired"] is None],
+            "retired": [_retired_entry(item) for item in retired],
+        }
+
+    def _learning_entries(self, project: FakeProject) -> list[dict[str, object]]:
+        return [self._learning_entry(project, twin) for twin in self._approved_twins(project)]
+
+    def _learning_twin(self, project: FakeProject, twin_id: str) -> dict[str, object]:
+        twins = self._approved_twins(project)
+        if not twins:
+            raise _Refusal(409, {"code": "USER_MODELING_APPROVAL_REQUIRED"})
+        twin = next((item for item in twins if item["twin_id"] == twin_id), None)
+        if twin is None:
+            raise _Refusal(404, {"code": "USER_TWIN_NOT_FOUND"})
+        return twin
+
+    def _pending_update(self, project: FakeProject, twin_id: str) -> dict[str, object] | None:
+        return next(
+            (
+                update
+                for update in project.updates
+                if update["twin_id"] == twin_id and update["status"] == "PROPOSED"
+            ),
+            None,
+        )
+
+    def _refuse_pending(self, project: FakeProject, twin_id: str) -> None:
+        pending = self._pending_update(project, twin_id)
+        if pending is not None:
+            raise _Refusal(409, {"code": "TWIN_UPDATE_PENDING", "update_id": pending["id"]})
+
+    def _active_count(self, project: FakeProject, twin_id: str) -> int:
+        return sum(
+            1 for item in project.learned if item["twin_id"] == twin_id and item["retired"] is None
+        )
+
+    def _new_material(
+        self, project: FakeProject, twin_id: str
+    ) -> tuple[list[tuple[dict, dict]], list[tuple[dict, dict]]]:
+        latest = next((update for update in project.updates if update["twin_id"] == twin_id), None)
+        since = None if latest is None else datetime.fromisoformat(str(latest["created_at"]))
+        changes = []
+        for record in project.code_changes:
+            run = self._latest_run(project, record["commit"])
+            critique = None if run is None else _critique_of(run, twin_id)
+            if critique is not None and _after(run["reviewed_at"], since):
+                changes.append((run, critique))
+        tests = []
+        for record in project.acceptance_runs:
+            review = self._latest_test_review(project, record["id"])
+            critique = None if review is None else _critique_of(review, twin_id)
+            if critique is not None and _after(review["reviewed_at"], since):
+                tests.append((review, critique))
+        changes.sort(key=_critique_moment, reverse=True)
+        tests.sort(key=_critique_moment, reverse=True)
+        return changes, tests
+
+    def _proposal(
+        self,
+        project: FakeProject,
+        twin: Mapping[str, object],
+        changes: Sequence[tuple[dict, dict]],
+        tests: Sequence[tuple[dict, dict]],
+        language: str,
+    ) -> list[dict[str, object]]:
+        texts = LEARNING_TEXTS[language]
+        name = str(twin["profile"]["name"])
+        seen = {
+            _comparable(str(item["statement"]))
+            for item in project.learned
+            if item["twin_id"] == twin["twin_id"] and item["retired"] is None
+        }
+        candidates = [
+            *(
+                (finding, texts["tests"])
+                for _, critique in tests
+                for finding in critique["findings"]
+            ),
+            *(
+                (finding, texts["commit"].format(commit=str(run["commit"])[:8]))
+                for run, critique in changes
+                for finding in critique["findings"]
+            ),
+        ]
+        observations: list[dict[str, object]] = []
+        for finding, basis in candidates:
+            statement = _cut_line(f"{name}: {finding['text']}", MAX_OBSERVATION_LENGTH)
+            if _comparable(statement) in seen:
+                continue
+            seen.add(_comparable(statement))
+            about = finding["about"]
+            observations.append(
+                {
+                    "index": len(observations),
+                    "statement": statement,
+                    "basis": basis,
+                    "about": {
+                        "requirement": about.get("requirement"),
+                        "screen": about.get("screen"),
+                    },
+                    "contradicts_profile": None,
+                }
+            )
+            if len(observations) == PROPOSED_OBSERVATIONS:
+                break
+        return observations
+
+    def _update_of(
+        self,
+        project: FakeProject,
+        twin: Mapping[str, object],
+        locale: str,
+        observations: Sequence[Mapping[str, object]],
+        material: Mapping[str, int],
+        cost: int,
+    ) -> dict[str, object]:
+        texts = LEARNING_TEXTS[_locale_language(locale)]
+        twin_id = str(twin["twin_id"])
+        return {
+            "id": self._new_id(),
+            "twin_id": twin_id,
+            "twin_name": str(twin["profile"]["name"]),
+            "created_at": _iso(self._now()),
+            "locale": locale,
+            "status": "PROPOSED" if observations else "EMPTY",
+            "base": {
+                "profile_version_number": int(twin["version_number"]),
+                "development_version_number": project.development.get(twin_id, 0),
+            },
+            "comment": texts["learned"].format(count=len(observations))
+            if observations
+            else texts["nothing"],
+            "observations": [copy.deepcopy(dict(item)) for item in observations],
+            "material": dict(material),
+            "decision": None,
+            "cost_microusd": cost,
+        }
+
+    def _add_observation(
+        self,
+        project: FakeProject,
+        twin: Mapping[str, object],
+        observation: Mapping[str, object],
+        *,
+        source: str,
+        version: int,
+        moment: str,
+        update_id: str | None,
+    ) -> None:
+        about = observation.get("about") or {}
+        project.learned.append(
+            {
+                "twin_id": str(twin["twin_id"]),
+                "code": f"{OBSERVATION_CODE_PREFIX}-{len(project.learned) + 1:03d}",
+                "statement": observation["statement"],
+                "basis": observation.get("basis"),
+                "source": source,
+                "about": {"requirement": about.get("requirement"), "screen": about.get("screen")},
+                "contradicts_profile": observation.get("contradicts_profile"),
+                "added_in_version": version,
+                "approved_at": moment,
+                "update_id": update_id,
+                "retired": None,
+            }
+        )
+
+    def _find_update(self, project: FakeProject, update_id: str) -> dict[str, object]:
+        update = next((item for item in project.updates if item["id"] == update_id), None)
+        if update is None:
+            raise _Refusal(404, {"code": "TWIN_UPDATE_NOT_FOUND"})
+        return update
+
+    def _named_twin(
+        self, project: FakeProject, twin_id: str, name: object, version: object
+    ) -> dict[str, object]:
+        twin = next(
+            (item for item in self._approved_twins(project) if item["twin_id"] == twin_id), None
+        )
+        if twin is not None:
+            return twin
+        return {"twin_id": twin_id, "version_number": version, "profile": {"name": name}}
+
+    def _route_twin_learning(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        twins = []
+        for twin in self._approved_twins(project):
+            twin_id = str(twin["twin_id"])
+            changes, tests = self._new_material(project, twin_id)
+            pending = self._pending_update(project, twin_id)
+            twins.append(
+                {
+                    **self._learning_entry(project, twin),
+                    "pending_update": None if pending is None else copy.deepcopy(pending),
+                    "new_material": {"changes": len(changes), "tests": len(tests)},
+                }
+            )
+        return _Answer(
+            200, {"project_id": project.id, "update_available": self.hosted, "twins": twins}
+        )
+
+    def _route_propose_update(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), UPDATE_FIELDS)
+        locale = fields.pattern(
+            "locale",
+            LOCALE_PATTERN,
+            required=False,
+            minimum=2,
+            maximum=MAX_LOCALE_LENGTH,
+            default=DEFAULT_LOCALE,
+        )
+        fields.check()
+        return self._later(
+            call,
+            "TWIN_UPDATE",
+            {"locale": locale},
+            lambda: self._proposed_update(call, str(locale)),
+        )
+
+    def _proposed_update(self, call: _Call, locale: str) -> _Answer:
+        project = self._code_project(call)
+        twin = self._learning_twin(project, call.params["twin_id"])
+        reference = self._alignment_reference(project)
+        if reference["requirements"] is None:
+            raise _Refusal(409, {"code": "REQUIREMENTS_APPROVAL_REQUIRED"})
+        if reference["design"] is None:
+            raise _Refusal(409, {"code": "DESIGN_APPROVAL_REQUIRED"})
+        twin_id = str(twin["twin_id"])
+        self._refuse_pending(project, twin_id)
+        changes, tests = self._new_material(project, twin_id)
+        if not changes and not tests:
+            raise _Refusal(409, {"code": "TWIN_UPDATE_NOTHING_NEW"})
+        if not self.hosted:
+            raise _Refusal(503, {"code": "TWIN_UPDATE_MODEL_NOT_CONFIGURED"})
+        self._record(project, "TWIN_UPDATE")
+        changes, tests = changes[:MAX_UPDATE_CHANGES], tests[:MAX_UPDATE_TESTS]
+        observations = self._proposal(project, twin, changes, tests, _locale_language(locale))
+        update = self._update_of(
+            project,
+            twin,
+            locale,
+            observations,
+            {"changes": len(changes), "tests": len(tests)},
+            COSTS["TWIN_UPDATE"],
+        )
+        project.updates.insert(0, update)
+        return _Answer(201, {"status": "PROPOSED", "update": copy.deepcopy(update)})
+
+    def _route_twin_update(self, call: _Call) -> _Answer:
+        project = self._code_project(call)
+        return _Answer(200, copy.deepcopy(self._find_update(project, call.params["update_id"])))
+
+    def _route_decide_update(self, call: _Call) -> _Answer:
+        decision, kept, reason = _update_decision_of(call.json())
+        project = self._code_project(call)
+        update = self._find_update(project, call.params["update_id"])
+        if update["status"] != "PROPOSED":
+            raise _Refusal(409, {"code": "TWIN_UPDATE_ALREADY_DECIDED"})
+        twin_id = str(update["twin_id"])
+        twin = self._named_twin(
+            project, twin_id, update["twin_name"], update["base"]["profile_version_number"]
+        )
+        development = project.development.get(twin_id, 0)
+        approving = decision == "APPROVE"
+        if approving and development != update["base"]["development_version_number"]:
+            raise _Refusal(409, {"code": "TWIN_UPDATE_CONTEXT_CHANGED"})
+        if approving and self._active_count(project, twin_id) + len(kept) > (
+            MAX_LEARNED_OBSERVATIONS
+        ):
+            raise _Refusal(409, {"code": "TWIN_OBSERVATIONS_LIMIT"})
+        proposed = update["observations"]
+        position = next(
+            (place for place, item in enumerate(kept) if item["index"] >= len(proposed)), None
+        )
+        if position is not None:
+            raise _Refusal(
+                422,
+                {
+                    "code": "invalid_request",
+                    "errors": [
+                        {
+                            "loc": ["body", "kept", position, "index"],
+                            "type": "value_error",
+                            "msg": UNKNOWN_INDEX,
+                        }
+                    ],
+                },
+            )
+        moment = _iso(self._now())
+        if approving:
+            for item in sorted(kept, key=lambda entry: int(entry["index"])):
+                observation = dict(proposed[item["index"]])
+                if item["statement"] is not None:
+                    observation["statement"] = item["statement"]
+                self._add_observation(
+                    project,
+                    twin,
+                    observation,
+                    source="TWIN_CRITIQUE",
+                    version=development + 1,
+                    moment=moment,
+                    update_id=str(update["id"]),
+                )
+            project.development[twin_id] = development + 1
+        update["status"] = "APPROVED" if decision == "APPROVE" else "REJECTED"
+        update["decision"] = {
+            "decided_at": moment,
+            "kept": sorted(int(item["index"]) for item in kept),
+            "reason": reason,
+        }
+        return _Answer(
+            200,
+            {
+                "status": "DECIDED",
+                "update": copy.deepcopy(update),
+                "twin": self._learning_entry(project, twin),
+            },
+        )
+
+    def _route_learn(self, call: _Call) -> _Answer:
+        observation = _owner_observation_of(call.json())
+        project = self._code_project(call)
+        twin = self._learning_twin(project, call.params["twin_id"])
+        twin_id = str(twin["twin_id"])
+        if self._active_count(project, twin_id) >= MAX_LEARNED_OBSERVATIONS:
+            raise _Refusal(409, {"code": "TWIN_OBSERVATIONS_LIMIT"})
+        self._refuse_pending(project, twin_id)
+        version = project.development.get(twin_id, 0) + 1
+        self._add_observation(
+            project,
+            twin,
+            observation,
+            source="OWNER",
+            version=version,
+            moment=_iso(self._now()),
+            update_id=None,
+        )
+        project.development[twin_id] = version
+        return _Answer(201, {"status": "LEARNED", "twin": self._learning_entry(project, twin)})
+
+    def _route_retire_observation(self, call: _Call) -> _Answer:
+        reason = _retire_reason_of(call.json())
+        project = self._code_project(call)
+        twin = self._learning_twin(project, call.params["twin_id"])
+        twin_id = str(twin["twin_id"])
+        number = _observation_number(call.params["code"])
+        observation = next(
+            (
+                item
+                for item in project.learned
+                if item["twin_id"] == twin_id
+                and item["retired"] is None
+                and _code_number(item["code"]) == number
+            ),
+            None,
+        )
+        if observation is None:
+            raise _Refusal(404, {"code": "TWIN_OBSERVATION_NOT_FOUND"})
+        self._refuse_pending(project, twin_id)
+        version = project.development.get(twin_id, 0) + 1
+        observation["retired"] = {
+            "retired_in_version": version,
+            "retired_at": _iso(self._now()),
+            "reason": reason,
+        }
+        project.development[twin_id] = version
+        return _Answer(200, {"status": "RETIRED", "twin": self._learning_entry(project, twin)})
+
+    def _seed_twin(self, project: FakeProject, twin: int | str) -> dict[str, object]:
+        twins = self._approved_twins(project)
+        if not twins:
+            raise ValueError("the twins of the project are not approved")
+        if isinstance(twin, bool) or not isinstance(twin, int | str):
+            raise ValueError("name the twin by its position or its twin_id")
+        if isinstance(twin, int):
+            if not 0 <= twin < len(twins):
+                raise ValueError(f"the project has no twin at position {twin}")
+            return twins[twin]
+        found = next((item for item in twins if item["twin_id"] == twin), None)
+        if found is None:
+            raise ValueError(f"the project has no approved twin {twin}")
+        return found
+
+    def _seed_locale(self) -> str:
+        return "it-IT" if self.language == "it" else "en-US"
+
+    def _seed_ground(self, project: FakeProject) -> dict[str, object]:
+        reference = self._alignment_reference(project)
+        if reference["requirements"] is None or reference["design"] is None:
+            raise ValueError("the project needs approved requirements and an approved design")
+        return reference
+
+    def _seed_twins(self, project: FakeProject) -> list[dict[str, object]]:
+        twins = self._approved_twins(project)
+        if not twins:
+            raise ValueError("a review needs the approved twins")
+        return twins
+
+    def _seed_commit(self, project: FakeProject) -> str:
+        number = len(project.code_changes)
+        known = {str(item["commit"]) for item in project.code_changes}
+        while True:
+            number += 1
+            seed = f"orchestwin-fake-seed:{project.id}:{number}".encode()
+            commit = hashlib.sha256(seed).hexdigest()[:40]
+            if commit not in known:
+                return commit
+
+    def _seed_change(
+        self, project: FakeProject, message: str | None, commit: str | None, reviewed: bool
+    ) -> dict[str, object]:
+        chosen = self._seed_commit(project) if commit is None else commit.lower()
+        if COMMIT_PATTERN.fullmatch(chosen) is None:
+            raise ValueError("a commit holds 7 to 64 hexadecimal characters")
+        if any(item["commit"] == chosen for item in project.code_changes):
+            raise ValueError(f"the commit {chosen} is already recorded")
+        text = SEED_TEXTS[self.language]["message"] if message is None else _text_block(message)
+        reference = self._seed_ground(project) if reviewed else None
+        twins = self._seed_twins(project) if reviewed else []
+        parent = str(project.code_changes[0]["commit"]) if project.code_changes else None
+        record: dict[str, object] = {
+            "commit": chosen,
+            "parent": parent,
+            "committed_at": _iso(self._now()),
+            "author": SEED_AUTHOR,
+            "message": text,
+            "files": [dict(SEED_FILE)],
+            "recorded_at": _iso(self._now()),
+            "decision": None,
+            "diff": SEED_DIFF,
+            "aligned": None,
+        }
+        project.code_changes.append(record)
+        project.code_changes.sort(key=_recorded_order, reverse=True)
+        if reference is not None:
+            cost = len(twins) * COSTS["CODE_CHANGE_REVIEW"] + COSTS["CODE_ALIGNMENT"]
+            self._stored_change_run(project, record, twins, self._seed_locale(), reference, cost)
+        return self._change_payload(project, record)
+
+    def _seed_test_run(
+        self, project: FakeProject, *, failed: bool, reviewed: bool
+    ) -> dict[str, object]:
+        reference = self._seed_ground(project)
+        twins = self._seed_twins(project) if reviewed else []
+        specification = project.specification
+        if specification is None:
+            raise ValueError("the project needs approved requirements")
+        locale = self._seed_locale()
+        body = {
+            "locale": locale,
+            "application": {"kind": "STATIC", "address": SEED_ADDRESS},
+            "snapshot": {
+                "url": SEED_PAGE,
+                "title": project.name,
+                "text": project.name,
+                "hidden_text": "",
+                "elements": [],
+            },
+            "criteria": None,
+            "earlier": None,
+        }
+        wanted = [
+            (str(item["code"]), str(item["statement"]))
+            for item in specification["specification"]["acceptance_criteria"]
+        ]
+        plan = self._test_plan(body, reference, wanted, 1)
+        project.acceptance_plans.insert(0, plan)
+        project.acceptance_plan_requests.insert(0, _copy(body))
+        results = [
+            _seeded_result(path, "FAILED" if failed and position == 0 else "PASSED", project.name)
+            for position, path in enumerate(plan["paths"])
+        ]
+        uncovered = copy.deepcopy(plan["not_covered"])
+        outcomes = _criteria_outcomes([plan], results, uncovered)
+        record: dict[str, object] = {
+            "id": self._new_id(),
+            "started_at": _iso(self._now()),
+            "finished_at": _iso(self._now()),
+            "recorded_at": _iso(self._now()),
+            "application": {"kind": "STATIC", "address": SEED_ADDRESS},
+            "browsers": [dict(SEED_BROWSER)],
+            "reference": copy.deepcopy(plan["reference"]),
+            "summary": _run_summary(outcomes),
+            "criteria": outcomes,
+            "not_covered": uncovered,
+            "results": results,
+            "critiques": [],
+            "reviewed_at": None,
+            "cost_microusd": int(plan["cost_microusd"]),
+        }
+        project.acceptance_runs.insert(0, record)
+        if twins:
+            cost = len(twins) * COSTS["TEST_REVIEW"]
+            self._stored_test_review(project, record, twins, locale, cost)
+        return self._test_run_payload(project, record)
+
+    def _seed_version(self, project: FakeProject, stage: str) -> dict[str, object]:
+        approvals = self._approvals(project)
+        if stage == "design":
+            design = project.design
+            if design is None or not approvals["design"]:
+                raise ValueError("the design of the project is not approved")
+            version = self._append_design(
+                project, copy.deepcopy(design["package"]), project.account
+            )
+        elif stage == "requirements":
+            specification = project.specification
+            if specification is None or not approvals["requirements"]:
+                raise ValueError("the requirements of the project are not approved")
+            version = self._append_requirements(
+                project, copy.deepcopy(specification["specification"]), project.account
+            )
+        else:
+            raise ValueError("stage must be requirements or design")
+        self._approve(project, stage)
+        return _copy(version)
+
+    def _seed_tasks(self, project: FakeProject) -> list[dict[str, object]]:
+        twin_id = str(self._seed_twins(project)[0]["twin_id"])
+        texts = SEED_TEXTS[self.language]
+        change = next(
+            (
+                record
+                for record in project.code_changes
+                if _has_findings(self._latest_run(project, record["commit"]), twin_id)
+            ),
+            None,
+        )
+        if change is None:
+            commit = str(self._seed_change(project, None, None, True)["commit"])
+            change = next(item for item in project.code_changes if item["commit"] == commit)
+        reviewed = self._latest_reviewed_run(project)
+        if reviewed is not None and _has_findings(reviewed[1], twin_id):
+            run_id = str(reviewed[0]["id"])
+        else:
+            run_id = str(self._seed_test_run(project, failed=True, reviewed=True)["id"])
+        self._decide(project, change, "CODE_TASKS", None, [texts["verdict_task"]], [])
+        verdict = project.code_tasks[-1]
+        items = [
+            {
+                "text": None,
+                "source": {
+                    "kind": "CODE_CHANGE",
+                    "commit": change["commit"],
+                    "twin_id": twin_id,
+                    "finding": 0,
+                },
+            },
+            {
+                "text": None,
+                "source": {
+                    "kind": "TEST_RUN",
+                    "test_run_id": run_id,
+                    "twin_id": twin_id,
+                    "finding": 0,
+                },
+            },
+            {"text": texts["owner_task"], "source": {"kind": "OWNER"}},
+        ]
+        _, tasks = self._created_tasks(project, _task_items({"tasks": items}))
+        return copy.deepcopy([verdict, *tasks])
+
+    def _seed_learning(
+        self,
+        project: FakeProject,
+        twin: int | str,
+        statements: Sequence[str] | None,
+        source: str,
+    ) -> dict[str, object]:
+        if source not in ("TWIN_CRITIQUE", "OWNER"):
+            raise ValueError("source must be TWIN_CRITIQUE or OWNER")
+        chosen = self._seed_twin(project, twin)
+        twin_id = str(chosen["twin_id"])
+        defaults = SEED_TEXTS[self.language]["observations"]
+        wanted = (
+            [statement for statement, _ in defaults]
+            if statements is None
+            else [_cut_line(statement, MAX_OBSERVATION_LENGTH) for statement in statements]
+        )
+        if not wanted or (source == "TWIN_CRITIQUE" and len(wanted) > MAX_UPDATE_OBSERVATIONS):
+            raise ValueError(f"give 1 to {MAX_UPDATE_OBSERVATIONS} statements")
+        _valid_statements(wanted)
+        if self._pending_update(project, twin_id) is not None:
+            raise ValueError("a proposal of the twin waits for its decision")
+        if self._active_count(project, twin_id) + len(wanted) > MAX_LEARNED_OBSERVATIONS:
+            raise ValueError(f"a twin keeps at most {MAX_LEARNED_OBSERVATIONS} observations")
+        material = self._seed_material(project, twin_id) if source == "TWIN_CRITIQUE" else {}
+        moment = _iso(self._now())
+        observations = [
+            {
+                "index": index,
+                "statement": statement,
+                "basis": None if source == "OWNER" else defaults[index % len(defaults)][1],
+                "about": {"requirement": None, "screen": None},
+                "contradicts_profile": None,
+            }
+            for index, statement in enumerate(wanted)
+        ]
+        if source == "OWNER":
+            for observation in observations:
+                version = project.development.get(twin_id, 0) + 1
+                self._add_observation(
+                    project,
+                    chosen,
+                    observation,
+                    source="OWNER",
+                    version=version,
+                    moment=moment,
+                    update_id=None,
+                )
+                project.development[twin_id] = version
+            return self._learning_entry(project, chosen)
+        update = self._update_of(
+            project, chosen, self._seed_locale(), observations, material, COSTS["TWIN_UPDATE"]
+        )
+        version = project.development.get(twin_id, 0) + 1
+        for observation in observations:
+            self._add_observation(
+                project,
+                chosen,
+                observation,
+                source="TWIN_CRITIQUE",
+                version=version,
+                moment=moment,
+                update_id=str(update["id"]),
+            )
+        project.development[twin_id] = version
+        update["status"] = "APPROVED"
+        update["decision"] = {
+            "decided_at": moment,
+            "kept": [int(item["index"]) for item in observations],
+            "reason": None,
+        }
+        project.updates.insert(0, update)
+        return self._learning_entry(project, chosen)
+
+    def _seed_update(
+        self,
+        project: FakeProject,
+        twin: int | str,
+        observations: Sequence[Mapping[str, object]] | None,
+    ) -> dict[str, object]:
+        chosen = self._seed_twin(project, twin)
+        twin_id = str(chosen["twin_id"])
+        if self._pending_update(project, twin_id) is not None:
+            raise ValueError("a proposal of the twin already waits for its decision")
+        defaults = SEED_TEXTS[self.language]["observations"]
+        given = (
+            [{"statement": statement, "basis": basis} for statement, basis in defaults]
+            if observations is None
+            else [dict(item) for item in observations]
+        )
+        if len(given) > MAX_UPDATE_OBSERVATIONS:
+            raise ValueError(f"a proposal holds at most {MAX_UPDATE_OBSERVATIONS} observations")
+        proposed = []
+        for index, item in enumerate(given):
+            if not isinstance(item.get("statement"), str):
+                raise ValueError("every observation needs a statement")
+            about = item.get("about") or {}
+            contradicts = item.get("contradicts_profile")
+            proposed.append(
+                {
+                    "index": index,
+                    "statement": _cut_line(str(item["statement"]), MAX_OBSERVATION_LENGTH),
+                    "basis": _cut_line(
+                        str(item.get("basis") or defaults[index % len(defaults)][1]),
+                        MAX_BASIS_LENGTH,
+                    ),
+                    "about": {
+                        "requirement": about.get("requirement"),
+                        "screen": about.get("screen"),
+                    },
+                    "contradicts_profile": None
+                    if contradicts is None
+                    else _cut_line(str(contradicts), MAX_BASIS_LENGTH),
+                }
+            )
+        _valid_statements([str(item["statement"]) for item in proposed])
+        material = self._seed_material(project, twin_id)
+        update = self._update_of(
+            project, chosen, self._seed_locale(), proposed, material, COSTS["TWIN_UPDATE"]
+        )
+        project.updates.insert(0, update)
+        return copy.deepcopy(update)
+
+    def _seed_material(self, project: FakeProject, twin_id: str) -> dict[str, int]:
+        changes, tests = self._new_material(project, twin_id)
+        if not changes and not tests:
+            raise ValueError(
+                "the twin has no new material: seed a reviewed change or test run first"
+            )
+        return {
+            "changes": min(len(changes), MAX_UPDATE_CHANGES),
+            "tests": min(len(tests), MAX_UPDATE_TESTS),
+        }
+
+    def _state_sources(self, project: FakeProject, through: str) -> ProjectStateSources:
+        frame = folder_frame(through)
         return ProjectStateSources(
             aligned=self._aligned(project),
-            changes=tuple(self._change_payload(project, record) for record in project.code_changes),
+            changes=tuple(
+                self._change_payload(project, record, frame) for record in project.code_changes
+            ),
             runs=tuple(copy.deepcopy(run) for run in project.change_runs),
             tasks=tuple(copy.deepcopy(task) for task in project.code_tasks),
             tests=tuple(
                 self._test_run_payload(project, record)
                 for record in project.acceptance_runs[:MAX_FOLDER_TEST_RUNS]
             ),
+            learning=self._folder_learning(project, frame),
+        )
+
+    def _folder_learning(
+        self, project: FakeProject, frame: Mapping[str, object]
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            {
+                **entry,
+                "twin_id": twin["twin_id"],
+                "twin_name": twin["twin_name"],
+                "profile_version_number": twin["profile_version_number"],
+                "label": f"{twin['profile_version_number']}.{entry['development_version_number']}",
+            }
+            for entry, twin in zip(self._learning_entries(project), frame["twins"], strict=False)
         )
 
     def _seed(
@@ -7355,7 +8651,7 @@ def _path_parameters(values: Mapping[str, str]) -> dict[str, str]:
             else:
                 parsed[name] = str(int(value))
             continue
-        if name == "commit":
+        if name in ("commit", "code"):
             parsed[name] = value
             continue
         try:
@@ -7440,6 +8736,21 @@ def _diff_text(value: object) -> str:
 
 def _task_texts(value: object) -> list[str]:
     return [_single_line(item) for item in value] if isinstance(value, list) else []
+
+
+def _lax_integer(value: object) -> tuple[str | None, int]:
+    if isinstance(value, bool | int):
+        return None, int(value)
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return "finite_number", 0
+        return (None, int(value)) if value.is_integer() else ("int_from_float", 0)
+    if isinstance(value, str):
+        try:
+            return None, int(value.strip())
+        except ValueError:
+            return "int_parsing", 0
+    return "int_type", 0
 
 
 def _lax_boolean(value: object) -> bool | None:
@@ -7611,6 +8922,315 @@ def _recorded_order(record: Mapping[str, object]) -> tuple[datetime, datetime, s
     )
 
 
+def _findings_by_twin(critiques: Sequence[Mapping[str, object]]) -> dict[str, list[str]]:
+    return {
+        str(critique["twin_id"]): [str(item["text"]) for item in critique["findings"]][
+            :MAX_FINDINGS
+        ]
+        for critique in critiques
+    }
+
+
+def _critique_of(
+    document: Mapping[str, object] | None, twin_id: object
+) -> dict[str, object] | None:
+    if document is None:
+        return None
+    return next((item for item in document["critiques"] if item["twin_id"] == twin_id), None)
+
+
+def _has_findings(document: Mapping[str, object] | None, twin_id: object) -> bool:
+    critique = _critique_of(document, twin_id)
+    return critique is not None and bool(critique["findings"])
+
+
+def _after(moment: object, since: datetime | None) -> bool:
+    return since is None or datetime.fromisoformat(str(moment)) > since
+
+
+def _critique_moment(item: tuple[Mapping[str, object], Mapping[str, object]]) -> datetime:
+    return datetime.fromisoformat(str(item[0]["reviewed_at"]))
+
+
+def _comparable(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def _cut_line(value: str, maximum: int) -> str:
+    return " ".join(value.split())[:maximum].rstrip()
+
+
+def _locale_language(locale: str) -> str:
+    return "it" if locale.split("-", 1)[0].lower() == "it" else "en"
+
+
+def _code_number(code: object) -> int:
+    return int(str(code).split("-", 1)[1])
+
+
+def _valid_statements(statements: Sequence[str]) -> None:
+    keys = [_comparable(statement) for statement in statements]
+    if not all(keys) or len(set(keys)) != len(keys):
+        raise ValueError("the statements must hold words and differ from each other")
+
+
+def _observation_number(code: str) -> int | None:
+    if OBSERVATION_CODE.fullmatch(code) is None:
+        return None
+    number = _code_number(code)
+    return number if 1 <= number <= MAX_OBSERVATION_NUMBER else None
+
+
+def _listed(value: object) -> list[str]:
+    return [] if value is None else [str(value)]
+
+
+def _task_origin(
+    kind: str,
+    *,
+    commit: str | None = None,
+    test_run_id: str | None = None,
+    twin_id: str | None = None,
+    twin_name: str | None = None,
+    finding: str | None = None,
+) -> dict[str, object]:
+    return {
+        "kind": kind,
+        "commit": commit,
+        "test_run_id": test_run_id,
+        "twin_id": twin_id,
+        "twin_name": twin_name,
+        "finding": finding,
+    }
+
+
+def _prepared_task(text: str | None, resolved: Mapping[str, object]) -> dict[str, object]:
+    finding = resolved["finding"]
+    if finding is None:
+        return {
+            "text": text,
+            "about": {"requirements": [], "screens": [], "criteria": []},
+            "origin": resolved["origin"],
+        }
+    about = finding["about"]
+    action = finding["action"]
+    written = " ".join(str(action if action and action.strip() else finding["text"]).split())
+    if len(written) > MAX_TASK_LENGTH:
+        written = written[: MAX_TASK_LENGTH - len(CUT_MARK)].rstrip() + CUT_MARK
+    return {
+        "text": written if text is None else text,
+        "about": {
+            "requirements": _listed(about.get("requirement")),
+            "screens": _listed(about.get("screen")),
+            "criteria": _listed(about.get("criterion")),
+        },
+        "origin": resolved["origin"],
+    }
+
+
+def _open_task(project: FakeProject, origin: Mapping[str, object]) -> dict[str, object] | None:
+    keys = ("kind", "commit", "test_run_id", "twin_id", "finding")
+    return next(
+        (
+            task
+            for task in project.code_tasks
+            if task["status"] == "OPEN" and all(task["origin"][key] == origin[key] for key in keys)
+        ),
+        None,
+    )
+
+
+def _set_task_status(task: dict[str, object], status: str, note: str | None, moment: str) -> None:
+    if task["status"] != status:
+        task["status"] = status
+        task["closed_at"] = moment if status in CLOSED_STATUSES else None
+    task["note"] = note
+
+
+def _active_entry(item: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "code": item["code"],
+        "statement": item["statement"],
+        "basis": item["basis"],
+        "source": item["source"],
+        "about": dict(item["about"]),
+        "contradicts_profile": item["contradicts_profile"],
+        "added_in_version": item["added_in_version"],
+        "approved_at": item["approved_at"],
+        "update_id": item["update_id"],
+    }
+
+
+def _retired_entry(item: Mapping[str, object]) -> dict[str, object]:
+    retired = item["retired"]
+    return {
+        "code": item["code"],
+        "statement": item["statement"],
+        "retired_in_version": retired["retired_in_version"],
+        "retired_at": retired["retired_at"],
+        "reason": retired["reason"],
+    }
+
+
+def _seeded_result(path: Mapping[str, object], status: str, title: str) -> dict[str, object]:
+    count = len(path["steps"])
+    steps = []
+    for index, step in enumerate(path["steps"], start=1):
+        failed = status == "FAILED" and index == count
+        expect = step["expect"]
+        detail = None
+        if failed and expect is not None:
+            detail = _cut_text(f"{expect['kind']}: {expect['text']}", MAX_STEP_DETAIL_LENGTH)
+        steps.append(
+            {
+                "index": index,
+                "status": "FAILED" if failed else "DONE",
+                "detail": detail,
+                "url": SEED_PAGE,
+                "title": _cut_text(title, MAX_SNAPSHOT_TITLE_LENGTH),
+                "screenshot": f"{path['code']}/chrome/{index:02d}.png",
+            }
+        )
+    return {
+        "path": copy.deepcopy(dict(path)),
+        "browser": "chrome",
+        "status": status,
+        "seconds": 2.5,
+        "steps": steps,
+        "page_text": _cut_text(title, MAX_PAGE_TEXT_LENGTH),
+    }
+
+
+def _source_of(fields: _Fields) -> dict[str, object] | None:
+    present, value = fields._get("source", True)
+    if not present:
+        return None
+    location = (*fields.location, "source")
+    if not isinstance(value, dict):
+        fields.errors.append(_error(location, "model_attributes_type"))
+        return None
+    if "kind" not in value:
+        fields.errors.append(_error(location, "union_tag_not_found"))
+        return None
+    kind = value["kind"]
+    if not isinstance(kind, str) or kind not in SOURCE_FIELDS:
+        fields.errors.append(_error(location, "union_tag_invalid"))
+        return None
+    child = _Fields(value, SOURCE_FIELDS[kind], location=(*location, kind))
+    source: dict[str, object] = {"kind": kind}
+    if kind == "TEST_RUN":
+        source["test_run_id"] = child.identifier("test_run_id")
+    elif kind == "CODE_CHANGE":
+        source["commit"] = child.pattern("commit", COMMIT_PATTERN)
+    if kind != "OWNER":
+        source["twin_id"] = child.identifier("twin_id")
+        source["finding"] = child.whole("finding", minimum=0)
+    fields.adopt(child)
+    return source
+
+
+def _owner_text(source: Mapping[str, object] | None, text: str | None) -> None:
+    if source is not None and source["kind"] == "OWNER" and text is None:
+        raise ValueError("a task written by the owner needs a text")
+
+
+def _task_items(body: object) -> list[dict[str, object]]:
+    fields = _Fields(body, TASK_FIELDS)
+    items = fields.children("tasks", TASK_ITEM_FIELDS, minimum_items=1, maximum_items=MAX_TASKS)
+    parsed = []
+    for item in items or []:
+        text = item.text("text", required=False, nullable=True, minimum=1, maximum=MAX_TASK_LENGTH)
+        if text is not None:
+            text = item.normalized("text", text, _single_line)
+        source = _source_of(item)
+        _model_rule(item, lambda source=source, text=text: _owner_text(source, text))
+        fields.adopt(item)
+        parsed.append({"text": text, "source": source})
+    fields.check()
+    return parsed
+
+
+def _task_status_of(body: object) -> tuple[str, str | None]:
+    fields = _Fields(body, TASK_STATUS_FIELDS)
+    status = fields.choice("status", TASK_STATUSES)
+    note = fields.text("note", required=False, nullable=True, maximum=MAX_TASK_NOTE_LENGTH)
+    if note is not None:
+        note = fields.normalized("note", note, _optional_line)
+    fields.check()
+    return str(status), note
+
+
+def _finding_of(fields: _Fields) -> dict[str, object]:
+    return {
+        "twin_id": fields.identifier("twin_id"),
+        "finding": fields.whole("finding", minimum=0),
+    }
+
+
+def _kept_of(fields: _Fields) -> dict[str, object]:
+    index = fields.whole("index", minimum=0)
+    statement = fields.text(
+        "statement", required=False, nullable=True, minimum=1, maximum=MAX_OBSERVATION_LENGTH
+    )
+    if statement is not None:
+        statement = fields.normalized("statement", statement, _single_line)
+    return {"index": index, "statement": statement}
+
+
+def _kept_rule(decision: object, kept: Sequence[Mapping[str, object]]) -> None:
+    indexes = [item["index"] for item in kept]
+    _distinct(indexes)
+    if (decision == "APPROVE") != bool(indexes):
+        raise ValueError("an approval keeps one observation or more, a rejection keeps none")
+
+
+def _update_decision_of(body: object) -> tuple[str, list[dict[str, object]], str | None]:
+    fields = _Fields(body, UPDATE_DECISION_FIELDS)
+    decision = fields.choice("decision", UPDATE_DECISIONS)
+    kept = _models(
+        fields,
+        "kept",
+        KEPT_FIELDS,
+        _kept_of,
+        required=False,
+        maximum_items=MAX_UPDATE_OBSERVATIONS,
+    )
+    reason = fields.text("reason", required=False, nullable=True, maximum=MAX_TASK_NOTE_LENGTH)
+    if reason is not None:
+        reason = fields.normalized("reason", reason, _optional_line)
+    _model_rule(fields, lambda: _kept_rule(decision, kept))
+    fields.check()
+    return str(decision), kept, reason
+
+
+def _owner_observation_of(body: object) -> dict[str, object]:
+    fields = _Fields(body, OBSERVATION_FIELDS)
+    statement = fields.text("statement", minimum=1, maximum=MAX_OBSERVATION_LENGTH)
+    if statement is not None:
+        statement = fields.normalized("statement", statement, _single_line)
+    about: dict[str, object] = {"requirement": None, "screen": None}
+    child = fields.child("about", ABOUT_FIELDS, required=False, nullable=True)
+    if child is not None:
+        about = {
+            "requirement": child.pattern(
+                "requirement", REQUIREMENT_REFERENCE, required=False, nullable=True
+            ),
+            "screen": child.pattern("screen", SCREEN_REFERENCE, required=False, nullable=True),
+        }
+        fields.adopt(child)
+    fields.check()
+    return {"statement": statement, "basis": None, "about": about, "contradicts_profile": None}
+
+
+def _retire_reason_of(body: object) -> str | None:
+    fields = _Fields(body, RETIRE_FIELDS)
+    reason = fields.text("reason", required=False, nullable=True, maximum=MAX_TASK_NOTE_LENGTH)
+    if reason is not None:
+        reason = fields.normalized("reason", reason, _optional_line)
+    fields.check()
+    return reason
+
+
 def _test_step(
     action: str,
     *,
@@ -7679,6 +9299,9 @@ def _snapshot_of(fields: _Fields, *, required: bool = True) -> dict[str, object]
         "url": child.text("url", maximum=MAX_RAW_TEXT_LENGTH),
         "title": child.text("title", maximum=MAX_RAW_TEXT_LENGTH),
         "text": child.text("text", maximum=MAX_RAW_TEXT_LENGTH),
+        "hidden_text": child.text(
+            "hidden_text", required=False, maximum=MAX_RAW_TEXT_LENGTH, default=""
+        ),
         "elements": _models(
             child, "elements", ELEMENT_FIELDS, _element_of, maximum_items=MAX_SNAPSHOT_ELEMENTS
         ),
