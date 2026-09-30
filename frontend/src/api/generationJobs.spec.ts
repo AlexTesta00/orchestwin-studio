@@ -559,6 +559,30 @@ describe("Generation Jobs API client", () => {
     );
   });
 
+  it("reads and lists the proposal of what a twin learned started by ut twins update", async () => {
+    const running = job({ operation: "TWIN_UPDATE" });
+    const ended = {
+      ...job(),
+      operation: "TWIN_UPDATE",
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:01:00+00:00",
+      response: { status_code: 201, body: { status: "PROPOSED", update: { id: "update-1" } } },
+    };
+    const api = createGenerationJobsApi({ fetchImpl: async () => json({ items: [running] }) });
+
+    await expect(api.list(PROJECT_ID, "token", "RUNNING")).resolves.toEqual([running]);
+    expect(generationJobOf(ended)).toEqual(
+      job({
+        operation: "TWIN_UPDATE",
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:01:00+00:00",
+        response: { status_code: 201, body: { status: "PROPOSED", update: { id: "update-1" } } },
+      }),
+    );
+  });
+
   it("lists the running plan and review of the acceptance tests started by ut test", async () => {
     const plan = job({ operation: "TEST_PLAN" });
     const review = job({

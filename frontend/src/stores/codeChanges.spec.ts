@@ -8,6 +8,8 @@ import type {
   ChangeReviewRunPayload,
   CodeChangeListPayload,
   CodeChangePayload,
+  CodeTaskPayload,
+  CodeTaskStatus,
 } from "../types/codeChanges";
 import { type AuthorizedRequest, useCodeChangesStore } from "./codeChanges";
 
@@ -123,11 +125,40 @@ function list(...items: CodeChangePayload[]): CodeChangeListPayload {
   return { items };
 }
 
+function task(code: string, status: CodeTaskStatus): CodeTaskPayload {
+  return {
+    code,
+    text: `Task ${code}`,
+    about: { requirements: [], screens: [], criteria: [] },
+    origin: {
+      kind: "OWNER",
+      commit: null,
+      test_run_id: null,
+      twin_id: null,
+      twin_name: null,
+      finding: null,
+    },
+    from_commit: null,
+    created_at: "2026-09-29T09:20:00+00:00",
+    status,
+    closed_at: status === "OPEN" ? null : "2026-09-29T10:00:00+00:00",
+    note: null,
+  };
+}
+
+const EVERY_TASK: CodeTaskPayload[] = [
+  ALIGNMENT.tasks[0]!,
+  task("TSK-002", "DONE"),
+  task("TSK-003", "DROPPED"),
+  task("TSK-004", "DONE"),
+];
+
 function fakeApi(overrides: Partial<CodeChangesApi> = {}): CodeChangesApi {
   return {
     alignment: async () => ALIGNMENT,
     changes: async () => list(NEWEST, UNREVIEWED, ALIGNED, OLDEST),
     reviews: async () => ({ items: [run("newest-run"), run("older-run")] }),
+    tasks: async () => ({ items: EVERY_TASK }),
     ...overrides,
   };
 }
@@ -145,30 +176,88 @@ describe("Code Changes store", () => {
     setActivePinia(createPinia());
   });
 
-  it("loads the alignment and every recorded change of the project", async () => {
+  it("loads the alignment, every recorded change and every task of the project", async () => {
     const alignment = vi.fn<CodeChangesApi["alignment"]>(async () => ALIGNMENT);
     const changes = vi.fn<CodeChangesApi["changes"]>(async () =>
       list(NEWEST, UNREVIEWED, ALIGNED, OLDEST),
     );
+    const tasks = vi.fn<CodeChangesApi["tasks"]>(async () => ({ items: EVERY_TASK }));
     const store = useCodeChangesStore();
 
-    const snapshot = await store.load(PROJECT_ID, authorize, fakeApi({ alignment, changes }));
+    const snapshot = await store.load(
+      PROJECT_ID,
+      authorize,
+      fakeApi({ alignment, changes, tasks }),
+    );
 
     expect(alignment).toHaveBeenCalledWith(PROJECT_ID, "test-token-not-real");
     expect(changes).toHaveBeenCalledWith(PROJECT_ID, "test-token-not-real");
+    expect(tasks).toHaveBeenCalledWith(PROJECT_ID, "test-token-not-real", "all");
     expect(snapshot).toEqual({
       alignment: ALIGNMENT,
       changes: [NEWEST, UNREVIEWED, ALIGNED, OLDEST],
+      tasks: EVERY_TASK,
     });
     expect(store.projectId).toBe(PROJECT_ID);
     expect(store.alignment).toEqual(ALIGNMENT);
     expect(store.changes).toEqual([NEWEST, UNREVIEWED, ALIGNED, OLDEST]);
+    expect(store.tasks).toEqual(EVERY_TASK);
     expect(store.pendingChanges).toEqual([NEWEST, UNREVIEWED]);
-    expect(store.openTasks.map((task) => task.code)).toEqual(["TSK-001"]);
+    expect(store.openTasks.map((item) => item.code)).toEqual(["TSK-001"]);
+    expect(store.closedTasks).toEqual({ done: 2, dropped: 1 });
+    expect(store.staleReviews).toBe(0);
     expect(store.latestReviewed).toEqual(NEWEST);
     expect(store.latestRun).toBeNull();
     expect(store.error).toBeNull();
     expect(store.isBusy).toBe(false);
+  });
+
+  it("gives the number of stale reviews that the Studio counts", async () => {
+    const store = useCodeChangesStore();
+
+    await store.load(
+      PROJECT_ID,
+      authorize,
+      fakeApi({ alignment: async () => ({ ...ALIGNMENT, stale_reviews: 2 }) }),
+    );
+
+    expect(store.staleReviews).toBe(2);
+  });
+
+  it.each([
+    ["a Studio without the list of the tasks", failure(404, "UNKNOWN")],
+    ["a failed read of the tasks", new TypeError("Failed to fetch")],
+  ])("loads the rest of the state with %s and counts no closed task", async (_case, refusal) => {
+    const store = useCodeChangesStore();
+
+    const snapshot = await store.load(
+      PROJECT_ID,
+      authorize,
+      fakeApi({
+        tasks: async () => {
+          throw refusal;
+        },
+      }),
+    );
+
+    expect(snapshot.tasks).toBeNull();
+    expect(store.tasks).toBeNull();
+    expect(store.closedTasks).toBeNull();
+    expect(store.alignment).toEqual(ALIGNMENT);
+    expect(store.openTasks.map((item) => item.code)).toEqual(["TSK-001"]);
+    expect(store.error).toBeNull();
+  });
+
+  it("counts no closed task when every task is open", async () => {
+    const store = useCodeChangesStore();
+
+    await store.load(
+      PROJECT_ID,
+      authorize,
+      fakeApi({ tasks: async () => ({ items: [task("TSK-009", "OPEN")] }) }),
+    );
+
+    expect(store.closedTasks).toEqual({ done: 0, dropped: 0 });
   });
 
   it("counts every change as pending while no commit is aligned", async () => {
@@ -197,7 +286,7 @@ describe("Code Changes store", () => {
       fakeApi({ alignment: async () => ({ ...ALIGNMENT, tasks: [done, ...ALIGNMENT.tasks] }) }),
     );
 
-    expect(store.openTasks.map((task) => task.code)).toEqual(["TSK-001"]);
+    expect(store.openTasks.map((item) => item.code)).toEqual(["TSK-001"]);
   });
 
   it("reads the latest run of the newest reviewed commit", async () => {
@@ -359,6 +448,7 @@ describe("Code Changes store", () => {
     expect(store.projectId).toBe(SECOND_PROJECT_ID);
     expect(store.alignment).toBeNull();
     expect(store.changes).toEqual([]);
+    expect(store.tasks).toBeNull();
     expect(store.runs).toEqual({});
     expect(store.error).toBeNull();
     expect(store.isBusy).toBe(false);

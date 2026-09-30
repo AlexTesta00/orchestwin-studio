@@ -130,6 +130,41 @@ describe("Acceptance Tests API client", () => {
     await expect(api.overview(PROJECT_ID, ACCESS_TOKEN)).resolves.toEqual(empty);
   });
 
+  it("reads whether the latest run is stale and the latest review of an older run", async () => {
+    const reviewed: AcceptanceTestsOverviewPayload = {
+      ...OVERVIEW,
+      latest_run_stale: true,
+      latest_review: {
+        run_id: "33333333-3333-4333-8333-333333333333",
+        finished_at: "2026-09-28T10:04:00+00:00",
+        reviewed_at: "2026-09-28T10:06:00+00:00",
+        critiques: [
+          {
+            twin_id: "44444444-4444-4444-8444-444444444444",
+            twin_name: "Reception staff",
+            verdict: "FINE",
+            summary: "The list is what I need.",
+            findings: [],
+          },
+        ],
+      },
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(reviewed))
+      .mockResolvedValueOnce(
+        jsonResponse({ ...OVERVIEW, latest_run_stale: false, latest_review: null }),
+      );
+    const api = createAcceptanceTestsApi({ fetchImpl });
+
+    await expect(api.overview(PROJECT_ID, ACCESS_TOKEN)).resolves.toEqual(reviewed);
+    await expect(api.overview(PROJECT_ID, ACCESS_TOKEN)).resolves.toEqual({
+      ...OVERVIEW,
+      latest_run_stale: false,
+      latest_review: null,
+    });
+  });
+
   it("uses the base path and encodes the project of the path", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(OVERVIEW));
     const api = createAcceptanceTestsApi({ basePath: "/studio/api/v1/", fetchImpl });
@@ -209,6 +244,28 @@ describe("Acceptance Tests API client", () => {
     });
     await expect(api.overview(PROJECT_ID, ACCESS_TOKEN)).rejects.toMatchObject({
       code: "INVALID_API_RESPONSE",
+    });
+  });
+
+  it.each([
+    ["a stale flag that is not a boolean", { ...OVERVIEW, latest_run_stale: "yes" }],
+    ["a latest review that is not an object", { ...OVERVIEW, latest_review: "none" }],
+    [
+      "a latest review without critiques",
+      { ...OVERVIEW, latest_review: { run_id: RUN.id, finished_at: RUN.finished_at } },
+    ],
+    [
+      "a latest review without the date of its run",
+      { ...OVERVIEW, latest_review: { run_id: RUN.id, critiques: [] } },
+    ],
+  ])("rejects an overview with %s", async (_case, body) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(body));
+    const api = createAcceptanceTestsApi({ fetchImpl });
+
+    await expect(api.overview(PROJECT_ID, ACCESS_TOKEN)).rejects.toMatchObject({
+      name: "AcceptanceTestsApiError",
+      code: "INVALID_API_RESPONSE",
+      payload: body,
     });
   });
 

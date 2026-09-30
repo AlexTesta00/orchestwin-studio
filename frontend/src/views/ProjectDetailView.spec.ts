@@ -1885,6 +1885,12 @@ const ACCEPTANCE_TESTS = {
   latest_run: null,
 };
 
+const TWIN_LEARNING = {
+  project_id: OPEN,
+  update_available: false,
+  twins: [],
+};
+
 type StoreGroup = "clarification" | "team" | "twins" | "requirements" | "design";
 
 const ORDERS: [string, StoreGroup[]][] = [
@@ -1983,6 +1989,8 @@ function fakeStudio(served: Served) {
       [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
       [`${base}/alignment`]: () => ok(DEVELOPMENT_STATE),
       [`${base}/code-changes`]: () => ok({ items: [] }),
+      [`${base}/code-tasks`]: () => ok({ items: [] }),
+      [`${base}/twin-learning`]: () => ok(TWIN_LEARNING),
       [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
@@ -2284,6 +2292,8 @@ const OPENING_READINGS: Record<string, number> = {
   "…/knowledge-packages": 1,
   "…/alignment": 1,
   "…/code-changes": 1,
+  "…/code-tasks?status=all": 1,
+  "…/twin-learning": 1,
   "…/acceptance-tests": 1,
   [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,
 };

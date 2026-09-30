@@ -5,6 +5,7 @@ import type {
   ChangeReviewListPayload,
   CodeChangeListPayload,
   CodeChangePayload,
+  CodeTaskListPayload,
 } from "../types/codeChanges";
 import { CodeChangesApiError, createCodeChangesApi } from "./codeChanges";
 
@@ -43,6 +44,47 @@ const ALIGNMENT: AlignmentPayload = {
 };
 
 const CHANGES: CodeChangeListPayload = { items: [CHANGE] };
+
+const TASKS: CodeTaskListPayload = {
+  items: [
+    {
+      code: "TSK-001",
+      text: "Show the empty state of the guest list.",
+      about: { requirements: ["REQ-003"], screens: ["SCR-002"], criteria: [] },
+      origin: {
+        kind: "CODE_CHANGE",
+        commit: COMMIT,
+        test_run_id: null,
+        twin_id: "33333333-3333-4333-8333-333333333333",
+        twin_name: "Reception staff",
+        finding: "An empty list looks broken.",
+      },
+      from_commit: COMMIT,
+      created_at: "2026-09-29T08:10:00+00:00",
+      status: "DONE",
+      closed_at: "2026-09-29T09:00:00+00:00",
+      note: "Fixed in the next commit.",
+    },
+    {
+      code: "TSK-002",
+      text: "Add a search by name.",
+      about: { requirements: [], screens: [], criteria: [] },
+      origin: {
+        kind: "OWNER",
+        commit: null,
+        test_run_id: null,
+        twin_id: null,
+        twin_name: null,
+        finding: null,
+      },
+      from_commit: null,
+      created_at: "2026-09-29T08:20:00+00:00",
+      status: "DROPPED",
+      closed_at: "2026-09-29T09:10:00+00:00",
+      note: null,
+    },
+  ],
+};
 
 const REVIEWS: ChangeReviewListPayload = {
   items: [
@@ -126,6 +168,75 @@ describe("Code Changes API client", () => {
       Authorization: `Bearer ${ACCESS_TOKEN}`,
     });
     expect(reviews).toEqual(REVIEWS);
+  });
+
+  it("reads the open tasks, or every task when asked, with an authenticated GET", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(TASKS));
+    const api = createCodeChangesApi({ basePath: "/studio/api/v1/", fetchImpl });
+
+    const every = await api.tasks("project 1", ACCESS_TOKEN, "all");
+    await api.tasks("project 1", ACCESS_TOKEN);
+    await api.tasks("project 1", ACCESS_TOKEN, "open");
+
+    expect(every).toEqual(TASKS);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
+      "/studio/api/v1/projects/project%201/code-tasks?status=all",
+      "/studio/api/v1/projects/project%201/code-tasks?status=open",
+      "/studio/api/v1/projects/project%201/code-tasks?status=open",
+    ]);
+    expect(fetchImpl.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchImpl.mock.calls[0]?.[1]?.credentials).toBe("include");
+    expect(fetchImpl.mock.calls[0]?.[1]?.headers).toEqual({
+      Accept: "application/json",
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+    });
+    expect(fetchImpl.mock.calls[0]?.[1]).not.toHaveProperty("body");
+  });
+
+  it("keeps the origin of the tasks, the stale reviews and their count as the Studio sends them", async () => {
+    const stale: AlignmentPayload = {
+      ...ALIGNMENT,
+      stale_reviews: 1,
+      latest_change: {
+        ...CHANGE,
+        review: {
+          run_id: "44444444-4444-4444-8444-444444444444",
+          reviewed_at: "2026-09-29T08:05:00+00:00",
+          verdict: "ALIGNED",
+          summary: "The code follows the design.",
+          reference: {
+            requirements_version_number: 2,
+            design_version_number: 2,
+            alternative_code: "DES-002",
+          },
+          stale: true,
+        },
+      },
+      tasks: TASKS.items,
+    };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(stale));
+    const api = createCodeChangesApi({ fetchImpl });
+
+    await expect(api.alignment(PROJECT_ID, ACCESS_TOKEN)).resolves.toEqual(stale);
+  });
+
+  it("keeps the code of a Studio that does not know the tasks and refuses a list without items", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ detail: "Not Found" }, 404))
+      .mockResolvedValueOnce(jsonResponse({ tasks: [] }));
+    const api = createCodeChangesApi({ fetchImpl });
+
+    await expect(api.tasks(PROJECT_ID, ACCESS_TOKEN, "all")).rejects.toMatchObject({
+      name: "CodeChangesApiError",
+      status: 404,
+      code: null,
+      payload: { detail: "Not Found" },
+    });
+    await expect(api.tasks(PROJECT_ID, ACCESS_TOKEN, "all")).rejects.toMatchObject({
+      code: "INVALID_API_RESPONSE",
+      payload: { tasks: [] },
+    });
   });
 
   it("encodes the commit of the path", async () => {
@@ -212,6 +323,9 @@ describe("Code Changes API client", () => {
       code: "ACCESS_TOKEN_REQUIRED",
     });
     await expect(api.reviews(PROJECT_ID, COMMIT, "   ")).rejects.toMatchObject({
+      code: "ACCESS_TOKEN_REQUIRED",
+    });
+    await expect(api.tasks(PROJECT_ID, "", "all")).rejects.toMatchObject({
       code: "ACCESS_TOKEN_REQUIRED",
     });
     expect(fetchImpl).not.toHaveBeenCalled();
