@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, SecretStr
 
+from orchestwin.api import acceptance_tests as acceptance_api
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import (
     AuthApiSettings,
@@ -42,6 +44,7 @@ from orchestwin.api.design import (
 from orchestwin.api.design_mockups import MockupCapabilities
 from orchestwin.api.design_review_pins import ReviewDocumentPayload, ReviewPinsPayload
 from orchestwin.api.generation_jobs import GenerationJob, GenerationJobKind, GenerationOperation
+from orchestwin.api.generation_requests import request_key
 from orchestwin.api.knowledge_packages import (
     KnowledgePackageHistoryPayload,
     KnowledgePackagePublicationPayload,
@@ -88,13 +91,14 @@ from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.identity.passwords import Argon2PasswordService
 from orchestwin.identity.tokens import AccessTokenSettings, JwtAccessTokenService
 from orchestwin.models.design import DesignProposalIssueCode
+from orchestwin.projects import acceptance_tests as acceptance_domain
 from orchestwin.projects.code_changes import (
     alignment_verdict_from_snapshot,
     changed_file_from_snapshot,
     twin_critique_from_snapshot,
 )
 
-from .support.fake_studio import COSTS, PREFIX, ROUTES, FakeStudio, route_table
+from .support.fake_studio import COSTS, PREFIX, ROUTES, FakeProject, FakeStudio, route_table
 
 HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 EMAIL = "owner@example.com"
@@ -205,6 +209,15 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/code-changes/{commit}/reviews"),
         ("GET", project + "/code-changes/{commit}/reviews"),
         ("POST", project + "/code-changes/{commit}/decision"),
+        ("GET", project + "/acceptance-tests"),
+        ("POST", project + "/test-plans"),
+        ("GET", project + "/test-plans"),
+        ("GET", project + "/test-plans/{plan_id}"),
+        ("POST", project + "/test-runs"),
+        ("GET", project + "/test-runs"),
+        ("GET", project + "/test-runs/{run_id}"),
+        ("POST", project + "/test-runs/{run_id}/reviews"),
+        ("GET", project + "/test-runs/{run_id}/reviews"),
     }
 
     assert needed <= set(route_table())
@@ -1626,4 +1639,1633 @@ def test_invalid_alignment_requests_answer_like_the_real_application(
             assert real.status_code == 422, (path, body, real.text)
             assert client.call(method, base + path, body) == (422, real.json()), (path, body)
         assert project.changes() == []
+        assert studio.errors == []
+
+
+PLAN_KEYS = [
+    "id",
+    "created_at",
+    "locale",
+    "reference",
+    "application",
+    "criteria",
+    "replan_of",
+    "paths",
+    "not_covered",
+    "cost_microusd",
+]
+TEST_RUN_KEYS = [
+    "id",
+    "started_at",
+    "finished_at",
+    "recorded_at",
+    "application",
+    "browsers",
+    "reference",
+    "summary",
+    "criteria",
+    "not_covered",
+    "results",
+    "critiques",
+    "reviewed_at",
+    "cost_microusd",
+]
+TEST_REVIEW_KEYS = ["id", "run_id", "reviewed_at", "locale", "critiques", "cost_microusd"]
+OVERVIEW_KEYS = ["project_id", "reference", "plan_available", "plans", "runs", "latest_run"]
+CRITERIA_CODES = ["AC-001", "AC-002", "AC-003", "AC-004"]
+APPLICATION = {"kind": "STATIC", "address": "dist"}
+PAGE = "http://127.0.0.1:41234/"
+TITLE = "Calcolo mancia"
+ELEMENT = {
+    "index": 0,
+    "role": "heading",
+    "name": "Calcolo mancia",
+    "value": None,
+    "state": None,
+    "options": None,
+}
+COMBOBOX = {
+    "index": 2,
+    "role": "combobox",
+    "name": "Mancia",
+    "value": "10%",
+    "state": None,
+    "options": ["5%", "10%", "15%"],
+}
+SNAPSHOT = {
+    "url": PAGE,
+    "title": TITLE,
+    "text": "Calcolo mancia Importo Mancia",
+    "elements": [
+        ELEMENT,
+        {
+            "index": 1,
+            "role": "textbox",
+            "name": "Importo",
+            "value": "34,50",
+            "state": None,
+            "options": None,
+        },
+        COMBOBOX,
+    ],
+}
+CHROME = {"name": "chrome", "version": "151.0.7922.76"}
+FIREFOX = {"name": "firefox", "version": "156.0.1"}
+REFERENCE = {
+    "requirements_version_number": 1,
+    "design_version_number": 2,
+    "alternative_code": "DES-002",
+}
+UNKNOWN_ID = "00000000-0000-4000-8000-000000000999"
+OTHER_PLAN = "00000000-0000-4000-8000-000000000998"
+OPEN_STEP = {"action": "OPEN", "target": None, "value": "/", "expect": None}
+CLICK_STEP = {
+    "action": "CLICK",
+    "target": {"role": "button", "name": "Calcola"},
+    "value": None,
+    "expect": None,
+}
+CHECK_STEP = {
+    "action": "CHECK",
+    "target": None,
+    "value": None,
+    "expect": {"kind": "TEXT_VISIBLE", "target": None, "text": "Mancia"},
+}
+PATH = {"code": "TP-001", "heading": "Calcolo", "criteria": ["AC-001"], "steps": [OPEN_STEP]}
+EARLIER = {
+    **PATH,
+    "steps": [OPEN_STEP, CLICK_STEP],
+    "blocked_step": 2,
+    "detail": "target not found: button: Calcola",
+    "snapshot": SNAPSHOT,
+}
+STEP_RESULT = {
+    "index": 1,
+    "status": "DONE",
+    "detail": None,
+    "url": PAGE,
+    "title": TITLE,
+    "screenshot": "TP-001/chrome/01.png",
+}
+RESULT = {
+    "path": PATH,
+    "browser": "chrome",
+    "status": "PASSED",
+    "seconds": 1.5,
+    "steps": [STEP_RESULT],
+    "page_text": TITLE,
+}
+RUN = {
+    "plan_id": UNKNOWN_ID,
+    "replan_ids": [],
+    "started_at": "2026-09-29T10:00:00+02:00",
+    "finished_at": "2026-09-29T10:02:30+02:00",
+    "application": APPLICATION,
+    "browsers": [CHROME],
+    "results": [RESULT],
+    "not_covered": [],
+}
+PLAN_REFUSALS = (
+    ({"locale": "x"}, ["body", "locale"], "string_too_short"),
+    ({"locale": "french"}, ["body", "locale"], "string_pattern_mismatch"),
+    ({"application": "dist"}, ["body", "application"], "model_attributes_type"),
+    ({"application": None}, ["body", "application"], "model_attributes_type"),
+    (
+        {"application": {"kind": "FILE", "address": "dist"}},
+        ["body", "application", "kind"],
+        "enum",
+    ),
+    (
+        {"application": {"kind": "URL", "address": ""}},
+        ["body", "application", "address"],
+        "string_too_short",
+    ),
+    (
+        {"application": {"kind": "URL", "address": "a" * 501}},
+        ["body", "application", "address"],
+        "string_too_long",
+    ),
+    (
+        {"application": {"kind": "URL", "address": "x", "port": 80}},
+        ["body", "application", "port"],
+        "extra_forbidden",
+    ),
+    *(
+        (
+            {"application": {"kind": kind, "address": address}},
+            ["body", "application"],
+            "value_error",
+        )
+        for kind, address in (
+            ("URL", "   "),
+            ("URL", "http://"),
+            ("URL", "ftp://example.com"),
+            ("URL", "http://exa mple.com"),
+            ("STATIC", "../dist"),
+            ("STATIC", "C:/dist"),
+            ("STATIC", "dist\\app"),
+            ("STATIC", "/dist"),
+        )
+    ),
+    ({"snapshot": None}, ["body", "snapshot"], "model_attributes_type"),
+    (
+        {"snapshot": {**SNAPSHOT, "text": "t" * 100_001}},
+        ["body", "snapshot", "text"],
+        "string_too_long",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [ELEMENT] * 151}},
+        ["body", "snapshot", "elements"],
+        "too_long",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [ELEMENT, ELEMENT]}},
+        ["body", "snapshot"],
+        "value_error",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [{**ELEMENT, "role": "widget"}]}},
+        ["body", "snapshot", "elements", 0, "role"],
+        "literal_error",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [{**ELEMENT, "index": -1}]}},
+        ["body", "snapshot", "elements", 0, "index"],
+        "greater_than_equal",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [{**ELEMENT, "state": "open"}]}},
+        ["body", "snapshot", "elements", 0, "state"],
+        "literal_error",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [{**ELEMENT, "options": ["5%"]}]}},
+        ["body", "snapshot", "elements", 0],
+        "value_error",
+    ),
+    (
+        {"snapshot": {**SNAPSHOT, "elements": [{**COMBOBOX, "options": ["o"] * 21}]}},
+        ["body", "snapshot", "elements", 0, "options"],
+        "too_long",
+    ),
+    (
+        {"snapshot": {key: value for key, value in SNAPSHOT.items() if key != "title"}},
+        ["body", "snapshot", "title"],
+        "missing",
+    ),
+    ({"criteria": []}, ["body", "criteria"], "too_short"),
+    ({"criteria": [""]}, ["body", "criteria", 0], "string_too_short"),
+    ({"criteria": ["AC 001"]}, ["body", "criteria", 0], "string_pattern_mismatch"),
+    ({"criteria": ["AC-001"] * 201}, ["body", "criteria"], "too_long"),
+    ({"earlier": [EARLIER] * 6}, ["body", "earlier"], "too_long"),
+    ({"earlier": [EARLIER, EARLIER]}, ["body"], "value_error"),
+    (
+        {"earlier": [{**EARLIER, "code": "P-1"}]},
+        ["body", "earlier", 0, "code"],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"earlier": [{**EARLIER, "heading": ""}]},
+        ["body", "earlier", 0, "heading"],
+        "string_too_short",
+    ),
+    ({"earlier": [{**EARLIER, "heading": "   "}]}, ["body", "earlier", 0], "value_error"),
+    (
+        {"earlier": [{**EARLIER, "criteria": ["AC-001"] * 7}]},
+        ["body", "earlier", 0, "criteria"],
+        "too_long",
+    ),
+    (
+        {"earlier": [{**EARLIER, "criteria": ["AC-001", "AC-001"]}]},
+        ["body", "earlier", 0],
+        "value_error",
+    ),
+    (
+        {"earlier": [{**EARLIER, "criteria": ["XYZ"]}]},
+        ["body", "earlier", 0, "criteria", 0],
+        "string_pattern_mismatch",
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [OPEN_STEP] * 13}]},
+        ["body", "earlier", 0, "steps"],
+        "too_long",
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [CLICK_STEP], "blocked_step": 1}]},
+        ["body", "earlier", 0],
+        "value_error",
+    ),
+    ({"earlier": [{**EARLIER, "blocked_step": 3}]}, ["body", "earlier", 0], "value_error"),
+    (
+        {"earlier": [{**EARLIER, "blocked_step": 0}]},
+        ["body", "earlier", 0, "blocked_step"],
+        "greater_than_equal",
+    ),
+    (
+        {"earlier": [{**EARLIER, "blocked_step": 13}]},
+        ["body", "earlier", 0, "blocked_step"],
+        "less_than_equal",
+    ),
+    (
+        {"earlier": [{**EARLIER, "detail": "d" * 100_001}]},
+        ["body", "earlier", 0, "detail"],
+        "string_too_long",
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [{**OPEN_STEP, "value": None}], "blocked_step": 1}]},
+        ["body", "earlier", 0, "steps", 0],
+        "value_error",
+    ),
+    *(
+        (
+            {"earlier": [{**EARLIER, "steps": [OPEN_STEP, step]}]},
+            ["body", "earlier", 0, "steps", 1],
+            "value_error",
+        )
+        for step in (
+            {**CLICK_STEP, "target": None},
+            {**CLICK_STEP, "value": "x"},
+            {"action": "PRESS", "target": None, "value": "F5", "expect": None},
+            {**CHECK_STEP, "expect": None},
+            {**CHECK_STEP, "value": "x"},
+            {
+                "action": "TYPE",
+                "target": {"role": "button", "name": "Calcola"},
+                "value": "1",
+                "expect": None,
+            },
+            {
+                "action": "SELECT",
+                "target": {"role": "textbox", "name": "Importo"},
+                "value": "5%",
+                "expect": None,
+            },
+            {
+                "action": "TYPE",
+                "target": {"role": "textbox", "name": "Importo"},
+                "value": "  ",
+                "expect": None,
+            },
+            {**OPEN_STEP, "value": "ftp://example.com"},
+        )
+    ),
+    *(
+        (
+            {"earlier": [{**EARLIER, "steps": [OPEN_STEP, {**CHECK_STEP, "expect": expect}]}]},
+            ["body", "earlier", 0, "steps", 1, "expect"],
+            "value_error",
+        )
+        for expect in (
+            {"kind": "VALUE_IS", "target": None, "text": "3"},
+            {"kind": "TEXT_VISIBLE", "target": {"role": None, "name": "Mancia"}, "text": "Mancia"},
+            {"kind": "ELEMENT_VISIBLE", "target": {"role": None, "name": "Mancia"}, "text": "x"},
+            {"kind": "TEXT_VISIBLE", "target": None, "text": None},
+            {"kind": "TEXT_VISIBLE", "target": None, "text": "   "},
+        )
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [OPEN_STEP, {**CLICK_STEP, "action": "SWIPE"}]}]},
+        ["body", "earlier", 0, "steps", 1, "action"],
+        "enum",
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [OPEN_STEP, {**CLICK_STEP, "target": {"name": ""}}]}]},
+        ["body", "earlier", 0, "steps", 1, "target", "name"],
+        "string_too_short",
+    ),
+    (
+        {"earlier": [{**EARLIER, "steps": [OPEN_STEP, {**CLICK_STEP, "target": {"name": "   "}}]}]},
+        ["body", "earlier", 0, "steps", 1, "target"],
+        "value_error",
+    ),
+    (
+        {
+            "earlier": [
+                {
+                    **EARLIER,
+                    "steps": [OPEN_STEP, {**CLICK_STEP, "target": {"role": "widget", "name": "x"}}],
+                }
+            ]
+        },
+        ["body", "earlier", 0, "steps", 1, "target", "role"],
+        "literal_error",
+    ),
+    ({"prefer": "sync"}, ["body", "prefer"], "extra_forbidden"),
+)
+RUN_REFUSALS = (
+    ({"plan_id": "plan"}, ["body", "plan_id"], "uuid_parsing"),
+    ({"replan_ids": ["x"]}, ["body", "replan_ids", 0], "uuid_parsing"),
+    ({"replan_ids": [OTHER_PLAN, OTHER_PLAN]}, ["body"], "value_error"),
+    ({"replan_ids": [UNKNOWN_ID]}, ["body"], "value_error"),
+    (
+        {"replan_ids": [f"00000000-0000-4000-8000-00000000099{index}" for index in range(6)]},
+        ["body", "replan_ids"],
+        "too_long",
+    ),
+    ({"started_at": "2026-09-29T10:00:00"}, ["body", "started_at"], "timezone_aware"),
+    ({"finished_at": "later"}, ["body", "finished_at"], "datetime_from_date_parsing"),
+    ({"finished_at": "2026-09-29T09:00:00+02:00"}, ["body"], "value_error"),
+    ({"application": {"kind": "URL"}}, ["body", "application", "address"], "missing"),
+    ({"application": {"kind": "STATIC", "address": ".."}}, ["body", "application"], "value_error"),
+    ({"browsers": []}, ["body", "browsers"], "too_short"),
+    ({"browsers": [CHROME] * 4}, ["body", "browsers"], "too_long"),
+    ({"browsers": [CHROME, CHROME]}, ["body"], "value_error"),
+    (
+        {"browsers": [{"name": "safari", "version": "18"}]},
+        ["body", "browsers", 0, "name"],
+        "literal_error",
+    ),
+    (
+        {"browsers": [{**CHROME, "version": ""}]},
+        ["body", "browsers", 0, "version"],
+        "string_too_short",
+    ),
+    ({"browsers": [{**CHROME, "version": "   "}]}, ["body", "browsers", 0], "value_error"),
+    (
+        {"browsers": [{**CHROME, "version": "v" * 81}]},
+        ["body", "browsers", 0, "version"],
+        "string_too_long",
+    ),
+    ({"results": [RESULT] * 61}, ["body", "results"], "too_long"),
+    ({"results": [{**RESULT, "browser": "firefox"}]}, ["body"], "value_error"),
+    ({"results": [{**RESULT, "status": "SKIPPED"}]}, ["body", "results", 0, "status"], "enum"),
+    (
+        {"results": [{**RESULT, "browser": "edge"}]},
+        ["body", "results", 0, "browser"],
+        "literal_error",
+    ),
+    (
+        {"results": [{**RESULT, "seconds": -1}]},
+        ["body", "results", 0, "seconds"],
+        "greater_than_equal",
+    ),
+    (
+        {"results": [{**RESULT, "seconds": 86_401}]},
+        ["body", "results", 0, "seconds"],
+        "less_than_equal",
+    ),
+    (
+        {"results": [{**RESULT, "seconds": "fast"}]},
+        ["body", "results", 0, "seconds"],
+        "float_parsing",
+    ),
+    ({"results": [{**RESULT, "seconds": [1]}]}, ["body", "results", 0, "seconds"], "float_type"),
+    (
+        {"results": [{**RESULT, "page_text": "p" * 100_001}]},
+        ["body", "results", 0, "page_text"],
+        "string_too_long",
+    ),
+    (
+        {"results": [{**RESULT, "path": {**PATH, "steps": []}}]},
+        ["body", "results", 0, "path", "steps"],
+        "too_short",
+    ),
+    (
+        {"results": [{**RESULT, "path": {**PATH, "heading": "  "}}]},
+        ["body", "results", 0, "path"],
+        "value_error",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "index": 2}]}]},
+        ["body", "results", 0],
+        "value_error",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [STEP_RESULT, {**STEP_RESULT, "index": 2}]}]},
+        ["body", "results", 0],
+        "value_error",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "status": "PASSED"}]}]},
+        ["body", "results", 0, "steps", 0, "status"],
+        "enum",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "index": 0}]}]},
+        ["body", "results", 0, "steps", 0, "index"],
+        "greater_than_equal",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "index": 13}]}]},
+        ["body", "results", 0, "steps", 0, "index"],
+        "less_than_equal",
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "detail": "d" * 100_001}]}]},
+        ["body", "results", 0, "steps", 0, "detail"],
+        "string_too_long",
+    ),
+    *(
+        (
+            {"results": [{**RESULT, "steps": [{**STEP_RESULT, "screenshot": screenshot}]}]},
+            ["body", "results", 0, "steps", 0],
+            "value_error",
+        )
+        for screenshot in (
+            "/TP-001/chrome/01.png",
+            "TP-001\\chrome\\01.png",
+            "TP-001/../../01.png",
+            "C:/01.png",
+            "",
+            "./01.png",
+            "TP-001//01.png",
+            "TP-001/chrome/\x0101.png",
+        )
+    ),
+    (
+        {"results": [{**RESULT, "steps": [{**STEP_RESULT, "screenshot": "s" * 201}]}]},
+        ["body", "results", 0, "steps", 0, "screenshot"],
+        "string_too_long",
+    ),
+    (
+        {"not_covered": [{"criterion": "AC-004", "reason": ""}]},
+        ["body", "not_covered", 0, "reason"],
+        "string_too_short",
+    ),
+    (
+        {"not_covered": [{"criterion": "AC-004", "reason": "   "}]},
+        ["body", "not_covered", 0],
+        "value_error",
+    ),
+    (
+        {"not_covered": [{"criterion": "AC-004", "reason": "r" * 301}]},
+        ["body", "not_covered", 0, "reason"],
+        "string_too_long",
+    ),
+    (
+        {"not_covered": [{"criterion": "XYZ", "reason": "r"}]},
+        ["body", "not_covered", 0, "criterion"],
+        "string_pattern_mismatch",
+    ),
+    ({"not_covered": [{"criterion": "AC-004", "reason": "r"}] * 2}, ["body"], "value_error"),
+    ({"not_covered": None}, ["body", "not_covered"], "list_type"),
+    ({"note": "x"}, ["body", "note"], "extra_forbidden"),
+)
+
+
+def plan_body(**changes: object) -> dict:
+    body: dict[str, object] = {
+        "locale": "it-IT",
+        "application": dict(APPLICATION),
+        "snapshot": copy.deepcopy(SNAPSHOT),
+        "criteria": None,
+        "earlier": None,
+    }
+    body.update(changes)
+    return body
+
+
+def result(
+    path: Mapping[str, object],
+    browser: str,
+    status: str,
+    *,
+    done: int | None = None,
+    detail: str | None = None,
+) -> dict:
+    finished = len(path["steps"]) if done is None else done
+    steps = []
+    for index in range(1, finished + 1):
+        last = index == finished and status in ("FAILED", "BLOCKED")
+        steps.append(
+            {
+                "index": index,
+                "status": status if last else "DONE",
+                "detail": detail if last else None,
+                "url": PAGE,
+                "title": TITLE,
+                "screenshot": f"{path['code']}/{browser}/{index:02d}.png",
+            }
+        )
+    return {
+        "path": copy.deepcopy(dict(path)),
+        "browser": browser,
+        "status": status,
+        "seconds": 1.5,
+        "steps": steps,
+        "page_text": TITLE,
+    }
+
+
+def run_body(plan: Mapping[str, object], results: list, **changes: object) -> dict:
+    body: dict[str, object] = {
+        "plan_id": plan["id"],
+        "replan_ids": [],
+        "started_at": "2026-09-29T10:00:00+02:00",
+        "finished_at": "2026-09-29T10:02:30+02:00",
+        "application": dict(APPLICATION),
+        "browsers": [dict(CHROME), dict(FIREFOX)],
+        "results": results,
+        "not_covered": copy.deepcopy(plan["not_covered"]),
+    }
+    body.update(changes)
+    return body
+
+
+def earlier_of(path: Mapping[str, object], blocked_step: int = 2) -> dict:
+    return {
+        **copy.deepcopy(dict(path)),
+        "blocked_step": blocked_step,
+        "detail": "target not found: button: Calcola",
+        "snapshot": copy.deepcopy(SNAPSHOT),
+    }
+
+
+def planned(client: _Client, base: str, **changes: object) -> dict:
+    status, answer = client.call("POST", base + "/test-plans", plan_body(**changes))
+    assert status == 201, answer
+    assert answer["status"] == "PLANNED"
+    return answer["plan"]
+
+
+def recorded_run(client: _Client, base: str, body: Mapping[str, object]) -> dict:
+    status, answer = client.call("POST", base + "/test-runs", body)
+    assert status == 201, answer
+    assert answer["status"] == "RECORDED"
+    return answer["run"]
+
+
+def statements_of(project: FakeProject) -> dict[str, str]:
+    specification = project.current("requirements")["specification"]
+    return {item["code"]: item["statement"] for item in specification["acceptance_criteria"]}
+
+
+def digest_of(body: Mapping[str, object]) -> str:
+    content = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_a_plan_writes_one_path_per_criterion_of_the_specification(language: str) -> None:
+    with FakeStudio(language=language, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        statements = statements_of(project)
+
+        status, answer = client.call(
+            "POST", base + "/test-plans", plan_body(locale=LOCALE[language])
+        )
+
+        plan = answer["plan"]
+        assert (status, answer["status"], list(plan)) == (201, "PLANNED", PLAN_KEYS)
+        assert datetime.fromisoformat(plan["created_at"]).utcoffset() == timedelta(0)
+        assert {key: plan[key] for key in PLAN_KEYS[2:] if key != "paths"} == {
+            "locale": LOCALE[language],
+            "reference": REFERENCE,
+            "application": APPLICATION,
+            "criteria": CRITERIA_CODES,
+            "replan_of": [],
+            "not_covered": [],
+            "cost_microusd": 200_000,
+        }
+        assert plan["paths"] == [
+            {
+                "code": f"TP-{number:03d}",
+                "heading": statement[:60].rstrip(),
+                "criteria": [code],
+                "steps": [
+                    OPEN_STEP,
+                    {
+                        "action": "CHECK",
+                        "target": None,
+                        "value": None,
+                        "expect": {
+                            "kind": "TEXT_VISIBLE",
+                            "target": None,
+                            "text": " ".join(statement.split()[:3]),
+                        },
+                    },
+                ],
+            }
+            for number, (code, statement) in enumerate(statements.items(), start=1)
+        ]
+        assert plan["paths"][0]["steps"][1]["expect"]["text"] == (
+            "Con 30 euro" if language == "it" else "With 30 euros"
+        )
+        assert studio.spent_microusd == project.spent_microusd == COSTS["TEST_PLAN"] == 200_000
+        _, usage = client.call("GET", base + "/model-usage")
+        assert [
+            (item["task"], item["purpose"], item["cost_microusd"]) for item in usage["items"]
+        ] == [("requirements", "TEST_PLAN", 200_000)]
+        assert project.test_plans() == [plan]
+        assert client.call("GET", base + "/test-plans") == (200, {"items": [plan]})
+        assert client.call("GET", f"{base}/test-plans/{plan['id']}") == (200, plan)
+        assert studio.errors == []
+
+
+def test_a_criterion_to_check_by_hand_is_not_covered() -> None:
+    long_statement = "The   tip appears " + "x" * 41 + " and stays visible after the cut"
+    with FakeStudio(language="en", job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        project.rewrite_criterion("AC-001", long_statement)
+        project.rewrite_criterion("AC-004", "The total is compared by a MANUAL count at the till.")
+
+        plan = planned(client, base, locale="en-US", criteria=["AC-004", "AC-001", "AC-004"])
+
+        assert plan["criteria"] == ["AC-001", "AC-004"]
+        assert plan["not_covered"] == [{"criterion": "AC-004", "reason": "Needs a manual check"}]
+        (path,) = plan["paths"]
+        assert (path["code"], path["criteria"]) == ("TP-001", ["AC-001"])
+        assert path["heading"] == long_statement[:60].rstrip() == "The   tip appears " + "x" * 41
+        assert len(long_statement[:60]) == 60
+        assert path["steps"][1]["expect"]["text"] == "The tip appears"
+        earlier = studio.seed_project(owner=EMAIL, name="Twins only", through="twins")
+        with pytest.raises(ValueError):
+            earlier.rewrite_criterion("AC-001", "Anything")
+        with pytest.raises(ValueError):
+            project.rewrite_criterion("AC-009", "Anything")
+    with FakeStudio(language="it", job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        project.rewrite_criterion("AC-002", "La mancia si controlla con una verifica manuale.")
+
+        plan = planned(client, f"/projects/{project.id}")
+
+        assert [(path["code"], path["criteria"]) for path in plan["paths"]] == [
+            ("TP-001", ["AC-001"]),
+            ("TP-002", ["AC-003"]),
+            ("TP-003", ["AC-004"]),
+        ]
+        assert plan["not_covered"] == [
+            {"criterion": "AC-002", "reason": "Richiede una verifica manuale"}
+        ]
+        assert plan["criteria"] == CRITERIA_CODES
+        assert studio.errors == []
+
+
+def test_unknown_criteria_are_refused_with_their_codes() -> None:
+    unknown = {"detail": {"code": "ACCEPTANCE_CRITERION_UNKNOWN", "codes": ["AC-009", "XYZ"]}}
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        body = plan_body(criteria=["AC-001", "AC-009", "XYZ", "AC-009"])
+
+        assert client.call("POST", base + "/test-plans", body) == (422, unknown)
+        started = client.call("POST", base + "/test-plans", body, headers=PREFER)
+        job = poll(client, base, started[1]["job_id"])
+
+        assert (job["status"], job["response"]) == (
+            "FAILED",
+            {"status_code": 422, "body": unknown},
+        )
+        assert project.test_plans() == []
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_a_replan_holds_only_the_criteria_of_the_blocked_paths() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        first = planned(client, base)
+        blocked = [first["paths"][1], first["paths"][3]]
+
+        second = planned(
+            client,
+            base,
+            criteria=["AC-002", "AC-004"],
+            earlier=[earlier_of(path) for path in blocked],
+        )
+        untitled = planned(
+            client,
+            base,
+            snapshot={**SNAPSHOT, "title": "  "},
+            earlier=[earlier_of(first["paths"][0], blocked_step=1)],
+        )
+
+        assert (second["criteria"], second["replan_of"]) == (
+            ["AC-002", "AC-004"],
+            ["TP-002", "TP-004"],
+        )
+        assert [(path["code"], path["criteria"]) for path in second["paths"]] == [
+            ("TP-005", ["AC-002"]),
+            ("TP-006", ["AC-004"]),
+        ]
+        assert [path["code"] for path in untitled["paths"]] == ["TP-007"]
+        assert [path["code"] for path in planned(client, base)["paths"]] == [
+            "TP-001",
+            "TP-002",
+            "TP-003",
+            "TP-004",
+        ]
+        title = {
+            "action": "CHECK",
+            "target": None,
+            "value": None,
+            "expect": {"kind": "TITLE_CONTAINS", "target": None, "text": "Calcolo"},
+        }
+        for path, earlier in zip(second["paths"], blocked, strict=True):
+            assert path["steps"] == [*earlier["steps"], title]
+        assert (untitled["criteria"], untitled["replan_of"]) == (["AC-001"], ["TP-001"])
+        assert untitled["paths"][0]["steps"][2]["expect"]["text"] == "a"
+        assert [plan["id"] for plan in project.test_plans()[1:]] == [
+            untitled["id"],
+            second["id"],
+            first["id"],
+        ]
+        assert studio.spent_microusd == 800_000
+        assert studio.errors == []
+
+
+def test_the_refusals_of_a_plan_come_in_the_order_of_the_contract() -> None:
+    body = plan_body()
+    with FakeStudio(hosted=False, job_polls=0) as studio:
+        client = signed(studio)
+        expected = (
+            ("twins", 409, "REQUIREMENTS_APPROVAL_REQUIRED"),
+            ("requirements", 409, "DESIGN_APPROVAL_REQUIRED"),
+            ("design", 503, "TEST_MODEL_NOT_CONFIGURED"),
+        )
+        for through, status, code in expected:
+            project = studio.seed_project(owner=EMAIL, name=f"Fino a {through}", through=through)
+            base = f"/projects/{project.id}"
+            assert client.call("POST", base + "/test-plans", body) == (status, refused(code))
+            unknown = plan_body(criteria=["AC-009"])
+            assert client.call("POST", base + "/test-plans", unknown) == (status, refused(code))
+            started = client.call("POST", base + "/test-plans", body, headers=PREFER)
+            assert started[0] == 202
+            job = poll(client, base, started[1]["job_id"])
+            assert (job["status"], job["response"]) == (
+                "FAILED",
+                {"status_code": status, "body": refused(code)},
+            )
+            assert project.test_plans() == []
+        other = stranger(studio)
+        owner_paths = (
+            ("GET", "/acceptance-tests", None),
+            ("POST", "/test-plans", body),
+            ("GET", "/test-plans", None),
+            ("GET", f"/test-plans/{UNKNOWN_ID}", None),
+            ("POST", "/test-runs", RUN),
+            ("GET", "/test-runs", None),
+            ("GET", f"/test-runs/{UNKNOWN_ID}", None),
+            ("POST", f"/test-runs/{UNKNOWN_ID}/reviews", {}),
+            ("GET", f"/test-runs/{UNKNOWN_ID}/reviews", None),
+        )
+        for method, path, payload in owner_paths:
+            assert other.call(method, base + path, payload) == (
+                404,
+                refused("PROJECT_NOT_FOUND"),
+            ), path
+        assert client.call("GET", f"{base}/test-plans/{UNKNOWN_ID}") == (
+            404,
+            refused("TEST_PLAN_NOT_FOUND"),
+        )
+        for path, name in (("/test-plans/plan", "plan_id"), ("/test-runs/run", "run_id")):
+            assert client.call("GET", base + path) == (422, invalid(["path", name], "uuid_parsing"))
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_a_plan_with_prefer_runs_as_a_request_job() -> None:
+    body = plan_body(locale="en-US")
+    with FakeStudio(language="en", job_polls=2) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+
+        status, started = client.call("POST", base + "/test-plans", body, headers=PREFER)
+
+        assert (status, client.headers["preference-applied"]) == (202, "respond-async")
+        assert (started["kind"], started["operation"], started["status"]) == (
+            "REQUEST",
+            "TEST_PLAN",
+            "RUNNING",
+        )
+        assert (
+            client.call("POST", base + "/test-plans", body, headers=PREFER)[1]["job_id"]
+            == (started["job_id"])
+        )
+        assert studio._jobs[started["job_id"]].key == f"TEST_PLAN:{digest_of(body)}"
+        job_path = f"{base}/generation-jobs/{started['job_id']}"
+        statuses = [client.call("GET", job_path)[1]["status"] for _ in range(3)]
+        assert statuses == ["RUNNING", "RUNNING", "SUCCEEDED"]
+        _, finished = client.call("GET", job_path)
+        assert finished["response"] == {
+            "status_code": 201,
+            "body": {"status": "PLANNED", "plan": project.test_plans()[0]},
+        }
+        for code in CRITERIA_CODES:
+            later = client.call(
+                "POST", base + "/test-plans", plan_body(criteria=[code]), headers=PREFER
+            )
+            assert later[0] == 202
+        busy = client.call("POST", base + "/test-plans", plan_body(locale="it"), headers=PREFER)
+        assert busy == (429, refused("TOO_MANY_GENERATIONS"))
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        studio.fail_job("TEST_PLAN", code="TIMEOUT")
+        failed = poll(
+            client,
+            base,
+            client.call("POST", base + "/test-plans", body, headers=PREFER)[1]["job_id"],
+        )
+        assert (failed["status"], failed["response"]) == (
+            "FAILED",
+            {
+                "status_code": 503,
+                "body": {"detail": {"code": "TIMEOUT", "stage": "MODEL_PROPOSAL"}},
+            },
+        )
+        studio.lose_job("TEST_PLAN")
+        lost = client.call("POST", base + "/test-plans", body, headers=PREFER)[1]
+        assert client.call("GET", f"{base}/generation-jobs/{lost['job_id']}") == (
+            404,
+            refused("GENERATION_JOB_NOT_FOUND"),
+        )
+        assert project.test_plans() == []
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_a_plan_that_passes_the_ceiling_is_not_stored() -> None:
+    exceeded = {"detail": {"code": "GENERATION_BUDGET_EXCEEDED", "stage": "MODEL_PROPOSAL"}}
+    with FakeStudio(budget_usd=0.3, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        planned(client, base)
+
+        assert client.call("POST", base + "/test-plans", plan_body()) == (402, exceeded)
+        assert len(project.test_plans()) == 1
+        assert studio.spent_microusd == 200_000
+        assert studio.errors == []
+
+
+def test_a_run_computes_the_status_of_every_criterion() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        project.rewrite_criterion("AC-004", "Il totale si controlla con una verifica manuale.")
+        plan = planned(client, base)
+        one, two, three = plan["paths"]
+        results = [
+            result(one, "chrome", "PASSED"),
+            result(one, "firefox", "PASSED"),
+            result(two, "chrome", "BLOCKED", done=1, detail="target not found: text: Mancia"),
+            result(two, "firefox", "FAILED", detail="TEXT_VISIBLE: L'elenco delle"),
+            result(three, "chrome", "BLOCKED", done=1, detail="target not found: text: Con"),
+            result(three, "firefox", "PASSED"),
+        ]
+
+        run = recorded_run(client, base, run_body(plan, results))
+
+        assert list(run) == TEST_RUN_KEYS
+        assert run["criteria"] == [
+            {"code": "AC-001", "status": "PASSED", "paths": ["TP-001"]},
+            {"code": "AC-002", "status": "FAILED", "paths": ["TP-002"]},
+            {"code": "AC-003", "status": "BLOCKED", "paths": ["TP-003"]},
+            {"code": "AC-004", "status": "NOT_COVERED", "paths": []},
+        ]
+        assert run["summary"] == {
+            "passed": 1,
+            "failed": 1,
+            "blocked": 1,
+            "not_covered": 1,
+            "not_run": 0,
+        }
+        assert {key: run[key] for key in TEST_RUN_KEYS if key not in ("id", "recorded_at")} == {
+            "started_at": "2026-09-29T08:00:00+00:00",
+            "finished_at": "2026-09-29T08:02:30+00:00",
+            "application": APPLICATION,
+            "browsers": [CHROME, FIREFOX],
+            "reference": REFERENCE,
+            "summary": run["summary"],
+            "criteria": run["criteria"],
+            "not_covered": plan["not_covered"],
+            "results": results,
+            "critiques": [],
+            "reviewed_at": None,
+            "cost_microusd": 200_000,
+        }
+        assert datetime.fromisoformat(run["recorded_at"]).utcoffset() == timedelta(0)
+        partial = recorded_run(
+            client,
+            base,
+            run_body(
+                plan,
+                [result(one, "chrome", "PASSED"), result(two, "chrome", "NOT_RUN", done=0)],
+                browsers=[CHROME],
+                not_covered=[*plan["not_covered"], {"criterion": "AC-001", "reason": "Non serve"}],
+            ),
+        )
+        empty = recorded_run(client, base, run_body(plan, [], browsers=[CHROME], not_covered=[]))
+        assert [(item["code"], item["status"]) for item in partial["criteria"]] == [
+            ("AC-001", "PASSED"),
+            ("AC-002", "NOT_RUN"),
+            ("AC-003", "NOT_RUN"),
+            ("AC-004", "NOT_COVERED"),
+        ]
+        assert partial["summary"] == {
+            "passed": 1,
+            "failed": 0,
+            "blocked": 0,
+            "not_covered": 1,
+            "not_run": 2,
+        }
+        assert empty["summary"] == {
+            "passed": 0,
+            "failed": 0,
+            "blocked": 0,
+            "not_covered": 0,
+            "not_run": 4,
+        }
+        assert project.test_runs() == [empty, partial, run]
+        assert client.call("GET", base + "/test-runs") == (200, {"items": [empty, partial, run]})
+        assert client.call("GET", f"{base}/test-runs/{run['id']}") == (200, run)
+        assert client.call("GET", f"{base}/test-runs/{run['id']}/reviews") == (200, {"items": []})
+        assert studio.spent_microusd == 200_000
+        assert studio.errors == []
+
+
+def test_a_run_with_a_replan_counts_both_plans() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base)
+        replan = planned(client, base, criteria=["AC-002"], earlier=[earlier_of(plan["paths"][1])])
+        paths = [plan["paths"][0], replan["paths"][0], *plan["paths"][2:]]
+
+        run = recorded_run(
+            client,
+            base,
+            run_body(
+                plan,
+                [result(path, "chrome", "PASSED") for path in paths],
+                browsers=[CHROME],
+                replan_ids=[replan["id"]],
+            ),
+        )
+        waiting = recorded_run(
+            client,
+            base,
+            run_body(
+                plan,
+                [result(plan["paths"][0], "chrome", "PASSED")],
+                browsers=[CHROME],
+                replan_ids=[replan["id"]],
+            ),
+        )
+
+        assert replan["paths"][0]["code"] == "TP-005"
+        assert run["cost_microusd"] == 400_000
+        assert run["reference"] == plan["reference"]
+        assert run["criteria"] == [
+            {"code": "AC-001", "status": "PASSED", "paths": ["TP-001"]},
+            {"code": "AC-002", "status": "PASSED", "paths": ["TP-005"]},
+            {"code": "AC-003", "status": "PASSED", "paths": ["TP-003"]},
+            {"code": "AC-004", "status": "PASSED", "paths": ["TP-004"]},
+        ]
+        assert waiting["criteria"][1] == {
+            "code": "AC-002",
+            "status": "NOT_RUN",
+            "paths": ["TP-002", "TP-005"],
+        }
+        assert studio.spent_microusd == 400_000
+        assert studio.errors == []
+
+
+def test_a_run_that_does_not_match_its_plans_is_refused() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base)
+        elsewhere = studio.seed_project(owner=EMAIL, name="Altro progetto", through="design")
+        foreign = planned(client, f"/projects/{elsewhere.id}")
+        for body in (
+            run_body({**plan, "id": UNKNOWN_ID}, []),
+            run_body(plan, [], replan_ids=[UNKNOWN_ID]),
+            run_body(foreign, []),
+        ):
+            assert client.call("POST", base + "/test-runs", body) == (
+                404,
+                refused("TEST_PLAN_NOT_FOUND"),
+            )
+        path = plan["paths"][0]
+        longer = {**path, "steps": [*path["steps"], CLICK_STEP]}
+        cases = (
+            (
+                [
+                    result(path, "firefox", "PASSED"),
+                    result({**path, "code": "TP-009"}, "chrome", "PASSED"),
+                ],
+                [],
+                "result 1 names the path TP-009, which is not in the plan or in its replans",
+            ),
+            (
+                [result(longer, "chrome", "PASSED")],
+                [],
+                "result 0 holds more steps than its path",
+            ),
+            (
+                [],
+                [{"criterion": "AC-009", "reason": "Non serve"}],
+                "the not covered criteria AC-009 are not in the plans",
+            ),
+        )
+        for results, not_covered, message in cases:
+            body = run_body(plan, results, not_covered=not_covered)
+            assert client.call("POST", base + "/test-runs", body) == (
+                422,
+                {
+                    "detail": {
+                        "code": "invalid_request",
+                        "errors": [{"loc": ["body"], "type": "value_error", "msg": message}],
+                    }
+                },
+            )
+        assert project.test_runs() == []
+        assert studio.spent_microusd == 400_000
+        assert studio.errors == []
+
+
+def test_a_recorded_run_keeps_the_planned_path_and_the_texts_the_studio_stores() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(
+            client, base, application={"kind": "URL", "address": "  http://127.0.0.1:5173/ "}
+        )
+        path = plan["paths"][0]
+        spaced = {**path, "heading": f"  {path['heading']}  "}
+        sent = result(spaced, "chrome", "FAILED", detail="  TEXT_VISIBLE:\n Con 30   euro ")
+        sent["seconds"] = 3
+        sent["page_text"] = "p " * 1_000
+        sent["steps"][0]["title"] = "t" * 400
+
+        run = recorded_run(
+            client,
+            base,
+            run_body(
+                plan,
+                [sent],
+                application={"kind": "URL", "address": " http://127.0.0.1:5173/ "},
+                browsers=[{"name": "chrome", "version": " 151.0 \t 1 "}],
+                not_covered=[{"criterion": "AC-004", "reason": "  Non   serve "}],
+            ),
+        )
+
+        (stored,) = run["results"]
+        assert plan["application"] == {"kind": "URL", "address": "http://127.0.0.1:5173/"}
+        assert run["application"] == plan["application"]
+        assert run["browsers"] == [{"name": "chrome", "version": "151.0 1"}]
+        assert run["not_covered"] == [{"criterion": "AC-004", "reason": "Non serve"}]
+        assert stored["path"] == path
+        assert (stored["seconds"], json.dumps(stored["seconds"])) == (3.0, "3.0")
+        assert stored["steps"][1]["detail"] == "TEXT_VISIBLE: Con 30 euro"
+        assert stored["steps"][0]["title"] == "t" * 299 + "…"
+        assert len(stored["page_text"]) == 1500
+        assert stored["page_text"].endswith("p…")
+        assert run["criteria"][3] == {"code": "AC-004", "status": "NOT_COVERED", "paths": []}
+        assert studio.errors == []
+
+
+TEST_CASES = (
+    *(
+        ("POST", "/test-plans", {**plan_body(), **item[0]}, item[1], item[2])
+        for item in PLAN_REFUSALS
+    ),
+    ("POST", "/test-plans", None, ["body"], "missing"),
+    *(("POST", "/test-runs", {**RUN, **item[0]}, item[1], item[2]) for item in RUN_REFUSALS),
+    (
+        "POST",
+        "/test-runs",
+        {key: value for key, value in RUN.items() if key != "not_covered"},
+        ["body", "not_covered"],
+        "missing",
+    ),
+    ("POST", "/test-runs", None, ["body"], "missing"),
+    *(
+        ("POST", f"/test-runs/{UNKNOWN_ID}/reviews", item[0], item[1], item[2])
+        for item in REVIEW_REFUSALS
+    ),
+    ("GET", "/test-plans/plan", None, ["path", "plan_id"], "uuid_parsing"),
+    ("GET", "/test-runs/run", None, ["path", "run_id"], "uuid_parsing"),
+    ("GET", "/test-runs/run/reviews", None, ["path", "run_id"], "uuid_parsing"),
+)
+
+
+def test_invalid_test_requests_answer_422() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        for method, path, body, location, kind in TEST_CASES:
+            assert client.call(method, base + path, body) == (422, invalid(location, kind)), (
+                path,
+                body,
+            )
+        assert (project.test_plans(), project.test_runs(), project.test_reviews()) == ([], [], [])
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_invalid_test_requests_answer_like_the_real_application(real_client: TestClient) -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="brief")
+        base = f"/projects/{project.id}"
+        for method, path, body, _, _ in TEST_CASES:
+            real = real_client.request(method, PREFIX + base + path, json=body)
+            assert real.status_code == 422, (path, body, real.text)
+            assert client.call(method, base + path, body) == (422, real.json()), (path, body)
+        assert studio.errors == []
+
+
+def test_the_job_keys_are_the_keys_of_the_real_application() -> None:
+    with FakeStudio(job_polls=5) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base)
+        run = recorded_run(client, base, run_body(plan, [], browsers=[CHROME]))
+        body = plan_body(
+            criteria=["ac-002", "AC-004", "ac-002"],
+            earlier=[earlier_of(plan["paths"][1])],
+        )
+        review = {"locale": "en-US", "again": True}
+
+        planning = client.call("POST", base + "/test-plans", body, headers=PREFER)[1]
+        reviewing = client.call(
+            "POST", f"{base}/test-runs/{run['id']}/reviews", review, headers=PREFER
+        )[1]
+
+        assert studio._jobs[planning["job_id"]].key == request_key(
+            GenerationOperation.TEST_PLAN,
+            {"project_id": project.id},
+            acceptance_api.TestPlanRequest.model_validate(body),
+        )
+        assert studio._jobs[reviewing["job_id"]].key == request_key(
+            GenerationOperation.TEST_REVIEW,
+            {"project_id": project.id, "run_id": run["id"]},
+            acceptance_api.TestReviewRequest.model_validate(review),
+        )
+        assert {"TEST_PLAN", "TEST_REVIEW"} <= {item.value for item in GenerationOperation}
+        assert studio.errors == []
+
+
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_a_review_of_a_run_follows_the_rules_of_the_fake(language: str) -> None:
+    numbers = {
+        "it": "2 criteri superati, 1 falliti, 1 bloccati, 0 non coperti, 0 non eseguiti",
+        "en": "2 criteria passed, 1 failed, 1 blocked, 0 not covered, 0 not run",
+    }
+    with FakeStudio(language=language, twins=3, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base, locale=LOCALE[language])
+        one, two, three, four = plan["paths"]
+        results = [
+            result(one, "chrome", "PASSED"),
+            result(two, "chrome", "PASSED"),
+            result(three, "chrome", "BLOCKED", done=1, detail="target not found: text: Con"),
+            result(four, "chrome", "FAILED", detail="TEXT_VISIBLE: Il risultato"),
+        ]
+        run = recorded_run(client, base, run_body(plan, results, browsers=[CHROME]))
+
+        status, answer = client.call(
+            "POST", f"{base}/test-runs/{run['id']}/reviews", {"locale": LOCALE[language]}
+        )
+
+        review = answer["review"]
+        assert (status, answer["status"], list(review)) == (201, "REVIEWED", TEST_REVIEW_KEYS)
+        assert (review["run_id"], review["locale"], review["cost_microusd"]) == (
+            run["id"],
+            LOCALE[language],
+            3 * COSTS["TEST_REVIEW"],
+        )
+        twins = project.current("twins")["snapshot"]["twin_versions"]
+        critiques = review["critiques"]
+        assert [(item["twin_id"], item["twin_name"]) for item in critiques] == [
+            (twin["twin_id"], twin["profile"]["name"]) for twin in twins
+        ]
+        assert [item["verdict"] for item in critiques] == ["CONCERN", "FINE", "FINE"]
+        about = {"criterion": "AC-003", "requirement": "REQ-003", "screen": "SCR-001"}
+        assert [
+            [(finding["severity"], finding["about"]) for finding in item["findings"]]
+            for item in critiques
+        ] == [[("MEDIUM", about)], [("LOW", about)], []]
+        for item in critiques:
+            assert FIRST_GOALS[language] in item["summary"]
+            assert numbers[language] in item["summary"]
+            for finding in item["findings"]:
+                assert finding["text"] and finding["action"]
+                assert "AC-003" in finding["text"]
+        _, usage = client.call("GET", base + "/model-usage")
+        assert [
+            (item["task"], item["purpose"], item["cost_microusd"])
+            for item in reversed(usage["items"])
+        ] == [
+            ("requirements", "TEST_PLAN", 200_000),
+            *[("user-twin-evaluation", "TEST_REVIEW", 150_000)] * 3,
+        ]
+        reviewed = {
+            **run,
+            "critiques": critiques,
+            "reviewed_at": review["reviewed_at"],
+            "cost_microusd": 650_000,
+        }
+        assert client.call("GET", f"{base}/test-runs/{run['id']}") == (200, reviewed)
+        assert client.call("GET", base + "/test-runs") == (200, {"items": [reviewed]})
+        assert client.call("GET", f"{base}/test-runs/{run['id']}/reviews") == (
+            200,
+            {"items": [review]},
+        )
+        assert client.call("GET", base + "/acceptance-tests")[1]["latest_run"] == reviewed
+        assert project.test_runs() == [reviewed]
+        assert project.test_reviews() == [review]
+        assert studio.spent_microusd == 650_000
+        assert studio.errors == []
+
+
+def test_a_review_of_a_run_that_passed_cites_its_first_criterion() -> None:
+    with FakeStudio(language="en", twins=1, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base, locale="en-US")
+        results = [result(path, "chrome", "PASSED") for path in plan["paths"]]
+        run = recorded_run(client, base, run_body(plan, results, browsers=[CHROME]))
+        empty = recorded_run(client, base, run_body(plan, [], browsers=[CHROME]))
+        project.rewrite_criterion("AC-001", "Checked with a manual count.")
+        nothing = planned(client, base, criteria=["AC-001"])
+        without = recorded_run(client, base, run_body(nothing, [], browsers=[CHROME]))
+
+        reviews = [
+            client.call("POST", f"{base}/test-runs/{item['id']}/reviews", {"locale": "en-US"})[1]
+            for item in (run, empty, without)
+        ]
+
+        (passed,), (not_run,), (covered,) = (item["review"]["critiques"] for item in reviews)
+        assert passed["verdict"] == "CONCERN"
+        assert [finding["about"] for finding in passed["findings"]] == [
+            {"criterion": "AC-001", "requirement": "REQ-001", "screen": "SCR-001"}
+        ]
+        assert "4 criteria passed, 0 failed" in passed["summary"]
+        assert [finding["about"]["criterion"] for finding in not_run["findings"]] == ["AC-001"]
+        assert [finding["about"]["criterion"] for finding in covered["findings"]] == ["AC-001"]
+        assert (nothing["paths"], nothing["criteria"]) == ([], ["AC-001"])
+        assert without["criteria"] == [{"code": "AC-001", "status": "NOT_COVERED", "paths": []}]
+        assert studio.errors == []
+
+
+def test_a_second_review_of_a_run_repeats_the_content_with_a_new_id() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plan = planned(client, base)
+        run = recorded_run(client, base, run_body(plan, [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+
+        _, first = client.call("POST", path, {"locale": "it-IT"})
+        repeated = client.call("POST", path, {})
+        status, second = client.call("POST", path, {"locale": "it-IT", "again": True})
+
+        assert repeated == (409, refused("TEST_REVIEW_EXISTS"))
+        older, newer = first["review"], second["review"]
+        assert status == 201
+        assert newer["id"] != older["id"]
+        assert datetime.fromisoformat(newer["reviewed_at"]) > datetime.fromisoformat(
+            older["reviewed_at"]
+        )
+        same = ("run_id", "locale", "critiques", "cost_microusd")
+        assert {key: newer[key] for key in same} == {key: older[key] for key in same}
+        assert client.call("GET", path) == (200, {"items": [newer, older]})
+        _, current = client.call("GET", f"{base}/test-runs/{run['id']}")
+        assert (current["reviewed_at"], current["cost_microusd"]) == (
+            newer["reviewed_at"],
+            200_000 + 300_000,
+        )
+        for body, location, kind in REVIEW_REFUSALS:
+            assert client.call("POST", path, body) == (422, invalid(location, kind)), body
+        _, french = client.call("POST", path, {"locale": "fr-FR", "again": "yes"})
+        _, default = client.call("POST", path, {"again": 1})
+        assert (french["review"]["locale"], default["review"]["locale"]) == ("fr-FR", "it-IT")
+        assert len(project.test_reviews()) == 4
+        assert studio.spent_microusd == 200_000 + 4 * 300_000
+        assert studio.errors == []
+
+
+def test_the_refusals_of_a_test_review_come_in_the_order_of_the_contract() -> None:
+    body = {"locale": "it-IT"}
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+        unknown = f"{base}/test-runs/{UNKNOWN_ID}/reviews"
+
+        assert client.call("POST", unknown, body) == (404, refused("TEST_RUN_NOT_FOUND"))
+        assert client.call("GET", unknown) == (404, refused("TEST_RUN_NOT_FOUND"))
+        assert client.call("GET", f"{base}/test-runs/{UNKNOWN_ID}") == (
+            404,
+            refused("TEST_RUN_NOT_FOUND"),
+        )
+        assert client.call("POST", path, body)[0] == 201
+        assert client.call("POST", path, body) == (409, refused("TEST_REVIEW_EXISTS"))
+        _, team = client.call("GET", base + "/team-proposals/current")
+        edited = [agent for agent in team["selected_agent_ids"] if agent != "FRONTEND_ENGINEER"]
+        edit = client.call(
+            "PATCH", base + "/team-proposals/current", {"selected_agent_ids": edited}
+        )
+        assert edit[0] == 201
+        assert project.approved("design") and not project.approved("twins")
+        assert client.call("POST", path, body) == (409, refused("TEST_REVIEW_EXISTS"))
+        assert client.call("POST", path, {**body, "again": True}) == (
+            409,
+            refused("USER_MODELING_APPROVAL_REQUIRED"),
+        )
+        assert studio.spent_microusd == 200_000 + 300_000
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+
+        assert client.call("POST", base + "/design/regenerations")[0] == 201
+        assert not project.approved("design")
+        assert client.call("POST", path, body) == (409, refused("DESIGN_APPROVAL_REQUIRED"))
+        _, change = client.call(
+            "POST", base + "/requirements/change-requests", {"request": "Aggiungi il bis"}
+        )
+        decided = client.call(
+            "POST",
+            f"{base}/requirements/revisions/{change['diff']['id']}/decision",
+            {"decision": "APPROVE"},
+        )
+        assert decided[0] == 200
+        assert not project.approved("requirements")
+        assert client.call("POST", path, body) == (
+            409,
+            refused("REQUIREMENTS_APPROVAL_REQUIRED"),
+        )
+        assert project.test_reviews() == []
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+        studio.hosted = False
+
+        assert client.call("POST", path, body) == (503, refused("TEST_MODEL_NOT_CONFIGURED"))
+        started = client.call("POST", path, body, headers=PREFER)
+        job = poll(client, base, started[1]["job_id"])
+        assert (job["status"], job["response"]) == (
+            "FAILED",
+            {"status_code": 503, "body": refused("TEST_MODEL_NOT_CONFIGURED")},
+        )
+        assert client.call("GET", base + "/acceptance-tests")[1]["plan_available"] is False
+        assert project.test_reviews() == []
+        assert studio.spent_microusd == 200_000
+        assert studio.errors == []
+
+
+def test_a_review_of_a_run_that_passes_the_ceiling_is_not_stored() -> None:
+    exceeded = {"detail": {"code": "GENERATION_BUDGET_EXCEEDED", "stage": "MODEL_PROPOSAL"}}
+    with FakeStudio(budget_usd=0.4, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+
+        assert client.call("POST", path, {"locale": "it-IT"}) == (402, exceeded)
+        assert studio.spent_microusd == 200_000 + 150_000
+        assert project.test_reviews() == []
+        _, current = client.call("GET", f"{base}/test-runs/{run['id']}")
+        assert (current["critiques"], current["reviewed_at"], current["cost_microusd"]) == (
+            [],
+            None,
+            200_000,
+        )
+        _, usage = client.call("GET", base + "/model-usage")
+        assert usage["totals"]["cost_microusd"] == studio.spent_microusd
+        assert studio.errors == []
+
+
+def test_a_review_of_a_run_with_prefer_runs_as_a_request_job() -> None:
+    body = {"locale": "en-US", "again": False}
+    with FakeStudio(language="en", job_polls=2) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Tip calculator", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+
+        status, started = client.call("POST", path, body, headers=PREFER)
+
+        assert (status, started["kind"], started["operation"], started["status"]) == (
+            202,
+            "REQUEST",
+            "TEST_REVIEW",
+            "RUNNING",
+        )
+        assert studio._jobs[started["job_id"]].key == (
+            f"TEST_REVIEW:run_id={run['id']}:{digest_of(body)}"
+        )
+        assert client.call("POST", path, body, headers=PREFER)[1]["job_id"] == started["job_id"]
+        again = client.call("POST", path, {**body, "again": True}, headers=PREFER)
+        assert again[1]["job_id"] != started["job_id"]
+        job_path = f"{base}/generation-jobs/{started['job_id']}"
+        statuses = [client.call("GET", job_path)[1]["status"] for _ in range(3)]
+        assert statuses == ["RUNNING", "RUNNING", "SUCCEEDED"]
+        _, finished = client.call("GET", job_path)
+        assert finished["response"] == {
+            "status_code": 201,
+            "body": {"status": "REVIEWED", "review": project.test_reviews()[0]},
+        }
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        run = recorded_run(client, base, run_body(planned(client, base), [], browsers=[CHROME]))
+        path = f"{base}/test-runs/{run['id']}/reviews"
+        studio.fail_job("TEST_REVIEW", code="TIMEOUT")
+
+        failed = poll(client, base, client.call("POST", path, body, headers=PREFER)[1]["job_id"])
+
+        assert (failed["status"], failed["response"]) == (
+            "FAILED",
+            {
+                "status_code": 503,
+                "body": {"detail": {"code": "TIMEOUT", "stage": "MODEL_PROPOSAL"}},
+            },
+        )
+        studio.lose_job("TEST_REVIEW")
+        lost = client.call("POST", path, body, headers=PREFER)[1]
+        assert client.call("GET", f"{base}/generation-jobs/{lost['job_id']}") == (
+            404,
+            refused("GENERATION_JOB_NOT_FOUND"),
+        )
+        assert project.test_reviews() == []
+        assert studio.spent_microusd == 200_000
+        assert studio.errors == []
+
+
+@pytest.mark.parametrize("hosted", [True, False])
+def test_the_overview_gives_the_reference_the_counts_and_the_latest_run(hosted: bool) -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        _, alignment = client.call("GET", base + "/alignment")
+        status, before = client.call("GET", base + "/acceptance-tests")
+        plan = planned(client, base)
+        recorded_run(client, base, run_body(plan, [], browsers=[CHROME]))
+        latest = recorded_run(client, base, run_body(plan, [], browsers=[FIREFOX]))
+        studio.hosted = hosted
+
+        _, after = client.call("GET", base + "/acceptance-tests")
+
+        assert (status, list(before)) == (200, OVERVIEW_KEYS)
+        assert before == {
+            "project_id": project.id,
+            "reference": alignment["reference"],
+            "plan_available": True,
+            "plans": 0,
+            "runs": 0,
+            "latest_run": None,
+        }
+        assert after == {
+            **before,
+            "plan_available": hosted,
+            "plans": 1,
+            "runs": 2,
+            "latest_run": latest,
+        }
+        earlier = studio.seed_project(owner=EMAIL, name="Fino ai requisiti", through="requirements")
+        _, other = client.call("GET", f"/projects/{earlier.id}/acceptance-tests")
+        assert other["reference"]["design"] is None
+        assert other["reference"]["requirements"] is not None
+        assert (other["plans"], other["runs"], other["latest_run"]) == (0, 0, None)
+        assert studio.errors == []
+
+
+def test_the_lists_give_the_twenty_newest_items() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        plans = [planned(client, base, criteria=[CRITERIA_CODES[index % 4]]) for index in range(21)]
+        runs = [
+            recorded_run(client, base, run_body(plans[0], [], browsers=[CHROME])) for _ in range(21)
+        ]
+
+        _, listed_plans = client.call("GET", base + "/test-plans")
+        _, listed_runs = client.call("GET", base + "/test-runs")
+
+        assert listed_plans["items"] == list(reversed(plans))[:20]
+        assert listed_runs["items"] == list(reversed(runs))[:20]
+        assert len(project.test_plans()) == len(project.test_runs()) == 21
+        _, overview = client.call("GET", base + "/acceptance-tests")
+        assert (overview["plans"], overview["runs"], overview["latest_run"]) == (21, 21, runs[-1])
+        assert studio.errors == []
+
+
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_the_tests_of_the_fake_pass_the_real_domain_rules(language: str) -> None:
+    with FakeStudio(language=language, twins=2, job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        project.rewrite_criterion("AC-004", "Il conto si controlla con una verifica manuale.")
+        plan = planned(client, base, locale=LOCALE[language])
+        replan = planned(client, base, criteria=["AC-002"], earlier=[earlier_of(plan["paths"][1])])
+        paths = [plan["paths"][0], replan["paths"][0], plan["paths"][2]]
+        results = [
+            result(paths[0], "chrome", "PASSED"),
+            result(paths[1], "firefox", "FAILED", detail="TITLE_CONTAINS: Calcolo"),
+            result(paths[2], "chrome", "BLOCKED", done=1, detail="target not found: text: Con"),
+        ]
+        run = recorded_run(client, base, run_body(plan, results, replan_ids=[replan["id"]]))
+        _, answer = client.call(
+            "POST", f"{base}/test-runs/{run['id']}/reviews", {"locale": LOCALE[language]}
+        )
+        _, reviewed = client.call("GET", f"{base}/test-runs/{run['id']}")
+
+        for item in (plan, replan):
+            for path in item["paths"]:
+                assert acceptance_domain.path_from_snapshot(path).to_snapshot() == path
+            for entry in item["not_covered"]:
+                assert acceptance_domain.not_covered_from_snapshot(entry).to_snapshot() == entry
+            assert (
+                acceptance_domain.application_from_snapshot(item["application"]).to_snapshot()
+                == item["application"]
+            )
+        for entry in reviewed["results"]:
+            parsed = acceptance_domain.path_result_from_snapshot(entry)
+            assert parsed.to_snapshot() == entry
+        outcomes = tuple(
+            acceptance_domain.outcome_from_snapshot(item) for item in reviewed["criteria"]
+        )
+        assert tuple(item.to_snapshot() for item in outcomes) == tuple(reviewed["criteria"])
+        assert acceptance_domain.run_summary(outcomes).to_snapshot() == reviewed["summary"]
+        assert reviewed["summary"] == {
+            "passed": 1,
+            "failed": 1,
+            "blocked": 1,
+            "not_covered": 1,
+            "not_run": 0,
+        }
+        for browser in reviewed["browsers"]:
+            assert acceptance_domain.browser_from_snapshot(browser).to_snapshot() == browser
+        assert reviewed["critiques"] == answer["review"]["critiques"]
+        for critique in reviewed["critiques"]:
+            assert acceptance_domain.critique_from_snapshot(critique).to_snapshot() == critique
         assert studio.errors == []

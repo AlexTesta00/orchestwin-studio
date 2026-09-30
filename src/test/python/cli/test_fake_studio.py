@@ -1496,3 +1496,128 @@ def test_the_clock_is_injected_and_never_goes_back() -> None:
         assert studio.now() == earlier
     with FakeStudio() as studio:
         assert studio.now() + timedelta(seconds=1) == studio.now()
+
+
+TEST_PAGE = "http://127.0.0.1:41234/"
+TEST_SNAPSHOT = {"url": TEST_PAGE, "title": "Seme", "text": "Seme", "elements": []}
+
+
+def plan_tests(client: Client, base: str) -> dict:
+    reply = client.post(
+        base + "/test-plans",
+        {"application": {"kind": "STATIC", "address": "dist"}, "snapshot": TEST_SNAPSHOT},
+    )
+    assert reply.status == 201
+    return reply.json()["plan"]
+
+
+def record_tests(client: Client, base: str, plan: dict) -> dict:
+    results = [
+        {
+            "path": path,
+            "browser": "chrome",
+            "status": "PASSED" if position else "FAILED",
+            "seconds": 2.5,
+            "steps": [
+                {
+                    "index": index,
+                    "status": "FAILED" if not position and index == len(path["steps"]) else "DONE",
+                    "detail": None,
+                    "url": TEST_PAGE,
+                    "title": "Seme",
+                    "screenshot": f"{path['code']}/chrome/{index:02d}.png",
+                }
+                for index in range(1, len(path["steps"]) + 1)
+            ],
+            "page_text": "Seme",
+        }
+        for position, path in enumerate(plan["paths"])
+    ]
+    reply = client.post(
+        base + "/test-runs",
+        {
+            "plan_id": plan["id"],
+            "started_at": "2026-09-29T10:00:00+00:00",
+            "finished_at": "2026-09-29T10:01:00+00:00",
+            "application": {"kind": "STATIC", "address": "dist"},
+            "browsers": [{"name": "chrome", "version": "151.0.7922.76"}],
+            "results": results,
+            "not_covered": plan["not_covered"],
+        },
+    )
+    assert reply.status == 201
+    return reply.json()["run"]
+
+
+def test_the_acceptance_tests_reach_the_published_folder() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        first = client.post(base + "/knowledge-packages").json()["version"]
+        plan = plan_tests(client, base)
+        assert client.post(base + "/knowledge-packages").status == 200
+        run = record_tests(client, base, plan)
+        recorded = client.post(base + "/knowledge-packages")
+        assert client.post(base + "/knowledge-packages").status == 200
+        reviewed = client.post(f"{base}/test-runs/{run['id']}/reviews", {"locale": "it-IT"})
+        published = client.post(base + "/knowledge-packages")
+        assert client.post(base + "/knowledge-packages").status == 200
+        archive = client.get(base + "/knowledge-packages/3/archive")
+        verified = read_verified_folder(archive.content)
+        with zipfile.ZipFile(io.BytesIO(archive.content)) as folder:
+            document = json.loads(folder.read("twins/feedback/tests.json").decode("utf-8"))
+
+        assert first["feedback"]["test_runs"] == 0
+        assert (recorded.status, recorded.json()["version"]["feedback"]["test_runs"]) == (201, 1)
+        assert reviewed.status == 201
+        version = published.json()["version"]
+        assert (published.status, version["version_number"]) == (201, 3)
+        assert version["feedback"]["test_runs"] == 1
+        assert "twins/feedback/tests.json" in version["entries"]
+        assert verified.manifest["feedback"]["tests"] == "twins/feedback/tests.json"
+        assert verified.manifest["feedback"]["test_runs"] == 1
+        assert (document["kind"], document["schema_version"]) == ("orchestwin.test-reviews", 3)
+        assert document["runs"] == seeded.test_runs()
+        assert document["runs"][0]["critiques"] == reviewed.json()["review"]["critiques"]
+        assert document["runs"][0]["summary"]["failed"] == 1
+        assert studio.errors == []
+
+
+def test_the_published_folder_keeps_the_twenty_newest_runs() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        plan = plan_tests(client, base)
+        for _ in range(21):
+            record_tests(client, base, plan)
+
+        version = client.post(base + "/knowledge-packages").json()["version"]
+        archive = client.get(base + "/knowledge-packages/1/archive")
+        with zipfile.ZipFile(io.BytesIO(archive.content)) as folder:
+            document = json.loads(folder.read("twins/feedback/tests.json").decode("utf-8"))
+
+        assert len(seeded.test_runs()) == 21
+        assert document["runs"] == seeded.test_runs()[:20]
+        assert version["feedback"]["test_runs"] == 20
+        assert studio.errors == []
+
+
+def test_the_helpers_of_the_tests_give_copies() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        run = record_tests(client, base, plan_tests(client, base))
+        assert client.post(f"{base}/test-runs/{run['id']}/reviews", {}).status == 201
+
+        seeded.test_plans()[0]["paths"].clear()
+        seeded.test_runs()[0]["critiques"].clear()
+        seeded.test_reviews()[0]["critiques"].clear()
+
+        assert len(seeded.test_plans()[0]["paths"]) == 4
+        assert len(seeded.test_runs()[0]["critiques"]) == 2
+        assert len(seeded.test_reviews()[0]["critiques"]) == 2
+        assert seeded.test_runs()[0]["critiques"] == seeded.test_reviews()[0]["critiques"]
+        assert studio.errors == []
