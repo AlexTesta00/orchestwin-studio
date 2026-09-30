@@ -11,13 +11,20 @@ from orchestwin.knowledge.archive import KnowledgeArchiveError, read_verified_fo
 from orchestwin.knowledge.layout import KNOWLEDGE_MANIFEST, STAGES
 from orchestwin.knowledge.schema import validate_document
 from orchestwin.knowledge.state import ProjectStateSources
+from orchestwin.knowledge.state_documents import current_reference
 from orchestwin.projects import acceptance_tests as acceptance_domain
-from src.test.python.knowledge.knowledge_fixtures import state_sources
+from orchestwin.projects import code_changes as changes_domain
+from orchestwin.projects import twin_learning as learning_domain
+from src.test.python.knowledge.knowledge_fixtures import partial_sources, state_sources
 
 from .support.folders import (
     ARCHIVE_PROJECT_ID,
     DEFAULT_PROJECT_NAME,
     acceptance_run_document,
+    folder_frame,
+    learned_entries,
+    legacy_task,
+    origin_tasks,
     partial_archive,
     stage_folder,
     state_archive,
@@ -31,10 +38,12 @@ EMPTY_STATE = {
     "text": "state/state.md",
     "changes": 0,
     "pending_changes": 0,
+    "stale_reviews": 0,
     "aligned_commit": None,
     "open_tasks": 0,
 }
 TESTS_DOCUMENT = "twins/feedback/tests.json"
+LEARNING_DOCUMENT = "twins/feedback/learned.json"
 STATE_FILES = {
     "state/state.json",
     "state/state.md",
@@ -177,8 +186,12 @@ def test_a_state_archive_carries_the_development_state() -> None:
     }
     assert verified.manifest["feedback"]["change_reviews"] == 1
     assert document["aligned"] == state.aligned
-    assert document["changes"] == list(state.changes)
-    assert document["tasks"] == list(state.tasks)
+    assert [change["commit"] for change in document["changes"]] == [
+        change["commit"] for change in state.changes
+    ]
+    assert document["changes"][0]["review"]["stale"] is False
+    assert [task["code"] for task in document["tasks"]] == [task["code"] for task in state.tasks]
+    assert document["tasks"][0]["origin"]["kind"] == "CODE_CHANGE"
     assert reviews["runs"] == list(state.runs)
     assert content != valid_archive(project_name="Lista della spesa", version_number=4)
 
@@ -254,3 +267,70 @@ def test_a_folder_of_any_step_carries_the_acceptance_runs(through: str) -> None:
     assert json.loads(folder.files[TESTS_DOCUMENT])["runs"] == [run]
     assert folder.manifest["feedback"]["test_runs"] == 1
     assert verify_folder(dict(folder.files)).package_version == 1
+
+
+@pytest.mark.parametrize("through", STAGES)
+def test_the_frame_is_the_reference_and_the_twins_of_the_published_folder(through: str) -> None:
+    present = STAGES[: STAGES.index(through) + 1]
+
+    frame = folder_frame(through)
+    manifest = stage_folder(through=through).manifest
+
+    assert frame["reference"] == current_reference(partial_sources(through))
+    assert (frame["reference"] is None) is (through != "design")
+    assert list(frame["twins"]) == [
+        {
+            "twin_id": twin["twin_id"],
+            "twin_name": twin["name"],
+            "profile_version_number": twin["version_number"],
+        }
+        for twin in manifest["twins"]
+    ]
+    assert bool(frame["twins"]) is ("twins" in present)
+    with pytest.raises(ValueError):
+        folder_frame("code")
+
+
+def test_the_tasks_and_the_learning_of_this_sprint_reach_a_verified_folder() -> None:
+    tasks = (*origin_tasks(), legacy_task())
+
+    content = state_archive(state=ProjectStateSources(tasks=tasks, learning=learned_entries()))
+    verified = read_verified_folder(content)
+    files = entries(content)
+    written = json.loads(files["state/state.json"])["tasks"]
+    learned = json.loads(files[LEARNING_DOCUMENT])
+
+    assert written[:4] == list(origin_tasks())
+    assert written[4] == {
+        **legacy_task(),
+        "about": {**legacy_task()["about"], "criteria": []},
+        "origin": {
+            "kind": "CODE_CHANGE",
+            "commit": legacy_task()["from_commit"],
+            "test_run_id": None,
+            "twin_id": None,
+            "twin_name": None,
+            "finding": None,
+        },
+        "closed_at": None,
+        "note": None,
+    }
+    assert learned["twins"] == list(learned_entries())
+    assert (learned["kind"], learned["project_id"]) == (
+        "orchestwin.twin-learning",
+        ARCHIVE_PROJECT_ID,
+    )
+    assert verified.manifest["feedback"]["learned"] == LEARNING_DOCUMENT
+    assert verified.manifest["feedback"]["learned_observations"] == 2
+    assert verified.manifest["state"]["open_tasks"] == 3
+
+
+def test_the_tasks_and_the_learning_of_this_sprint_pass_the_real_domain_rules() -> None:
+    for task in origin_tasks():
+        assert changes_domain.code_task_from_snapshot(task).to_snapshot() == task
+    for entry in learned_entries():
+        assert learning_domain.twin_learning_from_snapshot(entry).to_snapshot() == entry
+    assert origin_tasks() == origin_tasks()
+    assert origin_tasks()[0] is not origin_tasks()[0]
+    assert learned_entries()[0] is not learned_entries()[0]
+    assert "origin" not in legacy_task()
