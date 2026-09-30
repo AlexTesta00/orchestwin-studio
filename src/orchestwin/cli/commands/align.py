@@ -31,13 +31,18 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--latest", action="store_true", help="align.option_latest")
     parser.add_argument("--dry-run", action="store_true", help="align.option_dry_run")
     parser.add_argument("--decide", metavar="COMMIT", help="align.option_decide")
+    parser.add_argument("--recheck", action="store_true", help="align.option_recheck")
 
 
 def run(context: CommandContext, arguments: argparse.Namespace) -> int:
+    if arguments.recheck and (arguments.since is not None or arguments.decide is not None):
+        raise CliError("ALIGN_RECHECK_ALONE", status=USAGE_STATUS)
     if arguments.decide is not None and (
         arguments.since is not None or arguments.latest or arguments.dry_run
     ):
         raise CliError("ALIGN_DECIDE_ALONE", status=USAGE_STATUS)
+    if arguments.recheck:
+        return recheck(context, latest=arguments.latest, dry_run=arguments.dry_run)
     workspace = align_review.prepare(context)
     console = context.console
     console.heading(context.text("align.heading", name=workspace.project.link().project_name))
@@ -199,15 +204,102 @@ def review_all(
     locale = align_review.locale(context, workspace.project)
     runs: dict[str, Mapping[str, object]] = {}
     for commit in commits:
-        try:
-            run = align_review.review(context, workspace, commit.hash, locale=locale)
-        except ApiFailure as failure:
-            if failure.http_status == 402 or failure.code in BUDGET_CODES:
-                raise budget_error(context, workspace, failure.code) from None
-            raise
+        run = review_commit(context, workspace, commit.hash, locale=locale)
         runs[commit.hash] = run
         align_review.show_run(context, run, names, message=git.first_line(commit.message))
     return runs
+
+
+def review_commit(
+    context: CommandContext,
+    workspace: Workspace,
+    commit: str,
+    *,
+    locale: str,
+    again: bool = False,
+) -> Mapping[str, object]:
+    try:
+        return align_review.review(context, workspace, commit, locale=locale, again=again)
+    except ApiFailure as failure:
+        if failure.http_status == 402 or failure.code in BUDGET_CODES:
+            raise budget_error(context, workspace, failure.code) from None
+        raise
+
+
+def recheck(context: CommandContext, *, latest: bool, dry_run: bool) -> int:
+    workspace = align_review.prepare(context, repository=False)
+    console = context.console
+    console.heading(context.text("align.heading", name=workspace.project.link().project_name))
+    show_reference(context, workspace.alignment)
+    stale = stale_changes(workspace, latest=latest)
+    if not stale:
+        console.say("align.recheck_none")
+        finish(context, workspace)
+        return 0
+    console.say("align.recheck_list", count=len(stale), **current_versions(workspace.alignment))
+    console.items([recheck_line(context, change) for change in stale])
+    twins = align_review.twins_count(workspace.client, workspace.project)
+    operations = align_review.review_operations(twins, len(stale))
+    if dry_run:
+        total = costs.estimate(operations)
+        console.say("align.recheck_dry_run")
+        console.say(
+            "align.dry_run_estimate",
+            amount=costs.amount_text(total, context.language),
+            minutes=costs.minutes_text(total.minutes),
+        )
+        finish(context, workspace)
+        return 0
+    if not changes_api.review_available(workspace.alignment):
+        raise CliError(changes_api.NO_REVIEW_MODEL)
+    console.say("align.recheck_reviewing", count=len(stale), twins=twins)
+    costs.confirm_spending(context, workspace.client, operations)
+    names = align_review.titles(workspace.project)
+    locale = align_review.locale(context, workspace.project)
+    status = 0
+    for change in stale:
+        commit = str(change.get("commit") or "")
+        line = git.first_line(str(change.get("message") or ""))
+        run = review_commit(context, workspace, commit, locale=locale, again=True)
+        align_review.show_run(context, run, names, message=line)
+        earlier = changes_api.decision_of(change)
+        if earlier is not None:
+            key = DECISION_KEYS.get(earlier)
+            console.say("align.earlier_decision", decision=context.text(key) if key else earlier)
+        outcome = align_decision.decide(
+            context, workspace, [align_decision.Reviewed(commit, line, run)]
+        )
+        status = status or outcome
+    finish(context, workspace)
+    return status
+
+
+def stale_changes(workspace: Workspace, *, latest: bool) -> list[Mapping[str, object]]:
+    pending = changes_api.changes(workspace.client, workspace.project_id, pending=True)
+    stale = [change for change in reversed(pending) if changes_api.review_stale(change)]
+    return stale[-1:] if latest else stale
+
+
+def current_versions(document: Mapping[str, object]) -> dict[str, object]:
+    design = changes_api.reference(document, "design") or {}
+    return {
+        "requirements": _number(changes_api.reference(document, "requirements")),
+        "design": _number(design),
+        "alternative": design.get("alternative_code") or "-",
+    }
+
+
+def recheck_line(context: CommandContext, change: Mapping[str, object]) -> str:
+    reference = changes_api.review_reference(change)
+    return context.text(
+        "align.recheck_line",
+        commit=git.short(change.get("commit")),
+        date=git.commit_date(str(change.get("committed_at") or "")),
+        line=git.first_line(str(change.get("message") or "")),
+        requirements=_number(reference, "requirements_version_number"),
+        design=_number(reference, "design_version_number"),
+        alternative=reference.get("alternative_code") or "-",
+    )
 
 
 def budget_error(context: CommandContext, workspace: Workspace, code: str) -> CliError:
@@ -240,10 +332,12 @@ def decision_items(
 
 
 def finish(context: CommandContext, workspace: Workspace) -> None:
-    summary = changes_api.summary(workspace.client, workspace.project_id)
-    if summary is not None:
-        context.console.write()
-        status_command.show_alignment(context, summary)
+    found = changes_api.development(workspace.client, workspace.project_id)
+    if found is None:
+        return
+    context.console.write()
+    status_command.show_alignment(context, found.summary)
+    align_decision.say_recheck(context, workspace, found.stale_reviews)
 
 
 def _number(document: Mapping[str, object] | None, key: str = "version_number") -> object:

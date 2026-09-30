@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.client import payload
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
 NO_REVIEW_MODEL: Final = "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"
 REVIEW_EXISTS: Final = "CODE_CHANGE_REVIEW_EXISTS"
 CHANGE_NOT_FOUND: Final = "CODE_CHANGE_NOT_FOUND"
+TASK_SOURCE_INVALID: Final = "TASK_SOURCE_INVALID"
 RECORDED: Final = "RECORDED"
 ALREADY_RECORDED: Final = "ALREADY_RECORDED"
 REVIEWED: Final = "REVIEWED"
@@ -41,6 +43,17 @@ MAX_NOTE_LENGTH: Final = 2000
 MAX_DESIGN_REQUEST: Final = 1000
 MAX_REQUIREMENTS_REQUEST: Final = 2000
 MISSING_ROUTE: Final = frozenset({404, 405})
+REFERENCE_KEYS: Final = (
+    "requirements_version_number",
+    "design_version_number",
+    "alternative_code",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Development:
+    summary: StateSummary
+    stale_reviews: int
 
 
 def changes_path(project_id: str) -> str:
@@ -99,18 +112,30 @@ def decide(
     *,
     note: str | None = None,
     tasks: Sequence[str] = (),
+    findings: Sequence[Mapping[str, object]] = (),
 ) -> Mapping[str, object]:
     written = [" ".join(str(task).split()) for task in tasks]
     stripped = note.strip() if isinstance(note, str) else ""
-    body = {
+    body: dict[str, object] = {
         "kind": kind,
         "note": stripped or None,
         "tasks": [task for task in written if task],
     }
+    if findings:
+        body["findings"] = [finding_body(item) for item in findings]
     return _mapping_of(client.post(decision_path(project_id, commit), body))
 
 
+def finding_body(item: Mapping[str, object]) -> dict[str, object]:
+    return {"twin_id": item.get("twin_id"), "finding": item.get("finding")}
+
+
 def summary(client: StudioClient, project_id: str) -> StateSummary | None:
+    found = development(client, project_id)
+    return None if found is None else found.summary
+
+
+def development(client: StudioClient, project_id: str) -> Development | None:
     try:
         document = alignment(client, project_id)
         items = changes(client, project_id)
@@ -118,7 +143,28 @@ def summary(client: StudioClient, project_id: str) -> StateSummary | None:
         if failure.http_status in MISSING_ROUTE or failure.http_status >= 500:
             return None
         raise
-    return summary_of(document, len(items))
+    return Development(summary_of(document, len(items)), stale_count(document))
+
+
+def stale_count(document: Mapping[str, object]) -> int:
+    value = document.get("stale_reviews")
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def review_of(change_document: Mapping[str, object]) -> Mapping[str, object] | None:
+    review = change_document.get("review")
+    return review if isinstance(review, Mapping) else None
+
+
+def review_stale(change_document: Mapping[str, object]) -> bool:
+    review = review_of(change_document)
+    return review is not None and review.get("stale") is True
+
+
+def review_reference(change_document: Mapping[str, object]) -> Mapping[str, object]:
+    review = review_of(change_document)
+    found = review.get("reference") if review is not None else None
+    return found if isinstance(found, Mapping) else {}
 
 
 def summary_of(document: Mapping[str, object], recorded: int) -> StateSummary:

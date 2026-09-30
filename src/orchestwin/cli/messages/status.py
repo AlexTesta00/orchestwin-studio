@@ -75,6 +75,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Sviluppo: nessun commit registrato finora. Dopo il primo commit lancia `ut align`.",
         "en": "Development: no commit recorded yet. After your first commit launch `ut align`.",
     },
+    "status.stale_reviews": {
+        "it": "Esami da rifare perché i requisiti o il design sono cambiati: {count} "
+        "(`ut align --recheck`).",
+        "en": "Reviews to do again because the requirements or the design changed: {count} "
+        "(`ut align --recheck`).",
+    },
+    "status.learning": {
+        "it": "Cosa hanno imparato i twin durante lo sviluppo: {twins}.",
+        "en": "What the twins learned during the development: {twins}.",
+    },
+    "status.learning_twin": {
+        "it": "{name} (versione {label}, osservazioni: {count})",
+        "en": "{name} (version {label}, observations: {count})",
+    },
     "status.tests": {
         "it": "Verifica dei criteri: ultima esecuzione il {date}: {passed} superati, {failed} "
         "falliti, {blocked} bloccati, {not_covered} non coperti.",
