@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import sys
 from collections.abc import Callable, Mapping
@@ -27,6 +28,9 @@ from src.test.python.knowledge.knowledge_fixtures import (
 from .support.folders import (
     ARCHIVE_PROJECT_ID,
     acceptance_run_document,
+    learned_entries,
+    legacy_task,
+    origin_tasks,
     partial_archive,
     state_archive,
     valid_archive,
@@ -38,7 +42,13 @@ STAGES = ("brief", "team", "twins", "requirements", "design")
 RECEPTION = "Addetti all'accoglienza"
 VOLUNTEERS = "Organizzatori volontari"
 TESTS_DOCUMENT = "twins/feedback/tests.json"
+LEARNING_DOCUMENT = "twins/feedback/learned.json"
 OLDER_RUN = "00000000-0000-4000-8000-00000000e000"
+OLDER_REFERENCE = {
+    "requirements_version_number": 2,
+    "design_version_number": 3,
+    "alternative_code": "DES-002",
+}
 
 
 def linked(tmp_path: Path, *, language: str | None = "it") -> ProjectFolder:
@@ -122,6 +132,63 @@ def with_test_runs(
     write_files(project.knowledge, {TESTS_DOCUMENT: json.dumps(reviews_of_tests(runs))})
     declare_tests(project, declared=True, count=len(runs))
     return project
+
+
+def learning_sources() -> ProjectStateSources:
+    sources = state_sources()
+    pending = copy.deepcopy(dict(sources.changes[0]))
+    pending["review"] = {**pending["review"], "reference": dict(OLDER_REFERENCE)}
+    return dataclasses.replace(
+        sources,
+        changes=(pending, *sources.changes[1:]),
+        tasks=(*origin_tasks(), legacy_task()),
+        learning=learned_entries(),
+    )
+
+
+def learning_folder(tmp_path: Path, *, language: str | None = "it") -> ProjectFolder:
+    return with_archive(tmp_path, state_archive(state=learning_sources()), language=language)
+
+
+def learning_document(entries: object) -> dict[str, object]:
+    return {
+        "schema_version": 3,
+        "kind": "orchestwin.twin-learning",
+        "project_id": ARCHIVE_PROJECT_ID,
+        "twins": entries,
+    }
+
+
+def declare_learning(
+    project: ProjectFolder, *, declared: bool, path: str = LEARNING_DOCUMENT
+) -> None:
+    def change(manifest: dict) -> None:
+        feedback = manifest["feedback"]
+        feedback.pop("learned", None)
+        feedback.pop("learned_observations", None)
+        if declared:
+            feedback["learned"] = path
+            feedback["learned_observations"] = 2
+
+    edit_json(project.knowledge / "orchestwin.json", change)
+
+
+def with_learning(tmp_path: Path, entries: object, *, language: str | None = "it") -> ProjectFolder:
+    project = state_folder(tmp_path, language=language)
+    write_files(project.knowledge, {LEARNING_DOCUMENT: json.dumps(learning_document(entries))})
+    declare_learning(project, declared=True)
+    return project
+
+
+def without_learning(tmp_path: Path, *, language: str | None = "it") -> ProjectFolder:
+    project = state_folder(tmp_path, language=language)
+    (project.knowledge / "twins" / "feedback" / "learned.json").unlink(missing_ok=True)
+    declare_learning(project, declared=False)
+    return project
+
+
+def with_state_tasks(project: ProjectFolder, tasks: list[dict[str, object]]) -> None:
+    edit_json(project.knowledge / "state" / "state.json", lambda state: state.update(tasks=tasks))
 
 
 def test_a_schema_three_folder_gives_its_stages_its_state_and_its_twins(tmp_path: Path) -> None:
@@ -575,3 +642,136 @@ def test_the_test_runs_of_a_missing_folder_are_a_folder_problem(tmp_path: Path) 
         knowledge.test_runs(tmp_path / "nothing")
 
     assert refused.value.code == "FOLDER_MISSING"
+
+
+def test_the_tasks_come_from_the_state_of_the_folder_as_it_holds_them(tmp_path: Path) -> None:
+    project = learning_folder(tmp_path)
+    state = json.loads((project.knowledge / "state" / "state.json").read_bytes().decode("utf-8"))
+
+    found = knowledge.tasks(project.knowledge)
+
+    assert found == tuple(state["tasks"])
+    assert [task["code"] for task in found] == [f"TSK-00{number}" for number in range(1, 6)]
+    assert [task["origin"]["kind"] for task in found] == [
+        "CODE_CHANGE",
+        "CODE_CHANGE",
+        "TEST_RUN",
+        "OWNER",
+        "CODE_CHANGE",
+    ]
+    assert found[:4] == origin_tasks()
+    assert knowledge.load(project.knowledge).tasks() == found
+
+
+def test_the_tasks_of_older_folders_are_given_as_they_were_written(tmp_path: Path) -> None:
+    sprint_27 = state_folder(tmp_path / "sprint27")
+    with_state_tasks(sprint_27, [legacy_task(), "not a task"])
+    older = schema_two_folder(tmp_path / "older")
+    empty = with_archive(tmp_path / "empty", valid_archive())
+
+    assert knowledge.tasks(sprint_27.knowledge) == (legacy_task(),)
+    assert knowledge.tasks(older.knowledge) == ()
+    assert knowledge.tasks(empty.knowledge) == ()
+
+
+def test_the_tasks_answer_the_problems_of_the_folder(tmp_path: Path) -> None:
+    broken = state_folder(tmp_path / "broken")
+    (broken.knowledge / "state" / "state.json").write_bytes(b"{")
+
+    with pytest.raises(FolderProblem) as missing:
+        knowledge.tasks(tmp_path / "nothing")
+    with pytest.raises(FolderProblem) as unreadable:
+        knowledge.tasks(broken.knowledge)
+
+    assert missing.value.code == "FOLDER_MISSING"
+    assert (unreadable.value.code, dict(unreadable.value.values)) == (
+        "FOLDER_UNREADABLE",
+        {"path": "state/state.json"},
+    )
+
+
+def test_what_the_twins_learned_comes_from_the_declared_document(tmp_path: Path) -> None:
+    project = learning_folder(tmp_path)
+    manifest = json.loads((project.knowledge / "orchestwin.json").read_bytes().decode("utf-8"))
+
+    found = knowledge.learning(project.knowledge)
+
+    assert found == learned_entries()
+    assert manifest["feedback"]["learned"] == LEARNING_DOCUMENT
+    assert manifest["feedback"]["learned_observations"] == 2
+    assert knowledge.load(project.knowledge).learning() == found
+
+
+def test_a_folder_that_does_not_declare_the_learning_has_none(tmp_path: Path) -> None:
+    undeclared = with_learning(tmp_path / "undeclared", list(learned_entries()))
+    declare_learning(undeclared, declared=False)
+    older = schema_two_folder(tmp_path / "older")
+    partial = with_archive(tmp_path / "partial", partial_archive(through="team"))
+
+    assert knowledge.learning(undeclared.knowledge) == ()
+    assert knowledge.learning(older.knowledge) == ()
+    assert knowledge.learning(partial.knowledge) == ()
+    assert knowledge.learning(without_learning(tmp_path / "without").knowledge) == ()
+
+
+@pytest.mark.parametrize(
+    ("content", "manifest_path"),
+    [
+        (None, LEARNING_DOCUMENT),
+        (b"{", LEARNING_DOCUMENT),
+        (b"[]", LEARNING_DOCUMENT),
+        (
+            json.dumps({**learning_document([]), "kind": "orchestwin.test-reviews"}).encode(),
+            LEARNING_DOCUMENT,
+        ),
+        (json.dumps(learning_document([])).encode(), "../learned.json"),
+    ],
+)
+def test_a_declared_learning_document_that_cannot_be_used_is_a_folder_problem(
+    tmp_path: Path, content: bytes | None, manifest_path: str
+) -> None:
+    project = with_learning(tmp_path, list(learned_entries()))
+    path = project.knowledge / "twins" / "feedback" / "learned.json"
+    if content is None:
+        path.unlink()
+    else:
+        path.write_bytes(content)
+    declare_learning(project, declared=True, path=manifest_path)
+
+    with pytest.raises(FolderProblem) as refused:
+        knowledge.learning(project.knowledge)
+
+    assert (refused.value.code, dict(refused.value.values)) == (
+        "FOLDER_UNREADABLE",
+        {"path": manifest_path},
+    )
+
+
+def test_only_the_twin_entries_that_are_objects_are_kept(tmp_path: Path) -> None:
+    entry = learned_entries()[0]
+    project = with_learning(tmp_path, [entry, "twin", 7, None])
+    other = with_learning(tmp_path / "other", {"twin_id": RECEPTION_TWIN})
+
+    assert knowledge.learning(project.knowledge) == (entry,)
+    assert knowledge.learning(other.knowledge) == ()
+
+
+def test_the_stale_reviews_come_from_the_manifest(tmp_path: Path) -> None:
+    project = learning_folder(tmp_path)
+    counted = knowledge.load(project.knowledge).stale_reviews()
+    values = []
+    for value in (3, None, "2", -1, True):
+        edit_json(
+            project.knowledge / "orchestwin.json",
+            lambda manifest, value=value: manifest["state"].update(stale_reviews=value),
+        )
+        values.append(knowledge.load(project.knowledge).stale_reviews())
+    edit_json(
+        project.knowledge / "orchestwin.json",
+        lambda manifest: manifest["state"].pop("stale_reviews"),
+    )
+
+    assert counted == 1
+    assert values == [3, 0, 0, 0, 0]
+    assert knowledge.load(project.knowledge).stale_reviews() == 0
+    assert knowledge.load(schema_two_folder(tmp_path / "older").knowledge).stale_reviews() == 0

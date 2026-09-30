@@ -156,6 +156,7 @@ def test_the_estimates_of_the_contract() -> None:
     assert ESTIMATES["CODE_ALIGNMENT"] == Estimate(0.15, 0.30, 1.0)
     assert ESTIMATES["TEST_PLAN"] == Estimate(0.15, 0.30, 2.0)
     assert ESTIMATES["TEST_REVIEW"] == Estimate(0.10, 0.20, 1.0)
+    assert ESTIMATES["TWIN_UPDATE"] == Estimate(0.10, 0.25, 1.0)
     assert set(ESTIMATES) == {
         "BRIEF_DIALOGUE",
         "TEAM_PROPOSAL",
@@ -172,7 +173,23 @@ def test_the_estimates_of_the_contract() -> None:
         "CODE_ALIGNMENT",
         "TEST_PLAN",
         "TEST_REVIEW",
+        "TWIN_UPDATE",
     }
+
+
+def test_two_twin_updates_are_shown_and_three_are_asked(tmp_path: Path) -> None:
+    transport = with_budget().expect("GET", BUDGET_PATH, body=BUDGET)
+    context, bundle = prepared(tmp_path, transport, answers=("",), language="it")
+
+    confirm_spending(context, context.client(), ["TWIN_UPDATE"] * 2)
+    confirm_spending(context, context.client(), ["TWIN_UPDATE"] * 3)
+
+    assert bundle.output.splitlines() == [
+        "Stima: 0,20-0,50 USD, circa 2 min. Credito rimasto nello Studio: 25,13 USD.",
+        "Stima: 0,30-0,75 USD, circa 3 min. Credito rimasto nello Studio: 25,13 USD.",
+        "Vado avanti con questa spesa? [S/n] ",
+    ]
+    transport.assert_done()
 
 
 def test_a_test_plan_is_never_asked_and_three_twins_reviewing_a_run_are(tmp_path: Path) -> None:

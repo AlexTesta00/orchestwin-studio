@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from orchestwin.cli import messages
 from orchestwin.cli.project import ProjectFolder
 
 from .support.terminal import PROJECT_ID, START, link_folder, run_ut, store_session
@@ -15,6 +16,8 @@ LOCAL = "http://127.0.0.1:8000"
 BASE = f"{API}/projects/{PROJECT_ID}"
 ALIGNED = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 TEST_RUN = "00000000-0000-4000-8000-00000000e001"
+TWIN_OWNER = "00000000-0000-4000-8000-0000000000b1"
+TWIN_WAITER = "00000000-0000-4000-8000-0000000000b2"
 TEST_SUMMARY = {"passed": 3, "failed": 1, "blocked": 1, "not_covered": 2, "not_run": 0}
 BUDGET = {
     "currency": "USD",
@@ -40,7 +43,7 @@ def version(identifier: str, number: int, content_hash: str) -> dict[str, object
 
 
 def alignment_document(
-    *, aligned: str | None = ALIGNED, pending: int = 1, tasks: int = 1
+    *, aligned: str | None = ALIGNED, pending: int = 1, tasks: int = 1, stale: int = 0
 ) -> dict[str, object]:
     return {
         "project_id": PROJECT_ID,
@@ -54,6 +57,7 @@ def alignment_document(
             "design_version_number": 2,
         },
         "pending_changes": pending,
+        "stale_reviews": stale,
         "latest_change": None,
         "tasks": [
             {"code": f"TSK-{index + 1:03d}", "text": "Fix it", "status": "OPEN"}
@@ -85,6 +89,28 @@ def acceptance_document(
     }
 
 
+def learning_entry(twin_id: str, name: str, label: str, observations: int) -> dict[str, object]:
+    return {
+        "twin_id": twin_id,
+        "twin_name": name,
+        "profile_version_number": 1,
+        "development_version_number": int(label.split(".")[1]),
+        "label": label,
+        "observations": [
+            {"code": f"OBS-{index:03d}", "statement": f"Statement {index}."}
+            for index in range(1, observations + 1)
+        ],
+        "retired": [],
+    }
+
+
+LEARNED = [
+    learning_entry(TWIN_OWNER, "Pizzeria owner", "1.2", 2),
+    learning_entry(TWIN_WAITER, "Evening shift waiter", "1.0", 0),
+]
+EMPTY_LEARNING = {"project_id": PROJECT_ID, "update_available": False, "twins": []}
+
+
 def expect_alignment(
     transport: ScriptedTransport, document: dict[str, object], recorded: int
 ) -> None:
@@ -109,6 +135,7 @@ def expect_studio(
     recorded: int = 3,
     routes: bool = True,
     tests: dict[str, object] | None = None,
+    learning: dict[str, object] | None = None,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -191,6 +218,12 @@ def expect_studio(
         transport.expect(
             "GET", f"{BASE}/acceptance-tests", status=404, body={"detail": "Not Found"}
         )
+    if twins_approved and routes:
+        transport.expect(
+            "GET", f"{BASE}/twin-learning", body=EMPTY_LEARNING if learning is None else learning
+        )
+    elif twins_approved:
+        transport.expect("GET", f"{BASE}/twin-learning", status=404, body={"detail": "Not Found"})
     if budget:
         transport.expect("GET", f"{API}/model-runtime/budget", body=BUDGET)
         transport.expect(
@@ -356,6 +389,7 @@ def test_the_development_as_json_and_when_nothing_is_recorded(tmp_path: Path) ->
         "pending": 1,
         "aligned_commit": ALIGNED,
         "open_tasks": 1,
+        "stale_reviews": 0,
     }
     assert document["next_command"] == "ut align"
     assert (
@@ -423,6 +457,7 @@ def test_offline_the_development_comes_from_the_folder(tmp_path: Path) -> None:
         "pending": 2,
         "aligned_commit": ALIGNED,
         "open_tasks": 3,
+        "stale_reviews": 0,
     }
 
 
@@ -516,7 +551,8 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
     }
     assert document["alignment"] is None
     assert document["tests"] is None
-    assert list(document)[-2:] == ["alignment", "tests"]
+    assert document["learning"] is None
+    assert list(document)[-3:] == ["alignment", "tests", "learning"]
 
 
 def saved_steps(project: ProjectFolder) -> None:
@@ -878,7 +914,7 @@ def test_the_latest_run_of_the_tests_follows_the_development_line(
             "summary": TEST_SUMMARY,
         },
     }
-    assert list(document)[-1] == "tests"
+    assert list(document)[-2:] == ["tests", "learning"]
     text.assert_done()
 
 
@@ -993,3 +1029,273 @@ def test_status_from_a_subfolder_and_from_the_project_option(tmp_path: Path) -> 
 
     assert json.loads(below.output)["project"]["root"] == str(project.root)
     assert json.loads(option.output)["project"]["root"] == str(project.root)
+
+
+PACKAGE_STEP = {
+    "stage": "PACKAGE",
+    "action": "DOWNLOAD_FOLDER",
+    "twins_approved": True,
+    "later_approved": True,
+    "folder": 3,
+}
+
+
+def folder_with_state(
+    project: ProjectFolder,
+    *,
+    state: dict[str, object] | None = None,
+    learned: object = None,
+    listed: bool = True,
+) -> None:
+    project.knowledge.mkdir(parents=True)
+    stages = ("brief", "team", "twins", "requirements", "design")
+    manifest: dict[str, object] = {
+        "schema_version": 3,
+        "package": {"version_number": 5, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": "Calcolo mancia"},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": None, "complete": True},
+        "state": state
+        or {"changes": 2, "pending_changes": 1, "aligned_commit": None, "open_tasks": 0},
+        "files": {},
+    }
+    if listed:
+        manifest["feedback"] = {"learned": "twins/feedback/learned.json", "learned_observations": 2}
+    (project.knowledge / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if learned is not None:
+        feedback = project.knowledge / "twins" / "feedback"
+        feedback.mkdir(parents=True)
+        document = {
+            "schema_version": 3,
+            "kind": "orchestwin.twin-learning",
+            "project_id": PROJECT_ID,
+            "twins": learned,
+        }
+        (feedback / "learned.json").write_text(json.dumps(document), encoding="utf-8")
+
+
+def learning_line(language: str, twins: list[tuple[str, str, int]]) -> str:
+    listed = "; ".join(
+        messages.text("status.learning_twin", language, name=name, label=label, count=count)
+        for name, label, count in twins
+    )
+    return messages.text("status.learning", language, twins=listed)
+
+
+LEARNED_TWINS = {
+    "twins": [
+        {"twin_id": TWIN_OWNER, "name": "Pizzeria owner", "label": "1.2", "observations": 2},
+        {"twin_id": TWIN_WAITER, "name": "Evening shift waiter", "label": "1.0", "observations": 0},
+    ]
+}
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_stale_reviews_join_the_development_line_and_the_json(
+    tmp_path: Path, language: str
+) -> None:
+    signed_in_folder(tmp_path)
+    studio = {**PACKAGE_STEP, "alignment": alignment_document(stale=2)}
+    text = expect_studio(ScriptedTransport(), **studio)
+    as_json = expect_studio(ScriptedTransport(), **studio)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    development = messages.text(
+        "status.alignment", language, recorded=3, pending=1, commit="4f2a9c1", tasks=1
+    )
+    stale = messages.text("status.stale_reviews", language, count=2)
+    assert f"{development} {stale}" in run.output.splitlines()
+    assert "`ut align --recheck`" in stale
+    assert document["alignment"] == {
+        "recorded": 3,
+        "pending": 1,
+        "aligned_commit": ALIGNED,
+        "open_tasks": 1,
+        "stale_reviews": 2,
+    }
+    assert list(document["alignment"])[-1] == "stale_reviews"
+    assert document["learning"] is None
+    text.assert_done()
+    as_json.assert_done()
+
+
+def test_without_stale_reviews_the_development_line_stays_as_it_was(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    assert (
+        "Development: commits recorded: 3; after the aligned point: 1; aligned commit: 4f2a9c1; "
+        "open tasks for the code: 1." in run.output.splitlines()
+    )
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_offline_the_stale_reviews_come_from_the_manifest(tmp_path: Path, language: str) -> None:
+    project = link_folder(tmp_path / "project")
+    state = {
+        "changes": 2,
+        "pending_changes": 2,
+        "stale_reviews": 1,
+        "aligned_commit": None,
+        "open_tasks": 0,
+    }
+    folder_with_state(project, state=state, listed=False)
+
+    run = run_ut(
+        ["--lang", language, "status", "--offline"], tmp_path, transport=ScriptedTransport()
+    )
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    development = messages.text(
+        "status.alignment_not_aligned", language, recorded=2, pending=2, tasks=0
+    )
+    stale = messages.text("status.stale_reviews", language, count=1)
+    assert f"{development} {stale}" in run.output.splitlines()
+    assert document["alignment"]["stale_reviews"] == 1
+    assert document["learning"] is None
+
+
+@pytest.mark.parametrize("value", [None, -1, "2", True])
+def test_offline_a_missing_or_wrong_count_of_stale_reviews_is_zero(
+    tmp_path: Path, value: object
+) -> None:
+    project = link_folder(tmp_path / "project")
+    state: dict[str, object] = {
+        "changes": 2,
+        "pending_changes": 2,
+        "aligned_commit": None,
+        "open_tasks": 0,
+    }
+    if value is not None:
+        state["stale_reviews"] = value
+    folder_with_state(project, state=state, listed=False)
+
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert document["alignment"]["stale_reviews"] == 0
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_what_the_twins_learned_follows_the_tests_line(tmp_path: Path, language: str) -> None:
+    signed_in_folder(tmp_path)
+    studio = {
+        **PACKAGE_STEP,
+        "tests": acceptance_document(runs=1),
+        "learning": {"project_id": PROJECT_ID, "update_available": True, "twins": LEARNED},
+    }
+    text = expect_studio(ScriptedTransport(), **studio)
+    as_json = expect_studio(ScriptedTransport(), **studio)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    lines = run.output.splitlines()
+    line = learning_line(
+        language, [("Pizzeria owner", "1.2", 2), ("Evening shift waiter", "1.0", 0)]
+    )
+    position = lines.index(line)
+    assert lines[position - 1].startswith(("Acceptance tests:", "Verifica dei criteri:"))
+    assert lines[position + 1].startswith(("Spent", "Spesa"))
+    assert document["learning"] == LEARNED_TWINS
+    assert list(document)[-1] == "learning"
+    text.assert_done()
+
+
+def test_a_studio_without_the_route_of_the_learning_leaves_it_to_the_folder(
+    tmp_path: Path,
+) -> None:
+    project = signed_in_folder(tmp_path)
+    folder_with_state(project, learned=LEARNED)
+    transport = expect_studio(ScriptedTransport(), **{**PACKAGE_STEP, "routes": False})
+
+    run = run_ut(["status", "--json"], tmp_path, transport=transport)
+
+    assert json.loads(run.output)["learning"] == LEARNED_TWINS
+    transport.assert_done()
+
+
+def test_offline_the_learning_comes_from_the_folder(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_state(project, learned=LEARNED)
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert learning_line(
+        "en", [("Pizzeria owner", "1.2", 2), ("Evening shift waiter", "1.0", 0)]
+    ) in (run.output.splitlines())
+    assert document["learning"] == LEARNED_TWINS
+
+
+@pytest.mark.parametrize(
+    ("learned", "listed", "expected"),
+    [
+        (None, True, None),
+        (LEARNED, False, None),
+        ("not a list", True, None),
+        ([], True, None),
+        (
+            [
+                {**LEARNED[1], "label": " "},
+                "noise",
+                {**LEARNED[0], "twin_id": None},
+            ],
+            True,
+            {
+                "twins": [
+                    {
+                        "twin_id": TWIN_WAITER,
+                        "name": "Evening shift waiter",
+                        "label": "1.0",
+                        "observations": 0,
+                    }
+                ]
+            },
+        ),
+    ],
+)
+def test_nothing_learned_gives_no_line(
+    tmp_path: Path, learned: object, listed: bool, expected: object
+) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_state(project, learned=learned, listed=listed)
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert not any(line.startswith("What the twins learned") for line in run.output.splitlines())
+    assert document["learning"] == expected
+
+
+def test_a_learning_route_that_fails_hard_is_an_error(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(
+        ScriptedTransport(),
+        **PACKAGE_STEP,
+        learning=None,
+    )
+    transport.expected = [
+        item for item in transport.expected if not item.path.endswith("/twin-learning")
+    ]
+    transport.expect(
+        "GET", f"{BASE}/twin-learning", status=403, body={"detail": {"code": "FORBIDDEN"}}
+    )
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    assert run.status == 1
+    assert "FORBIDDEN" in run.errors

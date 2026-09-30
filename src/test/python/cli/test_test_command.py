@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import threading
 from collections.abc import Iterator, Sequence
@@ -9,13 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from orchestwin.cli import messages
 from orchestwin.cli.browser import BrowserProgram
 from orchestwin.cli.flows import test_run as run_flow
 from orchestwin.cli.http import UrlTransport
 
 from .support.browsers import FAKE_PNG
 from .support.fake_studio import FakeProject, FakeStudio, RecordedRequest
-from .support.terminal import TEST_PASSWORD, Run, link_folder, run_ut
+from .support.terminal import TEST_PASSWORD, Run, command_context, link_folder, run_ut, terminal
+from .support.transports import NoNetwork
 from .test_test_run_flow import FakeSite
 
 EMAIL = "owner@example.com"
@@ -33,7 +36,30 @@ TEXTS = {
         "risultato compare entro un secondo."
     ),
 }
+LAST_SENTENCES = {
+    "en": "The result appears within one second.",
+    "it": "Il risultato compare entro un secondo.",
+}
+HIDDEN = {"en": "Result Total Each person pays", "it": "Risultato Totale A testa"}
+SNAPSHOT_KEYS = ["url", "title", "text", "hidden_text", "elements"]
 FOLDER_VERSIONS = (2, 4)
+FIRST_SENTENCES = {
+    "en": "With 30 euros and 15 percent the tip is 4.50 euros.",
+    "it": "Con 30 euro e il 15 per cento la mancia è di 4,50 euro.",
+}
+EXAMPLES = {
+    "en": "Example: with 30 euros and 15 percent the tip is 4.50 euros.",
+    "it": "Esempio: con 30 euro e il 15 per cento la mancia è di 4,50 euro.",
+}
+WEAK_CRITERION = (
+    "{code} passed only through expectations that prove little: confirm by hand, with the "
+    "report, that the application does what the criterion asks."
+)
+VISIBLE_SENTENCE = (
+    'TP-00{number}, step 2: the page shows "{text}" as soon as it opens, so this expectation '
+    "holds before anything is done."
+)
+TOTALS = {"en": "Total", "it": "Totale"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +129,8 @@ def session(
     text: str | None = None,
     publish: bool = True,
     fetch: bool = False,
+    hidden: str | None = None,
+    later: str = "",
 ) -> Iterator[Session]:
     with FakeStudio(language=language, hosted=hosted, twins=twins) as studio:
         studio.add_account(EMAIL, TEST_PASSWORD)
@@ -119,7 +147,11 @@ def session(
             published = run_ut(["package", "publish"], tmp_path, transport=UrlTransport())
             assert published.status == 0, published.errors
         site = FakeSite(
-            title="Tip calculator", text=TEXTS[language] if text is None else text, fetch=fetch
+            title="Tip calculator",
+            text=TEXTS[language] if text is None else text,
+            fetch=fetch,
+            hidden_text=HIDDEN[language] if hidden is None else hidden,
+            later=later,
         )
         programs = site.programs(tmp_path / "programs", ("chrome", "firefox"))
         available = tuple(browsers)
@@ -139,6 +171,34 @@ def lines_of(run: Run) -> list[str]:
     return run.output.splitlines()
 
 
+def hidden_example(language: str) -> dict[str, str]:
+    first = FIRST_SENTENCES[language]
+    return {
+        "text": " ".join(TEXTS[language].replace(first, "").split()),
+        "hidden": f"{HIDDEN[language]} {EXAMPLES[language]}",
+        "later": first,
+    }
+
+
+def listed(lines: Sequence[str], header: int) -> list[str]:
+    items: list[str] = []
+    for line in lines[header + 1 :]:
+        if line.startswith("- "):
+            items.append(line[2:])
+        elif line.startswith("  ") and items:
+            items[-1] = f"{items[-1]} {line.strip()}"
+        else:
+            break
+    return items
+
+
+def checked_texts(document: dict[str, object]) -> dict[str, str]:
+    plans = [document["plan"], *document["replans"]]
+    return {
+        path["code"]: path["steps"][1]["expect"]["text"] for plan in plans for path in plan["paths"]
+    }
+
+
 def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -153,9 +213,10 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
 
     report = work.run_folder() / "report.html"
     lines = lines_of(run)
+    checks = ["With 30 euros", "The list of", "With 3 people", "The result appears"]
     assert run.status == 0, run.errors
     assert run.errors == ""
-    assert lines[:12] == [
+    assert lines[:10] == [
         'Acceptance tests of "Calcolo mancia"',
         "====================================",
         "Application: the address http://127.0.0.1:5173/.",
@@ -166,13 +227,21 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
         "Test plan...",
         "Test plan: done in 9 s.",
         "New test plan: 4 paths, 0 criteria not covered.",
-        "Cost of the plan: 0.20 USD.",
+        "Expectations that prove little: 4.",
+    ]
+    assert listed(lines, 9) == [
+        VISIBLE_SENTENCE.format(number=number, text=text)
+        for number, text in enumerate(checks, start=1)
+    ]
+    cost = lines.index("Cost of the plan: 0.20 USD.")
+    assert all(line.startswith(("- ", "  ")) for line in lines[10:cost])
+    assert lines[cost + 1 : cost + 3] == [
         "Path TP-001 in Google Chrome: With 30 euros and 15 percent the tip is 4.50 euros...",
         "Path TP-001 in Google Chrome: With 30 euros and 15 percent the tip is 4.50 euros: done "
         "in 0 s.",
     ]
     table = lines.index("Criterion  Status  Paths   Browsers")
-    assert lines[table : table + 8] == [
+    assert lines[table : table + 12] == [
         "Criterion  Status  Paths   Browsers",
         "---------  ------  ------  ------------------------------",
         "AC-001     passed  TP-001  Google Chrome, Mozilla Firefox",
@@ -180,9 +249,14 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
         "AC-003     passed  TP-003  Google Chrome, Mozilla Firefox",
         "AC-004     passed  TP-004  Google Chrome, Mozilla Firefox",
         "Criteria: 4 passed, 0 failed, 0 blocked, 0 not covered, 0 not run.",
+        *(WEAK_CRITERION.format(code=f"AC-00{number}") for number in range(1, 5)),
         f"Report with the steps and the screenshots: {report}",
     ]
-    assert lines[table + 8 : table + 14] == [
+    assert work.plan_document()["weak_expectations"] == [
+        {"path": f"TP-00{number}", "step": 2, "kind": "VISIBLE_AT_OPENING", "text": text}
+        for number, text in enumerate(checks, start=1)
+    ]
+    assert lines[table + 12 : table + 18] == [
         "",
         "The twins now criticize the run: 2 twins, one generation each.",
         "Estimate: 0.20-0.40 USD, about 2 min. Credit left in the Studio: 59.80 USD.",
@@ -204,6 +278,9 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
     assert body["application"] == {"kind": "URL", "address": ADDRESS}
     assert body["snapshot"]["url"] == ADDRESS
     assert body["snapshot"]["title"] == "Tip calculator"
+    assert list(body["snapshot"]) == SNAPSHOT_KEYS
+    assert body["snapshot"]["hidden_text"] == HIDDEN["en"]
+    assert work.site.opened[0] == ("chrome", ADDRESS)
     assert len(plans) == 1
     assert len(stored) == 1 and len(reviews) == 1
     recorded = stored[0]
@@ -234,6 +311,8 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
     page = report.read_text(encoding="utf-8")
     assert "<script" not in page.lower()
     assert "Pizzeria owner" in page
+    assert page.count('<span class="chip weak">proves little</span>') == 8
+    assert '<p class="weak">Expectations that prove little: 4. Each one is marked' in page
     assert work.plan_document()["plan"]["id"] == plans[0]["id"]
     settings = json.loads((work.root / ".orchestwin" / "test.json").read_text(encoding="utf-8"))
     assert settings == {
@@ -379,6 +458,26 @@ def test_the_saved_application_and_browser_are_used_when_no_option_is_given(
     assert not any(direct for _, _, direct in starts)
 
 
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_missing_application_is_named_with_the_words_of_the_usage(
+    tmp_path: Path, language: str
+) -> None:
+    run = run_ut(
+        ["--lang", language, "test", "--help"],
+        tmp_path,
+        transport=NoNetwork(),
+        variables={"COLUMNS": "400"},
+    )
+    sentence = messages.text("test.errors.TEST_APPLICATION_REQUIRED", language)
+
+    usage = run.output.splitlines()[0]
+    assert run.status == 0
+    assert usage.startswith("usage: ut test ")
+    assert "[--url ADDRESS | --static FOLDER]" in usage
+    assert "`ut test --url ADDRESS`" in sentence
+    assert "`ut test --static FOLDER`" in sentence
+
+
 def test_a_blocked_path_is_planned_again_once_and_its_new_path_runs_everywhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -407,6 +506,7 @@ def test_a_blocked_path_is_planned_again_once_and_its_new_path_runs_everywhere(
         "the page did not open: net::ERR_CONNECTION_REFUSED"
     )
     assert replan_body["earlier"][0]["snapshot"] is None
+    assert replan_body["snapshot"]["hidden_text"] == HIDDEN["en"]
     assert [plan["replan_of"] for plan in plans] == [["TP-002"], []]
     assert [(item["path"]["code"], item["browser"]) for item in recorded["results"]] == [
         (code, browser)
@@ -419,6 +519,28 @@ def test_a_blocked_path_is_planned_again_once_and_its_new_path_runs_everywhere(
     assert [item["path"]["code"] for item in local["first_attempt"]] == ["TP-002"]
     assert local["first_attempt"][0]["status"] == "BLOCKED"
     assert "First attempt of the blocked paths" in page
+
+
+def test_a_replan_sends_the_page_of_the_blocked_step_with_its_hidden_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        work.site.fail_screenshot("chrome", 4)
+        run = work.ut("test", "--url", ADDRESS, "--no-review")
+        replan_body = json.loads(work.requests("POST", "/test-plans")[1].body.decode("utf-8"))
+
+    lines = lines_of(run)
+    assert run.status == 0, run.errors
+    assert "Blocked paths sent back to the Studio for a new plan: TP-002." in lines
+    assert "New paths in place of the blocked ones: TP-005. They now run in every browser." in lines
+    (earlier,) = replan_body["earlier"]
+    assert (earlier["code"], earlier["blocked_step"]) == ("TP-002", 2)
+    assert list(earlier["snapshot"]) == SNAPSHOT_KEYS
+    assert (earlier["snapshot"]["url"], earlier["snapshot"]["hidden_text"]) == (
+        ADDRESS,
+        HIDDEN["en"],
+    )
+    assert replan_body["snapshot"]["hidden_text"] == HIDDEN["en"]
 
 
 def test_without_room_in_max_usd_a_blocked_path_stays_blocked(
@@ -442,11 +564,7 @@ def test_without_room_in_max_usd_a_blocked_path_stays_blocked(
         "AC-002",
         "BLOCKED",
     )
-    assert lines[-2:] == [
-        "",
-        "Some criteria failed or were blocked: the report shows every step with its screenshot. "
-        "Fix the application, then launch `ut test` again.",
-    ]
+    assert lines[-2:] == ["", messages.text("test.failed_summary", "en")]
     assert wrong.status == 2
     assert "(TEST_MAX_USD_INVALID)" in wrong.errors
 
@@ -471,6 +589,21 @@ def test_a_failed_expectation_fails_the_criterion_and_the_command(
         "expectation not met: TEXT_VISIBLE: The result appears"
     )
     assert run.slept >= 2.4
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_failed_criterion_ends_the_run_with_what_to_do_next(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str
+) -> None:
+    text = TEXTS[language].replace(LAST_SENTENCES[language], "")
+    with session(tmp_path, monkeypatch, language=language, text=text) as work:
+        run = work.ut("test", "--url", ADDRESS, "--no-review", language=language)
+        recorded = work.project.test_runs()[0]
+
+    assert run.status == 1
+    assert recorded["summary"]["failed"] == 1
+    assert lines_of(run)[-2:] == ["", messages.text("test.failed_summary", language)]
+    assert lines_of(run)[-1].endswith("`ut test --plan new`.")
 
 
 def test_the_review_asks_before_spending_for_three_twins_and_can_be_refused(
@@ -744,4 +877,341 @@ def test_the_status_names_the_latest_run_from_the_studio_and_from_the_folder(
     }
     assert document["tests"] == expected
     assert offline["tests"] == expected
-    assert list(document)[-1] == "tests"
+    assert list(document)[-2:] == ["tests", "learning"]
+
+
+def folder_tasks(work: Session) -> list[dict[str, object]]:
+    path = work.root / "orchestwin" / "state" / "state.json"
+    return json.loads(path.read_text(encoding="utf-8"))["tasks"]
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_findings_chosen_after_the_critiques_become_tasks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str
+) -> None:
+    with session(tmp_path, monkeypatch, language=language) as work:
+        run = work.ut("test", "--url", ADDRESS, answers=["1"], language=language)
+        tasks = work.project.tasks()
+        recorded = work.project.test_runs()[0]
+        folder = folder_tasks(work)
+        posts = [json.loads(item.body) for item in work.requests("POST", "/code-tasks")]
+
+    def said(key: str, **values: object) -> str:
+        return messages.text(key, language, **values)
+
+    lines = lines_of(run)
+    assert run.status == 0, run.errors
+    intro = lines.index(said("test.tasks_intro"))
+    cost = said("test.review_cost", amount="0.30" if language == "en" else "0,30")
+    assert lines[intro - 2 : intro] == [cost, ""]
+    question = lines.index(said("test.tasks_question") + " ")
+    assert [line[:5] for line in lines[intro + 1 : question] if not line.startswith("     ")] == [
+        "  1. ",
+        "  2. ",
+    ]
+    (task,) = tasks
+    created = lines.index(said("test.tasks_created", count=1))
+    following = lines.index(said("test.tasks_next"))
+    assert created == question + 1
+    assert " ".join(" ".join(lines[created + 1 : following]).split()) == (
+        f"- TSK-001: {task['text']}"
+    )
+    assert lines[following + 1] == ""
+    assert lines[-1] == said("test.folder_updated", version=2)
+    first = recorded["critiques"][0]
+    assert task["origin"] == {
+        "kind": "TEST_RUN",
+        "commit": None,
+        "test_run_id": recorded["id"],
+        "twin_id": first["twin_id"],
+        "twin_name": first["twin_name"],
+        "finding": first["findings"][0]["text"],
+    }
+    assert task["about"]["criteria"] == ["AC-001"]
+    assert posts == [
+        {
+            "tasks": [
+                {
+                    "text": None,
+                    "source": {
+                        "kind": "TEST_RUN",
+                        "test_run_id": recorded["id"],
+                        "twin_id": first["twin_id"],
+                        "finding": 0,
+                    },
+                }
+            ]
+        }
+    ]
+    assert folder == tasks
+
+
+def test_no_finding_chosen_or_a_closed_input_creates_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        none = work.ut("test", "--url", ADDRESS, answers=[""])
+        closed = work.ut("test")
+        tasks = work.project.tasks()
+        runs = work.project.test_runs()
+        posts = work.requests("POST", "/code-tasks")
+
+    assert (none.status, closed.status) == (0, 0)
+    assert (none.errors, closed.errors) == ("", "")
+    assert messages.text("test.tasks_none", "en") in lines_of(none)
+    assert messages.text("test.tasks_later", "en") in lines_of(closed)
+    assert "ut tasks from-test" in messages.text("test.tasks_later", "en")
+    assert lines_of(closed)[-1].startswith("Knowledge folder updated in orchestwin/")
+    assert tasks == [] and posts == []
+    assert len(runs) == 2 and all(len(run["critiques"]) == 2 for run in runs)
+
+
+def test_no_tasks_and_json_never_ask(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        quiet = work.ut("test", "--url", ADDRESS, "--no-tasks", answers=["1"])
+        as_json = work.ut("test", "--json", answers=["1"])
+        tasks = work.project.tasks()
+
+    intro = messages.text("test.tasks_intro", "en")
+    assert (quiet.status, as_json.status) == (0, 0)
+    assert intro not in quiet.output and intro not in as_json.errors
+    assert json.loads(as_json.output)["critiques"]
+    assert tasks == []
+
+
+def test_the_flow_with_a_default_request_never_asks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        bundle = terminal(tmp_path, transport=UrlTransport(), answers=["1"])
+        request = run_flow.TestRequest(application={"kind": "URL", "address": ADDRESS})
+        outcome = run_flow.execute(command_context(bundle.environment), request)
+        tasks = work.project.tasks()
+
+    assert request.offer_tasks is False
+    assert len(outcome.critiques) == 2
+    assert [(item["path"], item["kind"]) for item in outcome.weak] == [
+        (f"TP-00{number}", "VISIBLE_AT_OPENING") for number in range(1, 5)
+    ]
+    assert messages.text("test.tasks_intro", "en") not in bundle.output
+    assert bundle.environment.stdin.readline() == "1\n"
+    assert tasks == []
+
+
+def test_an_open_task_about_a_criterion_that_now_passes_gets_a_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        work.project.seed_tasks()
+        run = work.ut("test", "--url", ADDRESS, "--no-review")
+        statuses = [task["status"] for task in work.project.tasks()]
+
+    lines = lines_of(run)
+    report = next(index for index, line in enumerate(lines) if line.startswith("Report with"))
+    assert run.status == 0, run.errors
+    assert lines[report + 1] == messages.text(
+        "test.task_maybe_done", "en", task="TSK-003", criteria="AC-001"
+    )
+    assert sum(line.startswith("The open task") for line in lines) == 1
+    assert statuses == ["OPEN"] * 4
+
+
+def test_a_task_about_a_criterion_that_fails_gets_no_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = TEXTS["en"].replace("With 30 euros and 15 percent the tip is 4.50 euros.", "")
+    with session(tmp_path, monkeypatch, text=text) as work:
+        work.project.seed_tasks()
+        run = work.ut("test", "--url", ADDRESS, "--no-review")
+
+    assert run.status == 1
+    assert not any(line.startswith("The open task") for line in lines_of(run))
+
+
+def test_a_refusal_when_the_tasks_are_created_is_one_sentence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        work.studio.fail_next(
+            "POST",
+            "/projects/{project_id}/code-tasks",
+            status=503,
+            body={"detail": {"code": "DATABASE_UNAVAILABLE"}},
+        )
+        run = work.ut("test", "--url", ADDRESS, answers=["a"])
+        tasks = work.project.tasks()
+
+    assert run.status == 0, run.errors
+    assert messages.text("test.tasks_failed", "en", code="DATABASE_UNAVAILABLE") in lines_of(run)
+    assert lines_of(run)[-1].startswith("Knowledge folder updated in orchestwin/")
+    assert tasks == []
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_new_plan_names_the_expectations_that_prove_little_and_the_criteria_resting_on_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str
+) -> None:
+    example = hidden_example(language)
+    with session(
+        tmp_path,
+        monkeypatch,
+        language=language,
+        text=example["text"],
+        hidden=example["hidden"],
+        later=example["later"],
+    ) as work:
+        work.site.fail_open("chrome", 3)
+        run = work.ut("test", "--url", ADDRESS, "--no-review", language=language)
+        document = work.plan_document()
+        recorded = work.project.test_runs()[0]
+        sent = json.loads(work.requests("POST", "/test-plans")[0].body.decode("utf-8"))
+        page = (work.run_folder() / "report.html").read_text(encoding="utf-8")
+
+    def said(key: str, **values: object) -> str:
+        return messages.text(key, language, **values)
+
+    lines = lines_of(run)
+    checks = checked_texts(document)
+    assert run.status == 0, run.errors
+    assert sent["snapshot"]["hidden_text"] == example["hidden"]
+    assert example["later"] not in sent["snapshot"]["text"]
+    written = lines.index(said("test.plan_written", paths=4, not_covered=0))
+    assert lines[written + 1] == said("test.weak_count", count=4)
+    assert listed(lines, written + 1) == [
+        said("test.weak_hidden", path="TP-001", step=2, text=checks["TP-001"]),
+        *(
+            said("test.weak_visible", path=code, step=2, text=checks[code])
+            for code in ("TP-002", "TP-003", "TP-004")
+        ),
+    ]
+    done = lines.index(said("test.replan_done", codes="TP-005"))
+    assert lines[done + 1] == said("test.weak_count", count=1)
+    assert listed(lines, done + 1) == [
+        said("test.weak_visible", path="TP-005", step=2, text=checks["TP-005"])
+    ]
+    summary = lines.index(
+        said("test.summary", passed=4, failed=0, blocked=0, not_covered=0, not_run=0)
+    )
+    assert lines[summary + 1 : summary + 4] == [
+        said("test.weak_criterion", code=code) for code in ("AC-001", "AC-003", "AC-004")
+    ]
+    assert lines[summary + 4].startswith(said("test.report_written", path=""))
+    assert [item["status"] for item in recorded["criteria"]] == ["PASSED"] * 4
+    assert document["weak_expectations"] == [
+        {"path": "TP-001", "step": 2, "kind": "HIDDEN_AT_OPENING", "text": checks["TP-001"]},
+        *(
+            {"path": code, "step": 2, "kind": "VISIBLE_AT_OPENING", "text": checks[code]}
+            for code in ("TP-003", "TP-004", "TP-005")
+        ),
+    ]
+    mark = messages.text("test.report_weak_mark", language)
+    assert page.count(f'<span class="chip weak">{mark}</span>') == 8
+    assert said("test.report_weak", count=4) in page
+
+
+def test_a_reused_plan_counts_the_expectations_that_prove_little_in_one_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch) as work:
+        work.ut("test", "--url", ADDRESS, "--no-review")
+        work.fit_plan()
+        again = work.ut("test", "--no-review")
+        chosen = work.ut("test", "--no-review", "--criteria", "AC-002")
+        document = work.plan_document()
+        del document["weak_expectations"]
+        (work.tests / "plan.json").write_text(json.dumps(document), encoding="utf-8")
+        older = work.ut("test", "--no-review")
+        planned = len(work.requests("POST", "/test-plans"))
+
+    reused = "Test plan reused, written on 2026-09-29 08:00 UTC: 4 paths, 0 criteria not covered."
+    lines = lines_of(again)
+    assert (again.status, chosen.status, older.status) == (0, 0, 0)
+    assert planned == 1
+    start = lines.index(reused)
+    assert lines[start + 1] == (
+        "Expectations that prove little in the paths of this run: 4. The report marks them on "
+        "their steps."
+    )
+    assert lines[start + 2].startswith("Path TP-001 in Google Chrome")
+    assert not any(line.startswith(("- TP-", "Expectations that prove little: ")) for line in lines)
+    assert sum(line.endswith("the criterion asks.") for line in lines) == 4
+    assert lines_of(chosen)[lines_of(chosen).index(reused) + 1] == (
+        "Expectations that prove little in the paths of this run: 1. The report marks them on "
+        "their steps."
+    )
+    assert [line for line in lines_of(chosen) if line.endswith("the criterion asks.")] == [
+        WEAK_CRITERION.format(code="AC-002")
+    ]
+    assert not any("prove little" in line for line in lines_of(older))
+    assert "weak_expectations" not in work.plan_document()
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_plan_expecting_the_absence_of_a_text_shown_at_opening_says_it_cannot_be_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str
+) -> None:
+    word = TOTALS[language]
+    with session(tmp_path, monkeypatch, language=language) as work:
+        work.ut("test", "--url", ADDRESS, "--no-review", language=language)
+        stored = work.project.acceptance_plans[0]
+        stored["paths"][0]["steps"][1]["expect"] = {
+            "kind": "TEXT_ABSENT",
+            "target": None,
+            "text": word,
+        }
+        work.studio.fail_next(
+            "POST",
+            "/projects/{project_id}/test-plans",
+            status=201,
+            body={"status": "PLANNED", "plan": stored},
+        )
+        run = work.ut("test", "--no-review", "--plan", "new", language=language)
+        recorded = work.project.test_runs()[0]
+        document = work.plan_document()
+        page = (work.run_folder() / "report.html").read_text(encoding="utf-8")
+        work.fit_plan()
+        again = work.ut("test", "--no-review", language=language)
+
+    def said(key: str, **values: object) -> str:
+        return messages.text(key, language, **values)
+
+    lines = lines_of(run)
+    checks = checked_texts(document)
+    sentence = said("test.weak_absent_visible", path="TP-001", step=2, text=word)
+    assert word.casefold() in TEXTS[language].casefold()
+    assert word in HIDDEN[language]
+    assert (run.status, again.status) == (1, 1)
+    written = lines.index(said("test.plan_written", paths=4, not_covered=0))
+    assert lines[written + 1] == said("test.weak_count", count=4)
+    assert listed(lines, written + 1) == [
+        sentence,
+        *(
+            said("test.weak_visible", path=code, step=2, text=checks[code])
+            for code in ("TP-002", "TP-003", "TP-004")
+        ),
+    ]
+    summary = lines.index(
+        said("test.summary", passed=3, failed=1, blocked=0, not_covered=0, not_run=0)
+    )
+    assert lines[summary + 1 : summary + 4] == [
+        said("test.weak_criterion", code=code) for code in ("AC-002", "AC-003", "AC-004")
+    ]
+    assert lines[summary + 4].startswith(said("test.report_written", path=""))
+    assert [item["status"] for item in recorded["criteria"]] == [
+        "FAILED",
+        "PASSED",
+        "PASSED",
+        "PASSED",
+    ]
+    assert document["weak_expectations"][0] == {
+        "path": "TP-001",
+        "step": 2,
+        "kind": "ABSENT_VISIBLE_AT_OPENING",
+        "text": word,
+    }
+    mark = messages.text("test.report_weak_mark", language)
+    assert page.count(f'<span class="chip weak">{mark}</span>') == 8
+    assert page.count(f'<p class="weak">{html.escape(sentence, quote=True)}</p>') == 2
+    reused = lines_of(again)
+    assert said("test.weak_reused", count=4) in reused
+    assert not any(line.startswith("- TP-") for line in reused)

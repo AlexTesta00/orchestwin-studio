@@ -32,6 +32,7 @@ from .support.transports import NoNetwork
 
 BASE = "http://127.0.0.1:8123/"
 TAG = re.compile(r"<[^>]+>")
+HIDDEN = "Result Total Each person pays"
 
 
 class FakeSite:
@@ -43,18 +44,24 @@ class FakeSite:
         elements: Sequence[Element] = (),
         reveal: Mapping[str, str] | None = None,
         fetch: bool = False,
+        hidden_text: str = "",
+        later: str = "",
     ) -> None:
         self.title = title
         self.text = text
         self.elements = tuple(elements)
         self.reveal = dict(reveal or {})
         self.fetch = fetch
+        self.hidden_text = hidden_text
+        self.later = later
         self.starts: list[tuple[str, str, bool]] = []
         self.opened: list[tuple[str, str]] = []
         self.actions: list[tuple[str, str, str]] = []
         self.pages: list[FakePage] = []
         self.opens: dict[str, int] = {}
         self.failures: dict[tuple[str, int], BrowserError] = {}
+        self.shots: dict[str, int] = {}
+        self.shot_failures: set[tuple[str, int]] = set()
         self.broken: set[str] = set()
         self.snapshots = 0
 
@@ -82,6 +89,9 @@ class FakeSite:
             "PAGE_NOT_LOADED", program=browser, detail=detail
         )
 
+    def fail_screenshot(self, browser: str, number: int) -> None:
+        self.shot_failures.add((browser, number))
+
     def programs(self, folder: Path, names: Sequence[str]) -> dict[str, BrowserProgram]:
         return {name: FakeBrowserProgram.create(folder, name) for name in names}
 
@@ -95,6 +105,7 @@ class FakePage:
         self.body = ""
         self.values: dict[int, str] = {}
         self.shown: list[str] = []
+        self.taken = 0
         self.closed = False
 
     def open(self, url: str) -> None:
@@ -113,7 +124,9 @@ class FakePage:
 
     def snapshot(self) -> PageSnapshot:
         self.site.snapshots += 1
+        self.taken += 1
         base = self.body if self.site.fetch else self.site.text
+        later = self.site.later if self.taken > 1 else ""
         items = tuple(
             replace(item, value=self.values.get(item.index, item.value))
             for item in self.site.elements
@@ -121,8 +134,9 @@ class FakePage:
         return PageSnapshot(
             url=self.url,
             title=self.site.title,
-            text=" ".join(part for part in (base, *self.shown) if part),
+            text=" ".join(part for part in (base, later, *self.shown) if part),
             elements=items,
+            hidden_text=self.site.hidden_text,
         )
 
     def click(self, target: Element) -> None:
@@ -143,6 +157,12 @@ class FakePage:
         self.site.actions.append((self.browser, "press", key))
 
     def screenshot(self) -> bytes:
+        count = self.site.shots.get(self.browser, 0) + 1
+        self.site.shots[self.browser] = count
+        if (self.browser, count) in self.site.shot_failures:
+            raise BrowserError(
+                "BROWSER_PROTOCOL_ERROR", program=self.browser, detail="the screenshot is not valid"
+            )
         return FAKE_PNG
 
     def close(self) -> None:
@@ -307,7 +327,7 @@ def test_every_step_is_done_with_a_screenshot_and_the_page_is_closed(
 def test_a_target_that_is_not_on_the_page_blocks_the_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    site = FakeSite(text="Tip calculator", elements=ELEMENTS)
+    site = FakeSite(text="Tip calculator", elements=ELEMENTS, hidden_text=HIDDEN)
     runner, browser, bundle = bench(tmp_path, monkeypatch, site)
     blocked = path(
         "TP-002",
@@ -332,6 +352,8 @@ def test_a_target_that_is_not_on_the_page_blocks_the_path(
         "target not found: button: Pay now",
     )
     assert earlier["snapshot"]["elements"][3] == ELEMENTS[3].document()
+    assert earlier["snapshot"]["hidden_text"] == HIDDEN
+    assert list(earlier["snapshot"]) == ["url", "title", "text", "hidden_text", "elements"]
     assert bundle.output.splitlines()[1:] == [
         "Path TP-002 in Google Chrome: Heading of TP-002: not completed after 0 s.",
         "TP-002 in Google Chrome blocked at step 2: target not found: button: Pay now",
@@ -418,7 +440,9 @@ def test_a_click_refused_by_the_page_is_blocked_on_the_page_it_saw(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     program = FakeBrowserProgram.create(tmp_path / "programs", "chrome")
-    snapshot = page_snapshot(element(0, "button", "Calculate"), url=BASE, title="Tip")
+    snapshot = page_snapshot(
+        element(0, "button", "Calculate"), url=BASE, title="Tip", hidden_text=HIDDEN
+    )
     page = ScriptPage([snapshot], program)
     runner, browser, _ = bench(tmp_path, monkeypatch, FakeSite())
     monkeypatch.setattr(run_flow, "open_page", lambda *arguments, **options: page)
@@ -438,6 +462,53 @@ def test_a_click_refused_by_the_page_is_blocked_on_the_page_it_saw(
     )
     assert outcome.blocked_snapshot == snapshot
     assert outcome.earlier()["snapshot"] == snapshot.document()
+    assert outcome.earlier()["snapshot"]["hidden_text"] == HIDDEN
+
+
+def test_a_browser_that_stops_on_a_step_leaves_the_page_of_the_step_before_to_the_replan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = FakeSite(text="Tip calculator", elements=ELEMENTS, hidden_text=HIDDEN)
+    site.fail_screenshot("chrome", 2)
+    runner, browser, _ = bench(tmp_path, monkeypatch, site)
+
+    outcome = runner.run(
+        browser, path("TP-008", step("OPEN", value="/"), step("CHECK", expect=visible("Tip")))
+    )
+
+    assert statuses(outcome) == ["DONE", "BLOCKED"]
+    assert outcome.steps[1].detail == "the browser stopped answering: the screenshot is not valid"
+    earlier = outcome.earlier()
+    assert (earlier["blocked_step"], earlier["snapshot"]["url"]) == (2, BASE)
+    assert earlier["snapshot"]["hidden_text"] == HIDDEN
+    assert site.shots == {"chrome": 3}
+
+
+def test_the_expectations_never_look_at_the_hidden_text() -> None:
+    snapshot = page_snapshot(
+        element(0, "button", "Pay"), text="Total 34.50", hidden_text="Payment refused"
+    )
+    absent = {"kind": "TEXT_ABSENT", "text": "Payment refused"}
+
+    assert run_flow.expectation_met(snapshot, visible("Payment refused")) is False
+    assert run_flow.expectation_met(snapshot, absent) is True
+    assert run_flow.expectation_met(snapshot, visible("Total 34.50")) is True
+
+
+def test_a_part_that_appears_after_the_page_opened_is_seen_by_a_later_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    site = FakeSite(text="Tip calculator", hidden_text=HIDDEN, later="Each person pays 11.50")
+    runner, browser, _ = bench(tmp_path, monkeypatch, site)
+
+    outcome = runner.run(
+        browser,
+        path("TP-009", step("OPEN", value="/"), step("CHECK", expect=visible("each person pays"))),
+    )
+
+    assert statuses(outcome) == ["DONE", "DONE"]
+    assert outcome.page_text == "Tip calculator Each person pays 11.50"
+    assert site.pages[0].taken == 2
 
 
 def test_a_page_that_does_not_open_and_a_browser_that_does_not_start_block_the_path(
@@ -691,7 +762,18 @@ def test_the_request_and_the_outcome_are_not_collected_by_pytest() -> None:
         new_plan=False,
         review=True,
         max_usd=2.0,
+        offer_tasks=False,
     )
+    assert list(run_flow.TestRequest.__dataclass_fields__)[-1] == "offer_tasks"
+    outcome = run_flow.TestOutcome(run={}, critiques=(), folder=Path(), report=Path())
+    assert outcome.weak == ()
+    assert list(run_flow.TestOutcome.__dataclass_fields__) == [
+        "run",
+        "critiques",
+        "folder",
+        "report",
+        "weak",
+    ]
 
 
 @pytest.fixture

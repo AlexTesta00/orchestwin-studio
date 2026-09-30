@@ -76,6 +76,7 @@ def test_the_constants_follow_the_studio() -> None:
     assert changes_api.MAX_DESIGN_REQUEST == state.MAX_DESIGN_REQUEST_LENGTH
     assert changes_api.MAX_REQUIREMENTS_REQUEST == state.MAX_REQUIREMENTS_REQUEST_LENGTH
     assert changes_api.NO_REVIEW_MODEL == "CHANGE_REVIEW_MODEL_NOT_CONFIGURED"
+    assert changes_api.REFERENCE_KEYS == state.REFERENCE_KEYS
 
 
 def test_the_paths_and_the_body_of_a_review() -> None:
@@ -191,6 +192,78 @@ def test_a_decision_sends_clean_tasks_and_no_blank_note(tmp_path: Path) -> None:
         "tasks": ["Mostrare il messaggio", "Aggiungere un test"],
     }
     assert transport.sent[1].json() == {"kind": "DISMISSED", "note": "covered by x", "tasks": []}
+
+
+def test_a_decision_with_tasks_sends_the_findings_only_when_there_are_some(
+    tmp_path: Path,
+) -> None:
+    answer = {"status": "DECIDED", "change": CHANGE, "alignment": ALIGNMENT}
+    twin = "00000000-0000-4000-8000-0000000000b1"
+    transport = ScriptedTransport()
+    transport.expect("POST", f"{BASE}/code-changes/{COMMIT}/decision", body=answer)
+    client = client_for(tmp_path, transport)
+
+    changes_api.decide(
+        client,
+        PROJECT_ID,
+        COMMIT,
+        changes_api.CODE_TASKS,
+        tasks=[],
+        findings=[
+            {"kind": "CODE_CHANGE", "commit": COMMIT, "twin_id": twin, "finding": 1},
+            {"twin_id": twin, "finding": 0},
+        ],
+    )
+
+    assert transport.sent[0].json() == {
+        "kind": "CODE_TASKS",
+        "note": None,
+        "tasks": [],
+        "findings": [{"twin_id": twin, "finding": 1}, {"twin_id": twin, "finding": 0}],
+    }
+
+
+def test_the_development_carries_the_stale_reviews(tmp_path: Path) -> None:
+    transport = ScriptedTransport()
+    transport.expect("GET", f"{BASE}/alignment", body={**ALIGNMENT, "stale_reviews": 2})
+    transport.expect("GET", f"{BASE}/code-changes", body={"items": [CHANGE]})
+    transport.expect("GET", f"{BASE}/alignment", status=405, body={"detail": "Not Allowed"})
+    client = client_for(tmp_path, transport)
+
+    found = changes_api.development(client, PROJECT_ID)
+    missing = changes_api.development(client, PROJECT_ID)
+
+    assert found == changes_api.Development(
+        StateSummary(changes=1, pending_changes=1, aligned_commit=ALIGNED, open_tasks=1), 2
+    )
+    assert missing is None
+    assert [
+        changes_api.stale_count({"stale_reviews": value}) for value in (3, 0, -1, True, "2")
+    ] == [
+        3,
+        0,
+        0,
+        0,
+        0,
+    ]
+    assert changes_api.stale_count(ALIGNMENT) == 0
+
+
+def test_the_review_of_a_change_says_when_it_is_stale() -> None:
+    reference = {
+        "requirements_version_number": 2,
+        "design_version_number": 3,
+        "alternative_code": "DES-002",
+    }
+    stale = {**CHANGE, "review": {**CHANGE["review"], "reference": reference, "stale": True}}
+
+    assert changes_api.review_stale(stale) is True
+    assert changes_api.review_reference(stale) == reference
+    assert changes_api.review_stale(CHANGE) is False
+    assert changes_api.review_reference(CHANGE) == {}
+    assert changes_api.review_stale({**CHANGE, "review": None}) is False
+    assert changes_api.review_of({"review": "noise"}) is None
+    assert changes_api.review_stale({"review": {"stale": "yes"}}) is False
 
 
 def test_the_summary_of_the_development(tmp_path: Path) -> None:

@@ -247,6 +247,21 @@ def test_a_refusal_becomes_a_failure_with_its_code(
     assert dict(failure.values) == {"code": code, "http_status": status, **values}
 
 
+def test_the_latest_review_may_come_from_an_older_run() -> None:
+    review = {
+        "run_id": RUN_ID,
+        "finished_at": "2026-09-29T10:01:12+00:00",
+        "reviewed_at": "2026-09-29T10:03:00+00:00",
+        "critiques": [],
+    }
+
+    assert tests_api.latest_review({**OVERVIEW, "latest_review": review}) == review
+    assert tests_api.latest_review({**OVERVIEW, "latest_review": None}) is None
+    assert tests_api.latest_review(OVERVIEW) is None
+    assert tests_api.latest_review({"latest_review": {**review, "run_id": ""}}) is None
+    assert tests_api.latest_review({"latest_review": "noise"}) is None
+
+
 def test_a_run_fails_when_a_criterion_failed_or_was_blocked() -> None:
     blocked = {"criteria": [{"code": "AC-001", "status": "BLOCKED"}]}
     fine = {"criteria": [{"code": "AC-001", "status": "PASSED"}, {"status": "NOT_COVERED"}]}
