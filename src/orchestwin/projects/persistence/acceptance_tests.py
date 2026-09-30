@@ -312,6 +312,29 @@ class SqlAlchemyAcceptanceTestRepository:
         [run] = await self._assemble((row,))
         return run
 
+    async def latest_reviewed_run(
+        self, project_id: UUID, *, before: TestRun | None = None
+    ) -> TestRun | None:
+        reviewed = sa.exists().where(
+            TEST_REVIEWS.c.run_id == TEST_RUNS.c.id,
+            TEST_REVIEWS.c.owner_user_id == self._owner_user_id,
+        )
+        statement = self._owned(TEST_RUNS, project_id).where(reviewed)
+        if before is not None:
+            statement = statement.where(
+                sa.tuple_(TEST_RUNS.c.recorded_at, TEST_RUNS.c.id)
+                < sa.tuple_(
+                    sa.literal(before.recorded_at, sa.DateTime(timezone=True)),
+                    sa.literal(before.id, postgresql.UUID(as_uuid=True)),
+                )
+            )
+        statement = statement.order_by(TEST_RUNS.c.recorded_at.desc(), TEST_RUNS.c.id.desc())
+        row = (await self._session.execute(statement.limit(1))).mappings().first()
+        if row is None:
+            return None
+        [run] = await self._assemble((row,))
+        return run
+
     def _reviews(self, run_id: UUID):
         return (
             sa.select(*TEST_REVIEWS.c)

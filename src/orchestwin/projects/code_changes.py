@@ -24,7 +24,9 @@ from orchestwin.knowledge.state import (
     MAX_REQUIREMENTS_REQUEST_LENGTH,
     MAX_SUMMARY_LENGTH,
     MAX_TASK_LENGTH,
+    MAX_TASK_NOTE_LENGTH,
     MIN_COMMIT_LENGTH,
+    review_is_stale,
 )
 from orchestwin.twins.limits import MAX_USER_TWINS
 
@@ -34,11 +36,16 @@ MAX_LOCALE_LENGTH: Final = 20
 MAX_TWIN_NAME_LENGTH: Final = 200
 MAX_TASK_NUMBER: Final = 999_999
 TASK_CODE_PREFIX: Final = "TSK"
+TASK_CODE_PATTERN: Final = r"^TSK-[0-9]{3,6}$"
+TASK_CUT_MARK: Final = "…"
 _COMMIT: Final = re.compile(COMMIT_PATTERN)
 _LOCALE: Final = re.compile(LOCALE_PATTERN)
+_TASK_CODE: Final = re.compile(TASK_CODE_PATTERN)
 _REQUIREMENT_CODE: Final = re.compile(r"REQ-[0-9]{3,6}")
 _SCREEN_CODE: Final = re.compile(r"SCR-[0-9]{3,6}")
+_CRITERION_CODE: Final = re.compile(r"AC-[0-9]{3,6}")
 _ALTERNATIVE_CODE: Final = re.compile(r"DES-[0-9]{3,6}")
+_PLACEHOLDER_ID: Final = UUID(int=0)
 
 
 class ChangedFileKind(StrEnum):
@@ -78,6 +85,13 @@ class FindingSeverity(StrEnum):
 class TaskStatus(StrEnum):
     OPEN = "OPEN"
     DONE = "DONE"
+    DROPPED = "DROPPED"
+
+
+class TaskOrigin(StrEnum):
+    CODE_CHANGE = "CODE_CHANGE"
+    TEST_RUN = "TEST_RUN"
+    OWNER = "OWNER"
 
 
 class CodeChangeAmbiguous(LookupError):
@@ -198,11 +212,37 @@ def normalize_task_text(value: object) -> str:
     return normalized_line(value, label="code task", maximum=MAX_TASK_LENGTH)
 
 
+def normalize_task_note(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("task note must be a text")
+    if not value.strip():
+        return None
+    return normalized_line(value, label="task note", maximum=MAX_TASK_NOTE_LENGTH)
+
+
+def finding_task_text(text: str, action: str | None = None) -> str:
+    chosen = " ".join((action if action and action.strip() else text).split())
+    if len(chosen) > MAX_TASK_LENGTH:
+        chosen = chosen[: MAX_TASK_LENGTH - len(TASK_CUT_MARK)].rstrip() + TASK_CUT_MARK
+    return normalize_task_text(chosen)
+
+
 def code_task_code(number: int) -> str:
     _count(number, "code task number", minimum=1)
     if number > MAX_TASK_NUMBER:
         raise ValueError(f"code task number exceeds {MAX_TASK_NUMBER}")
     return f"{TASK_CODE_PREFIX}-{number:03d}"
+
+
+def task_number(code: object) -> int | None:
+    if not isinstance(code, str) or _TASK_CODE.fullmatch(code.upper()) is None:
+        return None
+    number = int(code.split("-", 1)[1])
+    if number < 1 or code_task_code(number) != code.upper():
+        return None
+    return number
 
 
 def _codes(values: object, pattern: re.Pattern[str], label: str) -> None:
@@ -279,12 +319,22 @@ class ChangeDecision:
         }
 
 
+def _reference(requirements_version: object, design_version: object, alternative: object) -> None:
+    _count(requirements_version, "requirements version number", minimum=1)
+    _count(design_version, "design version number", minimum=1)
+    if not isinstance(alternative, str) or _ALTERNATIVE_CODE.fullmatch(alternative) is None:
+        raise ValueError("alternative code must use the DES-NNN format")
+
+
 @dataclass(frozen=True, slots=True)
 class ChangeReviewSummary:
     run_id: UUID
     reviewed_at: datetime
     verdict: AlignmentStatus
     summary: str
+    requirements_version_number: int
+    design_version_number: int
+    alternative_code: str
 
     def __post_init__(self) -> None:
         _uuid(self.run_id, "review run ID")
@@ -292,6 +342,19 @@ class ChangeReviewSummary:
         if not isinstance(self.verdict, AlignmentStatus):
             raise ValueError("review verdict must be an AlignmentStatus")
         _normalized(self.summary, label="review summary", maximum=MAX_SUMMARY_LENGTH)
+        _reference(
+            self.requirements_version_number, self.design_version_number, self.alternative_code
+        )
+
+    def reference_snapshot(self) -> dict[str, object]:
+        return {
+            "requirements_version_number": self.requirements_version_number,
+            "design_version_number": self.design_version_number,
+            "alternative_code": self.alternative_code,
+        }
+
+    def stale(self, current: Mapping[str, object] | None) -> bool:
+        return review_is_stale(self.reference_snapshot(), current)
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -299,7 +362,11 @@ class ChangeReviewSummary:
             "reviewed_at": _timestamp(self.reviewed_at),
             "verdict": self.verdict.value,
             "summary": self.summary,
+            "reference": self.reference_snapshot(),
         }
+
+    def to_answer(self, current: Mapping[str, object] | None) -> dict[str, object]:
+        return {**self.to_snapshot(), "stale": self.stale(current)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,7 +484,7 @@ class CodeChange:
     def with_review(self, review: ChangeReviewSummary | None) -> CodeChange:
         return replace(self, review=review)
 
-    def to_snapshot(self, *, include_diff: bool = False) -> dict[str, object]:
+    def _snapshot(self, review: dict[str, object] | None, include_diff: bool) -> dict[str, object]:
         snapshot: dict[str, object] = {
             "commit": self.commit,
             "parent": self.parent,
@@ -426,7 +493,7 @@ class CodeChange:
             "message": self.message,
             "files": [item.to_snapshot() for item in self.files],
             "recorded_at": _timestamp(self.recorded_at),
-            "review": None if self.review is None else self.review.to_snapshot(),
+            "review": review,
             "decision": None if self.decision is None else self.decision.to_snapshot(),
         }
         if include_diff:
@@ -434,6 +501,16 @@ class CodeChange:
                 raise ValueError("the diff of this code change was not loaded")
             snapshot["diff"] = self.diff
         return snapshot
+
+    def to_snapshot(self, *, include_diff: bool = False) -> dict[str, object]:
+        review = None if self.review is None else self.review.to_snapshot()
+        return self._snapshot(review, include_diff)
+
+    def to_answer(
+        self, current: Mapping[str, object] | None, *, include_diff: bool = False
+    ) -> dict[str, object]:
+        review = None if self.review is None else self.review.to_answer(current)
+        return self._snapshot(review, include_diff)
 
 
 def create_code_change(
@@ -669,13 +746,9 @@ class ChangeReviewRun:
             or _LOCALE.fullmatch(self.locale) is None
         ):
             raise ValueError("review locale must be a language tag such as it-IT")
-        _count(self.requirements_version_number, "requirements version number", minimum=1)
-        _count(self.design_version_number, "design version number", minimum=1)
-        if (
-            not isinstance(self.alternative_code, str)
-            or _ALTERNATIVE_CODE.fullmatch(self.alternative_code) is None
-        ):
-            raise ValueError("alternative code must use the DES-NNN format")
+        _reference(
+            self.requirements_version_number, self.design_version_number, self.alternative_code
+        )
         if not isinstance(self.critiques, tuple) or not all(
             isinstance(item, TwinCritique) for item in self.critiques
         ):
@@ -708,7 +781,14 @@ class ChangeReviewRun:
             reviewed_at=self.reviewed_at,
             verdict=self.alignment.status,
             summary=self.alignment.summary,
+            requirements_version_number=self.requirements_version_number,
+            design_version_number=self.design_version_number,
+            alternative_code=self.alternative_code,
         )
+
+    def findings_of(self, twin_id: UUID) -> tuple[str, ...]:
+        critique = next((item for item in self.critiques if item.twin_id == twin_id), None)
+        return () if critique is None else tuple(item.text for item in critique.findings)
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -723,6 +803,96 @@ class ChangeReviewRun:
         }
 
 
+def _task_origin(
+    origin: object,
+    *,
+    change_id: object,
+    commit: object,
+    test_run_id: object,
+    twin_id: object,
+    twin_name: object,
+    finding: object,
+) -> None:
+    if not isinstance(origin, TaskOrigin):
+        raise ValueError("task origin must be a TaskOrigin")
+    if origin is TaskOrigin.CODE_CHANGE:
+        _uuid(change_id, "task change ID")
+        if normalize_commit(commit, label="task commit") != commit:
+            raise ValueError("task commit must be lower case")
+        if test_run_id is not None:
+            raise ValueError("a task from a code change names no test run")
+    elif origin is TaskOrigin.TEST_RUN:
+        _uuid(test_run_id, "task test run ID")
+        if change_id is not None or commit is not None:
+            raise ValueError("a task from a test run names no code change")
+        if twin_id is None:
+            raise ValueError("a task from a test run comes from a finding of a twin")
+    elif (change_id, commit, test_run_id, twin_id) != (None, None, None, None):
+        raise ValueError("a task written by the owner names no change, run or twin")
+    twin = (twin_id, twin_name, finding)
+    if twin == (None, None, None):
+        return
+    if None in twin:
+        raise ValueError("a task from a finding names the twin and the finding")
+    _uuid(twin_id, "task twin ID")
+    _normalized(twin_name, label="task twin name", maximum=MAX_TWIN_NAME_LENGTH)
+    _normalized(finding, label="task finding", maximum=MAX_FINDING_LENGTH)
+
+
+def _task_about(requirements: object, screens: object, criteria: object) -> None:
+    _codes(requirements, _REQUIREMENT_CODE, "code task requirements")
+    _codes(screens, _SCREEN_CODE, "code task screens")
+    _codes(criteria, _CRITERION_CODE, "code task criteria")
+
+
+def _source_key(
+    origin: TaskOrigin,
+    change_id: UUID | None,
+    test_run_id: UUID | None,
+    twin_id: UUID | None,
+    finding: str | None,
+) -> tuple[object, ...] | None:
+    if twin_id is None or finding is None:
+        return None
+    subject = change_id if origin is TaskOrigin.CODE_CHANGE else test_run_id
+    return origin, subject, twin_id, finding
+
+
+@dataclass(frozen=True, slots=True)
+class TaskSource:
+    origin: TaskOrigin
+    text: str
+    change_id: UUID | None = None
+    commit: str | None = None
+    test_run_id: UUID | None = None
+    twin_id: UUID | None = None
+    twin_name: str | None = None
+    finding: str | None = None
+    requirements: tuple[str, ...] = ()
+    screens: tuple[str, ...] = ()
+    criteria: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _task_origin(
+            self.origin,
+            change_id=self.change_id,
+            commit=self.commit,
+            test_run_id=self.test_run_id,
+            twin_id=self.twin_id,
+            twin_name=self.twin_name,
+            finding=self.finding,
+        )
+        if normalize_task_text(self.text) != self.text:
+            raise ValueError("code task text must be normalized")
+        _task_about(self.requirements, self.screens, self.criteria)
+
+    @property
+    def key(self) -> tuple[object, ...] | None:
+        return _source_key(
+            self.origin, self.change_id, self.test_run_id, self.twin_id, self.finding
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class CodeTask:
     id: UUID
@@ -730,36 +900,80 @@ class CodeTask:
     owner_user_id: UUID
     number: int
     text: str
-    from_change_id: UUID
-    from_commit: str
     created_at: datetime
+    origin: TaskOrigin = TaskOrigin.CODE_CHANGE
+    from_change_id: UUID | None = None
+    from_commit: str | None = None
+    test_run_id: UUID | None = None
+    twin_id: UUID | None = None
+    twin_name: str | None = None
+    finding: str | None = None
     status: TaskStatus = TaskStatus.OPEN
     requirements: tuple[str, ...] = ()
     screens: tuple[str, ...] = ()
-    done_at: datetime | None = None
+    criteria: tuple[str, ...] = ()
+    closed_at: datetime | None = None
+    note: str | None = None
 
     def __post_init__(self) -> None:
         for label, value in (
             ("code task ID", self.id),
             ("project ID", self.project_id),
             ("owner ID", self.owner_user_id),
-            ("code change ID", self.from_change_id),
         ):
             _uuid(value, label)
         code_task_code(self.number)
         if normalize_task_text(self.text) != self.text:
             raise ValueError("code task text must be normalized")
-        if normalize_commit(self.from_commit) != self.from_commit:
-            raise ValueError("code task commit must be lower case")
         _aware(self.created_at, "code task timestamp")
+        _task_origin(
+            self.origin,
+            change_id=self.from_change_id,
+            commit=self.from_commit,
+            test_run_id=self.test_run_id,
+            twin_id=self.twin_id,
+            twin_name=self.twin_name,
+            finding=self.finding,
+        )
         if not isinstance(self.status, TaskStatus):
             raise ValueError("code task status must be a TaskStatus")
-        _codes(self.requirements, _REQUIREMENT_CODE, "code task requirements")
-        _codes(self.screens, _SCREEN_CODE, "code task screens")
-        if (self.status is TaskStatus.DONE) != (self.done_at is not None):
-            raise ValueError("a code task has a completion time exactly when it is done")
-        if self.done_at is not None:
-            _aware(self.done_at, "code task completion time")
+        _task_about(self.requirements, self.screens, self.criteria)
+        if (self.status is TaskStatus.OPEN) != (self.closed_at is None):
+            raise ValueError("a code task has a closing time exactly when it is done or dropped")
+        if self.closed_at is not None:
+            _aware(self.closed_at, "code task closing time")
+        if normalize_task_note(self.note) != self.note:
+            raise ValueError("code task note must be normalized")
+
+    @classmethod
+    def from_source(
+        cls,
+        source: TaskSource,
+        *,
+        task_id: UUID,
+        project_id: UUID,
+        owner_user_id: UUID,
+        number: int,
+        created_at: datetime,
+    ) -> CodeTask:
+        return cls(
+            id=task_id,
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            number=number,
+            text=source.text,
+            created_at=created_at,
+            origin=source.origin,
+            from_change_id=source.change_id,
+            from_commit=source.commit,
+            test_run_id=source.test_run_id,
+            twin_id=source.twin_id,
+            twin_name=source.twin_name,
+            finding=source.finding,
+            requirements=source.requirements,
+            screens=source.screens,
+            criteria=source.criteria,
+        )
 
     @property
     def code(self) -> str:
@@ -769,18 +983,98 @@ class CodeTask:
     def open(self) -> bool:
         return self.status is TaskStatus.OPEN
 
-    def done(self, done_at: datetime) -> CodeTask:
-        return replace(self, status=TaskStatus.DONE, done_at=done_at)
+    @property
+    def source_key(self) -> tuple[object, ...] | None:
+        return _source_key(
+            self.origin, self.from_change_id, self.test_run_id, self.twin_id, self.finding
+        )
+
+    def with_status(self, status: TaskStatus, *, at: datetime, note: str | None = None) -> CodeTask:
+        if status is self.status:
+            return replace(self, note=note)
+        closed_at = None if status is TaskStatus.OPEN else at
+        return replace(self, status=status, closed_at=closed_at, note=note)
+
+    def done(self, closed_at: datetime) -> CodeTask:
+        return self.with_status(TaskStatus.DONE, at=closed_at)
+
+    def about_snapshot(self) -> dict[str, list[str]]:
+        return {
+            "requirements": list(self.requirements),
+            "screens": list(self.screens),
+            "criteria": list(self.criteria),
+        }
 
     def to_snapshot(self) -> dict[str, object]:
         return {
             "code": self.code,
             "text": self.text,
-            "about": {"requirements": list(self.requirements), "screens": list(self.screens)},
+            "about": self.about_snapshot(),
+            "origin": {
+                "kind": self.origin.value,
+                "commit": self.from_commit,
+                "test_run_id": None if self.test_run_id is None else str(self.test_run_id),
+                "twin_id": None if self.twin_id is None else str(self.twin_id),
+                "twin_name": self.twin_name,
+                "finding": self.finding,
+            },
             "from_commit": self.from_commit,
             "created_at": _timestamp(self.created_at),
             "status": self.status.value,
+            "closed_at": None if self.closed_at is None else _timestamp(self.closed_at),
+            "note": self.note,
         }
+
+
+def _optional_uuid(value: object) -> UUID | None:
+    return None if value is None else UUID(str(value))
+
+
+def _optional_time(value: object) -> datetime | None:
+    return None if value is None else datetime.fromisoformat(str(value))
+
+
+def code_task_from_snapshot(
+    payload: Mapping[str, object],
+    *,
+    task_id: UUID | None = None,
+    project_id: UUID | None = None,
+    owner_user_id: UUID | None = None,
+    change_id: UUID | None = None,
+) -> CodeTask:
+    about = payload["about"]
+    origin = payload["origin"]
+    if not isinstance(about, Mapping) or not isinstance(origin, Mapping):
+        raise ValueError("task about and origin must be objects")
+    if payload["from_commit"] != origin["commit"]:
+        raise ValueError("a task names the commit of its origin")
+    number = task_number(payload["code"])
+    if number is None or payload["code"] != code_task_code(number):
+        raise ValueError("task code must use the TSK-NNN format")
+    kind = TaskOrigin(str(origin["kind"]))
+    return CodeTask(
+        id=_PLACEHOLDER_ID if task_id is None else task_id,
+        project_id=_PLACEHOLDER_ID if project_id is None else project_id,
+        owner_user_id=_PLACEHOLDER_ID if owner_user_id is None else owner_user_id,
+        number=number,
+        text=payload["text"],
+        created_at=datetime.fromisoformat(str(payload["created_at"])),
+        origin=kind,
+        from_change_id=(_PLACEHOLDER_ID if change_id is None else change_id)
+        if kind is TaskOrigin.CODE_CHANGE
+        else None,
+        from_commit=origin["commit"],
+        test_run_id=_optional_uuid(origin["test_run_id"]),
+        twin_id=_optional_uuid(origin["twin_id"]),
+        twin_name=origin["twin_name"],
+        finding=origin["finding"],
+        status=TaskStatus(str(payload["status"])),
+        requirements=tuple(about["requirements"]),
+        screens=tuple(about["screens"]),
+        criteria=tuple(about["criteria"]),
+        closed_at=_optional_time(payload["closed_at"]),
+        note=payload["note"],
+    )
 
 
 __all__ = [
@@ -789,7 +1083,9 @@ __all__ = [
     "MAX_LOCALE_LENGTH",
     "MAX_TASK_NUMBER",
     "MAX_TWIN_NAME_LENGTH",
+    "TASK_CODE_PATTERN",
     "TASK_CODE_PREFIX",
+    "TASK_CUT_MARK",
     "AlignedPoint",
     "AlignmentStatus",
     "AlignmentVerdict",
@@ -805,24 +1101,30 @@ __all__ = [
     "CritiqueVerdict",
     "DecisionKind",
     "FindingSeverity",
+    "TaskOrigin",
+    "TaskSource",
     "TaskStatus",
     "TwinCritique",
     "aligned_change",
     "alignment_verdict_from_snapshot",
     "changed_file_from_snapshot",
     "code_task_code",
+    "code_task_from_snapshot",
     "commit_prefix",
     "create_code_change",
     "critique_finding_from_snapshot",
+    "finding_task_text",
     "normalize_author",
     "normalize_commit",
     "normalize_diff",
     "normalize_message",
     "normalize_note",
     "normalize_path",
+    "normalize_task_note",
     "normalize_task_text",
     "normalized_block",
     "normalized_line",
     "pending_changes",
+    "task_number",
     "twin_critique_from_snapshot",
 ]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -20,14 +20,15 @@ from orchestwin.projects.code_changes import (
     CodeChangeAmbiguous,
     CodeTask,
     DecisionKind,
+    TaskOrigin,
+    TaskSource,
     TaskStatus,
     alignment_verdict_from_snapshot,
     changed_file_from_snapshot,
-    code_task_code,
     commit_prefix,
-    normalize_task_text,
     twin_critique_from_snapshot,
 )
+from orchestwin.projects.persistence.acceptance_tests import TEST_RUNS
 from orchestwin.projects.persistence.models import ProjectRecord
 
 DEFAULT_LIST_LIMIT: Final = 200
@@ -80,12 +81,19 @@ TASKS = sa.table(
     sa.column("from_change_id", postgresql.UUID(as_uuid=True)),
     sa.column("created_at", sa.DateTime(timezone=True)),
     sa.column("status", sa.String(length=8)),
-    sa.column("done_at", sa.DateTime(timezone=True)),
+    sa.column("closed_at", sa.DateTime(timezone=True)),
+    sa.column("origin", sa.String(length=16)),
+    sa.column("test_run_id", postgresql.UUID(as_uuid=True)),
+    sa.column("twin_id", postgresql.UUID(as_uuid=True)),
+    sa.column("twin_name", sa.String(length=200)),
+    sa.column("finding_text", sa.String(length=400)),
+    sa.column("note", sa.String(length=300)),
 )
 
 _SUMMARY_COLUMNS: Final = tuple(column for column in CHANGES.c if column.name != "diff")
 _ORDER: Final = (CHANGES.c.recorded_at, CHANGES.c.committed_at, CHANGES.c.commit)
 _NEWEST_FIRST: Final = tuple(column.desc() for column in _ORDER)
+_CREATED_ORIGINS: Final = (TaskOrigin.TEST_RUN.value, TaskOrigin.OWNER.value)
 
 
 class CodeChangeWriteStatus(StrEnum):
@@ -99,6 +107,12 @@ class CodeChangeWriteStatus(StrEnum):
 class CodeChangeWriteResult:
     status: CodeChangeWriteStatus
     change: CodeChange | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreatedTasks:
+    tasks: tuple[CodeTask, ...]
+    created: int
 
 
 def _violated_constraint(error: sa.exc.IntegrityError) -> str | None:
@@ -152,11 +166,15 @@ def _change(
 
 def _summary(row: Mapping[str, object]) -> ChangeReviewSummary:
     alignment = row["alignment"]
+    reference = row["reference"]
     return ChangeReviewSummary(
         run_id=row["id"],
         reviewed_at=_utc(row["reviewed_at"]),
         verdict=alignment_verdict_from_snapshot(alignment).status,
         summary=alignment["summary"],
+        requirements_version_number=reference["requirements_version_number"],
+        design_version_number=reference["design_version_number"],
+        alternative_code=reference["alternative_code"],
     )
 
 
@@ -188,17 +206,46 @@ def _task(row: Mapping[str, object]) -> CodeTask:
         owner_user_id=row["owner_user_id"],
         number=row["number"],
         text=row["text"],
+        created_at=_utc(row["created_at"]),
+        origin=TaskOrigin(row["origin"]),
         from_change_id=row["from_change_id"],
         from_commit=row["from_commit"],
-        created_at=_utc(row["created_at"]),
+        test_run_id=row["test_run_id"],
+        twin_id=row["twin_id"],
+        twin_name=row["twin_name"],
+        finding=row["finding_text"],
         status=TaskStatus(row["status"]),
         requirements=tuple(about.get("requirements", ())),
         screens=tuple(about.get("screens", ())),
-        done_at=_utc(row["done_at"]),
+        criteria=tuple(about.get("criteria", ())),
+        closed_at=_utc(row["closed_at"]),
+        note=row["note"],
     )
     if task.code != row["code"]:
         raise ValueError("stored code task code does not match its number")
     return task
+
+
+def _task_values(task: CodeTask) -> dict[str, object]:
+    return {
+        "id": task.id,
+        "project_id": task.project_id,
+        "owner_user_id": task.owner_user_id,
+        "number": task.number,
+        "code": task.code,
+        "text": task.text,
+        "about": task.about_snapshot(),
+        "from_change_id": task.from_change_id,
+        "created_at": task.created_at,
+        "status": task.status.value,
+        "closed_at": task.closed_at,
+        "origin": task.origin.value,
+        "test_run_id": task.test_run_id,
+        "twin_id": task.twin_id,
+        "twin_name": task.twin_name,
+        "finding_text": task.finding,
+        "note": task.note,
+    }
 
 
 class SqlAlchemyCodeChangeRepository:
@@ -232,7 +279,13 @@ class SqlAlchemyCodeChangeRepository:
         if not change_ids:
             return {}
         statement = (
-            sa.select(REVIEWS.c.change_id, REVIEWS.c.id, REVIEWS.c.reviewed_at, REVIEWS.c.alignment)
+            sa.select(
+                REVIEWS.c.change_id,
+                REVIEWS.c.id,
+                REVIEWS.c.reviewed_at,
+                REVIEWS.c.reference,
+                REVIEWS.c.alignment,
+            )
             .where(
                 REVIEWS.c.change_id.in_(list(change_ids)),
                 REVIEWS.c.owner_user_id == self._owner_user_id,
@@ -443,79 +496,110 @@ class SqlAlchemyCodeChangeRepository:
             return None
         return _change(row, None, with_diff=False).aligned_point()
 
-    async def tasks(self, project_id: UUID, *, open_only: bool = False) -> tuple[CodeTask, ...]:
-        statement = (
+    def _tasks(self, project_id: UUID):
+        return (
             sa.select(*TASKS.c, CHANGES.c.commit.label("from_commit"))
-            .join(CHANGES, CHANGES.c.id == TASKS.c.from_change_id)
+            .select_from(TASKS.outerjoin(CHANGES, CHANGES.c.id == TASKS.c.from_change_id))
             .where(
                 TASKS.c.project_id == project_id,
                 TASKS.c.owner_user_id == self._owner_user_id,
             )
             .order_by(TASKS.c.number)
         )
+
+    async def tasks(self, project_id: UUID, *, open_only: bool = False) -> tuple[CodeTask, ...]:
+        statement = self._tasks(project_id)
         if open_only:
             statement = statement.where(TASKS.c.status == TaskStatus.OPEN.value)
         rows = (await self._session.execute(statement)).mappings().all()
         return tuple(_task(row) for row in rows)
 
+    async def task(self, project_id: UUID, number: int) -> CodeTask | None:
+        statement = self._tasks(project_id).where(TASKS.c.number == number)
+        row = (await self._session.execute(statement)).mappings().one_or_none()
+        return None if row is None else _task(row)
+
+    async def _check_subject(self, project_id: UUID, source: TaskSource) -> None:
+        if source.origin is TaskOrigin.CODE_CHANGE:
+            statement = self._owned_changes(project_id, CHANGES.c.id).where(
+                CHANGES.c.id == source.change_id, CHANGES.c.commit == source.commit
+            )
+        elif source.origin is TaskOrigin.TEST_RUN:
+            statement = sa.select(TEST_RUNS.c.id).where(
+                TEST_RUNS.c.id == source.test_run_id,
+                TEST_RUNS.c.project_id == project_id,
+                TEST_RUNS.c.owner_user_id == self._owner_user_id,
+            )
+        else:
+            return
+        if (await self._session.execute(statement)).scalar_one_or_none() is None:
+            raise ValueError("a code task names a change or a test run of its project")
+
     async def create_tasks(
-        self,
-        project_id: UUID,
-        from_change_id: UUID,
-        texts: Iterable[str],
-        *,
-        created_at: datetime,
-        requirements: Sequence[str] = (),
-        screens: Sequence[str] = (),
-    ) -> tuple[CodeTask, ...]:
+        self, project_id: UUID, sources: Sequence[TaskSource], *, created_at: datetime
+    ) -> CreatedTasks:
         if not await self._lock_project(project_id):
             raise ValueError("code tasks need an owned active project")
-        statement = self._owned_changes(project_id, CHANGES.c.commit).where(
-            CHANGES.c.id == from_change_id
-        )
-        commit = (await self._session.execute(statement)).scalar_one_or_none()
-        if commit is None:
-            raise ValueError("code tasks need a recorded code change of the project")
+        for source in sources:
+            await self._check_subject(project_id, source)
+        known = {
+            task.source_key: task
+            for task in await self.tasks(project_id, open_only=True)
+            if task.source_key is not None
+        }
         latest = (
             await self._session.execute(
                 sa.select(sa.func.max(TASKS.c.number)).where(TASKS.c.project_id == project_id)
             )
         ).scalar_one()
-        tasks = tuple(
-            CodeTask(
-                id=uuid4(),
+        number = latest or 0
+        tasks = []
+        created = 0
+        for source in sources:
+            existing = None if source.key is None else known.get(source.key)
+            if existing is not None:
+                tasks.append(existing)
+                continue
+            number += 1
+            task = CodeTask.from_source(
+                source,
+                task_id=uuid4(),
                 project_id=project_id,
                 owner_user_id=self._owner_user_id,
-                number=(latest or 0) + index,
-                text=normalize_task_text(text),
-                from_change_id=from_change_id,
-                from_commit=commit,
+                number=number,
                 created_at=created_at,
-                requirements=tuple(requirements),
-                screens=tuple(screens),
             )
-            for index, text in enumerate(texts, 1)
+            await self._session.execute(sa.insert(TASKS).values(**_task_values(task)))
+            if task.source_key is not None:
+                known[task.source_key] = task
+            tasks.append(task)
+            created += 1
+        return CreatedTasks(tasks=tuple(tasks), created=created)
+
+    async def set_task_status(
+        self,
+        project_id: UUID,
+        number: int,
+        status: TaskStatus,
+        *,
+        at: datetime,
+        note: str | None = None,
+    ) -> CodeTask | None:
+        if not await self._lock_project(project_id):
+            return None
+        task = await self.task(project_id, number)
+        if task is None:
+            return None
+        changed = task.with_status(status, at=at, note=note)
+        await self._session.execute(
+            sa.update(TASKS)
+            .where(TASKS.c.id == task.id)
+            .values(status=changed.status.value, closed_at=changed.closed_at, note=changed.note)
         )
-        for task in tasks:
-            await self._session.execute(
-                sa.insert(TASKS).values(
-                    id=task.id,
-                    project_id=task.project_id,
-                    owner_user_id=task.owner_user_id,
-                    number=task.number,
-                    code=code_task_code(task.number),
-                    text=task.text,
-                    about={"requirements": list(task.requirements), "screens": list(task.screens)},
-                    from_change_id=task.from_change_id,
-                    created_at=task.created_at,
-                    status=task.status.value,
-                    done_at=None,
-                )
-            )
-        return tasks
+        return changed
 
     async def close_open_tasks(
-        self, project_id: UUID, aligned_change_id: UUID, done_at: datetime
+        self, project_id: UUID, aligned_change_id: UUID, closed_at: datetime
     ) -> int:
         statement = self._owned_changes(project_id).where(CHANGES.c.id == aligned_change_id)
         aligned = (await self._session.execute(statement)).mappings().one_or_none()
@@ -530,9 +614,18 @@ class SqlAlchemyCodeChangeRepository:
                 TASKS.c.project_id == project_id,
                 TASKS.c.owner_user_id == self._owner_user_id,
                 TASKS.c.status == TaskStatus.OPEN.value,
-                TASKS.c.from_change_id.in_(covered),
+                sa.or_(
+                    sa.and_(
+                        TASKS.c.origin == TaskOrigin.CODE_CHANGE.value,
+                        TASKS.c.from_change_id.in_(covered),
+                    ),
+                    sa.and_(
+                        TASKS.c.origin.in_(_CREATED_ORIGINS),
+                        TASKS.c.created_at <= aligned["recorded_at"],
+                    ),
+                ),
             )
-            .values(status=TaskStatus.DONE.value, done_at=done_at)
+            .values(status=TaskStatus.DONE.value, closed_at=closed_at, note=None)
         )
         return result.rowcount
 
@@ -545,5 +638,6 @@ __all__ = [
     "UNIQUE_COMMIT",
     "CodeChangeWriteResult",
     "CodeChangeWriteStatus",
+    "CreatedTasks",
     "SqlAlchemyCodeChangeRepository",
 ]
