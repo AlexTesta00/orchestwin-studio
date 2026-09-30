@@ -8,6 +8,7 @@ from uuid import UUID
 from orchestwin.knowledge.documents import counted
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_TESTS,
     KNOWLEDGE_SCHEMA_VERSION,
     STATE_DOCUMENT,
     STATE_TEXT,
@@ -16,9 +17,11 @@ from orchestwin.knowledge.layout import (
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.state import (
     CHANGE_REVIEWS_KIND,
+    MAX_FOLDER_TEST_RUNS,
     MAX_MESSAGE_LENGTH,
     MIN_COMMIT_LENGTH,
     STATE_KIND,
+    TEST_REVIEWS_KIND,
 )
 
 SHORT_MESSAGE_LENGTH: Final = 200
@@ -82,6 +85,73 @@ _RUN_SHAPE: Final = {
         "requirements_request": None,
         "code_tasks": [None],
     },
+    "cost_microusd": None,
+}
+_SUMMARY_KEYS: Final = ("passed", "failed", "blocked", "not_covered", "not_run")
+_TARGET_SHAPE: Final = {"role": None, "name": None}
+_TEST_RUN_SHAPE: Final = {
+    "id": None,
+    "started_at": None,
+    "finished_at": None,
+    "recorded_at": None,
+    "application": {"kind": None, "address": None},
+    "browsers": [{"name": None, "version": None}],
+    "reference": {
+        "requirements_version_number": None,
+        "design_version_number": None,
+        "alternative_code": None,
+    },
+    "summary": dict.fromkeys(_SUMMARY_KEYS),
+    "criteria": [{"code": None, "status": None, "paths": [None]}],
+    "not_covered": [{"criterion": None, "reason": None}],
+    "results": [
+        {
+            "path": {
+                "code": None,
+                "heading": None,
+                "criteria": [None],
+                "steps": [
+                    {
+                        "action": None,
+                        "target": _TARGET_SHAPE,
+                        "value": None,
+                        "expect": {"kind": None, "target": _TARGET_SHAPE, "text": None},
+                    }
+                ],
+            },
+            "browser": None,
+            "status": None,
+            "seconds": None,
+            "steps": [
+                {
+                    "index": None,
+                    "status": None,
+                    "detail": None,
+                    "url": None,
+                    "title": None,
+                    "screenshot": None,
+                }
+            ],
+            "page_text": None,
+        }
+    ],
+    "critiques": [
+        {
+            "twin_id": None,
+            "twin_name": None,
+            "verdict": None,
+            "summary": None,
+            "findings": [
+                {
+                    "severity": None,
+                    "text": None,
+                    "about": {"criterion": None, "requirement": None, "screen": None},
+                    "action": None,
+                }
+            ],
+        }
+    ],
+    "reviewed_at": None,
     "cost_microusd": None,
 }
 _TEXTS: Final[dict[str, dict[str, Any]]] = {
@@ -228,6 +298,90 @@ _SEVERITY_WORDS: Final = {
     "en": {"LOW": "low", "MEDIUM": "medium", "HIGH": "high"},
     "it": {"LOW": "bassa", "MEDIUM": "media", "HIGH": "alta"},
 }
+_BROWSER_LABELS: Final = {"chrome": "Chrome", "firefox": "Firefox"}
+_TEST_TEXTS: Final[dict[str, dict[str, Any]]] = {
+    "en": {
+        "heading": "## Acceptance tests",
+        "critiques_heading": "## Critiques on the acceptance tests",
+        "none": (
+            "No run of the acceptance tests is recorded yet: `ut test` runs them on the "
+            "application and records the result in the Studio."
+        ),
+        "latest": (
+            "The latest run of the acceptance tests, finished on {when}, checked {application} in "
+            "{browsers}."
+        ),
+        "run": (
+            "The run of {when} checked {application} in {browsers}, against requirements version "
+            "{requirements} and design version {design}, alternative {alternative}."
+        ),
+        "static": "the static folder `{address}`",
+        "url": "the address `{address}`",
+        "and": "and",
+        "numbers": "Criteria: {numbers}.",
+        "statuses": {
+            "passed": ("passed", "passed"),
+            "failed": ("failed", "failed"),
+            "blocked": ("blocked", "blocked"),
+            "not_covered": ("not covered", "not covered"),
+            "not_run": ("not run", "not run"),
+        },
+        "stopped": "Criteria that failed or were blocked:",
+        "stopped_statuses": {"FAILED": "failed", "BLOCKED": "blocked"},
+        "stopped_line": "- {code} {status}{heading}{path}.",
+        "stopped_path": " (path {path})",
+        "none_stopped": "No criterion failed or was blocked.",
+        "review": "The review of the twins on {when} leaves {critiques}.",
+        "open_words": ("open critique", "open critiques"),
+        "review_clear": "The review of the twins on {when} leaves no open critique.",
+        "unreviewed": "The twins have not reviewed this run yet.",
+        "document": (
+            "`{document}` holds {runs} with the steps, the evidence and the critiques of the twins."
+        ),
+        "run_words": ("run of the acceptance tests", "runs of the acceptance tests"),
+        "again": "`ut test` runs the tests again.",
+        "reviewed": "The twins reviewed it on {when}.",
+        "twin": "{name}: {verdict}.",
+        "findings": "Findings: {findings}",
+        "finding": "importance {severity}{about}: {text}",
+        "finding_about": " about {codes}",
+        "no_findings": "No finding.",
+        "no_alternative": "not selected",
+    },
+    "it": {
+        "heading": "## Verifica dei criteri",
+        "none": (
+            "Nessuna verifica dei criteri è stata ancora registrata: `ut test` la esegue "
+            "sull'applicazione e ne registra il risultato nello Studio."
+        ),
+        "latest": (
+            "L'ultima verifica dei criteri, conclusa il {when}, ha provato {application} in "
+            "{browsers}."
+        ),
+        "static": "la cartella statica `{address}`",
+        "url": "l'indirizzo `{address}`",
+        "and": "e",
+        "numbers": "Criteri: {numbers}.",
+        "statuses": {
+            "passed": ("superato", "superati"),
+            "failed": ("fallito", "falliti"),
+            "blocked": ("bloccato", "bloccati"),
+            "not_covered": ("non coperto", "non coperti"),
+            "not_run": ("non eseguito", "non eseguiti"),
+        },
+        "review": "La revisione dei twin del {when} lascia {critiques}.",
+        "open_words": ("critica aperta", "critiche aperte"),
+        "review_clear": "La revisione dei twin del {when} non lascia critiche aperte.",
+        "unreviewed": "I twin non hanno ancora criticato questa verifica.",
+        "document": "`{document}` contiene {runs} con i passi, le prove e le critiche dei twin.",
+        "run_words": ("verifica dei criteri", "verifiche dei criteri"),
+    },
+}
+_TEST_VERDICT_WORDS: Final = {
+    "FINE": "the results are fine",
+    "CONCERN": "the results raise a concern",
+    "DRIFT": "the application departs from what was approved",
+}
 
 
 def _plain(value: object) -> object:
@@ -335,6 +489,19 @@ def change_reviews_document(sources: KnowledgeSources) -> dict[str, object]:
         "kind": CHANGE_REVIEWS_KIND,
         "project_id": str(sources.project_id),
         "runs": [_shaped(run, _RUN_SHAPE) for run in sources.state.runs],
+    }
+
+
+def acceptance_runs(sources: KnowledgeSources) -> tuple[Mapping[str, object], ...]:
+    return tuple(sources.state.tests[:MAX_FOLDER_TEST_RUNS])
+
+
+def test_reviews_document(sources: KnowledgeSources) -> dict[str, object]:
+    return {
+        "schema_version": KNOWLEDGE_SCHEMA_VERSION,
+        "kind": TEST_REVIEWS_KIND,
+        "project_id": str(sources.project_id),
+        "runs": [_shaped(run, _TEST_RUN_SHAPE) for run in acceptance_runs(sources)],
     }
 
 
@@ -556,6 +723,109 @@ def _run_lines(run: Mapping[str, Any], texts: Mapping[str, Any], language: str) 
     return lines
 
 
+def _listed(items: Sequence[str], conjunction: str) -> str:
+    if len(items) < 2:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} {conjunction} {items[-1]}"
+
+
+def _browsers(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    names = []
+    for browser in map(_mapping, run.get("browsers") or ()):
+        name = _inline(browser.get("name"))
+        names.append(f"{_BROWSER_LABELS.get(name, name)} {_inline(browser.get('version'))}")
+    return _listed(names, texts["and"])
+
+
+def _application(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    application = _mapping(run.get("application"))
+    template = texts["static"] if application.get("kind") == "STATIC" else texts["url"]
+    return template.format(address=_inline(application.get("address")))
+
+
+def _numbers(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    summary = _mapping(run.get("summary"))
+    counts = ", ".join(
+        counted(summary.get(key) or 0, *texts["statuses"][key]) for key in _SUMMARY_KEYS
+    )
+    return texts["numbers"].format(numbers=counts)
+
+
+def _latest_sentence(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    latest = texts["latest"].format(
+        application=_application(run, texts),
+        browsers=_browsers(run, texts),
+        when=_when(run.get("finished_at")),
+    )
+    return f"{latest} {_numbers(run, texts)}"
+
+
+def _open_critiques(run: Mapping[str, Any]) -> int:
+    return sum(
+        len(_mapping(critique).get("findings") or ()) for critique in run.get("critiques") or ()
+    )
+
+
+def _review_sentence(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    if run.get("reviewed_at") is None:
+        return texts["unreviewed"]
+    count = _open_critiques(run)
+    when = _when(run["reviewed_at"])
+    if not count:
+        return texts["review_clear"].format(when=when)
+    return texts["review"].format(when=when, critiques=counted(count, *texts["open_words"]))
+
+
+def _document_sentence(runs: Sequence[object], texts: Mapping[str, Any]) -> str:
+    return texts["document"].format(
+        document=FEEDBACK_TESTS, runs=counted(len(runs), *texts["run_words"])
+    )
+
+
+def _path_headings(run: Mapping[str, Any]) -> dict[str, str]:
+    headings: dict[str, str] = {}
+    for result in map(_mapping, run.get("results") or ()):
+        path = _mapping(result.get("path"))
+        headings.setdefault(str(path.get("code")), _bare(path.get("heading") or ""))
+    return headings
+
+
+def _stopped_lines(run: Mapping[str, Any], texts: Mapping[str, Any]) -> list[str]:
+    headings = _path_headings(run)
+    lines = []
+    for criterion in map(_mapping, run.get("criteria") or ()):
+        status = texts["stopped_statuses"].get(str(criterion.get("status")))
+        if status is None:
+            continue
+        paths = [str(code) for code in criterion.get("paths") or ()]
+        heading = headings.get(paths[0], "") if paths else ""
+        lines.append(
+            texts["stopped_line"].format(
+                code=criterion.get("code"),
+                status=status,
+                heading=f": {heading}" if heading else "",
+                path=texts["stopped_path"].format(path=paths[0]) if paths else "",
+            )
+        )
+    return lines
+
+
+def _test_state_lines(sources: KnowledgeSources, language: str) -> list[str]:
+    texts = _TEST_TEXTS[language]
+    runs = test_reviews_document(sources)["runs"]
+    if not runs:
+        return [texts["heading"], "", texts["none"], ""]
+    run = _mapping(runs[0])
+    paragraph = " ".join(
+        (
+            _latest_sentence(run, texts),
+            _review_sentence(run, texts),
+            _document_sentence(runs, texts),
+        )
+    )
+    return [texts["heading"], "", paragraph, ""]
+
+
 def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
     words = state_language(language)
     texts = _TEXTS[words]
@@ -577,6 +847,7 @@ def state_markdown(sources: KnowledgeSources, *, language: str | None) -> str:
         lines.extend(_run_lines(_mapping(runs[0]), texts, words))
     else:
         lines.extend([texts["no_runs"], ""])
+    lines.extend(_test_state_lines(sources, words))
     return "\n".join(lines)
 
 
@@ -676,8 +947,87 @@ def change_critique_lines(sources: KnowledgeSources) -> list[str]:
     return lines
 
 
+def test_lines(sources: KnowledgeSources) -> list[str]:
+    texts = _TEST_TEXTS["en"]
+    runs = test_reviews_document(sources)["runs"]
+    lines = [texts["heading"], ""]
+    if not runs:
+        return [*lines, texts["none"], ""]
+    run = _mapping(runs[0])
+    stopped = _stopped_lines(run, texts)
+    lines.extend([_latest_sentence(run, texts), ""])
+    if stopped:
+        lines.extend([texts["stopped"], "", *stopped, ""])
+    else:
+        lines.extend([texts["none_stopped"], ""])
+    closing = (
+        _review_sentence(run, texts),
+        _document_sentence(runs, texts),
+        texts["again"],
+    )
+    return [*lines, " ".join(closing), ""]
+
+
+def _test_finding(finding: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    about = _mapping(finding.get("about"))
+    codes = [
+        str(about[key])
+        for key in ("criterion", "requirement", "screen")
+        if about.get(key) is not None
+    ]
+    return texts["finding"].format(
+        severity=_worded(_SEVERITY_WORDS["en"], finding.get("severity")),
+        about=texts["finding_about"].format(codes=", ".join(codes)) if codes else "",
+        text=_bare(finding.get("text")),
+    )
+
+
+def _test_run_paragraph(run: Mapping[str, Any], texts: Mapping[str, Any]) -> str:
+    reference = _mapping(run.get("reference"))
+    reviewed = run.get("reviewed_at")
+    parts = [
+        texts["run"].format(
+            when=_when(run.get("finished_at")),
+            application=_application(run, texts),
+            browsers=_browsers(run, texts),
+            requirements=reference.get("requirements_version_number"),
+            design=reference.get("design_version_number"),
+            alternative=reference.get("alternative_code") or texts["no_alternative"],
+        ),
+        _numbers(run, texts),
+        texts["unreviewed"] if reviewed is None else texts["reviewed"].format(when=_when(reviewed)),
+    ]
+    for critique in map(_mapping, run.get("critiques") or ()):
+        findings = [_test_finding(_mapping(item), texts) for item in critique.get("findings") or ()]
+        parts.extend(
+            [
+                texts["twin"].format(
+                    name=_inline(critique.get("twin_name")),
+                    verdict=_worded(_TEST_VERDICT_WORDS, critique.get("verdict")),
+                ),
+                _sentence(critique.get("summary") or ""),
+                _sentence(texts["findings"].format(findings="; ".join(findings)))
+                if findings
+                else texts["no_findings"],
+            ]
+        )
+    return " ".join(part for part in parts if part)
+
+
+def test_critique_lines(sources: KnowledgeSources) -> list[str]:
+    texts = _TEST_TEXTS["en"]
+    runs = test_reviews_document(sources)["runs"]
+    lines = [texts["critiques_heading"], ""]
+    for run in map(_mapping, runs):
+        lines.extend([_test_run_paragraph(run, texts), ""])
+    if not runs:
+        lines.extend([texts["none"], ""])
+    return lines
+
+
 __all__ = [
     "SHORT_MESSAGE_LENGTH",
+    "acceptance_runs",
     "change_critique_lines",
     "change_reviews_document",
     "development_lines",
@@ -686,4 +1036,7 @@ __all__ = [
     "state_document",
     "state_language",
     "state_markdown",
+    "test_critique_lines",
+    "test_lines",
+    "test_reviews_document",
 ]

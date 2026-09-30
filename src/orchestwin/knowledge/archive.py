@@ -12,6 +12,7 @@ from orchestwin.artifacts.bound_mockups import BoundGeneratedMockup, bound_mocku
 from orchestwin.artifacts.generated_mockups import GeneratedMockupError
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_TESTS,
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
@@ -213,6 +214,15 @@ def _state_documents(files: Mapping[str, str], manifest: Mapping[str, object]) -
             raise KnowledgeArchiveError("FOLDER_TAMPERED", path)
 
 
+def _test_document(files: Mapping[str, str], manifest: Mapping[str, object]) -> None:
+    if "tests" not in manifest["feedback"]:
+        if FEEDBACK_TESTS in files:
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", FEEDBACK_TESTS)
+        return
+    if not _same_project(_json(files, FEEDBACK_TESTS), manifest):
+        raise KnowledgeArchiveError("FOLDER_TAMPERED", FEEDBACK_TESTS)
+
+
 def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
     manifest = _json(files, KNOWLEDGE_MANIFEST)
     if (
@@ -257,6 +267,7 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
             raise KnowledgeArchiveError("FOLDER_TAMPERED", stage_document(stage))
     if manifest["schema_version"] >= 3:
         _state_documents(files, manifest)
+    _test_document(files, manifest)
     if "design" in documents:
         _verify_generated_mockup(documents["design"]["package"])
     return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))

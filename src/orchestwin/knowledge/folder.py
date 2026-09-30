@@ -42,6 +42,7 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_FOLDER,
     FEEDBACK_INSIGHTS,
     FEEDBACK_REVIEWS,
+    FEEDBACK_TESTS,
     FEEDBACK_TEXT,
     KNOWLEDGE_FOLDER_KIND,
     KNOWLEDGE_INDEX,
@@ -59,10 +60,13 @@ from orchestwin.knowledge.layout import (
 from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.state_documents import (
+    acceptance_runs,
     change_reviews_document,
     development_lines,
     state_document,
     state_markdown,
+    test_lines,
+    test_reviews_document,
 )
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
@@ -321,6 +325,7 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         STATE_DOCUMENT: json_text(state_document(sources)),
         STATE_TEXT: state_markdown(sources, language=folder_language(sources)),
         FEEDBACK_CHANGES: json_text(change_reviews_document(sources)),
+        FEEDBACK_TESTS: json_text(test_reviews_document(sources)),
     }
     if "team" in present:
         files[stage_text("team")] = team_markdown(sources.team, sources.team_gate)
@@ -434,6 +439,8 @@ def _feedback_entry(sources: KnowledgeSources) -> dict[str, object]:
         **feedback_summary(sources),
         "changes": FEEDBACK_CHANGES,
         "change_reviews": len(sources.state.runs),
+        "tests": FEEDBACK_TESTS,
+        "test_runs": len(acceptance_runs(sources)),
     }
 
 
@@ -493,7 +500,9 @@ def build_knowledge_folder(
         created_at=created_at,
     )
     files[KNOWLEDGE_MANIFEST] = json_text(manifest)
-    files[KNOWLEDGE_INDEX] = index_markdown(manifest, development=development_lines(sources))
+    files[KNOWLEDGE_INDEX] = index_markdown(
+        manifest, development=[*development_lines(sources), *test_lines(sources)]
+    )
     return KnowledgeFolder(
         project_id=sources.project_id,
         project_name=sources.project_name,

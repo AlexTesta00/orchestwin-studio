@@ -6,7 +6,13 @@ from collections.abc import Mapping
 from typing import Final
 from uuid import UUID
 
-from orchestwin.knowledge.state import FEEDBACK_CHANGES, STATE_DOCUMENT, STATE_FOLDER, STATE_TEXT
+from orchestwin.knowledge.state import (
+    FEEDBACK_CHANGES,
+    FEEDBACK_TESTS,
+    STATE_DOCUMENT,
+    STATE_FOLDER,
+    STATE_TEXT,
+)
 
 KNOWLEDGE_SCHEMA_VERSION: Final = 3
 SUPPORTED_SCHEMA_VERSIONS: Final = (2, 3)
@@ -92,6 +98,7 @@ __all__ = [
     "FEEDBACK_FOLDER",
     "FEEDBACK_INSIGHTS",
     "FEEDBACK_REVIEWS",
+    "FEEDBACK_TESTS",
     "FEEDBACK_TEXT",
     "KNOWLEDGE_FOLDER_KIND",
     "KNOWLEDGE_FOLDER_NAME",
