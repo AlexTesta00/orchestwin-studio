@@ -4,6 +4,8 @@ import type {
   AlignmentPayload,
   ChangeReviewListPayload,
   CodeChangeListPayload,
+  CodeTaskListPayload,
+  CodeTaskListStatus,
 } from "../types/codeChanges";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
@@ -23,6 +25,11 @@ export interface CodeChangesApi {
     pending?: boolean,
   ): Promise<CodeChangeListPayload>;
   reviews(projectId: string, commit: string, accessToken: string): Promise<ChangeReviewListPayload>;
+  tasks(
+    projectId: string,
+    accessToken: string,
+    status?: CodeTaskListStatus,
+  ): Promise<CodeTaskListPayload>;
 }
 
 function normalizedBasePath(value: string): string {
@@ -99,6 +106,12 @@ function reviewsPath(basePath: string, projectId: string, commit: string): strin
   return `${projectPath(basePath, projectId)}/code-changes/${encodeURIComponent(commit)}/reviews`;
 }
 
+function tasksPath(basePath: string, projectId: string, status: CodeTaskListStatus): string {
+  const query = new URLSearchParams({ status });
+
+  return `${projectPath(basePath, projectId)}/code-tasks?${query.toString()}`;
+}
+
 export function createCodeChangesApi(options: CodeChangesApiOptions = {}): CodeChangesApi {
   const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
@@ -154,6 +167,12 @@ export function createCodeChangesApi(options: CodeChangesApiOptions = {}): CodeC
       const payload = await read(reviewsPath(basePath, projectId, commit), accessToken, true);
 
       return payload as unknown as ChangeReviewListPayload;
+    },
+
+    async tasks(projectId, accessToken, status = "open") {
+      const payload = await read(tasksPath(basePath, projectId, status), accessToken, true);
+
+      return payload as unknown as CodeTaskListPayload;
     },
   };
 }

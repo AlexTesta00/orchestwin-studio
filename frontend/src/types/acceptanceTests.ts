@@ -159,6 +159,13 @@ export interface TestRunPayload {
   cost_microusd: number;
 }
 
+export interface LatestTestReviewPayload {
+  run_id: string;
+  finished_at: string;
+  reviewed_at: string;
+  critiques: TestCritiquePayload[];
+}
+
 export interface AcceptanceTestsOverviewPayload {
   project_id: string;
   reference: DevelopmentReferencePayload;
@@ -166,4 +173,6 @@ export interface AcceptanceTestsOverviewPayload {
   plans: number;
   runs: number;
   latest_run: TestRunPayload | null;
+  latest_run_stale?: boolean;
+  latest_review?: LatestTestReviewPayload | null;
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, provide, ref, watch } from "vue";
 
+import GenerationJobNotice from "./GenerationJobNotice.vue";
+import ProjectTwinLearningBlock from "./ProjectTwinLearningBlock.vue";
 import { placeLabel } from "./screenNames";
 import UiButton from "./UiButton.vue";
 import UiClaimFrame from "./UiClaimFrame.vue";
@@ -10,19 +12,26 @@ import UiTechnicalDetails from "./UiTechnicalDetails.vue";
 
 import { apiClient } from "../api/client";
 import type { CodeChangesApi } from "../api/codeChanges";
+import type { GenerationJobsApi } from "../api/generationJobs";
+import type { TwinLearningApi } from "../api/twinLearning";
 import { useAuthStore } from "../stores/auth";
 import { useCodeChangesStore, type AuthorizedRequest } from "../stores/codeChanges";
 import { useDesignStore } from "../stores/design";
+import { useGenerationResume } from "../stores/generationJobs";
 import { useRequirementsStore } from "../stores/requirements";
+import { useTwinLearningStore } from "../stores/twinLearning";
 import type {
   AlignmentStatus,
   ChangeDecisionKind,
+  ChangeReviewSummaryPayload,
   CodeChangePayload,
   CodeSubjectsPayload,
+  CodeTaskPayload,
   CritiqueFindingPayload,
   CritiqueVerdict,
   FindingSeverity,
 } from "../types/codeChanges";
+import type { GenerationOperation } from "../types/designMockups";
 
 type Locale = "en" | "it";
 type ChipStatus = "approved" | "pending" | "blocked" | "failed";
@@ -44,9 +53,13 @@ const props = withDefaults(
     locale?: Locale;
     authorize?: AuthorizedRequest;
     api?: CodeChangesApi;
+    learningApi?: TwinLearningApi | undefined;
+    jobsApi?: GenerationJobsApi | undefined;
   }>(),
   {
     locale: "en",
+    learningApi: undefined,
+    jobsApi: undefined,
   },
 );
 
@@ -63,8 +76,7 @@ const messages = {
       "The code is written with your own tools. Here you read how the commits stand against the approved requirements and design.",
     terminal:
       "Reviews and decisions are made from the terminal with `ut align`: this page only shows their result.",
-    refresh: "Refresh",
-    refreshLabel: "Refresh the development state",
+    refresh: "Read again",
     loading: "Loading the development state…",
     loadFailed: "The development state could not be loaded.",
     details: "Details",
@@ -82,6 +94,13 @@ const messages = {
     pendingTitle: "Pending commits ({count})",
     pendingIntro: "The commits recorded after the aligned point.",
     noPending: "No commit after the aligned point.",
+    staleReviews: [
+      "1 review was made against earlier versions of the requirements or of the design: `ut align --recheck` has the twins review that commit again.",
+      "{count} reviews were made against earlier versions of the requirements or of the design: `ut align --recheck` has the twins review those commits again.",
+    ],
+    staleChip: "To re-review",
+    reviewedAgainst:
+      "Reviewed against requirements version {requirements} and design version {design}{alternative}",
     files: ["{count} file", "{count} files"],
     verdictBadge: {
       NONE: "Not reviewed yet",
@@ -101,6 +120,19 @@ const messages = {
     tasksTitle: "Open tasks for the code ({count})",
     tasksIntro: "They close when a later commit is marked as aligned.",
     noTasks: "No open task.",
+    origin: {
+      owner: "Written by you",
+      verdict: "From the decision on the commit {commit}",
+      twinCommit: "From {twin} on the commit {commit}",
+      twinTests: "From {twin} on the acceptance tests",
+      tests: "From the acceptance tests",
+      criteria: ["criterion {codes}", "criteria {codes}"],
+    },
+    tasksClosed: "Tasks closed so far: {list}.",
+    tasksDone: ["{count} done", "{count} done"],
+    tasksDropped: ["{count} dropped", "{count} dropped"],
+    tasksTerminal:
+      "From the terminal, `ut tasks` adds, closes and drops the tasks, and `ut code` hands the open ones to your coding agent.",
     latestReview: "Latest review",
     runTitle: "Latest review, commit {commit}",
     runMeta:
@@ -148,8 +180,7 @@ const messages = {
       "Il codice si scrive con i tuoi strumenti. Qui leggi come stanno i commit rispetto ai requisiti e al design approvati.",
     terminal:
       "Revisioni e decisioni si fanno dal terminale con `ut align`: questa pagina ne mostra solo il risultato.",
-    refresh: "Aggiorna",
-    refreshLabel: "Aggiorna lo stato dello sviluppo",
+    refresh: "Rileggi",
     loading: "Carico lo stato dello sviluppo…",
     loadFailed: "Non è stato possibile caricare lo stato dello sviluppo.",
     details: "Dettagli",
@@ -167,6 +198,13 @@ const messages = {
     pendingTitle: "Commit in attesa ({count})",
     pendingIntro: "I commit registrati dopo il punto allineato.",
     noPending: "Nessun commit dopo il punto allineato.",
+    staleReviews: [
+      "1 revisione è stata fatta su versioni precedenti dei requisiti o del design: `ut align --recheck` fa riesaminare quel commit ai twin.",
+      "{count} revisioni sono state fatte su versioni precedenti dei requisiti o del design: `ut align --recheck` fa riesaminare quei commit ai twin.",
+    ],
+    staleChip: "Da riesaminare",
+    reviewedAgainst:
+      "Rivisto rispetto ai requisiti versione {requirements} e al design versione {design}{alternative}",
     files: ["{count} file", "{count} file"],
     verdictBadge: {
       NONE: "Non ancora rivisto",
@@ -186,6 +224,19 @@ const messages = {
     tasksTitle: "Compiti aperti per il codice ({count})",
     tasksIntro: "Si chiudono quando un commit successivo viene segnato come allineato.",
     noTasks: "Nessun compito aperto.",
+    origin: {
+      owner: "Scritto da te",
+      verdict: "Dalla decisione sul commit {commit}",
+      twinCommit: "Da {twin} sul commit {commit}",
+      twinTests: "Da {twin} sulla verifica dei criteri",
+      tests: "Dalla verifica dei criteri",
+      criteria: ["criterio {codes}", "criteri {codes}"],
+    },
+    tasksClosed: "Compiti chiusi finora: {list}.",
+    tasksDone: ["{count} completato", "{count} completati"],
+    tasksDropped: ["{count} scartato", "{count} scartati"],
+    tasksTerminal:
+      "Dal terminale, `ut tasks` aggiunge, chiude e scarta i compiti, e `ut code` affida quelli aperti al tuo agente di programmazione.",
     latestReview: "Ultima revisione",
     runTitle: "Ultima revisione, commit {commit}",
     runMeta:
@@ -257,14 +308,29 @@ const SEVERITY_STYLES: Readonly<Record<FindingSeverity, string>> = {
 
 const SHORT_COMMIT = 7;
 
+const DEVELOPMENT_OPERATIONS: readonly GenerationOperation[] = [
+  "CODE_CHANGE_REVIEW",
+  "TWIN_UPDATE",
+];
+
 const auth = useAuthStore();
 const design = useDesignStore();
 const requirements = useRequirementsStore();
 const store = useCodeChangesStore();
+const learning = useTwinLearningStore();
 
 const copy = computed(() => messages[props.locale]);
+const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 const failure = ref<{ operation: "load" | "run"; code: string | null } | null>(null);
 let refreshes = 0;
+
+const { job: runningJob, recheck } = useGenerationResume({
+  projectId: () => props.projectId,
+  operations: DEVELOPMENT_OPERATIONS,
+  authorize: authorizedRequest,
+  onSettled: readAgain,
+  api: props.jobsApi,
+});
 
 const current = computed(() => store.projectId === props.projectId);
 const alignment = computed(() => (current.value ? store.alignment : null));
@@ -280,14 +346,23 @@ const runFetched = computed(() => {
   return change !== null && change.commit in store.runs;
 });
 const loading = computed(() => current.value && store.pending.load);
+const learningLoading = computed(
+  () => learning.projectId === props.projectId && learning.pending.load,
+);
+const busy = computed(() => loading.value || learningLoading.value);
 const loaded = computed(() => alignment.value !== null);
+const staleCount = computed(() => (current.value ? store.staleReviews : 0));
 
 const dateFormat = computed(
   () =>
-    new Intl.DateTimeFormat(props.locale === "it" ? "it-IT" : "en-GB", {
+    new Intl.DateTimeFormat(intlLocale.value, {
       dateStyle: "medium",
       timeStyle: "short",
     }),
+);
+
+const listFormat = computed(
+  () => new Intl.ListFormat(intlLocale.value, { style: "long", type: "conjunction" }),
 );
 
 const requirementTitles = computed<Readonly<Record<string, string>>>(() => {
@@ -361,15 +436,43 @@ const pendingRows = computed(() =>
     files: plural(change.files.length, copy.value.files),
     verdict: verdictBadge(change),
     decision: decisionBadge(change),
+    stale: change.review?.stale === true,
+    reviewedAgainst: staleReference(change.review),
   })),
+);
+
+const staleText = computed(() =>
+  staleCount.value > 0 ? plural(staleCount.value, copy.value.staleReviews) : null,
 );
 
 const taskRows = computed(() =>
   tasks.value.map((task) => ({
     code: task.code,
     text: task.text,
+    origin: taskOrigin(task),
     subjects: codeSubjects(task.about),
   })),
+);
+
+const closedText = computed(() => {
+  const counts = current.value ? store.closedTasks : null;
+  if (counts === null) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (counts.done > 0) {
+    parts.push(plural(counts.done, copy.value.tasksDone));
+  }
+  if (counts.dropped > 0) {
+    parts.push(plural(counts.dropped, copy.value.tasksDropped));
+  }
+  return parts.length === 0
+    ? null
+    : fill(copy.value.tasksClosed, { list: listFormat.value.format(parts) });
+});
+
+const tasksShown = computed(
+  () => changes.value.length > 0 || taskRows.value.length > 0 || closedText.value !== null,
 );
 
 const runHeading = computed(() => {
@@ -483,6 +586,50 @@ function decisionBadge(change: CodeChangePayload): Badge {
     : { status: DECISION_STATUS[decision.kind], label: copy.value.decisionBadge[decision.kind] };
 }
 
+function staleReference(review: ChangeReviewSummaryPayload | null): string | null {
+  const reference = review?.stale === true ? (review.reference ?? null) : null;
+  if (reference === null) {
+    return null;
+  }
+  const code = reference.alternative_code;
+  return fill(copy.value.reviewedAgainst, {
+    requirements: reference.requirements_version_number,
+    design: reference.design_version_number,
+    alternative: code === null ? "" : ` (${code})`,
+  });
+}
+
+function taskOrigin(task: CodeTaskPayload): string | null {
+  const origin = task.origin ?? null;
+  if (origin === null) {
+    return null;
+  }
+  const words = copy.value.origin;
+  if (origin.kind === "OWNER") {
+    return words.owner;
+  }
+  if (origin.kind === "TEST_RUN") {
+    const base =
+      origin.twin_name === null ? words.tests : fill(words.twinTests, { twin: origin.twin_name });
+    const criteria = task.about.criteria ?? [];
+    if (criteria.length === 0) {
+      return base;
+    }
+    const form = criteria.length === 1 ? words.criteria[0] : words.criteria[1];
+    return `${base}, ${fill(form, { codes: criteria.join(", ") })}`;
+  }
+  if (origin.kind === "CODE_CHANGE") {
+    const commit = origin.commit ?? task.from_commit;
+    if (commit === null) {
+      return null;
+    }
+    return origin.twin_name === null
+      ? fill(words.verdict, { commit: shortCommit(commit) })
+      : fill(words.twinCommit, { twin: origin.twin_name, commit: shortCommit(commit) });
+  }
+  return null;
+}
+
 function requirementSubject(code: string): Subject {
   return { key: code, code, title: requirementTitles.value[code] ?? null };
 }
@@ -542,6 +689,22 @@ async function refresh(): Promise<void> {
   }
 }
 
+async function readLearning(): Promise<void> {
+  try {
+    await learning.reload(props.projectId, authorizedRequest, props.learningApi);
+  } catch {
+    return;
+  }
+}
+
+async function readAgain(): Promise<void> {
+  await Promise.all([refresh(), readLearning()]);
+}
+
+async function readAgainAndCheck(): Promise<void> {
+  await Promise.all([readAgain(), recheck()]);
+}
+
 watch(() => props.projectId, refresh, { immediate: true });
 </script>
 
@@ -577,19 +740,23 @@ watch(() => props.projectId, refresh, { immediate: true });
       </div>
       <UiButton
         variant="outline"
-        :disabled="loading"
-        :aria-label="copy.refreshLabel"
+        :disabled="busy"
+        aria-describedby="development-title"
         data-testid="development-refresh"
-        @click="refresh"
+        @click="readAgainAndCheck"
       >
         {{ copy.refresh }}
       </UiButton>
     </div>
 
+    <div v-if="runningJob !== null" class="mt-5" data-testid="development-job">
+      <GenerationJobNotice :job="runningJob" :locale="locale" />
+    </div>
+
     <div
       class="mt-5 grid gap-5"
       aria-live="polite"
-      :aria-busy="loading ? 'true' : undefined"
+      :aria-busy="busy ? 'true' : undefined"
       data-testid="development-state"
     >
       <div
@@ -673,6 +840,20 @@ watch(() => props.projectId, refresh, { immediate: true });
               {{ fill(copy.pendingTitle, { count: pendingRows.length }) }}
             </h3>
             <p class="m-0 mt-1 text-sm leading-normal text-on-night-3">{{ copy.pendingIntro }}</p>
+            <p
+              v-if="staleText !== null"
+              class="m-0 mt-3 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+              data-testid="development-stale"
+            >
+              <template v-for="part in commandParts(staleText)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
             <ul v-if="pendingRows.length > 0" class="m-0 mt-2 list-none p-0">
               <li
                 v-for="row in pendingRows"
@@ -706,257 +887,312 @@ watch(() => props.projectId, refresh, { immediate: true });
                     class="whitespace-normal!"
                     data-testid="development-change-decision"
                   />
+                  <template v-if="row.stale">
+                    {{ " " }}
+                    <UiStatusChip
+                      status="blocked"
+                      :label="copy.staleChip"
+                      class="whitespace-normal!"
+                      data-testid="development-change-stale"
+                    />
+                  </template>
                 </div>
+                <p
+                  v-if="row.reviewedAgainst !== null"
+                  class="m-0 text-xs leading-normal text-on-night-3"
+                  data-testid="development-change-reference"
+                >
+                  {{ row.reviewedAgainst }}
+                </p>
               </li>
             </ul>
             <p v-else class="m-0 mt-2 text-sm text-on-night-3" data-testid="development-no-pending">
               {{ copy.noPending }}
             </p>
           </div>
+        </template>
 
-          <div class="border-t border-on-night/10 pt-4" data-testid="development-tasks">
-            <h3 class="m-0 text-base leading-tight font-semibold">
-              {{ fill(copy.tasksTitle, { count: taskRows.length }) }}
-            </h3>
-            <p class="m-0 mt-1 text-sm leading-normal text-on-night-3">{{ copy.tasksIntro }}</p>
-            <ul v-if="taskRows.length > 0" class="m-0 mt-2 list-none p-0">
-              <li
-                v-for="task in taskRows"
-                :key="task.code"
-                class="grid gap-1 border-t border-on-night/10 py-2.5"
-                data-testid="development-task"
-              >
-                <p class="m-0 text-[15px] leading-snug wrap-anywhere">
-                  <span
-                    class="font-mono text-xs text-on-night-2"
-                    data-testid="development-task-code"
-                    >{{ task.code }}</span
-                  >
-                  · {{ task.text }}
-                </p>
-                <div
-                  v-if="task.subjects.length > 0"
-                  class="flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
+        <div
+          v-if="tasksShown"
+          class="border-t border-on-night/10 pt-4"
+          data-testid="development-tasks"
+        >
+          <h3 class="m-0 text-base leading-tight font-semibold">
+            {{ fill(copy.tasksTitle, { count: taskRows.length }) }}
+          </h3>
+          <p class="m-0 mt-1 text-sm leading-normal text-on-night-3">{{ copy.tasksIntro }}</p>
+          <ul v-if="taskRows.length > 0" class="m-0 mt-2 list-none p-0">
+            <li
+              v-for="task in taskRows"
+              :key="task.code"
+              class="grid gap-1 border-t border-on-night/10 py-2.5"
+              data-testid="development-task"
+            >
+              <p class="m-0 text-[15px] leading-snug wrap-anywhere">
+                <span
+                  class="font-mono text-xs text-on-night-2"
+                  data-testid="development-task-code"
+                  >{{ task.code }}</span
                 >
-                  <span>{{ copy.about }}:</span>
-                  <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                · {{ task.text }}
+              </p>
+              <p
+                v-if="task.origin !== null"
+                class="m-0 text-[13px] leading-normal wrap-anywhere text-on-night-3"
+                data-testid="development-task-origin"
+              >
+                {{ task.origin }}
+              </p>
+              <div
+                v-if="task.subjects.length > 0"
+                class="flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
+              >
+                <span>{{ copy.about }}:</span>
+                <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                  <li
+                    v-for="subject in task.subjects"
+                    :key="subject.key"
+                    data-testid="development-subject"
+                  >
+                    <span class="font-mono text-xs text-on-night-2">{{ subject.code }}</span>
+                    <template v-if="subject.title"> · {{ subject.title }}</template>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <p v-else class="m-0 mt-2 text-sm text-on-night-3" data-testid="development-no-tasks">
+            {{ copy.noTasks }}
+          </p>
+          <div class="mt-2 grid gap-1.5 border-t border-on-night/10 pt-2.5">
+            <p
+              v-if="closedText !== null"
+              class="m-0 text-sm leading-normal text-on-night-3"
+              data-testid="development-tasks-closed"
+            >
+              {{ closedText }}
+            </p>
+            <p
+              class="m-0 text-sm leading-normal text-on-night-2"
+              data-testid="development-tasks-terminal"
+            >
+              <template v-for="part in commandParts(copy.tasksTerminal)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-if="changes.length > 0"
+          class="border-t border-on-night/10 pt-4"
+          data-testid="development-run"
+        >
+          <h3 class="m-0 text-base leading-tight font-semibold">{{ runHeading }}</h3>
+          <p
+            v-if="reviewed === null"
+            class="m-0 mt-2 text-sm text-on-night-3"
+            data-testid="development-no-run"
+          >
+            {{ copy.noRun }}
+          </p>
+          <template v-else-if="runView !== null">
+            <p
+              class="m-0 mt-1 text-sm leading-normal text-on-night-3"
+              data-testid="development-run-meta"
+            >
+              {{ runView.meta }}
+            </p>
+            <ul class="m-0 mt-3 grid list-none gap-3 p-0">
+              <li v-for="critique in runView.critiques" :key="critique.key">
+                <UiClaimFrame
+                  status="hypothesis"
+                  radius="tile"
+                  class="grid gap-2"
+                  data-testid="development-critique"
+                >
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <h4 class="m-0 text-[15px] leading-snug font-semibold">
+                      {{ critique.name }}
+                    </h4>
+                    <UiStatusChip
+                      :status="critique.badge.status"
+                      :label="critique.badge.label"
+                      class="whitespace-normal!"
+                      data-testid="development-critique-verdict"
+                    />
+                  </div>
+                  <p class="m-0 text-sm leading-normal text-on-night-2">{{ critique.summary }}</p>
+                  <ul
+                    v-if="critique.findings.length > 0"
+                    class="m-0 grid list-disc gap-2 pl-5 text-sm leading-normal"
+                  >
                     <li
-                      v-for="subject in task.subjects"
-                      :key="subject.key"
-                      data-testid="development-subject"
+                      v-for="finding in critique.findings"
+                      :key="finding.key"
+                      data-testid="development-finding"
                     >
-                      <span class="font-mono text-xs text-on-night-2">{{ subject.code }}</span>
-                      <template v-if="subject.title"> · {{ subject.title }}</template>
+                      <span
+                        :class="[
+                          'mr-1 inline-flex min-h-6 items-center rounded-pill px-[9px] text-xs font-semibold',
+                          finding.style,
+                        ]"
+                        data-testid="development-finding-severity"
+                        >{{ finding.severity }}</span
+                      >
+                      {{ " " }}
+                      <span class="wrap-anywhere">{{ finding.text }}</span>
+                      <div
+                        v-if="finding.subjects.length > 0"
+                        class="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
+                      >
+                        <span>{{ copy.about }}:</span>
+                        <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                          <li
+                            v-for="subject in finding.subjects"
+                            :key="subject.key"
+                            data-testid="development-subject"
+                          >
+                            <code
+                              v-if="subject.code === null"
+                              class="font-mono text-xs wrap-anywhere text-on-night-2"
+                              >{{ subject.title }}</code
+                            >
+                            <template v-else>
+                              <span class="font-mono text-xs text-on-night-2">{{
+                                subject.code
+                              }}</span>
+                              <template v-if="subject.title"> · {{ subject.title }}</template>
+                            </template>
+                          </li>
+                        </ul>
+                      </div>
+                      <p v-if="finding.action" class="m-0 mt-1 text-[13px] text-on-night-2">
+                        <strong class="font-semibold text-on-night">{{ copy.action }}:</strong>
+                        {{ finding.action }}
+                      </p>
                     </li>
                   </ul>
-                </div>
+                  <p v-else class="m-0 text-sm text-on-night-3">{{ copy.noFindings }}</p>
+                </UiClaimFrame>
               </li>
             </ul>
-            <p v-else class="m-0 mt-2 text-sm text-on-night-3" data-testid="development-no-tasks">
-              {{ copy.noTasks }}
-            </p>
-          </div>
 
-          <div class="border-t border-on-night/10 pt-4" data-testid="development-run">
-            <h3 class="m-0 text-base leading-tight font-semibold">{{ runHeading }}</h3>
-            <p
-              v-if="reviewed === null"
-              class="m-0 mt-2 text-sm text-on-night-3"
-              data-testid="development-no-run"
+            <UiClaimFrame
+              status="hypothesis"
+              radius="tile"
+              class="mt-3 grid gap-2"
+              data-testid="development-verdict"
             >
-              {{ copy.noRun }}
-            </p>
-            <template v-else-if="runView !== null">
-              <p
-                class="m-0 mt-1 text-sm leading-normal text-on-night-3"
-                data-testid="development-run-meta"
-              >
-                {{ runView.meta }}
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <h4 class="m-0 text-[15px] leading-snug font-semibold">
+                  {{ copy.verdictTitle }}
+                </h4>
+                <UiStatusChip
+                  :status="runView.verdict.badge.status"
+                  :label="runView.verdict.badge.label"
+                  class="whitespace-normal!"
+                  data-testid="development-verdict-status"
+                />
+              </div>
+              <p class="m-0 text-[15px] leading-snug font-semibold">
+                {{ runView.verdict.sentence }}
               </p>
-              <ul class="m-0 mt-3 grid list-none gap-3 p-0">
-                <li v-for="critique in runView.critiques" :key="critique.key">
-                  <UiClaimFrame
-                    status="hypothesis"
-                    radius="tile"
-                    class="grid gap-2"
-                    data-testid="development-critique"
-                  >
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <h4 class="m-0 text-[15px] leading-snug font-semibold">
-                        {{ critique.name }}
-                      </h4>
-                      <UiStatusChip
-                        :status="critique.badge.status"
-                        :label="critique.badge.label"
-                        class="whitespace-normal!"
-                        data-testid="development-critique-verdict"
-                      />
-                    </div>
-                    <p class="m-0 text-sm leading-normal text-on-night-2">{{ critique.summary }}</p>
-                    <ul
-                      v-if="critique.findings.length > 0"
-                      class="m-0 grid list-disc gap-2 pl-5 text-sm leading-normal"
-                    >
-                      <li
-                        v-for="finding in critique.findings"
-                        :key="finding.key"
-                        data-testid="development-finding"
-                      >
-                        <span
-                          :class="[
-                            'mr-1 inline-flex min-h-6 items-center rounded-pill px-[9px] text-xs font-semibold',
-                            finding.style,
-                          ]"
-                          data-testid="development-finding-severity"
-                          >{{ finding.severity }}</span
-                        >
-                        {{ " " }}
-                        <span class="wrap-anywhere">{{ finding.text }}</span>
-                        <div
-                          v-if="finding.subjects.length > 0"
-                          class="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
-                        >
-                          <span>{{ copy.about }}:</span>
-                          <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
-                            <li
-                              v-for="subject in finding.subjects"
-                              :key="subject.key"
-                              data-testid="development-subject"
-                            >
-                              <code
-                                v-if="subject.code === null"
-                                class="font-mono text-xs wrap-anywhere text-on-night-2"
-                                >{{ subject.title }}</code
-                              >
-                              <template v-else>
-                                <span class="font-mono text-xs text-on-night-2">{{
-                                  subject.code
-                                }}</span>
-                                <template v-if="subject.title"> · {{ subject.title }}</template>
-                              </template>
-                            </li>
-                          </ul>
-                        </div>
-                        <p v-if="finding.action" class="m-0 mt-1 text-[13px] text-on-night-2">
-                          <strong class="font-semibold text-on-night">{{ copy.action }}:</strong>
-                          {{ finding.action }}
-                        </p>
-                      </li>
-                    </ul>
-                    <p v-else class="m-0 text-sm text-on-night-3">{{ copy.noFindings }}</p>
-                  </UiClaimFrame>
-                </li>
-              </ul>
-
-              <UiClaimFrame
-                status="hypothesis"
-                radius="tile"
-                class="mt-3 grid gap-2"
-                data-testid="development-verdict"
+              <p class="m-0 text-sm leading-normal text-on-night-2">
+                {{ runView.verdict.summary }}
+              </p>
+              <div
+                v-if="runView.verdict.subjects.length > 0"
+                class="flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
               >
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <h4 class="m-0 text-[15px] leading-snug font-semibold">
-                    {{ copy.verdictTitle }}
-                  </h4>
-                  <UiStatusChip
-                    :status="runView.verdict.badge.status"
-                    :label="runView.verdict.badge.label"
-                    class="whitespace-normal!"
-                    data-testid="development-verdict-status"
-                  />
-                </div>
-                <p class="m-0 text-[15px] leading-snug font-semibold">
-                  {{ runView.verdict.sentence }}
-                </p>
-                <p class="m-0 text-sm leading-normal text-on-night-2">
-                  {{ runView.verdict.summary }}
-                </p>
-                <div
-                  v-if="runView.verdict.subjects.length > 0"
-                  class="flex flex-wrap items-baseline gap-x-2 text-[13px] text-on-night-3"
-                >
-                  <span>{{ copy.about }}:</span>
-                  <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
-                    <li
-                      v-for="subject in runView.verdict.subjects"
-                      :key="subject.key"
-                      data-testid="development-subject"
-                    >
-                      <span class="font-mono text-xs text-on-night-2">{{ subject.code }}</span>
-                      <template v-if="subject.title"> · {{ subject.title }}</template>
-                    </li>
-                  </ul>
-                </div>
-                <div v-if="runView.verdict.designRequest" data-testid="development-design-request">
-                  <p class="m-0 text-xs text-on-night-3">{{ copy.designRequest }}</p>
-                  <blockquote
-                    class="m-0 mt-1 border-l-2 border-petrol-on-night/60 pl-3 text-sm leading-normal wrap-anywhere text-on-night-2"
+                <span>{{ copy.about }}:</span>
+                <ul class="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                  <li
+                    v-for="subject in runView.verdict.subjects"
+                    :key="subject.key"
+                    data-testid="development-subject"
                   >
-                    {{ runView.verdict.designRequest }}
-                  </blockquote>
-                </div>
-                <div
-                  v-if="runView.verdict.requirementsRequest"
-                  data-testid="development-requirements-request"
+                    <span class="font-mono text-xs text-on-night-2">{{ subject.code }}</span>
+                    <template v-if="subject.title"> · {{ subject.title }}</template>
+                  </li>
+                </ul>
+              </div>
+              <div v-if="runView.verdict.designRequest" data-testid="development-design-request">
+                <p class="m-0 text-xs text-on-night-3">{{ copy.designRequest }}</p>
+                <blockquote
+                  class="m-0 mt-1 border-l-2 border-petrol-on-night/60 pl-3 text-sm leading-normal wrap-anywhere text-on-night-2"
                 >
-                  <p class="m-0 text-xs text-on-night-3">{{ copy.requirementsRequest }}</p>
-                  <blockquote
-                    class="m-0 mt-1 border-l-2 border-petrol-on-night/60 pl-3 text-sm leading-normal wrap-anywhere text-on-night-2"
+                  {{ runView.verdict.designRequest }}
+                </blockquote>
+              </div>
+              <div
+                v-if="runView.verdict.requirementsRequest"
+                data-testid="development-requirements-request"
+              >
+                <p class="m-0 text-xs text-on-night-3">{{ copy.requirementsRequest }}</p>
+                <blockquote
+                  class="m-0 mt-1 border-l-2 border-petrol-on-night/60 pl-3 text-sm leading-normal wrap-anywhere text-on-night-2"
+                >
+                  {{ runView.verdict.requirementsRequest }}
+                </blockquote>
+              </div>
+              <div v-if="runView.verdict.codeTasks.length > 0" data-testid="development-code-tasks">
+                <p class="m-0 text-xs text-on-night-3">{{ copy.codeTasks }}</p>
+                <ul class="m-0 mt-1 grid list-disc gap-1 pl-5 text-sm leading-normal">
+                  <li
+                    v-for="task in runView.verdict.codeTasks"
+                    :key="task"
+                    class="wrap-anywhere"
+                    data-testid="development-code-task"
                   >
-                    {{ runView.verdict.requirementsRequest }}
-                  </blockquote>
-                </div>
-                <div
-                  v-if="runView.verdict.codeTasks.length > 0"
-                  data-testid="development-code-tasks"
-                >
-                  <p class="m-0 text-xs text-on-night-3">{{ copy.codeTasks }}</p>
-                  <ul class="m-0 mt-1 grid list-disc gap-1 pl-5 text-sm leading-normal">
-                    <li
-                      v-for="task in runView.verdict.codeTasks"
-                      :key="task"
-                      class="wrap-anywhere"
-                      data-testid="development-code-task"
+                    {{ task }}
+                  </li>
+                </ul>
+                <p class="m-0 mt-1 text-[13px] text-on-night-3">
+                  <template v-for="part in commandParts(copy.codeTasksNote)" :key="part.key">
+                    <code
+                      v-if="part.command"
+                      class="rounded-[4px] bg-on-night/8 px-1 font-mono text-xs text-on-night"
+                      >{{ part.text }}</code
                     >
-                      {{ task }}
-                    </li>
-                  </ul>
-                  <p class="m-0 mt-1 text-[13px] text-on-night-3">
-                    <template v-for="part in commandParts(copy.codeTasksNote)" :key="part.key">
-                      <code
-                        v-if="part.command"
-                        class="rounded-[4px] bg-on-night/8 px-1 font-mono text-xs text-on-night"
-                        >{{ part.text }}</code
-                      >
-                      <template v-else>{{ part.text }}</template>
-                    </template>
-                  </p>
-                </div>
-              </UiClaimFrame>
-            </template>
-            <div
-              v-else-if="failure !== null && failure.operation === 'run'"
-              class="mt-2 grid gap-1 rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm text-fail-on-night"
-              role="alert"
-              data-testid="development-run-error"
-            >
-              <p class="m-0 font-semibold">{{ copy.runFailed }}</p>
-              <details v-if="failure.code !== null" class="text-xs">
-                <summary class="inline-flex min-h-11 cursor-pointer items-center">
-                  {{ copy.details }}
-                </summary>
-                <code class="break-all">{{ failure.code }}</code>
-              </details>
-            </div>
-            <p
-              v-else
-              class="m-0 mt-2 text-sm text-on-night-3"
-              data-testid="development-run-loading"
-            >
-              {{ runFetched ? copy.runMissing : copy.runLoading }}
-            </p>
+                    <template v-else>{{ part.text }}</template>
+                  </template>
+                </p>
+              </div>
+            </UiClaimFrame>
+          </template>
+          <div
+            v-else-if="failure !== null && failure.operation === 'run'"
+            class="mt-2 grid gap-1 rounded-field border border-fail-on-night/40 bg-fail-on-night/10 px-4 py-3 text-sm text-fail-on-night"
+            role="alert"
+            data-testid="development-run-error"
+          >
+            <p class="m-0 font-semibold">{{ copy.runFailed }}</p>
+            <details v-if="failure.code !== null" class="text-xs">
+              <summary class="inline-flex min-h-11 cursor-pointer items-center">
+                {{ copy.details }}
+              </summary>
+              <code class="break-all">{{ failure.code }}</code>
+            </details>
           </div>
-        </template>
+          <p v-else class="m-0 mt-2 text-sm text-on-night-3" data-testid="development-run-loading">
+            {{ runFetched ? copy.runMissing : copy.runLoading }}
+          </p>
+        </div>
+
+        <ProjectTwinLearningBlock
+          :project-id="projectId"
+          :locale="locale"
+          :authorize="authorizedRequest"
+          :api="learningApi"
+          :requirement-titles="requirementTitles"
+          :screen-titles="screenTitles"
+        />
       </template>
     </div>
 

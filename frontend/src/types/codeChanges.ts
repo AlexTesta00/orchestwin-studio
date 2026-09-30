@@ -10,7 +10,11 @@ export type CritiqueVerdict = "FINE" | "CONCERN" | "DRIFT";
 
 export type FindingSeverity = "LOW" | "MEDIUM" | "HIGH";
 
-export type CodeTaskStatus = "OPEN" | "DONE";
+export type CodeTaskStatus = "OPEN" | "DONE" | "DROPPED";
+
+export type CodeTaskOriginKind = "CODE_CHANGE" | "TEST_RUN" | "OWNER";
+
+export type CodeTaskListStatus = "open" | "all";
 
 export interface ChangedFilePayload {
   path: string;
@@ -24,6 +28,8 @@ export interface ChangeReviewSummaryPayload {
   reviewed_at: string;
   verdict: AlignmentStatus;
   summary: string;
+  reference?: RunReferencePayload;
+  stale?: boolean;
 }
 
 export interface ChangeDecisionPayload {
@@ -75,13 +81,33 @@ export interface CodeSubjectsPayload {
   screens: string[];
 }
 
+export interface CodeTaskSubjectsPayload extends CodeSubjectsPayload {
+  criteria?: string[];
+}
+
+export interface CodeTaskOriginPayload {
+  kind: CodeTaskOriginKind;
+  commit: string | null;
+  test_run_id: string | null;
+  twin_id: string | null;
+  twin_name: string | null;
+  finding: string | null;
+}
+
 export interface CodeTaskPayload {
   code: string;
   text: string;
-  about: CodeSubjectsPayload;
-  from_commit: string;
+  about: CodeTaskSubjectsPayload;
+  origin?: CodeTaskOriginPayload;
+  from_commit: string | null;
   created_at: string;
   status: CodeTaskStatus;
+  closed_at?: string | null;
+  note?: string | null;
+}
+
+export interface CodeTaskListPayload {
+  items: CodeTaskPayload[];
 }
 
 export interface AlignmentPayload {
@@ -89,6 +115,7 @@ export interface AlignmentPayload {
   reference: DevelopmentReferencePayload;
   aligned: AlignedPointPayload | null;
   pending_changes: number;
+  stale_reviews?: number;
   latest_change: CodeChangePayload | null;
   tasks: CodeTaskPayload[];
   review_available: boolean;

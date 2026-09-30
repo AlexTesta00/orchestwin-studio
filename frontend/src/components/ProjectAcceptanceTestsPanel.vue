@@ -1,24 +1,30 @@
 <script setup lang="ts">
 import { computed, provide, watch } from "vue";
 
+import GenerationJobNotice from "./GenerationJobNotice.vue";
 import { placeLabel } from "./screenNames";
+import UiButton from "./UiButton.vue";
 import UiClaimFrame from "./UiClaimFrame.vue";
 import UiStatusChip from "./UiStatusChip.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 
 import type { AcceptanceTestsApi } from "../api/acceptanceTests";
 import { apiClient } from "../api/client";
+import type { GenerationJobsApi } from "../api/generationJobs";
 import { useAcceptanceTestsStore, type AuthorizedRequest } from "../stores/acceptanceTests";
 import { useAuthStore } from "../stores/auth";
 import { useDesignStore } from "../stores/design";
+import { useGenerationResume } from "../stores/generationJobs";
 import { useRequirementsStore } from "../stores/requirements";
 import type {
   CriterionStatus,
   TestBrowserPayload,
+  TestCritiquePayload,
   TestFindingPayload,
   TestRunSummaryPayload,
 } from "../types/acceptanceTests";
 import type { CritiqueVerdict, FindingSeverity } from "../types/codeChanges";
+import type { GenerationOperation } from "../types/designMockups";
 
 type Locale = "en" | "it";
 type ChipStatus = "approved" | "pending" | "blocked" | "failed";
@@ -54,9 +60,11 @@ const props = withDefaults(
     locale?: Locale;
     authorize?: AuthorizedRequest;
     api?: AcceptanceTestsApi;
+    jobsApi?: GenerationJobsApi | undefined;
   }>(),
   {
     locale: "en",
+    jobsApi: undefined,
   },
 );
 
@@ -71,6 +79,7 @@ const messages = {
     title: "Acceptance tests",
     intro:
       "The acceptance criteria of the approved requirements are tried in real browsers on the application built outside the Studio, through paths: the steps a person would take on the screens. Here you read the outcome of the latest run.",
+    refresh: "Read again",
     loading: "Loading the acceptance tests…",
     loadFailed: "The acceptance tests could not be loaded.",
     loadFailedCode: "The acceptance tests could not be loaded ({code}).",
@@ -84,6 +93,8 @@ const messages = {
     application: "Application",
     reference: "Checked against",
     referenceValue: "requirements version {requirements}, design version {design}{alternative}",
+    stale:
+      "This run was made against earlier versions of the requirements or of the design: launch `ut test` to check the application against the approved ones.",
     browserName: {
       chrome: "Chrome",
       firefox: "Firefox",
@@ -123,6 +134,8 @@ const messages = {
     reason: "Why",
     critiquesTitle: "What the twins say",
     reviewedAt: "Comments from {date}",
+    earlierReview:
+      "No twin has commented on the latest run yet: here are their comments on the run of {date}.",
     noReview:
       "No twin has commented on this run yet: at the end of a run `ut test` asks for their comments, once you confirm the cost.",
     critique: {
@@ -146,6 +159,7 @@ const messages = {
     title: "Verifica dei criteri",
     intro:
       "I criteri di accettazione dei requisiti approvati vengono provati in browser veri sull'applicazione realizzata fuori dallo Studio, con dei percorsi: i passi che una persona farebbe sulle schermate. Qui leggi l'esito dell'ultima verifica.",
+    refresh: "Rileggi",
     loading: "Carico la verifica dei criteri…",
     loadFailed: "Non è stato possibile caricare la verifica dei criteri.",
     loadFailedCode: "Non è stato possibile caricare la verifica dei criteri ({code}).",
@@ -159,6 +173,8 @@ const messages = {
     application: "Applicazione",
     reference: "Confrontata con",
     referenceValue: "requisiti versione {requirements}, design versione {design}{alternative}",
+    stale:
+      "Questa verifica è stata fatta su versioni precedenti dei requisiti o del design: lancia `ut test` per controllare l'applicazione su quelle approvate.",
     browserName: {
       chrome: "Chrome",
       firefox: "Firefox",
@@ -198,6 +214,8 @@ const messages = {
     reason: "Perché",
     critiquesTitle: "Che cosa dicono i twin",
     reviewedAt: "Commenti del {date}",
+    earlierReview:
+      "Nessun twin ha ancora commentato l'ultima verifica: ecco i loro commenti sulla verifica del {date}.",
     noReview:
       "Nessun twin ha ancora commentato questa verifica: alla fine di una verifica `ut test` chiede il loro commento, dopo che hai confermato la spesa.",
     critique: {
@@ -246,6 +264,8 @@ const COUNTS: readonly { key: CountKey; status: CriterionStatus }[] = [
   { key: "not_run", status: "NOT_RUN" },
 ];
 
+const TEST_OPERATIONS: readonly GenerationOperation[] = ["TEST_PLAN", "TEST_REVIEW"];
+
 const auth = useAuthStore();
 const design = useDesignStore();
 const requirements = useRequirementsStore();
@@ -254,13 +274,44 @@ const store = useAcceptanceTestsStore();
 const copy = computed(() => messages[props.locale]);
 const intlLocale = computed(() => (props.locale === "it" ? "it-IT" : "en-GB"));
 
+const { job: runningJob, recheck } = useGenerationResume({
+  projectId: () => props.projectId,
+  operations: TEST_OPERATIONS,
+  authorize: authorizedRequest,
+  onSettled: reload,
+  api: props.jobsApi,
+});
+
 const current = computed(() => store.projectId === props.projectId);
 const overview = computed(() => (current.value ? store.overview : null));
 const run = computed(() => (current.value ? store.latestRun : null));
 const criteria = computed(() => (current.value ? store.criteria : []));
 const critiques = computed(() => (current.value ? store.critiques : []));
+const stale = computed(() => current.value && store.latestRunStale);
 const loading = computed(() => current.value && store.pending.load);
 const failure = computed(() => (current.value ? store.failure : null));
+
+const earlierReview = computed(() => {
+  const latest = run.value;
+  const review = current.value ? store.latestReview : null;
+  if (
+    latest === null ||
+    review === null ||
+    critiques.value.length > 0 ||
+    review.run_id === latest.id ||
+    review.critiques.length === 0
+  ) {
+    return null;
+  }
+  return {
+    sentence: fill(copy.value.earlierReview, { date: formatDate(review.finished_at) }),
+    critiques: review.critiques,
+  };
+});
+
+const shownCritiques = computed<TestCritiquePayload[]>(() =>
+  critiques.value.length > 0 ? critiques.value : (earlierReview.value?.critiques ?? []),
+);
 
 const dateFormat = computed(
   () =>
@@ -363,7 +414,7 @@ const criterionRows = computed(() => {
 });
 
 const critiqueViews = computed(() =>
-  critiques.value.map((critique, index) => ({
+  shownCritiques.value.map((critique, index) => ({
     key: `${critique.twin_id}:${index}`,
     name: critique.twin_name,
     badge: {
@@ -441,6 +492,18 @@ async function load(): Promise<void> {
   }
 }
 
+async function reload(): Promise<void> {
+  try {
+    await store.reload(props.projectId, authorizedRequest, props.api);
+  } catch {
+    return;
+  }
+}
+
+async function readAgainAndCheck(): Promise<void> {
+  await Promise.all([reload(), recheck()]);
+}
+
 watch(() => props.projectId, load, { immediate: true });
 </script>
 
@@ -451,13 +514,30 @@ watch(() => props.projectId, load, { immediate: true });
     data-surface="night"
     data-testid="acceptance-panel"
   >
-    <p class="m-0 font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
-      {{ copy.eyebrow }}
-    </p>
-    <h2 id="acceptance-tests-title" class="m-0 mt-2 text-lg leading-tight font-semibold">
-      {{ copy.title }}
-    </h2>
-    <p class="m-0 mt-1.5 text-sm leading-normal text-on-night-2">{{ copy.intro }}</p>
+    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div class="min-w-[min(100%,18rem)] flex-1">
+        <p class="m-0 font-mono text-[11px] tracking-label text-petrol-on-night-2 uppercase">
+          {{ copy.eyebrow }}
+        </p>
+        <h2 id="acceptance-tests-title" class="m-0 mt-2 text-lg leading-tight font-semibold">
+          {{ copy.title }}
+        </h2>
+        <p class="m-0 mt-1.5 text-sm leading-normal text-on-night-2">{{ copy.intro }}</p>
+      </div>
+      <UiButton
+        variant="outline"
+        :disabled="loading"
+        aria-describedby="acceptance-tests-title"
+        data-testid="acceptance-refresh"
+        @click="readAgainAndCheck"
+      >
+        {{ copy.refresh }}
+      </UiButton>
+    </div>
+
+    <div v-if="runningJob !== null" class="mt-5" data-testid="acceptance-job">
+      <GenerationJobNotice :job="runningJob" :locale="locale" />
+    </div>
 
     <div
       class="mt-5 grid gap-5"
@@ -482,7 +562,7 @@ watch(() => props.projectId, load, { immediate: true });
         {{ copy.loading }}
       </p>
 
-      <template v-else>
+      <template v-if="overview !== null">
         <p
           v-if="!overview.plan_available"
           class="m-0 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
@@ -532,6 +612,20 @@ watch(() => props.projectId, load, { immediate: true });
               <dt class="text-on-night-3">{{ copy.reference }}</dt>
               <dd class="m-0" data-testid="acceptance-run-reference">{{ runView.reference }}</dd>
             </dl>
+            <p
+              v-if="stale"
+              class="m-0 mt-3 rounded-field border border-warn-on-night/40 bg-warn-on-night/8 px-4 py-3 text-sm leading-normal text-warn-on-night"
+              data-testid="acceptance-stale"
+            >
+              <template v-for="part in commandParts(copy.stale)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
             <ul
               class="m-0 mt-4 flex list-none flex-wrap gap-2 p-0"
               :aria-label="copy.countsLabel"
@@ -654,6 +748,13 @@ watch(() => props.projectId, load, { immediate: true });
               data-testid="acceptance-reviewed"
             >
               {{ runView.reviewed }}
+            </p>
+            <p
+              v-if="earlierReview !== null"
+              class="m-0 mt-1 text-sm leading-normal text-on-night-3"
+              data-testid="acceptance-earlier-review"
+            >
+              {{ earlierReview.sentence }}
             </p>
             <ul v-if="critiqueViews.length > 0" class="m-0 mt-3 grid list-none gap-3 p-0">
               <li v-for="critique in critiqueViews" :key="critique.key">

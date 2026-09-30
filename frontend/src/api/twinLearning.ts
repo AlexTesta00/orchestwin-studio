@@ -1,25 +1,26 @@
 import { ApiRequestError } from "./requestError";
 
-import type { AcceptanceTestsOverviewPayload } from "../types/acceptanceTests";
+import type { TwinLearningPayload } from "../types/twinLearning";
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
+const ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 405]);
 
-export interface AcceptanceTestsApiOptions {
+export interface TwinLearningApiOptions {
   basePath?: string;
   fetchImpl?: typeof fetch;
 }
 
-export class AcceptanceTestsApiError extends ApiRequestError {}
+export class TwinLearningApiError extends ApiRequestError {}
 
-export interface AcceptanceTestsApi {
-  overview(projectId: string, accessToken: string): Promise<AcceptanceTestsOverviewPayload>;
+export interface TwinLearningApi {
+  overview(projectId: string, accessToken: string): Promise<TwinLearningPayload | null>;
 }
 
 function normalizedBasePath(value: string): string {
   const normalized = value.trim().replace(/\/+$/, "");
 
   if (normalized.length === 0) {
-    throw new Error("Acceptance Tests API base path must not be empty");
+    throw new Error("Twin Learning API base path must not be empty");
   }
 
   return normalized;
@@ -29,7 +30,7 @@ function requiredAccessToken(value: string): string {
   const normalized = value.trim();
 
   if (normalized.length === 0) {
-    throw new AcceptanceTestsApiError("Authentication is required", {
+    throw new TwinLearningApiError("Authentication is required", {
       status: 0,
       code: "ACCESS_TOKEN_REQUIRED",
       payload: null,
@@ -65,33 +66,49 @@ async function responsePayload(response: Response): Promise<unknown> {
   }
 }
 
-function isLatestReview(value: unknown): boolean {
+function isObservation(value: unknown): boolean {
   return (
-    value === undefined ||
-    value === null ||
-    (isRecord(value) &&
-      typeof value.run_id === "string" &&
-      typeof value.finished_at === "string" &&
-      Array.isArray(value.critiques))
+    isRecord(value) &&
+    typeof value.code === "string" &&
+    typeof value.statement === "string" &&
+    typeof value.source === "string" &&
+    typeof value.approved_at === "string" &&
+    isRecord(value.about)
+  );
+}
+
+function isMaterial(value: unknown): boolean {
+  return isRecord(value) && typeof value.changes === "number" && typeof value.tests === "number";
+}
+
+function isLearningTwin(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.twin_id === "string" &&
+    typeof value.twin_name === "string" &&
+    typeof value.label === "string" &&
+    Array.isArray(value.observations) &&
+    value.observations.every(isObservation) &&
+    Array.isArray(value.retired) &&
+    (value.pending_update === null || isRecord(value.pending_update)) &&
+    isMaterial(value.new_material)
   );
 }
 
 function isOverview(payload: unknown): payload is Record<string, unknown> {
   return (
     isRecord(payload) &&
-    (payload.latest_run === null || isRecord(payload.latest_run)) &&
-    (payload.latest_run_stale === undefined || typeof payload.latest_run_stale === "boolean") &&
-    isLatestReview(payload.latest_review)
+    typeof payload.update_available === "boolean" &&
+    Array.isArray(payload.twins) &&
+    payload.twins.every(isLearningTwin)
   );
 }
 
 function overviewPath(basePath: string, projectId: string): string {
-  return `${basePath}/projects/${encodeURIComponent(projectId)}/acceptance-tests`;
+  return `${basePath}/projects/${encodeURIComponent(projectId)}/twin-learning`;
 }
 
-export function createAcceptanceTestsApi(
-  options: AcceptanceTestsApiOptions = {},
-): AcceptanceTestsApi {
+export function createTwinLearningApi(options: TwinLearningApiOptions = {}): TwinLearningApi {
   const basePath = normalizedBasePath(options.basePath ?? DEFAULT_API_BASE_PATH);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
@@ -107,8 +124,12 @@ export function createAcceptanceTestsApi(
       });
       const payload = await responsePayload(response);
 
+      if (ABSENT_STATUSES.has(response.status)) {
+        return null;
+      }
+
       if (!response.ok) {
-        throw new AcceptanceTestsApiError("The acceptance tests request failed", {
+        throw new TwinLearningApiError("The twin learning request failed", {
           status: response.status,
           code: errorCode(payload),
           payload,
@@ -116,16 +137,16 @@ export function createAcceptanceTestsApi(
       }
 
       if (!isOverview(payload)) {
-        throw new AcceptanceTestsApiError("The Acceptance Tests API returned invalid JSON", {
+        throw new TwinLearningApiError("The Twin Learning API returned invalid JSON", {
           status: response.status,
           code: "INVALID_API_RESPONSE",
           payload,
         });
       }
 
-      return payload as unknown as AcceptanceTestsOverviewPayload;
+      return payload as unknown as TwinLearningPayload;
     },
   };
 }
 
-export const acceptanceTestsApi = createAcceptanceTestsApi();
+export const twinLearningApi = createTwinLearningApi();

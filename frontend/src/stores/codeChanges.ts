@@ -21,6 +21,12 @@ export interface CodeChangesStoreError {
 export interface DevelopmentSnapshot {
   alignment: AlignmentPayload;
   changes: CodeChangePayload[];
+  tasks: CodeTaskPayload[] | null;
+}
+
+export interface ClosedTaskCounts {
+  done: number;
+  dropped: number;
 }
 
 interface CodeChangesState {
@@ -29,6 +35,7 @@ interface CodeChangesState {
   loadSequence: number;
   alignment: AlignmentPayload | null;
   changes: CodeChangePayload[];
+  tasks: CodeTaskPayload[] | null;
   runs: Record<string, ChangeReviewRunPayload | null>;
   pending: Record<CodeChangesOperation, boolean>;
   error: CodeChangesStoreError | null;
@@ -72,6 +79,7 @@ export const useCodeChangesStore = defineStore("codeChanges", {
     loadSequence: 0,
     alignment: null,
     changes: [],
+    tasks: null,
     runs: {},
     pending: emptyPending(),
     error: null,
@@ -89,6 +97,20 @@ export const useCodeChangesStore = defineStore("codeChanges", {
 
     openTasks(state): CodeTaskPayload[] {
       return (state.alignment?.tasks ?? []).filter((task) => task.status === "OPEN");
+    },
+
+    closedTasks(state): ClosedTaskCounts | null {
+      if (state.tasks === null) {
+        return null;
+      }
+      return {
+        done: state.tasks.filter((task) => task.status === "DONE").length,
+        dropped: state.tasks.filter((task) => task.status === "DROPPED").length,
+      };
+    },
+
+    staleReviews(state): number {
+      return state.alignment?.stale_reviews ?? 0;
     },
 
     latestReviewed(state): CodeChangePayload | null {
@@ -111,6 +133,7 @@ export const useCodeChangesStore = defineStore("codeChanges", {
       this.projectEpoch += 1;
       this.alignment = null;
       this.changes = [];
+      this.tasks = null;
       this.runs = {};
       this.pending = emptyPending();
       this.error = null;
@@ -148,17 +171,22 @@ export const useCodeChangesStore = defineStore("codeChanges", {
       this.begin("load");
 
       try {
-        const [alignment, list] = await Promise.all([
+        const [alignment, list, tasks] = await Promise.all([
           authorize((token) => api.alignment(projectId, token)),
           authorize((token) => api.changes(projectId, token)),
+          authorize((token) => api.tasks(projectId, token, "all")).then(
+            (answer) => answer.items,
+            () => null,
+          ),
         ]);
 
         if (this.isCurrent(projectId, epoch) && sequence === this.loadSequence) {
           this.alignment = alignment;
           this.changes = [...list.items];
+          this.tasks = tasks === null ? null : [...tasks];
         }
 
-        return { alignment, changes: list.items };
+        return { alignment, changes: list.items, tasks };
       } catch (error) {
         if (sequence === this.loadSequence) {
           this.capture(error, projectId, epoch);
