@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.identity.domain import UserAccount
@@ -50,6 +50,7 @@ class PackageFeedbackPayload(ApiModel):
     discussions: int
     insights: int
     change_reviews: int
+    test_runs: int | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class PackageProgressPayload(ApiModel):
@@ -158,6 +159,7 @@ class KnowledgePackageVersionPayload(ApiModel):
                 discussions=feedback["discussions"],
                 insights=feedback["insights"],
                 change_reviews=feedback.get("change_reviews", 0),
+                test_runs=feedback.get("test_runs"),
             ),
             diagram_count=sum(len(view["diagrams"]) for view in views.values()),
             table_count=sum(len(view["tables"]) for view in views.values()),
