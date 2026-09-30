@@ -28,13 +28,30 @@ from .knowledge_fixtures import (
     ALIGNED_COMMIT,
     RUN_ONE,
     RUN_TWO,
+    VOLUNTEER_TWIN,
     applications,
     change_run,
     discussions,
     evaluation_runs,
+    real_sources,
     sources,
     state_sources,
     validations,
+)
+from .knowledge_fixtures import test_run as acceptance_run
+
+CODE_CRITIQUES = "## Critiques on the code changes\n\n"
+TEST_CRITIQUES = "\n## Critiques on the acceptance tests\n\n"
+NEWEST_TEST_RUN = (
+    "The run of 2026-09-29 10:05+00:00 checked the static folder `dist` in Chrome 151.0.7922.76 "
+    "and Firefox 156.0.1, against requirements version 2 and design version 4, alternative "
+    "DES-002. Criteria: 1 passed, 1 failed, 0 blocked, 1 not covered, 0 not run. The twins "
+    "reviewed it on 2026-09-29 10:20+00:00. Addetti all'accoglienza: the results raise a concern "
+    "(CONCERN). Un nome vuoto viene accettato senza nessun messaggio. Findings: importance high "
+    "(HIGH) about AC-002, REQ-003, SCR-002: Un ospite senza nome entra nella lista; importance "
+    "low (LOW) about AC-003: Nessuno ha provato la lista sul tablet. Organizzatori volontari: the "
+    "results are fine (FINE). L'aggiunta di un ospite funziona in tutti e due i browser. No "
+    "finding."
 )
 
 
@@ -200,11 +217,13 @@ def test_feedback_text_without_records_says_so() -> None:
     assert "## Approved discussions\n\nnot provided.\n" in text
     assert "## Applied insights\n\nnot provided.\n" in text
     assert text.endswith(
-        "## Critiques on the code changes\n\nNo code change has been reviewed yet.\n"
+        "## Critiques on the code changes\n\nNo code change has been reviewed yet.\n\n"
+        "## Critiques on the acceptance tests\n\nNo run of the acceptance tests is recorded yet: "
+        "`ut test` runs them on the application and records the result in the Studio.\n"
     )
 
 
-def test_feedback_text_ends_with_one_paragraph_for_every_critique_run_on_the_code() -> None:
+def test_feedback_text_has_one_paragraph_for_every_critique_run_on_the_code() -> None:
     first = change_run()
     second = {
         **change_run(),
@@ -220,7 +239,8 @@ def test_feedback_text_ends_with_one_paragraph_for_every_critique_run_on_the_cod
     }
     package = sources(state=replace(state_sources(), runs=(first, second)))
 
-    section = feedback_markdown(package).split("## Critiques on the code changes\n\n", 1)[1]
+    text = feedback_markdown(package)
+    section = text.split(CODE_CRITIQUES, 1)[1].split(TEST_CRITIQUES, 1)[0]
     paragraphs = [item for item in section.split("\n\n") if item.strip()]
 
     assert len(paragraphs) == 2
@@ -243,6 +263,72 @@ def test_feedback_text_ends_with_one_paragraph_for_every_critique_run_on_the_cod
     assert "Design change request: Aggiungere un filtro per sede nella lista." in paragraphs[1]
     assert "Tasks proposed" not in paragraphs[1]
     assert "\n" not in paragraphs[0].strip()
+
+
+def test_feedback_text_ends_with_one_paragraph_for_every_test_run_newest_first() -> None:
+    drifting = {
+        **acceptance_run(),
+        "id": "00000000-0000-4000-8000-00000000e0ff",
+        "finished_at": "2026-09-29T08:00:00+00:00",
+        "reviewed_at": "2026-09-29T08:30:00+00:00",
+        "critiques": [
+            {
+                "twin_id": VOLUNTEER_TWIN,
+                "twin_name": "Organizzatori volontari",
+                "verdict": "DRIFT",
+                "summary": "La lista non mostra più il numero progressivo",
+                "findings": [
+                    {
+                        "severity": "MEDIUM",
+                        "text": "Dov'è finito il numero?",
+                        "about": {"criterion": None, "requirement": None, "screen": "SCR-001"},
+                        "action": None,
+                    }
+                ],
+            }
+        ],
+    }
+    unreviewed = {
+        **acceptance_run(),
+        "id": "00000000-0000-4000-8000-00000000e0fe",
+        "finished_at": "2026-09-28T16:00:00+00:00",
+        "application": {"kind": "URL", "address": "http://localhost:5173/"},
+        "browsers": [{"name": "chrome", "version": "151.0.7922.76"}],
+        "reference": {**acceptance_run()["reference"], "alternative_code": None},
+        "critiques": [],
+        "reviewed_at": None,
+    }
+    runs = (acceptance_run(), drifting, unreviewed)
+    package = sources(state=replace(state_sources(), tests=runs))
+
+    text = feedback_markdown(package)
+    section = text.split(TEST_CRITIQUES, 1)[1]
+    paragraphs = [item.strip() for item in section.split("\n\n") if item.strip()]
+
+    assert text.endswith(f"{paragraphs[-1]}\n")
+    assert len(paragraphs) == 3
+    assert paragraphs[0] == NEWEST_TEST_RUN
+    assert paragraphs[1].startswith("The run of 2026-09-29 08:00+00:00 checked")
+    assert (
+        "The twins reviewed it on 2026-09-29 08:30+00:00. Organizzatori volontari: the application "
+        "departs from what was approved (DRIFT). La lista non mostra più il numero progressivo. "
+        "Findings: importance medium (MEDIUM) about SCR-001: Dov'è finito il numero?"
+    ) in paragraphs[1]
+    assert paragraphs[2] == (
+        "The run of 2026-09-28 16:00+00:00 checked the address `http://localhost:5173/` in Chrome "
+        "151.0.7922.76, against requirements version 2 and design version 4, alternative not "
+        "selected. Criteria: 1 passed, 1 failed, 0 blocked, 1 not covered, 0 not run. The twins "
+        "have not reviewed this run yet."
+    )
+    assert all("\n" not in paragraph for paragraph in paragraphs)
+
+
+def test_feedback_text_speaks_english_about_the_test_runs_of_an_italian_project() -> None:
+    text = feedback_markdown(real_sources(state=state_sources()))
+
+    assert "## Critiques on the code changes" in text
+    assert text.endswith(f"{TEST_CRITIQUES}{NEWEST_TEST_RUN}\n")
+    assert "Critiche sui test" not in text
 
 
 def test_feedback_counts_are_zero_while_the_design_is_not_approved() -> None:

@@ -16,6 +16,7 @@ from orchestwin.artifacts.design_gate import design_artifact_reference
 from orchestwin.knowledge.folder import file_digests, folder_content_hash, json_text
 from orchestwin.knowledge.layout import (
     FEEDBACK_CHANGES,
+    FEEDBACK_TESTS,
     FEEDBACK_TEXT,
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
@@ -265,10 +266,16 @@ ALIGNED_COMMIT = "9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e"
 PENDING_COMMIT = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 FIRST_COMMIT = "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c"
 CHANGE_RUN = "00000000-0000-4000-8000-00000000d001"
+TEST_RUN = "00000000-0000-4000-8000-00000000e101"
 RECEPTION_TWIN = "e98bf864-69ba-4198-85f9-d4e932c54a3d"
 VOLUNTEER_TWIN = "f921405b-21d5-4ef6-b99c-fe0dcb1033b5"
 SCHEMA_ID = "urn:orchestwin:knowledge-folder"
 OLDER_DOCUMENTS = frozenset({"twin", "reviews", "discussions", "insights"})
+TEST_SECTIONS = {
+    STATE_TEXT: ("\n## Acceptance tests", "\n## Verifica dei criteri"),
+    FEEDBACK_TEXT: ("\n## Critiques on the acceptance tests",),
+}
+SERVED_AT = "http://127.0.0.1:41234/"
 
 
 def sources_of(versions, *, project_id: UUID, **changes) -> KnowledgeSources:
@@ -362,6 +369,188 @@ def change_run() -> dict[str, object]:
     }
 
 
+def _done(path: str, browser: str, index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "status": "DONE",
+        "detail": None,
+        "url": SERVED_AT,
+        "title": "Lista ospiti",
+        "screenshot": f"{path}/{browser}/{index:02d}.png",
+    }
+
+
+def test_run() -> dict[str, object]:
+    guest_name = {"role": "textbox", "name": "Nome ospite"}
+    add = {"role": "button", "name": "Aggiungi"}
+    return {
+        "id": TEST_RUN,
+        "started_at": "2026-09-29T10:00:00+00:00",
+        "finished_at": "2026-09-29T10:05:00+00:00",
+        "recorded_at": "2026-09-29T10:05:30+00:00",
+        "application": {"kind": "STATIC", "address": "dist"},
+        "browsers": [
+            {"name": "chrome", "version": "151.0.7922.76"},
+            {"name": "firefox", "version": "156.0.1"},
+        ],
+        "reference": {
+            "requirements_version_number": 2,
+            "design_version_number": 4,
+            "alternative_code": "DES-002",
+        },
+        "summary": {"passed": 1, "failed": 1, "blocked": 0, "not_covered": 1, "not_run": 0},
+        "criteria": [
+            {"code": "AC-001", "status": "PASSED", "paths": ["TP-001"]},
+            {"code": "AC-002", "status": "FAILED", "paths": ["TP-002"]},
+            {"code": "AC-003", "status": "NOT_COVERED", "paths": []},
+        ],
+        "not_covered": [
+            {
+                "criterion": "AC-003",
+                "reason": "La leggibilità sul tablet va giudicata da una persona.",
+            }
+        ],
+        "results": [
+            {
+                "path": {
+                    "code": "TP-001",
+                    "heading": "Aggiungere un ospite e vederlo subito nella lista",
+                    "criteria": ["AC-001"],
+                    "steps": [
+                        {"action": "OPEN", "target": None, "value": "/", "expect": None},
+                        {
+                            "action": "TYPE",
+                            "target": guest_name,
+                            "value": "Maria Rossi",
+                            "expect": None,
+                        },
+                        {
+                            "action": "CLICK",
+                            "target": add,
+                            "value": None,
+                            "expect": {
+                                "kind": "TEXT_VISIBLE",
+                                "target": None,
+                                "text": "Maria Rossi",
+                            },
+                        },
+                    ],
+                },
+                "browser": "chrome",
+                "status": "PASSED",
+                "seconds": 4.2,
+                "steps": [_done("TP-001", "chrome", index) for index in (1, 2, 3)],
+                "page_text": "Lista ospiti 1. Maria Rossi Nome ospite Aggiungi",
+            },
+            {
+                "path": {
+                    "code": "TP-002",
+                    "heading": "Rifiutare un nome vuoto con un messaggio accanto al campo",
+                    "criteria": ["AC-002"],
+                    "steps": [
+                        {"action": "OPEN", "target": None, "value": "/", "expect": None},
+                        {
+                            "action": "CLICK",
+                            "target": add,
+                            "value": None,
+                            "expect": {
+                                "kind": "TEXT_VISIBLE",
+                                "target": None,
+                                "text": "Inserisci un nome",
+                            },
+                        },
+                        {
+                            "action": "CHECK",
+                            "target": None,
+                            "value": None,
+                            "expect": {"kind": "VALUE_IS", "target": guest_name, "text": ""},
+                        },
+                    ],
+                },
+                "browser": "firefox",
+                "status": "FAILED",
+                "seconds": 6.8,
+                "steps": [
+                    _done("TP-002", "firefox", 1),
+                    {
+                        **_done("TP-002", "firefox", 2),
+                        "status": "FAILED",
+                        "detail": "TEXT_VISIBLE: Inserisci un nome",
+                    },
+                    {
+                        "index": 3,
+                        "status": "SKIPPED",
+                        "detail": None,
+                        "url": None,
+                        "title": None,
+                        "screenshot": None,
+                    },
+                ],
+                "page_text": "Lista ospiti Nessun ospite Nome ospite Aggiungi",
+            },
+        ],
+        "critiques": [
+            {
+                "twin_id": RECEPTION_TWIN,
+                "twin_name": "Addetti all'accoglienza",
+                "verdict": "CONCERN",
+                "summary": "Un nome vuoto viene accettato senza nessun messaggio.",
+                "findings": [
+                    {
+                        "severity": "HIGH",
+                        "text": "Un ospite senza nome entra nella lista.",
+                        "about": {
+                            "criterion": "AC-002",
+                            "requirement": "REQ-003",
+                            "screen": "SCR-002",
+                        },
+                        "action": "Mostrare un messaggio accanto al campo del nome.",
+                    },
+                    {
+                        "severity": "LOW",
+                        "text": "Nessuno ha provato la lista sul tablet.",
+                        "about": {"criterion": "AC-003", "requirement": None, "screen": None},
+                        "action": None,
+                    },
+                ],
+            },
+            {
+                "twin_id": VOLUNTEER_TWIN,
+                "twin_name": "Organizzatori volontari",
+                "verdict": "FINE",
+                "summary": "L'aggiunta di un ospite funziona in tutti e due i browser.",
+                "findings": [],
+            },
+        ],
+        "reviewed_at": "2026-09-29T10:20:00+00:00",
+        "cost_microusd": 500000,
+    }
+
+
+def _without_tests(path: str, text: str) -> str:
+    for heading in TEST_SECTIONS.get(path, ()):
+        text = text.split(heading, 1)[0]
+    return text
+
+
+def files_before_tests(files: Mapping[str, str]) -> dict[str, str]:
+    dropped = {KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST, FEEDBACK_TESTS, schema_document("tests")}
+    earlier = {
+        path: _without_tests(path, text) for path, text in files.items() if path not in dropped
+    }
+    manifest = json.loads(files[KNOWLEDGE_MANIFEST])
+    for key in ("tests", "test_runs"):
+        del manifest["feedback"][key]
+    del manifest["schemas"]["tests"]
+    manifest["files"] = file_digests(earlier)
+    manifest["package"]["content_hash"] = folder_content_hash(earlier)
+    return {
+        **earlier,
+        KNOWLEDGE_MANIFEST: json_text(manifest),
+        KNOWLEDGE_INDEX: files[KNOWLEDGE_INDEX],
+    }
+
+
 def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
     dropped = {
         KNOWLEDGE_INDEX,
@@ -369,8 +558,10 @@ def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
         STATE_DOCUMENT,
         STATE_TEXT,
         FEEDBACK_CHANGES,
+        FEEDBACK_TESTS,
         schema_document("state"),
         schema_document("changes"),
+        schema_document("tests"),
     }
     older: dict[str, str] = {}
     for path, text in files.items():
@@ -387,10 +578,10 @@ def schema_two_files(files: Mapping[str, str]) -> dict[str, str]:
     manifest["schema_version"] = 2
     for key in ("progress", "state"):
         del manifest[key]
-    for key in ("changes", "change_reviews"):
-        del manifest["feedback"][key]
-    for name in ("state", "changes"):
-        del manifest["schemas"][name]
+    for key in ("changes", "change_reviews", "tests", "test_runs"):
+        manifest["feedback"].pop(key, None)
+    for name in ("state", "changes", "tests"):
+        manifest["schemas"].pop(name, None)
     manifest["files"] = file_digests(older)
     manifest["package"]["content_hash"] = folder_content_hash(older)
     return {
@@ -459,4 +650,5 @@ def state_sources() -> ProjectStateSources:
                 "status": "OPEN",
             },
         ),
+        tests=(test_run(),),
     )

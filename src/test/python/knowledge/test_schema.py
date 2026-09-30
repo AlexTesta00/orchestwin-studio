@@ -35,6 +35,7 @@ from orchestwin.knowledge.layout import (
     FEEDBACK_DISCUSSIONS,
     FEEDBACK_INSIGHTS,
     FEEDBACK_REVIEWS,
+    FEEDBACK_TESTS,
     KNOWLEDGE_MANIFEST,
     STAGES,
     STATE_DOCUMENT,
@@ -54,6 +55,7 @@ from orchestwin.knowledge.schema import (
     validate_files,
 )
 from orchestwin.knowledge.sources import KnowledgeFeedback, KnowledgeSources, knowledge_feedback
+from orchestwin.knowledge.state import MAX_FOLDER_TEST_RUNS
 from orchestwin.projects.brief_gate import project_brief_artifact_reference
 from orchestwin.projects.briefs import BriefField
 from orchestwin.projects.insight_applications import (
@@ -90,6 +92,8 @@ from src.test.python.artifacts.test_design_evaluation import TWIN_A, TWIN_B, eva
 from src.test.python.projects.test_insight_applications import application
 from src.test.python.twins.test_user_modeling_gate import snapshot_version
 from src.test.python.workflow.test_governed_project_setup import build_ready_project
+
+from .knowledge_fixtures import test_run as acceptance_run
 
 NOW: Final = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
 PUBLISHED_AT: Final = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
@@ -302,8 +306,8 @@ def test_schema_files_publish_one_valid_json_schema_for_every_document_kind() ->
     )
 
     assert list(files) == [f"schema/{name}.schema.json" for name in SCHEMA_NAMES]
-    assert len(files) == 12
-    assert SCHEMA_NAMES[-2:] == ("state", "changes")
+    assert len(files) == 13
+    assert SCHEMA_NAMES[-3:] == ("state", "changes", "tests")
     assert schema_files() == files
     assert fresh.stdout.strip() == (
         hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
@@ -370,6 +374,7 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
     assert names[FEEDBACK_INSIGHTS] == "insights"
     assert names[STATE_DOCUMENT] == "state"
     assert names[FEEDBACK_CHANGES] == "changes"
+    assert names[FEEDBACK_TESTS] == "tests"
     assert names[STATE_TEXT] is None
     assert twins == [path for path in folder.files if path.endswith("/twin.json")]
     assert len(twins) == 1
@@ -428,6 +433,13 @@ def test_schema_names_are_found_for_every_json_document_and_for_nothing_else() -
         ("manifest", ("schema_version",), 1, "schema_version"),
         ("manifest", ("progress", "pending"), "roadmap", "progress.pending"),
         ("manifest", ("state", "aligned_commit"), "ABC1234", "state.aligned_commit"),
+        ("manifest", ("feedback", "test_runs"), REMOVED, "feedback"),
+        ("manifest", ("feedback", "tests"), REMOVED, "feedback"),
+        ("manifest", ("feedback", "tests"), "twins/feedback/runs.json", "feedback.tests"),
+        ("manifest", ("feedback", "test_runs"), None, "feedback.test_runs"),
+        ("manifest", ("feedback", "test_runs"), -1, "feedback.test_runs"),
+        ("tests", ("schema_version",), 2, "schema_version"),
+        ("tests", ("kind",), "orchestwin.change-reviews", "kind"),
         ("state", ("schema_version",), 2, "schema_version"),
         (
             "state",
@@ -452,6 +464,120 @@ def test_both_validators_reject_a_document_that_breaks_its_schema(
     assert caught.value.document == name
     assert caught.value.location == location
     assert caught.value.message
+
+
+def acceptance_document() -> dict[str, Any]:
+    return {
+        "schema_version": 3,
+        "kind": "orchestwin.test-reviews",
+        "project_id": str(PROJECT_ID),
+        "runs": [acceptance_run()],
+    }
+
+
+def test_both_validators_accept_a_run_of_the_acceptance_tests() -> None:
+    document = acceptance_document()
+    unreviewed = changed(
+        changed(document, ("runs", 0, "critiques"), []), ("runs", 0, "reviewed_at"), None
+    )
+    many = changed(document, ("runs",), [acceptance_run()] * MAX_FOLDER_TEST_RUNS)
+    published = Draft202012Validator(knowledge_schemas()["tests"])
+
+    for payload in (document, unreviewed, many):
+        validate_document("tests", payload)
+        assert [error.message for error in published.iter_errors(payload)] == []
+
+
+@pytest.mark.parametrize(
+    ("keys", "value", "location"),
+    [
+        (("application", "kind"), "FOLDER", "application.kind"),
+        (("application", "address"), "", "application.address"),
+        (("browsers",), [], "browsers"),
+        (("browsers", 0, "name"), "safari", "browsers[0].name"),
+        (("browsers", 0, "version"), "1" * 81, "browsers[0].version"),
+        (("reference", "alternative_code"), "DES-2", "reference.alternative_code"),
+        (("summary", "not_run"), REMOVED, "summary.not_run"),
+        (("criteria", 0, "status"), "SKIPPED", "criteria[0].status"),
+        (("criteria", 0, "paths", 0), "TP-1", "criteria[0].paths[0]"),
+        (("not_covered", 0, "reason"), "x" * 301, "not_covered[0].reason"),
+        (("results", 0, "path", "criteria"), [], "results[0].path.criteria"),
+        (("results", 0, "path", "heading"), "x" * 121, "results[0].path.heading"),
+        (("results", 0, "path", "steps"), [], "results[0].path.steps"),
+        (("results", 0, "path", "steps", 0, "action"), "SCROLL", "results[0].path.steps[0].action"),
+        (
+            ("results", 0, "path", "steps", 1, "target", "role"),
+            "paragraph",
+            "results[0].path.steps[1].target.role",
+        ),
+        (
+            ("results", 0, "path", "steps", 1, "target", "name"),
+            "",
+            "results[0].path.steps[1].target.name",
+        ),
+        (
+            ("results", 0, "path", "steps", 1, "value"),
+            "x" * 201,
+            "results[0].path.steps[1].value",
+        ),
+        (
+            ("results", 0, "path", "steps", 2, "expect", "kind"),
+            "TEXT_EQUALS",
+            "results[0].path.steps[2].expect.kind",
+        ),
+        (("results", 0, "status"), "SKIPPED", "results[0].status"),
+        (("results", 0, "seconds"), -1, "results[0].seconds"),
+        (("results", 0, "steps", 0, "index"), 0, "results[0].steps[0].index"),
+        (("results", 0, "steps", 0, "status"), "PASSED", "results[0].steps[0].status"),
+        (("results", 0, "steps", 0, "detail"), "x" * 301, "results[0].steps[0].detail"),
+        (
+            ("results", 0, "steps", 0, "screenshot"),
+            "TP-001\\chrome\\01.png",
+            "results[0].steps[0].screenshot",
+        ),
+        (("results", 0, "steps", 0, "screenshot"), "..", "results[0].steps[0].screenshot"),
+        (("results", 0, "page_text"), "x" * 1501, "results[0].page_text"),
+        (("critiques", 0, "verdict"), "ALIGNED", "critiques[0].verdict"),
+        (("critiques", 0, "twin_name"), "", "critiques[0].twin_name"),
+        (
+            ("critiques", 0, "findings", 0, "about", "screen"),
+            "SCR-2",
+            "critiques[0].findings[0].about.screen",
+        ),
+        (
+            ("critiques", 0, "findings", 0, "severity"),
+            "CRITICAL",
+            "critiques[0].findings[0].severity",
+        ),
+        (("reviewed_at",), "2026-09-29 10:20", "reviewed_at"),
+        (("cost_microusd",), -1, "cost_microusd"),
+    ],
+)
+def test_both_validators_reject_a_run_that_breaks_its_schema(
+    keys: tuple[str | int, ...], value: object, location: str
+) -> None:
+    document = changed(acceptance_document(), ("runs", 0, *keys), value)
+
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_document("tests", document)
+
+    assert not Draft202012Validator(knowledge_schemas()["tests"]).is_valid(document)
+    assert caught.value.code == "DOCUMENT_INVALID"
+    assert caught.value.location == f"runs[0].{location}"
+
+
+def test_the_folder_keeps_at_most_twenty_runs_and_the_manifest_their_count() -> None:
+    document = changed(acceptance_document(), ("runs",), [acceptance_run()] * 21)
+    feedback = knowledge_schemas()["manifest"]["$defs"]["FeedbackSummary"]
+
+    with pytest.raises(KnowledgeSchemaError) as caught:
+        validate_document("tests", document)
+
+    assert MAX_FOLDER_TEST_RUNS == 20
+    assert caught.value.location == "runs"
+    assert not Draft202012Validator(knowledge_schemas()["tests"]).is_valid(document)
+    assert feedback["dependentRequired"] == {"tests": ["test_runs"], "test_runs": ["tests"]}
+    assert feedback["properties"]["tests"]["const"] == FEEDBACK_TESTS
 
 
 def test_unknown_properties_are_accepted_at_the_top_level_and_in_nested_objects() -> None:
