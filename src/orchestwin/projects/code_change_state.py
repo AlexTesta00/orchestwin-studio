@@ -4,7 +4,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestwin.knowledge.state import ProjectStateSources
+from orchestwin.knowledge.state import MAX_FOLDER_TEST_RUNS, ProjectStateSources
+from orchestwin.projects.persistence.acceptance_tests import SqlAlchemyAcceptanceTestRepository
 from orchestwin.projects.persistence.code_changes import SqlAlchemyCodeChangeRepository
 
 
@@ -21,11 +22,15 @@ class SqlAlchemyProjectStateQueryService:
             changes = await repository.list(project_id, limit=None)
             runs = await repository.project_runs(project_id)
             tasks = await repository.tasks(project_id)
+            tests = await SqlAlchemyAcceptanceTestRepository(
+                session, owner_user_id=owner_user_id
+            ).folder_runs(project_id, limit=MAX_FOLDER_TEST_RUNS)
         return ProjectStateSources(
             aligned=None if aligned is None else aligned.to_snapshot(),
             changes=tuple(change.to_snapshot() for change in changes),
             runs=tuple(run.to_snapshot() for run in runs),
             tasks=tuple(task.to_snapshot() for task in tasks),
+            tests=tests,
         )
 
 
