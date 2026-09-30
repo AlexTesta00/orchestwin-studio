@@ -32,6 +32,7 @@ from orchestwin.knowledge.state import (
     MAX_RESULTS,
     MAX_SCREENSHOT_PATH_LENGTH,
     MAX_SNAPSHOT_ELEMENTS,
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     MAX_SNAPSHOT_OPTIONS,
     MAX_SNAPSHOT_TEXT_LENGTH,
     MAX_STEP_DETAIL_LENGTH,
@@ -39,6 +40,7 @@ from orchestwin.knowledge.state import (
     MAX_STEPS,
     MAX_TARGET_NAME_LENGTH,
     TEST_ROLES,
+    review_is_stale,
 )
 from orchestwin.models.generation_budget import provider_result_cost_microusd
 from orchestwin.models.proposal_evidence import (
@@ -104,8 +106,10 @@ from orchestwin.projects.persistence.acceptance_tests import (
     AcceptanceTestWriteStatus,
     SqlAlchemyAcceptanceTestRepository,
 )
+from orchestwin.projects.persistence.twin_learning import SqlAlchemyTwinLearningRepository
 from orchestwin.projects.requirements_gate import requirements_gate_is_currently_approved
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.projects.twin_learning import learned_view
 from orchestwin.twins.user_modeling_gate import user_modeling_gate_is_currently_approved
 
 ACCEPTANCE_TESTS_API_PREFIX: Final = "/projects/{project_id}"
@@ -275,6 +279,7 @@ class SnapshotRequest(_Body):
     url: PageText
     title: PageText
     text: PageText
+    hidden_text: PageText = ""
     elements: list[ElementRequest] = Field(max_length=MAX_SNAPSHOT_ELEMENTS)
 
     def to_domain(self) -> PageSnapshot:
@@ -282,6 +287,7 @@ class SnapshotRequest(_Body):
             url=cut_text(self.url, maximum=MAX_SNAPSHOT_URL_LENGTH),
             title=cut_text(self.title, maximum=MAX_SNAPSHOT_TITLE_LENGTH),
             text=cut_text(self.text, maximum=MAX_SNAPSHOT_TEXT_LENGTH),
+            hidden_text=cut_text(self.hidden_text, maximum=MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH),
             elements=tuple(item.to_domain() for item in self.elements),
         )
 
@@ -557,6 +563,25 @@ def _generation_ids() -> tuple[UUID, ...]:
     return tuple(dict.fromkeys(identifiers))
 
 
+def _findings_by_twin(run: TestRun | None) -> dict[UUID, tuple[str, ...]]:
+    if run is None or run.review is None:
+        return {}
+    return {
+        critique.twin_id: tuple(item.text for item in critique.findings)
+        for critique in run.review.critiques
+    }
+
+
+def _latest_review(run: TestRun) -> dict[str, object]:
+    snapshot = run.to_snapshot()
+    return {
+        "run_id": snapshot["id"],
+        "finished_at": snapshot["finished_at"],
+        "reviewed_at": snapshot["reviewed_at"],
+        "critiques": snapshot["critiques"],
+    }
+
+
 def _requested(requirements, criteria: Sequence[str] | None) -> tuple[str, ...]:
     codes = tuple(item.code for item in requirements.specification.acceptance_criteria)
     if criteria is None:
@@ -704,14 +729,19 @@ class AcceptanceTestApplication:
             await self._owned(repository, project_id)
             plans, runs = await repository.counts(project_id)
             latest = await repository.runs(project_id, limit=1)
+            reviewed = await repository.latest_reviewed_run(project_id)
         reference = await self.reference(owner_user_id=owner_user_id, project_id=project_id)
+        latest_run = latest[0] if latest else None
         return {
             "project_id": str(project_id),
             "reference": reference.to_snapshot(),
             "plan_available": self.plan_available(),
             "plans": plans,
             "runs": runs,
-            "latest_run": latest[0].to_snapshot() if latest else None,
+            "latest_run": None if latest_run is None else latest_run.to_snapshot(),
+            "latest_run_stale": latest_run is not None
+            and review_is_stale(latest_run.reference_snapshot(), reference.current_versions()),
+            "latest_review": None if reviewed is None else _latest_review(reviewed),
         }
 
     @evidence_application
@@ -847,12 +877,17 @@ class AcceptanceTestApplication:
             run = await self._run(repository, project_id, run_id)
             if not body.again and await repository.latest_review(run.id) is not None:
                 raise _refusal(409, TEST_REVIEW_EXISTS)
+            earlier = await repository.latest_reviewed_run(project_id, before=run)
+            learned = await SqlAlchemyTwinLearningRepository(
+                session, owner_user_id=owner_user_id
+            ).active(project_id)
         reference = await self._approved(owner_user_id, project_id)
         twins = await self._twins(owner_user_id, project_id)
         generator = self._generator()
         material = await self._material(owner_user_id, project_id, reference, body.locale)
         review_id = uuid4()
         bounded = run_material(run.to_snapshot())
+        earlier_findings = _findings_by_twin(earlier)
         identifiers = {"test_run_id": str(run.id), "test_review_id": str(review_id)}
         critiques = []
         for position, twin in enumerate(twins, 1):
@@ -862,6 +897,8 @@ class AcceptanceTestApplication:
                 twin=twin,
                 material=material,
                 run_material=bounded,
+                earlier_findings=earlier_findings.get(twin.twin_id, ()),
+                learned=learned_view(learned.get(twin.twin_id, ())),
             )
             critique = await _attempt(
                 partial(critique_run, generator, context),

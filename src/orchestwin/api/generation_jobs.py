@@ -44,6 +44,7 @@ class GenerationOperation(StrEnum):
     CODE_CHANGE_REVIEW = "CODE_CHANGE_REVIEW"
     TEST_PLAN = "TEST_PLAN"
     TEST_REVIEW = "TEST_REVIEW"
+    TWIN_UPDATE = "TWIN_UPDATE"
 
 
 class GenerationJobStatus(StrEnum):
