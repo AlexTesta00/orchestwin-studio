@@ -23,6 +23,8 @@ CHANGES_DOCUMENT: Final = "twins/feedback/changes.json"
 REVIEWS_DOCUMENT: Final = "twins/feedback/reviews.json"
 TESTS_DOCUMENT: Final = "twins/feedback/tests.json"
 TESTS_KIND: Final = "orchestwin.test-reviews"
+LEARNING_DOCUMENT: Final = "twins/feedback/learned.json"
+LEARNING_KIND: Final = "orchestwin.twin-learning"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -147,6 +149,25 @@ class Knowledge:
             raise FolderProblem(FOLDER_UNREADABLE, path=relative)
         return tuple(mappings(document.get("runs")))
 
+    def tasks(self) -> tuple[Mapping[str, object], ...]:
+        state = self.state()
+        return () if state is None else tuple(mappings(state.get("tasks")))
+
+    def learning(self) -> tuple[Mapping[str, object], ...]:
+        if self.schema_version < STATE_SCHEMA:
+            return ()
+        relative = _text(_mapping(self.manifest.get("feedback")).get("learned"))
+        if relative is None:
+            return ()
+        document = self.document(relative)
+        if document is None or document.get("kind") != LEARNING_KIND:
+            raise FolderProblem(FOLDER_UNREADABLE, path=relative)
+        return tuple(mappings(document.get("twins")))
+
+    def stale_reviews(self) -> int:
+        value = _mapping(self.manifest.get("state")).get("stale_reviews")
+        return value if _integer(value) and value >= 0 else 0
+
     def design_reviews(self) -> int:
         relative = _text(_mapping(self.manifest.get("feedback")).get("reviews_document"))
         if relative is None:
@@ -207,6 +228,14 @@ def load(root: Path) -> Knowledge:
 
 def test_runs(root: Path) -> tuple[Mapping[str, object], ...]:
     return load(root).test_runs()
+
+
+def tasks(root: Path) -> tuple[Mapping[str, object], ...]:
+    return load(root).tasks()
+
+
+def learning(root: Path) -> tuple[Mapping[str, object], ...]:
+    return load(root).learning()
 
 
 def requirements_view(document: Mapping[str, object]) -> dict[str, object]:
