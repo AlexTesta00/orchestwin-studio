@@ -9,13 +9,16 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import projects as project_api
+from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.api import usage
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
+from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.messages import known
-from orchestwin.cli.project import STEP_STAGES
+from orchestwin.cli.project import STEP_STAGES, read_json
 
 if TYPE_CHECKING:
+    from orchestwin.cli.api.tests import AcceptanceSummary
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.folder import FolderSummary, StateSummary
@@ -26,6 +29,7 @@ SCHEMA_VERSION: Final = 1
 HEALTHY: Final = 200
 SHORT_COMMIT: Final = 7
 DESIGN_STAGE: Final = "design"
+FEEDBACK_TESTS: Final = "twins/feedback/tests.json"
 FROM_STUDIO: Final = "studio"
 FROM_FOLDER: Final = "folder"
 REQUESTED: Final = "requested"
@@ -72,6 +76,7 @@ class Report:
     remaining_usd: float | None
     alignment: StateSummary | None = None
     local_complete: bool = False
+    tests: AcceptanceSummary | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -131,6 +136,7 @@ class Report:
                     "open_tasks": self.alignment.open_tasks,
                 }
             ),
+            "tests": None if self.tests is None else self.tests.document(),
         }
 
 
@@ -142,6 +148,7 @@ class _Studio:
     spent_usd: float | None
     remaining_usd: float | None
     alignment: StateSummary | None = None
+    tests: AcceptanceSummary | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -197,6 +204,7 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         spent_usd=found.spent_usd,
         remaining_usd=found.remaining_usd,
         alignment=found.alignment,
+        tests=found.tests if found.tests is not None else local_tests(project),
     )
 
 
@@ -232,6 +240,8 @@ def show(context: CommandContext, report: Report) -> None:
     _folder_lines(context, report)
     if report.alignment is not None:
         show_alignment(context, report.alignment)
+    if report.tests is not None:
+        show_tests(context, report.tests)
     _spending_line(context, report)
 
 
@@ -254,6 +264,33 @@ def show_alignment(context: CommandContext, summary: StateSummary) -> None:
             commit=summary.aligned_commit[:SHORT_COMMIT],
             tasks=summary.open_tasks,
         )
+
+
+def show_tests(context: CommandContext, tests: AcceptanceSummary) -> None:
+    if tests.runs <= 0 or (tests.latest_id is None and tests.finished_at is None):
+        return
+    numbers = tests.summary
+    context.console.say(
+        "status.tests",
+        date=moment_text(tests.finished_at),
+        passed=numbers.get("passed", 0),
+        failed=numbers.get("failed", 0),
+        blocked=numbers.get("blocked", 0),
+        not_covered=numbers.get("not_covered", 0),
+    )
+
+
+def local_tests(project: ProjectFolder) -> AcceptanceSummary | None:
+    manifest = read_json(project.knowledge / knowledge.MANIFEST_NAME)
+    feedback = manifest.get("feedback") if isinstance(manifest, Mapping) else None
+    count = feedback.get("test_runs") if isinstance(feedback, Mapping) else None
+    if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
+        return None
+    named = feedback.get("tests")
+    relative = named if isinstance(named, str) and _inside(named) else FEEDBACK_TESTS
+    document = read_json(project.knowledge.joinpath(*relative.split("/")))
+    runs = tests_api.mappings(document.get("runs")) if isinstance(document, Mapping) else []
+    return tests_api.run_summary_of(runs[0] if runs else None, count)
 
 
 def next_action_text(context: CommandContext, code: str) -> str:
@@ -336,16 +373,16 @@ def _studio_facts(
             return UNREACHABLE
         found = project_api.get_project(client, link.project_id)
         steps = project_api.step_states(client, link.project_id)
-        alignment = (
-            changes_api.summary(client, link.project_id) if _design_approved(steps) else None
-        )
+        approved = _design_approved(steps)
+        alignment = changes_api.summary(client, link.project_id) if approved else None
+        tests = tests_api.summary(client, link.project_id) if approved else None
         has_budget, spent, remaining = _spending(client, link.project_id)
     except CliError as error:
         reason = _offline_reason(error)
         if reason is None:
             raise
         return reason
-    return _Studio(found, steps, has_budget, spent, remaining, alignment)
+    return _Studio(found, steps, has_budget, spent, remaining, alignment, tests)
 
 
 def _design_approved(steps: tuple[project_api.StepState, ...]) -> bool:
@@ -418,6 +455,7 @@ def _folder_report(
         local_complete=local is not None
         and local.complete
         and set(knowledge.FOLDER_STAGES) <= set(local.progress),
+        tests=local_tests(project),
     )
 
 
@@ -481,6 +519,16 @@ def _linked_project(project: ProjectFolder | None) -> str | None:
         return project.link().project_id
     except CliError:
         return None
+
+
+def _inside(path: str) -> bool:
+    parts = path.split("/")
+    return (
+        bool(path)
+        and "\\" not in path
+        and ":" not in path
+        and all(part not in ("", ".", "..") for part in parts)
+    )
 
 
 def _print_json(context: CommandContext, document: Mapping[str, object]) -> None:

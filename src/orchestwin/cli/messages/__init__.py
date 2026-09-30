@@ -17,6 +17,7 @@ from orchestwin.cli.messages import (
     mcp,
     package,
     status,
+    test,
     twins,
     watch,
 )
@@ -43,6 +44,7 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
             mcp,
             package,
             status,
+            test,
             twins,
             watch,
         )

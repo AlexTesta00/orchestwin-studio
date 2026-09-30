@@ -8,10 +8,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "approved knowledge of the project",
     },
     "mcp.option_spend": {
-        "it": "permette agli agenti gli strumenti a pagamento ask_twin e review_changes: ogni "
-        "chiamata è una spesa del modello",
-        "en": "allow the agents the paid tools ask_twin and review_changes: each call is a "
-        "spending of the model",
+        "it": "permette agli agenti gli strumenti a pagamento ask_twin, review_changes e "
+        "run_tests: ogni chiamata è una spesa del modello",
+        "en": "allow the agents the paid tools ask_twin, review_changes and run_tests: each call "
+        "is a spending of the model",
     },
     "mcp.option_config": {
         "it": "invece di avviare il server mostra la configurazione da copiare nell'editor: "
@@ -20,16 +20,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "claude-code, cursor or vscode",
     },
     "mcp.config_free": {
-        "it": "Senza --spend gli strumenti a pagamento ask_twin e review_changes rispondono con "
-        "un errore; per permetterli aggiungi --spend.",
-        "en": "Without --spend the paid tools ask_twin and review_changes answer with an error; "
-        "to allow them, add --spend.",
+        "it": "Senza --spend gli strumenti a pagamento ask_twin, review_changes e run_tests "
+        "rispondono con un errore; per permetterli aggiungi --spend.",
+        "en": "Without --spend the paid tools ask_twin, review_changes and run_tests answer with "
+        "an error; to allow them, add --spend.",
     },
     "mcp.config_spend": {
-        "it": "Con --spend gli agenti possono usare ask_twin e review_changes: ogni chiamata è "
-        "una spesa del modello.",
-        "en": "With --spend the agents can use ask_twin and review_changes: each call is a "
-        "spending of the model.",
+        "it": "Con --spend gli agenti possono usare ask_twin, review_changes e run_tests: ogni "
+        "chiamata è una spesa del modello.",
+        "en": "With --spend the agents can use ask_twin, review_changes and run_tests: each call "
+        "is a spending of the model.",
     },
     "mcp.config_claude_code_command": {
         "it": "Per aggiungere il server a Claude Code lancia questo comando dalla cartella del "
@@ -84,37 +84,49 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.instructions_free": {
         "it": "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
         "«{project}» di OrchesTwin Studio: brief, requisiti, design scelto, stato dello "
-        "sviluppo e critiche dei twin sul codice. Gli User Twin sono profili dei gruppi di "
-        "utenti del progetto simulati dal modello: le loro risposte sono ipotesi da valutare, "
-        "non opinioni di persone reali. Gli strumenti che leggono la cartella sono gratuiti; "
-        "ask_twin e review_changes spendono sul modello e ora rispondono con un errore, perché "
-        "il server è stato avviato senza --spend. Le decisioni sui commit restano al "
-        "proprietario del progetto, con `ut align`.",
+        "sviluppo, critiche dei twin sul codice ed esiti dei test di accettazione. Gli User "
+        "Twin sono profili dei gruppi di utenti del progetto simulati dal modello: le loro "
+        "risposte sono ipotesi da valutare, non opinioni di persone reali. Gli strumenti che "
+        "leggono la cartella sono gratuiti, compreso get_test_results con gli ultimi esiti dei "
+        "test; ask_twin e review_changes spendono sul modello e ora rispondono con un errore, "
+        "perché il server è stato avviato senza --spend. Lo stesso vale per run_tests, che "
+        "verifica i criteri di accettazione sull'applicazione nei browser di questo computer. "
+        "Le decisioni sui commit restano al proprietario del progetto, con `ut align`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
-        "state and the critiques of the twins on the code. User Twins are profiles of the user "
-        "groups of the project simulated by the model: their answers are hypotheses to weigh, "
-        "not opinions of real people. The tools that read the folder are free; ask_twin and "
-        "review_changes spend on the model and now answer with an error, because the server "
-        "was started without --spend. Decisions on the commits stay with the owner of the "
-        "project, through `ut align`.",
+        "state, the critiques of the twins on the code and the outcome of the acceptance tests. "
+        "User Twins are profiles of the user groups of the project simulated by the model: "
+        "their answers are hypotheses to weigh, not opinions of real people. The tools that "
+        "read the folder are free, get_test_results with the latest outcome of the tests "
+        "included; ask_twin and review_changes spend on the model and now answer with an "
+        "error, because the server was started without --spend. The same holds for run_tests, "
+        "which checks the acceptance criteria on the application in the browsers of this "
+        "computer. Decisions on the commits stay with the owner of the project, through "
+        "`ut align`.",
     },
     "mcp.instructions_spend": {
         "it": "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
         "«{project}» di OrchesTwin Studio: brief, requisiti, design scelto, stato dello "
-        "sviluppo e critiche dei twin sul codice. Gli User Twin sono profili dei gruppi di "
-        "utenti del progetto simulati dal modello: le loro risposte sono ipotesi da valutare, "
-        "non opinioni di persone reali. Gli strumenti che leggono la cartella sono gratuiti; "
-        "ask_twin e review_changes spendono sul modello a ogni chiamata e sono permessi, perché "
-        "il server è stato avviato con --spend. Le decisioni sui commit restano al "
-        "proprietario del progetto, con `ut align`.",
+        "sviluppo, critiche dei twin sul codice ed esiti dei test di accettazione. Gli User "
+        "Twin sono profili dei gruppi di utenti del progetto simulati dal modello: le loro "
+        "risposte sono ipotesi da valutare, non opinioni di persone reali. Gli strumenti che "
+        "leggono la cartella sono gratuiti, compreso get_test_results con gli ultimi esiti dei "
+        "test; ask_twin e review_changes spendono sul modello a ogni chiamata e sono permessi, "
+        "perché il server è stato avviato con --spend. È permesso anche run_tests: verifica i "
+        "criteri di accettazione sull'applicazione nei browser di questo computer, registra "
+        "l'esito nello Studio e spende sul modello per il piano dei test e per le critiche dei "
+        "twin. Le decisioni sui commit restano al proprietario del progetto, con `ut align`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
-        "state and the critiques of the twins on the code. User Twins are profiles of the user "
-        "groups of the project simulated by the model: their answers are hypotheses to weigh, "
-        "not opinions of real people. The tools that read the folder are free; ask_twin and "
-        "review_changes spend on the model at each call and are allowed, because the server "
-        "was started with --spend. Decisions on the commits stay with the owner of the "
+        "state, the critiques of the twins on the code and the outcome of the acceptance tests. "
+        "User Twins are profiles of the user groups of the project simulated by the model: "
+        "their answers are hypotheses to weigh, not opinions of real people. The tools that "
+        "read the folder are free, get_test_results with the latest outcome of the tests "
+        "included; ask_twin and review_changes spend on the model at each call and are "
+        "allowed, because the server was started with --spend. run_tests is allowed too: it "
+        "checks the acceptance criteria on the application in the browsers of this computer, "
+        "records the outcome in the Studio and spends on the model for the test plan and for "
+        "the critiques of the twins. Decisions on the commits stay with the owner of the "
         "project, through `ut align`.",
     },
     "mcp.rpc_parse_error": {
@@ -198,6 +210,27 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The argument {name} of {tool} must be the hash of a commit, 7 to 64 hexadecimal "
         "characters, or HEAD.",
     },
+    "mcp.argument_criteria": {
+        "it": "L'argomento {name} di {tool} deve essere un elenco da {minimum} a {maximum} codici "
+        "di criteri di accettazione, ciascuno di al massimo {length} caratteri, per esempio "
+        "AC-003.",
+        "en": "The argument {name} of {tool} must be a list of {minimum} to {maximum} codes of "
+        "acceptance criteria, each of at most {length} characters, for example AC-003.",
+    },
+    "mcp.argument_application": {
+        "it": "L'argomento {name} di {tool} deve essere un oggetto con kind (URL oppure STATIC) e "
+        "address (un testo da 1 a {maximum} caratteri).",
+        "en": "The argument {name} of {tool} must be an object with kind (URL or STATIC) and "
+        "address (a text of 1 to {maximum} characters).",
+    },
+    "mcp.argument_browser": {
+        "it": "L'argomento {name} di {tool} deve essere chrome, firefox oppure all.",
+        "en": "The argument {name} of {tool} must be chrome, firefox or all.",
+    },
+    "mcp.argument_flag": {
+        "it": "L'argomento {name} di {tool} deve essere true oppure false.",
+        "en": "The argument {name} of {tool} must be true or false.",
+    },
     "mcp.title_project_state": {"it": "Stato del progetto", "en": "Project state"},
     "mcp.describe_project_state": {
         "it": "Stato del progetto letto dalla cartella di conoscenza: passi approvati, versioni "
@@ -277,6 +310,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it, with the verdict of alignment with the approved design and requirements. Paid. "
         "The decision stays with the owner of the project, through `ut align`.",
     },
+    "mcp.title_get_test_results": {
+        "it": "Esiti dei test di accettazione",
+        "en": "Outcome of the acceptance tests",
+    },
+    "mcp.describe_get_test_results": {
+        "it": "Le ultime esecuzioni dei test di accettazione sull'applicazione in sviluppo, lette "
+        "dalla cartella di conoscenza: stato di ogni criterio, esito di ogni percorso in ogni "
+        "browser e critiche dei twin. Gratuito.",
+        "en": "The latest runs of the acceptance tests on the application under development, "
+        "read from the knowledge folder: status of every criterion, outcome of every path in "
+        "every browser and the critiques of the twins. Free.",
+    },
+    "mcp.title_run_tests": {
+        "it": "Verifica dei criteri di accettazione",
+        "en": "Check of the acceptance criteria",
+    },
+    "mcp.describe_run_tests": {
+        "it": "Apre l'applicazione in sviluppo nei browser di questo computer, verifica i "
+        "criteri di accettazione approvati lungo percorsi scritti dal modello, registra l'esito "
+        "nello Studio e lo fa criticare dai twin. A pagamento.",
+        "en": "Open the application under development in the browsers of this computer, check "
+        "the approved acceptance criteria along paths written by the model, record the outcome "
+        "in the Studio and have the twins criticize it. Paid.",
+    },
+    "mcp.describe_run_tests_estimate": {
+        "it": "Circa {plan} USD per un nuovo piano dei test e {review} USD per twin per le "
+        "critiche.",
+        "en": "About {plan} USD for a new test plan and {review} USD per twin for the critiques.",
+    },
     "mcp.describe_disabled": {
         "it": "Ora non disponibile: il server è stato avviato senza --spend.",
         "en": "Not available now: the server was started without --spend.",
@@ -308,6 +370,37 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.parameter_review_commit": {
         "it": "Hash del commit da rivedere, almeno 7 caratteri; senza, HEAD.",
         "en": "Hash of the commit to review, at least 7 characters; without it, HEAD.",
+    },
+    "mcp.parameter_test_limit": {
+        "it": "Quante esecuzioni dei test dare, dalla più recente: da 1 a 20, di solito 1.",
+        "en": "How many runs of the tests to give, newest first: 1 to 20, usually 1.",
+    },
+    "mcp.parameter_application": {
+        "it": "L'applicazione da verificare: kind URL con l'indirizzo, oppure kind STATIC con la "
+        "cartella dell'applicazione costruita, che contiene index.html; senza, quella "
+        "dell'esecuzione precedente.",
+        "en": "The application to check: kind URL with the address, or kind STATIC with the "
+        "folder of the built application, which holds index.html; without it, the one of the "
+        "previous run.",
+    },
+    "mcp.parameter_browser": {
+        "it": "Il browser da usare: chrome, firefox oppure all per tutti quelli trovati; di "
+        "solito all.",
+        "en": "The browser to use: chrome, firefox, or all for every one found; usually all.",
+    },
+    "mcp.parameter_criteria": {
+        "it": "Codici dei criteri di accettazione da verificare, per esempio AC-003; senza, tutti.",
+        "en": "Codes of the acceptance criteria to check, for example AC-003; without them, all.",
+    },
+    "mcp.parameter_review": {
+        "it": "Se i twin devono criticare l'esito dei test, a pagamento; di solito sì.",
+        "en": "Whether the twins criticize the outcome of the tests, paid; usually yes.",
+    },
+    "mcp.parameter_new_plan": {
+        "it": "Se chiedere allo Studio un nuovo piano dei test, a pagamento, invece di riusare "
+        "quello salvato; di solito no.",
+        "en": "Whether to ask the Studio for a new test plan, paid, instead of using the saved "
+        "one again; usually no.",
     },
     "mcp.next_no_folder": {
         "it": "Qui non c'è ancora la cartella di conoscenza: continua con `ut init` oppure, se "
@@ -534,5 +627,144 @@ MESSAGES: dict[str, dict[str, str]] = {
         "review_changes, ma è una nuova spesa.",
         "en": "The review was lost, perhaps because the Studio restarted. You can call "
         "review_changes again, but it is a new spending.",
+    },
+    "mcp.errors.TEST_DESIGN_REQUIRED": {
+        "it": "I test di accettazione richiedono i requisiti e il design approvati nella "
+        "cartella di conoscenza: approvali con `ut init` e `ut design`, poi scarica di nuovo la "
+        "cartella con `ut package pull`.",
+        "en": "The acceptance tests need the approved requirements and design in the knowledge "
+        "folder: approve them with `ut init` and `ut design`, then download the folder again "
+        "with `ut package pull`.",
+    },
+    "mcp.errors.TEST_APPLICATION_REQUIRED": {
+        "it": "Non so ancora quale applicazione verificare: richiama run_tests con application, "
+        "kind URL e l'indirizzo, oppure kind STATIC e la cartella dell'applicazione costruita; "
+        "le esecuzioni successive la ricordano.",
+        "en": "No application to check is known yet: call run_tests again with application, "
+        "kind URL and the address, or kind STATIC and the folder of the built application; the "
+        "next runs remember it.",
+    },
+    "mcp.errors.TEST_STATIC_INVALID": {
+        "it": "La cartella dell'applicazione non esiste oppure non contiene index.html: indica "
+        "la cartella con l'applicazione costruita.",
+        "en": "The folder of the application does not exist or holds no index.html: give the "
+        "folder with the built application.",
+    },
+    "mcp.errors.TEST_NO_BROWSER": {
+        "it": "Su questo computer non trovo nessun browser: installa Google Chrome, Chromium, "
+        "Microsoft Edge oppure Mozilla Firefox, oppure indica il programma con "
+        "ORCHESTWIN_CHROME o ORCHESTWIN_FIREFOX.",
+        "en": "No browser was found on this computer: install Google Chrome, Chromium, "
+        "Microsoft Edge or Mozilla Firefox, or name the program with ORCHESTWIN_CHROME or "
+        "ORCHESTWIN_FIREFOX.",
+    },
+    "mcp.errors.TEST_MODEL_NOT_CONFIGURED": {
+        "it": "Questo Studio non ha un modello collegato, quindi non può scrivere un nuovo piano "
+        "dei test; un piano già salvato su questo computer si esegue ancora con new_plan "
+        "false. Chi gestisce lo Studio può collegare un modello.",
+        "en": "This Studio has no model connected, so it cannot write a new test plan; a plan "
+        "already saved on this computer still runs with new_plan false. Whoever runs the "
+        "Studio can connect a model.",
+    },
+    "mcp.errors.TEST_CRITERION_UNKNOWN": {
+        "it": "Alcuni codici di criteria non sono criteri del piano dei test: usa i codici che "
+        "elenca get_requirements, per esempio AC-001.",
+        "en": "Some codes in criteria are not criteria of the test plan: use the codes that "
+        "get_requirements lists, for example AC-001.",
+    },
+    "mcp.errors.TEST_PLAN_NOT_FOUND": {
+        "it": "Il piano dei test salvato su questo computer non è più nello Studio: richiama "
+        "run_tests con new_plan true, che è una nuova spesa.",
+        "en": "The test plan saved on this computer is no longer in the Studio: call run_tests "
+        "again with new_plan true, which is a new spending.",
+    },
+    "mcp.errors.ACCEPTANCE_CRITERION_UNKNOWN": {
+        "it": "Lo Studio non conosce alcuni dei criteri indicati: scarica di nuovo la cartella "
+        "con `ut package pull` e usa i codici che elenca get_requirements.",
+        "en": "The Studio does not know some of the criteria given: download the folder again "
+        "with `ut package pull` and use the codes that get_requirements lists.",
+    },
+    "mcp.errors.BROWSER_NOT_FOUND": {
+        "it": "Il browser indicato non è installato su questo computer: scegline un altro con "
+        "browser, oppure all.",
+        "en": "The browser given is not installed on this computer: choose another with "
+        "browser, or all.",
+    },
+    "mcp.errors.BROWSER_NOT_STARTED": {
+        "it": "Il browser {program} non è partito: controlla che si apra su questo computer, "
+        "oppure scegline un altro con browser.",
+        "en": "The browser {program} did not start: check that it opens on this computer, or "
+        "choose another with browser.",
+    },
+    "mcp.errors.BROWSER_PROTOCOL_ERROR": {
+        "it": "La comunicazione con il browser si è interrotta: riprova; se succede ancora, "
+        "scegli l'altro browser con browser.",
+        "en": "The conversation with the browser broke off: try again; if it happens again, "
+        "choose the other browser with browser.",
+    },
+    "mcp.errors.PAGE_NOT_LOADED": {
+        "it": "L'applicazione non si è aperta nel browser: controlla che l'indirizzo risponda, "
+        "oppure che la cartella contenga index.html, poi riprova.",
+        "en": "The application did not open in the browser: check that the address answers, or "
+        "that the folder holds index.html, then try again.",
+    },
+    "mcp.errors.ACTION_FAILED": {
+        "it": "Il browser non ha potuto eseguire un passo dei test: riprova, oppure chiedi un "
+        "nuovo piano con new_plan true, che è una nuova spesa.",
+        "en": "The browser could not carry out a step of the tests: try again, or ask for a new "
+        "plan with new_plan true, which is a new spending.",
+    },
+    "mcp.errors.run_tests.REQUIREMENTS_APPROVAL_REQUIRED": {
+        "it": "Per verificare l'applicazione servono i requisiti approvati nello Studio: "
+        "approvali con `ut init`.",
+        "en": "Checking the application needs approved requirements in the Studio: approve "
+        "them with `ut init`.",
+    },
+    "mcp.errors.run_tests.DESIGN_APPROVAL_REQUIRED": {
+        "it": "Per verificare l'applicazione serve il design approvato nello Studio: approvalo "
+        "con `ut design`.",
+        "en": "Checking the application needs an approved design in the Studio: approve it "
+        "with `ut design`.",
+    },
+    "mcp.errors.run_tests.USER_MODELING_APPROVAL_REQUIRED": {
+        "it": "I twin possono criticare i test solo quando sono approvati: confermali con "
+        "`ut init`, oppure richiama run_tests con review false.",
+        "en": "The twins can criticize the tests only once they are approved: confirm them "
+        "with `ut init`, or call run_tests again with review false.",
+    },
+    "mcp.errors.run_tests.INVALID_PROVIDER_OUTPUT": {
+        "it": "Il modello ha risposto in un modo che lo Studio non può usare, quindi il piano dei "
+        "test o le critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
+        "en": "The model answered in a way the Studio cannot use, so the test plan or the "
+        "critiques were not saved. You can try again, but it is a new spending.",
+    },
+    "mcp.errors.run_tests.RESPONSE_SCHEMA_ERROR": {
+        "it": "Il modello ha risposto due volte in una forma sbagliata, quindi il piano dei test "
+        "o le critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
+        "en": "The model answered twice in a wrong form, so the test plan or the critiques were "
+        "not saved. You can try again, but it is a new spending.",
+    },
+    "mcp.errors.run_tests.INCOMPLETE_OUTPUT": {
+        "it": "Il modello ha interrotto la risposta due volte, quindi il piano dei test o le "
+        "critiche non sono stati salvati. Puoi riprovare, ma è una nuova spesa.",
+        "en": "The model cut its answer short twice, so the test plan or the critiques were not "
+        "saved. You can try again, but it is a new spending.",
+    },
+    "mcp.errors.run_tests.CONTEXT_BUDGET_EXCEEDED": {
+        "it": "La pagina insieme al design e ai requisiti è troppo grande per il modello: "
+        "verifica meno criteri alla volta con criteria.",
+        "en": "The page together with the design and the requirements is too large for the "
+        "model: check fewer criteria at a time with criteria.",
+    },
+    "mcp.errors.run_tests.GENERATION_STILL_RUNNING": {
+        "it": "Il modello sta ancora lavorando nello Studio: richiama run_tests fra qualche "
+        "minuto.",
+        "en": "The model is still working in the Studio: call run_tests again in a few minutes.",
+    },
+    "mcp.errors.run_tests.GENERATION_LOST": {
+        "it": "La generazione si è persa, forse perché lo Studio è ripartito. Puoi richiamare "
+        "run_tests, ma è una nuova spesa.",
+        "en": "The generation was lost, perhaps because the Studio restarted. You can call "
+        "run_tests again, but it is a new spending.",
     },
 }
