@@ -78,6 +78,14 @@ const messages = {
         what: "the twins' review of a commit",
         of: "of the twins' review of a commit",
       },
+      TEST_PLAN: {
+        what: "the paths that verify the acceptance criteria",
+        of: "of the paths that verify the acceptance criteria",
+      },
+      TEST_REVIEW: {
+        what: "the twins' review of the test results",
+        of: "of the twins' review of the test results",
+      },
     } satisfies Record<GenerationOperation, Subject>,
   },
   it: {
@@ -120,6 +128,14 @@ const messages = {
       CODE_CHANGE_REVIEW: {
         what: "la revisione dei twin su un commit",
         of: "della revisione dei twin su un commit",
+      },
+      TEST_PLAN: {
+        what: "i percorsi di verifica dei criteri",
+        of: "dei percorsi di verifica dei criteri",
+      },
+      TEST_REVIEW: {
+        what: "la revisione dei twin sui risultati dei test",
+        of: "della revisione dei twin sui risultati dei test",
       },
     } satisfies Record<GenerationOperation, Subject>,
   },

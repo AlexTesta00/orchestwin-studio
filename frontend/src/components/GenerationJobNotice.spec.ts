@@ -88,6 +88,50 @@ describe("GenerationJobNotice", () => {
     italian.unmount();
   });
 
+  it.each([
+    [
+      "TEST_PLAN",
+      "en",
+      "The Studio is generating the paths that verify the acceptance criteria.",
+      "The generation of the paths that verify the acceptance criteria did not succeed.",
+    ],
+    [
+      "TEST_PLAN",
+      "it",
+      "Lo Studio sta generando i percorsi di verifica dei criteri.",
+      "La generazione dei percorsi di verifica dei criteri non è riuscita.",
+    ],
+    [
+      "TEST_REVIEW",
+      "en",
+      "The Studio is generating the twins' review of the test results.",
+      "The generation of the twins' review of the test results did not succeed.",
+    ],
+    [
+      "TEST_REVIEW",
+      "it",
+      "Lo Studio sta generando la revisione dei twin sui risultati dei test.",
+      "La generazione della revisione dei twin sui risultati dei test non è riuscita.",
+    ],
+  ] as const)("names the %s started by ut test in %s", (operation, locale, running, failed) => {
+    const started = mount(GenerationJobNotice, { props: { job: job({ operation }), locale } });
+    const stopped = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation, code: "PROVIDER_UNAVAILABLE", lost: false },
+        locale,
+      },
+    });
+
+    expect(started.get("[data-testid='generation-job-notice']").attributes("data-operation")).toBe(
+      operation,
+    );
+    expect(started.get("[role='status']").text()).toBe(running);
+    expect(stopped.get("[data-testid='generation-job-failure']").text()).toContain(failed);
+    started.unmount();
+    stopped.unmount();
+  });
+
   it("says in plain words that an interrupted generation can be started again", async () => {
     const wrapper = mount(GenerationJobNotice, {
       props: {

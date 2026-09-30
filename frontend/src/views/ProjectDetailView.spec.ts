@@ -1876,6 +1876,15 @@ const DEVELOPMENT_STATE = {
   review_available: false,
 };
 
+const ACCEPTANCE_TESTS = {
+  project_id: OPEN,
+  reference: { requirements: null, design: null },
+  plan_available: false,
+  plans: 0,
+  runs: 0,
+  latest_run: null,
+};
+
 type StoreGroup = "clarification" | "team" | "twins" | "requirements" | "design";
 
 const ORDERS: [string, StoreGroup[]][] = [
@@ -1974,6 +1983,7 @@ function fakeStudio(served: Served) {
       [`${base}/knowledge-packages`]: () => ok({ project_id: OPEN, versions: [] }),
       [`${base}/alignment`]: () => ok(DEVELOPMENT_STATE),
       [`${base}/code-changes`]: () => ok({ items: [] }),
+      [`${base}/acceptance-tests`]: () => ok(ACCEPTANCE_TESTS),
       [`${base}/design/mockups/capabilities`]: () => ok(CAPABILITIES),
       [`${base}/design/mockups`]: () =>
         ok(served.latest[query.get("alternative_id") ?? ""] ?? null),
@@ -2274,6 +2284,7 @@ const OPENING_READINGS: Record<string, number> = {
   "…/knowledge-packages": 1,
   "…/alignment": 1,
   "…/code-changes": 1,
+  "…/acceptance-tests": 1,
   [`…/design/mockups/document?alternative_id=${DESIGN_ALTERNATIVE_ID}&source=applied`]: 1,
 };
 
