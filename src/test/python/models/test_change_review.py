@@ -20,6 +20,10 @@ from orchestwin.models.change_review import (
     CRITIQUE_OUTPUT_TOKENS,
     CRITIQUE_PURPOSE,
     DIFF_CUT_LINE,
+    EARLIER_PREVIOUS_COMMIT,
+    EARLIER_SOURCES,
+    EARLIER_THIS_COMMIT,
+    LEARNED_INSTRUCTION,
     MAX_SCREEN_ELEMENTS,
     MIN_SUMMARY_LENGTH,
     alignment_context,
@@ -32,6 +36,7 @@ from orchestwin.models.change_review import (
     critique_context,
     critique_output_type,
     judge_alignment,
+    learned_instruction,
     review_material,
 )
 from orchestwin.projects.briefs import create_project_brief
@@ -189,6 +194,7 @@ def test_the_critique_context_has_the_keys_and_the_content_of_the_contract():
         "design",
         "change",
         "earlier_findings",
+        "earlier_source",
     ]
     reviewer = twin()
     assert (context["project_id"], context["purpose"], context["locale"]) == (
@@ -253,7 +259,28 @@ def test_the_critique_context_has_the_keys_and_the_content_of_the_contract():
         "diff": code_change().diff,
     }
     assert context["earlier_findings"] == [f"Problema {index}." for index in range(6)]
+    assert context["earlier_source"] == EARLIER_PREVIOUS_COMMIT
     assert context_codes(context) == (("REQ-001",), ("SCR-001", "SCR-002"))
+
+
+def test_the_earlier_source_says_where_the_earlier_findings_come_from():
+    assert (EARLIER_PREVIOUS_COMMIT, EARLIER_THIS_COMMIT) == ("PREVIOUS_COMMIT", "THIS_COMMIT")
+    assert EARLIER_SOURCES == ("PREVIOUS_COMMIT", "THIS_COMMIT")
+    same = twin_context(earlier_findings=["Manca la data."], earlier_source=EARLIER_THIS_COMMIT)
+    assert (same["earlier_findings"], same["earlier_source"]) == (["Manca la data."], "THIS_COMMIT")
+    previous = twin_context(
+        earlier_findings=("Manca la data.",), earlier_source=EARLIER_PREVIOUS_COMMIT
+    )
+    assert previous["earlier_source"] == "PREVIOUS_COMMIT"
+    for source in EARLIER_SOURCES:
+        empty = twin_context(earlier_findings=(), earlier_source=source)
+        assert (empty["earlier_findings"], empty["earlier_source"]) == ([], None)
+    assert list(twin_context())[-2:] == ["earlier_findings", "earlier_source"]
+    assert twin_context()["earlier_source"] is None
+    with pytest.raises(ValueError):
+        twin_context(earlier_findings=["Manca la data."], earlier_source="OTHER_COMMIT")
+    with pytest.raises(ValueError):
+        twin_context(earlier_source=None)
 
 
 def test_the_contexts_carry_the_bounded_diff_and_a_missing_brief():
@@ -700,3 +727,64 @@ def test_the_instructions_name_the_fields_in_the_order_the_model_writes_them():
     assert positions == sorted(positions)
     for retired in ("verdict is", "summary is", "status is", "code_tasks", "design_request is"):
         assert retired not in CRITIQUE_INSTRUCTION + ALIGNMENT_INSTRUCTION
+
+
+def test_the_critique_instruction_says_where_the_earlier_findings_come_from():
+    for phrase in (
+        "earlier_findings lists problems that you reported earlier, and earlier_source says "
+        "where: PREVIOUS_COMMIT, on a previous commit that is not aligned yet, or THIS_COMMIT, "
+        "on this same commit when it was reviewed against an earlier version of the design or "
+        "of the requirements.",
+        "For PREVIOUS_COMMIT mention them only when this change solves them or makes them worse;",
+        "for THIS_COMMIT judge them again against the design and the requirements as they are "
+        "now and keep only the ones that still hold.",
+        "in a way that you would notice. earlier_findings lists problems",
+        "keep only the ones that still hold. Write every text in the language of locale",
+    ):
+        assert phrase in CRITIQUE_INSTRUCTION
+    assert "reported on an earlier commit that is not aligned yet" not in CRITIQUE_INSTRUCTION
+    assert "earlier_source" not in ALIGNMENT_INSTRUCTION
+    assert " ".join(CRITIQUE_INSTRUCTION.split()) == CRITIQUE_INSTRUCTION
+
+
+LEARNED = [
+    {
+        "code": "OBS-001",
+        "statement": "Il gruppo registra gli ospiti mentre parla al telefono.",
+        "source": "TWIN_CRITIQUE",
+    },
+    {"code": "OBS-004", "statement": "Il gruppo lavora anche di notte.", "source": "OWNER"},
+]
+
+
+def test_a_twin_without_learned_observations_gets_the_critique_of_sprint_27_byte_for_byte():
+    without = twin_context(earlier_findings=["Manca la data."])
+    context = twin_context(earlier_findings=["Manca la data."], learned=())
+    assert context == without
+    assert canonical_json(context) == canonical_json(without)
+    assert json.dumps(context).encode("utf-8") == json.dumps(without).encode("utf-8")
+    assert "learned" not in context["user_twin"]
+    generator = FakeGenerator(critique_output())
+    asyncio.run(critique_change(generator, context))
+    [call] = generator.calls
+    assert call["instruction"] is CRITIQUE_INSTRUCTION
+    assert call["context"] is context
+
+
+def test_the_learned_observations_join_the_twin_and_end_the_critique_instruction():
+    context = twin_context(learned=LEARNED)
+    assert list(context) == list(twin_context())
+    assert context["user_twin"] == {**twin_context()["user_twin"], "learned": LEARNED}
+    assert list(context["user_twin"])[-1] == "learned"
+    assert {key: value for key, value in context.items() if key != "user_twin"} == {
+        key: value for key, value in twin_context().items() if key != "user_twin"
+    }
+    generator = FakeGenerator(critique_output(), verdict_output())
+    asyncio.run(critique_change(generator, context))
+    asyncio.run(judge_alignment(generator, verdict_context()))
+    critique_call, verdict_call = generator.calls
+    assert critique_call["instruction"] == f"{CRITIQUE_INSTRUCTION} {LEARNED_INSTRUCTION}"
+    assert verdict_call["instruction"] is ALIGNMENT_INSTRUCTION
+    assert "user_twin" not in verdict_call["context"]
+    assert learned_instruction(ALIGNMENT_INSTRUCTION, verdict_context()) is ALIGNMENT_INSTRUCTION
+    assert LEARNED_INSTRUCTION.startswith("user_twin.learned lists what your user group learned")

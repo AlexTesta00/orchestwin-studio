@@ -369,6 +369,32 @@ def test_every_job_names_its_operation_and_a_request_job_needs_one():
     assert count == 2
 
 
+def test_a_twin_update_is_a_request_operation_of_its_own():
+    assert GenerationOperation("TWIN_UPDATE") is GenerationOperation.TWIN_UPDATE
+    assert list(GenerationOperation)[-1] is GenerationOperation.TWIN_UPDATE
+
+    async def scenario():
+        registry = GenerationJobRegistry()
+        job = registry.start(
+            OWNER,
+            PROJECT,
+            GenerationJobKind.REQUEST,
+            "TWIN_UPDATE:twin_id=twin:hash",
+            finished(GenerationJobResponse(201, {"status": "PROPOSED"})),
+            operation=GenerationOperation.TWIN_UPDATE,
+        )
+        await registry.wait(job.job_id)
+        return job.to_payload()
+
+    payload = run(scenario())
+    assert (payload["kind"], payload["operation"], payload["status"]) == (
+        "REQUEST",
+        "TWIN_UPDATE",
+        "SUCCEEDED",
+    )
+    assert payload["response"] == {"status_code": 201, "body": {"status": "PROPOSED"}}
+
+
 def test_the_jobs_of_a_project_are_listed_oldest_first_and_filtered_by_status():
     clock = Clock()
 

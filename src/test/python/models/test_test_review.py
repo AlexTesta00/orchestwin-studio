@@ -7,6 +7,8 @@ import re
 import pytest
 from pydantic import ValidationError
 
+from orchestwin.knowledge.state import MAX_FINDINGS
+from orchestwin.models.change_review import LEARNED_INSTRUCTION
 from orchestwin.models.test_review import (
     DETAIL_CUT,
     MAX_RUN_MATERIAL,
@@ -190,12 +192,14 @@ def test_the_critique_context_has_the_keys_and_the_content_of_the_contract():
         "acceptance_criteria",
         "design",
         "run",
+        "earlier_findings",
     ]
     assert (context["project_id"], context["purpose"], context["locale"]) == (
         str(PROJECT),
         REVIEW_PURPOSE,
         LOCALE,
     )
+    assert context["earlier_findings"] == []
     reviewer = twin()
     assert context["user_twin"] == {
         "twin_id": str(reviewer.twin_id),
@@ -215,6 +219,16 @@ def test_the_critique_context_has_the_keys_and_the_content_of_the_contract():
         ("REQ-001",),
         ("SCR-001", "SCR-002"),
     )
+
+
+def test_the_earlier_findings_of_the_twin_follow_the_run_and_are_bounded():
+    findings = [f"Problema {index} della verifica." for index in range(MAX_FINDINGS + 2)]
+    context = review_context(earlier_findings=findings)
+    assert list(context)[-2:] == ["run", "earlier_findings"]
+    assert context["earlier_findings"] == findings[:MAX_FINDINGS]
+    assert review_context(earlier_findings=("Manca la valuta.",))["earlier_findings"] == [
+        "Manca la valuta."
+    ]
 
 
 def test_the_run_material_joins_every_step_result_with_what_the_path_planned():
@@ -592,3 +606,55 @@ def test_the_instruction_names_the_fields_in_the_order_the_model_writes_them():
     assert positions == sorted(positions)
     for retired in ("verdict is", "summary is", "status is"):
         assert retired not in REVIEW_INSTRUCTION
+
+
+def test_the_instruction_says_what_the_earlier_findings_are():
+    sentence = (
+        "earlier_findings lists the problems that you reported on the previous run of these "
+        "tests: mention them only when the new results solve them or make them worse, and do "
+        "not repeat a finding that the new results no longer support."
+    )
+    assert sentence in REVIEW_INSTRUCTION
+    assert f"a criterion not covered that you need to see verified. {sentence} Write every " in (
+        REVIEW_INSTRUCTION
+    )
+    assert " ".join(REVIEW_INSTRUCTION.split()) == REVIEW_INSTRUCTION
+
+
+LEARNED = [
+    {
+        "code": "OBS-002",
+        "statement": "Il gruppo controlla sempre la valuta prima di chiudere il conto.",
+        "source": "TWIN_CRITIQUE",
+    }
+]
+
+
+def test_a_twin_without_learned_observations_gets_the_test_critique_of_sprint_27_byte_for_byte():
+    without = review_context(earlier_findings=["La valuta manca."])
+    context = review_context(earlier_findings=["La valuta manca."], learned=[])
+    assert context == without
+    assert canonical_json(context) == canonical_json(without)
+    assert json.dumps(context).encode("utf-8") == json.dumps(without).encode("utf-8")
+    assert "learned" not in context["user_twin"]
+    generator = FakeGenerator(critique_output())
+    asyncio.run(critique_run(generator, context))
+    [call] = generator.calls
+    assert call["instruction"] is REVIEW_INSTRUCTION
+    assert call["context"] is context
+
+
+def test_the_learned_observations_join_the_twin_and_end_the_test_critique_instruction():
+    context = review_context(learned=LEARNED)
+    plain = review_context()
+    assert list(context) == list(plain)
+    assert context["user_twin"] == {**plain["user_twin"], "learned": LEARNED}
+    assert list(context["user_twin"])[-1] == "learned"
+    assert {key: value for key, value in context.items() if key != "user_twin"} == {
+        key: value for key, value in plain.items() if key != "user_twin"
+    }
+    generator = FakeGenerator(critique_output())
+    asyncio.run(critique_run(generator, context))
+    [call] = generator.calls
+    assert call["instruction"] == f"{REVIEW_INSTRUCTION} {LEARNED_INSTRUCTION}"
+    assert call["context"]["user_twin"]["learned"] == LEARNED

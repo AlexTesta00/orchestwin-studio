@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import ClassVar
 from uuid import UUID
@@ -26,10 +26,17 @@ from orchestwin.api.generation_requests import PREFERENCE_APPLIED, RESPOND_ASYNC
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.artifacts.design_gate import design_artifact_reference
 from orchestwin.config import ApplicationSettings
+from orchestwin.knowledge.state import MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
+from orchestwin.models.change_review import LEARNED_INSTRUCTION
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.test_planning import NOT_PLANNED_REASON, PLAN_PURPOSE, PLAN_TASK
-from orchestwin.models.test_review import REVIEW_PURPOSE, REVIEW_TASK, run_material
+from orchestwin.models.test_review import (
+    REVIEW_INSTRUCTION,
+    REVIEW_PURPOSE,
+    REVIEW_TASK,
+    run_material,
+)
 from orchestwin.projects.acceptance_tests import TestPlanUnknown, path_number
 from orchestwin.projects.persistence.acceptance_tests import AcceptanceTestWriteStatus
 from orchestwin.projects.requirements_gate import requirements_artifact_reference
@@ -40,9 +47,11 @@ from src.test.python.api.test_code_changes_api import (
     FakeGenerator,
     FakeSession,
     MemoryEvidence,
+    MemoryLearning,
     account,
     approved,
     first_twin,
+    learned_by,
     nothing,
     second_twin,
 )
@@ -53,6 +62,8 @@ from src.test.python.projects.test_acceptance_tests import (
     REPLAN_ID,
     RUN_ID,
     page,
+    sample_critique,
+    sample_finding,
     sample_path,
     sample_plan,
     sample_review,
@@ -302,6 +313,13 @@ class MemoryTests:
             (item for item in await self.runs(project_id, limit=None) if item.id == run_id), None
         )
 
+    async def latest_reviewed_run(self, project_id, *, before=None):
+        runs = list(await self.runs(project_id, limit=None))
+        if before is not None:
+            place = next(index for index, item in enumerate(runs) if item.id == before.id)
+            runs = runs[place + 1 :]
+        return next((item for item in runs if item.review is not None), None)
+
     async def reviews(self, run_id):
         return tuple(reversed([item for item in self.store.reviews if item.run_id == run_id]))
 
@@ -352,9 +370,12 @@ class Studio:
         design=True,
         modeling=True,
         twins=None,
+        learned=None,
     ):
         MemoryTests.store = MemoryStore()
         monkeypatch.setattr(acceptance_api, "SqlAlchemyAcceptanceTestRepository", MemoryTests)
+        monkeypatch.setattr(MemoryLearning, "learned", dict(learned or {}))
+        monkeypatch.setattr(acceptance_api, "SqlAlchemyTwinLearningRepository", MemoryLearning)
         self.generator = FakeGenerator(*outcomes) if model else None
         self.evidence = (MemoryEvidence() if evidence is None else evidence) if model else None
         self.requirements = requirements_with_criteria()
@@ -815,6 +836,120 @@ def test_the_texts_read_from_the_page_are_collapsed_and_cut_before_the_model_rea
     assert len(field["value"]) == 1000
     assert choice["options"][0] == "dieci"
     assert len(choice["options"][1]) == 200
+
+
+def page_document(**values):
+    document = {key: value for key, value in page().to_snapshot().items() if key != "hidden_text"}
+    document.update(values)
+    return document
+
+
+def earlier_item(snapshot):
+    return {
+        **sample_path().to_snapshot(),
+        "blocked_step": 3,
+        "detail": "target not found: button: Calcola",
+        "snapshot": snapshot,
+    }
+
+
+def plan_key(body):
+    return request_key(
+        GenerationOperation.TEST_PLAN,
+        {"project_id": PROJECT},
+        TestPlanRequest.model_validate(body),
+    )
+
+
+def test_the_hidden_text_of_the_page_reaches_the_model_collapsed_and_cut(monkeypatch):
+    body = plan_body(
+        snapshot=page_document(hidden_text="  Sezione \n nascosta  " + "x" * 5000),
+        earlier=[earlier_item(page_document(hidden_text=" Totale \t da   pagare "))],
+    )
+    studio = Studio(monkeypatch, plan_answer())
+    with studio.client() as client:
+        answer = client.post(PLANS, json=body)
+    assert answer.status_code == 201, answer.text
+    context = studio.calls[0]["context"]
+    seen = context["application"]["snapshot"]
+    assert list(seen) == ["url", "title", "text", "hidden_text", "elements"]
+    assert MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH == 3000
+    assert len(seen["hidden_text"]) == MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
+    assert seen["hidden_text"] == "Sezione nascosta " + "x" * 2982 + "…"
+    assert seen["text"] == page().text
+    assert context["earlier"][0]["snapshot"]["hidden_text"] == "Totale da pagare"
+    [stored] = MemoryTests.store.plans
+    assert stored.snapshot_summary == page().summary()
+    assert "Sezione nascosta" not in answer.text
+
+
+def test_a_snapshot_without_the_hidden_text_reaches_the_model_with_an_empty_one(monkeypatch):
+    body = plan_body(snapshot=page_document(), earlier=[earlier_item(page_document())])
+    assert "hidden_text" not in body["snapshot"]
+    studio = Studio(monkeypatch, plan_answer())
+    with studio.client() as client:
+        answer = client.post(PLANS, json=body)
+    assert answer.status_code == 201, answer.text
+    context = studio.calls[0]["context"]
+    assert context["application"]["snapshot"] == page().to_snapshot()
+    assert context["application"]["snapshot"]["hidden_text"] == ""
+    assert context["earlier"][0]["snapshot"]["hidden_text"] == ""
+
+
+@pytest.mark.parametrize(
+    ("values", "kind"),
+    [
+        ({"hidden_text": None}, "string_type"),
+        ({"hidden_text": 42}, "string_type"),
+        ({"hidden_text": "x" * 100_001}, "string_too_long"),
+    ],
+)
+@pytest.mark.parametrize("place", ["snapshot", "earlier"])
+def test_a_hidden_text_that_is_not_a_page_text_is_refused(monkeypatch, values, kind, place):
+    snapshot = page_document(**values)
+    if place == "earlier":
+        body = plan_body(earlier=[earlier_item(snapshot)])
+        location = ["body", "earlier", 0, "snapshot", "hidden_text"]
+    else:
+        body = plan_body(snapshot=snapshot)
+        location = ["body", "snapshot", "hidden_text"]
+    studio = Studio(monkeypatch, plan_answer())
+    with studio.client() as client:
+        refused = client.post(PLANS, json=body)
+    assert refused.status_code == 422
+    assert refused.json() == {
+        "detail": "invalid_request",
+        "errors": [{"loc": location, "type": kind}],
+    }
+    assert studio.calls == []
+    assert MemoryTests.store.plans == []
+
+
+def test_the_job_key_of_a_plan_holds_the_hidden_text_also_when_it_is_not_sent(monkeypatch):
+    bare = plan_body(snapshot=page_document(), earlier=[earlier_item(page_document())])
+    empty = plan_body(
+        snapshot=page_document(hidden_text=""),
+        earlier=[earlier_item(page_document(hidden_text=""))],
+    )
+    hidden = plan_body(
+        snapshot=page_document(hidden_text="Sezione nascosta"),
+        earlier=[earlier_item(page_document())],
+    )
+    hidden_earlier = plan_body(
+        snapshot=page_document(),
+        earlier=[earlier_item(page_document(hidden_text="Sezione nascosta"))],
+    )
+    studio = Studio(monkeypatch, plan_answer())
+    with studio.client() as client:
+        job = job_of(studio, client, client.post(PLANS, json=bare, headers=ASYNC))
+        stored_job = studio.app.state.generation_jobs.get(OWNER, PROJECT, UUID(job["job_id"]))
+    assert job["status"] == "SUCCEEDED"
+    dumped = TestPlanRequest.model_validate(bare).model_dump(mode="json")
+    assert dumped["snapshot"]["hidden_text"] == ""
+    assert dumped["earlier"][0]["snapshot"]["hidden_text"] == ""
+    assert stored_job.key == plan_key(bare) == plan_key(empty)
+    assert stored_job.key.startswith("TEST_PLAN:")
+    assert len({plan_key(bare), plan_key(hidden), plan_key(hidden_earlier)}) == 3
 
 
 def element_body(**values):
@@ -1365,14 +1500,29 @@ def test_the_overview_answers_the_reference_the_counts_and_the_latest_run(monkey
         "plans": 0,
         "runs": 0,
         "latest_run": None,
+        "latest_run_stale": False,
+        "latest_review": None,
     }
+    assert list(empty) == [
+        "project_id",
+        "reference",
+        "plan_available",
+        "plans",
+        "runs",
+        "latest_run",
+        "latest_run_stale",
+        "latest_review",
+    ]
     assert (filled["plans"], filled["runs"]) == (1, 1)
     assert filled["latest_run"] == run.to_snapshot()
+    assert filled["latest_run_stale"] is True
+    assert filled["latest_review"] is None
     bare = Studio(monkeypatch, model=False, requirements=False, design=False)
     with bare.client() as client:
         partial = client.get(OVERVIEW).json()
     assert partial["reference"] == {"requirements": None, "design": None}
     assert partial["plan_available"] is False
+    assert (partial["latest_run"], partial["latest_run_stale"]) == (None, False)
 
 
 ROUTES = [
@@ -1426,3 +1576,156 @@ def test_a_database_less_runtime_answers_database_unavailable(monkeypatch):
         asyncio.run(studio.application().runs(owner_user_id=OWNER, project_id=PROJECT))
     assert failure.value.status_code == 503
     assert failure.value.detail == {"code": "DATABASE_UNAVAILABLE"}
+
+
+OLDER_RUN = UUID("00000000-0000-4000-8000-000000000c0a")
+MIDDLE_RUN = UUID("00000000-0000-4000-8000-000000000c0b")
+BUTTON_FINDING = "Il pulsante Calcola non risponde al tocco."
+
+
+@pytest.mark.parametrize(
+    ("reference", "setting", "stale"),
+    [
+        ({"requirements_version_number": 1, "design_version_number": 1}, {}, False),
+        ({"requirements_version_number": 2, "design_version_number": 1}, {}, True),
+        ({"requirements_version_number": 1, "design_version_number": 2}, {}, True),
+        (
+            {
+                "requirements_version_number": 1,
+                "design_version_number": 1,
+                "alternative_code": "DES-002",
+            },
+            {},
+            True,
+        ),
+        ({"requirements_version_number": 2}, {"design": False}, False),
+        ({"design_version_number": 2}, {"requirements": False}, False),
+    ],
+)
+def test_the_overview_says_whether_the_latest_run_is_stale(monkeypatch, reference, setting, stale):
+    studio = Studio(monkeypatch, **setting)
+    plan = stored_plan(sample_plan(**{"alternative_code": "DES-001", **reference}))
+    MemoryTests.store.runs.append(sample_run((plan,)))
+    with studio.client() as client:
+        overview = client.get(OVERVIEW).json()
+    assert overview["latest_run"]["reference"] == plan.reference_snapshot()
+    assert overview["latest_run_stale"] is stale
+
+
+def test_the_overview_gives_the_latest_review_also_when_the_latest_run_has_none(monkeypatch):
+    studio = Studio(monkeypatch)
+    plan = stored_plan()
+    older = sample_run((plan,), run_id=OLDER_RUN)
+    newest = sample_run((plan,))
+    MemoryTests.store.runs.extend([older, newest])
+    first = sample_review(id=UUID(int=0xF1), run_id=OLDER_RUN)
+    second = sample_review(
+        id=UUID(int=0xF2),
+        run_id=OLDER_RUN,
+        reviewed_at=first.reviewed_at + timedelta(hours=1),
+        critiques=(sample_critique(findings=(sample_finding(text=BUTTON_FINDING),)),),
+    )
+    MemoryTests.store.reviews.extend([first, second])
+    with studio.client() as client:
+        unreviewed = client.get(OVERVIEW).json()
+        MemoryTests.store.reviews.append(sample_review(id=UUID(int=0xF3), run_id=RUN_ID))
+        reviewed = client.get(OVERVIEW).json()
+    assert unreviewed["latest_run"]["id"] == str(RUN_ID)
+    assert unreviewed["latest_run"]["critiques"] == []
+    latest = unreviewed["latest_review"]
+    assert list(latest) == ["run_id", "finished_at", "reviewed_at", "critiques"]
+    snapshot = older.with_review(second).to_snapshot()
+    assert latest == {
+        "run_id": str(OLDER_RUN),
+        "finished_at": snapshot["finished_at"],
+        "reviewed_at": snapshot["reviewed_at"],
+        "critiques": snapshot["critiques"],
+    }
+    assert latest["critiques"][0]["findings"][0]["text"] == BUTTON_FINDING
+    assert reviewed["latest_review"]["run_id"] == str(RUN_ID)
+    assert reviewed["latest_review"]["critiques"] == reviewed["latest_run"]["critiques"]
+
+
+def test_the_critique_of_a_run_remembers_the_findings_of_the_newest_reviewed_run_before_it(
+    monkeypatch,
+):
+    studio = Studio(monkeypatch, *([critique_answer(), fine_answer()] * 4))
+    plan = stored_plan()
+    MemoryTests.store.runs.extend(
+        [
+            sample_run((plan,), run_id=OLDER_RUN),
+            sample_run((plan,), run_id=MIDDLE_RUN),
+            sample_run((plan,)),
+        ]
+    )
+    MemoryTests.store.reviews.append(
+        sample_review(
+            id=UUID(int=0xF1),
+            run_id=OLDER_RUN,
+            critiques=(
+                sample_critique(
+                    first_twin().twin_id,
+                    findings=(sample_finding(), sample_finding(text=BUTTON_FINDING)),
+                ),
+                sample_critique(second_twin().twin_id, "Night Auditor Twin", findings=()),
+            ),
+        )
+    )
+    with studio.client() as client:
+        for run_id, again in (
+            (RUN_ID, False),
+            (MIDDLE_RUN, False),
+            (OLDER_RUN, True),
+            (RUN_ID, True),
+        ):
+            answer = client.post(f"{RUNS}/{run_id}/reviews", json={**REVIEW, "again": again})
+            assert answer.status_code == 201, answer.text
+    remembered = [call["context"]["earlier_findings"] for call in studio.calls]
+    older_findings = ["Il totale non mostra la valuta che uso.", BUTTON_FINDING]
+    assert remembered == [
+        older_findings,
+        [],
+        older_findings,
+        [],
+        [],
+        [],
+        ["Il totale non mostra la valuta."],
+        [],
+    ]
+    assert all(list(call["context"])[-2:] == ["run", "earlier_findings"] for call in studio.calls)
+
+
+def test_a_test_critique_gives_each_twin_what_it_learned(monkeypatch):
+    twin_id = second_twin().twin_id
+    learned = {twin_id: learned_by(twin_id, "Il gruppo lavora di notte con poca luce.")}
+    studios = []
+    for known in (learned, None):
+        current = Studio(monkeypatch, critique_answer(), fine_answer(), learned=known)
+        stored_run()
+        with current.client() as client:
+            answer = client.post(f"{RUNS}/{RUN_ID}/reviews", json=REVIEW)
+            assert answer.status_code == 201, answer.text
+        studios.append(current)
+    studio, plain = studios
+    first, second = studio.calls
+    assert "learned" not in first["context"]["user_twin"]
+    assert first["instruction"] is REVIEW_INSTRUCTION
+    assert second["context"]["user_twin"]["learned"] == [
+        {
+            "code": "OBS-001",
+            "statement": "Il gruppo lavora di notte con poca luce.",
+            "source": "OWNER",
+        }
+    ]
+    assert second["instruction"] == f"{REVIEW_INSTRUCTION} {LEARNED_INSTRUCTION}"
+    plain_first, plain_second = plain.calls
+    assert plain_first["context"] == first["context"]
+    assert plain_first["instruction"] is REVIEW_INSTRUCTION
+    assert plain_second["context"] == {
+        **second["context"],
+        "user_twin": {
+            key: value for key, value in second["context"]["user_twin"].items() if key != "learned"
+        },
+    }
+    assert plain_second["instruction"] is REVIEW_INSTRUCTION
+    assert studio.evidence.kinds() == plain.evidence.kinds()

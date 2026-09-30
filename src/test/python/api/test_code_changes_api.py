@@ -26,11 +26,15 @@ from orchestwin.api.services import ApplicationRuntime
 from orchestwin.artifacts.design_gate import design_artifact_reference
 from orchestwin.config import ApplicationSettings
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.knowledge.state import MAX_TASK_LENGTH
 from orchestwin.models.change_review import (
+    ALIGNMENT_INSTRUCTION,
     ALIGNMENT_PURPOSE,
     CHANGE_REVIEW_TASK,
+    CRITIQUE_INSTRUCTION,
     CRITIQUE_PURPOSE,
     DIFF_CUT_LINE,
+    LEARNED_INSTRUCTION,
 )
 from orchestwin.models.proposal_evidence import ProposalEvidenceError, begin_model_generation
 from orchestwin.models.proposal_generation import ProposalGenerationError
@@ -38,6 +42,7 @@ from orchestwin.projects.briefs import create_project_brief
 from orchestwin.projects.code_changes import (
     CodeChangeAmbiguous,
     CodeTask,
+    TaskOrigin,
     TaskStatus,
     aligned_change,
     commit_prefix,
@@ -46,9 +51,11 @@ from orchestwin.projects.code_changes import (
 from orchestwin.projects.persistence.code_changes import (
     CodeChangeWriteResult,
     CodeChangeWriteStatus,
+    CreatedTasks,
 )
 from orchestwin.projects.requirements_gate import requirements_artifact_reference
 from orchestwin.projects.requirements_primitives import snapshot_content_hash
+from orchestwin.projects.twin_learning import LearnedObservation, LearningSource
 from orchestwin.twins.user_modeling_gate import user_modeling_artifact_reference
 from orchestwin.workflow.gates import (
     HumanGateAction,
@@ -57,7 +64,14 @@ from orchestwin.workflow.gates import (
     transition_human_gate,
 )
 from src.test.python.artifacts import design_fixtures
-from src.test.python.projects.test_code_changes import review_run
+from src.test.python.projects.test_acceptance_tests import RUN_ID as TEST_RUN_ID
+from src.test.python.projects.test_acceptance_tests import (
+    sample_critique,
+    sample_finding,
+    sample_review,
+    sample_run,
+)
+from src.test.python.projects.test_code_changes import TWIN_ONE, critique, finding, review_run
 from src.test.python.twins.test_user_modeling_gate import snapshot_version
 
 PREFIX = "/api/v1"
@@ -68,6 +82,7 @@ NOW = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
 PROJECT_PATH = f"{PREFIX}/projects/{PROJECT}"
 CHANGES = f"{PROJECT_PATH}/code-changes"
 ALIGNMENT = f"{PROJECT_PATH}/alignment"
+TASKS = f"{PROJECT_PATH}/code-tasks"
 JOBS = f"{PROJECT_PATH}/generation-jobs"
 ASYNC = {"Prefer": RESPOND_ASYNC}
 FIRST = "a1" * 20
@@ -174,6 +189,7 @@ class MemoryStore:
         self.changes = []
         self.runs = []
         self.tasks = []
+        self.creations = []
 
 
 class MemoryChanges:
@@ -265,46 +281,99 @@ class MemoryChanges:
         return None if change is None else change.aligned_point()
 
     async def tasks(self, project_id, *, open_only=False):
+        if not self._owned(project_id):
+            return ()
         return tuple(
             task
-            for task in self.store.tasks
+            for task in sorted(self.store.tasks, key=lambda item: item.number)
             if task.project_id == project_id and (task.open or not open_only)
         )
 
-    async def create_tasks(
-        self, project_id, from_change_id, texts, *, created_at, requirements=(), screens=()
-    ):
-        change = next(item for item in self.store.changes if item.id == from_change_id)
-        start = max((task.number for task in self.store.tasks), default=0)
-        created = tuple(
-            CodeTask(
-                id=uuid4(),
+    async def task(self, project_id, number):
+        return next((task for task in await self.tasks(project_id) if task.number == number), None)
+
+    async def create_tasks(self, project_id, sources, *, created_at):
+        self.store.creations.append(tuple(sources))
+        known = {
+            task.source_key: task
+            for task in await self.tasks(project_id, open_only=True)
+            if task.source_key is not None
+        }
+        number = max((task.number for task in self.store.tasks), default=0)
+        tasks = []
+        created = 0
+        for source in sources:
+            if source.key is not None and source.key in known:
+                tasks.append(known[source.key])
+                continue
+            number += 1
+            task = CodeTask.from_source(
+                source,
+                task_id=uuid4(),
                 project_id=project_id,
                 owner_user_id=self.owner_user_id,
-                number=start + index,
-                text=text,
-                from_change_id=from_change_id,
-                from_commit=change.commit,
+                number=number,
                 created_at=created_at,
-                requirements=tuple(requirements),
-                screens=tuple(screens),
             )
-            for index, text in enumerate(texts, 1)
-        )
-        self.store.tasks.extend(created)
-        return created
+            self.store.tasks.append(task)
+            if task.source_key is not None:
+                known[task.source_key] = task
+            tasks.append(task)
+            created += 1
+        return CreatedTasks(tasks=tuple(tasks), created=created)
 
-    async def close_open_tasks(self, project_id, aligned_change_id, done_at):
-        recorded = [item.id for item in self.store.changes if item.project_id == project_id]
-        if aligned_change_id not in recorded:
+    async def set_task_status(self, project_id, number, status, *, at, note=None):
+        for index, task in enumerate(self.store.tasks):
+            if task.project_id == project_id and task.number == number:
+                self.store.tasks[index] = task.with_status(status, at=at, note=note)
+                return self.store.tasks[index]
+        return None
+
+    async def close_open_tasks(self, project_id, aligned_change_id, closed_at):
+        recorded = [item for item in self.store.changes if item.project_id == project_id]
+        identifiers = [item.id for item in recorded]
+        if aligned_change_id not in identifiers:
             return 0
-        covered = set(recorded[: recorded.index(aligned_change_id) + 1])
+        place = identifiers.index(aligned_change_id)
+        covered = set(identifiers[: place + 1])
+        moment = recorded[place].recorded_at
         closed = 0
         for index, task in enumerate(self.store.tasks):
-            if task.project_id == project_id and task.open and task.from_change_id in covered:
-                self.store.tasks[index] = task.done(done_at)
+            if task.project_id != project_id or not task.open:
+                continue
+            if task.from_change_id in covered or (
+                task.origin is not TaskOrigin.CODE_CHANGE and task.created_at <= moment
+            ):
+                self.store.tasks[index] = task.done(closed_at)
                 closed += 1
         return closed
+
+
+class MemoryLearning:
+    learned: ClassVar[dict] = {}
+
+    def __init__(self, session, *, owner_user_id):
+        self.owner_user_id = owner_user_id
+
+    async def active(self, project_id):
+        if self.owner_user_id != OWNER or project_id != PROJECT:
+            return {}
+        return dict(self.learned)
+
+
+class MemoryRuns:
+    store: ClassVar[list] = []
+
+    def __init__(self, session, *, owner_user_id):
+        self.owner_user_id = owner_user_id
+
+    async def run(self, project_id, run_id):
+        if self.owner_user_id != OWNER:
+            return None
+        return next(
+            (item for item in self.store if item.id == run_id and item.project_id == project_id),
+            None,
+        )
 
 
 class MemoryEvidence:
@@ -433,9 +502,14 @@ class Studio:
         design=True,
         modeling=True,
         twins=None,
+        learned=None,
     ):
         MemoryChanges.store = MemoryStore()
+        MemoryRuns.store = []
         monkeypatch.setattr(code_changes, "SqlAlchemyCodeChangeRepository", MemoryChanges)
+        monkeypatch.setattr(code_changes, "SqlAlchemyAcceptanceTestRepository", MemoryRuns)
+        monkeypatch.setattr(MemoryLearning, "learned", dict(learned or {}))
+        monkeypatch.setattr(code_changes, "SqlAlchemyTwinLearningRepository", MemoryLearning)
         self.generator = FakeGenerator(*outcomes) if model else None
         self.evidence = (MemoryEvidence() if evidence is None else evidence) if model else None
         self.requirements = design_fixtures.requirements_version()
@@ -549,6 +623,9 @@ def test_router_registers_the_routes():
         "/projects/{project_id}/code-changes/{commit}/decision",
         "/projects/{project_id}/code-changes/{commit}/reviews",
         "/projects/{project_id}/code-changes/{commit}/reviews",
+        "/projects/{project_id}/code-tasks",
+        "/projects/{project_id}/code-tasks",
+        "/projects/{project_id}/code-tasks/{code}/status",
     ]
     methods = sorted(
         (route.path.removeprefix("/projects/{project_id}"), *sorted(route.methods))
@@ -562,6 +639,9 @@ def test_router_registers_the_routes():
         ("/code-changes/{commit}/decision", "POST"),
         ("/code-changes/{commit}/reviews", "GET"),
         ("/code-changes/{commit}/reviews", "POST"),
+        ("/code-tasks", "GET"),
+        ("/code-tasks", "POST"),
+        ("/code-tasks/{code}/status", "POST"),
     ]
 
 
@@ -669,6 +749,9 @@ ROUTES = [
     ("POST", f"/code-changes/{FIRST}/reviews", REVIEW),
     ("GET", f"/code-changes/{FIRST}/reviews", None),
     ("POST", f"/code-changes/{FIRST}/decision", {"kind": "DISMISSED"}),
+    ("GET", "/code-tasks", None),
+    ("POST", "/code-tasks", {"tasks": [{"text": "Un compito.", "source": {"kind": "OWNER"}}]}),
+    ("POST", "/code-tasks/TSK-001/status", {"status": "DONE"}),
 ]
 
 
@@ -677,12 +760,15 @@ def test_every_route_answers_project_not_found_for_another_owner(monkeypatch, me
     studio = Studio(monkeypatch, *review_answers())
     with studio.client() as client:
         record(client, FIRST)
+        assert decide(client, FIRST, kind="CODE_TASKS", tasks=["Un compito."]).status_code == 200
         studio.app.dependency_overrides[current_user_dependency] = lambda: account(STRANGER)
         answer = client.request(method, f"{PROJECT_PATH}{path}", json=body)
     assert answer.status_code == 404
     assert answer.json() == {"detail": {"code": "PROJECT_NOT_FOUND"}}
     assert studio.calls == []
     assert len(MemoryChanges.store.changes) == 1
+    [task] = MemoryChanges.store.tasks
+    assert task.open
 
 
 def test_the_changes_are_listed_newest_first_and_the_pending_ones_follow_the_aligned_point(
@@ -772,6 +858,8 @@ def test_a_review_asks_every_approved_twin_then_the_verdict_and_stores_the_run(m
         "reviewed_at": snapshot["reviewed_at"],
         "verdict": "ALIGNED",
         "summary": snapshot["alignment"]["summary"],
+        "reference": snapshot["reference"],
+        "stale": False,
     }
     calls = studio.calls
     assert [call["task"] for call in calls] == [CHANGE_REVIEW_TASK] * 3
@@ -791,6 +879,7 @@ def test_a_review_asks_every_approved_twin_then_the_verdict_and_stores_the_run(m
     assert critique_context["change"]["commit"] == FIRST
     assert critique_context["design"]["alternative_code"] == "DES-001"
     assert critique_context["earlier_findings"] == []
+    assert critique_context["earlier_source"] is None
     assert [item["twin_name"] for item in verdict_context["critiques"]] == [
         "Receptionist Twin",
         "Night Auditor Twin",
@@ -1185,8 +1274,10 @@ def test_the_earlier_findings_of_the_same_twin_reach_the_next_pending_review(mon
         "Problema numero 1 del modulo.",
         "Problema numero 2 del modulo.",
     ]
+    assert contexts[3]["earlier_source"] == "PREVIOUS_COMMIT"
     assert contexts[4]["earlier_findings"] == []
     assert contexts[6]["earlier_findings"] == []
+    assert [contexts[index]["earlier_source"] for index in (0, 4, 6)] == [None, None, None]
 
 
 def test_the_decisions_record_the_aligned_point_the_tasks_and_their_closing(monkeypatch):
@@ -1217,10 +1308,20 @@ def test_the_decisions_record_the_aligned_point_the_tasks_and_their_closing(monk
     assert body["alignment"]["tasks"][0] == {
         "code": "TSK-001",
         "text": "Ripristinare il pulsante.",
-        "about": {"requirements": ["REQ-001"], "screens": ["SCR-001"]},
+        "about": {"requirements": ["REQ-001"], "screens": ["SCR-001"], "criteria": []},
+        "origin": {
+            "kind": "CODE_CHANGE",
+            "commit": FIRST,
+            "test_run_id": None,
+            "twin_id": None,
+            "twin_name": None,
+            "finding": None,
+        },
         "from_commit": FIRST,
         "created_at": body["change"]["decision"]["decided_at"],
         "status": "OPEN",
+        "closed_at": None,
+        "note": None,
     }
     assert body["alignment"]["pending_changes"] == 3
     assert [task["code"] for task in more.json()["alignment"]["tasks"]] == [
@@ -1228,7 +1329,11 @@ def test_the_decisions_record_the_aligned_point_the_tasks_and_their_closing(monk
         "TSK-002",
         "TSK-003",
     ]
-    assert more.json()["alignment"]["tasks"][2]["about"] == {"requirements": [], "screens": []}
+    assert more.json()["alignment"]["tasks"][2]["about"] == {
+        "requirements": [],
+        "screens": [],
+        "criteria": [],
+    }
     assert dismissed.json()["change"]["decision"]["note"] is None
     assert len(dismissed.json()["alignment"]["tasks"]) == 3
     assert dismissed.json()["alignment"]["aligned"] is None
@@ -1288,9 +1393,25 @@ def test_an_aligned_decision_without_an_approved_reference_keeps_no_versions(mon
         {"kind": "ALIGNED", "tasks": ["Un compito."]},
         {"kind": "CODE_TASKS"},
         {"kind": "CODE_TASKS", "tasks": []},
+        {"kind": "CODE_TASKS", "tasks": [], "findings": []},
         {"kind": "CODE_TASKS", "tasks": ["   "]},
         {"kind": "CODE_TASKS", "tasks": ["Compito."] * 11},
         {"kind": "CODE_TASKS", "tasks": ["x" * 301]},
+        {
+            "kind": "CODE_TASKS",
+            "tasks": ["Compito."] * 6,
+            "findings": [{"twin_id": str(TWIN_TWO), "finding": 0}] * 5,
+        },
+        {"kind": "CODE_TASKS", "findings": [{"twin_id": str(TWIN_TWO), "finding": 0}] * 11},
+        {"kind": "CODE_TASKS", "findings": [{"twin_id": str(TWIN_TWO), "finding": -1}]},
+        {"kind": "CODE_TASKS", "findings": [{"twin_id": "someone", "finding": 0}]},
+        {"kind": "CODE_TASKS", "findings": [{"twin_id": str(TWIN_TWO)}]},
+        {
+            "kind": "CODE_TASKS",
+            "findings": [{"twin_id": str(TWIN_TWO), "finding": 0, "text": "Uno."}],
+        },
+        {"kind": "ALIGNED", "findings": [{"twin_id": str(TWIN_TWO), "finding": 0}]},
+        {"kind": "DISMISSED", "findings": [{"twin_id": str(TWIN_TWO), "finding": 0}]},
         {"kind": "DISMISSED", "note": "x" * 2001},
         {"kind": "LATER"},
         {"kind": "DISMISSED", "reason": "no"},
@@ -1341,10 +1462,21 @@ def test_the_alignment_answers_the_reference_the_aligned_point_and_the_open_task
         },
         "aligned": None,
         "pending_changes": 0,
+        "stale_reviews": 0,
         "latest_change": None,
         "tasks": [],
         "review_available": True,
     }
+    assert list(empty) == [
+        "project_id",
+        "reference",
+        "aligned",
+        "pending_changes",
+        "stale_reviews",
+        "latest_change",
+        "tasks",
+        "review_available",
+    ]
     bare = Studio(monkeypatch, model=False, requirements=False, design=False)
     with bare.client() as client:
         record(client, FIRST)
@@ -1395,3 +1527,685 @@ def test_a_database_less_runtime_answers_database_unavailable(monkeypatch):
         asyncio.run(studio.application().changes(owner_user_id=OWNER, project_id=PROJECT))
     assert failure.value.status_code == 503
     assert failure.value.detail == {"code": "DATABASE_UNAVAILABLE"}
+
+
+UNREVIEWED_RUN = UUID("00000000-0000-4000-8000-000000000c11")
+UNKNOWN_RUN = UUID("00000000-0000-4000-8000-000000000c99")
+DATE_FINDING = "Il modulo non chiede la data di arrivo."
+DATE_ACTION = "Aggiungere il campo della data di arrivo."
+PRINT_FINDING = "Il conto non si stampa dalla reception."
+PHONE_FINDING = "Il pulsante di salvataggio non si vede sul telefono."
+CURRENCY_FINDING = "Il totale non mostra la valuta che uso."
+LONG_FINDING = ("parola " * 57).strip()
+TWIN_KEYS = ["run_id", "reviewed_at", "verdict", "summary", "reference", "stale"]
+NO_ORIGIN = {
+    "commit": None,
+    "test_run_id": None,
+    "twin_id": None,
+    "twin_name": None,
+    "finding": None,
+}
+
+
+def owner_item(text="Scrivere la guida per la reception."):
+    return {"text": text, "source": {"kind": "OWNER"}}
+
+
+def change_item(commit=FIRST, *, twin_id=TWIN_ONE, position=0, text=None):
+    source = {"kind": "CODE_CHANGE", "commit": commit, "twin_id": str(twin_id), "finding": position}
+    return {"text": text, "source": source}
+
+
+def run_item(run_id=TEST_RUN_ID, *, twin_id=TWIN_ONE, position=0, text=None):
+    source = {
+        "kind": "TEST_RUN",
+        "test_run_id": str(run_id),
+        "twin_id": str(twin_id),
+        "finding": position,
+    }
+    return {"text": text, "source": source}
+
+
+def reviewed_change(place, *findings, minutes=60, **values):
+    change = MemoryChanges.store.changes[place]
+    run = review_run(
+        change,
+        id=uuid4(),
+        reviewed_at=NOW + timedelta(minutes=minutes),
+        critiques=(critique(findings=findings or (finding(),)),),
+        **values,
+    )
+    MemoryChanges.store.runs.append(run)
+    return run
+
+
+def reviewed_test_run(*findings, run_id=TEST_RUN_ID, minutes=0):
+    review = sample_review(
+        id=uuid4(),
+        run_id=run_id,
+        reviewed_at=NOW + timedelta(minutes=minutes),
+        critiques=(sample_critique(findings=findings or (sample_finding(),)),),
+    )
+    reviewed = sample_run(run_id=run_id).with_review(review)
+    MemoryRuns.store = [item for item in MemoryRuns.store if item.id != run_id] + [reviewed]
+    return reviewed
+
+
+def create(client, *items):
+    return client.post(TASKS, json={"tasks": list(items)})
+
+
+def set_status(client, code, **body):
+    return client.post(f"{TASKS}/{code}/status", json=body)
+
+
+def test_tasks_of_every_origin_are_created_in_the_order_sent(monkeypatch):
+    studio = Studio(monkeypatch)
+    printing = finding(text=PRINT_FINDING, action=None, requirement=None, screen="SCR-002")
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0, finding(), printing)
+        reviewed_test_run()
+        answer = create(
+            client,
+            owner_item("  Scrivere la guida   per la reception. "),
+            change_item(),
+            change_item(FIRST[:7].upper(), position=1, text=" Aggiungere la stampa  del conto. "),
+            run_item(),
+        )
+        listed = client.get(TASKS).json()
+        alignment = client.get(ALIGNMENT).json()
+    assert answer.status_code == 201, answer.text
+    body = answer.json()
+    assert list(body) == ["status", "created", "tasks", "alignment"]
+    assert (body["status"], body["created"]) == ("CREATED", 4)
+    assert [item["code"] for item in body["tasks"]] == ["TSK-001", "TSK-002", "TSK-003", "TSK-004"]
+    written, from_change, chosen, from_run = body["tasks"]
+    assert written == {
+        "code": "TSK-001",
+        "text": "Scrivere la guida per la reception.",
+        "about": {"requirements": [], "screens": [], "criteria": []},
+        "origin": {"kind": "OWNER", **NO_ORIGIN},
+        "from_commit": None,
+        "created_at": written["created_at"],
+        "status": "OPEN",
+        "closed_at": None,
+        "note": None,
+    }
+    assert datetime.fromisoformat(written["created_at"]).utcoffset() == timedelta(0)
+    assert from_change["text"] == DATE_ACTION
+    assert from_change["about"] == {
+        "requirements": ["REQ-001"],
+        "screens": ["SCR-001"],
+        "criteria": [],
+    }
+    assert from_change["origin"] == {
+        "kind": "CODE_CHANGE",
+        "commit": FIRST,
+        "test_run_id": None,
+        "twin_id": str(TWIN_ONE),
+        "twin_name": "Receptionist Twin",
+        "finding": DATE_FINDING,
+    }
+    assert from_change["from_commit"] == FIRST
+    assert chosen["text"] == "Aggiungere la stampa del conto."
+    assert chosen["origin"]["finding"] == PRINT_FINDING
+    assert chosen["about"] == {"requirements": [], "screens": ["SCR-002"], "criteria": []}
+    assert from_run["text"] == "Mostrare la valuta accanto al totale."
+    assert from_run["about"] == {
+        "requirements": ["REQ-001"],
+        "screens": ["SCR-001"],
+        "criteria": ["AC-001"],
+    }
+    assert from_run["origin"] == {
+        "kind": "TEST_RUN",
+        "commit": None,
+        "test_run_id": str(TEST_RUN_ID),
+        "twin_id": str(TWIN_ONE),
+        "twin_name": "Receptionist Twin",
+        "finding": CURRENCY_FINDING,
+    }
+    assert from_run["from_commit"] is None
+    assert body["alignment"]["tasks"] == body["tasks"]
+    assert body["alignment"] == alignment
+    assert listed == {"items": body["tasks"]}
+
+
+def test_a_finding_without_an_action_becomes_a_task_with_its_text_cut_to_the_limit(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0, finding(text=LONG_FINDING, action=None))
+        reviewed_test_run(sample_finding(action=None))
+        answer = create(client, change_item(), run_item())
+    assert answer.status_code == 201, answer.text
+    long, short = answer.json()["tasks"]
+    assert len(LONG_FINDING) > MAX_TASK_LENGTH
+    assert long["text"] == LONG_FINDING[: MAX_TASK_LENGTH - 1].rstrip() + "…"
+    assert long["origin"]["finding"] == LONG_FINDING
+    assert short["text"] == CURRENCY_FINDING
+
+
+def test_the_same_finding_text_is_the_same_task_and_a_new_review_brings_new_sources(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0, finding(), finding(text=PRINT_FINDING))
+        first = create(client, change_item()).json()
+        again = create(client, change_item())
+        twice = create(client, change_item(), change_item(FIRST[:10])).json()
+        reviewed_change(0, finding(text=PHONE_FINDING), finding(), minutes=120)
+        repeated = create(client, change_item(position=0), change_item(position=1)).json()
+        assert set_status(client, "TSK-001", status="DONE").status_code == 200
+        after_done = create(client, change_item(position=1)).json()
+        reviewed_test_run()
+        run_first = create(client, run_item()).json()
+        run_again = create(client, run_item()).json()
+        reviewed_test_run(
+            sample_finding(text="Il pulsante Calcola non risponde."), sample_finding()
+        )
+        run_new = create(client, run_item(position=0), run_item(position=1)).json()
+    assert again.status_code == 201
+    assert (first["created"], [item["code"] for item in first["tasks"]]) == (1, ["TSK-001"])
+    assert (again.json()["created"], again.json()["tasks"]) == (0, first["tasks"])
+    assert (twice["created"], [item["code"] for item in twice["tasks"]]) == (
+        0,
+        ["TSK-001", "TSK-001"],
+    )
+    assert (repeated["created"], [item["code"] for item in repeated["tasks"]]) == (
+        1,
+        ["TSK-002", "TSK-001"],
+    )
+    assert repeated["tasks"][0]["origin"]["finding"] == PHONE_FINDING
+    assert repeated["tasks"][1]["origin"]["finding"] == DATE_FINDING
+    assert (after_done["created"], after_done["tasks"][0]["code"]) == (1, "TSK-003")
+    assert after_done["tasks"][0]["origin"]["finding"] == DATE_FINDING
+    assert (run_first["created"], run_first["tasks"][0]["code"]) == (1, "TSK-004")
+    assert (run_again["created"], run_again["tasks"]) == (0, run_first["tasks"])
+    assert (run_new["created"], [item["code"] for item in run_new["tasks"]]) == (
+        1,
+        ["TSK-005", "TSK-004"],
+    )
+    assert len(MemoryChanges.store.tasks) == 5
+
+
+def test_nothing_is_created_when_one_task_is_refused(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0)
+        refused = create(client, owner_item(), change_item(), change_item(position=5))
+    assert refused.status_code == 422
+    assert refused.json() == {"detail": {"code": "TASK_SOURCE_INVALID", "index": 2}}
+    assert MemoryChanges.store.tasks == []
+    assert MemoryChanges.store.creations == []
+
+
+AMBIGUOUS = "abcdef1"
+
+
+@pytest.mark.parametrize(
+    ("items", "status_code", "detail"),
+    [
+        (
+            [change_item("9" * 40), run_item(UNKNOWN_RUN)],
+            404,
+            {"code": "TEST_RUN_NOT_FOUND"},
+        ),
+        (
+            [change_item(AMBIGUOUS), change_item("9" * 40)],
+            404,
+            {"code": "CODE_CHANGE_NOT_FOUND"},
+        ),
+        (
+            [change_item(position=9), change_item(AMBIGUOUS)],
+            409,
+            {"code": "CODE_CHANGE_AMBIGUOUS"},
+        ),
+        (
+            [owner_item(), change_item(SECOND)],
+            422,
+            {"code": "TASK_SOURCE_INVALID", "index": 1},
+        ),
+        ([change_item(twin_id=TWIN_TWO)], 422, {"code": "TASK_SOURCE_INVALID", "index": 0}),
+        ([change_item(position=1)], 422, {"code": "TASK_SOURCE_INVALID", "index": 0}),
+        ([run_item(UNREVIEWED_RUN)], 422, {"code": "TASK_SOURCE_INVALID", "index": 0}),
+        ([run_item(twin_id=TWIN_TWO)], 422, {"code": "TASK_SOURCE_INVALID", "index": 0}),
+        ([run_item(position=1)], 422, {"code": "TASK_SOURCE_INVALID", "index": 0}),
+        (
+            [run_item(), owner_item(), change_item(position=3), change_item(twin_id=TWIN_TWO)],
+            422,
+            {"code": "TASK_SOURCE_INVALID", "index": 2},
+        ),
+    ],
+)
+def test_the_task_refusals_come_in_the_order_of_the_contract(
+    monkeypatch, items, status_code, detail
+):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST, SECOND, AMBIGUOUS + "0" * 33, AMBIGUOUS + "f" * 33)
+        reviewed_change(0)
+        reviewed_test_run()
+        MemoryRuns.store.append(sample_run(run_id=UNREVIEWED_RUN))
+        refused = create(client, *items)
+    assert refused.status_code == status_code
+    assert refused.json() == {"detail": detail}
+    assert MemoryChanges.store.tasks == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"tasks": []},
+        {"tasks": [owner_item()] * 11},
+        {"tasks": [{"text": None, "source": {"kind": "OWNER"}}]},
+        {"tasks": [{"source": {"kind": "OWNER"}}]},
+        {"tasks": [owner_item("   ")]},
+        {"tasks": [owner_item("")]},
+        {"tasks": [owner_item("x" * 301)]},
+        {"tasks": [{"text": "Uno.", "source": {"kind": "MODEL"}}]},
+        {"tasks": [{"text": "Uno."}]},
+        {"tasks": [{"text": "Uno.", "source": {"kind": "OWNER", "twin_id": str(TWIN_ONE)}}]},
+        {"tasks": [change_item("xyz1234")]},
+        {"tasks": [change_item("abc12")]},
+        {"tasks": [change_item("a" * 65)]},
+        {"tasks": [change_item(position=-1)]},
+        {"tasks": [run_item(position=-1)]},
+        {
+            "tasks": [
+                {
+                    "text": None,
+                    "source": {"kind": "TEST_RUN", "test_run_id": "not-a-uuid", "twin_id": "x"},
+                }
+            ]
+        },
+        {
+            "tasks": [
+                {"text": None, "source": {"kind": "TEST_RUN", "test_run_id": str(TEST_RUN_ID)}}
+            ]
+        },
+        {"tasks": [{"text": None, "source": {"kind": "CODE_CHANGE", "commit": FIRST}}]},
+        {"tasks": [{**owner_item(), "note": "Una nota."}]},
+        {"tasks": [owner_item()], "extra": True},
+    ],
+)
+def test_a_task_body_is_validated(monkeypatch, body):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0)
+        refused = client.post(TASKS, json=body)
+    assert refused.status_code == 422
+    assert refused.json()["detail"] == "invalid_request"
+    assert MemoryChanges.store.tasks == []
+
+
+def test_the_open_tasks_are_listed_by_number_and_every_task_on_request(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        created = create(client, owner_item("Primo."), owner_item("Secondo."), owner_item("Primo."))
+        assert set_status(client, "TSK-001", status="DONE").status_code == 200
+        assert set_status(client, "TSK-003", status="DROPPED", note="Doppio.").status_code == 200
+        open_items = client.get(TASKS).json()["items"]
+        explicit = client.get(TASKS, params={"status": "open"}).json()["items"]
+        every = client.get(TASKS, params={"status": "all"}).json()["items"]
+        wrong = client.get(TASKS, params={"status": "done"})
+    assert created.json()["created"] == 3
+    assert [item["code"] for item in open_items] == ["TSK-002"]
+    assert explicit == open_items
+    assert [(item["code"], item["status"], item["note"]) for item in every] == [
+        ("TSK-001", "DONE", None),
+        ("TSK-002", "OPEN", None),
+        ("TSK-003", "DROPPED", "Doppio."),
+    ]
+    assert wrong.status_code == 422
+    assert wrong.json()["detail"] == "invalid_request"
+
+
+def test_a_task_is_closed_dropped_and_reopened_with_the_note_of_the_owner(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        create(client, owner_item())
+        done = set_status(client, "TSK-001", status="DONE", note="  Fatto   nel commit. ")
+        noted = set_status(client, "tsk-001", status="DONE", note="Rivisto.")
+        cleared = set_status(client, "TSK-001", status="DONE")
+        dropped = set_status(client, "TSK-001", status="DROPPED", note="Non serve.")
+        reopened = set_status(client, "Tsk-001", status="OPEN", note="Torna utile.")
+        missing = [
+            set_status(client, code, status="DONE")
+            for code in ("TSK-002", "TSK-0001", "TSK-01", "TSK-000", "abc")
+        ]
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert list(body) == ["status", "task", "alignment"]
+    assert body["status"] == "UPDATED"
+    task = body["task"]
+    assert (task["code"], task["status"], task["note"]) == ("TSK-001", "DONE", "Fatto nel commit.")
+    assert datetime.fromisoformat(task["closed_at"]).utcoffset() == timedelta(0)
+    assert body["alignment"]["tasks"] == []
+    assert (noted.json()["task"]["closed_at"], noted.json()["task"]["note"]) == (
+        task["closed_at"],
+        "Rivisto.",
+    )
+    assert (cleared.json()["task"]["closed_at"], cleared.json()["task"]["note"]) == (
+        task["closed_at"],
+        None,
+    )
+    assert (dropped.json()["task"]["status"], dropped.json()["task"]["note"]) == (
+        "DROPPED",
+        "Non serve.",
+    )
+    assert dropped.json()["task"]["closed_at"] is not None
+    again = reopened.json()["task"]
+    assert (again["status"], again["closed_at"], again["note"]) == ("OPEN", None, "Torna utile.")
+    assert reopened.json()["alignment"]["tasks"] == [again]
+    for answer in missing:
+        assert answer.status_code == 404
+        assert answer.json() == {"detail": {"code": "CODE_TASK_NOT_FOUND"}}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"note": "Una nota."},
+        {"status": "LATER"},
+        {"status": "done"},
+        {"status": "DONE", "note": "x" * 301},
+        {"status": "DONE", "note": 3},
+        {"status": "DONE", "extra": True},
+    ],
+)
+def test_a_status_body_is_validated(monkeypatch, body):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        create(client, owner_item())
+        refused = client.post(f"{TASKS}/TSK-001/status", json=body)
+    assert refused.status_code == 422
+    assert refused.json()["detail"] == "invalid_request"
+    assert MemoryChanges.store.tasks[0].open
+
+
+VERDICT_TASK = ("Ripristinare il pulsante.", None, ["REQ-001"], ["SCR-001"])
+DATE_TASK = (DATE_ACTION, DATE_FINDING, ["REQ-001"], ["SCR-001"])
+PRINT_TASK = (PRINT_FINDING, PRINT_FINDING, [], [])
+
+
+@pytest.mark.parametrize(
+    ("tasks", "positions", "expected"),
+    [
+        (["Ripristinare il pulsante."], [], [VERDICT_TASK]),
+        ([], [0], [DATE_TASK]),
+        (["Ripristinare il pulsante."], [1, 0], [VERDICT_TASK, PRINT_TASK, DATE_TASK]),
+        ([], [0, 0], [DATE_TASK]),
+    ],
+)
+def test_a_code_tasks_decision_takes_the_texts_of_the_verdict_and_the_chosen_findings(
+    monkeypatch, tasks, positions, expected
+):
+    studio = Studio(monkeypatch)
+    printing = finding(text=PRINT_FINDING, action=None, requirement=None, screen=None, file=None)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0, finding(), printing)
+        answer = decide(
+            client,
+            FIRST,
+            kind="CODE_TASKS",
+            tasks=tasks,
+            findings=[{"twin_id": str(TWIN_ONE), "finding": place} for place in positions],
+        )
+    assert answer.status_code == 200, answer.text
+    created = answer.json()["alignment"]["tasks"]
+    assert [
+        (
+            item["text"],
+            item["origin"]["finding"],
+            item["about"]["requirements"],
+            item["about"]["screens"],
+        )
+        for item in created
+    ] == list(expected)
+    assert [item["code"] for item in created] == [
+        f"TSK-{number:03d}" for number in range(1, len(expected) + 1)
+    ]
+    assert {item["origin"]["kind"] for item in created} == {"CODE_CHANGE"}
+    assert {item["origin"]["commit"] for item in created} == {FIRST}
+    assert answer.json()["change"]["decision"]["kind"] == "CODE_TASKS"
+
+
+@pytest.mark.parametrize(
+    ("commit", "findings", "index"),
+    [
+        (FIRST, [(TWIN_ONE, 0), (TWIN_ONE, 4)], 1),
+        (FIRST, [(TWIN_TWO, 0)], 0),
+        (SECOND, [(TWIN_ONE, 0)], 0),
+    ],
+)
+def test_a_decision_with_a_finding_that_is_not_there_records_nothing(
+    monkeypatch, commit, findings, index
+):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST, SECOND)
+        reviewed_change(0)
+        refused = decide(
+            client,
+            commit,
+            kind="CODE_TASKS",
+            tasks=["Ripristinare il pulsante."],
+            findings=[{"twin_id": str(twin), "finding": place} for twin, place in findings],
+        )
+    assert refused.status_code == 422
+    assert refused.json() == {"detail": {"code": "TASK_SOURCE_INVALID", "index": index}}
+    assert [item.decision for item in MemoryChanges.store.changes] == [None, None]
+    assert MemoryChanges.store.tasks == []
+
+
+def test_a_finding_chosen_in_a_decision_is_the_same_task_for_the_task_route(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST)
+        reviewed_change(0)
+        decided = decide(
+            client, FIRST, kind="CODE_TASKS", findings=[{"twin_id": str(TWIN_ONE), "finding": 0}]
+        )
+        posted = create(client, change_item()).json()
+    assert decided.status_code == 200, decided.text
+    assert [item["code"] for item in decided.json()["alignment"]["tasks"]] == ["TSK-001"]
+    assert posted["created"] == 0
+    assert posted["tasks"] == decided.json()["alignment"]["tasks"]
+
+
+def stored_task(number, minutes, origin, change=None):
+    from_run = origin is TaskOrigin.TEST_RUN
+    task = CodeTask(
+        id=uuid4(),
+        project_id=PROJECT,
+        owner_user_id=OWNER,
+        number=number,
+        text=f"Compito numero {number}.",
+        created_at=NOW + timedelta(minutes=minutes),
+        origin=origin,
+        from_change_id=None if change is None else change.id,
+        from_commit=None if change is None else change.commit,
+        test_run_id=TEST_RUN_ID if from_run else None,
+        twin_id=TWIN_ONE if from_run else None,
+        twin_name="Receptionist Twin" if from_run else None,
+        finding=f"Rilievo numero {number}." if from_run else None,
+    )
+    MemoryChanges.store.tasks.append(task)
+    return task
+
+
+def test_an_aligned_decision_closes_the_tasks_written_before_the_aligned_change_was_recorded(
+    monkeypatch,
+):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST, SECOND, THIRD)
+        MemoryChanges.store.changes = [
+            replace(item, recorded_at=NOW + timedelta(minutes=10 * place))
+            for place, item in enumerate(MemoryChanges.store.changes)
+        ]
+        _, second, third = MemoryChanges.store.changes
+        stored_task(1, 5, TaskOrigin.OWNER)
+        stored_task(2, 10, TaskOrigin.TEST_RUN)
+        stored_task(3, 15, TaskOrigin.TEST_RUN)
+        stored_task(4, 25, TaskOrigin.OWNER)
+        stored_task(5, 30, TaskOrigin.CODE_CHANGE, second)
+        stored_task(6, 1, TaskOrigin.CODE_CHANGE, third)
+        middle = decide(client, SECOND, kind="ALIGNED").json()["alignment"]
+        newest = decide(client, THIRD, kind="ALIGNED").json()["alignment"]
+    assert [item["code"] for item in middle["tasks"]] == ["TSK-003", "TSK-004", "TSK-006"]
+    assert [item["code"] for item in newest["tasks"]] == ["TSK-004"]
+    closed = {task.code: task for task in MemoryChanges.store.tasks if not task.open}
+    assert sorted(closed) == ["TSK-001", "TSK-002", "TSK-003", "TSK-005", "TSK-006"]
+    assert {task.status for task in closed.values()} == {TaskStatus.DONE}
+    assert all(task.closed_at is not None and task.note is None for task in closed.values())
+
+
+@pytest.mark.parametrize(
+    ("reference", "setting", "stale"),
+    [
+        ({}, {}, False),
+        ({"requirements_version_number": 2}, {}, True),
+        ({"design_version_number": 2}, {}, True),
+        ({"alternative_code": "DES-002"}, {}, True),
+        ({"design_version_number": 2}, {"design": False}, False),
+        ({"requirements_version_number": 2}, {"requirements": False}, False),
+    ],
+)
+def test_every_answer_that_holds_a_change_says_whether_its_review_is_stale(
+    monkeypatch, reference, setting, stale
+):
+    studio = Studio(monkeypatch, **setting)
+    with studio.client() as client:
+        record(client, FIRST)
+        run = reviewed_change(0, **reference)
+        again = client.post(CHANGES, json=payload(FIRST))
+        answers = [
+            client.get(ALIGNMENT).json()["latest_change"],
+            client.get(CHANGES).json()["items"][0],
+            client.get(CHANGES, params={"pending": "true"}).json()["items"][0],
+            client.get(f"{CHANGES}/{FIRST}").json(),
+            again.json()["change"],
+            decide(client, FIRST, kind="DISMISSED").json()["change"],
+        ]
+        alignment = client.get(ALIGNMENT).json()
+    assert again.status_code == 200
+    expected = {**run.summary().to_snapshot(), "stale": stale}
+    for answer in answers:
+        assert list(answer["review"]) == TWIN_KEYS
+        assert answer["review"] == expected
+    assert alignment["stale_reviews"] == int(stale)
+
+
+def test_the_alignment_counts_the_stale_reviews_of_the_pending_changes_only(monkeypatch):
+    studio = Studio(monkeypatch)
+    with studio.client() as client:
+        record(client, FIRST, SECOND, THIRD)
+        reviewed_change(0, design_version_number=2)
+        reviewed_change(1, alternative_code="DES-002")
+        reviewed_change(2)
+        before = client.get(ALIGNMENT).json()
+        assert decide(client, FIRST, kind="ALIGNED").status_code == 200
+        after = client.get(ALIGNMENT).json()
+        assert decide(client, SECOND, kind="ALIGNED").status_code == 200
+        last = client.get(ALIGNMENT).json()
+    assert (before["pending_changes"], before["stale_reviews"]) == (3, 2)
+    assert (after["pending_changes"], after["stale_reviews"]) == (2, 1)
+    assert (last["pending_changes"], last["stale_reviews"]) == (1, 0)
+
+
+def test_a_review_asked_again_gives_each_twin_its_findings_on_the_same_commit(monkeypatch):
+    def problem(text):
+        return critique_answer(findings=[finding_answer(problem=text, suggestion=None)])
+
+    studio = Studio(
+        monkeypatch,
+        problem("Problema A del modulo."),
+        fine_answer(),
+        verdict_answer(),
+        problem("Problema B del modulo."),
+        fine_answer(),
+        verdict_answer(),
+        *review_answers(),
+        *review_answers(),
+    )
+    with studio.client() as client:
+        record(client, FIRST, SECOND)
+        assert review(client, FIRST).status_code == 201
+        assert review(client, SECOND).status_code == 201
+        assert review(client, SECOND, again=True).status_code == 201
+        assert review(client, FIRST, again=True).status_code == 201
+    earlier = [
+        (call["context"]["earlier_findings"], call["context"]["earlier_source"])
+        for call in studio.calls
+        if call["context"]["purpose"] == CRITIQUE_PURPOSE
+    ]
+    assert earlier == [
+        ([], None),
+        ([], None),
+        (["Problema A del modulo."], "PREVIOUS_COMMIT"),
+        ([], None),
+        (["Problema B del modulo."], "THIS_COMMIT"),
+        ([], None),
+        (["Problema A del modulo."], "THIS_COMMIT"),
+        ([], None),
+    ]
+
+
+def learned_by(twin_id, *statements):
+    return tuple(
+        LearnedObservation(
+            twin_id=twin_id,
+            number=number,
+            statement=statement,
+            source=LearningSource.OWNER,
+            added_in_version=number,
+            approved_at=NOW,
+        )
+        for number, statement in enumerate(statements, 1)
+    )
+
+
+def test_a_review_gives_each_twin_what_it_learned_and_leaves_the_verdict_as_it_was(monkeypatch):
+    twin_id = first_twin().twin_id
+    learned = {
+        twin_id: learned_by(twin_id, "Il gruppo usa il telefono.", "Il gruppo lavora di notte.")
+    }
+    studios = []
+    for known in (learned, None):
+        current = Studio(monkeypatch, *review_answers(), learned=known)
+        with current.client() as client:
+            record(client, FIRST)
+            assert review(client).status_code == 201
+        studios.append(current)
+    studio, plain = studios
+    first, second, verdict = studio.calls
+    assert first["context"]["user_twin"]["learned"] == [
+        {"code": "OBS-001", "statement": "Il gruppo usa il telefono.", "source": "OWNER"},
+        {"code": "OBS-002", "statement": "Il gruppo lavora di notte.", "source": "OWNER"},
+    ]
+    assert first["instruction"] == f"{CRITIQUE_INSTRUCTION} {LEARNED_INSTRUCTION}"
+    assert "learned" not in second["context"]["user_twin"]
+    assert second["instruction"] is CRITIQUE_INSTRUCTION
+    assert "user_twin" not in verdict["context"]
+    assert verdict["instruction"] is ALIGNMENT_INSTRUCTION
+    plain_first, plain_second, plain_verdict = plain.calls
+    assert plain_first["context"] == {
+        **first["context"],
+        "user_twin": {
+            key: value for key, value in first["context"]["user_twin"].items() if key != "learned"
+        },
+    }
+    assert plain_first["instruction"] is CRITIQUE_INSTRUCTION
+    assert plain_second["context"] == second["context"]
+    assert plain_verdict["context"] == verdict["context"]
+    assert studio.evidence.kinds() == plain.evidence.kinds()
+    assert [sorted(payload) for payload in studio.evidence.payloads("ADAPTER_ACCEPTED")] == [
+        sorted(payload) for payload in plain.evidence.payloads("ADAPTER_ACCEPTED")
+    ]
