@@ -2,6 +2,7 @@
 import { computed, provide, ref, watch } from "vue";
 
 import DeclarativePrototypePreview from "./DeclarativePrototypePreview.vue";
+import ProjectAcceptanceTestsPanel from "./ProjectAcceptanceTestsPanel.vue";
 import ProjectDevelopmentPanel from "./ProjectDevelopmentPanel.vue";
 import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
@@ -810,6 +811,13 @@ watch(() => props.projectId, loadHistory, { immediate: true });
     </section>
 
     <ProjectDevelopmentPanel
+      v-if="designApproved"
+      :project-id="projectId"
+      :locale="locale"
+      :authorize="authorizedRequest"
+    />
+
+    <ProjectAcceptanceTestsPanel
       v-if="designApproved"
       :project-id="projectId"
       :locale="locale"

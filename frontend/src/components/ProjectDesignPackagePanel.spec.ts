@@ -134,7 +134,7 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
   const wrapper = mount(ProjectDesignPackagePanel, {
     global: {
       plugins: [createAppI18n(options.locale ?? "en")],
-      stubs: { ProjectDevelopmentPanel: true },
+      stubs: { ProjectDevelopmentPanel: true, ProjectAcceptanceTestsPanel: true },
     },
     props: {
       projectId: PROJECT_ID,
@@ -459,6 +459,7 @@ describe("ProjectDesignPackagePanel", () => {
     );
     expect(wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
     expect(wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "ProjectAcceptanceTestsPanel" }).exists()).toBe(false);
     await expectAccessible(wrapper.element);
     wrapper.unmount();
   });
@@ -558,6 +559,31 @@ describe("ProjectDesignPackagePanel", () => {
     await flushPromises();
     expect(waiting.wrapper.findComponent({ name: "ProjectDevelopmentPanel" }).exists()).toBe(false);
     expect(waiting.wrapper.find('[data-testid="package-terminal"]').exists()).toBe(false);
+    waiting.wrapper.unmount();
+  });
+
+  it("shows the acceptance tests right after the development outside the Studio once the design is approved", async () => {
+    const approved = mountPanel(knowledgeApi(), { locale: "it" });
+    await flushPromises();
+
+    const tests = approved.wrapper.findComponent({ name: "ProjectAcceptanceTestsPanel" });
+    expect(tests.exists()).toBe(true);
+    expect(tests.props("projectId")).toBe(PROJECT_ID);
+    expect(tests.props("locale")).toBe("it");
+    expect(tests.props("api")).toBeUndefined();
+    const authorize = tests.props("authorize") as <T>(
+      operation: (accessToken: string) => Promise<T>,
+    ) => Promise<T>;
+    await expect(authorize(async (accessToken) => accessToken)).resolves.toBe("access-token");
+    const development = approved.wrapper.findComponent({ name: "ProjectDevelopmentPanel" });
+    expect(development.element.nextElementSibling).toBe(tests.element);
+    approved.wrapper.unmount();
+
+    const waiting = mountPanel(knowledgeApi(), { stages: approvedUpTo(4) });
+    await flushPromises();
+    expect(waiting.wrapper.findComponent({ name: "ProjectAcceptanceTestsPanel" }).exists()).toBe(
+      false,
+    );
     waiting.wrapper.unmount();
   });
 

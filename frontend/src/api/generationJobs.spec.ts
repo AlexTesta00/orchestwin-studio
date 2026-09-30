@@ -535,6 +535,41 @@ describe("Generation Jobs API client", () => {
     );
   });
 
+  it.each([
+    ["TEST_PLAN", { status: "PLANNED", plan: { id: "plan-1" } }],
+    ["TEST_REVIEW", { status: "REVIEWED", review: { id: "review-1" } }],
+  ] as const)("reads the job of a %s started by ut test", (operation, body) => {
+    const ended = {
+      ...job(),
+      operation,
+      status: "SUCCEEDED",
+      stage: null,
+      finished_at: "2026-09-28T10:03:00+00:00",
+      response: { status_code: 201, body },
+    };
+
+    expect(generationJobOf(ended)).toEqual(
+      job({
+        operation,
+        status: "SUCCEEDED",
+        stage: null,
+        finished_at: "2026-09-28T10:03:00+00:00",
+        response: { status_code: 201, body },
+      }),
+    );
+  });
+
+  it("lists the running plan and review of the acceptance tests started by ut test", async () => {
+    const plan = job({ operation: "TEST_PLAN" });
+    const review = job({
+      job_id: "00000000-0000-4000-8000-0000000000ab",
+      operation: "TEST_REVIEW",
+    });
+    const api = createGenerationJobsApi({ fetchImpl: async () => json({ items: [plan, review] }) });
+
+    await expect(api.list(PROJECT_ID, "token", "RUNNING")).resolves.toEqual([plan, review]);
+  });
+
   it("names a missing or cancelled job as a lost generation", () => {
     expect(isGenerationLost(GENERATION_JOB_NOT_FOUND)).toBe(true);
     expect(isGenerationLost(GENERATION_JOB_CANCELLED)).toBe(true);

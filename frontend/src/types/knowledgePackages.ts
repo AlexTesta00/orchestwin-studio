@@ -22,6 +22,7 @@ export interface PackageFeedbackPayload {
   discussions: number;
   insights: number;
   change_reviews: number;
+  test_runs?: number;
 }
 
 export interface PackageProgressPayload {
