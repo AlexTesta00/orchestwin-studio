@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import http.client
 import io
 import json
 import os
 import re
+import selectors
 import shutil
 import socket
 import subprocess
@@ -14,22 +16,38 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Coroutine, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import IO, Final
+from uuid import UUID
+
+from pydantic import SecretStr
 
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.api.requirements import RequirementsSpecificationPayload
 from orchestwin.artifacts.visual_catalog import ARCHETYPES
+from orchestwin.cli.browser import BrowserProgram, discovery, find_browsers
 from orchestwin.cli.environment import Environment
 from orchestwin.cli.http import Reply, UrlTransport, origin_of, unreachable
 from orchestwin.cli.main import main
 from orchestwin.cli.messages import text
 from orchestwin.models.design_mockups import MockupDraft, bind_mockup
+from orchestwin.persistence import DatabaseSettings, create_database_runtime
+from orchestwin.projects.acceptance_tests import (
+    SnapshotSummary,
+    TestPlan,
+    application_from_snapshot,
+    not_covered_from_snapshot,
+    path_from_snapshot,
+)
+from orchestwin.projects.persistence.acceptance_tests import (
+    AcceptanceTestWriteStatus,
+    SqlAlchemyAcceptanceTestRepository,
+)
 
 HOST: Final = "127.0.0.1"
 API_PREFIX: Final = "/api/v1"
@@ -84,6 +102,9 @@ GIT_OPTIONS: Final = (
     f"user.email={GIT_EMAIL}",
 )
 GIT_CLEARED: Final = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY")
+STUDIO_VARIABLE_PREFIX: Final = "ORCHESTWIN_"
+BROWSER_VARIABLES: Final = frozenset(discovery.VARIABLES.values())
+ACCOUNT_PATH: Final = "/auth/me"
 
 
 class StudioFailure(RuntimeError):
@@ -529,6 +550,56 @@ class Terminal:
         document = json.loads(self.sessions_file.read_bytes().decode("utf-8"))
         return document if isinstance(document, dict) else {}
 
+    def run_on_machine(
+        self,
+        arguments: Sequence[str],
+        *,
+        directory: Path,
+        machine: Mapping[str, str],
+        answers: Sequence[str] = (),
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        directory.mkdir(parents=True, exist_ok=True)
+        transport = RecordingTransport(self.origin)
+        browser = Browser()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        environment = Environment(
+            stdin=io.StringIO("".join(f"{answer}\n" for answer in answers)),
+            stdout=stdout,
+            stderr=stderr,
+            variables={
+                **machine_variables(machine),
+                CONFIG_VARIABLE: str(self.config),
+                "NO_COLOR": "1",
+                "COLUMNS": TERMINAL_COLUMNS,
+            },
+            home=self.home,
+            working_directory=directory,
+            platform=sys.platform,
+            interactive=False,
+            now=utc_now,
+            monotonic=time.monotonic,
+            sleep=sleep,
+            read_secret=no_secret,
+            open_browser=browser.open,
+            transport=transport,
+            system_language=LANGUAGE,
+        )
+        status = main(list(arguments), environment=environment)
+        self.refused.extend(transport.refused)
+        run = Run(
+            arguments=tuple(arguments),
+            directory=directory,
+            status=status,
+            output=stdout.getvalue(),
+            errors=stderr.getvalue(),
+            opened=tuple(browser.opened),
+            exchanges=tuple(transport.exchanges),
+        )
+        self.runs.append(run)
+        return run
+
 
 @dataclass
 class Journey:
@@ -595,6 +666,22 @@ class Scene:
 
     def folder_numbers(self) -> list[int]:
         return [item["version_number"] for item in self.folders()]
+
+    def ut_on_machine(
+        self,
+        *arguments: str,
+        machine: Mapping[str, str],
+        directory: Path | None = None,
+        answers: Sequence[str] = (),
+        sleep: Callable[[float], None] = short_wait,
+    ) -> Run:
+        return self.terminal.run_on_machine(
+            arguments,
+            directory=self.project if directory is None else directory,
+            machine=machine,
+            answers=answers,
+            sleep=sleep,
+        )
 
 
 def journey_scene(root: Path, origin: str, port: int, api: StudioApi) -> Scene:
@@ -693,6 +780,86 @@ class Repository:
         self.git("add", "--", *files)
         self.git("commit", "-q", "-m", message, moment=moment)
         return self.git("rev-parse", "HEAD").strip()
+
+
+def machine_variables(machine: Mapping[str, str]) -> dict[str, str]:
+    return {
+        name: value
+        for name, value in machine.items()
+        if not name.upper().startswith(STUDIO_VARIABLE_PREFIX) or name.upper() in BROWSER_VARIABLES
+    }
+
+
+def installed_browsers(machine: Mapping[str, str], home: Path) -> tuple[BrowserProgram, ...]:
+    environment = Environment(
+        stdin=io.StringIO(),
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+        variables=machine_variables(machine),
+        home=home,
+        working_directory=home,
+        platform=sys.platform,
+        interactive=False,
+        now=utc_now,
+        monotonic=time.monotonic,
+        sleep=short_wait,
+        read_secret=no_secret,
+        open_browser=Browser().open,
+        transport=UrlTransport(),
+        system_language=LANGUAGE,
+    )
+    return find_browsers(environment)
+
+
+def insert_test_plan(scene: Scene, plan: Mapping[str, object], *, database_url: str) -> None:
+    account = scene.api.document(ACCOUNT_PATH)
+    reference = plan["reference"]
+    application = application_from_snapshot(plan["application"])
+    stored = TestPlan(
+        id=UUID(str(plan["id"])),
+        project_id=UUID(scene.project_id),
+        owner_user_id=UUID(str(account["id"])),
+        created_at=datetime.fromisoformat(str(plan["created_at"])),
+        locale=str(plan["locale"]),
+        requirements_version_number=reference["requirements_version_number"],
+        design_version_number=reference["design_version_number"],
+        alternative_code=reference["alternative_code"],
+        application=application,
+        criteria=tuple(plan["criteria"]),
+        paths=tuple(path_from_snapshot(item) for item in plan["paths"]),
+        not_covered=tuple(not_covered_from_snapshot(item) for item in plan["not_covered"]),
+        replan_of=tuple(plan["replan_of"]),
+        snapshot_summary=SnapshotSummary(
+            url=application.address, title="", elements=0, text_length=0
+        ),
+        cost_microusd=plan["cost_microusd"],
+    )
+    status = run_coroutine(store_test_plan(database_url, stored))
+    if status is not AcceptanceTestWriteStatus.RECORDED:
+        raise StudioFailure(f"the test plan was not stored: {status}")
+
+
+async def store_test_plan(database_url: str, plan: TestPlan) -> AcceptanceTestWriteStatus:
+    settings = DatabaseSettings(url=SecretStr(database_url), _env_file=None)
+    runtime = create_database_runtime(settings)
+    try:
+        async with runtime.session_factory() as session, session.begin():
+            repository = SqlAlchemyAcceptanceTestRepository(
+                session, owner_user_id=plan.owner_user_id
+            )
+            return await repository.create_plan(plan)
+    finally:
+        await runtime.dispose()
+
+
+def run_coroutine(coroutine: Coroutine[object, object, object]) -> object:
+    if sys.platform == "win32":
+        return asyncio.run(coroutine, loop_factory=selector_loop)
+    return asyncio.run(coroutine)
+
+
+def selector_loop() -> asyncio.AbstractEventLoop:
+    return asyncio.SelectorEventLoop(selectors.SelectSelector())
 
 
 def table_rows(output: str) -> list[list[str]]:

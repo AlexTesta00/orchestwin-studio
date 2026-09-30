@@ -100,6 +100,8 @@ MCP_TOOLS = (
     "get_feedback",
     "ask_twin",
     "review_changes",
+    "get_test_results",
+    "run_tests",
 )
 
 

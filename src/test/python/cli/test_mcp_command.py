@@ -13,12 +13,12 @@ from .support.terminal import Run, link_folder, run_ut
 from .support.transports import NoNetwork
 
 FREE = (
-    "Without --spend the paid tools ask_twin and review_changes answer with an error; to allow "
-    "them, add --spend."
+    "Without --spend the paid tools ask_twin, review_changes and run_tests answer with an error; "
+    "to allow them, add --spend."
 )
 SPEND = (
-    "With --spend the agents can use ask_twin and review_changes: each call is a spending of the "
-    "model."
+    "With --spend the agents can use ask_twin, review_changes and run_tests: each call is a "
+    "spending of the model."
 )
 NOT_LINKED = (
     "This folder is not linked to a project of the Studio, so the MCP server has no knowledge "
@@ -153,8 +153,8 @@ def test_the_configuration_speaks_the_language_of_the_command(tmp_path: Path) ->
     run = config(tmp_path, "claude-code", language="it")
 
     assert run.output.splitlines()[:4] == [
-        "Senza --spend gli strumenti a pagamento ask_twin e review_changes rispondono con un "
-        "errore; per permetterli aggiungi --spend.",
+        "Senza --spend gli strumenti a pagamento ask_twin, review_changes e run_tests rispondono "
+        "con un errore; per permetterli aggiungi --spend.",
         "Per aggiungere il server a Claude Code lancia questo comando dalla cartella del progetto:",
         claude_line(tmp_path),
         "Oppure scrivi questo nel file .mcp.json della cartella del progetto:",
@@ -252,7 +252,8 @@ def test_an_unknown_option_is_wrong_usage(tmp_path: Path) -> None:
         (
             "it",
             [
-                "permette agli agenti gli strumenti a pagamento ask_twin e review_changes",
+                "permette agli agenti gli strumenti a pagamento ask_twin, review_changes e "
+                "run_tests",
                 "invece di avviare il server mostra la configurazione da copiare nell'editor",
                 "Avvia il server MCP orchestwin-twins",
             ],
@@ -260,7 +261,7 @@ def test_an_unknown_option_is_wrong_usage(tmp_path: Path) -> None:
         (
             "en",
             [
-                "allow the agents the paid tools ask_twin and review_changes",
+                "allow the agents the paid tools ask_twin, review_changes and run_tests",
                 "instead of starting the server, show the configuration to copy into the editor",
                 "Start the MCP server orchestwin-twins",
             ],

@@ -14,6 +14,8 @@ from .support.transports import API, ScriptedTransport
 LOCAL = "http://127.0.0.1:8000"
 BASE = f"{API}/projects/{PROJECT_ID}"
 ALIGNED = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
+TEST_RUN = "00000000-0000-4000-8000-00000000e001"
+TEST_SUMMARY = {"passed": 3, "failed": 1, "blocked": 1, "not_covered": 2, "not_run": 0}
 BUDGET = {
     "currency": "USD",
     "per_generation_microusd": 5_000_000,
@@ -61,6 +63,28 @@ def alignment_document(
     }
 
 
+def acceptance_document(
+    *, runs: int = 0, summary: dict[str, int] | None = None
+) -> dict[str, object]:
+    latest = (
+        None
+        if runs == 0
+        else {
+            "id": TEST_RUN,
+            "finished_at": "2026-09-29T10:01:12+00:00",
+            "summary": summary or TEST_SUMMARY,
+        }
+    )
+    return {
+        "project_id": PROJECT_ID,
+        "reference": {"requirements": None, "design": None},
+        "plan_available": True,
+        "plans": 1 if runs else 0,
+        "runs": runs,
+        "latest_run": latest,
+    }
+
+
 def expect_alignment(
     transport: ScriptedTransport, document: dict[str, object], recorded: int
 ) -> None:
@@ -84,6 +108,7 @@ def expect_studio(
     alignment: dict[str, object] | None = None,
     recorded: int = 3,
     routes: bool = True,
+    tests: dict[str, object] | None = None,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -156,8 +181,16 @@ def expect_studio(
         expect_alignment(
             transport, alignment_document() if alignment is None else alignment, recorded
         )
+        transport.expect(
+            "GET",
+            f"{BASE}/acceptance-tests",
+            body=acceptance_document() if tests is None else tests,
+        )
     elif later_approved:
         transport.expect("GET", f"{BASE}/alignment", status=404, body={"detail": "Not Found"})
+        transport.expect(
+            "GET", f"{BASE}/acceptance-tests", status=404, body={"detail": "Not Found"}
+        )
     if budget:
         transport.expect("GET", f"{API}/model-runtime/budget", body=BUDGET)
         transport.expect(
@@ -482,7 +515,8 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
         "remaining_usd": 25.13,
     }
     assert document["alignment"] is None
-    assert list(document)[-1] == "alignment"
+    assert document["tests"] is None
+    assert list(document)[-2:] == ["alignment", "tests"]
 
 
 def saved_steps(project: ProjectFolder) -> None:
@@ -762,6 +796,181 @@ def test_a_broken_knowledge_folder_is_reported(tmp_path: Path) -> None:
         "The knowledge folder here cannot be read (FOLDER_DOCUMENT_INVALID): check it with "
         "`ut package verify`." in run.output
     )
+
+
+def folder_with_tests(project: ProjectFolder, runs: int, tests: object) -> None:
+    project.knowledge.mkdir(parents=True)
+    stages = ("brief", "team", "twins", "requirements", "design")
+    manifest = {
+        "schema_version": 3,
+        "package": {"version_number": 5, "content_hash": "c"},
+        "project": {"id": PROJECT_ID, "name": "Calcolo mancia"},
+        "stages": {
+            stage: {"version_number": 1, "gate": {"status": "APPROVED"}} for stage in stages
+        },
+        "progress": {"approved": list(stages), "pending": None, "complete": True},
+        "feedback": {"tests": "twins/feedback/tests.json", "test_runs": runs},
+        "files": {},
+    }
+    (project.knowledge / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+    feedback = project.knowledge / "twins" / "feedback"
+    feedback.mkdir(parents=True)
+    (feedback / "tests.json").write_text(json.dumps(tests), encoding="utf-8")
+
+
+def local_tests_document() -> dict[str, object]:
+    return {
+        "schema_version": 3,
+        "kind": "orchestwin.test-reviews",
+        "project_id": PROJECT_ID,
+        "runs": [
+            {
+                "id": TEST_RUN,
+                "finished_at": "2026-09-29T12:30:00+02:00",
+                "summary": {"passed": 1, "failed": 0, "blocked": 0, "not_covered": 1},
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "Acceptance tests: latest run on 2026-09-29 10:01 UTC: 3 passed, 1 failed, 1 blocked, "
+            "2 not covered.",
+        ),
+        (
+            "it",
+            "Verifica dei criteri: ultima esecuzione il 2026-09-29 10:01 UTC: 3 superati, 1 "
+            "falliti, 1 bloccati, 2 non coperti.",
+        ),
+    ],
+)
+def test_the_latest_run_of_the_tests_follows_the_development_line(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    signed_in_folder(tmp_path)
+    studio = dict(
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=3,
+        tests=acceptance_document(runs=2),
+    )
+    text = expect_studio(ScriptedTransport(), **studio)
+    as_json = expect_studio(ScriptedTransport(), **studio)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    lines = run.output.splitlines()
+    position = lines.index(line)
+    assert lines[position - 1].startswith(("Development:", "Sviluppo:"))
+    assert lines[position + 1].startswith(("Spent", "Spesa"))
+    assert document["tests"] == {
+        "runs": 2,
+        "latest": {
+            "id": TEST_RUN,
+            "finished_at": "2026-09-29T10:01:12+00:00",
+            "summary": TEST_SUMMARY,
+        },
+    }
+    assert list(document)[-1] == "tests"
+    text.assert_done()
+
+
+def test_a_studio_without_runs_shows_no_line_of_the_tests(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    studio = dict(
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=3,
+    )
+
+    run = run_ut(["status"], tmp_path, transport=expect_studio(ScriptedTransport(), **studio))
+    document = json.loads(
+        run_ut(
+            ["status", "--json"], tmp_path, transport=expect_studio(ScriptedTransport(), **studio)
+        ).output
+    )
+
+    assert not any(line.startswith("Acceptance tests") for line in run.output.splitlines())
+    assert document["tests"] is None
+
+
+def test_a_studio_without_the_route_of_the_tests_leaves_them_to_the_folder(
+    tmp_path: Path,
+) -> None:
+    project = signed_in_folder(tmp_path)
+    folder_with_tests(project, 1, local_tests_document())
+    transport = expect_studio(
+        ScriptedTransport(),
+        stage="PACKAGE",
+        action="DOWNLOAD_FOLDER",
+        twins_approved=True,
+        later_approved=True,
+        folder=5,
+        routes=False,
+    )
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    assert (
+        "Acceptance tests: latest run on 2026-09-29 10:30 UTC: 1 passed, 0 failed, 0 blocked, "
+        "1 not covered." in run.output.splitlines()
+    )
+    transport.assert_done()
+
+
+def test_offline_the_tests_come_from_the_folder(tmp_path: Path) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_tests(project, 2, local_tests_document())
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert (
+        "Acceptance tests: latest run on 2026-09-29 10:30 UTC: 1 passed, 0 failed, 0 blocked, "
+        "1 not covered." in run.output.splitlines()
+    )
+    assert document["tests"] == {
+        "runs": 2,
+        "latest": {
+            "id": TEST_RUN,
+            "finished_at": "2026-09-29T12:30:00+02:00",
+            "summary": {"passed": 1, "failed": 0, "blocked": 0, "not_covered": 1, "not_run": 0},
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("runs", "tests", "expected"),
+    [
+        (0, {"runs": []}, None),
+        (2, "not an object", {"runs": 2, "latest": None}),
+        (1, {"runs": []}, {"runs": 1, "latest": None}),
+    ],
+)
+def test_offline_a_folder_without_a_readable_run_shows_no_line(
+    tmp_path: Path, runs: int, tests: object, expected: object
+) -> None:
+    project = link_folder(tmp_path / "project")
+    folder_with_tests(project, runs, tests)
+
+    run = run_ut(["status", "--offline"], tmp_path, transport=ScriptedTransport())
+    document = json.loads(
+        run_ut(["status", "--offline", "--json"], tmp_path, transport=ScriptedTransport()).output
+    )
+
+    assert not any(line.startswith("Acceptance tests") for line in run.output.splitlines())
+    assert document["tests"] == expected
 
 
 def test_status_from_a_subfolder_and_from_the_project_option(tmp_path: Path) -> None:

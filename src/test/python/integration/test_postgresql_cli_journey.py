@@ -416,6 +416,7 @@ def show_the_state(scene: Scene) -> None:
         },
         "spending": None,
         "alignment": None,
+        "tests": None,
     }, as_json.transcript()
 
 

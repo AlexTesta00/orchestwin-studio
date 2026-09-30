@@ -39,6 +39,8 @@ TOOL_ORDER = [
     "get_feedback",
     "ask_twin",
     "review_changes",
+    "get_test_results",
+    "run_tests",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -200,7 +202,7 @@ def test_the_version_of_the_client_is_answered_when_it_is_known(
     assert messages(run)[1]["result"]["protocolVersion"] == answered
 
 
-def test_the_eight_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
+def test_the_ten_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
     state_folder(tmp_path)
 
     run = serve(tmp_path, initialize(), request(2, "tools/list"))
@@ -215,7 +217,7 @@ def test_the_eight_tools_are_listed_with_schemas_that_hold_together(tmp_path: Pa
         assert tool["title"]
         assert tool["description"]
         for field in schema["properties"].values():
-            assert field["type"] in ("string", "integer", "array")
+            assert field["type"] in ("string", "integer", "array", "object", "boolean")
             assert field["description"]
             if "pattern" in field:
                 re.compile(field["pattern"])
@@ -228,6 +230,8 @@ def test_the_eight_tools_are_listed_with_schemas_that_hold_together(tmp_path: Pa
         "get_feedback": [],
         "ask_twin": ["twin", "question"],
         "review_changes": [],
+        "get_test_results": [],
+        "run_tests": [],
     }
     assert tools[5]["inputSchema"]["properties"]["limit"] == {
         "type": "integer",
