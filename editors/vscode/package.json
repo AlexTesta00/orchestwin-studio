@@ -1,0 +1,117 @@
+{
+  "name": "orchestwin-studio",
+  "displayName": "OrchesTwin Studio",
+  "description": "%description%",
+  "publisher": "orchestwin",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./extension.js",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.orchestwin/project.json"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "orchestwin",
+          "title": "%container.title%",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "orchestwin": [
+        {
+          "type": "webview",
+          "id": "orchestwin.panel",
+          "name": "%view.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "orchestwin.refresh",
+        "title": "%command.refresh%",
+        "category": "OrchesTwin",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "orchestwin.status",
+        "title": "%command.status%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.test",
+        "title": "%command.test%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.align",
+        "title": "%command.align%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.recheck",
+        "title": "%command.recheck%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.code",
+        "title": "%command.code%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.tasks",
+        "title": "%command.tasks%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.twinsUpdate",
+        "title": "%command.twinsUpdate%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.openReport",
+        "title": "%command.openReport%",
+        "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.connectAgents",
+        "title": "%command.connectAgents%",
+        "category": "OrchesTwin"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "orchestwin.refresh",
+          "when": "view == orchestwin.panel",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "orchestwin.utCommand": {
+          "type": "string",
+          "default": "ut",
+          "scope": "machine",
+          "description": "%configuration.utCommand%"
+        }
+      }
+    }
+  }
+}
