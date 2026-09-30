@@ -41,6 +41,7 @@ ASK_TWIN: Final = "ask_twin"
 REVIEW_CHANGES: Final = "review_changes"
 GET_TEST_RESULTS: Final = "get_test_results"
 RUN_TESTS: Final = "run_tests"
+GET_TASKS: Final = "get_tasks"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
@@ -53,6 +54,10 @@ BROWSER: Final = "browser"
 FLAG: Final = "flag"
 REVIEW: Final = "review"
 NEW_PLAN: Final = "new_plan"
+STATUS: Final = "status"
+OPEN_TASKS: Final = "open"
+ALL_TASKS: Final = "all"
+TASK_FILTERS: Final = (OPEN_TASKS, ALL_TASKS)
 HASH_PATTERN: Final = "^[0-9a-fA-F]{7,64}$"
 REVISION_PATTERN: Final = "^(?:[0-9a-fA-F]{7,64}|HEAD)$"
 HEAD: Final = "HEAD"
@@ -76,6 +81,7 @@ INVALID_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         APPLICATION: "mcp.argument_application",
         BROWSER: "mcp.argument_browser",
         FLAG: "mcp.argument_flag",
+        STATUS: "mcp.argument_status",
     }
 )
 SPEND_REQUIRED: Final = "SPEND_REQUIRED"
@@ -150,7 +156,7 @@ class Parameter:
     required: bool = False
     minimum: int = 1
     maximum: int = 200
-    default: int | None = None
+    default: int | str | None = None
 
     def schema(self, context: CommandContext) -> dict[str, object]:
         description = context.text(self.description)
@@ -190,6 +196,13 @@ class Parameter:
             }
         if self.kind == BROWSER:
             return {"type": "string", "enum": list(BROWSER_CHOICES), "description": description}
+        if self.kind == STATUS:
+            return {
+                "type": "string",
+                "enum": list(TASK_FILTERS),
+                "default": self.default,
+                "description": description,
+            }
         if self.kind == FLAG:
             return {"type": "boolean", "default": self.default, "description": description}
         if self.kind == COMMIT:
@@ -221,8 +234,9 @@ class Parameter:
         if not isinstance(raw, str):
             raise self.invalid(tool)
         value = " ".join(raw.split())
-        if self.kind == BROWSER:
-            if value.lower() not in BROWSER_CHOICES:
+        if self.kind in (BROWSER, STATUS):
+            choices = BROWSER_CHOICES if self.kind == BROWSER else TASK_FILTERS
+            if value.lower() not in choices:
                 raise self.invalid(tool)
             return value.lower()
         if self.kind == REVISION and value.upper() == HEAD:
@@ -492,6 +506,7 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
         "reference": None,
         "aligned": None,
         "pending_changes": [],
+        "stale_reviews": 0,
         "open_tasks": [],
     }
     try:
@@ -525,6 +540,7 @@ def project_state(session: Session, values: Mapping[str, object]) -> dict[str, o
         "reference": None if state is None else _mapping_or_none(state.get("reference")),
         "aligned": aligned,
         "pending_changes": pending,
+        "stale_reviews": found.stale_reviews(),
         "open_tasks": tasks,
         "next": next_step(session.language, found, state, changes, pending, tasks, aligned),
     }
@@ -587,6 +603,9 @@ def next_step(
 
 
 def list_twins(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    found = session.knowledge()
+    twins = folder_twins(session, found)
+    learned = learned_entries(found)
     return {
         "twins": [
             {
@@ -595,14 +614,18 @@ def list_twins(session: Session, values: Mapping[str, object]) -> dict[str, obje
                 "name": twin.name,
                 "role": twin.role,
                 "wants": twin.wants,
+                "label": twin_label(twin, learned.get(twin.twin_id)),
+                "learned_observations": learned_count(learned.get(twin.twin_id)),
             }
-            for twin in folder_twins(session)
+            for twin in twins
         ]
     }
 
 
 def get_twin(session: Session, values: Mapping[str, object]) -> dict[str, object]:
-    twin = pick(folder_twins(session), str(values["twin"]))
+    found = session.knowledge()
+    twin = pick(folder_twins(session, found), str(values["twin"]))
+    entry = learned_entries(found).get(twin.twin_id)
     observations: dict[str, object] = {}
     for item in twin.observations:
         key = item.get("observation_key")
@@ -622,7 +645,8 @@ def get_twin(session: Session, values: Mapping[str, object]) -> dict[str, object
             "pain_points": list(twin.values("pain_points")),
             "context_of_use": list(twin.values("context_of_use")),
             "observations": observations,
-        }
+        },
+        "learned": None if entry is None else _plain(entry),
     }
 
 
@@ -776,6 +800,12 @@ def get_test_results(session: Session, values: Mapping[str, object]) -> dict[str
     return {"runs": [_plain(run) for run in runs[:count]]}
 
 
+def get_tasks(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    tasks = knowledge.tasks(session.knowledge_root)
+    every = values.get(STATUS) == ALL_TASKS
+    return {"tasks": [_plain(task) for task in tasks if every or task.get("status") == OPEN_TASK]}
+
+
 def run_tests(session: Session, values: Mapping[str, object]) -> dict[str, object]:
     from orchestwin.cli.flows import test_run
 
@@ -845,11 +875,30 @@ def reviewed_run(body: object, status: int) -> Mapping[str, object]:
     return run
 
 
-def folder_twins(session: Session) -> tuple[Twin, ...]:
-    twins = session.knowledge().twins()
+def folder_twins(session: Session, found: Knowledge | None = None) -> tuple[Twin, ...]:
+    twins = (session.knowledge() if found is None else found).twins()
     if twins is None:
         raise stage_missing(session, "twins")
     return twins
+
+
+def learned_entries(found: Knowledge) -> dict[str, Mapping[str, object]]:
+    return {
+        entry["twin_id"]: entry
+        for entry in found.learning()
+        if isinstance(entry.get("twin_id"), str)
+    }
+
+
+def twin_label(twin: Twin, entry: Mapping[str, object] | None) -> str | None:
+    label = None if entry is None else entry.get("label")
+    if isinstance(label, str) and label.strip():
+        return label
+    return None if twin.version_number is None else str(twin.version_number)
+
+
+def learned_count(entry: Mapping[str, object] | None) -> int:
+    return 0 if entry is None else len(knowledge.mappings(entry.get("observations")))
 
 
 def pick(twins: Sequence[Twin], value: str) -> Twin:
@@ -992,6 +1041,13 @@ TOOLS: Final = (
             Parameter(NEW_PLAN, FLAG, "mcp.parameter_new_plan", default=False),
         ),
         paid=True,
+    ),
+    Tool(
+        GET_TASKS,
+        "mcp.title_get_tasks",
+        "mcp.describe_get_tasks",
+        get_tasks,
+        (Parameter(STATUS, STATUS, "mcp.parameter_task_status", default=OPEN_TASKS),),
     ),
 )
 TOOLS_BY_NAME: Final[Mapping[str, Tool]] = MappingProxyType({tool.name: tool for tool in TOOLS})

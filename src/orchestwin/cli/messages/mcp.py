@@ -84,50 +84,64 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.instructions_free": {
         "it": "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
         "«{project}» di OrchesTwin Studio: brief, requisiti, design scelto, stato dello "
-        "sviluppo, critiche dei twin sul codice ed esiti dei test di accettazione. Gli User "
-        "Twin sono profili dei gruppi di utenti del progetto simulati dal modello: le loro "
-        "risposte sono ipotesi da valutare, non opinioni di persone reali. Gli strumenti che "
-        "leggono la cartella sono gratuiti, compreso get_test_results con gli ultimi esiti dei "
-        "test; ask_twin e review_changes spendono sul modello e ora rispondono con un errore, "
-        "perché il server è stato avviato senza --spend. Lo stesso vale per run_tests, che "
-        "verifica i criteri di accettazione sull'applicazione nei browser di questo computer. "
-        "Le decisioni sui commit restano al proprietario del progetto, con `ut align`.",
+        "sviluppo, compiti per il codice, critiche dei twin sul codice ed esiti dei test di "
+        "accettazione. Gli User Twin sono profili dei gruppi di utenti del progetto simulati dal "
+        "modello: le loro risposte sono ipotesi da valutare, non opinioni di persone reali. "
+        "Durante lo sviluppo un twin può aver imparato osservazioni nuove sul suo gruppo, "
+        "approvate dal proprietario: get_twin e list_twins le mostrano, e dove contraddicono il "
+        "profilo valgono loro, perché sono più recenti. Gli strumenti che leggono la cartella "
+        "sono gratuiti, compresi get_tasks con i compiti aperti per il codice e "
+        "get_test_results con gli ultimi esiti dei test; ask_twin e review_changes spendono sul "
+        "modello e ora rispondono con un errore, perché il server è stato avviato senza "
+        "--spend. Lo stesso vale per run_tests, che verifica i criteri di accettazione "
+        "sull'applicazione nei browser di questo computer. Le decisioni sui commit e sui compiti "
+        "restano al proprietario del progetto, con `ut align` e `ut tasks`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
-        "state, the critiques of the twins on the code and the outcome of the acceptance tests. "
-        "User Twins are profiles of the user groups of the project simulated by the model: "
-        "their answers are hypotheses to weigh, not opinions of real people. The tools that "
-        "read the folder are free, get_test_results with the latest outcome of the tests "
-        "included; ask_twin and review_changes spend on the model and now answer with an "
-        "error, because the server was started without --spend. The same holds for run_tests, "
-        "which checks the acceptance criteria on the application in the browsers of this "
-        "computer. Decisions on the commits stay with the owner of the project, through "
-        "`ut align`.",
+        "state, the tasks for the code, the critiques of the twins on the code and the outcome "
+        "of the acceptance tests. User Twins are profiles of the user groups of the project "
+        "simulated by the model: their answers are hypotheses to weigh, not opinions of real "
+        "people. During the development a twin may have learned new observations about its "
+        "group, approved by the owner: get_twin and list_twins show them, and where they "
+        "contradict the profile they prevail, because they are newer. The tools that read the "
+        "folder are free, get_tasks with the open tasks for the code and get_test_results with "
+        "the latest outcome of the tests included; ask_twin and review_changes spend on the "
+        "model and now answer with an error, because the server was started without --spend. "
+        "The same holds for run_tests, which checks the acceptance criteria on the application "
+        "in the browsers of this computer. Decisions on the commits and on the tasks stay with "
+        "the owner of the project, through `ut align` and `ut tasks`.",
     },
     "mcp.instructions_spend": {
         "it": "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
         "«{project}» di OrchesTwin Studio: brief, requisiti, design scelto, stato dello "
-        "sviluppo, critiche dei twin sul codice ed esiti dei test di accettazione. Gli User "
-        "Twin sono profili dei gruppi di utenti del progetto simulati dal modello: le loro "
-        "risposte sono ipotesi da valutare, non opinioni di persone reali. Gli strumenti che "
-        "leggono la cartella sono gratuiti, compreso get_test_results con gli ultimi esiti dei "
-        "test; ask_twin e review_changes spendono sul modello a ogni chiamata e sono permessi, "
-        "perché il server è stato avviato con --spend. È permesso anche run_tests: verifica i "
-        "criteri di accettazione sull'applicazione nei browser di questo computer, registra "
-        "l'esito nello Studio e spende sul modello per il piano dei test e per le critiche dei "
-        "twin. Le decisioni sui commit restano al proprietario del progetto, con `ut align`.",
+        "sviluppo, compiti per il codice, critiche dei twin sul codice ed esiti dei test di "
+        "accettazione. Gli User Twin sono profili dei gruppi di utenti del progetto simulati dal "
+        "modello: le loro risposte sono ipotesi da valutare, non opinioni di persone reali. "
+        "Durante lo sviluppo un twin può aver imparato osservazioni nuove sul suo gruppo, "
+        "approvate dal proprietario: get_twin e list_twins le mostrano, e dove contraddicono il "
+        "profilo valgono loro, perché sono più recenti. Gli strumenti che leggono la cartella "
+        "sono gratuiti, compresi get_tasks con i compiti aperti per il codice e "
+        "get_test_results con gli ultimi esiti dei test; ask_twin e review_changes spendono sul "
+        "modello a ogni chiamata e sono permessi, perché il server è stato avviato con --spend. "
+        "È permesso anche run_tests: verifica i criteri di accettazione sull'applicazione nei "
+        "browser di questo computer, registra l'esito nello Studio e spende sul modello per il "
+        "piano dei test e per le critiche dei twin. Le decisioni sui commit e sui compiti "
+        "restano al proprietario del progetto, con `ut align` e `ut tasks`.",
         "en": "This server gives the agents of the editor the approved knowledge of the project "
         '"{project}" of OrchesTwin Studio: brief, requirements, chosen design, development '
-        "state, the critiques of the twins on the code and the outcome of the acceptance tests. "
-        "User Twins are profiles of the user groups of the project simulated by the model: "
-        "their answers are hypotheses to weigh, not opinions of real people. The tools that "
-        "read the folder are free, get_test_results with the latest outcome of the tests "
-        "included; ask_twin and review_changes spend on the model at each call and are "
-        "allowed, because the server was started with --spend. run_tests is allowed too: it "
-        "checks the acceptance criteria on the application in the browsers of this computer, "
-        "records the outcome in the Studio and spends on the model for the test plan and for "
-        "the critiques of the twins. Decisions on the commits stay with the owner of the "
-        "project, through `ut align`.",
+        "state, the tasks for the code, the critiques of the twins on the code and the outcome "
+        "of the acceptance tests. User Twins are profiles of the user groups of the project "
+        "simulated by the model: their answers are hypotheses to weigh, not opinions of real "
+        "people. During the development a twin may have learned new observations about its "
+        "group, approved by the owner: get_twin and list_twins show them, and where they "
+        "contradict the profile they prevail, because they are newer. The tools that read the "
+        "folder are free, get_tasks with the open tasks for the code and get_test_results with "
+        "the latest outcome of the tests included; ask_twin and review_changes spend on the "
+        "model at each call and are allowed, because the server was started with --spend. "
+        "run_tests is allowed too: it checks the acceptance criteria on the application in the "
+        "browsers of this computer, records the outcome in the Studio and spends on the model "
+        "for the test plan and for the critiques of the twins. Decisions on the commits and on "
+        "the tasks stay with the owner of the project, through `ut align` and `ut tasks`.",
     },
     "mcp.rpc_parse_error": {
         "it": "Il messaggio non è JSON valido.",
@@ -231,28 +245,40 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "L'argomento {name} di {tool} deve essere true oppure false.",
         "en": "The argument {name} of {tool} must be true or false.",
     },
+    "mcp.argument_status": {
+        "it": "L'argomento {name} di {tool} deve essere open oppure all.",
+        "en": "The argument {name} of {tool} must be open or all.",
+    },
     "mcp.title_project_state": {"it": "Stato del progetto", "en": "Project state"},
     "mcp.describe_project_state": {
         "it": "Stato del progetto letto dalla cartella di conoscenza: passi approvati, versioni "
-        "di requisiti e design da realizzare, punto allineato, commit successivi, compiti "
-        "aperti per il codice e che cosa fare dopo. Gratuito.",
+        "di requisiti e design da realizzare, punto allineato, commit successivi e quante loro "
+        "revisioni sono da rifare perché fatte su versioni precedenti, compiti aperti per il "
+        "codice e che cosa fare dopo. Gratuito.",
         "en": "State of the project read from the knowledge folder: approved steps, "
-        "requirements and design versions to implement, aligned point, later commits, open "
-        "tasks for the code and what to do next. Free.",
+        "requirements and design versions to implement, aligned point, later commits and how "
+        "many of their reviews need doing again because they were made on earlier versions, "
+        "open tasks for the code and what to do next. Free.",
     },
     "mcp.title_list_twins": {"it": "User Twin del progetto", "en": "User Twins of the project"},
     "mcp.describe_list_twins": {
-        "it": "Elenca gli User Twin approvati con numero, nome, ruolo e primo obiettivo. Gli "
-        "User Twin sono profili dei gruppi di utenti simulati dal modello. Gratuito.",
-        "en": "List the approved User Twins with number, name, role and first goal. User Twins "
-        "are profiles of the user groups simulated by the model. Free.",
+        "it": "Elenca gli User Twin approvati con numero, nome, ruolo, primo obiettivo, versione "
+        "(per esempio 1.2: profilo approvato 1, due passi di apprendimento durante lo sviluppo) "
+        "e numero di osservazioni imparate durante lo sviluppo. Gli User Twin sono profili dei "
+        "gruppi di utenti simulati dal modello. Gratuito.",
+        "en": "List the approved User Twins with number, name, role, first goal, version (for "
+        "example 1.2: approved profile 1, two learning steps during the development) and the "
+        "number of observations learned during the development. User Twins are profiles of the "
+        "user groups simulated by the model. Free.",
     },
     "mcp.title_get_twin": {"it": "Profilo di un User Twin", "en": "Profile of a User Twin"},
     "mcp.describe_get_twin": {
         "it": "Profilo completo di un User Twin: ruolo, obiettivi, frustrazioni, difficoltà, "
-        "contesto d'uso e ogni osservazione con la sua origine. Gratuito.",
+        "contesto d'uso e ogni osservazione con la sua origine; in learned, le osservazioni che "
+        "il twin ha imparato durante lo sviluppo, approvate dal proprietario. Gratuito.",
         "en": "Full profile of a User Twin: role, goals, frustrations, pain points, context of "
-        "use and every observation with its origin. Free.",
+        "use and every observation with its origin; in learned, the observations that the twin "
+        "learned during the development, approved by the owner. Free.",
     },
     "mcp.title_get_requirements": {"it": "Requisiti approvati", "en": "Approved requirements"},
     "mcp.describe_get_requirements": {
@@ -339,6 +365,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "critiche.",
         "en": "About {plan} USD for a new test plan and {review} USD per twin for the critiques.",
     },
+    "mcp.title_get_tasks": {"it": "Compiti per il codice", "en": "Tasks for the code"},
+    "mcp.describe_get_tasks": {
+        "it": "I compiti per il codice letti dalla cartella di conoscenza: il testo, i requisiti, "
+        "le schermate e i criteri che riguardano, da dove vengono (una critica di un twin su un "
+        "commit o sui test, la decisione su un commit, oppure il proprietario) e il loro stato; "
+        "con status all anche quelli fatti o lasciati cadere. Gratuito.",
+        "en": "The tasks for the code read from the knowledge folder: the text, the "
+        "requirements, screens and criteria they are about, where they come from (a critique of "
+        "a twin on a commit or on the tests, the decision on a commit, or the owner) and their "
+        "status; with status all also the ones done or dropped. Free.",
+    },
     "mcp.describe_disabled": {
         "it": "Ora non disponibile: il server è stato avviato senza --spend.",
         "en": "Not available now: the server was started without --spend.",
@@ -401,6 +438,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "quello salvato; di solito no.",
         "en": "Whether to ask the Studio for a new test plan, paid, instead of using the saved "
         "one again; usually no.",
+    },
+    "mcp.parameter_task_status": {
+        "it": "Quali compiti dare: open per quelli aperti, all per tutti; di solito open.",
+        "en": "Which tasks to give: open for the open ones, all for every task; usually open.",
     },
     "mcp.next_no_folder": {
         "it": "Qui non c'è ancora la cartella di conoscenza: continua con `ut init` oppure, se "
