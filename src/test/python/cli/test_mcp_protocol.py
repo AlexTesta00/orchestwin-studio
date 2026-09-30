@@ -19,7 +19,7 @@ from .support.transports import NoNetwork
 
 TOOL_NAMES = (
     "project_state, list_twins, get_twin, get_requirements, get_design, get_feedback, "
-    "ask_twin, review_changes, get_test_results, run_tests"
+    "ask_twin, review_changes, get_test_results, run_tests, get_tasks"
 )
 RPC_KEYS = (
     "mcp.rpc_parse_error",
@@ -258,7 +258,7 @@ def test_requests_before_initialize_are_refused_except_ping(tmp_path: Path) -> N
     assert started["result"]["protocolVersion"] == "2025-06-18"
     listed = answer(server, request(4, "tools/list"))
     assert isinstance(listed, dict)
-    assert len(listed["result"]["tools"]) == 10
+    assert len(listed["result"]["tools"]) == 11
 
 
 def test_initialize_can_be_sent_again_and_negotiates_again(tmp_path: Path) -> None:
@@ -310,7 +310,7 @@ def test_a_batch_gets_an_array_of_answers(tmp_path: Path) -> None:
     assert answered[2] == error(
         None, -32600, "The message is not a valid JSON-RPC 2.0 request.", "INVALID_REQUEST"
     )
-    assert len(answered[3]["result"]["tools"]) == 10
+    assert len(answered[3]["result"]["tools"]) == 11
 
 
 def test_an_empty_batch_is_an_invalid_request(tmp_path: Path) -> None:

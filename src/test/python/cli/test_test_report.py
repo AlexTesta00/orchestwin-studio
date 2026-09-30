@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.flows import test_report as report_flow
@@ -89,6 +92,8 @@ def test_the_report_is_a_page_without_scripts_and_with_relative_screenshots(
     )
     assert "Organizzatori volontari: the results are fine" in page
     assert "First attempt" not in page
+    assert "chip weak" not in page
+    assert '<p class="weak">' not in page
 
 
 def test_the_report_speaks_the_language_of_the_command_and_names_the_first_attempt(
@@ -269,6 +274,102 @@ def test_the_words_of_steps_targets_and_expectations(tmp_path: Path) -> None:
     ) == ('Choose "15%" in combobox "Mancia"; expected: the address contains "/totale"')
     assert report_flow.step_text(context, {"action": "WAIT"}) == "WAIT"
     assert report_flow.step_text(context, None) == "-"
+
+
+WEAK = [
+    {"path": "TP-001", "step": 3, "kind": "VISIBLE_AT_OPENING", "text": "Marco  Rossi"},
+    {"path": "TP-002", "step": 2, "kind": "HIDDEN_AT_OPENING", "text": "Il nome <è> obbligatorio"},
+    {"path": "TP-009", "step": 1, "kind": "NEVER_ON_PAGE", "text": "Errore"},
+    {"path": "TP-002", "step": 1, "kind": "ABSENT_VISIBLE_AT_OPENING", "text": "Nessun ospite"},
+    {"path": "TP-001", "step": 1, "kind": "SOMETHING_ELSE", "text": "Lista"},
+]
+WEAK_SENTENCES = {
+    "en": (
+        'TP-001, step 3: the page shows "Marco Rossi" as soon as it opens, so this expectation '
+        "holds before anything is done.",
+        'TP-002, step 2: "Il nome <è> obbligatorio" is already in the page when it opens, in a '
+        "hidden part, so this expectation proves only that the part appeared.",
+        'TP-009, step 1: the page as it opens does not hold "Errore" anywhere, not even in its '
+        "hidden parts, so its absence proves little.",
+        'TP-002, step 1: "Nessun ospite" is already visible when the page opens, so its absence '
+        "cannot be verified: this expectation fails even when the application is right.",
+    ),
+    "it": (
+        "TP-001, passo 3: la pagina mostra «Marco Rossi» già quando si apre, quindi questa attesa "
+        "è vera prima di fare qualunque cosa.",
+        "TP-002, passo 2: «Il nome <è> obbligatorio» è già nella pagina quando si apre, in una "
+        "parte nascosta, quindi questa attesa prova soltanto che quella parte è comparsa.",
+        "TP-009, passo 1: la pagina, quando si apre, non contiene «Errore» da nessuna parte, "
+        "nemmeno nelle parti nascoste, quindi che manchi prova poco.",
+        "TP-002, passo 1: «Nessun ospite» è già visibile quando la pagina si apre, quindi che "
+        "manchi non si può verificare: questa attesa fallisce anche quando l'applicazione è "
+        "giusta.",
+    ),
+}
+WEAK_SUMMARIES = {
+    "en": "Expectations that prove little: 3. Each one is marked on its step with the reason; a "
+    "criterion passed only through them needs to be confirmed by hand.",
+    "it": "Attese che provano poco: 3. Ognuna è segnata sul suo passo con il motivo; un criterio "
+    "superato soltanto con queste attese va confermato a mano.",
+}
+MARKS = {"en": "proves little", "it": "prova poco"}
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_report_marks_the_expectations_that_prove_little(tmp_path: Path, language: str) -> None:
+    context, _ = console(tmp_path, language)
+    run = acceptance_run_document()
+    first = copy.deepcopy(run["results"][2])
+    first["path"]["code"] = "TP-009"
+    first["status"] = "BLOCKED"
+
+    page = report_flow.report_html(
+        context,
+        run,
+        project_name="Lista ospiti",
+        names=NAMES,
+        labels=LABELS,
+        first_attempt=[first],
+        weak=WEAK,
+    )
+
+    visible, hidden, _, shown = (html.escape(item, quote=True) for item in WEAK_SENTENCES[language])
+    summary = f'<p class="weak">{html.escape(WEAK_SUMMARIES[language], quote=True)}</p>'
+    mark = f'<span class="chip weak">{MARKS[language]}</span>'
+    assert page.index(summary) > page.index('<p class="summary">')
+    assert page.index(summary) < page.index('<section class="criterion">')
+    assert page.count(mark) == 6
+    assert page.count(f'<p class="weak">{visible}</p>') == 2
+    assert page.count(f'<p class="weak">{hidden}</p>') == 2
+    assert page.count(f'<p class="weak">{shown}</p>') == 2
+    assert page.index(shown) < page.index(hidden)
+    assert "Errore" not in page
+    assert f'{mark}<p class="weak">{visible}</p>' in page
+    firefox = page.index("TP-001 in Mozilla Firefox")
+    assert page.index(mark, firefox) < page.index("TP-002 in Google Chrome")
+    assert "<script" not in page.lower()
+    assert ".chip.weak{" in page
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_console_lists_the_expectations_that_prove_little(
+    tmp_path: Path, language: str
+) -> None:
+    context, bundle = console(tmp_path, language)
+
+    report_flow.show_weak(context, WEAK)
+    report_flow.show_weak(context, [WEAK[-1]])
+    report_flow.show_weak(context, [])
+
+    count = (
+        "Expectations that prove little: 4." if language == "en" else "Attese che provano poco: 4."
+    )
+    assert bundle.output.splitlines() == [
+        count,
+        *(f"- {line}" for line in WEAK_SENTENCES[language]),
+    ]
+    assert report_flow.weak_sentence(context, WEAK[-1]) == ""
+    assert report_flow.weak_sentence(context, WEAK[0]) == WEAK_SENTENCES[language][0]
 
 
 def test_moments_are_written_in_utc() -> None:

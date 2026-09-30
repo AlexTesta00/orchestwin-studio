@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import io
 import os
+import re
 import socketserver
 import sys
 import threading
@@ -21,6 +22,7 @@ from orchestwin.cli.browser import (
     PageSnapshot,
     find_browsers,
     matches_text,
+    normalized,
     open_page,
     resolve_target,
 )
@@ -33,6 +35,7 @@ from orchestwin.cli.environment import (
     utc_now,
 )
 
+from .support.browsers import FAKE_PNG
 from .support.transports import NoNetwork
 
 pytestmark = pytest.mark.browser
@@ -76,6 +79,38 @@ SENT_PAGE = """<!doctype html>
 <html lang="it"><head><meta charset="utf-8"><title>Inviato</title></head>
 <body><h1>Ordine inviato</h1></body></html>
 """
+HIDDEN_PAGE = """<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><title>Prova nascosti</title></head>
+<body>
+<h1>Pannello principale</h1>
+<p>Benvenuti nella vetrina.</p>
+<button type="button" id="reveal">Mostra dettagli</button>
+<section id="more" hidden>
+  <h2>Sezione rivelata</h2>
+  <p>Paragrafo segreto recuperabile.</p>
+  <img src="foto.png" alt="Fotografia nascosta" width="40" height="40">
+</section>
+<div style="display:none">Riquadro spento</div>
+<div style="visibility:hidden">Velo invisibile <span style="visibility:visible">Bordo luminoso</span></div>
+<details><summary>Domande frequenti</summary><p>Risposta chiusa</p></details>
+<div aria-hidden="true">Decorazione vistosa</div>
+<template><p>Modello inerte</p></template>
+<script>
+const note = "Codice riservato";
+document.getElementById("reveal").addEventListener("click", () => {
+  document.getElementById("more").hidden = false;
+});
+</script>
+</body>
+</html>
+"""
+OPEN_TEXTS = ("Pannello principale", "Benvenuti nella vetrina.", "Mostra dettagli")
+SECTION_TEXTS = ("Sezione rivelata", "Paragrafo segreto recuperabile.", "Fotografia nascosta")
+HIDDEN_TEXTS = ("Riquadro spento", "Velo invisibile", "Risposta chiusa")
+SHOWN_TEXTS = ("Bordo luminoso", "Domande frequenti", "Decorazione vistosa")
+INERT_TEXTS = ("Modello inerte", "Codice riservato")
+WORD = re.compile(r"\w+")
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -114,6 +149,8 @@ def site(tmp_path: Path) -> Iterator[str]:
     folder.mkdir()
     (folder / "index.html").write_text(ORDER_PAGE, encoding="utf-8", newline="\n")
     (folder / "sent.html").write_text(SENT_PAGE, encoding="utf-8", newline="\n")
+    (folder / "hidden.html").write_text(HIDDEN_PAGE, encoding="utf-8", newline="\n")
+    (folder / "foto.png").write_bytes(FAKE_PNG)
     handler = functools.partial(QuietHandler, directory=str(folder))
     server = LoopbackServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(
@@ -176,6 +213,10 @@ def target(snapshot: PageSnapshot, role: str, name: str, action: str | None = No
     return found
 
 
+def words(text: str) -> set[str]:
+    return set(WORD.findall(normalized(text)))
+
+
 @pytest.mark.parametrize("name", BROWSER_NAMES)
 def test_a_real_browser_reads_the_page_and_acts_like_a_person(
     tmp_path: Path, site: str, name: str
@@ -206,6 +247,7 @@ def test_a_real_browser_reads_the_page_and_acts_like_a_person(
         assert first.title == "Prova ordini"
         assert first.url == f"{site}/index.html"
         assert not matches_text(first.text, "Testo nascosto")
+        assert first.hidden_text == "Testo nascosto"
         size = target(first, "combobox", "Taglia", "SELECT")
         assert (size.value, size.options) == ("Piccola", ("Piccola", "Media", "Grande"))
 
@@ -231,12 +273,67 @@ def test_a_real_browser_reads_the_page_and_acts_like_a_person(
 
         assert sent.url.startswith(f"{site}/sent.html?name=Bruno&size=l&gift=on")
         assert sent.title == "Inviato"
+        assert sent.hidden_text == ""
         assert target(sent, "heading", "Ordine inviato").index == 0
         image = page.screenshot()
         assert image.startswith(PNG_SIGNATURE)
         assert len(image) > 1024
     finally:
         page.close()
+
+    assert len(starts.processes) == 1
+    assert all(process.poll() is not None for process in starts.processes)
+    assert not any(folder.exists() for folder in starts.folders)
+
+
+@pytest.mark.parametrize("name", BROWSER_NAMES)
+def test_a_real_browser_keeps_the_hidden_text_apart_from_the_visible_text(
+    tmp_path: Path, site: str, name: str
+) -> None:
+    starts = RecordedStarts()
+    environment = machine(tmp_path, starts)
+    program = installed(environment, name)
+    context = CommandContext(
+        environment, Console(environment, language="en", color=False), language="en"
+    )
+
+    page = open_page(context, program, language="it-IT", direct=True)
+    try:
+        page.open(f"{site}/hidden.html")
+        closed = page.snapshot()
+        page.click(target(closed, "button", "Mostra dettagli", "CLICK"))
+        opened = waited(
+            page, environment, lambda snapshot: matches_text(snapshot.text, SECTION_TEXTS[0])
+        )
+    finally:
+        page.close()
+
+    assert closed.hidden_text == " ".join((*SECTION_TEXTS, *HIDDEN_TEXTS))
+    assert all(matches_text(closed.text, text) for text in (*OPEN_TEXTS, *SHOWN_TEXTS))
+    assert not any(matches_text(closed.text, text) for text in (*SECTION_TEXTS, *HIDDEN_TEXTS))
+    assert not any(matches_text(closed.hidden_text, text) for text in (*OPEN_TEXTS, *SHOWN_TEXTS))
+    assert ("heading", "Sezione rivelata") not in {
+        (item.role, item.name) for item in closed.elements
+    }
+
+    assert opened.hidden_text == " ".join(HIDDEN_TEXTS)
+    assert all(
+        matches_text(opened.text, text) for text in (*OPEN_TEXTS, *SECTION_TEXTS, *SHOWN_TEXTS)
+    )
+    assert not any(matches_text(opened.hidden_text, text) for text in SECTION_TEXTS)
+    assert {("heading", "Sezione rivelata"), ("image", "Fotografia nascosta")} <= {
+        (item.role, item.name) for item in opened.elements
+    }
+
+    for snapshot in (closed, opened):
+        assert words(snapshot.text).isdisjoint(words(snapshot.hidden_text))
+        assert words(snapshot.text) | words(snapshot.hidden_text) == words(
+            " ".join((*OPEN_TEXTS, *SECTION_TEXTS, *HIDDEN_TEXTS, *SHOWN_TEXTS))
+        )
+        assert not any(
+            matches_text(f"{snapshot.text} {snapshot.hidden_text}", text) for text in INERT_TEXTS
+        )
+        assert list(snapshot.document()) == ["url", "title", "text", "hidden_text", "elements"]
 
     assert len(starts.processes) == 1
     assert all(process.poll() is not None for process in starts.processes)

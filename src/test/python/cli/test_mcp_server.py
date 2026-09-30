@@ -20,6 +20,7 @@ from .support.transports import NoNetwork, ScriptedTransport
 from .test_mcp_knowledge import (
     RECEPTION,
     VOLUNTEERS,
+    learning_folder,
     linked,
     schema_two_folder,
     state_folder,
@@ -41,6 +42,7 @@ TOOL_ORDER = [
     "review_changes",
     "get_test_results",
     "run_tests",
+    "get_tasks",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -202,7 +204,7 @@ def test_the_version_of_the_client_is_answered_when_it_is_known(
     assert messages(run)[1]["result"]["protocolVersion"] == answered
 
 
-def test_the_ten_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
+def test_the_eleven_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
     state_folder(tmp_path)
 
     run = serve(tmp_path, initialize(), request(2, "tools/list"))
@@ -232,6 +234,14 @@ def test_the_ten_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path
         "review_changes": [],
         "get_test_results": [],
         "run_tests": [],
+        "get_tasks": [],
+    }
+    assert tools[10]["inputSchema"]["properties"]["status"] == {
+        "type": "string",
+        "enum": ["open", "all"],
+        "default": "open",
+        "description": "Which tasks to give: open for the open ones, all for every task; usually "
+        "open.",
     }
     assert tools[5]["inputSchema"]["properties"]["limit"] == {
         "type": "integer",
@@ -308,6 +318,55 @@ def test_the_free_tools_answer_from_a_schema_two_folder(tmp_path: Path) -> None:
     assert state["next"].startswith("The design is approved, but this folder has no development")
     assert structured(answered[3]) == {"runs": [], "design_reviews": 0}
     assert structured(answered[4])["chosen"]["code"] == "DES-002"
+
+
+def test_the_tasks_and_what_the_twins_learned_answer_through_the_protocol(
+    tmp_path: Path,
+) -> None:
+    learning_folder(tmp_path, language="en")
+
+    run = serve(
+        tmp_path,
+        initialize(),
+        call(2, "get_tasks"),
+        call(3, "get_tasks", {"status": "all"}),
+        call(4, "list_twins"),
+        call(5, "get_twin", {"twin": "addetti"}),
+        call(6, "project_state"),
+        call(7, "get_tasks", {"status": "closed"}),
+    )
+
+    answered = messages(run)
+    assert [task["code"] for task in structured(answered[2])["tasks"]] == [
+        "TSK-001",
+        "TSK-003",
+        "TSK-005",
+    ]
+    assert [task["status"] for task in structured(answered[3])["tasks"]] == [
+        "OPEN",
+        "DONE",
+        "OPEN",
+        "DROPPED",
+        "OPEN",
+    ]
+    assert [
+        (twin["label"], twin["learned_observations"]) for twin in structured(answered[4])["twins"]
+    ] == [
+        ("1.3", 2),
+        ("1.0", 0),
+    ]
+    learned = structured(answered[5])["learned"]
+    assert (learned["label"], [item["code"] for item in learned["observations"]]) == (
+        "1.3",
+        ["OBS-001", "OBS-003"],
+    )
+    assert structured(answered[6])["stale_reviews"] == 1
+    assert answered[7]["error"] == {
+        "code": -32602,
+        "message": "The argument status of get_tasks must be open or all.",
+        "data": "INVALID_ARGUMENTS",
+    }
+    assert run.status == 0
 
 
 def test_without_the_knowledge_folder_the_tools_say_how_to_get_it(tmp_path: Path) -> None:

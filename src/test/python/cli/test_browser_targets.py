@@ -29,6 +29,7 @@ def test_the_constants_match_the_constants_of_the_studio() -> None:
     assert targets_module.INTERACTIVE_ROLES == state.INTERACTIVE_ROLES
     assert snapshot_module.MAX_SNAPSHOT_ELEMENTS == state.MAX_SNAPSHOT_ELEMENTS
     assert snapshot_module.MAX_SNAPSHOT_TEXT_LENGTH == state.MAX_SNAPSHOT_TEXT_LENGTH
+    assert snapshot_module.MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH == state.MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
     assert snapshot_module.MAX_SNAPSHOT_OPTIONS == state.MAX_SNAPSHOT_OPTIONS
     assert snapshot_module.MAX_TARGET_NAME_LENGTH == state.MAX_TARGET_NAME_LENGTH
     assert snapshot_module.MAX_VALUE_LENGTH == state.MAX_STEP_VALUE_LENGTH
@@ -249,11 +250,30 @@ def test_a_page_description_becomes_a_snapshot_and_back() -> None:
     assert snapshot_from_document(snapshot.document()) == snapshot
 
 
+def test_the_hidden_text_is_optional_collapsed_and_written_before_the_elements() -> None:
+    older = snapshot_from_document(DOCUMENT)
+    carried = snapshot_from_document({**DOCUMENT, "hidden_text": "  Totale \n nascosto "})
+
+    assert older.hidden_text == ""
+    assert carried.hidden_text == "Totale nascosto"
+    assert (carried.url, carried.title, carried.text, carried.elements) == (
+        older.url,
+        older.title,
+        older.text,
+        older.elements,
+    )
+    assert list(carried.document()) == ["url", "title", "text", "hidden_text", "elements"]
+    assert carried.document()["hidden_text"] == "Totale nascosto"
+    assert snapshot_from_document(carried.document()) == carried
+    assert PageSnapshot(url="u", title="t", text="x", elements=()).hidden_text == ""
+
+
 def test_long_texts_are_cut_to_the_limits() -> None:
     document = {
         **DOCUMENT,
         "title": "t" * 500,
         "text": "w " * 5000,
+        "hidden_text": "h " * 5000,
         "elements": [
             {
                 "index": 0,
@@ -270,6 +290,8 @@ def test_long_texts_are_cut_to_the_limits() -> None:
 
     assert len(snapshot.title) == state.MAX_TARGET_NAME_LENGTH
     assert len(snapshot.text) <= state.MAX_SNAPSHOT_TEXT_LENGTH
+    assert len(snapshot.hidden_text) <= state.MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
+    assert snapshot.hidden_text.startswith("h h ")
     only = snapshot.elements[0]
     assert len(only.name) == state.MAX_TARGET_NAME_LENGTH
     assert only.value is not None and len(only.value) == state.MAX_STEP_VALUE_LENGTH
@@ -280,6 +302,8 @@ def test_long_texts_are_cut_to_the_limits() -> None:
     ("change", "message"),
     [
         ({"url": None}, "url is not text"),
+        ({"hidden_text": None}, "hidden_text is not text"),
+        ({"hidden_text": 3}, "hidden_text is not text"),
         ({"elements": {}}, "elements is not a list"),
         ({"elements": [{"index": 1, "role": "button", "name": "x"}]}, "has the index 1"),
         ({"elements": [{"index": True, "role": "button", "name": "x"}]}, "has the index True"),

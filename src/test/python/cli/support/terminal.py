@@ -20,12 +20,14 @@ from orchestwin.cli.session import (
     StudioSession,
 )
 
+from .agents import no_agents
 from .browsers import no_browsers
 from .processes import no_processes
 from .transports import NoNetwork
 
 Runner = Callable[[Sequence[str], Path, float], ProcessResult]
 Starter = Callable[[Sequence[str], Path, Mapping[str, str]], RunningProcess]
+Interactive = Callable[[Sequence[str], Path, Mapping[str, str]], int]
 
 START = datetime(2026, 9, 29, 9, 0, tzinfo=UTC)
 MONOTONIC_ORIGIN = 1000.0
@@ -119,6 +121,7 @@ def terminal(
     working_directory: Path | None = None,
     processes: Runner | None = None,
     start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Terminal:
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
@@ -145,6 +148,7 @@ def terminal(
         system_language=language,
         run_process=no_processes if processes is None else processes,
         start_process=no_browsers if start_process is None else start_process,
+        run_interactive=no_agents if run_interactive is None else run_interactive,
     )
     return Terminal(environment=environment, clock=clock, browser=browser, secrets=keeper)
 
@@ -162,6 +166,7 @@ def environment(
     start: datetime | None = None,
     processes: Runner | None = None,
     start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Environment:
     return terminal(
         tmp_path,
@@ -175,6 +180,7 @@ def environment(
         start=start,
         processes=processes,
         start_process=start_process,
+        run_interactive=run_interactive,
     ).environment
 
 
@@ -193,6 +199,7 @@ def run_ut(
     start: datetime | None = None,
     processes: Runner | None = None,
     start_process: Starter | None = None,
+    run_interactive: Interactive | None = None,
 ) -> Run:
     bundle = terminal(
         tmp_path,
@@ -207,6 +214,7 @@ def run_ut(
         working_directory=working_directory,
         processes=processes,
         start_process=start_process,
+        run_interactive=run_interactive,
     )
     status = main(list(arguments), environment=bundle.environment)
     return Run(

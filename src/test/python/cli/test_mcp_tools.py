@@ -19,6 +19,7 @@ from orchestwin.cli.mcp.knowledge import Knowledge
 from orchestwin.cli.mcp.protocol import RpcError
 from orchestwin.cli.mcp.server import quiet_context
 from orchestwin.cli.mcp.tools import Tools
+from orchestwin.cli.messages import text
 from src.test.python.knowledge.knowledge_fixtures import (
     ALIGNED_COMMIT,
     PENDING_COMMIT,
@@ -29,7 +30,14 @@ from src.test.python.knowledge.knowledge_fixtures import (
     state_sources,
 )
 
-from .support.folders import acceptance_run_document, partial_archive, valid_archive
+from .support.folders import (
+    acceptance_run_document,
+    learned_entries,
+    legacy_task,
+    origin_tasks,
+    partial_archive,
+    valid_archive,
+)
 from .support.terminal import (
     PROJECT_ID,
     PROJECT_NAME,
@@ -44,14 +52,19 @@ from .test_mcp_knowledge import (
     RECEPTION,
     STAGES,
     VOLUNTEERS,
+    declare_learning,
     declare_tests,
     edit_json,
+    learning_folder,
     linked,
     runs_newest_first,
     schema_two_folder,
     state_folder,
     with_archive,
+    with_learning,
+    with_state_tasks,
     with_test_runs,
+    without_learning,
 )
 
 BASE = f"{API}/projects/{PROJECT_ID}"
@@ -93,6 +106,7 @@ TOOL_NAMES = [
     "review_changes",
     "get_test_results",
     "run_tests",
+    "get_tasks",
 ]
 RUN_FOLDER = ("tests", "20260929-100000")
 
@@ -301,7 +315,8 @@ def test_the_project_state_joins_the_link_the_folder_and_the_development_state(
 
     document = run(tools, "project_state")
 
-    reference = state_document(project.knowledge)["reference"]
+    state = state_document(project.knowledge)
+    reference = state["reference"]
     assert reference["requirements"]["version_number"] == 2
     assert (reference["design"]["version_number"], reference["design"]["alternative_code"]) == (
         4,
@@ -334,10 +349,12 @@ def test_the_project_state_joins_the_link_the_folder_and_the_development_state(
                 "decision": "CODE_TASKS",
             }
         ],
-        "open_tasks": [dict(sources.tasks[0])],
+        "stale_reviews": 0,
+        "open_tasks": [task for task in state["tasks"] if task["status"] == "OPEN"],
         "next": "Compiti aperti per il codice: 1 (TSK-001). Realizzali, fai il commit, poi "
         "lancia `ut align`.",
     }
+    assert [task["code"] for task in document["open_tasks"]] == [sources.tasks[0]["code"]]
 
 
 def test_the_next_step_speaks_the_language_of_the_link(tmp_path: Path) -> None:
@@ -559,6 +576,8 @@ def test_the_twins_come_from_the_folder_with_their_numbers(tmp_path: Path) -> No
                 "name": RECEPTION,
                 "role": RECEPTION,
                 "wants": "Verificare la presenza degli ospiti",
+                "label": "1.0",
+                "learned_observations": 0,
             },
             {
                 "number": 2,
@@ -566,6 +585,8 @@ def test_the_twins_come_from_the_folder_with_their_numbers(tmp_path: Path) -> No
                 "name": VOLUNTEERS,
                 "role": VOLUNTEERS,
                 "wants": "Aggiungere ospiti per nome",
+                "label": "1.0",
+                "learned_observations": 0,
             },
         ]
     }
@@ -842,6 +863,7 @@ def test_a_folder_that_cannot_be_read_is_a_tool_error(tmp_path: Path) -> None:
         ("review_changes", {}),
         ("get_test_results", {}),
         ("run_tests", {}),
+        ("get_tasks", {}),
     ],
 )
 def test_without_a_linked_folder_every_tool_answers_the_same_error(
@@ -1376,16 +1398,53 @@ def with_test_estimates(monkeypatch: pytest.MonkeyPatch, *, present: bool) -> No
     monkeypatch.setattr(costs, "ESTIMATES", MappingProxyType(estimates))
 
 
-def test_the_ten_tools_end_with_the_two_tools_of_the_tests(
+def test_the_eleven_tools_end_with_the_tools_of_the_tests_and_of_the_tasks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with_test_estimates(monkeypatch, present=True)
     free, _ = build(tmp_path / "free")
+    italian, _ = build(tmp_path / "italian", language="it")
 
     listed = free.definitions()
-    results, tests = listed[8], listed[9]
+    results, tests, tasks = listed[8], listed[9], listed[10]
 
     assert [tool["name"] for tool in listed] == TOOL_NAMES
+    assert tasks == {
+        "name": "get_tasks",
+        "title": "Tasks for the code",
+        "description": "The tasks for the code read from the knowledge folder: the text, the "
+        "requirements, screens and criteria they are about, where they come from (a critique of "
+        "a twin on a commit or on the tests, the decision on a commit, or the owner) and their "
+        "status; with status all also the ones done or dropped. Free.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "all"],
+                    "default": "open",
+                    "description": "Which tasks to give: open for the open ones, all for every "
+                    "task; usually open.",
+                }
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    }
+    assert italian.definitions()[10]["title"] == "Compiti per il codice"
+    assert italian.definitions()[10]["description"].endswith(
+        "con status all anche quelli fatti o lasciati cadere. Gratuito."
+    )
+    assert (
+        "(una critica di un twin su un commit o sui test, la decisione su un commit, oppure il "
+        "proprietario)" in italian.definitions()[10]["description"]
+    )
     assert results == {
         "name": "get_test_results",
         "title": "Outcome of the acceptance tests",
@@ -1771,3 +1830,157 @@ def test_an_interrupted_run_of_the_tests_stops_the_server(
 
     with pytest.raises(KeyboardInterrupt):
         tools.call("run_tests", {})
+
+
+def test_the_tasks_are_the_open_ones_of_the_folder_unless_all_are_asked(tmp_path: Path) -> None:
+    project = learning_folder(tmp_path)
+    tools, _ = build(tmp_path)
+    written = state_document(project.knowledge)["tasks"]
+
+    opened = run(tools, "get_tasks")
+    every = run(tools, "get_tasks", status="all")
+    spaced = run(tools, "get_tasks", status="  ALL ")
+    default = run(tools, "get_tasks", status=None)
+
+    assert opened == {"tasks": [task for task in written if task["status"] == "OPEN"]}
+    assert [task["code"] for task in opened["tasks"]] == ["TSK-001", "TSK-003", "TSK-005"]
+    assert every == spaced == {"tasks": written}
+    assert default == opened
+    assert every["tasks"][:4] == list(origin_tasks())
+    assert every["tasks"][2]["origin"] == {
+        "kind": "TEST_RUN",
+        "commit": None,
+        "test_run_id": "00000000-0000-4000-8000-00000000e001",
+        "twin_id": RECEPTION_TWIN,
+        "twin_name": RECEPTION,
+        "finding": "Con il nome vuoto non compare nessun messaggio.",
+    }
+
+
+def test_the_tasks_of_older_folders_come_as_they_were_written(tmp_path: Path) -> None:
+    sprint_27 = state_folder(tmp_path / "sprint27")
+    done = {**legacy_task(), "code": "TSK-006", "status": "DONE"}
+    with_state_tasks(sprint_27, [legacy_task(), done])
+    schema_two_folder(tmp_path / "older")
+    newer, _ = build(tmp_path / "sprint27")
+    older, _ = build(tmp_path / "older")
+
+    assert run(newer, "get_tasks") == {"tasks": [legacy_task()]}
+    assert run(newer, "get_tasks", status="all") == {"tasks": [legacy_task(), done]}
+    assert run(older, "get_tasks", status="all") == {"tasks": []}
+
+
+def test_the_tasks_answer_the_problems_of_the_folder(tmp_path: Path) -> None:
+    linked(tmp_path / "missing")
+    broken = state_folder(tmp_path / "broken")
+    (broken.knowledge / "state" / "state.json").unlink()
+    missing, _ = build(tmp_path / "missing")
+    unreadable, _ = build(tmp_path / "broken")
+
+    assert refused(missing, "get_tasks")["code"] == "FOLDER_MISSING"
+    assert refused(unreadable, "get_tasks") == {
+        "code": "FOLDER_UNREADABLE",
+        "message": "La cartella di conoscenza non si legge (orchestwin/state/state.json): "
+        "scaricala di nuovo con `ut package pull`. (FOLDER_UNREADABLE)",
+    }
+
+
+@pytest.mark.parametrize("value", ["done", "", 3, True, ["all"]])
+def test_the_filter_of_the_tasks_is_open_or_all(tmp_path: Path, value: object) -> None:
+    state_folder(tmp_path)
+    tools, _ = build(tmp_path)
+
+    with pytest.raises(RpcError) as refused_call:
+        tools.call("get_tasks", {"status": value})
+
+    error = refused_call.value
+    assert (error.code, error.word, error.key) == (
+        -32602,
+        "INVALID_ARGUMENTS",
+        "mcp.argument_status",
+    )
+    assert text(error.key, "en", **error.values) == (
+        "The argument status of get_tasks must be open or all."
+    )
+    assert text(error.key, "it", **error.values) == (
+        "L'argomento status di get_tasks deve essere open oppure all."
+    )
+
+
+def test_the_twins_carry_their_label_and_what_they_learned(tmp_path: Path) -> None:
+    learning_folder(tmp_path)
+    tools, _ = build(tmp_path)
+    reception, volunteers = learned_entries()
+
+    listed = run(tools, "list_twins")["twins"]
+    first = run(tools, "get_twin", twin="1")
+    second = run(tools, "get_twin", twin="organizzatori")
+
+    assert [
+        (twin["number"], twin["name"], twin["label"], twin["learned_observations"])
+        for twin in listed
+    ] == [(1, RECEPTION, "1.3", 2), (2, VOLUNTEERS, "1.0", 0)]
+    assert first["twin"]["twin_id"] == RECEPTION_TWIN
+    assert first["learned"] == reception
+    assert [item["code"] for item in first["learned"]["observations"]] == ["OBS-001", "OBS-003"]
+    assert [item["code"] for item in first["learned"]["retired"]] == ["OBS-002"]
+    assert second["learned"] == volunteers
+    assert list(first) == ["twin", "learned"]
+
+
+def test_without_the_learning_document_a_twin_keeps_the_version_of_its_profile(
+    tmp_path: Path,
+) -> None:
+    without_learning(tmp_path / "without")
+    with_learning(tmp_path / "partial", [learned_entries()[0]])
+    before, _ = build(tmp_path / "without")
+    partial, _ = build(tmp_path / "partial")
+
+    listed = run(before, "list_twins")["twins"]
+    partly = run(partial, "list_twins")["twins"]
+
+    assert [(twin["label"], twin["learned_observations"]) for twin in listed] == [
+        ("1", 0),
+        ("1", 0),
+    ]
+    assert run(before, "get_twin", twin="1")["learned"] is None
+    assert [(twin["label"], twin["learned_observations"]) for twin in partly] == [
+        ("1.3", 2),
+        ("1", 0),
+    ]
+    assert run(partial, "get_twin", twin="2")["learned"] is None
+
+
+def test_a_learning_document_that_cannot_be_read_is_a_tool_error(tmp_path: Path) -> None:
+    project = with_learning(tmp_path, list(learned_entries()))
+    (project.knowledge / "twins" / "feedback" / "learned.json").unlink()
+    declare_learning(project, declared=True)
+    tools, _ = build(tmp_path)
+    message = (
+        "La cartella di conoscenza non si legge (orchestwin/twins/feedback/learned.json): "
+        "scaricala di nuovo con `ut package pull`. (FOLDER_UNREADABLE)"
+    )
+
+    assert refused(tools, "list_twins") == {"code": "FOLDER_UNREADABLE", "message": message}
+    assert refused(tools, "get_twin", twin="1") == {"code": "FOLDER_UNREADABLE", "message": message}
+    assert run(tools, "get_requirements")["version_number"] == 2
+
+
+def test_the_project_state_counts_the_reviews_to_do_again(tmp_path: Path) -> None:
+    project = learning_folder(tmp_path / "stale")
+    linked(tmp_path / "nothing")
+    stale, _ = build(tmp_path / "stale")
+    nothing, _ = build(tmp_path / "nothing")
+
+    document = run(stale, "project_state")
+    edit_json(
+        project.knowledge / "orchestwin.json",
+        lambda manifest: manifest["state"].pop("stale_reviews"),
+    )
+    older = run(stale, "project_state")
+
+    assert list(document)[4:7] == ["pending_changes", "stale_reviews", "open_tasks"]
+    assert document["stale_reviews"] == 1
+    assert [task["code"] for task in document["open_tasks"]] == ["TSK-001", "TSK-003", "TSK-005"]
+    assert older["stale_reviews"] == 0
+    assert run(nothing, "project_state")["stale_reviews"] == 0

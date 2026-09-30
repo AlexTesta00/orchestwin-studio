@@ -10,6 +10,7 @@ from orchestwin.cli.browser import BrowserError, Page, matches_text, open_page
 from orchestwin.cli.browser.snapshot import (
     FIELD_SCRIPT,
     FOCUS_SCRIPT,
+    MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH,
     READY_SCRIPT,
     RECT_SCRIPT,
     SCROLL_SCRIPT,
@@ -297,6 +298,36 @@ def test_a_snapshot_that_breaks_the_contract_is_an_error(
 
     assert browser_error(first, "BROWSER_PROTOCOL_ERROR") == "page description: url is not text"
     assert browser_error(second, "BROWSER_PROTOCOL_ERROR") == "page description: not an object"
+
+
+def test_the_hidden_text_comes_back_checked_and_shortened(
+    tmp_path: Path, browser: ScriptedBrowser
+) -> None:
+    document = page_snapshot(BUTTON, FIELD, hidden_text=" Riepilogo\n  nascosto ").document()
+    older = {key: value for key, value in document.items() if key != "hidden_text"}
+    long = "parola " * 1000
+    browser.endpoint.answer_script(SNAPSHOT_SCRIPT, document)
+    browser.endpoint.answer_script(SNAPSHOT_SCRIPT, older)
+    browser.endpoint.answer_script(SNAPSHOT_SCRIPT, {**document, "hidden_text": ["Riepilogo"]})
+    browser.endpoint.answer_script(SNAPSHOT_SCRIPT, {**document, "hidden_text": long})
+    page, _, _ = start(tmp_path, browser)
+
+    carried = page.snapshot()
+    missing = page.snapshot()
+    with pytest.raises(BrowserError) as refused:
+        page.snapshot()
+    trimmed = page.snapshot()
+    page.close()
+
+    assert carried == page_snapshot(BUTTON, FIELD, hidden_text="Riepilogo nascosto")
+    assert list(carried.document()) == ["url", "title", "text", "hidden_text", "elements"]
+    assert missing == page_snapshot(BUTTON, FIELD)
+    assert browser_error(refused, "BROWSER_PROTOCOL_ERROR") == (
+        "page description: hidden_text is not text"
+    )
+    assert trimmed.hidden_text == long[:MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH]
+    assert len(trimmed.hidden_text) == MAX_SNAPSHOT_HIDDEN_TEXT_LENGTH
+    assert browser.endpoint.scripts() == ["snapshot"] * 4
 
 
 def test_a_snapshot_taken_while_a_new_page_loads_is_taken_again(

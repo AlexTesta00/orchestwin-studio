@@ -109,10 +109,13 @@ def page_snapshot(
     url: str = PAGE_URL,
     title: str = "Prova",
     text: str | None = None,
+    hidden_text: str = "",
 ) -> PageSnapshot:
     shown = " ".join(item.name for item in items if item.name) if text is None else text
     numbered = tuple(replace(item, index=position) for position, item in enumerate(items))
-    return PageSnapshot(url=url, title=title, text=shown, elements=numbered)
+    return PageSnapshot(
+        url=url, title=title, text=shown, elements=numbered, hidden_text=hidden_text
+    )
 
 
 def no_browsers(
