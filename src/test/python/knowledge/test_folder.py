@@ -33,10 +33,12 @@ from orchestwin.knowledge.folder import (
 from orchestwin.knowledge.layout import (
     KNOWLEDGE_INDEX,
     KNOWLEDGE_MANIFEST,
+    STAGE_LABELS,
     STAGE_PAYLOAD_KEYS,
     STAGES,
     schema_document,
     stage_document,
+    stage_text,
 )
 from orchestwin.knowledge.schema import SCHEMA_NAMES, schema_files
 from orchestwin.knowledge.state import ProjectStateSources
@@ -88,6 +90,7 @@ TEXT_VIEWS = (
     "design/mockups.md",
 )
 VERSION_LINES = ("Version ", "User twin version ")
+STEP_NAMES = ("Project brief", "Perspectives", "User twins", "Definition", "Design and evaluation")
 IDENTITY = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 DIGEST = re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
 LINK = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)$", re.MULTILINE)
@@ -246,8 +249,12 @@ def test_manifest_lists_the_three_views_of_requirements_and_design() -> None:
 
     assert sorted(views) == ["design", "requirements"]
     assert views["requirements"]["text"] == [
-        {"path": "requirements/requirements.md", "title": "Requirements"}
+        {"path": "requirements/requirements.md", "title": "Definition"}
     ]
+    assert views["design"]["text"][0] == {
+        "path": "design/design.md",
+        "title": "Design and evaluation",
+    }
     assert [entry["path"] for entry in views["design"]["text"]] == [
         "design/design.md",
         "design/critiques.md",
@@ -430,6 +437,42 @@ def test_the_text_views_show_codes_and_names_instead_of_identifiers(make) -> Non
     assert "content hash `" in built.files["requirements/requirements.md"].splitlines()[2]
 
 
+@pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
+def test_the_steps_have_their_names_in_the_titles_the_index_and_the_manifest(make) -> None:
+    built = folder(make())
+    index = built.files[KNOWLEDGE_INDEX]
+    stages = index.split("\n## Approved stages\n\n", 1)[1].split("\n\n", 1)[0].splitlines()[2:]
+
+    assert tuple(STAGE_LABELS[stage] for stage in STAGES) == STEP_NAMES
+    assert [built.files[stage_text(stage)].splitlines()[0] for stage in STAGES] == [
+        f"# {name}" for name in STEP_NAMES
+    ]
+    assert [built.manifest["stages"][stage]["label"] for stage in STAGES] == list(STEP_NAMES)
+    assert [row.split(" | ", 1)[0] for row in stages] == [f"| {name}" for name in STEP_NAMES]
+    assert (
+        "The approved steps of this project (Project brief, Perspectives, User twins, Definition, "
+        "Design and evaluation), each approved by the owner through a human gate in OrchesTwin "
+        "Studio: a step comes into this folder once it is approved. This folder holds 5 of 5 "
+        "approved steps; every step is approved."
+    ) in index
+    assert "| requirements | text | `requirements/requirements.md` | Definition |" in index
+    assert "| design | text | `design/design.md` | Design and evaluation |" in index
+    assert "agent team" not in index.casefold()
+
+
+@pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
+def test_every_view_of_a_step_says_that_the_owner_approved_it(make) -> None:
+    package = make()
+    built = folder(package)
+
+    for stage in STAGES:
+        version = package.version(stage)
+        assert built.files[stage_text(stage)].splitlines()[2] == (
+            f"Version {version.version_number}, content hash `{version.content_hash}`, approved "
+            f"by the owner on {package.gate(stage).updated_at.isoformat()}."
+        )
+
+
 def test_index_explains_the_folder_to_people_and_coding_agents() -> None:
     built = folder()
     index = built.files[KNOWLEDGE_INDEX]
@@ -526,7 +569,7 @@ def test_the_index_of_an_italian_project_opens_with_the_overview_in_italian() ->
         "  - REQ-003 Validazione nome",
         "  - REQ-006 Architettura statica",
         "- Design scelto: DES-002 Event Guest Manager.",
-        "- Come si verifica: 1 criterio di accettazione, che `ut test` verifica nei browser.",
+        "- Come si verifica: 1 criterio di accettazione, controllato da `ut test` nei browser.",
     ]
     assert index.index("## In breve") < index.index("## What this folder is")
     assert verify_folder(built.files).complete is True
@@ -616,6 +659,48 @@ def test_the_overview_lists_at_most_twelve_must_requirements(
         *(f"  - REQ-{number:03d} Titolo {number}" for number in range(1, 13)),
         *rest,
     ]
+
+
+@pytest.mark.parametrize(
+    ("language", "count", "line"),
+    [
+        (
+            "it",
+            1,
+            "- Come si verifica: 1 criterio di accettazione, controllato da `ut test` nei browser.",
+        ),
+        (
+            "it",
+            3,
+            "- Come si verifica: 3 criteri di accettazione, controllati da `ut test` nei browser.",
+        ),
+        (
+            "en",
+            1,
+            "- How it is verified: 1 acceptance criterion, which `ut test` checks in the browsers.",
+        ),
+        (
+            "en",
+            3,
+            "- How it is verified: 3 acceptance criteria, which `ut test` checks in the browsers.",
+        ),
+    ],
+)
+def test_the_overview_says_how_many_criteria_ut_test_checks(
+    language: str, count: int, line: str
+) -> None:
+    package = real_sources()
+    specification = package.payload("requirements")
+    criteria = specification["acceptance_criteria"][:1] * count
+
+    lines = overview_lines(
+        language=language,
+        project_name=PROJECT_NAME,
+        brief=package.payload("brief"),
+        specification={**specification, "acceptance_criteria": criteria},
+    )
+
+    assert lines[-2:] == [line, ""]
 
 
 def test_the_overview_cuts_a_long_description_at_a_word() -> None:

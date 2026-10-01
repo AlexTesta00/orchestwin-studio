@@ -200,6 +200,23 @@ def test_feedback_text_shows_findings_with_the_owner_decisions() -> None:
     assert "Evidence gaps:" in text
 
 
+def test_feedback_text_dates_runs_and_discussions_without_their_identifiers() -> None:
+    text = feedback_markdown(sources())
+    runs = [run.to_snapshot() for run in evaluation_runs()]
+    approved = discussions()[0].to_snapshot()
+
+    for run in runs:
+        assert (
+            f"\nCompleted on {run['completed_at']}, evaluator fake-design-evaluator 1, "
+            "prompt prompt-1.\n"
+        ) in text
+        assert run["id"] not in text
+    assert f"\nApproved on {approved['decided_at']}.\n" in text
+    assert approved["id"] not in text
+    assert "\nRun " not in text
+    assert "\nDiscussion " not in text
+
+
 def test_feedback_text_reports_rounds_reactions_and_synthesis_of_discussions() -> None:
     text = feedback_markdown(sources())
 
