@@ -22,6 +22,7 @@ from orchestwin.api.design_discussion import create_design_discussion_router
 from orchestwin.api.design_iterations import create_design_iteration_router
 from orchestwin.api.design_loop import create_design_loop_router
 from orchestwin.api.design_mockups import create_design_mockup_router
+from orchestwin.api.design_realignment import create_design_realignment_router
 from orchestwin.api.design_review_pins import create_design_review_pins_router
 from orchestwin.api.diagrams import create_diagram_router
 from orchestwin.api.generation_jobs import GenerationJobRegistry
@@ -41,12 +42,14 @@ from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.requirements_realignment import (
     create_requirements_realignment_router,
 )
+from orchestwin.api.sections import create_sections_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
 from orchestwin.api.twin_imports import create_twin_import_router
 from orchestwin.api.twin_learning import create_twin_learning_router
+from orchestwin.api.user_modeling_realignment import create_user_modeling_realignment_router
 from orchestwin.api.user_modeling_runtime import create_runtime_user_modeling_router
 from orchestwin.api.validation import request_validation_error
 from orchestwin.config import ApplicationSettings, load_settings
@@ -163,9 +166,14 @@ def create_app(
     application.state.project_diagram_service = resolved_runtime.project_diagram_service
     application.state.knowledge_package_service = resolved_runtime.knowledge_package_service
     application.state.twin_import_service = resolved_runtime.twin_import_service
+    application.state.user_modeling_realignment_service = (
+        resolved_runtime.user_modeling_realignment_service
+    )
     application.state.requirements_realignment_service = (
         resolved_runtime.requirements_realignment_service
     )
+    application.state.design_realignment_service = resolved_runtime.design_realignment_service
+    application.state.sections_service = resolved_runtime.sections_service
     application.state.project_import_service = resolved_runtime.project_import_service
     application.state.training_api_service = resolved_runtime.training_api_service
     application.state.generation_jobs = jobs
@@ -218,7 +226,10 @@ def create_app(
         create_acceptance_test_router(),
         create_twin_learning_router(),
         create_twin_import_router(),
+        create_user_modeling_realignment_router(),
         create_requirements_realignment_router(),
+        create_design_realignment_router(),
+        create_sections_router(),
         create_project_import_router(),
         create_training_router(),
         create_proposal_evidence_router(),
