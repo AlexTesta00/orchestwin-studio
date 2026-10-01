@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from orchestwin.agents.catalog import all_agent_catalog_entries
-from orchestwin.agents.selection_rules import TeamSelectionReasonCode
+from orchestwin.agents.perspectives import (
+    ASPECT_AGENT_IDS,
+    ASPECT_ORDER,
+    PERSPECTIVE_AGENT_IDS,
+    PERSPECTIVE_ORDER,
+    PerspectiveStanding,
+)
 from orchestwin.agents.team_gate import TeamEditIssueCode
 from orchestwin.cli.api import brief, modeling, requirements, team
 from orchestwin.cli.client import StudioClient
@@ -58,13 +64,25 @@ def test_the_brief_constants_follow_the_domain() -> None:
 def test_the_team_constants_follow_the_catalog() -> None:
     entries = all_agent_catalog_entries()
     assert tuple(entry.agent_id.value for entry in entries) == team.AGENTS
-    assert {
-        entry.agent_id.value for entry in entries if entry.is_always_present
-    } == team.PLATFORM_AGENTS
-    assert {code.value for code in TeamSelectionReasonCode} <= set(team.REASON_CODES)
-    assert "CORE_ACCESSIBILITY_DISCIPLINE" in team.REASON_CODES
-    assert len(set(team.REASON_CODES)) == len(team.REASON_CODES)
     assert tuple(code.value for code in TeamEditIssueCode) == team.EDIT_ISSUES
+    platform = {entry.agent_id.value for entry in entries if entry.is_always_present}
+    assert platform.isdisjoint(agent for agents in team.UNIT_AGENTS.values() for agent in agents)
+
+
+def test_the_perspective_constants_follow_the_domain() -> None:
+    assert tuple(item.value for item in PERSPECTIVE_ORDER) == team.PERSPECTIVES
+    assert tuple(item.value for item in ASPECT_ORDER) == team.ASPECTS
+    assert tuple(item.value for item in PerspectiveStanding) == team.STANDINGS
+    units = {
+        key.value: tuple(agent.value for agent in agents)
+        for key, agents in PERSPECTIVE_AGENT_IDS.items()
+    }
+    units.update({key.value: (agent.value,) for key, agent in ASPECT_AGENT_IDS.items()})
+    assert units == dict(team.UNIT_AGENTS)
+    assert list(team.UNIT_AGENTS) == [*team.PERSPECTIVES, *team.ASPECTS]
+    named = (team.REQUIRED, team.OPTIONAL, team.EXCLUDED, team.CONTESTED)
+    assert named == team.STANDINGS[1:]
+    assert team.DESIGNER in team.UNIT_AGENTS["UX"]
 
 
 def test_the_requirements_constants_follow_the_domain() -> None:
@@ -80,9 +98,12 @@ def test_every_key_built_at_run_time_exists() -> None:
         *(f"init.field_{field}" for field in brief.FIELDS),
         *(f"init.question_{field}" for field in ("problem", "target_users", "goals")),
         "init.question_functional_requirements",
-        *(f"init.agent_{agent.lower()}" for agent in team.AGENTS),
-        *(f"init.agent_{agent.lower()}_role" for agent in team.AGENTS),
-        *(f"init.reason_{code.lower()}" for code in team.REASON_CODES),
+        *(f"init.perspective_{key.lower()}" for key in team.PERSPECTIVES),
+        *(f"init.perspective_{key.lower()}_line" for key in team.PERSPECTIVES),
+        *(f"init.aspect_{key.lower()}" for key in team.ASPECTS),
+        *(f"init.aspect_{key.lower()}_line" for key in team.ASPECTS),
+        *(f"init.standing_{standing.lower()}" for standing in team.STANDINGS),
+        "init.standing_optional_applied",
         *(f"init.team_issue_{code.lower()}" for code in team.EDIT_ISSUES),
         *(f"init.priority_{item.lower()}" for item in requirements.PRIORITIES),
         *(f"init.kind_{item.lower()}" for item in requirements.KINDS),
@@ -218,14 +239,34 @@ def test_the_team_edit_sends_the_whole_selection_in_catalog_order(tmp_path: Path
         studio,
         PROJECT_ID,
         ["QA_TEST_ENGINEER", "WORKFLOW_ORCHESTRATOR", "MOBILE_ENGINEER", "QA_TEST_ENGINEER"],
-        {"MOBILE_ENGINEER": "Phones"},
     )
 
     assert transport.sent[0].json() == {
         "selected_agent_ids": ["WORKFLOW_ORCHESTRATOR", "MOBILE_ENGINEER", "QA_TEST_ENGINEER"],
-        "owner_rationales": [{"agent_id": "MOBILE_ENGINEER", "statement": "Phones"}],
     }
     transport.assert_done()
+
+
+def test_a_unit_is_switched_by_adding_or_removing_its_agent() -> None:
+    chosen = ["WORKFLOW_ORCHESTRATOR", "SOFTWARE_ARCHITECT", "QA_TEST_ENGINEER", "LATER_AGENT"]
+
+    assert team.switched(chosen, "SECURITY_REVIEWER") == [
+        "WORKFLOW_ORCHESTRATOR",
+        "SOFTWARE_ARCHITECT",
+        "QA_TEST_ENGINEER",
+        "SECURITY_REVIEWER",
+        "LATER_AGENT",
+    ]
+    assert team.switched(chosen, "QA_TEST_ENGINEER") == [
+        "WORKFLOW_ORCHESTRATOR",
+        "SOFTWARE_ARCHITECT",
+        "LATER_AGENT",
+    ]
+    assert [team.unit_of(agent) for agent in ("UX_UI_DESIGNER", "BACKEND_ENGINEER")] == [
+        "UX",
+        "SERVICES",
+    ]
+    assert team.unit_of("TEAM_SELECTOR") is None
 
 
 def test_the_team_reads_are_tolerant(tmp_path: Path) -> None:
@@ -240,15 +281,32 @@ def test_the_team_reads_are_tolerant(tmp_path: Path) -> None:
     assert team.current(studio, PROJECT_ID) is None
     assert team.readiness(studio, PROJECT_ID) == "TEAM_PROPOSAL_REQUIRED"
     assert team.gate(studio, PROJECT_ID) is None
+    engineering = {
+        "key": "SOFTWARE_ENGINEERING",
+        "editable": False,
+        "agent_id": None,
+        "aspects": [
+            {"key": "WEB", "editable": True, "agent_id": None},
+            {"key": "MOBILE", "editable": True, "agent_id": "MOBILE_ENGINEER"},
+            {"key": "SERVICES", "editable": "yes", "agent_id": "BACKEND_ENGINEER"},
+            4,
+        ],
+    }
+    security = {"key": "SECURITY", "editable": True, "agent_id": "SECURITY_REVIEWER"}
     proposal = {
         "selected_agent_ids": ["QA_TEST_ENGINEER", "UNKNOWN_AGENT", 3],
-        "role_constraints": [{"agent_id": "QA_TEST_ENGINEER", "kind": "MANDATORY"}, 4],
-        "members": [{"agent_id": "QA_TEST_ENGINEER", "justifications": []}],
+        "perspectives": [engineering, {"key": 7}, "UX", {**security, "aspects": "none"}],
     }
     assert team.selected(proposal) == ["QA_TEST_ENGINEER", "UNKNOWN_AGENT"]
-    assert team.kind(proposal, "QA_TEST_ENGINEER") == "MANDATORY"
-    assert team.kind(proposal, "MOBILE_ENGINEER") is None
-    assert list(team.members(proposal)) == ["QA_TEST_ENGINEER"]
+    assert team.selected({"selected_agent_ids": "QA_TEST_ENGINEER"}) == []
+    views = team.perspectives(proposal)
+    assert views is not None
+    assert [view["key"] for view in views] == ["SOFTWARE_ENGINEERING", "SECURITY"]
+    assert [aspect["key"] for aspect in team.aspects(views[0])] == ["WEB", "MOBILE", "SERVICES"]
+    assert team.aspects(views[1]) == []
+    assert [unit["key"] for unit in team.switchable(views)] == ["MOBILE", "SECURITY"]
+    for older in ({}, {"perspectives": None}, {"perspectives": []}, {"perspectives": [1]}):
+        assert team.perspectives(older) is None
     transport.assert_done()
 
 
@@ -451,7 +509,7 @@ def test_a_gate_refused_by_the_studio_is_named(tmp_path: Path) -> None:
 
     assert (refused.code, dict(refused.values)) == (
         "GATE_REFUSED",
-        {"step": "Team", "code": "ITERATION_LIMIT_REACHED"},
+        {"step": "Perspectives", "code": "ITERATION_LIMIT_REACHED"},
     )
     assert (stale.code, stale.values["code"]) == ("STATE_CHANGED", "ARTIFACT_STALE")
     assert missing.code == "BRIEF_INCOMPLETE"

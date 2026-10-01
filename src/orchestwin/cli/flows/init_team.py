@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 STAGE: Final = "team"
 OPERATION: Final = "TEAM_PROPOSAL"
 ATTEMPTS: Final = 5
-OWNER_RATIONALE: Final = "OWNER_RATIONALE"
+ALWAYS: Final = "ALWAYS"
+PERSPECTIVE_INDENT: Final = "  "
+ASPECT_INDENT: Final = "      "
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,14 +61,11 @@ def run(journey: Journey, state: TeamState) -> bool:
         if journey.script is not None:
             action = "approve" if journey.script.team == APPROVE else "stop"
         else:
-            action = journey.console.choose(
-                "init.team_choice",
-                [
-                    Choice("approve", journey.text("init.team_approve")),
-                    Choice("change", journey.text("init.team_change")),
-                    Choice("stop", journey.text("init.team_stop")),
-                ],
-            ).key
+            options = [Choice("approve", journey.text("init.team_approve"))]
+            if team_api.perspectives(team) is not None:
+                options.append(Choice("change", journey.text("init.team_change")))
+            options.append(Choice("stop", journey.text("init.team_stop")))
+            action = journey.console.choose("init.team_choice", options).key
         if action == "stop":
             journey.say("init.team_left")
             return False
@@ -95,12 +94,12 @@ def propose(journey: Journey) -> Mapping[str, object]:
     )
     if status >= 400:
         issues = team_api.issues(document)
-        agents = [str(issue.get("agent_id")) for issue in issues]
+        names = _unique(agent_name(journey, str(issue.get("agent_id"))) for issue in issues)
         sentences = [sentence for issue in issues if (sentence := contradiction(journey, issue))]
         raise CliError(
             "TEAM_BLOCKED",
             values={
-                "agents": ", ".join(agent_name(journey, agent) for agent in agents),
+                "names": ", ".join(names),
                 "details": "".join(f" {sentence}" for sentence in sentences),
             },
         )
@@ -111,73 +110,35 @@ def propose(journey: Journey) -> Mapping[str, object]:
 
 
 def show(journey: Journey, team: Mapping[str, object]) -> None:
-    chosen = team_api.selected(team)
-    specialists = [agent for agent in chosen if agent not in team_api.PLATFORM_AGENTS]
-    platform = [agent for agent in chosen if agent in team_api.PLATFORM_AGENTS]
     journey.console.write()
-    journey.say("init.team_heading", version=_number(team) or "-", count=len(specialists))
-    for number, agent in enumerate(specialists, start=1):
-        journey.console.write(
-            f"  {number}. {agent_name(journey, agent)}: {agent_role(journey, agent)}"
-        )
-        journey.console.write(
-            "     " + journey.text("init.team_why", reason=reason(journey, team, agent))
-        )
-    if platform:
-        journey.say(
-            "init.team_platform",
-            names=", ".join(agent_name(journey, agent) for agent in platform),
-        )
+    journey.say("init.team_heading", version=_number(team) or "-")
+    journey.say("init.team_intro")
+    views = team_api.perspectives(team)
+    if views is None:
+        journey.say("init.team_outdated")
+        return
+    for perspective in views:
+        journey.console.write(PERSPECTIVE_INDENT + unit_line(journey, perspective))
+        for aspect in team_api.aspects(perspective):
+            journey.console.write(ASPECT_INDENT + unit_line(journey, aspect))
 
 
 def change(journey: Journey, team: Mapping[str, object]) -> Mapping[str, object]:
-    chosen = team_api.selected(team)
-    rules = team_api.constraints(team)
-    switchable = [
-        agent
-        for agent in team_api.ordered(rules)
-        if rules[agent].get("kind") == team_api.OPTIONAL and agent not in team_api.PLATFORM_AGENTS
-    ]
-    fixed = [
-        agent
-        for agent in team_api.ordered(rules)
-        if rules[agent].get("kind") == team_api.MANDATORY and agent not in team_api.PLATFORM_AGENTS
-    ]
-    excluded = [
-        agent
-        for agent in team_api.ordered(rules)
-        if rules[agent].get("kind") in team_api.EXCLUDED_KINDS
-    ]
-    if fixed:
-        journey.say(
-            "init.team_fixed", names=", ".join(agent_name(journey, agent) for agent in fixed)
-        )
-    if excluded:
-        journey.say(
-            "init.team_excluded",
-            names=", ".join(agent_name(journey, agent) for agent in excluded),
-        )
-    if not switchable:
+    units = team_api.switchable(team_api.perspectives(team) or [])
+    if not units:
         journey.say("init.team_nothing")
         return team
     journey.say("init.team_switch_intro")
-    for number, agent in enumerate(switchable, start=1):
-        mark = "x" if agent in chosen else " "
-        journey.console.write(
-            f"  {number}. [{mark}] {agent_name(journey, agent)}: {agent_role(journey, agent)}"
-        )
-    numbers = _numbers(journey, len(switchable))
+    for number, unit in enumerate(units, start=1):
+        journey.console.write(f"  {number}. {_mark(unit)} {_described(journey, unit)}")
+    numbers = _numbers(journey, len(units))
     if not numbers:
         journey.say("init.team_unchanged")
         return team
-    wanted = set(chosen)
+    wanted = team_api.selected(team)
     for number in numbers:
-        wanted ^= {switchable[number - 1]}
-    added = [agent for agent in team_api.ordered(wanted) if agent not in chosen]
-    rationales = {agent: _rationale(journey, agent) for agent in added}
-    status, document = team_api.edit(
-        journey.client, journey.project_id, team_api.ordered(wanted), rationales
-    )
+        wanted = team_api.switched(wanted, str(units[number - 1]["agent_id"]))
+    status, document = team_api.edit(journey.client, journey.project_id, wanted)
     if status == 422 and team_api.issues(document):
         refusals(journey, document)
         return team
@@ -204,8 +165,8 @@ def refusals(journey: Journey, document: object) -> None:
 
 
 def contradiction(journey: Journey, issue: Mapping[str, object]) -> str | None:
-    excluded = _evidence(journey, issue.get("impossible_reasons"))
-    required = _evidence(journey, issue.get("mandatory_reasons"))
+    excluded = _reason_words(journey, issue.get("impossible_reasons"))
+    required = _reason_words(journey, issue.get("mandatory_reasons"))
     if not excluded or not required:
         return None
     return journey.text(
@@ -216,27 +177,97 @@ def contradiction(journey: Journey, issue: Mapping[str, object]) -> str | None:
     )
 
 
-def _evidence(journey: Journey, reasons: object) -> str:
-    if not isinstance(reasons, list):
+def unit_line(journey: Journey, unit: Mapping[str, object]) -> str:
+    name = unit_name(journey, str(unit.get("key")))
+    return f"{_mark(unit)} {name}: {standing(journey, unit)}"
+
+
+def standing(journey: Journey, unit: Mapping[str, object]) -> str:
+    value = str(unit.get("standing"))
+    applied = unit.get("applied") is True
+    requested = words(journey, unit.get("requested"))
+    excluded = words(journey, unit.get("excluded"))
+    if value == team_api.OPTIONAL and applied:
+        label = journey.text("init.standing_optional_applied")
+    elif value == ALWAYS and not applied:
+        label = journey.text("init.standing_always_missing")
+    elif value in team_api.STANDINGS:
+        label = journey.text(f"init.standing_{value.lower()}")
+    else:
+        label = value.lower().replace("_", " ")
+    shown: list[str] = []
+    if value == team_api.REQUIRED:
+        shown = [requested]
+    elif value == team_api.EXCLUDED:
+        shown = [excluded]
+    elif value == team_api.CONTESTED:
+        shown = [
+            journey.text("init.team_asks", words=requested) if requested else "",
+            journey.text("init.team_rules_out", words=excluded) if excluded else "",
+        ]
+    detail = "; ".join(item for item in shown if item)
+    return f"{label} ({detail})" if detail else label
+
+
+def words(journey: Journey, evidence: object) -> str:
+    if not isinstance(evidence, Mapping):
         return ""
-    items = [item for item in reasons if isinstance(item, Mapping)]
-    proofs = [proof for item in items if isinstance(proof := item.get("evidence"), Mapping)]
-    terms = _unique(term for proof in proofs for term in _texts(proof.get("terms")))
-    fields = _unique(field for proof in proofs for field in _texts(proof.get("fields")))
+    terms = _unique(_texts(evidence.get("terms")))
     if not terms:
-        codes = _texts([item.get("code") for item in items])
-        return ", ".join(_unique(_reason_text(journey, code) for code in codes))
-    quoted = ", ".join(journey.text("init.team_blocked_term", term=term) for term in terms)
+        return ""
+    quoted = ", ".join(journey.text("init.team_term", term=term) for term in terms)
+    fields = _unique(_texts(evidence.get("fields")))
     if not fields:
         return quoted
     labels = ", ".join(_field_label(journey, field) for field in fields)
-    return journey.text("init.team_blocked_evidence", terms=quoted, fields=labels)
+    return journey.text("init.team_evidence", terms=quoted, fields=labels)
 
 
-def _reason_text(journey: Journey, code: str) -> str:
-    if code in team_api.REASON_CODES:
-        return journey.text(f"init.reason_{code.lower()}")
-    return code.lower().replace("_", " ")
+def unit_name(journey: Journey, key: str) -> str:
+    if key in team_api.PERSPECTIVES:
+        return journey.text(f"init.perspective_{key.lower()}")
+    if key in team_api.ASPECTS:
+        return journey.text(f"init.aspect_{key.lower()}")
+    return key.lower().replace("_", " ")
+
+
+def unit_description(journey: Journey, key: str) -> str:
+    if key in team_api.PERSPECTIVES:
+        return journey.text(f"init.perspective_{key.lower()}_line")
+    if key in team_api.ASPECTS:
+        return journey.text(f"init.aspect_{key.lower()}_line")
+    return ""
+
+
+def agent_name(journey: Journey, agent: str) -> str:
+    key = team_api.unit_of(agent)
+    return unit_name(journey, agent if key is None else key)
+
+
+def _described(journey: Journey, unit: Mapping[str, object]) -> str:
+    key = str(unit.get("key"))
+    name = unit_name(journey, key)
+    description = unit_description(journey, key)
+    return f"{name}: {description}" if description else name
+
+
+def _mark(unit: Mapping[str, object]) -> str:
+    return "[x]" if unit.get("applied") is True else "[ ]"
+
+
+def _reason_words(journey: Journey, reasons: object) -> str:
+    if not isinstance(reasons, list):
+        return ""
+    proofs = [
+        proof
+        for item in reasons
+        if isinstance(item, Mapping) and isinstance(proof := item.get("evidence"), Mapping)
+    ]
+    merged = {
+        "terms": [term for proof in proofs for term in _texts(proof.get("terms"))],
+        "fields": [field for proof in proofs for field in _texts(proof.get("fields"))],
+    }
+    return words(journey, merged)
 
 
 def _field_label(journey: Journey, field: str) -> str:
@@ -264,38 +295,6 @@ def _edited(journey: Journey, status: int, document: object) -> Mapping[str, obj
     return version
 
 
-def reason(journey: Journey, team: Mapping[str, object], agent: str) -> str:
-    member = team_api.members(team).get(agent, {})
-    justifications = member.get("justifications")
-    items = [item for item in justifications or [] if isinstance(item, Mapping)]
-    for item in items:
-        statement = item.get("statement")
-        if isinstance(statement, str) and statement:
-            if item.get("kind") == OWNER_RATIONALE:
-                return journey.text("init.team_owner_reason", reason=statement)
-            return statement
-    codes = [str(item["code"]) for item in items if isinstance(item.get("code"), str)]
-    codes.extend(team_api.reason_codes(team_api.constraints(team).get(agent, {})))
-    for code in codes:
-        if code in team_api.REASON_CODES:
-            return journey.text(f"init.reason_{code.lower()}")
-    if codes:
-        return codes[0]
-    return journey.text("init.reason_unknown")
-
-
-def agent_name(journey: Journey, agent: str) -> str:
-    if agent in team_api.AGENTS:
-        return journey.text(f"init.agent_{agent.lower()}")
-    return agent
-
-
-def agent_role(journey: Journey, agent: str) -> str:
-    if agent in team_api.AGENTS:
-        return journey.text(f"init.agent_{agent.lower()}_role")
-    return ""
-
-
 def _numbers(journey: Journey, count: int) -> list[int]:
     for _ in range(ATTEMPTS):
         line = journey.console.ask("init.team_switch", required=False)
@@ -305,17 +304,6 @@ def _numbers(journey: Journey, count: int) -> list[int]:
         if all(token.isdecimal() and 1 <= int(token) <= count for token in tokens):
             return sorted({int(token) for token in tokens})
         journey.say("init.team_switch_invalid", count=count)
-    raise CliError("ANSWER_NOT_VALID")
-
-
-def _rationale(journey: Journey, agent: str) -> str:
-    for _ in range(ATTEMPTS):
-        text = " ".join(
-            journey.console.ask("init.team_add_reason", name=agent_name(journey, agent)).split()
-        )
-        if len(text) <= team_api.MAX_RATIONALE:
-            return text
-        journey.say("init.answer_too_long", limit=team_api.MAX_RATIONALE)
     raise CliError("ANSWER_NOT_VALID")
 
 
