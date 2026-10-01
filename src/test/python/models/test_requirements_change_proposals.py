@@ -28,6 +28,7 @@ from orchestwin.models.requirements_drafts import (
     RequirementsDraft,
     bind_requirements,
     requirements_context,
+    requirements_limits,
     requirements_view,
 )
 from orchestwin.projects.requirements_primitives import (
@@ -48,8 +49,8 @@ from . import test_fake_requirements as fixtures
 from .test_model_proposals import make_generator
 
 REQUEST_SHA256 = "9cba445351a1785f4078ccbbcbd03da0910ae2c3de03cc0c104e6d4a850ca3ca"
-CONTEXT_SHA256 = "f5ac62b46820fc0187082e9504c3de9e82b7f15e2a15ad3c15091239c6dda60c"
-INSTRUCTION_SHA256 = "2f88c3238becce75c6de8fc06ce003813766abe336228db5b7f3ba0f16d5b1b9"
+CONTEXT_SHA256 = "6d0e77fa081a8423a0b8bd99648a720b1acdbd16856a1b4c775bc9aa0197579d"
+INSTRUCTION_SHA256 = "ff47349a99fa3617618bddd322bc713f859888673f69ddeb13f554ed79fb9080"
 FAKE_RESULT_SHA256 = "33e23a49845c960a8a58d94141c649b647254fdafa150e720618b3ed0f6b3c37"
 CHANGE_SENTENCE = (
     "The context carries current_requirements, the specification that the owner is reviewing, "
@@ -372,6 +373,7 @@ def test_the_change_context_carries_the_current_requirements_the_request_and_the
     assert {key: value for key, value in context.items() if key not in CHANGE_KEYS} == {
         **base_context,
         "governed_request_hash": request.content_hash,
+        "limits": requirements_limits(request),
     }
     assert (sources, twins) == (base_sources, base_twins)
     assert [item["code"] for item in view["requirements"]] == [

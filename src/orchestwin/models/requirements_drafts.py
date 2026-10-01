@@ -18,6 +18,10 @@ from orchestwin.projects.requirements_specifications import create_requirements_
 Text = Annotated[str, Field(min_length=1, max_length=2000)]
 Title = Annotated[str, Field(min_length=1, max_length=200)]
 Links = Annotated[tuple[str, ...], Field(min_length=1)]
+LIMIT_FLOOR = 3
+QUALITY_LIMIT = 4
+STORIES_PER_TWIN = 2
+CHANGE_HEADROOM = 2
 
 REQUIREMENTS_CHANGE_INSTRUCTION = (
     "The context carries current_requirements, the specification that the owner is reviewing, "
@@ -101,6 +105,35 @@ class RequirementsDraft(BaseModel):
     definition_of_done: Annotated[tuple[DoneDraft, ...], Field(min_length=1)]
 
 
+def _brief_count(brief, name):
+    return 0 if name in brief.unknown_fields else len(getattr(brief, name))
+
+
+def requirements_limits(request):
+    brief = request.brief
+    functional = _brief_count(brief, "functional_requirements")
+    qualities = _brief_count(brief, "non_functional_requirements") + _brief_count(
+        brief, "technical_constraints"
+    )
+    twins = len(request.user_modeling.user_twins)
+    requirements = max(functional, LIMIT_FLOOR) + min(qualities, QUALITY_LIMIT)
+    limits = {
+        "requirements": requirements,
+        "user_stories": max(twins, min(STORIES_PER_TWIN * twins, max(functional, LIMIT_FLOOR))),
+        "acceptance_criteria": requirements,
+        "scenarios": twins,
+        "risks": max(_brief_count(brief, "risks"), LIMIT_FLOOR),
+        "definition_of_done": max(_brief_count(brief, "definition_of_done"), LIMIT_FLOOR),
+    }
+    current = request.current_specification
+    if current is None:
+        return limits
+    return {
+        name: max(limit, len(getattr(current, name)) + CHANGE_HEADROOM)
+        for name, limit in limits.items()
+    }
+
+
 def requirements_context(request):
     sources, evidence = {}, {}
     brief = request.brief
@@ -154,6 +187,7 @@ def requirements_context(request):
         "governed_request_hash": request.content_hash,
         "evidence": evidence,
         "twins": wire_value(twins),
+        "limits": requirements_limits(request),
         "brief_reference": wire_value(brief.reference),
         "user_modeling_reference": wire_value(request.user_modeling.reference),
     }
@@ -286,6 +320,9 @@ def bind_requirements(draft, request, sources, twins):
         draft.risks,
         draft.definition_of_done,
     )
+    for name, limit in requirements_limits(request).items():
+        if len(getattr(draft, name)) > limit:
+            raise ValueError(f"draft list {name} exceeds its limit of {limit}")
     codes = [item.code for group in groups for item in group]
     if len(codes) != len(set(codes)):
         raise ValueError("duplicate draft codes")
