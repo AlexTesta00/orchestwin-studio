@@ -52,7 +52,7 @@ def test_a_change_is_applied_and_the_new_version_is_approved(tmp_path: Path) -> 
     assert "  + adds the requirement REQ-005: Owner request: " + REQUEST in lines
     assert "Change applied: the requirements are at version 2." in lines
     assert (
-        'Step "Requirements" approved (version 2). Saved in .orchestwin/steps/requirements.json.'
+        'Step "Definition" approved (version 2). Saved in .orchestwin/steps/requirements.json.'
         in lines
     )
 

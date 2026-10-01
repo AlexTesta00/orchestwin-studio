@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli.jobs import reply_body
@@ -27,25 +28,26 @@ AGENTS: Final = (
     "ACCESSIBILITY_REVIEWER",
     "INTEGRATION_ENGINEER",
 )
-PLATFORM_AGENTS: Final = frozenset(AGENTS[:6])
 DESIGNER: Final = "UX_UI_DESIGNER"
-REASON_CODES: Final = (
-    "CATALOG_ALWAYS_PRESENT",
-    "CATALOG_MODE_INCOMPATIBLE",
-    "CORE_REQUIREMENTS_DISCIPLINE",
-    "CORE_USER_CENTERED_DESIGN",
-    "CORE_ARCHITECTURE_DISCIPLINE",
-    "CORE_QUALITY_DISCIPLINE",
-    "CORE_ACCESSIBILITY_DISCIPLINE",
-    "BROWNFIELD_INTEGRATION",
-    "USER_INTERFACE_SIGNAL",
-    "WEB_DELIVERY_SIGNAL",
-    "BACKEND_DELIVERY_SIGNAL",
-    "MOBILE_DELIVERY_SIGNAL",
-    "EXTERNAL_INTEGRATION_SIGNAL",
-    "SECURITY_SENSITIVITY_SIGNAL",
-    "ACCESSIBILITY_REQUIREMENT_SIGNAL",
-    "EXPLICIT_SCOPE_EXCLUSION",
+PERSPECTIVES: Final = ("UX", "ACCESSIBILITY", "SOFTWARE_ENGINEERING", "PRODUCT", "SECURITY")
+ASPECTS: Final = ("WEB", "SERVICES", "MOBILE", "INTEGRATIONS")
+STANDINGS: Final = ("ALWAYS", "REQUIRED", "OPTIONAL", "EXCLUDED", "CONTESTED")
+REQUIRED: Final = "REQUIRED"
+OPTIONAL: Final = "OPTIONAL"
+EXCLUDED: Final = "EXCLUDED"
+CONTESTED: Final = "CONTESTED"
+UNIT_AGENTS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "UX": ("UX_RESEARCHER_USER_MODELER", "UX_UI_DESIGNER"),
+        "ACCESSIBILITY": ("ACCESSIBILITY_REVIEWER",),
+        "SOFTWARE_ENGINEERING": ("SOFTWARE_ARCHITECT", "QA_TEST_ENGINEER"),
+        "PRODUCT": ("REQUIREMENTS_ANALYST",),
+        "SECURITY": ("SECURITY_REVIEWER",),
+        "WEB": ("FRONTEND_ENGINEER",),
+        "SERVICES": ("BACKEND_ENGINEER",),
+        "MOBILE": ("MOBILE_ENGINEER",),
+        "INTEGRATIONS": ("INTEGRATION_ENGINEER",),
+    }
 )
 EDIT_ISSUES: Final = (
     "DUPLICATE_AGENT",
@@ -59,13 +61,9 @@ READY: Final = "READY_FOR_MAIN_WORKFLOW"
 PROPOSAL_REQUIRED: Final = "TEAM_PROPOSAL_REQUIRED"
 APPROVAL_REQUIRED: Final = "TEAM_APPROVAL_REQUIRED"
 BLOCKED: Final = "BLOCKED_BY_CONSTRAINTS"
-MANDATORY: Final = "MANDATORY"
-OPTIONAL: Final = "OPTIONAL"
-EXCLUDED_KINDS: Final = frozenset({"IMPOSSIBLE", "CONFLICT"})
 UPDATED: Final = "UPDATED"
 UNCHANGED: Final = "UNCHANGED"
 REJECTED: Final = "REJECTED"
-MAX_RATIONALE: Final = 2000
 
 
 def project_path(project_id: str) -> str:
@@ -92,18 +90,8 @@ def propose(client: StudioClient, project_id: str) -> tuple[int, object]:
     return _send(client, "POST", f"{project_path(project_id)}/team-proposals")
 
 
-def edit(
-    client: StudioClient,
-    project_id: str,
-    selected: Sequence[str],
-    rationales: Mapping[str, str],
-) -> tuple[int, object]:
-    body = {
-        "selected_agent_ids": ordered(selected),
-        "owner_rationales": [
-            {"agent_id": agent, "statement": rationales[agent]} for agent in ordered(rationales)
-        ],
-    }
+def edit(client: StudioClient, project_id: str, selected: Sequence[str]) -> tuple[int, object]:
+    body = {"selected_agent_ids": ordered(selected)}
     return _send(client, "PATCH", f"{project_path(project_id)}/team-proposals/current", body)
 
 
@@ -135,42 +123,32 @@ def selected(team: Mapping[str, object]) -> list[str]:
     return ordered(str(agent) for agent in value if isinstance(agent, str))
 
 
-def constraints(team: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
-    value = team.get("role_constraints")
-    if not isinstance(value, list):
-        return {}
-    return {
-        str(item["agent_id"]): item
-        for item in value
-        if isinstance(item, Mapping) and isinstance(item.get("agent_id"), str)
-    }
+def switched(chosen: Sequence[str], agent: str) -> list[str]:
+    if agent in chosen:
+        return [item for item in chosen if item != agent]
+    return ordered([*chosen, agent])
 
 
-def members(team: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
-    value = team.get("members")
-    if not isinstance(value, list):
-        return {}
-    return {
-        str(item["agent_id"]): item
-        for item in value
-        if isinstance(item, Mapping) and isinstance(item.get("agent_id"), str)
-    }
+def perspectives(team: Mapping[str, object]) -> list[Mapping[str, object]] | None:
+    found = _units(team.get("perspectives"))
+    return found or None
 
 
-def kind(team: Mapping[str, object], agent: str) -> str | None:
-    value = constraints(team).get(agent, {}).get("kind")
-    return value if isinstance(value, str) else None
+def aspects(perspective: Mapping[str, object]) -> list[Mapping[str, object]]:
+    return _units(perspective.get("aspects"))
 
 
-def reason_codes(constraint: Mapping[str, object]) -> list[str]:
-    value = constraint.get("reasons")
-    if not isinstance(value, list):
-        return []
+def switchable(views: Sequence[Mapping[str, object]]) -> list[Mapping[str, object]]:
     return [
-        str(item["code"])
-        for item in value
-        if isinstance(item, Mapping) and isinstance(item.get("code"), str)
+        unit
+        for perspective in views
+        for unit in (perspective, *aspects(perspective))
+        if unit.get("editable") is True and isinstance(unit.get("agent_id"), str)
     ]
+
+
+def unit_of(agent: str) -> str | None:
+    return next((key for key, agents in UNIT_AGENTS.items() if agent in agents), None)
 
 
 def issues(document: object) -> list[Mapping[str, object]]:
@@ -183,6 +161,14 @@ def issues(document: object) -> list[Mapping[str, object]]:
 def version(document: object) -> Mapping[str, object] | None:
     value = document.get("version") if isinstance(document, Mapping) else None
     return value if isinstance(value, Mapping) else None
+
+
+def _units(value: object) -> list[Mapping[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [
+        item for item in value if isinstance(item, Mapping) and isinstance(item.get("key"), str)
+    ]
 
 
 def _send(

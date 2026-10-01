@@ -207,11 +207,25 @@ def test_the_whole_path_in_italian_says_what_happens_at_each_step(tmp_path: Path
     assert "Domanda 1: Quale problema risolve il progetto?" in lines
     assert "Punti essenziali ancora aperti: 1." in lines
     assert 'Passo "Brief" approvato (versione 3). Salvato in .orchestwin/steps/brief.json.' in lines
-    assert "Passo 2 di 4: Squadra" in lines
+    assert "Il percorso ha quattro passi: Brief, Prospettive, User Twin e Definizione." in (
+        run.output
+    )
+    assert "Passo 2 di 4: Prospettive" in lines
+    assert "Passo 3 di 4: User Twin" in lines
+    assert "Passo 4 di 4: Definizione" in lines
     assert "Profilo 2 di 2: Titolare della pizzeria" in lines
     assert "  Difficoltà: Conti a mente sbagliati; Attesa alla cassa" in lines
     assert "REQ-003  Divisione del conto       importante" in lines
-    assert "- Requisiti: versione 1" in lines
+    assert (
+        'Fatto: il progetto "Calcolo mancia" ha approvati tutti i passi fino alla Definizione.'
+        in (lines)
+    )
+    assert lines[lines.index("- Brief: versione 3") : lines.index("- Brief: versione 3") + 4] == [
+        "- Brief: versione 3",
+        "- Prospettive: versione 1",
+        "- User Twin: versione 1",
+        "- Definizione: versione 1",
+    ]
 
 
 def test_the_whole_path_with_an_answers_file_asks_nothing(tmp_path: Path) -> None:
@@ -323,10 +337,17 @@ def test_until_stops_after_the_step_and_the_next_launch_goes_on(tmp_path: Path) 
         assert (first.status, second.status) == (0, 0), second.errors
         assert after_first == ["brief"]
         assert_saved(studio, tmp_path, STAGES)
-    assert 'Stopping after the step "Brief", as asked with --until.' in first.output
+    assert (
+        'Stopping after the step "Brief", as asked with --until. Launch `ut init` again to go on '
+        'with the step "Perspectives".' in first.output
+    )
     assert "Step 2 of 4" not in first.output
-    assert 'Resuming the project "Calcolo mancia" from step 2 of 4: Team.' in second.output
+    assert 'Resuming the project "Calcolo mancia" from step 2 of 4: Perspectives.' in second.output
     assert 'Step "Brief" already approved (version 3).' in second.output
+    assert "Step 2 of 4: Perspectives" in second.output.splitlines()
+    assert 'Done: the project "Calcolo mancia" has every step approved up to the Definition.' in (
+        second.output.splitlines()
+    )
 
 
 STOPS = {
@@ -353,7 +374,7 @@ STOPS = {
 }
 LEFT = {
     "brief": "The brief stays waiting for your approval.",
-    "team": "The team stays waiting for your approval.",
+    "team": "The perspectives stay waiting for your approval.",
     "twins": "The User Twins stay waiting for your approval.",
     "requirements": "The requirements stay waiting for your approval.",
 }
@@ -393,8 +414,8 @@ def test_the_project_option_links_the_folder_to_a_project_of_the_studio(tmp_path
         assert_saved(studio, tmp_path, STAGES)
         assert seeded.stage == "DESIGN"
     assert 'Linking this folder to the project "Calcolo mancia" of the Studio.' in run.output
-    assert 'Resuming the project "Calcolo mancia" from step 3 of 4: User Twins.' in run.output
-    assert 'Step "Team" already approved (version 1).' in run.output
+    assert 'Resuming the project "Calcolo mancia" from step 3 of 4: User Twin.' in run.output
+    assert 'Step "Perspectives" already approved (version 1).' in run.output
 
 
 def test_a_project_already_at_the_design_step_only_saves_its_steps(tmp_path: Path) -> None:
@@ -410,7 +431,10 @@ def test_a_project_already_at_the_design_step_only_saves_its_steps(tmp_path: Pat
         assert publications(studio) >= 1
         assert len(seeded.knowledge_versions()) == 1
         assert local_progress(tmp_path) == (list(STAGES), "design")
-    assert "already has an approved brief, team, User Twins and requirements" in run.output
+    assert (
+        'The project "Calcolo mancia" already has the steps Brief, Perspectives, User Twin and '
+        "Definition approved." in run.output.splitlines()
+    )
     assert "The next command is `ut design`" in run.output
     assert (
         "Knowledge folder updated in orchestwin/ (version 1): it holds the steps approved "
@@ -649,12 +673,36 @@ def test_a_publication_that_fails_is_said_in_one_line_and_the_path_goes_on(
 @pytest.mark.parametrize(
     ("language", "words"),
     [
-        ("it", "si ferma dopo il passo indicato: brief, team, twins oppure requirements"),
-        ("en", "stop after the named step: brief, team, twins or requirements"),
+        (
+            "it",
+            "si ferma dopo il passo indicato: brief (Brief), team (Prospettive), twins (User "
+            "Twin) oppure requirements (Definizione)",
+        ),
+        (
+            "en",
+            "stop after the named step: brief (Brief), team (Perspectives), twins (User Twin) or "
+            "requirements (Definition)",
+        ),
     ],
 )
 def test_the_help_of_the_command_is_translated(tmp_path: Path, language: str, words: str) -> None:
     run = run_ut(["--lang", language, "init", "--help"], tmp_path, transport=ScriptedTransport())
+
+    assert run.status == 0
+    assert words in " ".join(run.output.split())
+
+
+@pytest.mark.parametrize(
+    ("language", "words"),
+    [
+        ("it", "Crea un progetto e lo porta dall'idea alla Definizione approvata"),
+        ("en", "Create a project and take it from the idea to an approved Definition"),
+    ],
+)
+def test_the_list_of_commands_says_where_init_takes_the_project(
+    tmp_path: Path, language: str, words: str
+) -> None:
+    run = run_ut(["--lang", language, "--help"], tmp_path, transport=ScriptedTransport())
 
     assert run.status == 0
     assert words in " ".join(run.output.split())

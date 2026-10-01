@@ -2,8 +2,8 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     "init.help": {
-        "it": "Crea un progetto e lo porta dall'idea ai requisiti approvati",
-        "en": "Create a project and take it from the idea to approved requirements",
+        "it": "Crea un progetto e lo porta dall'idea alla Definizione approvata",
+        "en": "Create a project and take it from the idea to an approved Definition",
     },
     "init.option_name": {"it": "nome del progetto", "en": "name of the project"},
     "init.option_idea": {
@@ -23,20 +23,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "JSON file with the answers, to run the whole path without questions",
     },
     "init.option_until": {
-        "it": "si ferma dopo il passo indicato: brief, team, twins oppure requirements",
-        "en": "stop after the named step: brief, team, twins or requirements",
+        "it": "si ferma dopo il passo indicato: brief (Brief), team (Prospettive), twins (User "
+        "Twin) oppure requirements (Definizione)",
+        "en": "stop after the named step: brief (Brief), team (Perspectives), twins (User Twin) "
+        "or requirements (Definition)",
     },
     "init.welcome": {
         "it": "Nuovo progetto di OrchesTwin in questa cartella.",
         "en": "New OrchesTwin project in this folder.",
     },
     "init.path": {
-        "it": "Il percorso ha quattro passi: il brief, la squadra, gli User Twin e i requisiti. "
-        "Lo Studio prepara ogni passo con il suo modello e tu lo approvi qui; quello che "
-        "approvi resta salvato anche se ti fermi a metà.",
-        "en": "The path has four steps: the brief, the team, the User Twins and the "
-        "requirements. The Studio prepares each step with its model and you approve it here; "
-        "what you approve stays saved even if you stop halfway.",
+        "it": "Il percorso ha quattro passi: Brief, Prospettive, User Twin e Definizione. Lo "
+        "Studio prepara ogni passo con il suo modello e tu lo approvi qui; quello che approvi "
+        "resta salvato anche se ti fermi a metà.",
+        "en": "The path has four steps: Brief, Perspectives, User Twin and Definition. The "
+        "Studio prepares each step with its model and you approve it here; what you approve "
+        "stays saved even if you stop halfway.",
     },
     "init.mode_question": {"it": "Come vuoi lavorare?", "en": "How do you want to work?"},
     "init.mode_design_only": {
@@ -92,9 +94,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": 'Resuming the project "{name}" from step {number} of {total}: {step}.',
     },
     "init.resume_done": {
-        "it": 'Il progetto "{name}" ha già brief, squadra, User Twin e requisiti approvati.',
-        "en": 'The project "{name}" already has an approved brief, team, User Twins and '
-        "requirements.",
+        "it": 'Il progetto "{name}" ha già approvati i passi Brief, Prospettive, User Twin e '
+        "Definizione.",
+        "en": 'The project "{name}" already has the steps Brief, Perspectives, User Twin and '
+        "Definition approved.",
     },
     "init.state_changed": {
         "it": "Il progetto è cambiato nel frattempo, forse dall'interfaccia web ({code}): "
@@ -133,8 +136,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         'again to go on with the step "{next}".',
     },
     "init.done": {
-        "it": 'Fatto: il progetto "{name}" ha approvati tutti i passi fino ai requisiti.',
-        "en": 'Done: the project "{name}" has every step approved up to the requirements.',
+        "it": 'Fatto: il progetto "{name}" ha approvati tutti i passi fino alla Definizione.',
+        "en": 'Done: the project "{name}" has every step approved up to the Definition.',
     },
     "init.done_step": {"it": "- {step}: versione {version}", "en": "- {step}: version {version}"},
     "init.done_saved": {
@@ -406,54 +409,50 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "init.field_definition_of_done": {"it": "Quando sarà finito", "en": "When it is done"},
     "init.designer_missing_end": {
-        "it": "Attenzione: la squadra approvata di questo progetto non ha il Designer UX/UI, "
-        "quindi le alternative di design non si possono preparare finché la squadra non lo "
-        "avrà. La squadra si cambia e si approva di nuovo nello Studio web.",
-        "en": "Note: the approved team of this project has no UX/UI designer, so the design "
-        "alternatives cannot be prepared until the team has it. The team is changed and "
-        "approved again in the web Studio.",
+        "it": "Attenzione: nelle prospettive approvate di questo progetto l'Esperienza d'uso "
+        "(UX) non è applicata per intero, quindi le alternative di design non si possono "
+        "preparare. Prepara di nuovo le prospettive e approvale nello Studio web.",
+        "en": "Note: in the approved perspectives of this project User experience (UX) is not "
+        "fully applied, so the design alternatives cannot be prepared. Prepare the "
+        "perspectives again and approve them in the web Studio.",
     },
-    "init.team_label": {"it": "Propongo la squadra", "en": "Proposing the team"},
+    "init.team_label": {"it": "Preparo le prospettive", "en": "Preparing the perspectives"},
     "init.team_heading": {
-        "it": "La squadra (versione {version}). Specialisti: {count}.",
-        "en": "The team (version {version}). Specialists: {count}.",
+        "it": "Prospettive (versione {version})",
+        "en": "Perspectives (version {version})",
     },
-    "init.team_why": {"it": "Perché: {reason}", "en": "Why: {reason}"},
-    "init.team_platform": {
-        "it": "Sempre presenti, per far funzionare lo Studio: {names}.",
-        "en": "Always present, to run the Studio: {names}.",
+    "init.team_intro": {
+        "it": "Le competenze con cui guardare il progetto: ognuna porta le sue considerazioni "
+        "quando si scrivono requisiti e design.",
+        "en": "The competences through which the project is looked at: each one adds its "
+        "considerations when the requirements and the design are written.",
+    },
+    "init.team_outdated": {
+        "it": "Questo Studio non dà ancora le prospettive: aggiornalo per vederle e cambiarle. "
+        "Puoi comunque approvare questo passo.",
+        "en": "This Studio does not give the perspectives yet: update it to see and change "
+        "them. You can still approve this step.",
     },
     "init.team_choice": {
-        "it": "Che cosa fai con la squadra?",
-        "en": "What do you do with the team?",
+        "it": "Che cosa fai con le prospettive?",
+        "en": "What do you do with the perspectives?",
     },
-    "init.team_approve": {"it": "La approvo e vado avanti", "en": "Approve it and go on"},
-    "init.team_change": {
-        "it": "Cambio gli specialisti della squadra",
-        "en": "Change the specialists of the team",
-    },
+    "init.team_approve": {"it": "Le approvo e vado avanti", "en": "Approve them and go on"},
+    "init.team_change": {"it": "Cambio le prospettive", "en": "Change the perspectives"},
     "init.team_stop": {"it": "Mi fermo qui", "en": "Stop here"},
     "init.team_left": {
-        "it": "La squadra resta in attesa della tua approvazione. Rilancia `ut init` per "
+        "it": "Le prospettive restano in attesa della tua approvazione. Rilancia `ut init` per "
         "riprendere da qui.",
-        "en": "The team stays waiting for your approval. Launch `ut init` again to resume "
-        "from here.",
+        "en": "The perspectives stay waiting for your approval. Launch `ut init` again to "
+        "resume from here.",
     },
     "init.team_nothing": {
-        "it": "In questo progetto nessuno specialista si può aggiungere o togliere.",
-        "en": "No specialist can be added or removed in this project.",
-    },
-    "init.team_fixed": {
-        "it": "Restano sempre nella squadra, perché sono membri obbligatori: {names}.",
-        "en": "Always in the team, because they are mandatory members: {names}.",
-    },
-    "init.team_excluded": {
-        "it": "Non possono entrare, per come è scritto il brief: {names}.",
-        "en": "Cannot join, the way the brief is written: {names}.",
+        "it": "In questo progetto nessuna prospettiva e nessun aspetto si può attivare o togliere.",
+        "en": "In this project no perspective and no aspect can be switched on or off.",
     },
     "init.team_switch_intro": {
-        "it": "Specialisti che puoi aggiungere [ ] o togliere [x]:",
-        "en": "Specialists you can add [ ] or remove [x]:",
+        "it": "Prospettive e aspetti che puoi attivare [ ] o togliere [x]:",
+        "en": "Perspectives and aspects you can switch on [ ] or off [x]:",
     },
     "init.team_switch": {
         "it": "Numeri da cambiare, separati da spazi (riga vuota per non cambiare nulla):",
@@ -463,16 +462,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Scrivi solo numeri da 1 a {count}, separati da spazi.",
         "en": "Write only numbers from 1 to {count}, separated by spaces.",
     },
-    "init.team_add_reason": {
-        "it": 'Perché aggiungi "{name}"? Una riga, resta scritta con la squadra:',
-        "en": 'Why do you add "{name}"? One line, it stays written with the team:',
+    "init.team_unchanged": {
+        "it": "Le prospettive non cambiano.",
+        "en": "The perspectives do not change.",
     },
-    "init.team_unchanged": {"it": "La squadra non cambia.", "en": "The team does not change."},
     "init.team_updated": {
-        "it": "Squadra aggiornata (versione {version}).",
-        "en": "Team updated (version {version}).",
+        "it": "Prospettive aggiornate (versione {version}).",
+        "en": "Perspectives updated (version {version}).",
     },
-    "init.team_owner_reason": {"it": "aggiunto da te: {reason}", "en": "added by you: {reason}"},
     "init.team_issue": {
         "it": "{name}: il cambio non è accettato ({code}).",
         "en": "{name}: the change is not accepted ({code}).",
@@ -486,197 +483,104 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{name} has two reasons: one is enough.",
     },
     "init.team_issue_mandatory_agent_missing": {
-        "it": "{name} non si può togliere: è un membro obbligatorio della squadra.",
-        "en": "{name} cannot be removed: it is a mandatory member of the team.",
+        "it": "{name}: non si può togliere in questo progetto.",
+        "en": "{name}: it cannot be switched off in this project.",
     },
     "init.team_issue_agent_not_selectable": {
-        "it": "{name} non può entrare in questa squadra.",
-        "en": "{name} cannot join this team.",
+        "it": "{name}: non si può attivare, perché il brief la esclude.",
+        "en": "{name}: it cannot be switched on, because the brief rules it out.",
     },
     "init.team_issue_rationale_required": {
-        "it": "Per aggiungere {name} serve una motivazione.",
-        "en": "Adding {name} needs a reason.",
+        "it": "{name}: per attivarla questo Studio chiede una motivazione, quindi attivala "
+        "nello Studio web.",
+        "en": "{name}: this Studio asks for a reason to switch it on, so switch it on in the "
+        "web Studio.",
     },
     "init.team_issue_unused_rationale": {
         "it": "La motivazione per {name} non serve: non è un'aggiunta.",
         "en": "The reason for {name} is not needed: it is not an addition.",
     },
     "init.team_blocked": {
-        "it": "{name}: il brief lo esclude ({excluded}) e insieme lo richiede ({required}).",
-        "en": "{name}: the brief rules it out ({excluded}) and also calls for it ({required}).",
+        "it": "{name}: il brief la esclude ({excluded}) e insieme la chiede ({required}).",
+        "en": "{name}: the brief rules it out ({excluded}) and also asks for it ({required}).",
     },
-    "init.team_blocked_evidence": {"it": "{terms} in {fields}", "en": "{terms} in {fields}"},
-    "init.team_blocked_term": {"it": "«{term}»", "en": "«{term}»"},
-    "init.reason_catalog_always_present": {
-        "it": "componente sempre presente dello Studio",
-        "en": "always-present component of the Studio",
+    "init.team_asks": {"it": "la chiede con {words}", "en": "asks for it with {words}"},
+    "init.team_rules_out": {"it": "la esclude con {words}", "en": "rules it out with {words}"},
+    "init.team_evidence": {"it": "{terms} in {fields}", "en": "{terms} in {fields}"},
+    "init.team_term": {"it": "«{term}»", "en": "«{term}»"},
+    "init.standing_always": {"it": "Sempre applicata", "en": "Always applied"},
+    "init.standing_required": {"it": "La chiede il brief", "en": "The brief asks for it"},
+    "init.standing_optional": {"it": "A scelta", "en": "Your choice"},
+    "init.standing_optional_applied": {
+        "it": "Applicata, a tua scelta",
+        "en": "Applied, your choice",
     },
-    "init.reason_catalog_mode_incompatible": {
-        "it": "non adatto alla modalità del progetto",
-        "en": "not suited to the mode of the project",
+    "init.standing_always_missing": {
+        "it": "Questa versione è stata preparata prima che questa prospettiva diventasse sempre "
+        "applicata: prepara di nuovo le prospettive nel web.",
+        "en": "This version was prepared before this perspective became always applied: prepare "
+        "the perspectives again in the web Studio.",
     },
-    "init.reason_core_requirements_discipline": {
-        "it": "serve sempre per scrivere requisiti chiari",
-        "en": "always needed to write clear requirements",
+    "init.standing_excluded": {"it": "Il brief la esclude", "en": "The brief rules it out"},
+    "init.standing_contested": {
+        "it": "Il brief dice due cose diverse: decidi tu",
+        "en": "The brief says two different things: you decide",
     },
-    "init.reason_core_user_centered_design": {
-        "it": "serve sempre per progettare pensando agli utenti",
-        "en": "always needed to design around the users",
+    "init.perspective_ux": {"it": "Esperienza d'uso (UX)", "en": "User experience (UX)"},
+    "init.perspective_ux_line": {
+        "it": "Guarda il progetto con gli occhi di chi lo userà: obiettivi, contesto, punti in "
+        "cui ci si può bloccare.",
+        "en": "Looks at the project through the eyes of the people who will use it: goals, "
+        "context, places where they may get stuck.",
     },
-    "init.reason_core_architecture_discipline": {
-        "it": "serve sempre per tenere insieme requisiti e design",
-        "en": "always needed to keep requirements and design together",
+    "init.perspective_accessibility": {"it": "Accessibilità", "en": "Accessibility"},
+    "init.perspective_accessibility_line": {
+        "it": "Controlla che tutti possano usarlo: tastiera, contrasto, testi leggibili, "
+        "messaggi chiari.",
+        "en": "Checks that everyone can use it: keyboard, contrast, readable text, clear messages.",
     },
-    "init.reason_core_quality_discipline": {
-        "it": "serve sempre per verificare la qualità",
-        "en": "always needed to check the quality",
+    "init.perspective_software_engineering": {
+        "it": "Ingegneria del software",
+        "en": "Software engineering",
     },
-    "init.reason_core_accessibility_discipline": {
-        "it": "L'accessibilità fa parte di ogni progetto",
-        "en": "Accessibility is part of every project",
+    "init.perspective_software_engineering_line": {
+        "it": "Tiene il progetto realizzabile entro vincoli tecnici, tempi e budget, e "
+        "verificabile.",
+        "en": "Keeps the project feasible within its technical constraints, time and budget, "
+        "and verifiable.",
     },
-    "init.reason_brownfield_integration": {
-        "it": "il progetto parte da un sistema che esiste già",
-        "en": "the project starts from a system that already exists",
+    "init.perspective_product": {"it": "Prodotto", "en": "Product"},
+    "init.perspective_product_line": {
+        "it": "Tiene le priorità: che cosa serve nella prima versione e che cosa può aspettare.",
+        "en": "Keeps the priorities: what the first version needs and what can wait.",
     },
-    "init.reason_user_interface_signal": {
-        "it": "il brief chiede un'interfaccia per le persone",
-        "en": "the brief asks for an interface for people",
+    "init.perspective_security": {"it": "Sicurezza", "en": "Security"},
+    "init.perspective_security_line": {
+        "it": "Protegge dati e accessi: chi può vedere e fare che cosa.",
+        "en": "Protects data and access: who may see and do what.",
     },
-    "init.reason_web_delivery_signal": {
-        "it": "il brief chiede un prodotto sul web",
-        "en": "the brief asks for a product on the web",
+    "init.aspect_web": {"it": "Interfaccia web", "en": "Web interface"},
+    "init.aspect_web_line": {
+        "it": "Funziona nel browser, dal telefono al computer.",
+        "en": "Works in the browser, from phone to desktop.",
     },
-    "init.reason_backend_delivery_signal": {
-        "it": "il brief chiede dati e servizi dietro le schermate",
-        "en": "the brief asks for data and services behind the screens",
+    "init.aspect_services": {"it": "Servizi e dati", "en": "Services and data"},
+    "init.aspect_services_line": {
+        "it": "Dati e funzioni che stanno su un server.",
+        "en": "Data and logic that live on a server.",
     },
-    "init.reason_mobile_delivery_signal": {
-        "it": "il brief chiede un prodotto per telefoni e tablet",
-        "en": "the brief asks for a product for phones and tablets",
+    "init.aspect_mobile": {"it": "Mobile", "en": "Mobile"},
+    "init.aspect_mobile_line": {
+        "it": "Uso su telefono e tablet.",
+        "en": "Use on phones and tablets.",
     },
-    "init.reason_external_integration_signal": {
-        "it": "il brief chiede collegamenti con altri servizi",
-        "en": "the brief asks for connections with other services",
+    "init.aspect_integrations": {
+        "it": "Collegamenti con altri sistemi",
+        "en": "Connections to other systems",
     },
-    "init.reason_security_sensitivity_signal": {
-        "it": "il brief tratta dati o accessi delicati",
-        "en": "the brief handles sensitive data or access",
-    },
-    "init.reason_accessibility_requirement_signal": {
-        "it": "il brief chiede attenzione all'accessibilità",
-        "en": "the brief asks for attention to accessibility",
-    },
-    "init.reason_explicit_scope_exclusion": {
-        "it": "il brief esclude questo ruolo",
-        "en": "the brief excludes this role",
-    },
-    "init.reason_unknown": {"it": "scelto per il progetto", "en": "chosen for the project"},
-    "init.agent_workflow_orchestrator": {"it": "Coordinatore", "en": "Coordinator"},
-    "init.agent_workflow_orchestrator_role": {
-        "it": "Organizza il lavoro e accompagna il progetto da un passo al successivo.",
-        "en": "Organizes the work and guides the project through each step.",
-    },
-    "init.agent_intake_clarification_agent": {"it": "Guida del progetto", "en": "Project guide"},
-    "init.agent_intake_clarification_agent_role": {
-        "it": "Ti aiuta a chiarire l'idea, gli obiettivi e le priorità.",
-        "en": "Helps you clarify the idea, goals and priorities.",
-    },
-    "init.agent_team_selector": {"it": "Organizzatore del team", "en": "Team planner"},
-    "init.agent_team_selector_role": {
-        "it": "Propone gli specialisti adatti alla tua idea.",
-        "en": "Suggests the specialists your idea needs.",
-    },
-    "init.agent_human_gate_controller": {
-        "it": "Referente delle approvazioni",
-        "en": "Approval guide",
-    },
-    "init.agent_human_gate_controller_role": {
-        "it": "Aspetta la tua conferma prima di proseguire.",
-        "en": "Waits for your confirmation before moving on.",
-    },
-    "init.agent_artifact_manager": {"it": "Custode delle versioni", "en": "Version keeper"},
-    "init.agent_artifact_manager_role": {
-        "it": "Conserva proposte, risultati e decisioni per ritrovarli in ogni momento.",
-        "en": "Keeps proposals, results and decisions available for review.",
-    },
-    "init.agent_sandbox_controller": {
-        "it": "Responsabile delle prove",
-        "en": "Test environment keeper",
-    },
-    "init.agent_sandbox_controller_role": {
-        "it": "Esegue le prove in un ambiente separato dal tuo progetto.",
-        "en": "Runs checks in an environment separate from your project.",
-    },
-    "init.agent_requirements_analyst": {"it": "Analista delle esigenze", "en": "Needs analyst"},
-    "init.agent_requirements_analyst_role": {
-        "it": "Trasforma il brief in requisiti chiari, con un modo per verificarli.",
-        "en": "Turns the brief into clear requirements, each with a way to check it.",
-    },
-    "init.agent_ux_researcher_user_modeler": {
-        "it": "Ricercatore degli utenti",
-        "en": "User researcher",
-    },
-    "init.agent_ux_researcher_user_modeler_role": {
-        "it": "Costruisce i twin e raccoglie le loro critiche.",
-        "en": "Builds the twins and gathers their critiques.",
-    },
-    "init.agent_ux_ui_designer": {"it": "Designer UX/UI", "en": "UX/UI designer"},
-    "init.agent_ux_ui_designer_role": {
-        "it": "Propone le alternative di design e i mockup navigabili.",
-        "en": "Proposes the design alternatives and the clickable mockups.",
-    },
-    "init.agent_software_architect": {"it": "Architetto del prodotto", "en": "Product architect"},
-    "init.agent_software_architect_role": {
-        "it": "Controlla che requisiti e design stiano in piedi insieme.",
-        "en": "Checks that requirements and design hold together.",
-    },
-    "init.agent_frontend_engineer": {
-        "it": "Sviluppatore dell'interfaccia",
-        "en": "Interface developer",
-    },
-    "init.agent_frontend_engineer_role": {
-        "it": "Prepara il pacchetto per chi costruirà le schermate.",
-        "en": "Prepares the package for whoever builds the screens.",
-    },
-    "init.agent_backend_engineer": {"it": "Sviluppatore dei servizi", "en": "Service developer"},
-    "init.agent_backend_engineer_role": {
-        "it": "Gestisce dati e funzioni che lavorano dietro le schermate.",
-        "en": "Builds the data and features behind the screens.",
-    },
-    "init.agent_mobile_engineer": {"it": "Sviluppatore mobile", "en": "Mobile developer"},
-    "init.agent_mobile_engineer_role": {
-        "it": "Realizza l'esperienza per telefoni e tablet.",
-        "en": "Builds the experience for phones and tablets.",
-    },
-    "init.agent_qa_test_engineer": {"it": "Specialista della qualità", "en": "Quality specialist"},
-    "init.agent_qa_test_engineer_role": {
-        "it": 'Scrive come controllare ogni requisito prima di dire "finito".',
-        "en": "Writes how to check each requirement before calling it done.",
-    },
-    "init.agent_security_reviewer": {
-        "it": "Specialista della sicurezza",
-        "en": "Security specialist",
-    },
-    "init.agent_security_reviewer_role": {
-        "it": "Controlla accessi, riservatezza e protezione dei dati.",
-        "en": "Reviews access, privacy and data protection.",
-    },
-    "init.agent_accessibility_reviewer": {
-        "it": "Specialista dell'accessibilità",
-        "en": "Accessibility specialist",
-    },
-    "init.agent_accessibility_reviewer_role": {
-        "it": "Rivede contrasto, uso da tastiera e leggibilità dei mockup.",
-        "en": "Reviews contrast, keyboard use and readability of the mockups.",
-    },
-    "init.agent_integration_engineer": {
-        "it": "Specialista dei collegamenti",
-        "en": "Integration specialist",
-    },
-    "init.agent_integration_engineer_role": {
-        "it": "Collega il prodotto agli altri servizi di cui hai bisogno.",
-        "en": "Connects your product to the other services it needs.",
+    "init.aspect_integrations_line": {
+        "it": "Scambio di dati con servizi esterni.",
+        "en": "Data exchanged with outside services.",
     },
     "init.profiles_label": {
         "it": "Propongo i profili degli utenti",
@@ -1012,12 +916,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "the page of the project in the web interface.",
     },
     "init.errors.TEAM_BLOCKED": {
-        "it": "La squadra non si può proporre: il brief insieme chiede ed esclude questi "
-        "ruoli: {agents}.{details} Correggi il brief nello Studio web (passo Brief, "
-        "«Modifica il brief di persona»), poi rilancia `ut init`.",
-        "en": "The team cannot be proposed: the brief both asks for and excludes these "
-        "roles: {agents}.{details} Correct the brief in the web Studio (step Brief, "
-        "«Edit the brief yourself»), then launch `ut init` again.",
+        "it": "Le prospettive non si possono preparare: il brief chiede ed esclude insieme "
+        "{names}.{details} Correggi il brief nello Studio web (passo Brief, «Modifica il brief "
+        "di persona»), poi rilancia `ut init`.",
+        "en": "The perspectives cannot be prepared: the brief both asks for and rules out "
+        "{names}.{details} Correct the brief in the web Studio (step Brief, «Edit the brief "
+        "yourself»), then launch `ut init` again.",
     },
     "init.errors.NO_PROFILE_CONFIRMED": {
         "it": "Nessun profilo degli utenti è confermato, quindi gli User Twin non si possono "
