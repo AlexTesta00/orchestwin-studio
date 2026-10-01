@@ -4,10 +4,12 @@ import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { apiClient, ApiError } from "@/api/client";
-import type {
-  ProjectBriefInput,
-  ProjectBriefVersionResponse,
-  ProjectResponse,
+import {
+  PROJECT_STAGES,
+  type ProjectBriefInput,
+  type ProjectBriefVersionResponse,
+  type ProjectResponse,
+  type ProjectStage,
 } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
@@ -20,6 +22,7 @@ import ProjectDesignFlow from "@/components/ProjectDesignFlow.vue";
 import ProjectDesignPackagePanel from "@/components/ProjectDesignPackagePanel.vue";
 import ProjectRequirementsFlow from "@/components/ProjectRequirementsFlow.vue";
 import ModelRuntimeStatus from "@/components/ModelRuntimeStatus.vue";
+import ProjectSectionsNotice from "@/components/ProjectSectionsNotice.vue";
 import ProjectUserModelingFlow from "@/components/ProjectUserModelingFlow.vue";
 import TwinChatPanel from "@/components/TwinChatPanel.vue";
 import ProjectTeamSelectionFlow from "@/components/ProjectTeamSelectionFlow.vue";
@@ -27,7 +30,11 @@ import UiButton from "@/components/UiButton.vue";
 import UiStateBlock from "@/components/UiStateBlock.vue";
 import UiSidePanel from "@/components/UiSidePanel.vue";
 import UiStepHeader from "@/components/UiStepHeader.vue";
-import UiStepper, { type StepItem, type StepStatus } from "@/components/UiStepper.vue";
+import UiStepper, {
+  type StepItem,
+  type StepSection,
+  type StepStatus,
+} from "@/components/UiStepper.vue";
 import { surfaceKey, type SurfaceContext } from "@/components/UiSurface.vue";
 import UiTechnicalDetails from "@/components/UiTechnicalDetails.vue";
 import { useTeamStore } from "@/stores/team";
@@ -39,8 +46,31 @@ import { useAuthStore } from "@/stores/auth";
 import { useClarificationStore } from "@/stores/clarification";
 import { useInsightTrayStore } from "@/stores/insightTray";
 import { useKnowledgePackagesStore } from "@/stores/knowledgePackages";
+import { useSectionsStore } from "@/stores/sections";
 import type { ProjectImportOriginPayload } from "@/types/projectImports";
+import type { SectionState, SectionsAlignmentPayload } from "@/types/sections";
 import type { UserTwinVersionPayload } from "@/types/userModeling";
+
+const SECTION_STATUSES: Readonly<Record<SectionState, StepStatus>> = {
+  NOT_STARTED: "pending",
+  IN_PROGRESS: "current",
+  FINE: "approved",
+  UPDATE_AVAILABLE: "approved",
+  TO_UPDATE: "approved",
+};
+const SECTION_SEGMENTS: Readonly<Record<SectionState, string>> = {
+  NOT_STARTED: "bg-on-night/14",
+  IN_PROGRESS: "bg-on-night",
+  FINE: "bg-petrol-on-night",
+  UPDATE_AVAILABLE: "bg-petrol-on-night",
+  TO_UPDATE: "bg-warn-on-night",
+};
+const APPROVED_STATES: ReadonlySet<SectionState> = new Set([
+  "FINE",
+  "UPDATE_AVAILABLE",
+  "TO_UPDATE",
+]);
+const NO_SECTION: StepSection = { state: "NOT_STARTED", version: null };
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -52,6 +82,8 @@ const clarification = useClarificationStore();
 const tray = useInsightTrayStore();
 const packages = useKnowledgePackagesStore();
 const mockups = useDesignMockupsStore();
+const sectionsStore = useSectionsStore();
+const remounts = ref<readonly number[]>([0, 0, 0, 0, 0, 0]);
 // Reload downstream state when its approved inputs change on this page.
 const briefContext = computed(() =>
   briefKnown.value && clarificationSettled.value
@@ -95,7 +127,7 @@ const { t, locale } = useI18n({
         readOnlyBrief:
           "You already approved the brief: you can read it again. If you change it, a new version is made that you approve again, and the steps after it need another look.",
         readOnlyTeam:
-          "You already approved the team: you can read it again. You can still switch the optional roles on or off: every change you save makes a new version of the team that you approve again.",
+          "You already approved the perspectives: you can read them again. You can still switch on or off the ones left to your choice: every change you save makes a new version that you approve again.",
         readOnlyTwins:
           "You already approved the user twins: you can read them again and talk to them. If you correct a twin or reuse one from another project, a new version is made that you approve again.",
         readOnlyRequirements:
@@ -108,6 +140,7 @@ const { t, locale } = useI18n({
         describeIdea: "Describe your idea in the form",
         openDialogue: "Back to the dialogue with the analyst",
         showSteps: "All steps",
+        showSections: "All sections",
         readyToDownload: "Ready to download",
         partialFolder: "Partial folder",
         packageAhead:
@@ -144,7 +177,7 @@ const { t, locale } = useI18n({
         readOnlyBrief:
           "Hai già approvato il brief: puoi rileggerlo. Se lo modifichi nasce una nuova versione da approvare di nuovo, e i passi successivi andranno rivisti.",
         readOnlyTeam:
-          "Hai già approvato la squadra: puoi rileggerla. Puoi ancora attivare o togliere i ruoli facoltativi: ogni cambio che salvi crea una nuova versione della squadra da approvare di nuovo.",
+          "Hai già approvato le prospettive: puoi rileggerle. Puoi ancora attivare o togliere quelle a tua scelta: ogni cambio che salvi crea una nuova versione da approvare di nuovo.",
         readOnlyTwins:
           "Hai già approvato gli user twin: puoi rileggerli e parlarci. Se correggi un twin o ne riusi uno da un altro progetto, nasce una nuova versione da approvare di nuovo.",
         readOnlyRequirements:
@@ -157,6 +190,7 @@ const { t, locale } = useI18n({
         describeIdea: "Descrivi la tua idea nel modulo",
         openDialogue: "Torna al dialogo con l'analista",
         showSteps: "Tutti i passi",
+        showSections: "Tutte le sezioni",
         readyToDownload: "Pronto da scaricare",
         partialFolder: "Cartella parziale",
         packageAhead:
@@ -211,6 +245,7 @@ function onDialogueActive(active: boolean): void {
 async function onDialogueSynthesized(): Promise<void> {
   await reloadProject();
   briefMode.value = "form";
+  onSectionsChanged();
 }
 
 const projectId = computed(() => {
@@ -225,7 +260,11 @@ const projectId = computed(() => {
 const trayVisible = computed(() => tray.isVisible(projectId.value));
 const briefKnown = computed(() => !loading.value && !reloading.value && project.value !== null);
 
-function settledOnPage(owner: () => string | null, busy: () => boolean) {
+function settledOnPage(
+  owner: () => string | null,
+  busy: () => boolean,
+  generation: () => number = () => 0,
+) {
   const ran = ref(false);
   watch(
     () => owner() === projectId.value && busy(),
@@ -235,7 +274,7 @@ function settledOnPage(owner: () => string | null, busy: () => boolean) {
     { flush: "sync", immediate: true },
   );
   watch(
-    projectId,
+    [projectId, generation],
     () => {
       ran.value = owner() === projectId.value && busy();
     },
@@ -255,10 +294,12 @@ const teamSettled = settledOnPage(
 const modelingSettled = settledOnPage(
   () => modeling.projectId,
   () => modeling.isBusy,
+  () => remounts.value[2] ?? 0,
 );
 const requirementsSettled = settledOnPage(
   () => requirements.projectId,
   () => requirements.isBusy,
+  () => remounts.value[3] ?? 0,
 );
 
 function approved(
@@ -300,38 +341,72 @@ const currentStage = computed(() => {
   return incomplete < 0 ? 5 : incomplete;
 });
 const packageOpen = computed(() => completedStages.value[0] === true);
+const sectionsData = computed(() =>
+  sectionsStore.projectId === projectId.value ? sectionsStore.sections : null,
+);
+const sectionsMode = computed(() => sectionsData.value?.first_pass_complete === true);
+const sectionSteps = computed<StepSection[]>(() =>
+  PROJECT_STAGES.map((key) => {
+    const section = sectionsData.value?.sections.find((item) => item.key === key);
+    return section === undefined
+      ? NO_SECTION
+      : { state: section.state, version: section.version_number };
+  }),
+);
+const defaultSection = computed(() => {
+  const states = sectionSteps.value.map((section) => section.state);
+  const waiting = states.indexOf("IN_PROGRESS");
+  if (waiting >= 0) return waiting;
+  const behind = states.indexOf("TO_UPDATE");
+  return behind >= 0 ? behind : 5;
+});
 const activeStage = computed(() => {
+  if (sectionsMode.value) {
+    return selectedStage.value ?? defaultSection.value;
+  }
   if (selectedStage.value === 5 && packageOpen.value) {
     return 5;
   }
   return Math.min(selectedStage.value ?? currentStage.value, currentStage.value);
 });
+const activeKey = computed<ProjectStage>(() => PROJECT_STAGES[activeStage.value] ?? "PACKAGE");
+const activeSection = computed(() => sectionSteps.value[activeStage.value] ?? NO_SECTION);
 const stageLabels = computed(() =>
   locale.value === "it"
-    ? ["Brief", "Squadra", "User Twin", "Requisiti", "Design", "Pacchetto"]
-    : ["Brief", "Team", "User Twins", "Requirements", "Design", "Package"],
+    ? ["Brief", "Prospettive", "User Twin", "Definizione", "Design e valutazione", "Dossier"]
+    : ["Brief", "Perspectives", "User Twin", "Definition", "Design & Evaluation", "Dossier"],
 );
 const stageDescriptions = computed(() =>
   locale.value === "it"
     ? [
         "Racconta cosa vuoi realizzare e per chi. Quello che manca arriva come proposta: decidi tu se tenerla.",
-        "Gli assistenti che lavoreranno al tuo progetto, e in quale passo.",
+        "Le competenze con cui guardare il tuo progetto: ognuna porta le sue considerazioni quando si scrivono requisiti e design.",
         "I profili simulati delle persone che useranno il prodotto. Confermali, correggili, parlaci.",
         "Che cosa deve fare la tua applicazione, per chi, e come controlleremo che lo faccia.",
-        "Alternative già provate dai twin. Leggi il loro parere, prova il mockup e scegli.",
-        "La cartella di conoscenza da portare nei tuoi strumenti di sviluppo.",
+        "Le alternative, i mockup e il parere dei twin.",
+        "La cartella con tutto ciò che hai approvato.",
       ]
     : [
         "Tell what you want to build and for whom. What is missing arrives as a proposal: you decide whether to keep it.",
-        "The assistants who will work on your project, and in which step.",
+        "The competences through which your project is looked at: each one adds its considerations when the requirements and the design are written.",
         "The simulated profiles of the people who will use the product. Confirm them, correct them, talk to them.",
         "What your application must do, for whom, and how we will check that it does.",
-        "Alternatives already tried by the twins. Read what they think, try the mockup and choose.",
-        "The knowledge folder to bring into your own development tools.",
+        "The alternatives, the mockups and what the twins say.",
+        "The folder with everything you approved.",
       ],
 );
 const stepItems = computed<StepItem[]>(() =>
   stageLabels.value.map((label, index) => {
+    if (sectionsMode.value) {
+      const section = sectionSteps.value[index] ?? NO_SECTION;
+      return {
+        key: `step-${index}`,
+        label,
+        index,
+        status: SECTION_STATUSES[section.state],
+        section,
+      };
+    }
     const status: StepStatus =
       index < currentStage.value
         ? "approved"
@@ -368,6 +443,7 @@ const provenanceOpen = ref(false);
 const chatTwin = ref<UserTwinVersionPayload | null>(null);
 
 function segmentClass(index: number): string {
+  if (sectionsMode.value) return SECTION_SEGMENTS[(sectionSteps.value[index] ?? NO_SECTION).state];
   if (index < currentStage.value) return "bg-petrol-on-night";
   if (index === currentStage.value) return "bg-on-night";
   return "bg-on-night/14";
@@ -375,8 +451,24 @@ function segmentClass(index: number): string {
 
 function selectStep(key: string): void {
   const index = Number(key.replace("step-", ""));
-  selectedStage.value = index === currentStage.value ? null : index;
+  const followed = sectionsMode.value ? defaultSection.value : currentStage.value;
+  selectedStage.value = index === followed ? null : index;
   stepsOpen.value = false;
+}
+
+function openSection(key: ProjectStage): void {
+  selectStep(`step-${PROJECT_STAGES.indexOf(key)}`);
+}
+
+function remountFrom(stage: number): void {
+  remounts.value = remounts.value.map((count, index) => (index >= stage ? count + 1 : count));
+}
+
+function firstAligned(result: SectionsAlignmentPayload): number | null {
+  const stages = result.results
+    .filter((item) => item.outcome === "ALIGNED")
+    .map((item) => PROJECT_STAGES.indexOf(item.key));
+  return stages.length === 0 ? null : Math.min(...stages);
 }
 
 const stageVersions = computed(() => [
@@ -444,9 +536,10 @@ const technicalSummary = computed(() => {
   }
   const version = activeVersion.value;
   if (version === undefined || version === null) return t("detail.techNone");
-  const state = completedStages.value[activeStage.value]
-    ? t("detail.techApproved")
-    : t("detail.techPending");
+  const approvedNow = sectionsMode.value
+    ? APPROVED_STATES.has(activeSection.value.state)
+    : completedStages.value[activeStage.value];
+  const state = approvedNow ? t("detail.techApproved") : t("detail.techPending");
   return `${t("detail.techVersion", { number: version })} · ${state}`;
 });
 const technicalRows = computed(() => {
@@ -488,7 +581,7 @@ const projectRows = computed(() => {
 
 watch(currentStage, (next, previous) => {
   // Follow progress unless the owner deliberately revisited an earlier stage.
-  if (selectedStage.value === 5 && packageOpen.value) {
+  if (sectionsMode.value || (selectedStage.value === 5 && packageOpen.value)) {
     return;
   }
   if (
@@ -528,7 +621,7 @@ watch(
   () => tray.resultOf(projectId.value)?.briefVersionNumber ?? null,
   (version) => {
     if (version !== null && version > (currentBrief.value?.version_number ?? 0)) {
-      void refreshBrief();
+      void refreshBrief().then(onSectionsChanged);
     }
   },
 );
@@ -599,7 +692,7 @@ async function reloadProject(): Promise<void> {
       authorized((accessToken) => apiClient.listBriefVersions(accessToken, id)),
     ]);
     if (epoch !== projectEpoch) return;
-    selectedStage.value = null;
+    selectedStage.value = sectionsMode.value ? 0 : null;
     briefMode.value = null;
     project.value = projectResult;
     briefHistory.value = [...versions];
@@ -639,7 +732,10 @@ async function saveBrief(brief: ProjectBriefInput): Promise<void> {
 
   try {
     await authorized((accessToken) => apiClient.createBriefVersion(accessToken, id, brief));
-    if (epoch === projectEpoch) await reloadProject();
+    if (epoch === projectEpoch) {
+      await reloadProject();
+      onSectionsChanged();
+    }
   } catch (error: unknown) {
     if (epoch === projectEpoch) errorDetail.value = errorCode(error, "brief_save_failed");
   } finally {
@@ -656,6 +752,28 @@ async function loadImportOrigin(): Promise<void> {
   const request = authorized((accessToken) => projectImportsApi.origin(id, accessToken));
   const origin = await request.catch(() => null);
   if (sequence === originSequence) importOrigin.value = origin;
+}
+
+async function refreshSections(): Promise<void> {
+  const id = projectId.value;
+  if (!id) return;
+  await sectionsStore.read(id, authorized).catch(() => null);
+}
+
+function onSectionsChanged(): void {
+  sectionsStore.clearAlignment();
+  void refreshSections();
+}
+
+async function alignSections(): Promise<void> {
+  const id = projectId.value;
+  if (!id || sectionsStore.pending.align) return;
+  selectedStage.value = activeStage.value;
+  const result = await sectionsStore.align(id, authorized).catch(() => null);
+  if (result === null || id !== projectId.value) return;
+  const first = firstAligned(result);
+  if (first !== null) remountFrom(first);
+  await refreshSections();
 }
 
 const stagesRoot = ref<HTMLElement | null>(null);
@@ -722,6 +840,7 @@ watch(
 
 watch(projectId, loadProject, { immediate: true });
 watch(projectId, loadImportOrigin, { immediate: true });
+watch(projectId, refreshSections, { immediate: true });
 onUnmounted(() => {
   projectEpoch++;
   originSequence++;
@@ -758,7 +877,9 @@ onUnmounted(() => {
         @click="stepsOpen = !stepsOpen"
       >
         <span class="flex items-center justify-between gap-3">
-          <span class="text-[15px] font-semibold text-on-night">{{ t("detail.showSteps") }}</span>
+          <span class="text-[15px] font-semibold text-on-night">
+            {{ sectionsMode ? t("detail.showSections") : t("detail.showSteps") }}
+          </span>
           <span
             aria-hidden="true"
             :class="[
@@ -794,7 +915,8 @@ onUnmounted(() => {
           :total="6"
           :title="stageLabels[activeStage] ?? ''"
           :description="stageDescriptions[activeStage]"
-          :status="headerStatus"
+          :status="sectionsMode ? undefined : headerStatus"
+          :section="sectionsMode ? activeSection : undefined"
         />
         <p
           v-if="importOrigin"
@@ -809,8 +931,20 @@ onUnmounted(() => {
           }}
         </p>
 
+        <ProjectSectionsNotice
+          v-if="sectionsMode && sectionsData !== null"
+          :sections="sectionsData"
+          :labels="stageLabels"
+          :open-key="activeKey"
+          :locale="locale === 'it' ? 'it' : 'en'"
+          :busy="sectionsStore.pending.align"
+          :result="sectionsStore.alignment"
+          :failed="sectionsStore.alignmentFailure !== null"
+          @align="alignSections"
+          @open="openSection"
+        />
         <div
-          v-if="activeStage < currentStage"
+          v-else-if="activeStage < currentStage"
           class="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-panel border border-night-line bg-night-raised py-3 pr-3 pl-5"
           aria-live="polite"
           data-testid="step-read-only"
@@ -862,6 +996,8 @@ onUnmounted(() => {
                 :current-brief="currentBrief"
                 :history="briefHistory"
                 :active="activeStage === 0"
+                :sections-mode="sectionsMode"
+                @sections-changed="onSectionsChanged"
               />
               <div
                 v-if="currentBrief !== null || !completedStages[0]"
@@ -924,51 +1060,62 @@ onUnmounted(() => {
               :project-id="projectId"
               :upstream="briefContext"
               :active="activeStage === 1"
+              :sections-mode="sectionsMode"
+              @sections-changed="onSectionsChanged"
             />
           </div>
           <div id="studio-stage-2" v-show="activeStage === 2" data-testid="stage-twins">
             <ProjectUserModelingFlow
               id="studio-twins"
               v-if="auth.accessToken"
-              :key="`${projectId}:user-modeling`"
+              :key="`${projectId}:user-modeling:${remounts[2]}`"
               :project-id="projectId"
               :access-token="auth.accessToken"
               :authorize="authorized"
               :locale="locale === 'it' ? 'it' : 'en'"
               :upstream="teamContext"
               :active="activeStage === 2"
+              :sections-mode="sectionsMode"
               @open-chat="chatTwin = $event"
+              @sections-changed="onSectionsChanged"
             />
           </div>
           <div id="studio-stage-3" v-show="activeStage === 3" data-testid="stage-requirements">
             <ProjectRequirementsFlow
               id="studio-requirements"
               :prerequisite-ready="modeling.isReadyForRequirements"
-              :key="`${projectId}:requirements`"
+              :key="`${projectId}:requirements:${remounts[3]}`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
               :upstream="twinContext"
               :active="activeStage === 3"
+              :sections-mode="sectionsMode"
+              @sections-changed="onSectionsChanged"
             />
           </div>
           <div id="studio-stage-4" v-show="activeStage === 4" data-testid="stage-design">
             <ProjectDesignFlow
               id="studio-design"
               :prerequisite-ready="requirements.isReadyForDesign"
-              :key="`${projectId}:design`"
+              :key="`${projectId}:design:${remounts[4]}`"
               :project-id="projectId"
               :locale="locale === 'it' ? 'it' : 'en'"
               :upstream="requirementsContext"
               :active="activeStage === 4"
+              :sections-mode="sectionsMode"
+              @sections-changed="onSectionsChanged"
             />
           </div>
           <div id="studio-stage-5" v-show="activeStage === 5" data-testid="stage-package">
             <ProjectDesignPackagePanel
               id="studio-package"
+              :key="`${projectId}:package:${remounts[5]}`"
               :project-id="projectId"
               :stages="stageSummaries"
               :authorize="authorized"
               :locale="locale === 'it' ? 'it' : 'en'"
+              :sections-mode="sectionsMode"
+              @sections-changed="onSectionsChanged"
             >
               <template v-if="packagePreview !== null" #preview>
                 <GeneratedMockupFrame
@@ -993,7 +1140,7 @@ onUnmounted(() => {
         />
         <div
           id="step-decision-bar"
-          v-show="project !== null && activeStage === currentStage"
+          v-show="project !== null && (sectionsMode || activeStage === currentStage)"
           :class="['flex flex-col', trayVisible ? '[&_[data-testid=decision-bar]]:mt-3' : '']"
           data-testid="step-decision-bar"
         />

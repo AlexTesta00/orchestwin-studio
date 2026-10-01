@@ -157,9 +157,7 @@ describe("decision bar", () => {
     wrapper.unmount();
     const shared = mountBar();
     await shared.get("[data-testid='decision-secondary']").trigger("click");
-    expect(shared.get("textarea").attributes("placeholder")).toBe(
-      "Scrivi una nota per l'assistente: ne preparerà una nuova versione.",
-    );
+    expect(shared.get("textarea").attributes("placeholder")).toBe("Scrivi che cosa vuoi cambiare…");
     shared.unmount();
   });
 

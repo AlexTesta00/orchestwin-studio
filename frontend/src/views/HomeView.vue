@@ -35,7 +35,7 @@ const hiddenTransforms: Record<RevealKind, string> = {
 
 const messages = {
   it: {
-    lead: "Una squadra di agenti AI ti accompagna dal brief al pacchetto di design. Ogni passo si chiude con la tua approvazione.",
+    lead: "L'AI ti accompagna dal brief al dossier e guarda il progetto dalle prospettive che gli servono. Ogni passo si chiude con la tua approvazione.",
     heroAlt:
       "Un twin di vetro traslucido accanto al suo gemello pieno, due robot da compagnia su un pavimento scuro",
     hypothesis: "Ipotesi dell'AI",
@@ -61,7 +61,7 @@ const messages = {
     decision: "Tua decisione:",
     decisions: {
       brief: "Approva il brief",
-      team: "Approva la squadra",
+      team: "Approva le prospettive",
       twins: "Conferma i twin",
       requirements: "Approva i requisiti",
       design: "Scegli e approva il design",
@@ -73,7 +73,7 @@ const messages = {
     author: "Dott. Alex Testa",
   },
   en: {
-    lead: "A team of AI agents guides you from the brief to the design package. Every step closes with your approval.",
+    lead: "AI guides you from the brief to the dossier and looks at the project from the perspectives it needs. Every step closes with your approval.",
     heroAlt:
       "A translucent glass twin next to its solid sibling, two companion robots on a dark floor",
     hypothesis: "AI hypothesis",
@@ -98,7 +98,7 @@ const messages = {
     decision: "Your decision:",
     decisions: {
       brief: "Approve the brief",
-      team: "Approve the team",
+      team: "Approve the perspectives",
       twins: "Confirm the twins",
       requirements: "Approve the requirements",
       design: "Choose and approve the design",
