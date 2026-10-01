@@ -102,6 +102,26 @@ function spoken(element: { text(): string }): string {
   return element.text().replace(/\s+/g, " ");
 }
 
+function commands(
+  wrapper: ReturnType<typeof mountPanel>["wrapper"],
+  step: "package-cli-step" | "package-development-step",
+): string[] {
+  return wrapper
+    .findAll(`[data-testid="${step}"] [data-testid="command-text"]`)
+    .map((item) => item.text());
+}
+
+function namedFolder(name: string): KnowledgePackagesApi {
+  return knowledgeApi({
+    history: vi.fn(() =>
+      Promise.resolve({
+        project_id: PROJECT_ID,
+        versions: [{ ...version(1), project_name: name }],
+      }),
+    ),
+  });
+}
+
 function knowledgeApi(overrides: Partial<KnowledgePackagesApi> = {}): KnowledgePackagesApi {
   return {
     publish: vi.fn(() => Promise.resolve({ reused: false, version: version(2) })),
@@ -127,6 +147,7 @@ interface MountOptions {
   locale?: "en" | "it";
   saveExport?: () => void;
   preview?: (slot: PreviewSlot) => VNode;
+  studioAddress?: string;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -143,6 +164,7 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       authorize: (operation) => operation("access-token"),
       api,
       saveExport,
+      ...(options.studioAddress === undefined ? {} : { studioAddress: options.studioAddress }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -766,6 +788,260 @@ describe("ProjectDesignPackagePanel", () => {
     expect(wrapper.findAll('[data-testid="package-twin"]').map((item) => item.text())).toEqual([
       "Addetti all'accoglienza",
     ]);
+    wrapper.unmount();
+  });
+
+  it("gives the commands that bring the project into Visual Studio Code from the terminal", async () => {
+    const { wrapper } = mountPanel(knowledgeApi(), {
+      locale: "it",
+      studioAddress: "https://studio.example.org",
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="package-howto"] h2').text()).toBe("Come usarla");
+    const title = wrapper.get('[data-testid="package-cli-title"]');
+    expect(title.element.tagName).toBe("H3");
+    expect(spoken(title)).toBe("Dal terminale, con ut");
+    expect(title.get("code").text()).toBe("ut");
+    expect(wrapper.get('[data-testid="package-cli-steps"]').element.tagName).toBe("OL");
+    const steps = wrapper.findAll('[data-testid="package-cli-step"]');
+    expect(steps.map((step) => spoken(step.get('[data-testid="package-cli-text"]')))).toEqual([
+      "Accedi allo Studio dal terminale. Serve una volta sola su questo computer.",
+      "Crea una cartella vuota per il progetto ed entraci.",
+      "Collega la cartella a questo progetto: ut scarica qui la cartella di conoscenza.",
+      "Apri la cartella in Visual Studio Code: il pannello OrchesTwin mostra lo stato del progetto e lancia gli stessi comandi.",
+    ]);
+    expect(steps[2]!.get('[data-testid="package-cli-text"] code').text()).toBe("ut");
+    expect(commands(wrapper, "package-cli-step")).toEqual([
+      "ut login --studio https://studio.example.org",
+      "mkdir lista-ospiti-workshop; cd lista-ospiti-workshop",
+      `ut init --project ${PROJECT_ID} --mode design-code`,
+      "code .",
+    ]);
+    expect(
+      steps.map((step) => step.get('[data-testid="command-copy"]').attributes("aria-label")),
+    ).toEqual([
+      "Copia: ut login --studio https://studio.example.org",
+      "Copia: mkdir lista-ospiti-workshop; cd lista-ospiti-workshop",
+      `Copia: ut init --project ${PROJECT_ID} --mode design-code`,
+      "Copia: code .",
+    ]);
+    expect(steps.map((step) => step.get('[data-testid="command-copy"]').text())).toEqual([
+      "Copia",
+      "Copia",
+      "Copia",
+      "Copia",
+    ]);
+    wrapper.unmount();
+  });
+
+  it("gives the same commands in English with the address of the page by default", async () => {
+    const { wrapper } = mountPanel(knowledgeApi());
+    await flushPromises();
+
+    expect(spoken(wrapper.get('[data-testid="package-cli-title"]'))).toBe(
+      "From the terminal, with ut",
+    );
+    expect(wrapper.findAll('[data-testid="package-cli-text"]').map((item) => spoken(item))).toEqual(
+      [
+        "Log in to the Studio from the terminal. You need this only once on this computer.",
+        "Create an empty folder for the project and go into it.",
+        "Link the folder to this project: ut downloads the knowledge folder here.",
+        "Open the folder in Visual Studio Code: the OrchesTwin panel shows the state of the project and runs the same commands.",
+      ],
+    );
+    expect(commands(wrapper, "package-cli-step")).toEqual([
+      `ut login --studio ${window.location.origin}`,
+      "mkdir lista-ospiti-workshop; cd lista-ospiti-workshop",
+      `ut init --project ${PROJECT_ID} --mode design-code`,
+      "code .",
+    ]);
+    const first = wrapper.get('[data-testid="command-copy"]');
+    expect(first.text()).toBe("Copy");
+    expect(first.attributes("aria-label")).toBe(
+      `Copy: ut login --studio ${window.location.origin}`,
+    );
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["it", "  Caffè & Città — Prenotazioni 2026!  ", "caffe-citta-prenotazioni-2026"],
+    ["en", "L'Agenda dell'Università: ÈLITE", "l-agenda-dell-universita-elite"],
+    [
+      "it",
+      "Gestione delle prenotazioni per il menu del giorno",
+      "gestione-delle-prenotazioni-per-il-menu",
+    ],
+    ["it", "¿¡!? — …", "progetto"],
+    ["en", "", "project"],
+  ] as const)("names the folder in %s after the project %j", async (locale, name, folder) => {
+    const { wrapper } = mountPanel(namedFolder(name), { locale });
+    await flushPromises();
+
+    expect(commands(wrapper, "package-cli-step")[1]).toBe(`mkdir ${folder}; cd ${folder}`);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["it", "progetto"],
+    ["en", "project"],
+  ] as const)(
+    "names the folder in %s %s while no version of the folder is known",
+    async (locale, folder) => {
+      const api = knowledgeApi({
+        history: vi.fn(() => Promise.resolve({ project_id: PROJECT_ID, versions: [] })),
+      });
+      const { wrapper } = mountPanel(api, { locale });
+      await flushPromises();
+
+      expect(commands(wrapper, "package-cli-step")[1]).toBe(`mkdir ${folder}; cd ${folder}`);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "it",
+      "Poi, durante lo sviluppo",
+      [
+        "Metti la cartella sotto git: ut align lavora sui commit.",
+        "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
+        "Verifica i criteri di accettazione nei browser di questo computer (con --url se l'applicazione ha un suo indirizzo).",
+        "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+        "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
+        "Guarda a che punto è il progetto.",
+      ],
+    ],
+    [
+      "en",
+      "Then, during development",
+      [
+        "Put the folder under git: ut align works on the commits.",
+        "Have your coding agent write the application, with the requirements and the design as context.",
+        "Check the acceptance criteria in the browsers of this computer (with --url if the application has an address of its own).",
+        "Have the twins review the commits and bring code, design and requirements back in line.",
+        "Have the twins propose what they learned from the development.",
+        "See where the project stands.",
+      ],
+    ],
+  ] as const)(
+    "lists in %s the commands of the development once the design is approved",
+    async (locale, title, sentences) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+
+      const heading = wrapper.get('[data-testid="package-development-title"]');
+      expect(heading.element.tagName).toBe("H3");
+      expect(heading.text()).toBe(title);
+      const items = wrapper.findAll('[data-testid="package-development-step"]');
+      expect(
+        items.map((item) => spoken(item.get('[data-testid="package-development-text"]'))),
+      ).toEqual(sentences);
+      expect(commands(wrapper, "package-development-step")).toEqual([
+        "git init",
+        "ut code",
+        "ut test --static .",
+        "ut align",
+        "ut twins update",
+        "ut status",
+      ]);
+      expect(items[0]!.get('[data-testid="package-development-text"] code').text()).toBe(
+        "ut align",
+      );
+      expect(items[2]!.get('[data-testid="package-development-text"] code').text()).toBe("--url");
+      wrapper.unmount();
+    },
+  );
+
+  it("hides the commands of the development while the design is not approved", async () => {
+    const { wrapper } = mountPanel(knowledgeApi(), { stages: approvedUpTo(4), locale: "it" });
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-testid="package-cli-step"]')).toHaveLength(4);
+    expect(wrapper.find('[data-testid="package-development-title"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="package-development-steps"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="command-line"]')).toHaveLength(4);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "it",
+      "Senza ut: scarica lo zip",
+      [
+        "Scarica la cartella con il pulsante qui sopra ed estraila nel tuo progetto, in una cartella chiamata orchestwin.",
+        "Apri ORCHESTWIN.md: è l'indice e spiega ogni file.",
+        "Realizza il progetto con i tuoi strumenti. Requisiti, schermate ed elementi hanno codici stabili da citare nel lavoro.",
+        "Quando lo scopo cambia, torna nello Studio, approva la nuova versione e scarica di nuovo la cartella.",
+      ],
+    ],
+    [
+      "en",
+      "Without ut: download the zip",
+      [
+        "Download the folder with the button above and extract it into your project, in a folder named orchestwin.",
+        "Open ORCHESTWIN.md: it is the index and explains every file.",
+        "Build with your own tools. Requirements, screens and elements have stable codes to quote in your work.",
+        "When the scope changes, come back to the Studio, approve the new version and download the folder again.",
+      ],
+    ],
+  ] as const)(
+    "keeps in %s the steps of the zip in a collapsed block after the commands",
+    async (locale, summary, steps) => {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+
+      const zip = wrapper.get('[data-testid="package-zip"]');
+      expect(zip.element.tagName).toBe("DETAILS");
+      expect(zip.attributes("open")).toBeUndefined();
+      expect(spoken(zip.get("summary"))).toBe(summary);
+      expect(zip.get("summary code").text()).toBe("ut");
+      expect(
+        zip
+          .findAll('[data-testid="package-step"]')
+          .map((step) => step.get("span:last-child").text()),
+      ).toEqual(steps);
+      const development = wrapper.get('[data-testid="package-development-steps"]').element;
+      expect(
+        development.compareDocumentPosition(zip.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      wrapper.unmount();
+    },
+  );
+
+  it("copies a command with the clipboard of the browser and says so", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      const { wrapper } = mountPanel(knowledgeApi(), { locale: "it" });
+      await flushPromises();
+
+      const link = wrapper.findAll('[data-testid="package-cli-step"]')[2]!;
+      await link.get('[data-testid="command-copy"]').trigger("click");
+      await flushPromises();
+
+      expect(writeText).toHaveBeenCalledWith(`ut init --project ${PROJECT_ID} --mode design-code`);
+      expect(link.get('[data-testid="command-copy"]').text()).toBe("Copiato");
+      expect(link.get('[data-testid="command-status"]').text()).toBe("Copiato");
+      wrapper.unmount();
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("says when a command could not be copied", async () => {
+    const { wrapper } = mountPanel(knowledgeApi());
+    await flushPromises();
+
+    const login = wrapper.findAll('[data-testid="package-cli-step"]')[0]!;
+    await login.get('[data-testid="command-copy"]').trigger("click");
+    await flushPromises();
+
+    expect(login.get('[data-testid="command-copy"]').text()).toBe("Could not copy");
+    expect(login.get('[data-testid="command-status"]').text()).toBe("Could not copy");
+    expect(login.get('[data-testid="command-text"]').text()).toBe(
+      `ut login --studio ${window.location.origin}`,
+    );
     wrapper.unmount();
   });
 
