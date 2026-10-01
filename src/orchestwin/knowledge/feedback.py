@@ -129,7 +129,7 @@ def _review_lines(sources: KnowledgeSources) -> list[str]:
             [
                 f"### Review of {_scope(snapshot, sources)}",
                 "",
-                f"Run {snapshot['id']}, completed on {snapshot['completed_at']}, evaluator "
+                f"Completed on {snapshot['completed_at']}, evaluator "
                 f"{evaluator['evaluator_id']} {evaluator['evaluator_version']}, prompt "
                 f"{evaluator['prompt_version_ref']}.",
                 "",
@@ -241,7 +241,7 @@ def _discussion_lines(sources: KnowledgeSources) -> list[str]:
             [
                 f"### Discussion on {_scope(snapshot, sources)}",
                 "",
-                f"Discussion {snapshot['id']}, approved on {snapshot['decided_at']}.",
+                f"Approved on {snapshot['decided_at']}.",
                 "",
             ]
         )

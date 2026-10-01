@@ -172,7 +172,7 @@ def test_publication_of_a_new_version_answers_created_with_its_summary() -> None
     assert [stage["stage"] for stage in version["stages"]] == list(STAGES)
     assert version["stages"][4] == {
         "stage": "design",
-        "label": "Design",
+        "label": "Design and evaluation",
         "version_number": manifest["stages"]["design"]["version_number"],
         "content_hash": manifest["stages"]["design"]["content_hash"],
     }

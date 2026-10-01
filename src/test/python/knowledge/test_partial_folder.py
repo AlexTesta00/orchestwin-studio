@@ -285,12 +285,14 @@ def test_the_index_of_a_folder_up_to_the_requirements_points_to_them() -> None:
         "(REQ-001, USR-001, AC-001); the design comes into this folder once the owner approves "
         "it, and only then is the scope complete."
     ) in index
-    assert "| requirements | text | `requirements/requirements.md` | Requirements |" in index
+    assert "| requirements | text | `requirements/requirements.md` | Definition |" in index
+    assert "This folder holds 4 of 5 approved steps; next: Design and evaluation." in index
 
 
 def test_the_index_of_a_folder_of_the_brief_says_that_the_scope_is_not_approved() -> None:
     index = partial_folder("brief").files[KNOWLEDGE_INDEX]
 
+    assert "This folder holds 1 of 5 approved steps; next: Perspectives." in index
     assert "- The scope is not approved yet: the requirements and the design come into" in index
     assert "Judge every change from the point of view of the user twins" not in index
 

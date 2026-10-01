@@ -3,11 +3,22 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
+from orchestwin.agents.perspectives import (
+    AspectView,
+    GuidanceStage,
+    Perspective,
+    PerspectiveAspect,
+    PerspectiveStanding,
+    PerspectiveView,
+    perspective_guidance,
+    perspective_views,
+)
 from orchestwin.agents.proposals import TeamProposalVersion
+from orchestwin.agents.selection_rules import RuleEvidence
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
 from orchestwin.knowledge.layout import STAGE_LABELS, STAGES, VIEW_STAGES, present_stages
-from orchestwin.projects.briefs import ProjectBriefVersion
+from orchestwin.projects.briefs import BriefField, ProjectBriefVersion
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion
 from orchestwin.workflow.gates import HumanGate
@@ -17,6 +28,7 @@ OVERVIEW_DESCRIPTION_LENGTH: Final = 300
 OVERVIEW_REQUIREMENTS: Final = 12
 _ROLE_KEY: Final = "user_twin.role"
 _MUST: Final = "MUST"
+_VERIFIED: Final = "- How it is verified: {criteria}, which `ut test` checks in the browsers."
 _OVERVIEW_TEXTS: Final[dict[str, dict[str, Any]]] = {
     "en": {
         "heading": "## In short",
@@ -27,7 +39,7 @@ _OVERVIEW_TEXTS: Final[dict[str, dict[str, Any]]] = {
         "more": ("and 1 more.", "and {count} more."),
         "design": "- Chosen design: {alternative}.",
         "product": "{alternative} (product name: {product})",
-        "criteria": "- How it is verified: {criteria}, which `ut test` checks in the browsers.",
+        "criteria": (_VERIFIED, _VERIFIED),
         "criterion_words": ("acceptance criterion", "acceptance criteria"),
     },
     "it": {
@@ -39,10 +51,80 @@ _OVERVIEW_TEXTS: Final[dict[str, dict[str, Any]]] = {
         "more": ("e un altro.", "e altri {count}."),
         "design": "- Design scelto: {alternative}.",
         "product": "{alternative} (nome del prodotto: {product})",
-        "criteria": "- Come si verifica: {criteria}, che `ut test` verifica nei browser.",
+        "criteria": (
+            "- Come si verifica: {criteria}, controllato da `ut test` nei browser.",
+            "- Come si verifica: {criteria}, controllati da `ut test` nei browser.",
+        ),
         "criterion_words": ("criterio di accettazione", "criteri di accettazione"),
     },
 }
+_STEP_NAMES: Final = ", ".join(STAGE_LABELS[stage] for stage in STAGES)
+_PERSPECTIVES_INTRODUCTION: Final = (
+    "The perspectives are the competences through which this project is looked at. Each applied "
+    "perspective adds its considerations when the requirements and the design alternatives are "
+    "written."
+)
+_PERSPECTIVE_TEXTS: Final[dict[Perspective, tuple[str, str]]] = {
+    Perspective.UX: (
+        "User experience (UX)",
+        "Looks at the project through the eyes of the people who will use it: goals, context, "
+        "places where they may get stuck.",
+    ),
+    Perspective.ACCESSIBILITY: (
+        "Accessibility",
+        "Checks that everyone can use it: keyboard, contrast, readable text, clear messages.",
+    ),
+    Perspective.SOFTWARE_ENGINEERING: (
+        "Software engineering",
+        "Keeps the project feasible within its technical constraints, time and budget, and "
+        "verifiable.",
+    ),
+    Perspective.PRODUCT: (
+        "Product",
+        "Keeps the priorities: what the first version needs and what can wait.",
+    ),
+    Perspective.SECURITY: ("Security", "Protects data and access: who may see and do what."),
+}
+_ASPECT_NAMES: Final[dict[PerspectiveAspect, str]] = {
+    PerspectiveAspect.WEB: "Web interface",
+    PerspectiveAspect.SERVICES: "Services and data",
+    PerspectiveAspect.MOBILE: "Mobile",
+    PerspectiveAspect.INTEGRATIONS: "Connections to other systems",
+}
+_ASPECT_OF: Final = "aspect of software engineering"
+_BRIEF_FIELD_NAMES: Final[dict[BriefField, str]] = {
+    BriefField.NAME: "Name",
+    BriefField.DESCRIPTION: "The idea",
+    BriefField.PROBLEM: "The problem",
+    BriefField.GOALS: "Goals",
+    BriefField.TARGET_USERS: "For whom",
+    BriefField.DOMAIN: "Context",
+    BriefField.TECHNICAL_CONSTRAINTS: "Technical constraints",
+    BriefField.TEMPORAL_CONSTRAINTS: "Timing",
+    BriefField.BUDGET: "Budget",
+    BriefField.FUNCTIONAL_REQUIREMENTS: "What it must do",
+    BriefField.NON_FUNCTIONAL_REQUIREMENTS: "Expected qualities",
+    BriefField.RISKS: "Risks",
+    BriefField.STAKEHOLDERS: "People involved",
+    BriefField.AVAILABLE_ARTIFACTS: "Available materials",
+    BriefField.DEFINITION_OF_DONE: "When it is done",
+}
+_ALWAYS_APPLIED: Final = "Always applied"
+_PREPARED_EARLIER: Final = "This version was prepared before this perspective became always applied"
+_OPTIONAL_APPLIED: Final = "Applied, optional"
+_OPTIONAL: Final = "Optional"
+_STANDING_TEXTS: Final[dict[PerspectiveStanding, str]] = {
+    PerspectiveStanding.REQUIRED: "The brief asks for it{requested}",
+    PerspectiveStanding.EXCLUDED: "The brief rules it out{excluded}",
+    PerspectiveStanding.CONTESTED: (
+        "The brief says two different things: the owner decides. It rules it out{excluded} and "
+        "also calls for it{requested}"
+    ),
+}
+_GUIDANCE_HEADINGS: Final = (
+    (GuidanceStage.DEFINITION, "In the definition:"),
+    (GuidanceStage.DESIGN, "In the design:"),
+)
 
 
 def plain_text(value: object) -> str:
@@ -152,7 +234,7 @@ def _version_lines(label: str, version: object, gate: HumanGate) -> list[str]:
         f"# {label}",
         "",
         f"Version {version.version_number}, content hash `{version.content_hash}`, "
-        f"approved by gate {gate.gate_type.value} on {gate.updated_at.isoformat()}.",
+        f"approved by the owner on {gate.updated_at.isoformat()}.",
         "",
     ]
 
@@ -173,46 +255,80 @@ def brief_markdown(version: ProjectBriefVersion, gate: HumanGate) -> str:
     return "\n".join(lines)
 
 
+def _evidence_text(evidence: RuleEvidence) -> str:
+    if not evidence.terms:
+        return ""
+    terms = ", ".join(f"“{term}”" for term in evidence.terms)
+    fields = ", ".join(_BRIEF_FIELD_NAMES[field] for field in evidence.fields)
+    return f" ({terms} in {fields})"
+
+
+def _standing_text(unit: PerspectiveView | AspectView) -> str:
+    if unit.standing is PerspectiveStanding.ALWAYS:
+        return _ALWAYS_APPLIED if unit.applied else _PREPARED_EARLIER
+    if unit.standing is PerspectiveStanding.OPTIONAL:
+        return _OPTIONAL_APPLIED if unit.applied else _OPTIONAL
+    return _STANDING_TEXTS[unit.standing].format(
+        requested=_evidence_text(unit.requested), excluded=_evidence_text(unit.excluded)
+    )
+
+
+def _considerations(version: TeamProposalVersion) -> dict[GuidanceStage, dict[str, list[str]]]:
+    selected = version.proposal.selected_agent_ids
+    return {
+        stage: {
+            str(item["perspective"]): [str(sentence) for sentence in item["considerations"]]
+            for item in perspective_guidance(selected, stage)
+        }
+        for stage, _heading in _GUIDANCE_HEADINGS
+    }
+
+
+def _applied_perspective_lines(
+    view: PerspectiveView, considerations: Mapping[GuidanceStage, Mapping[str, list[str]]]
+) -> list[str]:
+    name, line = _PERSPECTIVE_TEXTS[view.key]
+    lines = [f"### {name}", "", line, "", f"{_standing_text(view)}.", ""]
+    aspects = [aspect for aspect in view.aspects if aspect.applied]
+    if aspects:
+        lines.extend(
+            [
+                "Applied aspects:",
+                *(f"- {_ASPECT_NAMES[item.key]}: {_standing_text(item)}." for item in aspects),
+                "",
+            ]
+        )
+    for stage, heading in _GUIDANCE_HEADINGS:
+        sentences = considerations[stage].get(view.key.value, [])
+        lines.extend([heading, *markdown_bullets(sentences), ""])
+    return lines
+
+
+def _not_applied_lines(views: Sequence[PerspectiveView]) -> list[str]:
+    lines: list[str] = []
+    for view in views:
+        if not view.applied:
+            lines.append(f"- {_PERSPECTIVE_TEXTS[view.key][0]}: {_standing_text(view)}.")
+        lines.extend(
+            f"- {_ASPECT_NAMES[aspect.key]} ({_ASPECT_OF}): {_standing_text(aspect)}."
+            for aspect in view.aspects
+            if not aspect.applied
+        )
+    return ["## Not applied", "", *lines, ""] if lines else []
+
+
 def team_markdown(version: TeamProposalVersion, gate: HumanGate) -> str:
-    snapshot = version.proposal.to_snapshot()
+    proposal = version.proposal
+    views = perspective_views(proposal.constraints, proposal.selected_agent_ids)
+    considerations = _considerations(version)
     lines = _version_lines(STAGE_LABELS["team"], version, gate)
-    lines.extend(
-        [
-            f"Project mode: {snapshot['project_mode']}. Provider: "
-            f"{snapshot['provider']['kind']} v{snapshot['provider']['provider_version']}.",
-            "",
-            "## Members",
-            "",
-        ]
-    )
-    rows = []
-    for member in snapshot["members"]:
-        justifications = "; ".join(
-            item["statement"] or f"{item['kind']} {item['code']}"
-            for item in member["justifications"]
-        )
-        rows.append((title_text(member["agent_id"]), title_text(member["source"]), justifications))
-    lines.extend(markdown_table(("Agent", "Source", "Justification"), rows))
-    lines.extend(["", "## Role constraints", ""])
-    rows = [
-        (
-            title_text(constraint["agent_id"]),
-            constraint["kind"],
-            "; ".join(reason["code"] for reason in constraint["reasons"]),
-        )
-        for constraint in snapshot["constraints"]["role_constraints"]
-    ]
-    lines.extend(
-        markdown_table(
-            (
-                "Agent",
-                "Constraint",
-                "Reasons",
-            ),
-            rows,
-        )
-    )
-    lines.append("")
+    lines.extend([_PERSPECTIVES_INTRODUCTION, "", "## Applied", ""])
+    applied = [view for view in views if view.applied]
+    for view in applied:
+        lines.extend(_applied_perspective_lines(view, considerations))
+    if not applied:
+        lines.extend([f"{UNSET}.", ""])
+    lines.extend(_not_applied_lines(views))
     return "\n".join(lines)
 
 
@@ -926,7 +1042,9 @@ def _overview_criteria(specification: Mapping[str, object], texts: Mapping[str, 
     count = len(specification["acceptance_criteria"])
     if not count:
         return []
-    return [texts["criteria"].format(criteria=counted(count, *texts["criterion_words"]))]
+    one, many = texts["criteria"]
+    line = one if count == 1 else many
+    return [line.format(criteria=counted(count, *texts["criterion_words"]))]
 
 
 def overview_lines(
@@ -969,9 +1087,8 @@ def index_markdown(
         *overview,
         "## What this folder is",
         "",
-        "The approved steps of this project (the brief, the agent team, the user twins, the "
-        "requirements and the design), each approved by the owner through a human gate in "
-        "OrchesTwin Studio: a step comes into this folder once it is approved. "
+        f"The approved steps of this project ({_STEP_NAMES}), each approved by the owner through "
+        "a human gate in OrchesTwin Studio: a step comes into this folder once it is approved. "
         f"{progress_sentence(manifest)} The project is implemented outside the Studio: this "
         "folder travels with the source code and tells people and coding agents what has to be "
         "built and for whom.",

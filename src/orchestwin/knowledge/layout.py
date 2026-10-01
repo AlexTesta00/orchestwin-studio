@@ -24,10 +24,10 @@ KNOWLEDGE_FOLDER_KIND: Final = "orchestwin.knowledge-folder"
 STAGES: Final = ("brief", "team", "twins", "requirements", "design")
 STAGE_LABELS: Final = {
     "brief": "Project brief",
-    "team": "Agent team",
+    "team": "Perspectives",
     "twins": "User twins",
-    "requirements": "Requirements",
-    "design": "Design",
+    "requirements": "Definition",
+    "design": "Design and evaluation",
 }
 STAGE_PAYLOAD_KEYS: Final = {
     "brief": "brief",
