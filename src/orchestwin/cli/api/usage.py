@@ -13,6 +13,10 @@ BUDGET_PATH: Final = "/model-runtime/budget"
 NO_BUDGET_CODES: Final = frozenset(
     {"REAL_MODEL_RUNTIME_NOT_CONFIGURED", "GENERATION_BUDGET_NOT_CONFIGURED"}
 )
+SUBSCRIPTION_BILLING: Final = "SUBSCRIPTION"
+API_BILLING: Final = "API"
+MIXED_BILLING: Final = "MIXED"
+BILLINGS: Final = frozenset({SUBSCRIPTION_BILLING, API_BILLING, MIXED_BILLING})
 
 
 def budget(client: StudioClient) -> Mapping[str, object] | None:
@@ -33,6 +37,15 @@ def budget(client: StudioClient) -> Mapping[str, object] | None:
 def project_usage(client: StudioClient, project_id: str) -> Mapping[str, object] | None:
     document = client.get(f"/projects/{project_id}/model-usage", optional=True)
     return document if isinstance(document, dict) else None
+
+
+def billing(document: object) -> str:
+    value = document.get("billing") if isinstance(document, Mapping) else None
+    return value if isinstance(value, str) and value in BILLINGS else API_BILLING
+
+
+def on_subscription(document: object) -> bool:
+    return billing(document) == SUBSCRIPTION_BILLING
 
 
 def remaining_usd(document: Mapping[str, object]) -> float | None:

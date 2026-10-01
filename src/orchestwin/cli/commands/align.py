@@ -179,11 +179,19 @@ def dry_run(context: CommandContext, workspace: Workspace, commits: Sequence[git
     console.say("align.dry_run", count=len(commits))
     console.items([align_review.commit_line(context, commit) for commit in commits])
     twins = align_review.twins_count(workspace.client, workspace.project)
-    total = costs.estimate(align_review.review_operations(twins, len(commits)))
-    console.say(
+    say_estimate(context, workspace, align_review.review_operations(twins, len(commits)))
+
+
+def say_estimate(context: CommandContext, workspace: Workspace, operations: Sequence[str]) -> None:
+    total = costs.estimate(operations)
+    minutes = costs.minutes_text(total.minutes)
+    if costs.uses_subscription(workspace.client):
+        context.console.say("align.dry_run_subscription", minutes=minutes)
+        return
+    context.console.say(
         "align.dry_run_estimate",
         amount=costs.amount_text(total, context.language),
-        minutes=costs.minutes_text(total.minutes),
+        minutes=minutes,
     )
 
 
@@ -241,13 +249,8 @@ def recheck(context: CommandContext, *, latest: bool, dry_run: bool) -> int:
     twins = align_review.twins_count(workspace.client, workspace.project)
     operations = align_review.review_operations(twins, len(stale))
     if dry_run:
-        total = costs.estimate(operations)
         console.say("align.recheck_dry_run")
-        console.say(
-            "align.dry_run_estimate",
-            amount=costs.amount_text(total, context.language),
-            minutes=costs.minutes_text(total.minutes),
-        )
+        say_estimate(context, workspace, operations)
         finish(context, workspace)
         return 0
     if not changes_api.review_available(workspace.alignment):

@@ -173,6 +173,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Trying once more, because with --yes you already confirmed the spending "
         "(about {amount} USD).",
     },
+    "init.retry_confirm_subscription": {
+        "it": "Riprovo una volta? È una nuova generazione, con l'abbonamento di Claude: non "
+        "spende credito.",
+        "en": "Try once more? It is a new generation, on the Claude subscription: it spends no "
+        "credit.",
+    },
+    "init.retry_assumed_subscription": {
+        "it": "Riprovo una volta, perché con --yes hai già dato il tuo consenso (è una nuova "
+        "generazione con l'abbonamento di Claude: non spende credito).",
+        "en": "Trying once more, because with --yes you already gave your consent (it is a new "
+        "generation on the Claude subscription: it spends no credit).",
+    },
     "init.dialogue_starting": {
         "it": "L'analista delle esigenze legge l'idea e prepara la prima domanda...",
         "en": "The needs analyst reads the idea and prepares the first question...",

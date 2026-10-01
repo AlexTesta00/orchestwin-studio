@@ -67,8 +67,11 @@ def confirm_spending(
     if budget is None:
         return
     console = context.console
-    amount = amount_text(total, context.language)
     duration = minutes_text(total.minutes)
+    if usage.on_subscription(budget):
+        console.say("costs.subscription", minutes=duration)
+        return
+    amount = amount_text(total, context.language)
     remaining = usage.remaining_usd(budget)
     if remaining is None:
         console.say("costs.estimate_no_credit", amount=amount, minutes=duration)
@@ -88,6 +91,13 @@ def confirm_spending(
         return
     if not ask or not console.confirm("costs.confirm", default=True):
         raise CliError("SPENDING_REFUSED")
+
+
+def uses_subscription(client: StudioClient) -> bool:
+    try:
+        return usage.on_subscription(usage.budget(client))
+    except CliError:
+        return False
 
 
 def usd_text(value: float, language: str) -> str:

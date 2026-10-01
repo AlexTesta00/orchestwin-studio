@@ -91,6 +91,7 @@ class Watcher:
         self.cap = cap
         self.interval = interval
         self.reviewing = twins and changes_api.review_available(workspace.alignment)
+        self.subscription = False
         self.spent = 0.0
         self.queue: list[git.Commit] = []
         self.last: str | None = None
@@ -146,11 +147,18 @@ class Watcher:
             console.say("watch.review_unavailable")
         else:
             self.count = align_review.twins_count(workspace.client, workspace.project)
-            console.say("watch.twins_on", cap=costs.usd_text(self.cap, context.language))
             budget = usage.budget(workspace.client)
-            remaining = None if budget is None else usage.remaining_usd(budget)
-            if remaining is not None:
-                console.say("watch.credit", remaining=costs.usd_text(remaining, context.language))
+            self.subscription = usage.on_subscription(budget)
+            cap = costs.usd_text(self.cap, context.language)
+            if self.subscription:
+                console.say("watch.twins_on_subscription", cap=cap)
+            else:
+                console.say("watch.twins_on", cap=cap)
+                remaining = None if budget is None else usage.remaining_usd(budget)
+                if remaining is not None:
+                    console.say(
+                        "watch.credit", remaining=costs.usd_text(remaining, context.language)
+                    )
         if not once:
             console.say("watch.waiting", seconds=_seconds(self.interval))
 
@@ -220,7 +228,11 @@ class Watcher:
         while self.queue:
             commit = self.queue[0]
             if self.spent + need > self.cap + TOLERANCE:
-                console.say("watch.cap_reached", cap=costs.usd_text(self.cap, context.language))
+                cap = costs.usd_text(self.cap, context.language)
+                if self.subscription:
+                    console.say("watch.cap_reached_subscription", cap=cap)
+                else:
+                    console.say("watch.cap_reached", cap=cap)
                 self.stop_reviews()
                 return
             try:

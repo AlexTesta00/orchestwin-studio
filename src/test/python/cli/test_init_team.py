@@ -513,6 +513,12 @@ def test_a_failed_team_proposal_ends_its_progress_as_not_completed(tmp_path: Pat
     transport = ScriptedTransport().expect(
         "POST", f"{BASE}/team-proposals", status=502, body={"detail": "invalid_team_proposal"}
     )
+    transport.expect(
+        "GET",
+        f"{API}/model-runtime/budget",
+        status=503,
+        body={"detail": {"code": "GENERATION_BUDGET_NOT_CONFIGURED"}},
+    )
     store_session(tmp_path)
     folder = link_folder(tmp_path / "project")
     bundle = terminal(tmp_path, transport=transport, answers=["n"])

@@ -555,10 +555,15 @@ class Journey:
         if self.retried:
             return False
         self.say("init.generation_failed", label=label, code=code)
+        if self.script is not None and not self.context.assume_yes:
+            return False
+        if costs.uses_subscription(self.client):
+            if self.script is not None:
+                self.say("init.retry_assumed_subscription")
+                return True
+            return self.console.confirm("init.retry_confirm_subscription", default=True)
         amount = costs.amount_text(costs.estimate([operation]), self.context.language)
         if self.script is not None:
-            if not self.context.assume_yes:
-                return False
             self.say("init.retry_assumed", amount=amount)
             return True
         return self.console.confirm("init.retry_confirm", default=True, amount=amount)

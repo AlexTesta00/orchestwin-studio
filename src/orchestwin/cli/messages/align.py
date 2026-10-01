@@ -99,6 +99,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Estimate of these reviews: {amount} USD, about {minutes}. Without --dry-run they "
         "really start.",
     },
+    "align.dry_run_subscription": {
+        "it": "Questi esami usano l'abbonamento di Claude: non spendono credito. Tempo stimato: "
+        "circa {minutes}. Senza --dry-run partono davvero.",
+        "en": "These reviews run on the Claude subscription: they spend no credit. Estimated "
+        "time: about {minutes}. Without --dry-run they really start.",
+    },
     "align.recheck_none": {
         "it": "Nessun esame è stato fatto con versioni precedenti dei requisiti o del design: non "
         "c'è niente da far esaminare di nuovo.",

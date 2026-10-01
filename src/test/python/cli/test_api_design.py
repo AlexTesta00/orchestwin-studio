@@ -29,6 +29,7 @@ WITHOUT_DRAWING = {
     "generated_mockups": False,
     "iterations": False,
     "model": None,
+    "paid": True,
     "static_check": False,
 }
 
@@ -109,11 +110,13 @@ def design_session(
     job_polls: int = 2,
     twins: int = 2,
     team_without: Sequence[str] = (),
+    billing: str | None = None,
 ) -> Iterator[Session]:
     with FakeStudio(
         language=language,
         hosted=hosted,
         budget_usd=budget_usd,
+        billing=billing,
         job_polls=job_polls,
         twins=twins,
     ) as studio:
@@ -291,6 +294,21 @@ def test_an_older_studio_without_the_budget_route_counts_as_one_with_a_model(
 
     assert older == design_api.ModelRuntime(model=True, budget=False)
     assert broken.value.code == "BUDGET_STORE_FAILED"
+
+
+@pytest.mark.parametrize(
+    ("billing", "expected"),
+    [("SUBSCRIPTION", "SUBSCRIPTION"), ("MIXED", "MIXED"), ("API", "API"), (None, "API")],
+)
+def test_the_billing_is_read_with_the_budget(
+    tmp_path: Path, billing: str | None, expected: str
+) -> None:
+    with design_session(tmp_path, billing=billing) as session:
+        found = design_api.model_runtime(session.client())
+        reads = session.count("GET", "/model-runtime/budget")
+
+    assert found == design_api.ModelRuntime(model=True, budget=True, billing=expected)
+    assert reads == 1
 
 
 def test_capabilities_that_cannot_be_read_count_as_unavailable(tmp_path: Path) -> None:

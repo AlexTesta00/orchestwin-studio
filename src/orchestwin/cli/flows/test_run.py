@@ -637,11 +637,15 @@ def replan(
         return None
     needed = spent + costs.ESTIMATES[tests_api.PLAN_OPERATION].high_usd
     if needed > max_usd + TOLERANCE:
-        console.say(
-            "test.replan_over_budget",
-            amount=costs.usd_text(needed, context.language),
-            limit=costs.usd_text(max_usd, context.language),
-        )
+        limit = costs.usd_text(max_usd, context.language)
+        if costs.uses_subscription(ready.client):
+            console.say("test.replan_over_budget_subscription", limit=limit)
+        else:
+            console.say(
+                "test.replan_over_budget",
+                amount=costs.usd_text(needed, context.language),
+                limit=limit,
+            )
         return None
     chosen = list(blocked[: tests_api.MAX_EARLIER_PATHS])
     console.say("test.replan", codes=", ".join(outcome.code for outcome in chosen))

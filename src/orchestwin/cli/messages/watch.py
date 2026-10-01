@@ -65,6 +65,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The twins review each new commit, up to {cap} USD of estimated spending in this "
         "session (--max-usd).",
     },
+    "watch.twins_on_subscription": {
+        "it": "I twin esaminano ogni nuovo commit con l'abbonamento di Claude: non spendono "
+        "credito. Per non consumare troppo l'abbonamento, in questa sessione si fermano prima di "
+        "superare {cap} USD di esami ai prezzi a pagamento (--max-usd).",
+        "en": "The twins review each new commit on the Claude subscription: they spend no "
+        "credit. To spare the subscription, in this session they stop before going over {cap} "
+        "USD of reviews at paid prices (--max-usd).",
+    },
     "watch.credit": {
         "it": "Credito rimasto nello Studio: {remaining} USD.",
         "en": "Credit left in the Studio: {remaining} USD.",
@@ -103,6 +111,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "`ut align`.",
         "en": "The next review would go over {cap} USD of estimated spending: the twins stop "
         "reviewing, the commits are still recorded. Have the others reviewed with `ut align`.",
+    },
+    "watch.cap_reached_subscription": {
+        "it": "Il prossimo esame supererebbe {cap} USD di esami ai prezzi a pagamento "
+        "(--max-usd): i twin smettono di esaminare, i commit continuano a essere registrati. Fai "
+        "esaminare gli altri con `ut align`.",
+        "en": "The next review would go over {cap} USD of reviews at paid prices (--max-usd): "
+        "the twins stop reviewing, the commits are still recorded. Have the others reviewed with "
+        "`ut align`.",
     },
     "watch.review_stopped": {
         "it": "I twin smettono di esaminare ({code}): i commit continuano a essere registrati. "

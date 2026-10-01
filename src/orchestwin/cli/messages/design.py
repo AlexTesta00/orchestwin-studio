@@ -352,6 +352,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "stima {amount} USD, circa {minutes}",
         "en": "estimate {amount} USD, about {minutes}",
     },
+    "design.estimate_subscription": {
+        "it": "abbonamento di Claude, nessun credito speso, circa {minutes}",
+        "en": "Claude subscription, no credit spent, about {minutes}",
+    },
     "design.menu": {"it": "Che cosa vuoi fare?", "en": "What do you want to do?"},
     "design.menu_open": {
         "it": "Apri le anteprime nel browser",
@@ -495,6 +499,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "spesa ({amount} USD, circa {minutes}): `ut design` te lo propone nel menu.",
         "en": "The other alternatives remain usable. Drawing {code} again is a new spending "
         "({amount} USD, about {minutes}): `ut design` offers it in its menu.",
+    },
+    "design.mockup_again_subscription": {
+        "it": "Le altre alternative restano utilizzabili. Disegnare di nuovo {code} usa "
+        "l'abbonamento di Claude e non spende credito (circa {minutes}): `ut design` te lo "
+        "propone nel menu.",
+        "en": "The other alternatives remain usable. Drawing {code} again runs on the Claude "
+        "subscription and spends no credit (about {minutes}): `ut design` offers it in its menu.",
     },
     "design.mockup_again_plain": {
         "it": "Le altre alternative restano utilizzabili. `ut design` ti propone nel menu di "
