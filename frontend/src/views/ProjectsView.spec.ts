@@ -344,8 +344,8 @@ describe("projects page", () => {
     );
     expect([0, 1, 2].map((index) => read(index, "project-stage"))).toEqual([
       "Brief",
-      "Requisiti",
-      "Pacchetto",
+      "Definizione",
+      "Dossier",
     ]);
     expect([0, 1, 2].map((index) => read(index, "project-next"))).toEqual([
       "Tocca a te: Racconta la tua idea",
@@ -373,9 +373,11 @@ describe("projects page", () => {
 
   it.each<[ProjectStage, ProjectNextAction, string, string]>([
     ["BRIEF", "APPROVE_BRIEF", "Brief", "Your turn: Approve the brief"],
-    ["TEAM", "APPROVE_TEAM", "Team", "Your turn: Approve the team"],
-    ["USER_TWINS", "CONFIRM_TWINS", "User Twins", "Your turn: Confirm the twins"],
-    ["DESIGN", "APPROVE_DESIGN", "Design", "Your turn: Choose and approve the design"],
+    ["TEAM", "APPROVE_TEAM", "Perspectives", "Your turn: Approve the perspectives"],
+    ["USER_TWINS", "CONFIRM_TWINS", "User Twin", "Your turn: Confirm the twins"],
+    ["REQUIREMENTS", "APPROVE_REQUIREMENTS", "Definition", "Your turn: Approve the requirements"],
+    ["DESIGN", "APPROVE_DESIGN", "Design & Evaluation", "Your turn: Choose and approve the design"],
+    ["PACKAGE", "DOWNLOAD_FOLDER", "Dossier", "Your turn: Download the folder"],
   ])("names the step %s and its action in English", async (stage, action, name, next) => {
     vi.spyOn(apiClient, "listProjects").mockResolvedValue([
       project("one", "Guest list", 1, "GREENFIELD_GENERATION", stage, action),
@@ -385,6 +387,41 @@ describe("projects page", () => {
 
     expect(row.get('[data-testid="project-stage"]').text()).toBe(name);
     expect(row.get('[data-testid="project-next"]').text().replace(/\s+/g, " ")).toBe(next);
+    wrapper.unmount();
+  });
+
+  it.each<[ProjectStage, ProjectNextAction, string, string]>([
+    ["TEAM", "APPROVE_TEAM", "Prospettive", "Tocca a te: Approva le prospettive"],
+    ["USER_TWINS", "CONFIRM_TWINS", "User Twin", "Tocca a te: Conferma i twin"],
+    ["DESIGN", "APPROVE_DESIGN", "Design e valutazione", "Tocca a te: Scegli e approva il design"],
+  ])("names the step %s and its action in Italian", async (stage, action, name, next) => {
+    vi.spyOn(apiClient, "listProjects").mockResolvedValue([
+      project("one", "Guest list", 1, "GREENFIELD_GENERATION", stage, action),
+    ]);
+    const { wrapper } = await mountProjects("it");
+    const row = wrapper.get('[data-testid="project-row"]');
+
+    expect(row.get('[data-testid="project-stage"]').text()).toBe(name);
+    expect(row.get('[data-testid="project-next"]').text().replace(/\s+/g, " ")).toBe(next);
+    wrapper.unmount();
+  });
+
+  it.each<["it" | "en", string]>([
+    [
+      "it",
+      "Parti da un prodotto che esiste già: lo Studio ne tiene conto quando prepara le prospettive.",
+    ],
+    [
+      "en",
+      "Start from a product that already exists: the Studio takes it into account when it prepares the perspectives.",
+    ],
+  ])("speaks of perspectives for an existing product in %s", async (locale, text) => {
+    const { wrapper } = await mountProjects(locale);
+    await wrapper.get('[data-testid="new-project"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="project-start-existing"]').text()).toContain(text);
+    expect(wrapper.get('[role="dialog"]').text()).not.toMatch(/squadra|\bteam\b/i);
     wrapper.unmount();
   });
 

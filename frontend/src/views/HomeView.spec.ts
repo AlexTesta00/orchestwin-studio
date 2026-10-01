@@ -80,7 +80,7 @@ afterEach(() => {
   Reflect.deleteProperty(Element.prototype, "scrollIntoView");
 });
 
-async function mountHome(authenticated = false) {
+async function mountHome(authenticated = false, locale: "it" | "en" = "it") {
   const router = createAppRouter(createMemoryHistory());
   const pinia = createPinia();
 
@@ -104,7 +104,7 @@ async function mountHome(authenticated = false) {
   return mount(HomeView, {
     attachTo: document.body,
     global: {
-      plugins: [pinia, createAppI18n("it"), router],
+      plugins: [pinia, createAppI18n(locale), router],
     },
   });
 }
@@ -136,6 +136,32 @@ describe("home page", () => {
     expect(wrapper.get("footer").text()).toContain("Dott. Alex Testa");
     wrapper.unmount();
   });
+
+  it.each<["it" | "en", string[], string, RegExp]>([
+    [
+      "it",
+      ["Brief", "Prospettive", "User Twin", "Definizione", "Design e valutazione", "Dossier"],
+      "Tua decisione: Approva le prospettive",
+      /\b(squadra|agenti|agente|assistenti|assistente|pacchetto)\b/i,
+    ],
+    [
+      "en",
+      ["Brief", "Perspectives", "User Twin", "Definition", "Design & Evaluation", "Dossier"],
+      "Your decision: Approve the perspectives",
+      /\b(team|agents|agent|assistants|assistant|package)\b/i,
+    ],
+  ])(
+    "names the six steps in %s and speaks of perspectives, not of a team",
+    async (locale, titles, decision, team) => {
+      const wrapper = await mountHome(false, locale);
+      const steps = wrapper.findAll("[data-testid='home-step']");
+
+      expect(steps.map((step) => step.get("h3").text())).toEqual(titles);
+      expect(steps[1]?.text()).toContain(decision);
+      expect(wrapper.text()).not.toMatch(team);
+      wrapper.unmount();
+    },
+  );
 
   it("sends an authenticated owner to the projects from every entry", async () => {
     const wrapper = await mountHome(true);

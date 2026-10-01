@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
-import type { StepStatus } from "./UiStepper.vue";
+import { SECTION_MARKS, type StepSection, type StepStatus } from "./UiStepper.vue";
 import { useSurface, type SurfaceContext } from "./UiSurface.vue";
 
 const props = withDefaults(
@@ -12,10 +12,11 @@ const props = withDefaults(
     title: string;
     description?: string | undefined;
     status?: StepStatus | undefined;
+    section?: StepSection | undefined;
     as?: "h1" | "h2" | undefined;
     surface?: SurfaceContext | undefined;
   }>(),
-  { description: "", status: undefined, as: "h1", surface: undefined },
+  { description: "", status: undefined, section: undefined, as: "h1", surface: undefined },
 );
 
 const { t } = useI18n({ useScope: "global" });
@@ -33,6 +34,13 @@ const palettes = {
         dot: "border-[1.5px] border-ink-3",
       },
       rejected: { chip: "border-fail-line bg-fail-bg text-fail-dark", dot: "bg-fail" },
+    },
+    sections: {
+      NOT_STARTED: "border-line-strong bg-surface text-ink-3",
+      IN_PROGRESS: "border-ink bg-ink text-white",
+      FINE: "border-action bg-action-soft text-action",
+      UPDATE_AVAILABLE: "border-action bg-action-soft text-action",
+      TO_UPDATE: "border-line-strong bg-surface text-warn",
     },
   },
   night: {
@@ -52,6 +60,13 @@ const palettes = {
         dot: "bg-fail-on-night",
       },
     },
+    sections: {
+      NOT_STARTED: "border-night-line-strong bg-night-raised text-on-night-3",
+      IN_PROGRESS: "border-on-night bg-on-night text-ink",
+      FINE: "border-petrol-on-night bg-petrol-on-night/16 text-petrol-on-night-2",
+      UPDATE_AVAILABLE: "border-petrol-on-night bg-petrol-on-night/16 text-petrol-on-night-2",
+      TO_UPDATE: "border-warn-on-night/60 bg-warn-on-night/10 text-warn-on-night",
+    },
   },
 };
 
@@ -62,25 +77,47 @@ const chip = computed(() => (props.status ? palette.value.chips[props.status] : 
 <template>
   <div class="grid" data-testid="step-header" :data-surface-context="context">
     <div class="flex flex-wrap items-center gap-3">
-      <span :class="['font-mono text-xs tracking-[0.08em] uppercase', palette.muted]">
-        {{ t("ui.progress.step", { n: step, total }) }}
-      </span>
-      <span
-        v-if="status && chip"
-        :class="[
-          'inline-flex min-h-[26px] items-center gap-1.5 rounded-pill border px-2.5 text-xs font-medium whitespace-nowrap',
-          chip.chip,
-        ]"
-        :data-status="status"
-        data-testid="step-status"
-      >
+      <template v-if="section">
         <span
-          v-if="chip.dot"
-          :class="['inline-block h-2 w-2 shrink-0 rounded-full', chip.dot]"
-          aria-hidden="true"
-        />
-        {{ t(`ui.stepHeader.${status}`) }}
-      </span>
+          :class="[
+            'inline-flex min-h-[26px] items-center gap-1.5 rounded-pill border px-2.5 text-xs font-medium whitespace-nowrap',
+            palette.sections[section.state],
+          ]"
+          :data-state="section.state"
+          data-testid="step-section-state"
+        >
+          <span aria-hidden="true">{{ SECTION_MARKS[section.state] }}</span>
+          {{ t(`ui.sections.states.${section.state}`) }}
+        </span>
+        <span
+          v-if="section.version !== null"
+          :class="['font-mono text-xs tracking-[0.08em]', palette.muted]"
+          data-testid="step-version"
+        >
+          {{ t("ui.sections.version", { n: section.version }) }}
+        </span>
+      </template>
+      <template v-else>
+        <span :class="['font-mono text-xs tracking-[0.08em] uppercase', palette.muted]">
+          {{ t("ui.progress.step", { n: step, total }) }}
+        </span>
+        <span
+          v-if="status && chip"
+          :class="[
+            'inline-flex min-h-[26px] items-center gap-1.5 rounded-pill border px-2.5 text-xs font-medium whitespace-nowrap',
+            chip.chip,
+          ]"
+          :data-status="status"
+          data-testid="step-status"
+        >
+          <span
+            v-if="chip.dot"
+            :class="['inline-block h-2 w-2 shrink-0 rounded-full', chip.dot]"
+            aria-hidden="true"
+          />
+          {{ t(`ui.stepHeader.${status}`) }}
+        </span>
+      </template>
     </div>
     <component
       :is="as"
