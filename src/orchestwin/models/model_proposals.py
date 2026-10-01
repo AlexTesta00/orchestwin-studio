@@ -141,6 +141,11 @@ HOSTED_SCHEMA_INSTRUCTION = (
     "The Studio checks the answer against the complete output schema, so follow these rules "
     "exactly."
 )
+HOSTED_PERSPECTIVES_INSTRUCTION = (
+    "context.perspectives lists the perspectives chosen for this project, each with its "
+    "considerations: take them into account in every alternative and in the critiques, without "
+    "adding screens or functions that no requirement asks for."
+)
 PERSONAS_INSTRUCTION = (
     "Propose one persona content draft per candidate, in input order. "
     "Use the approved project_brief.brief business content, including its goals and "
@@ -260,6 +265,7 @@ def hosted_design_instruction(context):
         (
             _design_instruction("/".join(keys), language, CRITIQUE_LIST_INSTRUCTIONS[None]),
             HOSTED_VERDICT_INSTRUCTION.format(language=written),
+            HOSTED_PERSPECTIVES_INSTRUCTION,
             *rules,
         )
     )
@@ -348,11 +354,6 @@ class ModelTeamProposalAdapter:
     @_model_boundary
     async def propose(self, request):
         constraints = request.constraints
-        if constraints.has_conflicts:
-            return TeamProposalGenerationResult(
-                status=TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS,
-                issues=constraints.issues,
-            )
         route = self.generator.route("team")
         output = await self.generator.generate(
             task="team",
@@ -431,7 +432,9 @@ class ModelTeamProposalAdapter:
         except (ValueError, TypeError) as error:
             raise ProposalGenerationError("INVALID_PROVIDER_OUTPUT") from error
         return TeamProposalGenerationResult(
-            status=TeamProposalGenerationStatus.PROPOSED, proposal=proposal
+            status=TeamProposalGenerationStatus.PROPOSED,
+            proposal=proposal,
+            issues=constraints.issues,
         )
 
 
@@ -462,6 +465,11 @@ class ModelRequirementsAdapter:
             "when the project needs fewer. When the brief names more needs than a limit allows, "
             "merge related needs into one requirement and name every merged need among its "
             "sources. Every statement is one sentence, two at most. "
+            "context.perspectives lists the perspectives chosen for this project, each with its "
+            "considerations. Apply a consideration where this project needs it, inside the "
+            "requirements, the acceptance criteria and the risks that you write anyway: a "
+            "consideration never justifies an item that the project does not need and never an "
+            "item beyond context.limits. "
             "Keep criteria concrete and testable. Include relevant risks and completion "
             "conditions. A definition_of_done item with applicability REQUIRED must leave condition null; "
             "only a CONDITIONAL item states the condition under which it applies. "
@@ -504,7 +512,7 @@ class ModelDesignAdapter:
         context, twins = design_context(request)
         route = self.generator.route("design")
         if hosted_route(route):
-            context = hosted_design_context(context)
+            context = hosted_design_context(context, request.team.selected_agent_ids)
             route = self.generator.route("design", context["purpose"])
             output_type, budget = HostedDesignDraft, HOSTED_DESIGN_OUTPUT_TOKENS
             instruction = hosted_design_instruction(context)

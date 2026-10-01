@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts.visual_catalog import SCRIPT_TONES, DesignTone
 from orchestwin.models import design_drafts
 from orchestwin.models.anthropic_hosted import build_anthropic_adapter
@@ -184,12 +185,19 @@ def test_the_local_design_draft_its_instruction_and_its_budgets_stay_byte_identi
 
 
 def test_the_hosted_contract_has_its_own_version_and_purpose():
-    context, _ = design_context(proposal_request())
-    marked = hosted_design_context(context)
-    assert HOSTED_DESIGN_CONTRACT_VERSION == 101
+    request = proposal_request()
+    context, _ = design_context(request)
+    team = request.team.selected_agent_ids
+    marked = hosted_design_context(context, team)
+    assert HOSTED_DESIGN_CONTRACT_VERSION == 104
     assert HOSTED_DESIGN_PURPOSE == "DESIGN_ALTERNATIVES_HOSTED"
-    assert marked == {**context, "purpose": HOSTED_DESIGN_PURPOSE}
+    assert marked == {
+        **context,
+        "purpose": HOSTED_DESIGN_PURPOSE,
+        "perspectives": perspective_guidance(team, GuidanceStage.DESIGN),
+    }
     assert "purpose" not in context
+    assert "perspectives" not in context
     assert HOSTED_DESIGN_OUTPUT_TOKENS == 24000
 
 
@@ -214,7 +222,8 @@ def test_every_hosted_critique_asks_for_a_verdict_and_a_quote():
 
 @pytest.mark.parametrize("count", [2, 3, 5, 8])
 def test_the_hosted_schema_keeps_the_positions_and_the_list_limits_of_two_twins(count):
-    context = hosted_design_context(design_context(proposal_request())[0])
+    request = proposal_request()
+    context = hosted_design_context(design_context(request)[0], request.team.selected_agent_ids)
     template = next(iter(context["twins"].values()))
     context["twins"] = {f"T{index}": template for index in range(1, count + 1)}
     schema = HostedDesignDraft.model_json_schema()
@@ -241,7 +250,9 @@ def test_the_hosted_schema_keeps_the_positions_and_the_list_limits_of_two_twins(
 
 
 def test_a_hosted_provider_loses_the_positions_so_the_instruction_states_them():
-    context = hosted_design_context(three_twin_context())
+    context = hosted_design_context(
+        three_twin_context(), proposal_request().team.selected_agent_ids
+    )
     schema = HostedDesignDraft.model_json_schema()
     constrain_planning_schema(schema, context, "design")
     hosted = json.dumps(hosted_output_schema(schema, ANTHROPIC))
@@ -350,7 +361,7 @@ def test_the_design_adapter_asks_the_design_route_for_the_hosted_draft(unrestric
     assert local.calls == []
     assert call["task"] == "design"
     assert call["output_type"] is HostedDesignDraft
-    assert call["context"] == hosted_design_context(context)
+    assert call["context"] == hosted_design_context(context, request.team.selected_agent_ids)
     assert call["max_output_tokens"] == HOSTED_DESIGN_OUTPUT_TOKENS
     assert call["instruction"] == hosted_design_instruction(call["context"])
     assert result.provider_id == hosted.provider_id

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.models.proposal_generation import wire_value
 from orchestwin.models.requirements import REQUIREMENTS_CHANGE_PURPOSE
 from orchestwin.projects import requirements as req
@@ -188,6 +189,9 @@ def requirements_context(request):
         "evidence": evidence,
         "twins": wire_value(twins),
         "limits": requirements_limits(request),
+        "perspectives": perspective_guidance(
+            request.team.selected_agent_ids, GuidanceStage.DEFINITION
+        ),
         "brief_reference": wire_value(brief.reference),
         "user_modeling_reference": wire_value(request.user_modeling.reference),
     }

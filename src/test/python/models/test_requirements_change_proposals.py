@@ -49,8 +49,8 @@ from . import test_fake_requirements as fixtures
 from .test_model_proposals import make_generator
 
 REQUEST_SHA256 = "9cba445351a1785f4078ccbbcbd03da0910ae2c3de03cc0c104e6d4a850ca3ca"
-CONTEXT_SHA256 = "6d0e77fa081a8423a0b8bd99648a720b1acdbd16856a1b4c775bc9aa0197579d"
-INSTRUCTION_SHA256 = "ff47349a99fa3617618bddd322bc713f859888673f69ddeb13f554ed79fb9080"
+CONTEXT_SHA256 = "2c5840187cb8b71c7ad9d52313ccfdc244e40287ae9b407a2838e65e3c69bb91"
+INSTRUCTION_SHA256 = "be89c73417a9c4b1d1aa3f307d1810a4773596d8c9f577ec83e1418909300d47"
 FAKE_RESULT_SHA256 = "33e23a49845c960a8a58d94141c649b647254fdafa150e720618b3ed0f6b3c37"
 CHANGE_SENTENCE = (
     "The context carries current_requirements, the specification that the owner is reviewing, "

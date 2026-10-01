@@ -91,7 +91,7 @@ TRANSIENT_FAILURE_CODES: Final = frozenset(
 DESIGN_CONTRACT_VERSIONS: Final = MappingProxyType(
     {
         "DESIGN_MOCKUP": 7,
-        "DESIGN_ALTERNATIVES_HOSTED": 101,
+        "DESIGN_ALTERNATIVES_HOSTED": 104,
         "DESIGN_MOCKUP_HTML": 102,
         "DESIGN_ITERATION": 103,
     }
@@ -269,7 +269,7 @@ class ProposalGenerator:
         contract_version = {
             "personas": 4,
             "user-twins": 4,
-            "requirements": 4,
+            "requirements": 5,
             "design": 11,
             "architecture": 7,
             "twin-discussion": 5,

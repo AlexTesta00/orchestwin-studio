@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from orchestwin.agents.catalog import AgentIdentifier
 from orchestwin.agents.selection_rules import TeamRoleConstraintKind
 from orchestwin.models.model_proposals import (
     HOSTED_PROFILE_NAME_INSTRUCTION,
@@ -40,6 +41,7 @@ from orchestwin.models.structured_generation import (
     ModelRuntimeIdentity,
     StructuredGenerationProviderKind,
 )
+from orchestwin.models.team_proposals import TeamProposalGenerationStatus
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     UserModelingBriefInput,
@@ -65,6 +67,7 @@ ROLE_AS_NAME = (
     "the language of the brief, with a capital first letter; it never contains the words Twin or "
     "Persona and never a colon."
 )
+CONTRADICTION = "Una app con database ma senza backend. No integrations."
 
 
 class CompletionTransport:
@@ -187,6 +190,66 @@ def test_team_ignores_redundant_mandatory_suggestions(tmp_path):
     result = asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
     assert result.proposal.suggested_agent_ids == ()
     assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
+
+
+def contradictory_request():
+    request = team_fixtures.build_request(description=CONTRADICTION)
+    kinds = {item.agent_id: item.kind for item in request.constraints.role_constraints}
+    assert request.constraints.conflicting_agent_ids == (AgentIdentifier.BACKEND_ENGINEER,)
+    assert kinds[AgentIdentifier.INTEGRATION_ENGINEER] is TeamRoleConstraintKind.IMPOSSIBLE
+    assert kinds[AgentIdentifier.MOBILE_ENGINEER] is TeamRoleConstraintKind.OPTIONAL
+    return request
+
+
+def test_a_contradiction_reaches_the_model_and_comes_back_with_the_proposal(tmp_path):
+    request = contradictory_request()
+    generator, transport = make_generator(
+        tmp_path,
+        {
+            "rationale": "The staff work on the move.",
+            "suggestions": [{"agent_id": "MOBILE_ENGINEER", "rationale": "Phones at the desk."}],
+        },
+    )
+
+    result = asyncio.run(ModelTeamProposalAdapter(generator).propose(request))
+    selected = result.proposal.selected_agent_ids
+
+    assert len(transport.calls) == 1
+    assert result.status is TeamProposalGenerationStatus.PROPOSED
+    assert result.issues == request.constraints.issues
+    assert [issue.agent_id for issue in result.issues] == [AgentIdentifier.BACKEND_ENGINEER]
+    assert result.proposal.suggested_agent_ids == (AgentIdentifier.MOBILE_ENGINEER,)
+    assert result.proposal.mandatory_agent_ids == request.constraints.mandatory_agent_ids
+    assert AgentIdentifier.BACKEND_ENGINEER not in selected
+    assert AgentIdentifier.INTEGRATION_ENGINEER not in selected
+
+
+@pytest.mark.parametrize(
+    "agent_id",
+    [AgentIdentifier.BACKEND_ENGINEER, AgentIdentifier.INTEGRATION_ENGINEER],
+    ids=["contested", "impossible"],
+)
+def test_a_contested_or_impossible_suggestion_is_still_refused(tmp_path, agent_id):
+    generator, transport = make_generator(
+        tmp_path,
+        {
+            "rationale": "One more specialist.",
+            "suggestions": [{"agent_id": agent_id.value, "rationale": "The brief names it."}],
+        },
+    )
+
+    with pytest.raises(ProposalGenerationError, match="INVALID_PROVIDER_OUTPUT"):
+        asyncio.run(ModelTeamProposalAdapter(generator).propose(contradictory_request()))
+    assert len(transport.calls) == 1
+
+
+def test_a_brief_without_a_contradiction_returns_no_issues(tmp_path):
+    generator, _ = make_generator(tmp_path, {"rationale": "Valid", "suggestions": []})
+
+    result = asyncio.run(ModelTeamProposalAdapter(generator).propose(team_fixtures.build_request()))
+
+    assert result.status is TeamProposalGenerationStatus.PROPOSED
+    assert result.issues == ()
 
 
 @pytest.mark.parametrize("stage", ["requirements", "design"])
