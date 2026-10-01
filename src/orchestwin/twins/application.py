@@ -51,6 +51,7 @@ from orchestwin.twins.personas import (
     confirm_proto_persona,
     reject_proto_persona,
 )
+from orchestwin.twins.representation import snapshot_matches_archetypes
 from orchestwin.twins.user_twins import (
     UserModelingSnapshotVersion,
     UserTwinLifecycleStatus,
@@ -92,6 +93,7 @@ class UserModelingApplicationIssueCode(StrEnum):
     PERSONA_CONFIRMATION_REQUIRED = "PERSONA_CONFIRMATION_REQUIRED"
 
     SNAPSHOT_ALREADY_EXISTS = "SNAPSHOT_ALREADY_EXISTS"
+    USER_TWIN_REVISION_PENDING = "USER_TWIN_REVISION_PENDING"
     PERSISTENCE_REJECTED = "PERSISTENCE_REJECTED"
 
 
@@ -394,6 +396,18 @@ class LocalUserModelingApplicationService:
             )
 
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                return PersonaProposalApplicationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.PROJECT_NOT_FOUND,
+                )
+            if not await self._context_is_unchanged(
+                owner_user_id=owner_user_id, project_id=project_id, previous=context
+            ):
+                return PersonaProposalApplicationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.CONTEXT_CHANGED,
+                )
             existing = await uow.personas.list_current(project_id=(project_id))
 
             if existing:
@@ -456,12 +470,17 @@ class LocalUserModelingApplicationService:
             )
 
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                return PersonaDecisionApplicationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.PROJECT_NOT_FOUND,
+                )
             current = await uow.personas.current(
                 project_id=project_id,
                 persona_id=persona_id,
             )
 
-            if current is None:
+            if current is None or current.profile.archived:
                 return PersonaDecisionApplicationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.PERSONA_NOT_FOUND),
@@ -522,7 +541,11 @@ class LocalUserModelingApplicationService:
             owner_user_id=owner_user_id,
             project_id=project_id,
         )
-        return snapshot is not None and snapshot_matches_context(snapshot, context)
+        if snapshot is None or not snapshot_matches_context(snapshot, context):
+            return False
+        async with self._uow_factory(owner_user_id=owner_user_id) as uow:
+            personas = await uow.personas.list_current(project_id=project_id)
+        return snapshot_matches_archetypes(snapshot, personas)
 
     @evidence_application
     async def generate_grounded_snapshot(
@@ -551,9 +574,19 @@ class LocalUserModelingApplicationService:
         team_reference = _require_team_reference(context)
 
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
+            if await uow.has_pending_revision(project_id=project_id):
+                return GroundedSnapshotGenerationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.USER_TWIN_REVISION_PENDING,
+                )
             current_snapshot = await uow.snapshots.current(project_id=project_id)
+            persona_versions = await uow.personas.list_current(project_id=project_id)
 
-            if current_snapshot is not None and snapshot_matches_context(current_snapshot, context):
+            if (
+                current_snapshot is not None
+                and snapshot_matches_context(current_snapshot, context)
+                and snapshot_matches_archetypes(current_snapshot, persona_versions)
+            ):
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.SNAPSHOT_ALREADY_EXISTS),
@@ -561,7 +594,7 @@ class LocalUserModelingApplicationService:
 
             base_snapshot_id = None if current_snapshot is None else current_snapshot.id
             base_version = None if current_snapshot is None else current_snapshot.version_number
-            persona_versions = await uow.personas.list_current(project_id=(project_id))
+            base_content_hash = None if current_snapshot is None else current_snapshot.content_hash
 
         (
             persona_issue,
@@ -616,9 +649,32 @@ class LocalUserModelingApplicationService:
             )
 
         async with self._uow_factory(owner_user_id=(owner_user_id)) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                return GroundedSnapshotGenerationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.PROJECT_NOT_FOUND,
+                )
+            if await uow.has_pending_revision(project_id=project_id):
+                return GroundedSnapshotGenerationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.USER_TWIN_REVISION_PENDING,
+                )
+            if not await self._context_is_unchanged(
+                owner_user_id=owner_user_id, project_id=project_id, previous=context
+            ):
+                return GroundedSnapshotGenerationResult(
+                    status=UserModelingApplicationStatus.REJECTED,
+                    issue=UserModelingApplicationIssueCode.CONTEXT_CHANGED,
+                )
             current_snapshot = await uow.snapshots.current(project_id=project_id)
 
-            if (None if current_snapshot is None else current_snapshot.id) != base_snapshot_id:
+            if (
+                (None if current_snapshot is None else current_snapshot.id) != base_snapshot_id
+                or (None if current_snapshot is None else current_snapshot.version_number)
+                != base_version
+                or (None if current_snapshot is None else current_snapshot.content_hash)
+                != base_content_hash
+            ):
                 return GroundedSnapshotGenerationResult(
                     status=(UserModelingApplicationStatus.REJECTED),
                     issue=(UserModelingApplicationIssueCode.CONTEXT_CHANGED),
@@ -644,13 +700,22 @@ class LocalUserModelingApplicationService:
                 )
 
             created_at = _aware_timestamp(self._clock())
+            previous_twins = (
+                {}
+                if current_snapshot is None
+                else {
+                    twin.profile.persona_reference.persona_id: twin
+                    for twin in current_snapshot.snapshot.twin_versions
+                }
+            )
 
             twin_versions = tuple(
-                self._initial_twin_version(
+                self._next_twin_version(
                     project_id=project_id,
                     owner_user_id=(owner_user_id),
                     proposal=proposal,
                     created_at=created_at,
+                    previous=previous_twins.get(proposal.persona_id),
                 )
                 for proposal in proposal_result.proposals
             )
@@ -761,23 +826,23 @@ class LocalUserModelingApplicationService:
             created_at=created_at,
         )
 
-    def _initial_twin_version(
+    def _next_twin_version(
         self,
         *,
         project_id: UUID,
         owner_user_id: UUID,
         proposal: ProposedUserTwinProfile,
         created_at: datetime,
+        previous: UserTwinProfileVersion | None,
     ) -> UserTwinProfileVersion:
-        """Assign stable identity to one initial grounded User Twin."""
-        twin_id = self._uuid_factory()
+        twin_id = self._uuid_factory() if previous is None else previous.twin_id
 
         return UserTwinProfileVersion(
             id=self._uuid_factory(),
             project_id=project_id,
             twin_id=twin_id,
-            version_number=1,
-            based_on_version_number=None,
+            version_number=1 if previous is None else previous.version_number + 1,
+            based_on_version_number=None if previous is None else previous.version_number,
             profile=proposal.profile,
             content_hash=(proposal.profile.content_hash),
             created_by_user_id=(owner_user_id),
@@ -930,6 +995,7 @@ def _select_confirmed_personas(
     ],
 ]:
     """Exclude rejected personas while requiring decisions on all others."""
+    versions = tuple(version for version in versions if not version.profile.archived)
     if not versions:
         return (
             UserModelingApplicationIssueCode.PERSONAS_REQUIRED,

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import timedelta
 from types import SimpleNamespace, TracebackType
 from typing import ClassVar
 from uuid import UUID
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from orchestwin.agents.team_gate import ProjectWorkflowReadiness
 from orchestwin.api import twin_chat
@@ -46,6 +48,7 @@ from orchestwin.twins.persistence.repositories import VersionAppendStatus
 from orchestwin.twins.realignment import UserModelingRealignment
 from orchestwin.twins.realignment_service import (
     ALREADY_ALIGNED,
+    ARCHETYPES_CHANGED,
     BRIEF_APPROVAL_REQUIRED,
     PERSISTENCE_REJECTED,
     TEAM_APPROVAL_REQUIRED,
@@ -115,6 +118,8 @@ class Store:
     def __init__(self, snapshot: UserModelingSnapshotVersion | None) -> None:
         self.snapshots = [] if snapshot is None else [snapshot]
         self.twins = [] if snapshot is None else list(snapshot.snapshot.twin_versions)
+        self.personas = [] if snapshot is None else list(snapshot.snapshot.persona_versions)
+        self.lock = asyncio.Lock()
         self.diffs: dict[UUID, UserTwinProfileDiff] = {}
         self.twin_refusal: VersionAppendStatus | None = None
         self.snapshot_refusal: VersionAppendStatus | None = None
@@ -182,6 +187,14 @@ class Diffs:
         return DiffPersistenceStatus.UPDATED
 
 
+class Personas:
+    def __init__(self, unit: Unit) -> None:
+        self.unit = unit
+
+    async def list_current(self, *, project_id: UUID):
+        return tuple(self.unit.store.personas) if self.unit.owns(project_id) else ()
+
+
 class Unit:
     def __init__(self, store: Store, owner_user_id: UUID) -> None:
         self.store = store
@@ -191,6 +204,8 @@ class Unit:
         self.snapshots = Snapshots(self)
         self.twins = Twins(self)
         self.diffs = Diffs(self)
+        self.personas = Personas(self)
+        self.locked = False
 
     def owns(self, project_id: UUID) -> bool:
         return self.owner_user_id == OWNER_ID and project_id == PROJECT_ID
@@ -206,6 +221,21 @@ class Unit:
     ) -> None:
         self.staged_twins = []
         self.staged_snapshots = []
+        if self.locked:
+            self.store.lock.release()
+            self.locked = False
+
+    async def lock_project(self, *, project_id: UUID) -> bool:
+        if not self.owns(project_id):
+            return False
+        await self.store.lock.acquire()
+        self.locked = True
+        return True
+
+    async def has_pending_revision(self, *, project_id: UUID) -> bool:
+        return self.owns(project_id) and any(
+            diff.status is UserTwinProfileDiffStatus.PROPOSED for diff in self.store.diffs.values()
+        )
 
     async def commit(self) -> None:
         self.store.twins.extend(self.staged_twins)
@@ -474,11 +504,107 @@ def test_another_owner_finds_no_twins_and_no_versions():
     assert harness.nothing_written()
 
 
-def test_a_revision_pending_on_an_older_snapshot_does_not_block_the_re_anchoring():
+def test_a_revision_pending_on_an_older_snapshot_blocks_the_re_anchoring():
     harness = pending(behind(snapshot=revised_snapshot()), first_snapshot())
 
-    assert harness.status().issue is None
-    assert harness.realign().snapshot_version.version_number == 3
+    assert harness.status().issue == USER_TWIN_REVISION_PENDING
+    assert harness.refusal() == USER_TWIN_REVISION_PENDING
+    assert harness.nothing_written()
+
+
+def test_archetype_identity_changes_cannot_reanchor_a_snapshot_even_with_same_profile():
+    harness = behind()
+    persona = harness.store.personas[0]
+    harness.store.personas[0] = replace(persona, id=UUID(int=999001))
+    assert harness.status().issue == ARCHETYPES_CHANGED
+    assert harness.refusal() == ARCHETYPES_CHANGED
+    assert harness.nothing_written()
+
+
+def test_two_concurrent_realignments_append_one_snapshot_and_refuse_the_second():
+    async def scenario():
+        harness = behind(injected=False)
+        ready = asyncio.Event()
+        waiting = 0
+
+        class RacingUnit(Unit):
+            async def lock_project(self, *, project_id):
+                nonlocal waiting
+                waiting += 1
+                if waiting == 2:
+                    ready.set()
+                await ready.wait()
+                return await super().lock_project(project_id=project_id)
+
+        harness.service._uow_factory = lambda *, owner_user_id: RacingUnit(
+            harness.store, owner_user_id
+        )
+
+        async def attempt():
+            try:
+                return await harness.service.realign(owner_user_id=OWNER_ID, project_id=PROJECT_ID)
+            except UserModelingRealignmentFailure as error:
+                return error.code
+
+        answers = await asyncio.gather(attempt(), attempt())
+        assert sum(isinstance(answer, UserModelingRealignment) for answer in answers) == 1
+        assert ALREADY_ALIGNED in answers
+        assert len(harness.store.snapshots) == 2 and harness.store.commits == 1
+        assert len(harness.store.twins) == 4
+        assert not harness.store.lock.locked()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("gate", ["brief", "team"])
+def test_lost_approval_on_identical_artifact_references_is_rechecked_under_the_lock(gate):
+    harness = behind()
+    context = harness.governance.context
+
+    class ChangedGateUnit(Unit):
+        async def lock_project(self, *, project_id):
+            locked = await super().lock_project(project_id=project_id)
+            harness.governance.context = replace(
+                context,
+                **({"brief_gate": None} if gate == "brief" else {"approved_team_reference": None}),
+            )
+            return locked
+
+    harness.service._uow_factory = lambda *, owner_user_id: ChangedGateUnit(
+        harness.store, owner_user_id
+    )
+    assert harness.refusal() == PERSISTENCE_REJECTED
+    assert harness.nothing_written()
+    assert harness.governance.context.brief_reference == context.brief_reference
+    assert harness.governance.context.team_reference == context.team_reference
+    assert not harness.store.lock.locked()
+
+
+@pytest.mark.parametrize("failure_at", ["append", "commit"])
+def test_sql_failure_is_normalized_and_rolls_back_staged_twins_and_snapshot(failure_at):
+    harness = behind()
+
+    class FailingUnit(Unit):
+        async def commit(self):
+            if failure_at == "commit":
+                raise IntegrityError("insert", {}, ValueError("private constraint details"))
+            await super().commit()
+
+        async def __aenter__(self):
+            if failure_at == "append":
+
+                async def reject(version):
+                    raise IntegrityError("insert", {}, ValueError("private constraint details"))
+
+                self.snapshots.append = reject
+            return self
+
+    harness.service._uow_factory = lambda *, owner_user_id: FailingUnit(
+        harness.store, owner_user_id
+    )
+    assert harness.refusal() == PERSISTENCE_REJECTED
+    assert harness.nothing_written()
+    assert not harness.store.lock.locked()
 
 
 def test_realign_stores_new_twin_versions_and_a_snapshot_that_gate_three_has_not_approved():

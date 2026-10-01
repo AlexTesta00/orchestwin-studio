@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignPackagePayload
+from orchestwin.api.design_context import require_current_design_context
 from orchestwin.api.generation_jobs import (
     GENERATION_JOB_NOT_FOUND,
     GenerationJobFailure,
@@ -375,9 +376,9 @@ class ModelMockupApplication:
 
     @evidence_application
     async def generate(self, *, owner_user_id, project_id, body):
-        current = await self.current(owner_user_id, project_id)
-        if (current.id, current.content_hash) != (body.design_version_id, body.design_content_hash):
-            raise HTTPException(409, detail={"code": DESIGN_CONTEXT_CHANGED})
+        current = await self.checked_version(
+            owner_user_id, project_id, body.design_version_id, body.design_content_hash
+        )
         alternative = _alternative(current.package, body.alternative_id)
         if alternative is None:
             raise HTTPException(422, detail={"code": DESIGN_ALTERNATIVE_NOT_FOUND})
@@ -424,9 +425,7 @@ class ModelMockupApplication:
         except (TypeError, ValueError) as error:
             await retain_adapter_result(error=error, reason=str(error))
             raise ProposalGenerationError("INVALID_MOCKUP_OUTPUT") from error
-        refreshed = await self.current(owner_user_id, project_id)
-        if (refreshed.id, refreshed.content_hash) != (current.id, current.content_hash):
-            raise HTTPException(409, detail={"code": DESIGN_CONTEXT_CHANGED})
+        await self.checked_version(owner_user_id, project_id, current.id, current.content_hash)
         scope = current_proposal_evidence()
         result = MockupResult(
             status=MockupStatus.GENERATED,
@@ -448,7 +447,30 @@ class ModelMockupApplication:
         current = await self.current(owner_user_id, project_id)
         if (current.id, current.content_hash) != (version_id, content_hash):
             raise MockupCommandError(409, DESIGN_CONTEXT_CHANGED)
+        await require_current_design_context(
+            self.runtime, owner_user_id=owner_user_id, project_id=project_id
+        )
+        await self.selected_agent_ids(owner_user_id, project_id, current)
         return current
+
+    async def selected_agent_ids(self, owner_user_id, project_id, current):
+        if not hasattr(self.runtime, "team_proposal_service"):
+            return ()
+        service = self.runtime.team_proposal_service
+        team = (
+            None
+            if service is None
+            else await service.current(owner_user_id=owner_user_id, project_id=project_id)
+        )
+        reference = current.package.grounding.agent_team_reference
+        if team is None or (team.project_id, team.id, team.version_number, team.content_hash) != (
+            project_id,
+            reference.artifact_id,
+            reference.version_number,
+            reference.content_hash,
+        ):
+            raise MockupCommandError(409, DESIGN_CONTEXT_CHANGED)
+        return tuple(team.proposal.selected_agent_ids)
 
     async def grounded_requirements(self, owner_user_id, project_id, current):
         query = getattr(self.runtime, "requirements_query_service", None)
@@ -578,9 +600,7 @@ class ModelMockupApplication:
     async def accept(
         self, *, owner_user_id, project_id, current, proposed, draft, binding, cost, changes=()
     ):
-        refreshed = await self.current(owner_user_id, project_id)
-        if (refreshed.id, refreshed.content_hash) != (current.id, current.content_hash):
-            raise MockupCommandError(409, DESIGN_CONTEXT_CHANGED)
+        await self.checked_version(owner_user_id, project_id, current.id, current.content_hash)
         scope = current_proposal_evidence()
         result = MockupResult(
             status=MockupStatus.GENERATED,
@@ -635,6 +655,7 @@ class ModelMockupApplication:
         requirements = await self.grounded_requirements(owner_user_id, project_id, current)
         language = requirements_language(requirements_view(requirements))
         observations = await self.observations(owner_user_id, project_id, current, alternative)
+        selected_agent_ids = await self.selected_agent_ids(owner_user_id, project_id, current)
         command_id = uuid4()
 
         def context_for(previous_answer, rejection):
@@ -645,6 +666,7 @@ class ModelMockupApplication:
                 version=current,
                 alternative=alternative,
                 requirements=requirements,
+                selected_agent_ids=selected_agent_ids,
                 observations=observations,
                 previous_answer=previous_answer,
                 rejection=rejection,

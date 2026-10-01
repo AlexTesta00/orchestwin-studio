@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
@@ -25,6 +26,7 @@ from orchestwin.twins.application import (
     GovernedUserModelingContext,
     LocalUserModelingApplicationService,
 )
+from orchestwin.twins.archetypes import ArchetypeFailure, ArchetypeIssue, ArchetypeService
 from orchestwin.twins.persistence.repositories import (
     SqlAlchemyPersonaVersionRepository,
     SqlAlchemyUserModelingSnapshotRepository,
@@ -36,7 +38,11 @@ from orchestwin.twins.revisions import UserTwinProfileDiff
 from orchestwin.twins.user_modeling_gate import LocalUserModelingGateService
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion, VersionedArtifactReference
 from orchestwin.workflow.gates import GateArtifactReference, HumanGateStatus, HumanGateType
-from orchestwin.workflow.persistence.repositories import SqlAlchemyHumanGateRepository
+from orchestwin.workflow.persistence.repositories import (
+    SqlAlchemyHumanGateRepository,
+    gate_record_to_domain,
+    latest_owned_gate_statement,
+)
 
 
 class ManagedUserModelingUnitOfWork(SqlAlchemyUserModelingUnitOfWork):
@@ -65,6 +71,28 @@ class ManagedUserModelingUnitOfWorkFactory:
             self._session_factory(),
             owner_user_id=owner_user_id,
         )
+
+
+class ManagedArchetypeUnitOfWork(ManagedUserModelingUnitOfWork):
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+        try:
+            await super().__aexit__(exc_type, exc_value, traceback)
+        except SQLAlchemyError:
+            raise ArchetypeFailure(ArchetypeIssue.PERSISTENCE_REJECTED) from None
+        if isinstance(exc_value, SQLAlchemyError):
+            raise ArchetypeFailure(ArchetypeIssue.PERSISTENCE_REJECTED) from None
+
+
+class ManagedArchetypeUnitOfWorkFactory:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    def __call__(self, *, owner_user_id: UUID) -> ManagedArchetypeUnitOfWork:
+        return ManagedArchetypeUnitOfWork(self._session_factory(), owner_user_id=owner_user_id)
+
+
+def build_archetype_service(session_factory: async_sessionmaker[AsyncSession]) -> ArchetypeService:
+    return ArchetypeService(uow_factory=ManagedArchetypeUnitOfWorkFactory(session_factory))
 
 
 class LockedUserModelingSnapshotQuery:
@@ -161,16 +189,25 @@ class SqlAlchemyUserModelingGovernanceAdapter:
                 owner_user_id=owner_user_id,
                 project_id=project_id,
             )
-            gates = SqlAlchemyHumanGateRepository(session)
-            brief_gate = await gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.PROJECT_BRIEF,
+            brief_gate_record = await session.scalar(
+                latest_owned_gate_statement(
+                    project_id=project_id,
+                    owner_user_id=owner_user_id,
+                    gate_type=HumanGateType.PROJECT_BRIEF,
+                )
             )
-            team_gate = await gates.get_latest_owned_for_update(
-                project_id=project_id,
-                owner_user_id=owner_user_id,
-                gate_type=HumanGateType.AGENT_TEAM,
+            team_gate_record = await session.scalar(
+                latest_owned_gate_statement(
+                    project_id=project_id,
+                    owner_user_id=owner_user_id,
+                    gate_type=HumanGateType.AGENT_TEAM,
+                )
+            )
+            brief_gate = (
+                None if brief_gate_record is None else gate_record_to_domain(brief_gate_record)
+            )
+            team_gate = (
+                None if team_gate_record is None else gate_record_to_domain(team_gate_record)
             )
             team_reference = None
             approved_reference = None
@@ -213,10 +250,11 @@ class SqlAlchemyUserModelingQueryService:
     async def current_personas(self, *, owner_user_id: UUID, project_id: UUID):
         """Recover proposed/confirmed personas even before a twin snapshot exists."""
         async with self._session_factory() as session:
-            return await SqlAlchemyPersonaVersionRepository(
+            versions = await SqlAlchemyPersonaVersionRepository(
                 session,
                 owner_user_id=owner_user_id,
             ).list_current(project_id=project_id)
+            return tuple(version for version in versions if not version.profile.archived)
 
     async def current_snapshot(
         self,

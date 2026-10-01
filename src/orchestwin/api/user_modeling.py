@@ -50,6 +50,12 @@ from orchestwin.twins.lifecycle import (
 from orchestwin.twins.personas import (
     PersonaProfileVersion,
 )
+from orchestwin.twins.representation import (
+    ReadableClaimStatus,
+    TwinBasis,
+    snapshot_matches_archetypes,
+    twin_view,
+)
 from orchestwin.twins.revision_application import (
     ProfileRevisionApplicationIssueCode,
     ProfileRevisionApplicationResult,
@@ -308,6 +314,53 @@ class UserTwinProfilePayload(ApiModel):
     ]
 
 
+class ReadableClaimPayload(ApiModel):
+    observation_key: str
+    value: ObservationValuePayload
+    display_status: ReadableClaimStatus
+    rationale: str | None
+    provenance: tuple[EvidenceReferencePayload, ...]
+
+
+class PersonaViewPayload(ApiModel):
+    description: ReadableClaimPayload
+    goals: ReadableClaimPayload
+    needs: ReadableClaimPayload
+    behaviours: ReadableClaimPayload
+    pain_points: ReadableClaimPayload
+    constraints: ReadableClaimPayload
+    contexts: ReadableClaimPayload
+
+
+class TwinViewPayload(ApiModel):
+    basis: TwinBasis
+    represents: ReadableClaimPayload
+    does_not_represent: ReadableClaimPayload
+    contexts: ReadableClaimPayload
+    evidence_gaps: ReadableClaimPayload
+    empirically_supported_fields: tuple[str, ...]
+    unsupported_fields: tuple[str, ...]
+    persona: PersonaViewPayload
+
+
+def _snapshot_persona(
+    twin: UserTwinProfileVersion, snapshot: UserModelingSnapshotVersion | None
+) -> PersonaProfileVersion | None:
+    if snapshot is None:
+        return None
+    reference = twin.profile.persona_reference
+    return next(
+        (
+            version
+            for version in snapshot.snapshot.persona_versions
+            if version.persona_id == reference.persona_id
+            and version.version_number == reference.version_number
+            and version.content_hash == reference.content_hash
+        ),
+        None,
+    )
+
+
 class UserTwinVersionPayload(ApiModel):
     """Immutable User Twin profile version."""
 
@@ -320,11 +373,13 @@ class UserTwinVersionPayload(ApiModel):
     created_by_user_id: UUID
     created_at: datetime
     profile: UserTwinProfilePayload
+    view: TwinViewPayload
 
     @classmethod
     def from_domain(
         cls,
         version: UserTwinProfileVersion,
+        persona_version: PersonaProfileVersion | None = None,
     ) -> UserTwinVersionPayload:
         """Convert one User Twin version."""
         profile = version.profile
@@ -339,6 +394,7 @@ class UserTwinVersionPayload(ApiModel):
             content_hash=version.content_hash,
             created_by_user_id=(version.created_by_user_id),
             created_at=version.created_at,
+            view=TwinViewPayload.model_validate(twin_view(version, persona_version)),
             profile=UserTwinProfilePayload(
                 name=profile.name,
                 persona_reference={
@@ -432,7 +488,8 @@ class UserModelingSnapshotVersionPayload(ApiModel):
                         for persona in snapshot.persona_versions
                     ),
                     twin_versions=tuple(
-                        UserTwinVersionPayload.from_domain(twin) for twin in snapshot.twin_versions
+                        UserTwinVersionPayload.from_domain(twin, _snapshot_persona(twin, version))
+                        for twin in snapshot.twin_versions
                     ),
                 )
             ),
@@ -814,6 +871,7 @@ class UserModelingReadinessPayload(ApiModel):
     gate_status: HumanGateStatus | None
     approved_current_snapshot: bool
     context_current: bool = True
+    archetypes_current: bool = False
     workflow_state: str
     twins: tuple[
         EffectiveTwinLifecyclePayload,
@@ -998,7 +1056,11 @@ def create_user_modeling_router(
         versions = await dependencies.queries.current_personas(
             owner_user_id=owner_user_id, project_id=project_id
         )
-        return tuple(PersonaVersionPayload.from_domain(version) for version in versions)
+        return tuple(
+            PersonaVersionPayload.from_domain(version)
+            for version in versions
+            if not version.profile.archived
+        )
 
     @router.post(
         "/personas/proposals",
@@ -1312,10 +1374,17 @@ def create_user_modeling_router(
             project_id=project_id,
             snapshot=snapshot,
         )
+        archetypes_current = False
+        if snapshot is not None:
+            versions = await dependencies.queries.current_personas(
+                owner_user_id=owner_user_id, project_id=project_id
+            )
+            archetypes_current = snapshot_matches_archetypes(snapshot, tuple(versions))
         return _readiness_payload(
             snapshot=snapshot,
             gate=gate,
             context_current=context_current,
+            archetypes_current=archetypes_current,
         )
 
     return router
@@ -1362,7 +1431,10 @@ def _snapshot_generation_payload(
             else UserModelingSnapshotVersionPayload.from_domain(result.snapshot_version)
         ),
         twin_versions=tuple(
-            UserTwinVersionPayload.from_domain(version) for version in result.twin_versions
+            UserTwinVersionPayload.from_domain(
+                version, _snapshot_persona(version, result.snapshot_version)
+            )
+            for version in result.twin_versions
         ),
     )
 
@@ -1379,7 +1451,9 @@ def _revision_payload(
         twin_version=(
             None
             if result.twin_version is None
-            else UserTwinVersionPayload.from_domain(result.twin_version)
+            else UserTwinVersionPayload.from_domain(
+                result.twin_version, _snapshot_persona(result.twin_version, result.snapshot_version)
+            )
         ),
         snapshot_version=(
             None
@@ -1406,6 +1480,7 @@ def _readiness_payload(
     snapshot: (UserModelingSnapshotVersion | None),
     gate: HumanGate | None,
     context_current: bool = True,
+    archetypes_current: bool = True,
 ) -> UserModelingReadinessPayload:
     """Derive HTTP readiness without mutating User Twin profiles."""
     if snapshot is None:
@@ -1418,6 +1493,8 @@ def _readiness_payload(
             gate_id=(None if gate is None else gate.id),
             gate_status=(None if gate is None else gate.status),
             approved_current_snapshot=False,
+            context_current=context_current,
+            archetypes_current=False,
             workflow_state=("USER_MODELING_REQUIRED"),
             twins=(),
         )
@@ -1432,6 +1509,7 @@ def _readiness_payload(
 
     approved = (
         context_current
+        and archetypes_current
         and gate is not None
         and gate.gate_type is HumanGateType.USER_MODELING
         and gate.status is HumanGateStatus.APPROVED
@@ -1469,6 +1547,7 @@ def _readiness_payload(
         gate_status=(None if gate is None else gate.status),
         approved_current_snapshot=(approved),
         context_current=context_current,
+        archetypes_current=archetypes_current,
         workflow_state=(
             "READY_FOR_REQUIREMENTS_DEFINITION" if approved else "USER_MODELING_REVIEW_REQUIRED"
         ),

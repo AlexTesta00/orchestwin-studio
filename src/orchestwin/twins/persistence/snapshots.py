@@ -633,6 +633,7 @@ def _persona_profile_from_snapshot(
             )
         ),
         observations=observations,
+        archived=payload.get("archived", False),
     )
 
     _require_snapshot_match(

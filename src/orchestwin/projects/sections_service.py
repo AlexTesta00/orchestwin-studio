@@ -18,7 +18,11 @@ from orchestwin.artifacts.design_persistence import (
 from orchestwin.knowledge.package_persistence import SqlAlchemyKnowledgePackageRepository
 from orchestwin.knowledge.packages import KnowledgePackageVersion
 from orchestwin.projects.persistence.models import ProjectRecord
-from orchestwin.projects.persistence.progress import overview_statement, progress_facts
+from orchestwin.projects.persistence.progress import (
+    overview_section_facts,
+    overview_statement,
+    progress_facts,
+)
 from orchestwin.projects.progress import ArtifactVersion, GateState, ProjectStage
 from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsDiffRepository,
@@ -66,6 +70,7 @@ _SUBMITTED: Final = frozenset({"SUBMITTED", "ALREADY_PENDING"})
 _ALREADY_APPROVED: Final = "ALREADY_APPROVED"
 _APPLIED: Final = "APPLIED"
 _ISSUES: Final = {
+    "ARCHETYPES_CHANGED": SectionBlock.PREPARE_TWINS.value,
     "USER_TWIN_REVISION_PENDING": SectionBlock.REVISION_PENDING.value,
     "REQUIREMENTS_REVISION_PENDING": SectionBlock.REVISION_PENDING.value,
     "DESIGN_REVISION_PENDING": SectionBlock.REVISION_PENDING.value,
@@ -267,6 +272,7 @@ def user_twins_facts(
     *,
     gate: GateState | None,
     revision_pending: bool = False,
+    archetypes_current: bool = True,
 ) -> UserTwinsFacts:
     version = _identity(snapshot)
     return UserTwinsFacts(
@@ -276,6 +282,7 @@ def user_twins_facts(
         team=_reference(snapshot.snapshot.agent_team_reference),
         twins=_twins(snapshot.snapshot.twin_versions),
         revision_pending=revision_pending,
+        archetypes_current=archetypes_current,
     )
 
 
@@ -417,10 +424,15 @@ class SqlAlchemySectionReads:
             if row is None:
                 return None
             progress = progress_facts(row)
+            base = overview_section_facts(row)
             twins = (
-                None
-                if progress.user_twins is None
-                else await self._user_twins(session, progress.user_twins_gate, **scope)
+                base.user_twins
+                if base is not None
+                else (
+                    None
+                    if progress.user_twins is None
+                    else await self._user_twins(session, progress.user_twins_gate, **scope)
+                )
             )
             requirements = (
                 None
@@ -446,7 +458,9 @@ class SqlAlchemySectionReads:
                     approved=_approved(progress.brief_gate, progress.brief),
                 )
             ),
-            team=(
+            team=base.team
+            if base is not None
+            else (
                 None
                 if team is None
                 else TeamFacts(
@@ -464,14 +478,19 @@ class SqlAlchemySectionReads:
 
     @staticmethod
     async def _user_twins(
-        session: AsyncSession, gate: GateState | None, *, owner_user_id: UUID, project_id: UUID
+        session: AsyncSession,
+        gate: GateState | None,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        archetypes_current: bool = True,
     ) -> UserTwinsFacts | None:
         snapshot = await SqlAlchemyUserModelingSnapshotRepository(
             session, owner_user_id=owner_user_id
         ).current(project_id=project_id)
         if snapshot is None:
             return None
-        facts = user_twins_facts(snapshot, gate=gate)
+        facts = user_twins_facts(snapshot, gate=gate, archetypes_current=archetypes_current)
         if not facts.approved:
             return facts
         return replace(
@@ -568,6 +587,7 @@ class SectionsService:
         design: SectionStep,
         design_alignment: DesignAlignmentQueries,
         twin_learning: TwinLearningQueries,
+        team: SectionStep | None = None,
     ) -> None:
         self._reads = reads
         self._steps = {
@@ -575,6 +595,8 @@ class SectionsService:
             ProjectStage.REQUIREMENTS: requirements,
             ProjectStage.DESIGN: design,
         }
+        if team is not None:
+            self._steps[ProjectStage.TEAM] = team
         self._design_alignment = design_alignment
         self._twin_learning = twin_learning
 
@@ -590,7 +612,14 @@ class SectionsService:
             if results and results[-1].outcome is not SectionOutcome.ALIGNED:
                 results.append(SectionUpdate(key=key, outcome=SectionOutcome.SKIPPED))
                 continue
-            section = before.section(key)
+            current = (
+                await self._sections(
+                    owner_user_id=owner_user_id, project_id=project_id, learning=False
+                )
+                if results
+                else before
+            )
+            section = current.section(key)
             if section.blocked is not None:
                 results.append(_blocked(key, section.blocked.value, section.codes))
                 continue
@@ -636,6 +665,8 @@ class SectionsService:
     async def _update(
         self, key: ProjectStage, *, owner_user_id: UUID, project_id: UUID
     ) -> SectionUpdate:
+        if key not in self._steps:
+            return _blocked(key, SectionBlock.PREPARE_AGAIN.value)
         step = self._steps[key]
         scope = {"project_id": project_id, "owner_user_id": owner_user_id}
         gate = await step.gate.current_gate(**scope)

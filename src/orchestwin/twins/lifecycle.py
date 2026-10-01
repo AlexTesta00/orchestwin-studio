@@ -61,6 +61,7 @@ _NON_EMPIRICAL_CLAIM_STATUSES: Final = frozenset(
         EpistemicStatus.HUMAN_VALIDATED,
         EpistemicStatus.MODEL_INFERRED,
         EpistemicStatus.UNSUPPORTED_ASSUMPTION,
+        EpistemicStatus.CONTESTED,
     }
 )
 

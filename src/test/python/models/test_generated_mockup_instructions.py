@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.perspectives import PERSPECTIVE_ORDER, GuidanceStage, perspective_guidance
 from orchestwin.artifacts.design_finding_validations import (
     FindingDecision,
     create_finding_validation,
@@ -501,9 +503,70 @@ def test_the_contract_versions_of_the_design_purposes():
     assert dict(DESIGN_CONTRACT_VERSIONS) == {
         "DESIGN_MOCKUP": 7,
         "DESIGN_ALTERNATIVES_HOSTED": 104,
-        "DESIGN_MOCKUP_HTML": 102,
-        "DESIGN_ITERATION": 103,
+        "DESIGN_MOCKUP_HTML": 105,
+        "DESIGN_ITERATION": 106,
     }
+
+
+def test_context_guidance_uses_the_fixed_perspectives_without_new_catalog_entries():
+    selected = (
+        AgentIdentifier.UX_RESEARCHER_USER_MODELER,
+        AgentIdentifier.UX_UI_DESIGNER,
+        AgentIdentifier.SECURITY_REVIEWER,
+    )
+    requirements = requirements_version()
+    context = mockup_context(
+        project_id=PROJECT_ID,
+        purpose=DESIGN_MOCKUP_HTML,
+        command_id=uuid4(),
+        version=version(package()),
+        alternative=chosen(GUIDED_ID),
+        requirements=requirements,
+        selected_agent_ids=selected,
+    )
+    assert len(PERSPECTIVE_ORDER) == 5
+    assert context["perspectives"] == perspective_guidance(selected, GuidanceStage.DESIGN)
+    assert [item["perspective"] for item in context["perspectives"]] == ["UX", "SECURITY"]
+    assert "They do not justify adding screens, controls or requirements" in instruction(
+        selected_agent_ids=selected
+    )
+
+
+def test_all_five_existing_perspectives_keep_their_design_considerations():
+    selected = (
+        AgentIdentifier.UX_RESEARCHER_USER_MODELER,
+        AgentIdentifier.UX_UI_DESIGNER,
+        AgentIdentifier.ACCESSIBILITY_REVIEWER,
+        AgentIdentifier.SOFTWARE_ARCHITECT,
+        AgentIdentifier.QA_TEST_ENGINEER,
+        AgentIdentifier.REQUIREMENTS_ANALYST,
+        AgentIdentifier.SECURITY_REVIEWER,
+    )
+    context = mockup_context(
+        project_id=PROJECT_ID,
+        purpose=DESIGN_ITERATION,
+        command_id=uuid4(),
+        version=version(package()),
+        alternative=chosen(GUIDED_ID),
+        requirements=requirements_version(),
+        selected_agent_ids=selected,
+    )
+    assert [item["perspective"] for item in context["perspectives"]] == [
+        item.value for item in PERSPECTIVE_ORDER
+    ]
+    assert all(item["considerations"] for item in context["perspectives"])
+
+
+def test_legacy_mockup_context_has_empty_selected_guidance():
+    context = mockup_context(
+        project_id=PROJECT_ID,
+        purpose=DESIGN_MOCKUP_HTML,
+        command_id=uuid4(),
+        version=version(package()),
+        alternative=chosen(GUIDED_ID),
+        requirements=requirements_version(),
+    )
+    assert context["perspectives"] == []
 
 
 class DraftPort:
@@ -532,8 +595,8 @@ class DraftPort:
 @pytest.mark.parametrize(
     "purpose, output_type, payload, version_number",
     [
-        (DESIGN_MOCKUP_HTML, GeneratedMockupDraft, draft_payload(), 102),
-        (DESIGN_ITERATION, GeneratedIterationDraft, iteration_payload(), 103),
+        (DESIGN_MOCKUP_HTML, GeneratedMockupDraft, draft_payload(), 105),
+        (DESIGN_ITERATION, GeneratedIterationDraft, iteration_payload(), 106),
     ],
 )
 def test_the_real_generator_sends_the_contract_of_the_purpose(

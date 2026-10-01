@@ -5,7 +5,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -48,6 +48,9 @@ from orchestwin.projects.design_application import (
     DesignGenerationStatus,
     DesignVersionAppendStatus,
 )
+from orchestwin.projects.progress import ProjectStage
+from orchestwin.projects.sections import SectionState
+from orchestwin.projects.sections_service import SectionsFailure
 from orchestwin.workflow.gates import (
     HumanGate,
     HumanGateAction,
@@ -56,6 +59,7 @@ from orchestwin.workflow.gates import (
     create_human_gate,
     transition_human_gate,
 )
+from src.test.python.api.test_design_context import sections_port
 from src.test.python.artifacts.test_design_package_extension import (
     ASSERTIONS,
     VERDICTS,
@@ -526,6 +530,73 @@ def test_revision_decision_preserves_owner_reason() -> None:
             "Reviewed the selected design and declarative prototype.",
         )
     ]
+
+
+def test_archetype_edit_refuses_design_proposal_and_approval_before_service_mutation():
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    service = sections_port(
+        owner_user_id=OWNER_ID,
+        project_id=PROJECT_ID,
+        states={ProjectStage.USER_TWINS: SectionState.TO_UPDATE},
+    )
+    client.app.state.application_runtime = SimpleNamespace(sections_service=service)
+    payload = DesignPackagePayload.from_domain(design_version().package).model_dump(mode="json")
+    with client:
+        proposed = client.post(path("/revisions"), json={"package": payload})
+        approved = client.post(path(f"/revisions/{DIFF_ID}/decision"), json={"decision": "APPROVE"})
+        historical = client.get(path("/revisions"))
+    for response in (proposed, approved):
+        assert response.status_code == 409
+        assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert revisions.proposed is None and revisions.decisions == []
+    assert historical.status_code == 200
+    assert len(service.calls) == 2
+
+
+def test_outdated_context_can_reject_pending_design_revision_to_unblock_it():
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    service = sections_port(
+        owner_user_id=OWNER_ID,
+        project_id=PROJECT_ID,
+        states={ProjectStage.USER_TWINS: SectionState.TO_UPDATE},
+    )
+    client.app.state.application_runtime = SimpleNamespace(sections_service=service)
+    with client:
+        response = client.post(
+            path(f"/revisions/{DIFF_ID}/decision"),
+            json={"decision": "REJECT", "reason": "The archetypes changed."},
+        )
+    assert response.status_code == 200
+    assert revisions.decisions == [
+        (DIFF_ID, DesignRevisionDecision.REJECT, "The archetypes changed.")
+    ]
+    assert service.calls == []
+
+
+@pytest.mark.parametrize("code,status", [("PROJECT_NOT_FOUND", 404), ("PERSISTENCE_REJECTED", 409)])
+def test_unavailable_or_foreign_project_context_is_controlled_before_revision_mutation(
+    code, status
+):
+    client, _generation, _queries, revisions, _gates = client_fixture()
+    calls = []
+
+    async def current(**scope):
+        assert scope == {"owner_user_id": OWNER_ID, "project_id": PROJECT_ID}
+        calls.append(scope)
+        raise SectionsFailure(code)
+
+    client.app.state.application_runtime = SimpleNamespace(
+        sections_service=SimpleNamespace(current=current)
+    )
+    payload = DesignPackagePayload.from_domain(design_version().package).model_dump(mode="json")
+    with client:
+        proposed = client.post(path("/revisions"), json={"package": payload})
+        approved = client.post(path(f"/revisions/{DIFF_ID}/decision"), json={"decision": "APPROVE"})
+    for response in (proposed, approved):
+        assert response.status_code == status
+        assert response.json()["detail"] == {"code": code}
+    assert revisions.proposed is None and revisions.decisions == []
+    assert len(calls) == 2
 
 
 def test_gate_and_readiness_endpoints_expose_exact_design_approval() -> None:

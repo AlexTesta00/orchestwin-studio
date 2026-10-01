@@ -63,6 +63,10 @@ class UserTwinField(StrEnum):
     TECHNICAL_LITERACY = "technical_literacy"
     RISK_SENSITIVITY = "risk_sensitivity"
     ASSUMPTIONS = "assumptions"
+    DESCRIPTION = "description"
+    REPRESENTS = "represents"
+    DOES_NOT_REPRESENT = "does_not_represent"
+    EVIDENCE_GAPS = "evidence_gaps"
 
     @property
     def observation_key(self) -> str:
@@ -75,7 +79,16 @@ _USER_TWIN_FIELD_ORDER: Final = tuple(UserTwinField)
 _USER_TWIN_FIELD_BY_KEY: Final = {field.observation_key: field for field in UserTwinField}
 
 _REQUIRED_USER_TWIN_FIELDS: Final = frozenset(
-    field for field in UserTwinField if field is not UserTwinField.AGE_RANGE
+    field
+    for field in UserTwinField
+    if field
+    not in {
+        UserTwinField.AGE_RANGE,
+        UserTwinField.DESCRIPTION,
+        UserTwinField.REPRESENTS,
+        UserTwinField.DOES_NOT_REPRESENT,
+        UserTwinField.EVIDENCE_GAPS,
+    }
 )
 
 _TEXT_OR_UNCERTAINTY: Final = frozenset(
@@ -116,6 +129,10 @@ _ALLOWED_VALUE_KINDS: Final = {
     UserTwinField.TECHNICAL_LITERACY: (_TEXT_OR_UNCERTAINTY),
     UserTwinField.RISK_SENSITIVITY: (_TEXT_OR_UNCERTAINTY),
     UserTwinField.ASSUMPTIONS: (_ITEMS_OR_UNCERTAINTY),
+    UserTwinField.DESCRIPTION: (_TEXT_OR_UNCERTAINTY),
+    UserTwinField.REPRESENTS: (_ITEMS_OR_UNCERTAINTY),
+    UserTwinField.DOES_NOT_REPRESENT: (_ITEMS_OR_UNCERTAINTY),
+    UserTwinField.EVIDENCE_GAPS: (_ITEMS_OR_UNCERTAINTY),
 }
 
 

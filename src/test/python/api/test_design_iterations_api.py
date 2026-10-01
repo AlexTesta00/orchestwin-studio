@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.api.design import DesignPackagePayload
 from orchestwin.api.design_iterations import (
     DesignIterationApplication,
@@ -16,7 +18,15 @@ from orchestwin.api.design_iterations import (
 from orchestwin.models.generated_mockup_drafts import GeneratedIterationDraft
 from orchestwin.models.generated_mockup_instructions import DESIGN_ITERATION, ITERATION_SENTENCE
 from orchestwin.models.proposal_generation import ProposalGenerationError
-from src.test.python.api.test_generated_mockup_api import BASE, MOCKUPS, client_for, generated
+from orchestwin.projects.progress import ProjectStage
+from orchestwin.projects.sections import SectionState
+from src.test.python.api.test_generated_mockup_api import (
+    BASE,
+    MOCKUPS,
+    client_for,
+    generated,
+    wired_runtime,
+)
 from src.test.python.models.test_generated_mockup_support import (
     GUIDED_ID,
     OWNER_ID,
@@ -65,6 +75,37 @@ def iterate(client, registry, versions, **changes):
 
 def applied_versions(assertions=(KEPT,)):
     return DesignVersions(package(), applied_package(assertions=assertions))
+
+
+@pytest.mark.parametrize("security", (False, True))
+def test_iteration_uses_only_selected_guidance_and_preserves_it_on_retry(security):
+    selected = (AgentIdentifier.UX_UI_DESIGNER,) + (
+        (AgentIdentifier.SECURITY_REVIEWER,) if security else ()
+    )
+    versions = applied_versions()
+    generator = ScriptedMockupGenerator(answer(BROKEN), answer(iteration_payload()))
+    value, _team = wired_runtime(generator, versions, selected_agent_ids=selected)
+    client, registry = client_for(value)
+    with client:
+        _started, done = iterate(client, registry, versions)
+    assert done["status"] == "SUCCEEDED" and len(generator.calls) == 2
+    expected = perspective_guidance(selected, GuidanceStage.DESIGN)
+    assert all(call["context"]["perspectives"] == expected for call in generator.calls)
+    assert any(item["perspective"] == "SECURITY" for item in expected) is security
+
+
+def test_iteration_after_archetype_edit_refuses_provider():
+    versions = applied_versions()
+    generator = ScriptedMockupGenerator()
+    value, _team = wired_runtime(
+        generator, versions, states={ProjectStage.USER_TWINS: SectionState.TO_UPDATE}
+    )
+    client, registry = client_for(value)
+    with client:
+        response = client.post(f"{ITERATIONS}/jobs", json=request_body(versions))
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert generator.calls == [] and len(registry) == 0
 
 
 def test_an_iteration_changes_the_applied_mockup_and_keeps_the_assertions():

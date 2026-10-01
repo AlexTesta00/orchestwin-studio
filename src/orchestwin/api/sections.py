@@ -7,6 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
+from orchestwin.agents.realignment_service import TeamRealignmentFailure, TeamRealignmentService
+from orchestwin.agents.team_gate import LocalAgentTeamApprovalService
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.twin_learning import TwinLearningApplication
 from orchestwin.identity.domain import UserAccount
@@ -47,6 +49,7 @@ from orchestwin.twins.realignment_service import (
     UserModelingRealignmentService,
 )
 from orchestwin.twins.runtime import UserModelingServices
+from orchestwin.workflow.gates import HumanGateAction
 
 SECTIONS_API_PREFIX: Final = "/projects/{project_id}/sections"
 _NOT_FOUND_CODES: Final = frozenset({PROJECT_NOT_FOUND})
@@ -164,6 +167,29 @@ class TwinLearningProbe:
         )
 
 
+class TeamSectionGate:
+    def __init__(self, service: LocalAgentTeamApprovalService) -> None:
+        self._service = service
+
+    async def current_gate(self, *, project_id: UUID, owner_user_id: UUID):
+        return await self._service.current_gate(project_id=project_id, owner_user_id=owner_user_id)
+
+    async def submit(self, *, project_id: UUID, owner_user_id: UUID):
+        return await self._service.submit_gate(project_id=project_id, owner_user_id=owner_user_id)
+
+    async def decide(
+        self,
+        *,
+        project_id: UUID,
+        owner_user_id: UUID,
+        action: HumanGateAction,
+        reason: str | None = None,
+    ):
+        return await self._service.decide_gate(
+            project_id=project_id, owner_user_id=owner_user_id, action=action, reason=reason
+        )
+
+
 def build_sections_service(
     *,
     database_runtime: DatabaseRuntime,
@@ -175,9 +201,18 @@ def build_sections_service(
     design_gate_service: SectionGate,
     real_model_runtime: RealModelRuntime | None = None,
     proposal_evidence_store: SqlAlchemyProposalEvidenceStore | None = None,
+    team_realignment_service: TeamRealignmentService | None = None,
+    agent_team_service: LocalAgentTeamApprovalService | None = None,
 ) -> SectionsService:
     return SectionsService(
         reads=SqlAlchemySectionReads(database_runtime.session_factory),
+        team=None
+        if team_realignment_service is None or agent_team_service is None
+        else SectionStep(
+            realignment=team_realignment_service,
+            gate=TeamSectionGate(agent_team_service),
+            failure=TeamRealignmentFailure,
+        ),
         user_twins=SectionStep(
             realignment=user_modeling_realignment_service,
             gate=user_modeling_services.gates,
@@ -273,6 +308,7 @@ __all__ = [
     "SectionPayload",
     "SectionUpdatePayload",
     "SectionsAlignmentPayload",
+    "TeamSectionGate",
     "TwinLearningOverview",
     "TwinLearningProbe",
     "TwinLearningSources",

@@ -8,8 +8,9 @@ import pytest
 
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.agents.selection_rules import determine_team_constraints
-from orchestwin.artifacts.design_packages import DesignPackageVersion
+from orchestwin.artifacts.design_packages import DesignPackageVersion, create_design_grounding
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
+from orchestwin.artifacts.design_realignment import design_is_aligned, missing_item_ids
 from orchestwin.models.fake_team_proposals import FakeDeterministicTeamProposalAdapter
 from orchestwin.models.team_proposals import TeamProposalRequest
 from orchestwin.persistence import create_database_runtime, load_database_settings
@@ -28,6 +29,9 @@ from orchestwin.projects.persistence.progress import SqlAlchemyProjectOverviewRe
 from orchestwin.projects.progress import ProjectNextAction, ProjectStage
 from orchestwin.projects.requirements_application import RequirementsVersionAppendStatus
 from orchestwin.projects.requirements_runtime import ManagedRequirementsUnitOfWorkFactory
+from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
+from orchestwin.projects.sections import SectionState, project_sections
+from orchestwin.projects.sections_service import SqlAlchemySectionReads
 from orchestwin.twins.runtime import SqlAlchemyUserModelingGateUnitOfWorkFactory
 from orchestwin.twins.user_modeling_gate import LocalUserModelingGateService
 from orchestwin.workflow.gates import HumanGateAction, HumanGateType
@@ -111,7 +115,7 @@ async def add_team(runtime, *, identifier: UUID, brief: ProjectBriefVersion):
     return created.version
 
 
-async def add_requirements(runtime, snapshot):
+async def add_requirements(runtime, snapshot) -> RequirementsSpecificationVersion:
     version = requirements_version(
         snapshot, version_id=uuid4(), version_number=1, owner_id=OWNER_ID, created_at=CREATED_AT
     )
@@ -126,13 +130,73 @@ async def add_requirements(runtime, snapshot):
         gate_type=HumanGateType.REQUIREMENTS,
         version=version,
     )
+    return version
 
 
-async def add_design(runtime, *, identifier: UUID) -> None:
-    package = replace(design_fixtures.design_package(), project_id=identifier)
+async def add_design(runtime, *, requirements: RequirementsSpecificationVersion) -> None:
+    specification = requirements.specification
+    template = design_fixtures.design_package()
+    twin = specification.user_twin_references[0]
+    trace_ids = {
+        "requirement_ids": (specification.requirements[0].id,),
+        "user_story_ids": (specification.user_stories[0].id,),
+        "acceptance_criterion_ids": (specification.acceptance_criteria[0].id,),
+    }
+
+    def bind_traces(item, **changes):
+        return replace(
+            item,
+            **{
+                key: identifiers if getattr(item, key) else ()
+                for key, identifiers in trace_ids.items()
+                if hasattr(item, key)
+            },
+            **changes,
+        )
+
+    alternatives = []
+    for alternative in template.alternatives:
+        language = alternative.visual_language
+        if language is not None:
+            language = replace(
+                language,
+                twin_fit=tuple(
+                    replace(fit, twin_id=twin.twin_id, name=twin.name) for fit in language.twin_fit
+                ),
+            )
+        alternatives.append(
+            bind_traces(
+                alternative,
+                user_twin_references=(twin,),
+                workflows=tuple(bind_traces(workflow) for workflow in alternative.workflows),
+                visual_language=language,
+            )
+        )
+    package = replace(
+        template,
+        project_id=requirements.project_id,
+        grounding=create_design_grounding(requirements),
+        alternatives=tuple(alternatives),
+        critiques=tuple(
+            replace(critique, user_twin_reference=twin) for critique in template.critiques
+        ),
+        prototype=replace(
+            template.prototype,
+            screens=tuple(
+                bind_traces(
+                    screen,
+                    elements=tuple(bind_traces(element) for element in screen.elements),
+                )
+                for screen in template.prototype.screens
+            ),
+        ),
+        concerns=tuple(bind_traces(concern) for concern in template.concerns),
+    )
+    assert design_is_aligned(package, requirements)
+    assert not missing_item_ids(package, requirements)
     version = DesignPackageVersion(
         id=uuid4(),
-        project_id=identifier,
+        project_id=requirements.project_id,
         version_number=1,
         package=package,
         content_hash=package.content_hash,
@@ -144,7 +208,12 @@ async def add_design(runtime, *, identifier: UUID) -> None:
             version
         )
     assert status.value == "APPENDED"
-    await approve(runtime, project_id=identifier, gate_type=HumanGateType.DESIGN, version=version)
+    await approve(
+        runtime,
+        project_id=requirements.project_id,
+        gate_type=HumanGateType.DESIGN,
+        version=version,
+    )
 
 
 async def reopen_brief(runtime, *, identifier: UUID) -> None:
@@ -224,11 +293,13 @@ def test_every_project_of_the_owner_gets_its_step_from_one_statement():
                 ProjectStage.REQUIREMENTS,
                 ProjectNextAction.APPROVE_REQUIREMENTS,
             )
-            for ordinal in (6, 7, 8):
-                await add_requirements(runtime, snapshots[ordinal])
+            requirements = {
+                ordinal: await add_requirements(runtime, snapshots[ordinal])
+                for ordinal in (6, 7, 8)
+            }
             expected[project_id(6)] = (ProjectStage.DESIGN, ProjectNextAction.APPROVE_DESIGN)
             for ordinal in (7, 8):
-                await add_design(runtime, identifier=project_id(ordinal))
+                await add_design(runtime, requirements=requirements[ordinal])
             expected[project_id(7)] = (ProjectStage.PACKAGE, ProjectNextAction.DOWNLOAD_FOLDER)
             await reopen_brief(runtime, identifier=project_id(8))
             expected[project_id(8)] = (ProjectStage.BRIEF, ProjectNextAction.APPROVE_BRIEF)
@@ -338,7 +409,23 @@ def test_the_latest_gate_iteration_decides_and_a_new_brief_reopens_the_team():
             await briefs.decide(
                 project_id=identifier, owner_user_id=OWNER_ID, action=HumanGateAction.APPROVE
             )
-            assert await progress() == (ProjectStage.TEAM, ProjectNextAction.APPROVE_TEAM)
+            assert await progress() == (ProjectStage.TEAM, ProjectNextAction.UPDATE_SECTIONS)
+            facts = await SqlAlchemySectionReads(factory).facts(
+                project_id=identifier, owner_user_id=OWNER_ID
+            )
+            assert facts is not None and facts.team is not None and facts.brief is not None
+            assert facts.team.approved and facts.team.alignable
+            assert facts.team.version.version_number == 1
+            assert facts.team.brief.version_number == 1
+            assert facts.brief.version.version_number == 2
+            sections = project_sections(facts)
+            assert sections.alignment.available
+            assert ProjectStage.TEAM in sections.alignment.sections
+            team_section = next(
+                section for section in sections.sections if section.key is ProjectStage.TEAM
+            )
+            assert team_section.state is SectionState.TO_UPDATE
+            assert team_section.blocked is None
         finally:
             await runtime.dispose()
 

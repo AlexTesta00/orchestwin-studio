@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Final
 
+from orchestwin.models.profile_drafts import (
+    TWIN_DECLARATION_ITEM_TEXT_LIMIT,
+    TWIN_DECLARATION_TEXT_LIMIT,
+)
 from orchestwin.models.user_modeling import (
     PersonaProposalRequest,
     PersonaProposalResult,
@@ -24,6 +28,7 @@ from orchestwin.twins.epistemics import (
     HumanValidationRequirement,
     ObservationProvenance,
     ObservationValue,
+    ObservationValueKind,
     ProfileObservation,
 )
 from orchestwin.twins.persona_candidates import (
@@ -302,6 +307,16 @@ def _build_user_twin(
             UserTwinField.AGE_RANGE,
         )
 
+    for field in (
+        UserTwinField.DESCRIPTION,
+        UserTwinField.REPRESENTS,
+        UserTwinField.DOES_NOT_REPRESENT,
+        UserTwinField.EVIDENCE_GAPS,
+    ):
+        transferred[field] = _twin_declaration(
+            request=request, persona_version=persona_version, field=field
+        )
+
     observations = tuple(
         transferred[field]
         if field in transferred
@@ -332,6 +347,67 @@ def _rekey_observation(
     return replace(
         observation,
         observation_key=(field.observation_key),
+    )
+
+
+def _twin_declaration(*, request, persona_version, field):
+    persona = persona_version.profile
+    value = ObservationValue.unknown()
+    if field is UserTwinField.DESCRIPTION:
+        summary = persona.observation_for(PersonaField.SUMMARY)
+        if summary is not None and summary.value.text is not None:
+            value = ObservationValue.from_text(summary.value.text[:TWIN_DECLARATION_TEXT_LIMIT])
+        rationale = (
+            "The description summarizes the cited archetype; it is not empirical user research."
+        )
+    elif field is UserTwinField.REPRESENTS:
+        role = persona.observation_for(PersonaField.ROLE)
+        if role is not None and role.value.text is not None:
+            value = ObservationValue.from_items(
+                (role.value.text[:TWIN_DECLARATION_ITEM_TEXT_LIMIT],)
+            )
+        rationale = "The represented role comes only from the cited archetype."
+    elif field is UserTwinField.DOES_NOT_REPRESENT:
+        rationale = "No exclusions are established by the supplied archetype; the adapter does not invent them."
+    else:
+        value = ObservationValue.from_items(
+            ("The brief and owner inputs do not establish empirical evidence about real users.",)
+        )
+        rationale = (
+            "Project grounding and owner approval do not constitute empirical user research."
+        )
+    brief = request.project_brief_reference
+    return ProfileObservation(
+        observation_key=field.observation_key,
+        value=value,
+        epistemic_status=EpistemicStatus.MODEL_INFERRED,
+        confidence=ConfidenceScore(0.0 if value.kind is ObservationValueKind.UNKNOWN else 1.0),
+        provenance=ObservationProvenance.from_references(
+            (
+                EvidenceReference(
+                    source_kind=EvidenceSourceKind.SYSTEM_ARTIFACT,
+                    source_id=str(persona_version.id),
+                    source_version=persona_version.version_number,
+                    content_hash=persona_version.content_hash,
+                    locator="persona_profile",
+                ),
+                EvidenceReference(
+                    source_kind=EvidenceSourceKind.PROJECT_BRIEF,
+                    source_id=str(brief.artifact_id),
+                    source_version=brief.version_number,
+                    content_hash=brief.content_hash,
+                    locator="brief",
+                ),
+                EvidenceReference(
+                    source_kind=EvidenceSourceKind.MODEL_OUTPUT,
+                    source_id=FAKE_USER_MODELING_PROVIDER_ID,
+                    source_version=FAKE_USER_MODELING_PROVIDER_VERSION,
+                    locator=field.observation_key,
+                ),
+            )
+        ),
+        human_validation=HumanValidationRequirement.REQUIRED,
+        rationale=rationale,
     )
 
 

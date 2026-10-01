@@ -5,6 +5,8 @@ from types import MappingProxyType
 from typing import Final
 from uuid import UUID
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts.design_finding_validations import FindingDecision
 from orchestwin.artifacts.generated_mockups import (
     _ATTRIBUTE_SPELLING,
@@ -94,6 +96,9 @@ ROLE_AND_RESULT: Final = (
         "You are the UX/UI designer of the team. Draw the screens of the selected design "
         "alternative as the interface of a finished product that a person could use tomorrow. "
         "You are not writing a wireframe, a description of a screen or a style guide.",
+        "Use the selected team's perspective considerations only where they are relevant to "
+        "this project, within the supplied screens and controls. They do not justify adding "
+        "screens, controls or requirements and are not empirical evidence about real users.",
         "Answer with one JSON object:",
         "- `approach`: two or three sentences, in the language of the requirements, on how the "
         "screens serve the people described by the user twins.",
@@ -554,6 +559,7 @@ def mockup_context(
     version,
     alternative,
     requirements,
+    selected_agent_ids: Iterable[AgentIdentifier | str] = (),
     observations: Iterable[Mapping[str, object]] = (),
     current_mockup=None,
     owner_request: str | None = None,
@@ -573,6 +579,7 @@ def mockup_context(
         "critiques": critique_view(version.package, alternative),
         "concerns": concern_view(version.package, alternative),
         "confirmed_observations": [dict(item) for item in observations],
+        "perspectives": perspective_guidance(selected_agent_ids, GuidanceStage.DESIGN),
     }
     if current_mockup is not None:
         context["current_mockup"] = mockup_view(current_mockup)

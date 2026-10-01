@@ -92,8 +92,8 @@ DESIGN_CONTRACT_VERSIONS: Final = MappingProxyType(
     {
         "DESIGN_MOCKUP": 7,
         "DESIGN_ALTERNATIVES_HOSTED": 104,
-        "DESIGN_MOCKUP_HTML": 102,
-        "DESIGN_ITERATION": 103,
+        "DESIGN_MOCKUP_HTML": 105,
+        "DESIGN_ITERATION": 106,
     }
 )
 
@@ -268,7 +268,7 @@ class ProposalGenerator:
         _forbid_extra_schema(schema_payload)
         contract_version = {
             "personas": 4,
-            "user-twins": 4,
+            "user-twins": 5,
             "requirements": 5,
             "design": 11,
             "architecture": 7,
