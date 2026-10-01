@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 import pytest
 
 from orchestwin.knowledge.documents import twin_markdown
 from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.layout import TWIN_DOCUMENT_KIND, twin_slug
+from orchestwin.knowledge.stage_documents import modeling_version_from_document
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
 
 from .knowledge_fixtures import PROJECT_NAME, PUBLISHED_AT, partial_sources, sources
@@ -138,3 +140,73 @@ def test_a_folder_before_the_approved_twins_has_no_portable_twin(through: str) -
 
     assert portable_twins(package) == ()
     assert portable_twins(partial_sources("twins"))
+
+
+@pytest.mark.parametrize(
+    "language,labels",
+    [
+        (
+            "en",
+            (
+                "Archetype",
+                "Basis",
+                "Represents",
+                "Does not represent",
+                "Covered contexts",
+                "Evidence gaps",
+                "Description",
+                "Goals",
+                "Needs",
+                "Behaviours",
+                "Pain points",
+                "Constraints",
+                "Contexts",
+                "Why?",
+                "Unknown",
+            ),
+        ),
+        (
+            "it",
+            (
+                "Archetipo",
+                "Fondamento",
+                "Rappresenta",
+                "Non rappresenta",
+                "Contesti coperti",
+                "Limiti delle evidenze",
+                "Descrizione",
+                "Obiettivi",
+                "Bisogni",
+                "Comportamenti",
+                "Difficoltà",
+                "Vincoli",
+                "Contesti",
+                "Perché?",
+                "Sconosciuto",
+            ),
+        ),
+    ],
+)
+def test_portable_text_localizes_declarations_persona_and_why_without_mutating_json(
+    language, labels
+):
+    document = portable_twins(sources())[0].document
+    original = deepcopy(document)
+    text = twin_markdown(document, language=language)
+    assert all(label in text for label in labels)
+    assert text.count("<summary>") >= 12
+    assert "PERSONA_PROFILE" in text or "PROJECT_BRIEF" in text or "OWNER_INPUT" in text
+    assert document == original
+    assert "view" not in document["twin"]
+
+
+def test_derived_api_view_is_ignored_when_reading_canonical_modeling_stage():
+    version = sources().modeling
+    document = version.to_snapshot()
+    projected = deepcopy(document)
+    for twin in projected["snapshot"]["twin_versions"]:
+        twin["view"] = {"basis": "PROVISIONAL", "persona": {}}
+    parsed = modeling_version_from_document(projected)
+    assert parsed == version
+    assert parsed.content_hash == document["content_hash"]
+    assert "view" in projected["snapshot"]["twin_versions"][0]

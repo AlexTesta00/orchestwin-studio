@@ -60,6 +60,7 @@ def _persona_of(
         if (
             persona["persona_id"] == reference["persona_id"]
             and persona["version_number"] == reference["version_number"]
+            and persona["content_hash"] == reference["content_hash"]
         ):
             return persona
     raise ValueError("user twin references a persona version outside its snapshot")

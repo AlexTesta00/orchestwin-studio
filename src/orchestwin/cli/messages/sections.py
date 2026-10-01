@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "sections.archetypes_behind": {
+        "it": "{sections} da aggiornare: gli archetipi sono cambiati. Prepara i twin nuovi e approvali con `ut init`, poi aggiorna le sezioni.",
+        "en": "{sections} to update: the archetypes changed. Prepare the new twins and approve them with `ut init`, then update the sections.",
+    },
+    "sections.reason_prepare_twins": {
+        "it": "gli archetipi sono cambiati: prepara e approva i twin aggiornati; lo storico resta disponibile",
+        "en": "the archetypes changed: prepare and approve the updated twins; the history remains available",
+    },
     "sections.help": {
         "it": "Mostra lo stato delle sezioni del progetto e aggiorna quelle rimaste indietro",
         "en": "Show the state of the sections of the project and update the ones left behind",

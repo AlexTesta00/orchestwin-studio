@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -53,6 +54,7 @@ def loader(package: KnowledgeSources, *, with_feedback: bool = True, **overrides
         "team_proposal_service": FakeQuery(package.team, "current"),
         "agent_team_service": FakeQuery(package.team_gate, "current_gate"),
         "user_modeling_services": SimpleNamespace(
+            commands=SimpleNamespace(snapshot_context_is_current=AsyncMock(return_value=True)),
             queries=FakeQuery(package.modeling, "current_snapshot"),
             gates=FakeQuery(package.modeling_gate, "current_gate"),
         ),
@@ -104,6 +106,22 @@ def test_loader_without_feedback_service_exports_an_empty_history() -> None:
     loaded = load(loader(sources(), with_feedback=False))
 
     assert loaded.feedback == KnowledgeFeedback()
+
+
+def test_changed_archetypes_end_the_current_export_after_the_team():
+    package = sources()
+    service = loader(package)
+    check = service.user_modeling_services.commands.snapshot_context_is_current
+    check.return_value = False
+    loaded = load(service)
+    assert loaded.present_stages == ("brief", "team")
+    assert loaded.modeling is None and loaded.requirements is None and loaded.design is None
+    check.assert_awaited_once_with(
+        owner_user_id=OWNER_ID, project_id=PROJECT_ID, snapshot=package.modeling
+    )
+    assert service.requirements_query_service.calls == []
+    assert service.design_query_service.calls == []
+    assert service.feedback_query_service.calls == []
 
 
 def stage_services(service: KnowledgeSourceLoader) -> dict[str, tuple[FakeQuery, FakeQuery]]:

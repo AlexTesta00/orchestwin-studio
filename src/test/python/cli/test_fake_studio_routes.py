@@ -259,11 +259,17 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/requirements/twin-alignment"),
         ("GET", project + "/design/requirements-alignment"),
         ("POST", project + "/design/requirements-alignment"),
+        ("GET", project + "/user-modeling/archetypes"),
+        ("POST", project + "/user-modeling/archetypes"),
+        ("PATCH", project + "/user-modeling/archetypes/{persona_id}"),
+        ("DELETE", project + "/user-modeling/archetypes/{persona_id}"),
+        ("GET", project + "/team/context-alignment"),
+        ("POST", project + "/team/context-alignment"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 133
+    assert len(ROUTES) == 139
 
 
 class _Client:

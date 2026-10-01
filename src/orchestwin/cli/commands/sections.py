@@ -105,7 +105,11 @@ def update(
         for line in blocked_lines(context, found):
             console.write(line)
         return 1
-    console.say("sections.behind", sections=names(context, alignment.sections))
+    archetypes_changed = any("ARCHETYPES_CHANGED" in section.reasons for section in found.sections)
+    console.say(
+        "sections.archetypes_behind" if archetypes_changed else "sections.behind",
+        sections=names(context, alignment.sections),
+    )
     if alignment.uncovered_codes:
         console.say("sections.uncovered", codes=joined(alignment.uncovered_codes))
     for line in blocked_lines(context, found):
@@ -193,7 +197,12 @@ def sentences(context: CommandContext, found: Sections) -> list[str]:
     if told is not None:
         lines.append(told)
     if alignment.sections and alignment.available:
-        behind = context.text("sections.behind", sections=names(context, alignment.sections))
+        key = (
+            "sections.archetypes_behind"
+            if any(sections_api.ARCHETYPES_CHANGED in section.reasons for section in found.sections)
+            else "sections.behind"
+        )
+        behind = context.text(key, sections=names(context, alignment.sections))
         lines.append(f"{behind} {context.text('sections.behind_command')}")
         if alignment.uncovered_codes:
             lines.append(
@@ -225,6 +234,8 @@ def alignable_lines(context: CommandContext, found: Sections, *, upstream_told: 
     lines: list[str] = []
     told = upstream_told
     for section in found.behind(sections_api.ALIGNABLE):
+        if section.key == sections_api.TEAM:
+            continue
         if section.blocked is None:
             continue
         if section.blocked == sections_api.UPSTREAM_NOT_READY:
@@ -334,6 +345,8 @@ def reason_text(
 
 
 def solver(found: Sections | None, key: str, block: str | None) -> str | None:
+    if block == sections_api.PREPARE_TWINS:
+        return SOLVE_INIT
     if block == sections_api.PREPARE_AGAIN:
         return SOLVE_INIT
     if block == sections_api.REQUIREMENT_NO_LONGER_AVAILABLE:

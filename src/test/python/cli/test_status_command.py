@@ -859,6 +859,46 @@ def test_all_projects_mark_the_linked_one_in_italian_json(tmp_path: Path) -> Non
     ]
 
 
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_all_projects_use_the_available_sections_gesture_in_text_and_json(
+    tmp_path: Path, language: str
+) -> None:
+    signed_in_folder(tmp_path)
+    project = projects_list()[0] | {"current_stage": "TEAM", "next_action": "UPDATE_SECTIONS"}
+    table = ScriptedTransport().expect("GET", f"{API}/projects", body=[project])
+    as_json = ScriptedTransport().expect("GET", f"{API}/projects", body=[project])
+    run = run_ut(["--lang", language, "status", "--all"], tmp_path, transport=table)
+    document = json.loads(run_ut(["status", "--all", "--json"], tmp_path, transport=as_json).output)
+    assert run.status == 0
+    assert "`ut" in run.output and "sections update`." in run.output
+    assert "ut package publish" not in run.output
+    assert document["projects"][0]["next_action"] == "UPDATE_SECTIONS"
+    assert document["projects"][0]["next_command"] == "ut sections update"
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+@pytest.mark.parametrize(
+    ("stage", "action", "command"),
+    [
+        ("USER_TWINS", "PREPARE_TWINS", "ut init"),
+        ("DESIGN", "PREPARE_DESIGN", "ut design regenerate"),
+    ],
+)
+def test_all_projects_name_preparation_of_obsolete_artifacts(
+    tmp_path: Path, language: str, stage: str, action: str, command: str
+) -> None:
+    signed_in_folder(tmp_path)
+    project = projects_list()[0] | {"current_stage": stage, "next_action": action}
+    table = ScriptedTransport().expect("GET", f"{API}/projects", body=[project])
+    as_json = ScriptedTransport().expect("GET", f"{API}/projects", body=[project])
+    run = run_ut(["--lang", language, "status", "--all"], tmp_path, transport=table)
+    document = json.loads(run_ut(["status", "--all", "--json"], tmp_path, transport=as_json).output)
+    assert run.status == 0
+    assert ("Prepara di nuovo" if language == "it" else "Prepare the") in run.output
+    assert document["projects"][0]["next_action"] == action
+    assert document["projects"][0]["next_command"] == command
+
+
 def test_all_projects_in_a_table_mark_this_folder(tmp_path: Path) -> None:
     signed_in_folder(tmp_path)
     transport = ScriptedTransport().expect("GET", f"{API}/projects", body=projects_list())
@@ -1639,8 +1679,43 @@ def test_the_json_ends_with_the_object_of_the_sections_as_it_is(tmp_path: Path) 
 
     assert list(document)[-1] == "sections"
     assert document["sections"] == extra
-    assert document["next_command"] == "ut package publish"
+    assert document["next_action"] == "UPDATE_SECTIONS"
+    assert document["next_command"] == "ut sections update"
     transport.assert_done()
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+@pytest.mark.parametrize(
+    ("stage", "block", "action", "command"),
+    [
+        ("USER_TWINS", "PREPARE_TWINS", "PREPARE_TWINS", "ut init"),
+        ("DESIGN", "REQUIREMENT_NO_LONGER_AVAILABLE", "PREPARE_DESIGN", "ut design regenerate"),
+        ("DESIGN", "PREPARE_AGAIN", "PREPARE_DESIGN", "ut design regenerate"),
+    ],
+)
+def test_status_derives_preparation_from_a_blocked_obsolete_section(
+    tmp_path: Path, language: str, stage: str, block: str, action: str, command: str
+) -> None:
+    signed_in_folder(tmp_path)
+    rows = [dict(item) for item in ALL_FINE["sections"]]
+    target = next(item for item in rows if item["key"] == stage)
+    target.update(
+        state="TO_UPDATE",
+        blocked=block,
+        reasons=["ARCHETYPES_CHANGED" if stage == "USER_TWINS" else "REQUIREMENTS_CHANGED"],
+    )
+    found = sections_document(*rows, available=False, aligned=(stage,))
+    table = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=found)
+    as_json = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=found)
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=table)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+    assert run.status == 0
+    assert document["current_stage"] == stage
+    assert document["next_action"] == action
+    assert document["next_command"] == command
+    assert ("Prepara di nuovo" if language == "it" else "Prepare the") in run.output
+    assert command in run.output
+    assert "ut package publish" not in run.output
 
 
 @pytest.mark.parametrize(

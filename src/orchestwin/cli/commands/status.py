@@ -221,6 +221,9 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
     stage = found.project.get("current_stage")
     action = found.project.get("next_action")
     current = project_api.current_stage(found.steps)
+    section_progress = _section_progress(found.sections)
+    if section_progress is not None:
+        stage, action = section_progress
     return Report(
         source=FROM_STUDIO,
         reason=None,
@@ -295,6 +298,9 @@ def steps_table(context: CommandContext, steps: tuple[project_api.StepState, ...
 
 def next_lines(context: CommandContext, report: Report) -> None:
     console = context.console
+    if report.next_action in {project_api.PREPARE_TWINS, project_api.PREPARE_DESIGN}:
+        console.say("status.next", action=next_action_text(context, report.next_action))
+        return
     found = report.sections
     if found is not None and any(
         section.key != sections_api.PACKAGE or section.blocked is None
@@ -440,10 +446,39 @@ def local_tests(project: ProjectFolder) -> AcceptanceSummary | None:
 
 
 def next_action_text(context: CommandContext, code: str) -> str:
+    if code == project_api.UPDATE_SECTIONS:
+        return context.text("status.next_update_sections")
+    if code == project_api.PREPARE_TWINS:
+        return context.text("status.next_prepare_twins")
+    if code == project_api.PREPARE_DESIGN:
+        return context.text("status.next_prepare_design")
     key = f"common.next_{code.lower()}"
     if code and known(key):
         return context.text(key)
     return context.text("common.next_unknown", code=code)
+
+
+def _section_progress(found: Sections | None) -> tuple[str, str] | None:
+    if found is None:
+        return None
+    for section in found.sections:
+        if section.key == sections_api.PACKAGE:
+            break
+        if section.state in {sections_api.NOT_STARTED, sections_api.IN_PROGRESS}:
+            return None
+        if not section.behind:
+            continue
+        if found.alignment.available:
+            return section.key, project_api.UPDATE_SECTIONS
+        if section.blocked == "PREPARE_TWINS":
+            return sections_api.USER_TWINS, project_api.PREPARE_TWINS
+        if section.key == sections_api.DESIGN and section.blocked in {
+            "REQUIREMENT_NO_LONGER_AVAILABLE",
+            "PREPARE_AGAIN",
+        }:
+            return sections_api.DESIGN, project_api.PREPARE_DESIGN
+        return section.key, project_api.STAGE_ACTIONS[section.key]
+    return None
 
 
 def _projects(context: CommandContext, project: ProjectFolder | None, *, as_json: bool) -> int:

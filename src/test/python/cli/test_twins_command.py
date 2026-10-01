@@ -55,6 +55,10 @@ LABELS = {
     "technical_literacy": "Technical literacy",
     "risk_sensitivity": "Risk sensitivity",
     "assumptions": "Assumptions",
+    "description": "Description",
+    "represents": "Represents",
+    "does_not_represent": "Does not represent",
+    "evidence_gaps": "Evidence gaps",
 }
 SECTIONS = (
     ("Goals", ("goals",)),
@@ -452,6 +456,10 @@ def test_show_prints_the_twin_of_the_studio_with_every_observation(tmp_path: Pat
     head = [name, "=" * len(name), *([] if role == name else [f"Role: {role}"]), *sections]
     lines = run.output.splitlines()
     assert run.status == 0
+    assert "Basis: Provisional" in lines
+    assert "Does not represent: Unknown [Unknown]" in lines
+    assert "Evidence gaps: Unknown [Unknown]" in lines
+    lines = lines[:2] + lines[9:]
     assert lines[: len(head) + 2] == [*head, "", "Every observation, with its origin"]
     observations = version["profile"]["observations"]
     items = observation_items(run.output)
@@ -475,7 +483,7 @@ def test_show_prints_every_part_of_a_twin_and_the_origin_of_each_observation(
     both = run_ut(["twins"], tmp_path, transport=transport, variables=WIDE)
 
     assert (english.status, english.errors) == (0, "")
-    assert english.output.splitlines() == [
+    assert english.output.splitlines()[:2] + english.output.splitlines()[9:] == [
         "Marta Twin",
         "==========",
         "Role: Cameriera del turno serale",
@@ -511,7 +519,7 @@ def test_show_prints_every_part_of_a_twin_and_the_origin_of_each_observation(
         "- Mood: Calma (origin: NEW_STATUS)",
     ]
     assert italian.status == 0
-    assert italian.output.splitlines() == [
+    assert italian.output.splitlines()[:2] + italian.output.splitlines()[9:] == [
         "Marta Twin",
         "==========",
         "Ruolo: Cameriera del turno serale",

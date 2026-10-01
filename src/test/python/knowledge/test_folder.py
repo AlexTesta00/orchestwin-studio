@@ -122,7 +122,9 @@ def overview_of(index: str, heading: str) -> list[str]:
 
 def body_of(text: str) -> str:
     lines = text.splitlines()
-    return "\n".join(lines[3:] if lines[2].startswith(VERSION_LINES) else lines)
+    return "\n".join(
+        lines[3:] if lines[2].startswith((*VERSION_LINES, "User Twin versione ")) else lines
+    )
 
 
 def with_requirements(specification: dict[str, object], must: int) -> dict[str, object]:
@@ -432,6 +434,10 @@ def test_the_text_views_show_codes_and_names_instead_of_identifiers(make) -> Non
 
     for path in views:
         body = body_of(built.files[path])
+        if path.startswith("twins/"):
+            body = re.sub(
+                r"<details><summary>(?:Why\?|Perché\?).*?</details>", "", body, flags=re.DOTALL
+            )
         assert IDENTITY.search(body) is None, path
         assert DIGEST.search(body) is None, path
     assert "content hash `" in built.files["requirements/requirements.md"].splitlines()[2]

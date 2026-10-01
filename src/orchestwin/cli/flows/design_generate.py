@@ -307,6 +307,8 @@ def start_design(
     project: ProjectFolder,
     state: DesignState,
     prices: Prices,
+    *,
+    route: str | None = None,
 ) -> bool:
     console = context.console
     generated = state.generated
@@ -323,14 +325,31 @@ def start_design(
         context,
         client,
         state.project_id,
-        design_api.proposals_path(state.project_id),
+        design_api.proposals_path(state.project_id) if route is None else route,
         label=context.text("design.label_proposal"),
     )
     if result.status_code >= 400:
         raise_failure(failure_of(result.status_code, result.body))
+    if isinstance(result.body, Mapping) and result.body.get("status") == REJECTED:
+        issue = result.body.get("issue")
+        proposal_issue = result.body.get(PROPOSAL_ISSUE)
+        raise_failure(
+            ApiFailure(
+                issue if isinstance(issue, str) and issue else PROPOSAL_REJECTED,
+                http_status=409,
+                detail=result.body,
+                values={"reason": proposal_issue} if isinstance(proposal_issue, str) else None,
+            )
+        )
     fresh = design_state.read_state(client, project)
     if fresh.version is None:
         raise ApiFailure("API_FAILURE", http_status=result.status_code)
+    if (
+        route is not None
+        and state.version is not None
+        and fresh.version.get("id") == state.version.get("id")
+    ):
+        raise CliError(CONTEXT_CHANGED)
     design_state.show_alternatives(context, fresh, mockups=False)
     design_state.show_verdicts(context, fresh)
     if not generated:

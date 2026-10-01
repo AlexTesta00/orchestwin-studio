@@ -444,6 +444,7 @@ class ProfileObservation(_Record):
 
 
 class PersonaProfile(_Record):
+    archived: bool = False
     schema_version: Literal[PERSONA_PROFILE_SCHEMA_VERSION] = Field(
         description="Version of the persona profile format."
     )

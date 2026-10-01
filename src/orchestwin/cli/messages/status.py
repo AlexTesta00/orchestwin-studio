@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "status.next_prepare_twins": {
+        "it": "Prepara di nuovo i twin con `ut init`.",
+        "en": "Prepare the twins again with `ut init`.",
+    },
+    "status.next_prepare_design": {
+        "it": "Prepara di nuovo il design con `ut design regenerate`.",
+        "en": "Prepare the design again with `ut design regenerate`.",
+    },
+    "status.next_update_sections": {
+        "it": "Aggiorna le sezioni con `ut sections update`.",
+        "en": "Update the sections with `ut sections update`.",
+    },
     "status.help": {
         "it": "Mostra a che punto è il progetto",
         "en": "Show where the project stands",

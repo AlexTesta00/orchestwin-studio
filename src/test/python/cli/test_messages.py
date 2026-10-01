@@ -220,6 +220,9 @@ def test_no_key_of_the_runtime_files_is_unused() -> None:
 
 def test_every_next_action_of_the_studio_names_a_command() -> None:
     assert set(NEXT_COMMANDS) == {action.value for action in ProjectNextAction}
+    for action, command in NEXT_COMMANDS.items():
+        for language in LANGUAGES:
+            assert f"`{command}`" in text(f"common.next_{action.lower()}", language)
 
 
 def test_text_fills_the_placeholders_and_survives_mistakes() -> None:

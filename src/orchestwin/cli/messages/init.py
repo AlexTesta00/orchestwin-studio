@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "init.twins_manage": {"it": "Gestisco gli archetipi", "en": "Manage the archetypes"},
+    "init.errors.USER_TWIN_REVISION_PENDING": {
+        "it": "Decidi prima la revisione del User Twin in attesa.",
+        "en": "Decide the pending User Twin revision first.",
+    },
     "init.help": {
         "it": "Crea un progetto e lo porta dall'idea alla Definizione approvata",
         "en": "Create a project and take it from the idea to an approved Definition",
@@ -583,48 +588,48 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Data exchanged with outside services.",
     },
     "init.profiles_label": {
-        "it": "Propongo i profili degli utenti",
-        "en": "Proposing the user profiles",
+        "it": "Propongo gli archetipi",
+        "en": "Proposing the archetypes",
     },
     "init.profiles_intro": {
-        "it": "Profili di utenti tipo proposti dal modello: {count}. Per ciascuno scegli se "
-        "confermarlo o scartarlo: dai profili confermati nascono gli User Twin.",
-        "en": "Profiles of typical users proposed by the model: {count}. For each one, choose "
-        "whether to confirm or discard it: the User Twins are made from the confirmed profiles.",
+        "it": "Archetipi proposti dal modello: {count}. Per ciascuno scegli se "
+        "confermarlo o scartarlo: dagli archetipi confermati nascono gli User Twin.",
+        "en": "Archetypes proposed by the model: {count}. For each one, choose "
+        "whether to confirm or discard it: the User Twins are made from the confirmed archetypes.",
     },
     "init.profile_heading": {
-        "it": "Profilo {number} di {total}: {name}",
-        "en": "Profile {number} of {total}: {name}",
+        "it": "Archetipo {number} di {total}: {name}",
+        "en": "Archetype {number} of {total}: {name}",
     },
     "init.profile_confirmed": {
-        "it": "Profilo {number} di {total}, {name}: già confermato.",
-        "en": "Profile {number} of {total}, {name}: already confirmed.",
+        "it": "Archetipo {number} di {total}, {name}: già confermato.",
+        "en": "Archetype {number} of {total}, {name}: already confirmed.",
     },
     "init.profile_rejected": {
-        "it": "Profilo {number} di {total}, {name}: già scartato.",
-        "en": "Profile {number} of {total}, {name}: already discarded.",
+        "it": "Archetipo {number} di {total}, {name}: già scartato.",
+        "en": "Archetype {number} of {total}, {name}: already discarded.",
     },
     "init.profile_confirm": {
-        "it": "Confermi questo profilo?",
-        "en": "Do you confirm this profile?",
+        "it": "Confermi questo archetipo?",
+        "en": "Do you confirm this archetype?",
     },
     "init.profile_needed": {
-        "it": "Serve almeno un profilo confermato per creare gli User Twin: questo è "
+        "it": "Serve almeno un archetipo confermato per creare gli User Twin: questo è "
         "l'ultimo, quindi va confermato.",
-        "en": "At least one confirmed profile is needed to create the User Twins: this is the "
+        "en": "At least one confirmed archetype is needed to create the User Twins: this is the "
         "last one, so it has to be confirmed.",
     },
     "init.profile_reason": {
-        "it": "Perché lo scarti? Una riga, resta scritta con il profilo:",
-        "en": "Why do you discard it? One line, it stays written with the profile:",
+        "it": "Perché lo scarti? Una riga, resta scritta con l'archetipo:",
+        "en": "Why do you discard it? One line, it stays written with the archetype:",
     },
     "init.profile_reason_default": {
         "it": "Non rappresenta gli utenti del progetto.",
         "en": "It does not represent the users of the project.",
     },
     "init.twins_label": {
-        "it": "Creo gli User Twin dai profili confermati",
-        "en": "Creating the User Twins from the confirmed profiles",
+        "it": "Creo gli User Twin dagli archetipi confermati",
+        "en": "Creating the User Twins from the confirmed archetypes",
     },
     "init.twins_heading": {
         "it": "Gli User Twin (versione {version}). User Twin creati: {count}.",

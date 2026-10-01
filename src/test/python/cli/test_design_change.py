@@ -507,7 +507,7 @@ def test_a_design_behind_the_new_requirements_names_the_gesture(
         guided = session.ut(
             "--yes",
             "design",
-            answers=["change", "Bigger button", "", "", "leave"],
+            answers=["leave"],
             language=language,
         )
         number = version_number(session)
@@ -517,7 +517,10 @@ def test_a_design_behind_the_new_requirements_names_the_gesture(
     assert run.errors == messages.text("design.behind", language) + "\n"
     assert "`ut sections update`" in run.errors
     assert guided.status == 0, guided.errors
-    assert guided.errors == messages.text("design.behind", language) + "\n"
+    assert guided.errors == ""
+    assert messages.text("design.behind", language) in guided.output
+    assert messages.text("design.menu_update_sections", language) in guided.output
+    assert messages.text("design.menu_change", language) not in guided.output
     assert (number, started) == (2, 0)
 
 
@@ -530,15 +533,15 @@ def test_a_design_that_cites_a_removed_requirement_says_why_it_cannot_follow(
         sections = session.project.sections()
 
     design = next(item for item in sections["sections"] if item["key"] == "DESIGN")
-    reason = messages.text(
-        "sections.reason_requirement_no_longer_available", "en", codes=", ".join(design["codes"])
-    )
-    blocked = messages.text("sections.blocked", "en", section="Design & Evaluation", reason=reason)
     assert run.status == 1
-    assert run.errors == messages.text("design.behind_blocked", "en", blocked=blocked) + "\n"
-    assert run.errors.endswith(
-        "regenerate the alternatives in the Design & Evaluation step of the web Studio.\n"
+    assert (
+        run.errors
+        == messages.text(
+            "design.recovery_requirement_removed", "en", codes=", ".join(design["codes"])
+        )
+        + "\n"
     )
+    assert "`ut design regenerate`" in run.errors
     assert "ut sections update" not in run.errors
     assert "ut design change" not in run.errors
     assert "ask for a change" not in run.errors

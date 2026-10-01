@@ -905,18 +905,26 @@ def test_a_requirement_removed_under_the_design_stops_the_gesture_before_it_is_s
     assert states["DESIGN"] == "TO_UPDATE"
 
 
-def test_a_new_brief_asks_to_prepare_the_perspectives_again(tmp_path: Path) -> None:
+def test_a_new_brief_with_valid_choices_reanchors_the_perspectives_and_downstream(
+    tmp_path: Path,
+) -> None:
     with session(tmp_path, language="it") as current:
         current.project.seed_brief_change()
-        run = current.ut("sections", "update", language="it")
+        before = current.twin_ids()
+        run = current.ut("--yes", "sections", "update", language="it")
         gestures = current.project.alignments()
-
-    assert run.status == 1
-    assert run.output.splitlines() == [
-        "Prospettive non si aggiorna da sola: il brief è cambiato: prepara di nuovo le "
-        "prospettive. Lancia `ut init`."
+        after = current.twin_ids()
+        states = current.states()
+    assert run.status == 0, run.output
+    assert before == after
+    assert len(gestures) == 1
+    assert [item["key"] for item in gestures[0]["results"]] == [
+        "TEAM",
+        "USER_TWINS",
+        "REQUIREMENTS",
+        "DESIGN",
     ]
-    assert gestures == []
+    assert all(states[key] == "FINE" for key in ("BRIEF", "TEAM", "USER_TWINS", "REQUIREMENTS"))
 
 
 @pytest.mark.parametrize(("answers", "status"), [(["n"], 1), ([], 1)])

@@ -257,7 +257,7 @@ def test_the_issue_of_a_gesture_names_its_obstacle(issue: str | None, block: str
 def test_the_copied_keys_are_those_of_the_studio() -> None:
     assert tuple(stage.value for stage in ProjectStage) == sections_api.SECTION_KEYS
     assert set(sections_api.STAGE_OF) == set(sections_api.SECTION_KEYS)
-    assert sections_api.ALIGNABLE == ("USER_TWINS", "REQUIREMENTS", "DESIGN")
+    assert sections_api.ALIGNABLE == ("TEAM", "USER_TWINS", "REQUIREMENTS", "DESIGN")
     assert tuple(item.value for item in SectionState) == sections_api.STATES
     assert tuple(item.value for item in SectionReason) == (
         *sections_api.BEHIND_REASONS,

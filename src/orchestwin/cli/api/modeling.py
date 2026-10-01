@@ -86,7 +86,44 @@ def approved(document: Mapping[str, object]) -> bool:
 
 
 def current_snapshot(document: Mapping[str, object]) -> bool:
-    return document.get("snapshot_exists") is True and document.get("context_current") is not False
+    return (
+        document.get("snapshot_exists") is True
+        and document.get("context_current") is not False
+        and document.get("archetypes_current") is not False
+    )
+
+
+def archetypes(client: StudioClient, project_id: str) -> list[Mapping[str, object]]:
+    document = client.get(f"{modeling_path(project_id)}/archetypes")
+    return (
+        [item for item in document if isinstance(item, Mapping)]
+        if isinstance(document, list)
+        else []
+    )
+
+
+def create_archetype(client: StudioClient, project_id: str, body: Mapping[str, object]) -> object:
+    return client.post(f"{modeling_path(project_id)}/archetypes", dict(body))
+
+
+def edit_archetype(
+    client: StudioClient, project_id: str, persona_id: str, body: Mapping[str, object]
+) -> object:
+    return client.patch(f"{modeling_path(project_id)}/archetypes/{persona_id}", dict(body))
+
+
+def archive_archetype(
+    client: StudioClient, project_id: str, persona_id: str, version: int
+) -> object:
+    from orchestwin.cli.client import payload
+
+    return payload(
+        client.request(
+            "DELETE",
+            f"{modeling_path(project_id)}/archetypes/{persona_id}",
+            body={"based_on_version_number": version},
+        )
+    )
 
 
 def profile(version: Mapping[str, object]) -> Mapping[str, object]:

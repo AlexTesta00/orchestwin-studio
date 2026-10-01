@@ -1,6 +1,46 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "twins.help_persona": {
+        "it": "Mostra la Persona derivata dal User Twin",
+        "en": "Show the Persona derived from the User Twin",
+    },
+    "twins.option_why": {
+        "it": "mostra valore, stato, motivazione e fonti del campo",
+        "en": "show the field's value, status, rationale and sources",
+    },
+    "twins.option_json": {"it": "mostra i dati JSON", "en": "show the JSON data"},
+    "twins.persona_heading": {"it": "Persona · {name}", "en": "Persona · {name}"},
+    "twins.basis": {"it": "Fondamento: {basis}", "en": "Basis: {basis}"},
+    "twins.basis_provisional": {"it": "Provvisorio", "en": "Provisional"},
+    "twins.basis_evidence_based": {"it": "Fondato su evidenze", "en": "Evidence based"},
+    "twins.provisional_note": {
+        "it": "Il brief e le scelte del proprietario non sono evidenze su utenti reali.",
+        "en": "The brief and the owner's choices are not evidence about real users.",
+    },
+    "twins.status_evidenced": {"it": "Evidenziato", "en": "Evidenced"},
+    "twins.status_inferred": {"it": "Dedotto", "en": "Inferred"},
+    "twins.status_hypothesized": {"it": "Ipotizzato", "en": "Hypothesized"},
+    "twins.status_contested": {"it": "Contestato", "en": "Contested"},
+    "twins.status_unknown": {"it": "Sconosciuto", "en": "Unknown"},
+    "twins.persona_description": {"it": "Descrizione", "en": "Description"},
+    "twins.persona_goals": {"it": "Obiettivi", "en": "Goals"},
+    "twins.persona_needs": {"it": "Bisogni", "en": "Needs"},
+    "twins.persona_behaviours": {"it": "Comportamenti", "en": "Behaviours"},
+    "twins.persona_pain_points": {"it": "Difficoltà", "en": "Pain points"},
+    "twins.persona_constraints": {"it": "Vincoli", "en": "Constraints"},
+    "twins.persona_contexts": {"it": "Contesti", "en": "Contexts"},
+    "twins.persona_represents": {"it": "Chi rappresenta", "en": "Represents"},
+    "twins.persona_does_not_represent": {"it": "Chi non rappresenta", "en": "Does not represent"},
+    "twins.persona_evidence_gaps": {"it": "Lacune nelle evidenze", "en": "Evidence gaps"},
+    "twins.field_description": {"it": "Descrizione", "en": "Description"},
+    "twins.field_represents": {"it": "Chi rappresenta", "en": "Represents"},
+    "twins.field_does_not_represent": {"it": "Chi non rappresenta", "en": "Does not represent"},
+    "twins.field_evidence_gaps": {"it": "Lacune nelle evidenze", "en": "Evidence gaps"},
+    "twins.origin_contested": {"it": "contestato", "en": "contested"},
+    "twins.why": {"it": "Perché?", "en": "Why?"},
+    "twins.no_rationale": {"it": "Motivazione non fornita.", "en": "Rationale not provided."},
+    "twins.no_sources": {"it": "Fonti non fornite.", "en": "Sources not provided."},
     "twins.help": {
         "it": "Parla con gli User Twin del progetto, chiedi loro di rivedere il design e segui "
         "quello che imparano durante lo sviluppo",
