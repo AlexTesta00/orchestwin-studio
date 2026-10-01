@@ -77,8 +77,12 @@ def test_twin_text_states_identity_origin_persona_and_observations() -> None:
     text = twin_markdown(twin.document)
 
     assert text.startswith(f"# {profile['name']}\n")
-    assert f"User twin {version['twin_id']} version {version['version_number']}" in text
-    assert f"of the project {PROJECT_NAME}" in text
+    assert (
+        f"User twin version {version['version_number']}, content hash `{version['content_hash']}`, "
+        f"of the project {PROJECT_NAME}. Validation status"
+    ) in text
+    assert version["twin_id"] not in text
+    assert twin.document["origin"]["project_id"] not in text
     assert f"Validation status {profile['validation_status']}" in text
     assert "A user twin is a model of a kind of user, not a person" in text
     assert "## Persona" in text

@@ -79,6 +79,13 @@ COMMON_FILES = frozenset(
     }
 )
 OTHER_PROJECT = "99999999-9999-4999-8999-999999999999"
+OVERVIEW_LABELS = (
+    ("- Progetto", "brief"),
+    ("- Per chi è", "twins"),
+    ("- Cosa deve fare", "requirements"),
+    ("- Design scelto", "design"),
+    ("- Come si verifica", "requirements"),
+)
 REQUIREMENT_DIAGRAMS = (
     "requirements/diagrams/use-cases.mmd",
     "requirements/diagrams/requirements.mmd",
@@ -247,6 +254,27 @@ def test_the_index_of_a_partial_folder_names_the_next_step(through: str) -> None
     assert "The feedback of the twins on the design comes into this folder" in index
     assert "`design/design.json`" not in index
     assert f"`{stage_document(through)}`" in index
+
+
+@pytest.mark.parametrize("through", [*PARTIAL, "design"])
+def test_the_overview_of_a_folder_holds_a_line_for_each_approved_step(through: str) -> None:
+    present = STAGES[: STAGES.index(through) + 1]
+    folder = partial_folder(through)
+
+    index = folder.files[KNOWLEDGE_INDEX]
+    overview = index.split("\n## In breve\n\n", 1)[1].split("\n\n", 1)[0].splitlines()
+
+    assert index.index("## In breve") < index.index("## What this folder is")
+    assert [line.split(":", 1)[0] for line in overview if line.startswith("- ")] == [
+        label for label, stage in OVERVIEW_LABELS if stage in present
+    ]
+    assert overview[0] == (
+        "- Progetto: Lista ospiti workshop. Una pagina web per gestire la lista degli ospiti di "
+        "un workshop di comunita."
+    )
+    if "twins" not in present:
+        assert overview == overview[:1]
+    assert verify_folder(folder.files).present_stages == present
 
 
 def test_the_index_of_a_folder_up_to_the_requirements_points_to_them() -> None:

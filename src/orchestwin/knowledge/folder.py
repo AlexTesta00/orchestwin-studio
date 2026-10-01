@@ -25,6 +25,7 @@ from orchestwin.knowledge.documents import (
     design_markdown,
     index_markdown,
     mockups_markdown,
+    overview_lines,
     requirements_markdown,
     team_markdown,
     twin_markdown,
@@ -69,6 +70,7 @@ from orchestwin.knowledge.state_documents import (
     learning_lines,
     stale_reviews,
     state_document,
+    state_language,
     state_markdown,
     test_lines,
     test_reviews_document,
@@ -235,9 +237,13 @@ def _views(
     diagrams: Iterable[Diagram],
 ) -> str:
     return views_markdown(
-        tables=[_relative(path, stage.value) for path in tables if path.startswith(stage.value)],
+        tables=[
+            {"title": _table_title(path), "path": _relative(path, stage.value)}
+            for path in tables
+            if path.startswith(stage.value)
+        ],
         diagrams=[
-            {**diagram.to_snapshot(), "path": _relative(diagram.path, stage.value)}
+            {"title": diagram.title, "path": _relative(diagram.path, stage.value)}
             for diagram in diagrams
             if diagram.stage is stage
         ],
@@ -491,6 +497,18 @@ def folder_manifest(
     }
 
 
+def folder_overview(sources: KnowledgeSources) -> list[str]:
+    present = sources.present_stages
+    return overview_lines(
+        language=state_language(folder_language(sources)),
+        project_name=sources.project_name,
+        brief=sources.payload("brief"),
+        twins=sources.payload("twins") if "twins" in present else None,
+        specification=sources.payload("requirements") if "requirements" in present else None,
+        package=_design_payload(sources),
+    )
+
+
 def build_knowledge_folder(
     sources: KnowledgeSources,
     *,
@@ -513,6 +531,7 @@ def build_knowledge_folder(
     files[KNOWLEDGE_MANIFEST] = json_text(manifest)
     files[KNOWLEDGE_INDEX] = index_markdown(
         manifest,
+        overview=folder_overview(sources),
         development=[
             *development_lines(sources),
             *test_lines(sources),
@@ -567,6 +586,7 @@ __all__ = [
     "folder_diagrams",
     "folder_language",
     "folder_manifest",
+    "folder_overview",
     "gate_document",
     "identifiers",
     "json_text",
