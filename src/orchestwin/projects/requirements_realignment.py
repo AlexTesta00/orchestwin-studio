@@ -15,12 +15,13 @@ from orchestwin.projects.requirements_specifications import (
     RequirementsSpecification,
     RequirementsSpecificationVersion,
 )
-from orchestwin.twins.user_twins import UserModelingSnapshotVersion
+from orchestwin.twins.user_twins import UserModelingSnapshotVersion, VersionedArtifactReference
 
 
 class RequirementsRealignmentIssue(StrEnum):
     ALREADY_ALIGNED = "REQUIREMENTS_ALREADY_ALIGNED"
     CONTEXT_CHANGED = "REQUIREMENTS_CONTEXT_CHANGED"
+    PROJECT_MISMATCH = "REQUIREMENTS_PROJECT_MISMATCH"
     TWIN_NO_LONGER_AVAILABLE = "TWIN_NO_LONGER_AVAILABLE"
 
 
@@ -57,11 +58,26 @@ def snapshot_reference(snapshot: UserModelingSnapshotVersion) -> RequirementsCon
     )
 
 
-def _same_artifact(reference: RequirementsContextReference, other) -> bool:
-    return (
-        reference.artifact_id == other.artifact_id
-        and reference.version_number == other.version_number
-        and reference.content_hash == other.content_hash
+def _context_reference(
+    kind: RequirementsContextKind, reference: VersionedArtifactReference
+) -> RequirementsContextReference:
+    return RequirementsContextReference(
+        kind=kind,
+        artifact_id=reference.artifact_id,
+        version_number=reference.version_number,
+        content_hash=reference.content_hash,
+    )
+
+
+def snapshot_brief_reference(snapshot: UserModelingSnapshotVersion) -> RequirementsContextReference:
+    return _context_reference(
+        RequirementsContextKind.PROJECT_BRIEF, snapshot.snapshot.project_brief_reference
+    )
+
+
+def snapshot_team_reference(snapshot: UserModelingSnapshotVersion) -> RequirementsContextReference:
+    return _context_reference(
+        RequirementsContextKind.AGENT_TEAM, snapshot.snapshot.agent_team_reference
     )
 
 
@@ -83,29 +99,26 @@ def requirements_are_aligned(
     specification: RequirementsSpecification,
     snapshot: UserModelingSnapshotVersion,
 ) -> bool:
-    return specification.user_modeling_reference == snapshot_reference(
-        snapshot
-    ) and specification.user_twin_references == snapshot_twin_references(snapshot)
+    modeling = snapshot.snapshot
+    return (
+        specification.project_brief_reference == snapshot_brief_reference(snapshot)
+        and specification.agent_team_reference == snapshot_team_reference(snapshot)
+        and specification.catalog_version == modeling.catalog_version
+        and specification.catalog_content_hash == modeling.catalog_content_hash
+        and specification.user_modeling_reference == snapshot_reference(snapshot)
+        and specification.user_twin_references == snapshot_twin_references(snapshot)
+    )
 
 
 def realignment_issue(
     specification: RequirementsSpecification,
     snapshot: UserModelingSnapshotVersion,
 ) -> RequirementsRealignmentIssue | None:
+    if specification.project_id != snapshot.project_id:
+        return RequirementsRealignmentIssue.PROJECT_MISMATCH
     if requirements_are_aligned(specification, snapshot):
         return RequirementsRealignmentIssue.ALREADY_ALIGNED
-    modeling = snapshot.snapshot
-    if (
-        specification.project_id != snapshot.project_id
-        or not _same_artifact(
-            specification.project_brief_reference, modeling.project_brief_reference
-        )
-        or not _same_artifact(specification.agent_team_reference, modeling.agent_team_reference)
-        or specification.catalog_version != modeling.catalog_version
-        or specification.catalog_content_hash != modeling.catalog_content_hash
-    ):
-        return RequirementsRealignmentIssue.CONTEXT_CHANGED
-    available = {version.twin_id for version in modeling.twin_versions}
+    available = {version.twin_id for version in snapshot.snapshot.twin_versions}
     if not referenced_twin_ids(specification) <= available:
         return RequirementsRealignmentIssue.TWIN_NO_LONGER_AVAILABLE
     return None
@@ -122,6 +135,10 @@ def realign_requirements(
     current = {reference.twin_id: reference for reference in references}
     return replace(
         specification,
+        project_brief_reference=snapshot_brief_reference(snapshot),
+        agent_team_reference=snapshot_team_reference(snapshot),
+        catalog_version=snapshot.snapshot.catalog_version,
+        catalog_content_hash=snapshot.snapshot.catalog_content_hash,
         user_modeling_reference=snapshot_reference(snapshot),
         user_twin_references=references,
         requirements=tuple(
@@ -174,6 +191,8 @@ __all__ = [
     "realignment_issue",
     "referenced_twin_ids",
     "requirements_are_aligned",
+    "snapshot_brief_reference",
     "snapshot_reference",
+    "snapshot_team_reference",
     "snapshot_twin_references",
 ]

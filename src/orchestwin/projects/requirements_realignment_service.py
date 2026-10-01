@@ -83,6 +83,16 @@ class RealignmentGateQueries(Protocol):
     async def current_gate(self, *, project_id: UUID, owner_user_id: UUID) -> HumanGate | None: ...
 
 
+class RealignmentContextQueries(Protocol):
+    async def snapshot_context_is_current(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        snapshot: UserModelingSnapshotVersion | None,
+    ) -> bool: ...
+
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -127,12 +137,14 @@ class RequirementsRealignmentService:
         uow_factory: RequirementsRealignmentUnitOfWorkFactory,
         user_modeling_queries: RealignmentSnapshotQueries,
         user_modeling_gates: RealignmentGateQueries,
+        user_modeling_context: RealignmentContextQueries | None = None,
         clock: Callable[[], datetime] = _utc_now,
         uuid_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         self._uow_factory = uow_factory
         self._user_modeling_queries = user_modeling_queries
         self._user_modeling_gates = user_modeling_gates
+        self._user_modeling_context = user_modeling_context
         self._clock = clock
         self._uuid_factory = uuid_factory
 
@@ -204,10 +216,17 @@ class RequirementsRealignmentService:
         gate = await self._user_modeling_gates.current_gate(
             project_id=project_id, owner_user_id=owner_user_id
         )
-        return snapshot, user_modeling_gate_is_currently_approved(gate, snapshot)
+        if not user_modeling_gate_is_currently_approved(gate, snapshot):
+            return snapshot, False
+        if self._user_modeling_context is None:
+            return snapshot, True
+        return snapshot, await self._user_modeling_context.snapshot_context_is_current(
+            owner_user_id=owner_user_id, project_id=project_id, snapshot=snapshot
+        )
 
 
 __all__ = [
+    "RealignmentContextQueries",
     "RealignmentDiffRepository",
     "RealignmentGateQueries",
     "RealignmentSnapshotQueries",
