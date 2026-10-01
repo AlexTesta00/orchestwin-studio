@@ -190,6 +190,7 @@ class DesignIterationApplication(ModelMockupApplication):
         requirements = await self.grounded_requirements(owner_user_id, project_id, current)
         language = requirements_language(requirements_view(requirements))
         observations = await self.observations(owner_user_id, project_id, current, alternative)
+        selected_agent_ids = await self.selected_agent_ids(owner_user_id, project_id, current)
         command_id = uuid4()
 
         def context_for(previous_answer, rejection):
@@ -200,6 +201,7 @@ class DesignIterationApplication(ModelMockupApplication):
                 version=current,
                 alternative=alternative,
                 requirements=requirements,
+                selected_agent_ids=selected_agent_ids,
                 observations=observations,
                 current_mockup=bound.mockup,
                 owner_request=request,

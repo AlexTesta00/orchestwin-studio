@@ -28,6 +28,7 @@ from orchestwin.projects.briefs import (
 )
 from orchestwin.twins.epistemics import (
     EpistemicStatus,
+    EvidenceSourceKind,
     HumanValidationRequirement,
     ObservationValueKind,
 )
@@ -427,3 +428,37 @@ def test_fake_user_twin_output_is_reproducible() -> None:
     assert first == second
     assert first.content_hash == second.content_hash
     assert first.proposals[0].profile.content_hash == second.proposals[0].profile.content_hash
+
+
+def test_fake_twin_declarations_follow_archetype_without_empirical_claims():
+    persona = confirmed_persona_version()
+    request = UserTwinProposalRequest(
+        project_id=PROJECT_ID,
+        persona_versions=(persona,),
+        project_brief_reference=BRIEF_REFERENCE,
+        agent_team_reference=TEAM_REFERENCE,
+        catalog_version=1,
+        catalog_content_hash=CATALOG_HASH,
+    )
+    result = asyncio.run(FakeDeterministicUserModelingAdapter().propose_user_twins(request))
+    profile = result.proposals[0].profile
+    description = profile.observation_for(UserTwinField.DESCRIPTION)
+    represents = profile.observation_for(UserTwinField.REPRESENTS)
+    exclusions = profile.observation_for(UserTwinField.DOES_NOT_REPRESENT)
+    gaps = profile.observation_for(UserTwinField.EVIDENCE_GAPS)
+    assert (
+        description.value.text == persona.profile.observation_for(PersonaField.SUMMARY).value.text
+    )
+    assert represents.value.items == (
+        persona.profile.observation_for(PersonaField.ROLE).value.text,
+    )
+    assert exclusions.value.kind is ObservationValueKind.UNKNOWN
+    assert "empirical" in gaps.value.items[0]
+    for observation in (description, represents, exclusions, gaps):
+        assert observation.epistemic_status is EpistemicStatus.MODEL_INFERRED
+        assert observation.human_validation is HumanValidationRequirement.REQUIRED
+        assert all(
+            r.source_kind is not EvidenceSourceKind.EMPIRICAL_RESEARCH
+            for r in observation.provenance.references
+        )
+        assert len(observation.rationale) <= 240

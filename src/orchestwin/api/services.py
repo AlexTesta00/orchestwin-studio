@@ -16,6 +16,8 @@ from orchestwin.agents.proposals import (
     LocalTeamProposalApplicationService,
     TeamProposalApplicationService,
 )
+from orchestwin.agents.realignment_persistence import build_team_realignment_service
+from orchestwin.agents.realignment_service import TeamRealignmentService
 from orchestwin.agents.team_gate import (
     AgentTeamGateDecisionResult,
     AgentTeamGateSubmissionResult,
@@ -110,11 +112,13 @@ from orchestwin.projects.requirements_runtime import (
 )
 from orchestwin.projects.sections_service import SectionsService
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
+from orchestwin.twins.archetypes import ArchetypeService
 from orchestwin.twins.realignment_service import UserModelingRealignmentService
 from orchestwin.twins.runtime import (
     ManagedUserModelingUnitOfWorkFactory,
     SqlAlchemyUserModelingGovernanceAdapter,
     UserModelingServices,
+    build_archetype_service,
     build_user_modeling_services,
 )
 from orchestwin.workflow.gates import HumanGate, HumanGateAction, HumanGateEvent
@@ -195,6 +199,7 @@ class ApplicationRuntime:
     team_proposal_service: TeamProposalApplicationService | None = None
     agent_team_service: AgentTeamApprovalService | None = None
     user_modeling_services: UserModelingServices | None = None
+    archetype_service: ArchetypeService | None = None
     requirements_generation_service: LocalRequirementsGenerationService | None = None
     requirements_revision_service: LocalRequirementsRevisionService | None = None
     requirements_query_service: SqlAlchemyRequirementsQueryService | None = None
@@ -212,6 +217,7 @@ class ApplicationRuntime:
     requirements_realignment_service: RequirementsRealignmentService | None = None
     design_realignment_service: DesignRealignmentService | None = None
     sections_service: SectionsService | None = None
+    team_realignment_service: TeamRealignmentService | None = None
     project_import_service: ProjectImportService | None = None
     training_api_service: TrainingApiService | None = None
 
@@ -336,6 +342,7 @@ def create_default_runtime(
         user_modeling_gates=user_modeling.gates,
         candidates=SqlAlchemyTwinImportCandidateQuery(database_runtime.session_factory),
     )
+    team_realignment_service = build_team_realignment_service(database_runtime.session_factory)
     user_modeling_realignment_service = UserModelingRealignmentService(
         governance=SqlAlchemyUserModelingGovernanceAdapter(database_runtime.session_factory),
         team_queries=agent_team_service,
@@ -353,6 +360,8 @@ def create_default_runtime(
         requirements_gates=requirements.gate,
     )
     sections_service = build_sections_service(
+        team_realignment_service=team_realignment_service,
+        agent_team_service=agent_team_service,
         database_runtime=database_runtime,
         user_modeling_services=user_modeling,
         user_modeling_realignment_service=user_modeling_realignment_service,
@@ -378,6 +387,7 @@ def create_default_runtime(
         agent_team_service=agent_team_service,
         user_modeling_services=user_modeling,
         requirements_generation_service=requirements.generation,
+        archetype_service=build_archetype_service(database_runtime.session_factory),
         requirements_revision_service=requirements.revisions,
         requirements_query_service=requirements.queries,
         requirements_gate_service=requirements.gate,
@@ -394,6 +404,7 @@ def create_default_runtime(
         requirements_realignment_service=requirements_realignment_service,
         design_realignment_service=design_realignment_service,
         sections_service=sections_service,
+        team_realignment_service=team_realignment_service,
         project_import_service=project_import_service,
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from orchestwin import __version__
 from orchestwin.api.acceptance_tests import create_acceptance_test_router
+from orchestwin.api.archetypes import create_archetypes_router
 from orchestwin.api.artifacts import create_artifact_graph_router
 from orchestwin.api.auth import AuthApiSettings, AuthAttemptLimits, create_auth_router
 from orchestwin.api.brief_dialogue import create_brief_dialogue_router
@@ -44,6 +45,7 @@ from orchestwin.api.requirements_realignment import (
 )
 from orchestwin.api.sections import create_sections_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
+from orchestwin.api.team_realignment import create_team_realignment_router
 from orchestwin.api.teams import create_team_router
 from orchestwin.api.training import create_training_router
 from orchestwin.api.twin_chat import create_twin_chat_router
@@ -151,6 +153,7 @@ def create_app(
     application.state.team_proposal_service = resolved_runtime.team_proposal_service
     application.state.agent_team_service = resolved_runtime.agent_team_service
     application.state.user_modeling_services = resolved_runtime.user_modeling_services
+    application.state.archetype_service = resolved_runtime.archetype_service
     application.state.requirements_generation_service = (
         resolved_runtime.requirements_generation_service
     )
@@ -174,6 +177,7 @@ def create_app(
     )
     application.state.design_realignment_service = resolved_runtime.design_realignment_service
     application.state.sections_service = resolved_runtime.sections_service
+    application.state.team_realignment_service = resolved_runtime.team_realignment_service
     application.state.project_import_service = resolved_runtime.project_import_service
     application.state.training_api_service = resolved_runtime.training_api_service
     application.state.generation_jobs = jobs
@@ -209,6 +213,7 @@ def create_app(
         create_brief_dialogue_router(),
         create_team_router(),
         create_runtime_user_modeling_router(resolved_runtime.user_modeling_services),
+        create_archetypes_router(),
         create_twin_chat_router(),
         create_requirements_router(),
         create_design_router(),
@@ -230,6 +235,7 @@ def create_app(
         create_requirements_realignment_router(),
         create_design_realignment_router(),
         create_sections_router(),
+        create_team_realignment_router(),
         create_project_import_router(),
         create_training_router(),
         create_proposal_evidence_router(),

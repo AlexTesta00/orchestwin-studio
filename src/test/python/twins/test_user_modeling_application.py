@@ -7,6 +7,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
+
 from orchestwin.agents.catalog import (
     AGENT_CATALOG_CONTENT_HASH,
     AGENT_CATALOG_VERSION,
@@ -42,6 +44,11 @@ from orchestwin.twins.persistence.repositories import (
 from orchestwin.twins.personas import (
     PersonaConfirmationStatus,
     PersonaProfileVersion,
+)
+from orchestwin.twins.representation import (
+    ArchetypeInput,
+    archetype_profile,
+    archive_archetype_profile,
 )
 from orchestwin.twins.user_twins import (
     UserModelingSnapshotVersion,
@@ -613,6 +620,10 @@ class TransactionTracker:
         self.active = 0
         self.commits = 0
         self.rollbacks = 0
+        self.locks = 0
+        self.project_available = True
+        self.pending_revision = False
+        self.after_lock = None
 
 
 class MemoryUserModelingUnitOfWork:
@@ -663,6 +674,19 @@ class MemoryUserModelingUnitOfWork:
         """Record explicit commit."""
         self._tracker.commits += 1
         self._completed = True
+
+    async def lock_project(self, *, project_id):
+        assert self._tracker.active == 1
+        assert project_id == PROJECT_ID
+        self._tracker.locks += 1
+        if self._tracker.after_lock is not None:
+            self._tracker.after_lock()
+        return self._tracker.project_available
+
+    async def has_pending_revision(self, *, project_id):
+        assert self._tracker.active == 1
+        assert project_id == PROJECT_ID
+        return self._tracker.pending_revision
 
     async def rollback(
         self,
@@ -715,6 +739,7 @@ class TrackingProposalPort:
         self.twin_calls = 0
         self.persona_requests = []
         self.twin_requests = []
+        self.after_twin_proposal = None
 
     async def propose_personas(
         self,
@@ -738,7 +763,10 @@ class TrackingProposalPort:
         self.twin_calls += 1
         self.twin_requests.append(request)
 
-        return await self._inner.propose_user_twins(request)
+        result = await self._inner.propose_user_twins(request)
+        if self.after_twin_proposal is not None:
+            self.after_twin_proposal()
+        return result
 
 
 class DeterministicUuidFactory:
@@ -1308,11 +1336,274 @@ def test_changed_team_allows_new_snapshot_without_reusing_old_approval():
         assert second.snapshot_version.version_number == 2
         assert second.snapshot_version.based_on_version_number == 1
         assert second.snapshot_version.snapshot.agent_team_reference == changed.team_reference
+        assert second.twin_versions[0].twin_id == first.twin_versions[0].twin_id
+        assert second.twin_versions[0].version_number == first.twin_versions[0].version_number + 1
+        assert (
+            second.twin_versions[0].based_on_version_number == first.twin_versions[0].version_number
+        )
         assert snapshot_matches_context(second.snapshot_version, changed)
         assert all(
             t.profile.validation_status is UserTwinLifecycleStatus.PROJECT_GROUNDED_UT
             for t in second.twin_versions
         )
         assert len(store.snapshots[PROJECT_ID]) == 2
+
+    asyncio.run(run())
+
+
+def stored_persona_revision(store, current, profile):
+    history = store.personas[(PROJECT_ID, current.persona_id)]
+    version = replace(
+        current,
+        id=UUID(int=50_000 + sum(len(versions) for versions in store.personas.values())),
+        version_number=current.version_number + 1,
+        based_on_version_number=current.version_number,
+        profile=profile,
+        content_hash=profile.content_hash,
+    )
+    history.append(version)
+    return version
+
+
+def test_archetype_edit_regenerates_same_twin_and_invalidates_current_snapshot():
+    service, _, _, store, tracker = build_service(ready_context())
+
+    async def run():
+        persona = await propose_and_confirm(service)
+        first = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert await service.snapshot_context_is_current(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, snapshot=first.snapshot_version
+        )
+        profile = archetype_profile(
+            ArchetypeInput(
+                "Receptionist", "Handles group bookings", "Receptionist", ("Check in groups",)
+            ),
+            source_id=str(OWNER_ID),
+        )
+        updated = stored_persona_revision(store, persona, profile)
+        assert not await service.snapshot_context_is_current(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, snapshot=first.snapshot_version
+        )
+        second = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert second.status is UserModelingApplicationStatus.CREATED
+        twin = second.twin_versions[0]
+        assert twin.twin_id == first.twin_versions[0].twin_id
+        assert twin.version_number == 2
+        assert twin.based_on_version_number == 1
+        assert twin.profile.persona_reference.version_number == updated.version_number
+        assert twin.profile.persona_reference.content_hash == updated.content_hash
+        assert second.snapshot_version.version_number == 2
+        assert len(store.twins[(PROJECT_ID, twin.twin_id)]) == 2
+        assert len(store.snapshots[PROJECT_ID]) == 2
+        assert await service.snapshot_context_is_current(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, snapshot=second.snapshot_version
+        )
+        third = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert third.issue is UserModelingApplicationIssueCode.SNAPSHOT_ALREADY_EXISTS
+        assert tracker.locks == 4
+
+    asyncio.run(run())
+
+
+def test_new_archetype_creates_only_one_new_twin_and_archive_preserves_history():
+    service, _, _, store, _ = build_service(ready_context())
+
+    async def run():
+        original = await propose_and_confirm(service)
+        first = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        added_profile = archetype_profile(
+            ArchetypeInput("Concierge", "Helps visitors", "Concierge"), source_id=str(OWNER_ID)
+        )
+        added = replace(
+            original,
+            id=UUID(int=60_000),
+            persona_id=UUID(int=60_001),
+            version_number=1,
+            based_on_version_number=None,
+            profile=added_profile,
+            content_hash=added_profile.content_hash,
+        )
+        store.personas[(PROJECT_ID, added.persona_id)] = [added]
+        second = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert second.status is UserModelingApplicationStatus.CREATED
+        twins = {t.profile.persona_reference.persona_id: t for t in second.twin_versions}
+        assert twins[original.persona_id].twin_id == first.twin_versions[0].twin_id
+        assert twins[original.persona_id].version_number == 2
+        added_twin = twins[added.persona_id]
+        assert added_twin.twin_id != first.twin_versions[0].twin_id
+        assert added_twin.version_number == 1
+        assert added_twin.based_on_version_number is None
+        stored_persona_revision(store, original, archive_archetype_profile(original.profile))
+        third = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert third.status is UserModelingApplicationStatus.CREATED
+        assert len(third.twin_versions) == 1
+        assert third.twin_versions[0].twin_id == added_twin.twin_id
+        assert third.twin_versions[0].version_number == 2
+        assert third.twin_versions[0].based_on_version_number == 1
+        assert len(store.snapshots[PROJECT_ID]) == 3
+        assert len(store.twins[(PROJECT_ID, first.twin_versions[0].twin_id)]) == 2
+        assert len(store.personas[(PROJECT_ID, original.persona_id)]) == 3
+
+    asyncio.run(run())
+
+
+def test_archived_pending_archetype_is_excluded_and_cannot_be_confirmed():
+    service, _, proposals, store, _ = build_service(
+        ready_context(target_users=("Receptionist", "Concierge"))
+    )
+
+    async def run():
+        proposed = await service.propose_personas(owner_user_id=OWNER_ID, project_id=PROJECT_ID)
+        confirmed, pending = proposed.versions
+        await service.decide_persona(
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+            persona_id=confirmed.persona_id,
+            decision=PersonaOwnerDecision.CONFIRM,
+        )
+        stored_persona_revision(store, pending, archive_archetype_profile(pending.profile))
+        decision = await service.decide_persona(
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+            persona_id=pending.persona_id,
+            decision=PersonaOwnerDecision.CONFIRM,
+        )
+        assert decision.issue is UserModelingApplicationIssueCode.PERSONA_NOT_FOUND
+        result = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert result.status is UserModelingApplicationStatus.CREATED
+        assert len(result.twin_versions) == 1
+        assert result.twin_versions[0].profile.persona_reference.persona_id == confirmed.persona_id
+        assert len(proposals.twin_requests[0].persona_versions) == 1
+        assert len(store.personas[(PROJECT_ID, pending.persona_id)]) == 2
+
+    asyncio.run(run())
+
+
+def test_changed_brief_preserves_twin_identity():
+    context = ready_context()
+    service, governance, _, _, _ = build_service(context)
+
+    async def run():
+        await propose_and_confirm(service)
+        first = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        brief = replace(
+            brief_version(target_users=("Hotel receptionist", "Concierge")),
+            id=UUID(int=70_000),
+            version_number=2,
+        )
+        changed = replace(context, brief_version=brief, brief_gate=approved_brief_gate(brief))
+        governance.set_contexts([changed])
+        second = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert second.status is UserModelingApplicationStatus.CREATED
+        assert second.twin_versions[0].twin_id == first.twin_versions[0].twin_id
+        assert second.twin_versions[0].version_number == 2
+        assert second.twin_versions[0].profile.project_brief_reference == changed.brief_reference
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("change", ["roster", "base", "context_after_lock"])
+def test_generation_discards_provider_result_when_inputs_change_in_flight(change):
+    context = ready_context()
+    service, governance, proposals, store, tracker = build_service(context)
+
+    async def run():
+        persona = await propose_and_confirm(service)
+        first = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        changed = changed_team_context(context)
+        governance.set_contexts([changed])
+        if change == "roster":
+            proposals.after_twin_proposal = lambda: stored_persona_revision(
+                store, persona, replace(persona.profile, name="Updated receptionist")
+            )
+        elif change == "base":
+            proposals.after_twin_proposal = lambda: store.snapshots[PROJECT_ID].append(
+                replace(
+                    first.snapshot_version,
+                    id=UUID(int=80_000),
+                    version_number=2,
+                    based_on_version_number=1,
+                )
+            )
+        else:
+            tracker.after_lock = lambda: governance.set_contexts([context])
+        result = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert result.issue is UserModelingApplicationIssueCode.CONTEXT_CHANGED
+        assert len(store.twins[(PROJECT_ID, first.twin_versions[0].twin_id)]) == 1
+        assert tracker.commits == 3
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("command", ["propose", "decide", "generate"])
+def test_project_disappearing_before_lock_rejects_persistence(command):
+    service, _, _, store, tracker = build_service(ready_context())
+
+    async def run():
+        persona = None
+        if command != "propose":
+            persona = await propose_and_confirm(service)
+        commits = tracker.commits
+        tracker.project_available = False
+        if command == "propose":
+            result = await service.propose_personas(owner_user_id=OWNER_ID, project_id=PROJECT_ID)
+        elif command == "decide":
+            result = await service.decide_persona(
+                owner_user_id=OWNER_ID,
+                project_id=PROJECT_ID,
+                persona_id=persona.persona_id,
+                decision=PersonaOwnerDecision.CONFIRM,
+            )
+        else:
+            result = await service.generate_grounded_snapshot(
+                owner_user_id=OWNER_ID, project_id=PROJECT_ID
+            )
+        assert result.issue is UserModelingApplicationIssueCode.PROJECT_NOT_FOUND
+        assert tracker.commits == commits
+        assert store.snapshots == {}
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("when", ["before_provider", "during_provider"])
+def test_pending_twin_revision_blocks_generation_before_writes(when):
+    service, _, proposals, store, tracker = build_service(ready_context())
+
+    async def run():
+        await propose_and_confirm(service)
+        if when == "before_provider":
+            tracker.pending_revision = True
+        else:
+            proposals.after_twin_proposal = lambda: setattr(tracker, "pending_revision", True)
+        result = await service.generate_grounded_snapshot(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID
+        )
+        assert result.issue is UserModelingApplicationIssueCode.USER_TWIN_REVISION_PENDING
+        assert store.twins == {}
+        assert store.snapshots == {}
+        assert tracker.commits == 2
+        assert proposals.twin_calls == (0 if when == "before_provider" else 1)
 
     asyncio.run(run())

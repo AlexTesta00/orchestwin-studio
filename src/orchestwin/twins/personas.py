@@ -205,9 +205,13 @@ class PersonaProfile:
         ...,
     ]
     rejection_reason: str | None = None
+    archived: bool = False
 
     def __post_init__(self) -> None:
         """Protect profile shape, provenance label, and decision state."""
+        if not isinstance(self.archived, bool):
+            raise TypeError("persona archived flag must be a boolean")
+
         normalized_name = _normalized_text(
             self.name,
             label="persona name",
@@ -296,7 +300,7 @@ class PersonaProfile:
         self,
     ) -> bool:
         """Return whether this profile may ground a User Twin."""
-        return self.confirmation_status is PersonaConfirmationStatus.CONFIRMED
+        return not self.archived and self.confirmation_status is PersonaConfirmationStatus.CONFIRMED
 
     def observation_for(
         self,
@@ -313,7 +317,7 @@ class PersonaProfile:
         self,
     ) -> dict[str, object]:
         """Return a deterministic JSON-serializable profile snapshot."""
-        return {
+        snapshot = {
             "schema_version": (PERSONA_PROFILE_SCHEMA_VERSION),
             "name": self.name,
             "source": self.source.value,
@@ -322,6 +326,9 @@ class PersonaProfile:
             "rejection_reason": (self.rejection_reason),
             "observations": [observation.to_snapshot() for observation in self.observations],
         }
+        if self.archived:
+            snapshot["archived"] = True
+        return snapshot
 
     def canonical_json(
         self,

@@ -17,6 +17,7 @@ from orchestwin.api.auth import AuthApiSettings
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.config import ApplicationSettings
 from orchestwin.models.user_modeling_runtime import UserModelingRuntimeMode
+from orchestwin.twins.archetypes import ArchetypeService
 from orchestwin.twins.runtime import UserModelingServices
 
 PROJECT = UUID("00000000-0000-4000-8000-000000053201")
@@ -59,6 +60,7 @@ def test_standard_factory_registers_modeling_routes_with_the_custom_api_prefix()
     ):
         assert method in paths[prefix + suffix]
     assert app.state.user_modeling_services is bundle
+    assert "post" in paths[prefix + "/archetypes"]
     assert not any(path.startswith("/api/v1/") for path in paths)
 
 
@@ -112,6 +114,7 @@ def test_default_runtime_builds_the_persisted_modeling_bundle(monkeypatch):
         assert bundle.queries is not None
         assert bundle.revisions is not None
         assert bundle.gates is not None
+        assert isinstance(runtime.archetype_service, ArchetypeService)
     finally:
         asyncio.run(runtime.close())
     database.dispose.assert_awaited_once()
@@ -124,4 +127,5 @@ def test_missing_credentials_does_not_build_a_modeling_runtime(monkeypatch):
     monkeypatch.setattr(services_module, "build_user_modeling_services", forbidden)
     runtime = create_default_runtime(ApplicationSettings(_env_file=None))
     assert runtime.user_modeling_services is None
+    assert runtime.archetype_service is None
     asyncio.run(runtime.close())

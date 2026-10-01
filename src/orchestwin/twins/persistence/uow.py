@@ -6,9 +6,11 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceBindings
+from orchestwin.projects.persistence.repositories import owned_project_statement
 from orchestwin.twins.persistence.repositories import (
     PersonaVersionRepository,
     SqlAlchemyPersonaVersionRepository,
@@ -18,9 +20,11 @@ from orchestwin.twins.persistence.repositories import (
     UserTwinVersionRepository,
 )
 from orchestwin.twins.revision_persistence import (
+    DIFFS,
     SqlAlchemyUserTwinProfileDiffRepository,
     UserTwinProfileDiffRepository,
 )
+from orchestwin.twins.revisions import UserTwinProfileDiffStatus
 
 
 class UserModelingUnitOfWork(Protocol):
@@ -30,6 +34,10 @@ class UserModelingUnitOfWork(Protocol):
     twins: UserTwinVersionRepository
     snapshots: UserModelingSnapshotRepository
     diffs: UserTwinProfileDiffRepository
+
+    async def lock_project(self, *, project_id: UUID) -> bool: ...
+
+    async def has_pending_revision(self, *, project_id: UUID) -> bool: ...
 
     async def __aenter__(
         self,
@@ -62,6 +70,7 @@ class SqlAlchemyUserModelingUnitOfWork:
     ) -> None:
         """Create owner-scoped repositories over one shared session."""
         self._session = session
+        self._owner_user_id = owner_user_id
         self.proposal_evidence = SqlAlchemyProposalEvidenceBindings(session)
         self._completed = False
 
@@ -107,6 +116,32 @@ class SqlAlchemyUserModelingUnitOfWork:
         """Commit the shared SQLAlchemy transaction."""
         await self._session.commit()
         self._completed = True
+
+    async def lock_project(self, *, project_id: UUID) -> bool:
+        return (
+            await self._session.scalar(
+                owned_project_statement(
+                    project_id=project_id, owner_user_id=self._owner_user_id
+                ).with_for_update()
+            )
+            is not None
+        )
+
+    async def has_pending_revision(self, *, project_id: UUID) -> bool:
+        return (
+            await self._session.scalar(
+                sa.select(DIFFS.c.id)
+                .where(
+                    DIFFS.c.project_id == project_id,
+                    DIFFS.c.status == UserTwinProfileDiffStatus.PROPOSED.value,
+                    owned_project_statement(
+                        project_id=project_id, owner_user_id=self._owner_user_id
+                    ).exists(),
+                )
+                .limit(1)
+            )
+            is not None
+        )
 
     async def rollback(self) -> None:
         """Rollback the shared SQLAlchemy transaction."""

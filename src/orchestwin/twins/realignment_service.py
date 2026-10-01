@@ -7,6 +7,8 @@ from types import TracebackType
 from typing import Final, Protocol, Self
 from uuid import UUID, uuid4
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from orchestwin.agents.team_gate import ProjectWorkflowReadiness
 from orchestwin.twins.application import (
     GovernedUserModelingContext,
@@ -14,12 +16,13 @@ from orchestwin.twins.application import (
     UserModelingGovernancePort,
     _governance_issue,
 )
-from orchestwin.twins.persistence.repositories import VersionAppendStatus
+from orchestwin.twins.persistence.repositories import PersonaVersionRepository, VersionAppendStatus
 from orchestwin.twins.realignment import (
     UserModelingRealignment,
     realigned_user_modeling,
     user_modeling_is_aligned,
 )
+from orchestwin.twins.representation import snapshot_matches_archetypes
 from orchestwin.twins.revisions import UserTwinProfileDiff
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion, UserTwinProfileVersion
 
@@ -29,6 +32,7 @@ TEAM_APPROVAL_REQUIRED: Final = "TEAM_APPROVAL_REQUIRED"
 ALREADY_ALIGNED: Final = "ALREADY_ALIGNED"
 USER_TWIN_REVISION_PENDING: Final = "USER_TWIN_REVISION_PENDING"
 PERSISTENCE_REJECTED: Final = "PERSISTENCE_REJECTED"
+ARCHETYPES_CHANGED: Final = "ARCHETYPES_CHANGED"
 
 
 class UserModelingRealignmentFailure(Exception):
@@ -66,6 +70,7 @@ class UserModelingRealignmentUnitOfWork(Protocol):
     snapshots: UserModelingRealignmentSnapshotRepository
     twins: UserModelingRealignmentTwinRepository
     diffs: UserModelingRealignmentDiffRepository
+    personas: PersonaVersionRepository
 
     async def __aenter__(self) -> Self: ...
 
@@ -77,6 +82,10 @@ class UserModelingRealignmentUnitOfWork(Protocol):
     ) -> None: ...
 
     async def commit(self) -> None: ...
+
+    async def lock_project(self, *, project_id: UUID) -> bool: ...
+
+    async def has_pending_revision(self, *, project_id: UUID) -> bool: ...
 
 
 class UserModelingRealignmentUnitOfWorkFactory(Protocol):
@@ -132,6 +141,8 @@ async def _revision_pending(
     project_id: UUID,
     snapshot: UserModelingSnapshotVersion,
 ) -> bool:
+    if await uow.has_pending_revision(project_id=project_id):
+        return True
     for version in snapshot.snapshot.twin_versions:
         proposed = await uow.diffs.current_proposed(
             project_id=project_id,
@@ -151,6 +162,10 @@ async def _issue(
     context: GovernedUserModelingContext | None,
     readiness: ProjectWorkflowReadiness,
 ) -> str | None:
+    if snapshot is not None and _context_issue(context, readiness) is None:
+        personas = await uow.personas.list_current(project_id=project_id)
+        if not snapshot_matches_archetypes(snapshot, personas):
+            return ARCHETYPES_CHANGED
     issue = _blocking_issue(snapshot, context, readiness)
     if (
         issue is None
@@ -200,7 +215,32 @@ class UserModelingRealignmentService:
 
     async def realign(self, *, owner_user_id: UUID, project_id: UUID) -> UserModelingRealignment:
         context, readiness = await self._context(owner_user_id=owner_user_id, project_id=project_id)
+        try:
+            return await self._realign_locked(
+                owner_user_id=owner_user_id,
+                project_id=project_id,
+                context=context,
+                readiness=readiness,
+            )
+        except SQLAlchemyError:
+            raise UserModelingRealignmentFailure(PERSISTENCE_REJECTED) from None
+
+    async def _realign_locked(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        context: GovernedUserModelingContext | None,
+        readiness: ProjectWorkflowReadiness,
+    ) -> UserModelingRealignment:
         async with self._uow_factory(owner_user_id=owner_user_id) as uow:
+            if not await uow.lock_project(project_id=project_id):
+                raise UserModelingRealignmentFailure(USER_TWINS_NOT_FOUND)
+            current_context = await self._governance.load_current(
+                owner_user_id=owner_user_id, project_id=project_id
+            )
+            if context != current_context:
+                raise UserModelingRealignmentFailure(PERSISTENCE_REJECTED)
             snapshot = await uow.snapshots.current(project_id=project_id)
             issue = await _issue(
                 uow,
@@ -244,11 +284,16 @@ class UserModelingRealignmentService:
         if snapshot is None:
             return False
         context, readiness = await self._context(owner_user_id=owner_user_id, project_id=project_id)
-        return (
+        current = (
             context is not None
             and _context_issue(context, readiness) is None
             and user_modeling_is_aligned(snapshot, context)
         )
+        if not current:
+            return False
+        async with self._uow_factory(owner_user_id=owner_user_id) as uow:
+            personas = await uow.personas.list_current(project_id=project_id)
+            return snapshot_matches_archetypes(snapshot, personas)
 
     async def _context(
         self, *, owner_user_id: UUID, project_id: UUID
@@ -264,6 +309,7 @@ class UserModelingRealignmentService:
 
 __all__ = [
     "ALREADY_ALIGNED",
+    "ARCHETYPES_CHANGED",
     "BRIEF_APPROVAL_REQUIRED",
     "PERSISTENCE_REJECTED",
     "TEAM_APPROVAL_REQUIRED",

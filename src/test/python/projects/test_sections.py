@@ -270,7 +270,7 @@ CASES = {
                 NOT_READY,
             ),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a new brief waiting for approval": (
@@ -343,7 +343,7 @@ CASES = {
         [
             *ALL_FINE[:4],
             row("DESIGN", "TO_UPDATE", 1, ("PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED")),
-            fine("PACKAGE", 5),
+            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
         ],
     ),
     "requirements changed and approved": (
@@ -369,7 +369,7 @@ CASES = {
                 NOT_READY,
             ),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a proposed requirements revision below twins that will be updated": (
@@ -386,7 +386,7 @@ CASES = {
                 "REVISION_PENDING",
             ),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a twin cited by the requirements that the twins no longer have": (
@@ -402,7 +402,7 @@ CASES = {
                 "TWIN_NO_LONGER_AVAILABLE",
             ),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a design that cites requirements removed by the change": (
@@ -418,7 +418,7 @@ CASES = {
                 "REQUIREMENT_NO_LONGER_AVAILABLE",
                 ("REQ-002", "US-003"),
             ),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "twins and requirements regenerated with another set of twins": (
@@ -439,7 +439,7 @@ CASES = {
                 ("USER_TWINS_CHANGED", "REQUIREMENTS_CHANGED"),
                 "TWIN_SET_CHANGED",
             ),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a proposed design revision": (
@@ -448,7 +448,7 @@ CASES = {
             *ALL_FINE[:3],
             fine("REQUIREMENTS", 2),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), "REVISION_PENDING"),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "a proposed design revision below requirements that will be updated": (
@@ -459,7 +459,7 @@ CASES = {
             row("USER_TWINS", "TO_UPDATE", 1, ("PERSPECTIVES_CHANGED",)),
             row("REQUIREMENTS", "TO_UPDATE", 1, ("PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED")),
             row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), "REVISION_PENDING"),
-            row("PACKAGE", "TO_UPDATE", 5, ("FOLDER_BEHIND",)),
+            FOLDER_WAITING,
         ],
     ),
     "twins that learned something": (
@@ -468,6 +468,17 @@ CASES = {
             *ALL_FINE[:2],
             row("USER_TWINS", "UPDATE_AVAILABLE", 1, ("TWINS_LEARNED",)),
             *ALL_FINE[3:],
+        ],
+    ),
+    "an archetype changed while the approved snapshot still holds its old version": (
+        aligned(user_twins=user_twins(archetypes_current=False)),
+        [
+            fine("BRIEF"),
+            fine("TEAM"),
+            row("USER_TWINS", "TO_UPDATE", 1, ("ARCHETYPES_CHANGED",), "PREPARE_TWINS"),
+            row("REQUIREMENTS", "TO_UPDATE", 1, ("USER_TWINS_CHANGED",), NOT_READY),
+            row("DESIGN", "TO_UPDATE", 1, ("REQUIREMENTS_CHANGED",), NOT_READY),
+            FOLDER_WAITING,
         ],
     ),
     "requirements the design does not cover": (
@@ -757,6 +768,7 @@ def test_sections_follow_the_order_of_the_stages_and_the_enums_are_the_contract(
     assert [reason.value for reason in SectionReason] == [
         "BRIEF_CHANGED",
         "PERSPECTIVES_CHANGED",
+        "ARCHETYPES_CHANGED",
         "USER_TWINS_CHANGED",
         "REQUIREMENTS_CHANGED",
         "FOLDER_BEHIND",
@@ -771,6 +783,7 @@ def test_sections_follow_the_order_of_the_stages_and_the_enums_are_the_contract(
         "REVISION_PENDING",
         "UPSTREAM_NOT_READY",
         "PREPARE_AGAIN",
+        "PREPARE_TWINS",
     }
 
 

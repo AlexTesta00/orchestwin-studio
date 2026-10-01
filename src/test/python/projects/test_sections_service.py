@@ -9,6 +9,8 @@ from uuid import UUID
 
 import pytest
 
+from orchestwin.agents.realignment_service import TeamRealignmentFailure
+from orchestwin.agents.team_gate import AgentTeamGateDecisionStatus, AgentTeamGateSubmissionStatus
 from orchestwin.artifacts.design_gate import DesignGateDecisionStatus, DesignGateSubmissionStatus
 from orchestwin.knowledge.packages import KnowledgePackageVersion
 from orchestwin.projects.design_realignment_service import (
@@ -26,6 +28,7 @@ from orchestwin.projects.sections import (
     FolderFacts,
     RequirementsFacts,
     SectionFacts,
+    TeamFacts,
     UserTwinsFacts,
 )
 from orchestwin.projects.sections_service import (
@@ -55,6 +58,7 @@ from src.test.python.projects.test_sections import (
     TWINS_2,
     aligned,
     artifact,
+    brief,
     design,
     requirements,
     team,
@@ -66,20 +70,23 @@ OWNER_ID = UUID("00000000-0000-4000-8000-0000000005a1")
 STRANGER_ID = UUID("00000000-0000-4000-8000-0000000005a2")
 PROJECT_ID = UUID("00000000-0000-4000-8000-0000000005b1")
 UT = ProjectStage.USER_TWINS
+TM = ProjectStage.TEAM
 RQ = ProjectStage.REQUIREMENTS
 DS = ProjectStage.DESIGN
 STATUSES = {
+    TM: (AgentTeamGateSubmissionStatus, AgentTeamGateDecisionStatus),
     UT: (UserModelingGateSubmissionStatus, UserModelingGateDecisionStatus),
     RQ: (RequirementsGateSubmissionStatus, RequirementsGateDecisionStatus),
     DS: (DesignGateSubmissionStatus, DesignGateDecisionStatus),
 }
 FAILURES = {
+    TM: TeamRealignmentFailure,
     UT: UserModelingRealignmentFailure,
     RQ: RequirementsRealignmentFailure,
     DS: DesignRealignmentFailure,
 }
-KINDS = {UT: "snapshot", RQ: "requirements", DS: "design"}
-FIELDS = {UT: "user_twins", RQ: "requirements", DS: "design"}
+KINDS = {TM: "team", UT: "snapshot", RQ: "requirements", DS: "design"}
+FIELDS = {TM: "team", UT: "user_twins", RQ: "requirements", DS: "design"}
 NO_CODES = DesignAlignment(
     aligned=False,
     issue=None,
@@ -112,7 +119,11 @@ class World:
         facts = self.facts
         old = self.latest(key)
         version = artifact(KINDS[key], old.version.version_number + 1)
-        if key is UT:
+        if key is TM:
+            new = TeamFacts(
+                version=version, approved=False, brief=facts.brief.version, alignable=True
+            )
+        elif key is UT:
             new = UserTwinsFacts(
                 version=version,
                 approved=False,
@@ -232,6 +243,9 @@ def service(world: World) -> SectionsService:
     design_realignment = Realignment(world, DS)
     return SectionsService(
         reads=Reads(world),
+        team=SectionStep(
+            realignment=Realignment(world, TM), gate=Gate(world, TM), failure=FAILURES[TM]
+        ),
         user_twins=SectionStep(
             realignment=Realignment(world, UT), gate=Gate(world, UT), failure=FAILURES[UT]
         ),
@@ -383,6 +397,8 @@ def test_the_gesture_updates_requirements_then_design():
         ("facts",),
         ("status", "DESIGN"),
         *gesture(RQ),
+        ("facts",),
+        ("status", "DESIGN"),
         *gesture(DS),
         ("facts",),
         ("learned",),
@@ -414,7 +430,11 @@ def test_the_gesture_updates_the_three_sections_in_order_and_never_the_team_or_t
         ("facts",),
         ("status", "DESIGN"),
         *gesture(UT),
+        ("facts",),
+        ("status", "DESIGN"),
         *gesture(RQ),
+        ("facts",),
+        ("status", "DESIGN"),
         *gesture(DS),
         ("facts",),
         ("learned",),
@@ -437,7 +457,7 @@ def test_the_gesture_updates_the_three_sections_in_order_and_never_the_team_or_t
     assert world.scopes == {(OWNER_ID, PROJECT_ID)}
 
 
-def test_the_service_has_no_way_to_change_the_team_or_publish_the_folder():
+def test_the_service_can_reanchor_the_team_and_has_no_way_to_publish_the_folder():
     assert set(inspect.signature(SectionsService).parameters) == {
         "reads",
         "user_twins",
@@ -445,7 +465,37 @@ def test_the_service_has_no_way_to_change_the_team_or_publish_the_folder():
         "design",
         "design_alignment",
         "twin_learning",
+        "team",
     }
+
+
+def test_a_valid_new_brief_reanchors_the_team_then_the_three_downstream_sections():
+    world = World(aligned(brief=brief(2), team=replace(team(), alignable=True)))
+    before = world.facts
+    result = align(world)
+    assert [(item.key, item.outcome) for item in result.results] == [
+        (key, SectionOutcome.ALIGNED) for key in (TM, UT, RQ, DS)
+    ]
+    assert result.status is SectionsAlignmentStatus.ALIGNED
+    assert world.facts.team.brief == artifact("brief", 2)
+    assert world.facts.user_twins.brief == artifact("brief", 2)
+    assert world.facts.user_twins.twin_ids == before.user_twins.twin_ids
+    assert world.facts.folder == before.folder
+    assert [entry for entry in world.log if entry[0] == "realign"] == [
+        ("realign", key.value) for key in (TM, UT, RQ, DS)
+    ]
+
+
+def test_an_archetype_change_requires_regeneration_and_never_approves_old_twins():
+    world = World(aligned(user_twins=user_twins(archetypes_current=False)))
+    before = world.facts
+    result = align(world)
+    assert result.results[0] == SectionUpdate(
+        key=UT, outcome=SectionOutcome.BLOCKED, issue="PREPARE_TWINS"
+    )
+    assert result.status is SectionsAlignmentStatus.NOTHING_TO_ALIGN
+    assert world.facts == before
+    assert not any(entry[0] in {"realign", "submit", "decide"} for entry in world.log)
 
 
 def test_a_refusal_in_the_middle_keeps_what_was_updated_and_stops():

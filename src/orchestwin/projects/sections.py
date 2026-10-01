@@ -20,6 +20,7 @@ class SectionState(StrEnum):
 class SectionReason(StrEnum):
     BRIEF_CHANGED = "BRIEF_CHANGED"
     PERSPECTIVES_CHANGED = "PERSPECTIVES_CHANGED"
+    ARCHETYPES_CHANGED = "ARCHETYPES_CHANGED"
     USER_TWINS_CHANGED = "USER_TWINS_CHANGED"
     REQUIREMENTS_CHANGED = "REQUIREMENTS_CHANGED"
     FOLDER_BEHIND = "FOLDER_BEHIND"
@@ -35,9 +36,11 @@ class SectionBlock(StrEnum):
     REVISION_PENDING = "REVISION_PENDING"
     UPSTREAM_NOT_READY = "UPSTREAM_NOT_READY"
     PREPARE_AGAIN = "PREPARE_AGAIN"
+    PREPARE_TWINS = "PREPARE_TWINS"
 
 
 ALIGNABLE_SECTIONS: Final = (
+    ProjectStage.TEAM,
     ProjectStage.USER_TWINS,
     ProjectStage.REQUIREMENTS,
     ProjectStage.DESIGN,
@@ -63,6 +66,7 @@ class TeamFacts:
     version: ArtifactVersion
     approved: bool
     brief: ArtifactVersion
+    alignable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +78,7 @@ class UserTwinsFacts:
     twins: frozenset[ArtifactVersion] = frozenset()
     revision_pending: bool = False
     learned: bool = False
+    archetypes_current: bool = True
 
     @property
     def twin_ids(self) -> frozenset[UUID]:
@@ -272,7 +277,7 @@ def _team_section(facts: SectionFacts, brief: Section) -> Section:
         approved=team.approved,
         upstream=(brief,),
         behind=(SectionReason.BRIEF_CHANGED,) if team.brief != _version(facts.brief) else (),
-        obstacles=((SectionBlock.PREPARE_AGAIN, ()),),
+        obstacles=() if team.alignable else ((SectionBlock.PREPARE_AGAIN, ()),),
     )
 
 
@@ -285,13 +290,20 @@ def _user_twins_section(facts: SectionFacts, brief: Section, team: Section) -> S
         behind.append(SectionReason.BRIEF_CHANGED)
     if twins.team != _version(facts.team) or _behind(team):
         behind.append(SectionReason.PERSPECTIVES_CHANGED)
+    if not twins.archetypes_current:
+        behind.append(SectionReason.ARCHETYPES_CHANGED)
+    obstacles = []
+    if not twins.archetypes_current:
+        obstacles.append((SectionBlock.PREPARE_TWINS, ()))
+    if twins.revision_pending:
+        obstacles.append((SectionBlock.REVISION_PENDING, ()))
     return _section(
         ProjectStage.USER_TWINS,
         twins.version,
         approved=twins.approved,
         upstream=(brief, team),
         behind=behind,
-        obstacles=((SectionBlock.REVISION_PENDING, ()),) if twins.revision_pending else (),
+        obstacles=obstacles,
         offered=(SectionReason.TWINS_LEARNED,) if twins.learned else (),
     )
 
@@ -400,13 +412,19 @@ def _package_section(facts: SectionFacts, upstream: tuple[Section, ...]) -> Sect
     folder = facts.folder
     if folder is None:
         return Section(key=ProjectStage.PACKAGE, state=SectionState.NOT_STARTED)
-    if dict(folder.stages) == dict(_approved_chain(facts)):
+    if dict(folder.stages) == dict(_approved_chain(facts)) and not any(
+        section.state is SectionState.TO_UPDATE for section in upstream
+    ):
         return Section(
             key=ProjectStage.PACKAGE,
             state=SectionState.FINE,
             version_number=folder.version_number,
         )
-    waiting = any(section.state is SectionState.IN_PROGRESS for section in upstream)
+    waiting = any(
+        section.state is SectionState.IN_PROGRESS
+        or (section.state is SectionState.TO_UPDATE and section.blocked is not None)
+        for section in upstream
+    )
     return Section(
         key=ProjectStage.PACKAGE,
         state=SectionState.TO_UPDATE,

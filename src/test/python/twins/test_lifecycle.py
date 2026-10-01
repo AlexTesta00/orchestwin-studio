@@ -282,7 +282,13 @@ def twin_observations(
     observations: list[ProfileObservation] = []
 
     for field in UserTwinField:
-        if field is UserTwinField.AGE_RANGE:
+        if field in {
+            UserTwinField.AGE_RANGE,
+            UserTwinField.DESCRIPTION,
+            UserTwinField.REPRESENTS,
+            UserTwinField.DOES_NOT_REPRESENT,
+            UserTwinField.EVIDENCE_GAPS,
+        }:
             continue
 
         override = resolved_overrides.get(field)

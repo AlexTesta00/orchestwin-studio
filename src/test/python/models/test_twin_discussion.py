@@ -302,7 +302,45 @@ def test_twin_keys_follow_the_twin_order_and_only_known_observations_are_shown()
         "epistemic_status": "USER_PROVIDED",
     }
     assert observed["user_twin.goals"]["value"] == ["Known goals"]
-    assert len(observed) == len(UserTwinField) - 1
+    required_keys = {
+        "user_twin.role",
+        "user_twin.expertise",
+        "user_twin.goals",
+        "user_twin.recurring_tasks",
+        "user_twin.context_of_use",
+        "user_twin.information_needs",
+        "user_twin.decision_criteria",
+        "user_twin.preferred_vocabulary",
+        "user_twin.frustrations",
+        "user_twin.pain_points",
+        "user_twin.trust_concerns",
+        "user_twin.accessibility_needs",
+        "user_twin.operational_constraints",
+        "user_twin.technical_literacy",
+        "user_twin.risk_sensitivity",
+        "user_twin.assumptions",
+    }
+    assert set(observed) == required_keys
+    absent_optional = {
+        UserTwinField.DESCRIPTION.observation_key,
+        UserTwinField.REPRESENTS.observation_key,
+        UserTwinField.DOES_NOT_REPRESENT.observation_key,
+        UserTwinField.EVIDENCE_GAPS.observation_key,
+    }
+    assert absent_optional.isdisjoint(item.observation_key for item in first.profile.observations)
+    context = statement_context(
+        project_id=design_fixtures.PROJECT_ID,
+        locale="it-IT",
+        ordinal=1,
+        owner_note=None,
+        keys=keys,
+        speaker="T1",
+        design={},
+        findings=(),
+        previous=None,
+    )
+    assert set(context["user_twin"]["observations"]) == required_keys
+    assert absent_optional.isdisjoint(context["user_twin"]["observations"])
     assert all(set(item) == {"value", "epistemic_status"} for item in observed.values())
     inferred = ProfileObservation(
         observation_key="user_twin.frustrations",

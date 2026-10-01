@@ -180,7 +180,13 @@ def twin_observations() -> tuple[
     values: list[ProfileObservation] = []
 
     for field in UserTwinField:
-        if field is UserTwinField.AGE_RANGE:
+        if field in {
+            UserTwinField.AGE_RANGE,
+            UserTwinField.DESCRIPTION,
+            UserTwinField.REPRESENTS,
+            UserTwinField.DOES_NOT_REPRESENT,
+            UserTwinField.EVIDENCE_GAPS,
+        }:
             continue
 
         if field is UserTwinField.ROLE:

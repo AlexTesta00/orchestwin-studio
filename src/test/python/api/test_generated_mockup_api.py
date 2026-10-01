@@ -14,6 +14,8 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import current_user_dependency
 from orchestwin.api.design import DesignPackagePayload
@@ -26,6 +28,9 @@ from orchestwin.identity.domain import NormalizedEmail, UserAccount
 from orchestwin.models.generation_budget import GenerationBudget
 from orchestwin.models.proposal_evidence import ProposalEvidenceError
 from orchestwin.models.structured_generation import StructuredGenerationProviderKind
+from orchestwin.projects.progress import ProjectStage
+from orchestwin.projects.sections import SectionState
+from src.test.python.api.test_design_context import sections_port
 from src.test.python.models.test_generated_mockup_support import (
     DASHBOARD,
     DASHBOARD_ID,
@@ -114,6 +119,156 @@ def generated(client, registry, versions, alternative_id=GUIDED_ID):
     started = client.post(f"{MOCKUPS}/jobs", json=body(versions, alternative_id))
     assert started.status_code == 202, started.json()
     return settle(client, registry, started.json())
+
+
+def wired_runtime(generator, versions, *, selected_agent_ids=(), states=None):
+    legacy = runtime(generator, versions=versions)
+    reference = versions.versions[-1].package.grounding.agent_team_reference
+    team = SimpleNamespace(
+        project_id=PROJECT_ID,
+        id=reference.artifact_id,
+        version_number=reference.version_number,
+        content_hash=reference.content_hash,
+        proposal=SimpleNamespace(selected_agent_ids=selected_agent_ids),
+    )
+    team_port = SimpleNamespace(value=team, calls=[])
+
+    async def current(**scope):
+        assert scope == {"owner_user_id": OWNER_ID, "project_id": PROJECT_ID}
+        team_port.calls.append(scope)
+        return team_port.value
+
+    team_port.current = current
+    value = ApplicationRuntime(
+        real_model_runtime=legacy.real_model_runtime,
+        proposal_evidence_store=legacy.proposal_evidence_store,
+        design_query_service=legacy.design_query_service,
+        requirements_query_service=legacy.requirements_query_service,
+        team_proposal_service=team_port,
+        sections_service=sections_port(
+            owner_user_id=OWNER_ID, project_id=PROJECT_ID, states=states
+        ),
+    )
+    return value, team_port
+
+
+@pytest.mark.parametrize("security", (False, True))
+def test_generated_mockup_uses_only_exact_selected_team_guidance_and_keeps_it_on_retry(security):
+    selected = (AgentIdentifier.UX_UI_DESIGNER,) + (
+        (AgentIdentifier.SECURITY_REVIEWER,) if security else ()
+    )
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator(answer(BROKEN), answer(draft_payload()))
+    value, team = wired_runtime(
+        generator,
+        versions,
+        selected_agent_ids=selected,
+        states={ProjectStage.DESIGN: SectionState.IN_PROGRESS} if security else None,
+    )
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "SUCCEEDED"
+    assert len(generator.calls) == 2 and len(team.calls) >= 2
+    expected = perspective_guidance(selected, GuidanceStage.DESIGN)
+    assert all(call["context"]["perspectives"] == expected for call in generator.calls)
+    assert any(item["perspective"] == "SECURITY" for item in expected) is security
+    assert all(
+        "not empirical evidence about real users" in call["instruction"] for call in generator.calls
+    )
+
+
+@pytest.mark.parametrize(
+    "field,new_value",
+    [
+        ("id", uuid4()),
+        ("version_number", 99),
+        ("content_hash", "a" * 64),
+        ("project_id", uuid4()),
+        ("missing", None),
+        ("service_missing", None),
+    ],
+)
+def test_real_runtime_team_mismatch_is_refused_before_provider(field, new_value):
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator()
+    value, team = wired_runtime(generator, versions)
+    if field == "missing":
+        team.value = None
+    elif field == "service_missing":
+        value.team_proposal_service = None
+    else:
+        setattr(team.value, field, new_value)
+    client, registry = client_for(value)
+    with client:
+        response = client.post(f"{MOCKUPS}/jobs", json=body(versions))
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert generator.calls == [] and len(registry) == 0
+
+
+@pytest.mark.parametrize(
+    "key,state",
+    [
+        (ProjectStage.USER_TWINS, SectionState.TO_UPDATE),
+        (ProjectStage.DESIGN, SectionState.TO_UPDATE),
+        (ProjectStage.TEAM, SectionState.IN_PROGRESS),
+    ],
+)
+def test_stale_sections_after_archetype_edit_prevent_mockup_generation(key, state):
+    versions = DesignVersions(package())
+    generator = ScriptedMockupGenerator()
+    value, _team = wired_runtime(generator, versions, states={key: state})
+    client, registry = client_for(value)
+    with client:
+        response = client.post(f"{MOCKUPS}/jobs", json=body(versions))
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"code": "DESIGN_CONTEXT_CHANGED"}
+    assert generator.calls == [] and len(registry) == 0
+
+
+def test_archetype_edit_during_provider_refuses_adapter_acceptance():
+    states = {}
+
+    class Changed(ScriptedMockupGenerator):
+        async def generate(self, **options):
+            draft = await super().generate(**options)
+            states[ProjectStage.USER_TWINS] = SectionState.TO_UPDATE
+            return draft
+
+    versions = DesignVersions(package())
+    generator = Changed(answer(draft_payload()))
+    value, _team = wired_runtime(generator, versions, states=states)
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "FAILED"
+    assert done["failure"]["code"] == "DESIGN_CONTEXT_CHANGED"
+    assert len(generator.calls) == 1
+    assert "ADAPTER_ACCEPTED" not in value.proposal_evidence_store.kinds(
+        value.proposal_evidence_store.order[-1]
+    )
+
+
+def test_team_changed_during_provider_refuses_adapter_acceptance():
+    class Changed(ScriptedMockupGenerator):
+        async def generate(self, **options):
+            draft = await super().generate(**options)
+            team.value.version_number += 1
+            return draft
+
+    versions = DesignVersions(package())
+    generator = Changed(answer(draft_payload()))
+    value, team = wired_runtime(generator, versions)
+    client, registry = client_for(value)
+    with client:
+        done = generated(client, registry, versions)
+    assert done["status"] == "FAILED"
+    assert done["failure"]["code"] == "DESIGN_CONTEXT_CHANGED"
+    assert len(generator.calls) == 1
+    assert "ADAPTER_ACCEPTED" not in value.proposal_evidence_store.kinds(
+        value.proposal_evidence_store.order[-1]
+    )
 
 
 class Gated(ScriptedMockupGenerator):

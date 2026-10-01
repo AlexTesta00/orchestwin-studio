@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import UUID
+
+import pytest
 
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
@@ -235,7 +238,13 @@ def twin_observations() -> tuple[
     observations: list[ProfileObservation] = []
 
     for field in UserTwinField:
-        if field is UserTwinField.AGE_RANGE:
+        if field in {
+            UserTwinField.AGE_RANGE,
+            UserTwinField.DESCRIPTION,
+            UserTwinField.REPRESENTS,
+            UserTwinField.DOES_NOT_REPRESENT,
+            UserTwinField.EVIDENCE_GAPS,
+        }:
             continue
 
         if field is UserTwinField.ROLE:
@@ -515,6 +524,7 @@ class MemoryUow:
         snapshots: MemorySnapshotRepository,
         twins: MemoryTwinRepository,
         diffs: MemoryDiffRepository,
+        owner_scope,
     ) -> None:
         """Store shared repositories."""
         self.snapshots = snapshots
@@ -522,6 +532,7 @@ class MemoryUow:
         self.diffs = diffs
         self.personas = DummyPersonaRepository()
         self._completed = False
+        self._owner_scope = owner_scope
 
     async def __aenter__(
         self,
@@ -545,6 +556,10 @@ class MemoryUow:
         """Mark fake transaction committed."""
         self._completed = True
 
+    async def lock_project(self, *, project_id):
+        self._owner_scope.locks.append(project_id)
+        return self._owner_scope.project_available
+
     async def rollback(self) -> None:
         """Mark fake transaction rolled back."""
         self._completed = True
@@ -561,6 +576,8 @@ class MemoryUowFactory:
         self.snapshots = MemorySnapshotRepository(base)
         self.twins = MemoryTwinRepository(base.snapshot.twin_versions[0])
         self.diffs = MemoryDiffRepository()
+        self.locks = []
+        self.project_available = True
 
     def __call__(
         self,
@@ -574,6 +591,7 @@ class MemoryUowFactory:
             snapshots=self.snapshots,
             twins=self.twins,
             diffs=self.diffs,
+            owner_scope=self,
         )
 
 
@@ -665,6 +683,7 @@ def test_owner_approval_creates_new_twin_and_snapshot_versions() -> None:
 
     assert base.version_number == 1
     assert base.snapshot.twin_versions[0].version_number == 1
+    assert factory.locks == [PROJECT_ID, PROJECT_ID]
 
 
 def test_rejected_diff_does_not_create_new_profile_versions() -> None:
@@ -770,3 +789,41 @@ def test_stale_diff_cannot_modify_newer_snapshot() -> None:
     assert result.issue is (ProfileRevisionApplicationIssueCode.CONTEXT_CHANGED)
 
     assert len(factory.twins.values) == 1
+
+
+@pytest.mark.parametrize("command", ["propose", "decide"])
+def test_revision_commands_reject_unavailable_project_before_reading(monkeypatch, command):
+    factory = MemoryUowFactory(base_snapshot_version())
+    factory.project_available = False
+    snapshots = AsyncMock(side_effect=AssertionError("snapshot read before owned project lock"))
+    diffs = AsyncMock(side_effect=AssertionError("diff read before owned project lock"))
+    monkeypatch.setattr(factory.snapshots, "current", snapshots)
+    monkeypatch.setattr(factory.diffs, "get", diffs)
+    service = LocalUserTwinProfileRevisionService(uow_factory=factory)
+    if command == "propose":
+        result = asyncio.run(
+            service.propose_revision(
+                owner_user_id=OWNER_ID,
+                project_id=PROJECT_ID,
+                twin_id=TWIN_ID,
+                replacements={
+                    UserTwinField.GOALS: owner_replacement(
+                        UserTwinField.GOALS, ObservationValue.from_items(("Reduce booking errors",))
+                    )
+                },
+            )
+        )
+        assert result.issue is ProfileRevisionApplicationIssueCode.SNAPSHOT_NOT_FOUND
+    else:
+        result = asyncio.run(
+            service.decide_revision(
+                owner_user_id=OWNER_ID,
+                project_id=PROJECT_ID,
+                diff_id=UUID(int=90_000),
+                decision=ProfileRevisionDecision.APPROVE,
+            )
+        )
+        assert result.issue is ProfileRevisionApplicationIssueCode.DIFF_NOT_FOUND
+    assert factory.locks == [PROJECT_ID]
+    snapshots.assert_not_awaited()
+    diffs.assert_not_awaited()

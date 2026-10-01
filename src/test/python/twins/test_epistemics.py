@@ -53,6 +53,7 @@ def test_epistemic_statuses_match_project_policy() -> None:
         EpistemicStatus.HUMAN_VALIDATED,
         EpistemicStatus.MODEL_INFERRED,
         EpistemicStatus.UNSUPPORTED_ASSUMPTION,
+        EpistemicStatus.CONTESTED,
     )
 
 

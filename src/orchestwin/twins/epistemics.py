@@ -66,6 +66,7 @@ class EpistemicStatus(StrEnum):
     HUMAN_VALIDATED = "HUMAN_VALIDATED"
     MODEL_INFERRED = "MODEL_INFERRED"
     UNSUPPORTED_ASSUMPTION = "UNSUPPORTED_ASSUMPTION"
+    CONTESTED = "CONTESTED"
 
 
 class HumanValidationRequirement(StrEnum):
@@ -363,20 +364,29 @@ class ProfileObservation:
         if self.epistemic_status in {
             EpistemicStatus.MODEL_INFERRED,
             EpistemicStatus.UNSUPPORTED_ASSUMPTION,
+            EpistemicStatus.CONTESTED,
         }:
             if self.human_validation is not HumanValidationRequirement.REQUIRED:
                 raise ValueError(
-                    "model-inferred and unsupported observations require human validation"
+                    "model-inferred, unsupported and contested observations require human validation"
                 )
 
             if self.rationale is None:
-                raise ValueError("model-inferred and unsupported observations require a rationale")
+                raise ValueError(
+                    "model-inferred, unsupported and contested observations require a rationale"
+                )
 
         if self.epistemic_status is EpistemicStatus.UNSUPPORTED_ASSUMPTION and self.value.kind in {
             ObservationValueKind.UNKNOWN,
             ObservationValueKind.ABSTAINED,
         }:
             raise ValueError("an unsupported assumption must contain a tentative value")
+
+        if self.epistemic_status is EpistemicStatus.CONTESTED and self.value.kind in {
+            ObservationValueKind.UNKNOWN,
+            ObservationValueKind.ABSTAINED,
+        }:
+            raise ValueError("a contested observation must contain a substantive value")
 
     @property
     def requires_human_validation(
