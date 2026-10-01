@@ -495,6 +495,8 @@ const messages = {
     yourNote: "Your note",
     ready: "Design approved by you. Next: the package.",
     matrixEmpty: "The twins have not given an opinion on these alternatives yet.",
+    readObservations: "Read every observation of {twin} on {alternative} ({count})",
+    closeObservations: "Close the observations",
     version: "Version",
     statusChoose: "waiting for your choice",
     statusPending: "waiting for your decision",
@@ -529,6 +531,7 @@ const messages = {
     confidence: "self-assessed confidence {value}",
     usage: "Generations with the hosted model",
     usageItem: "{date} · {purpose} · {model} · {status}",
+    subscription: "subscription",
     mockupNotes: "Notes of the Studio on the mockups",
     mockupNotesIntro: "The Studio accepted these mockups and noted these points.",
     mockupNotesOf: "{code} · {title}",
@@ -650,6 +653,8 @@ const messages = {
     yourNote: "La tua nota",
     ready: "Design approvato da te. Ora il pacchetto.",
     matrixEmpty: "I twin non hanno ancora espresso un parere su queste alternative.",
+    readObservations: "Leggi tutte le osservazioni di {twin} su {alternative} ({count})",
+    closeObservations: "Chiudi le osservazioni",
     version: "Versione",
     statusChoose: "in attesa della tua scelta",
     statusPending: "in attesa della tua decisione",
@@ -684,6 +689,7 @@ const messages = {
     confidence: "confidenza auto-valutata {value}",
     usage: "Generazioni con il modello ospitato",
     usageItem: "{date} · {purpose} · {model} · {status}",
+    subscription: "abbonamento",
     mockupNotes: "Note dello Studio sui mockup",
     mockupNotesIntro: "Lo Studio ha accettato questi mockup e ha annotato questi punti.",
     mockupNotesOf: "{code} · {title}",
@@ -726,6 +732,7 @@ const diffReasons = reactive<Record<string, string>>({});
 const reviewRequestedFor = ref<string | null>(null);
 const nextStepRefresh = ref(0);
 const selectedCell = ref<TwinMatrixSelection | null>(null);
+const observationsOpen = ref(false);
 const dialog = ref<DialogState | null>(null);
 const dialogBusy = ref(false);
 const previewAlternativeId = ref<string | null>(null);
@@ -817,6 +824,9 @@ const iterationScreens = computed<ScreenName[]>(() => [
 ]);
 const staticCheckAvailable = computed(
   () => !(mockups.projectId === props.projectId && mockups.capabilities?.static_check === false),
+);
+const mockupsPaid = computed(
+  () => !(mockups.projectId === props.projectId && mockups.capabilities?.paid === false),
 );
 
 const gateTargetsCurrent = computed(() => {
@@ -1050,10 +1060,25 @@ const observation = computed(() => {
             number: pinNumbers.value.get(`${finding.twin_id}:${finding.finding_id}`) ?? null,
           })),
     critique: critique === null ? null : critiqueView(critique),
+    count: findings === null ? critiqueItemCount(critique) : findings.length,
     screens: screensOf(alternative.id),
     elements: alternative.id === chosenAlternativeId.value ? reviewElements.value : {},
     workflows: workflowNamesOf(alternative),
   };
+});
+const observationsLabel = computed(() => {
+  const value = observation.value;
+  if (value === null) {
+    return "";
+  }
+  if (observationsOpen.value) {
+    return copy.value.closeObservations;
+  }
+  return fill(copy.value.readObservations, {
+    twin: value.twin.name,
+    alternative: `${value.alternative.code} · ${value.alternative.title}`,
+    count: value.count,
+  });
 });
 const observationValidations = computed(() => {
   const decisions: Record<string, { decision: "OWNER_CONFIRMED" | "OWNER_DISMISSED" }> = {};
@@ -2471,6 +2496,11 @@ async function prepareMockups(): Promise<void> {
   void loadUsage();
 }
 
+function selectCell(selection: TwinMatrixSelection): void {
+  selectedCell.value = selection;
+  observationsOpen.value = true;
+}
+
 async function validate(finding: ObservationFinding, confirmed: boolean): Promise<void> {
   const runId = observation.value?.runId ?? null;
   if (runId === null || loopStore.validating !== null) {
@@ -2496,6 +2526,7 @@ async function validate(finding: ObservationFinding, confirmed: boolean): Promis
       key,
       code: loopStore.validationError ?? "DESIGN_LOOP_REQUEST_FAILED",
     };
+    observationsOpen.value = true;
   }
 }
 
@@ -2544,6 +2575,7 @@ async function applyInsight(request: ObservationInsightRequest): Promise<void> {
     await onInsightApplied(application);
   } catch {
     applyFailure.value = { id: source.id, code: loopStore.error ?? "DESIGN_LOOP_REQUEST_FAILED" };
+    observationsOpen.value = true;
   } finally {
     applyingSource.value = null;
   }
@@ -2581,6 +2613,7 @@ watch(
   () => props.projectId,
   async () => {
     reviewRequestedFor.value = null;
+    observationsOpen.value = false;
     if (props.autoLoad) {
       await load();
     }
@@ -2927,6 +2960,7 @@ onBeforeUnmount(() => {
           :notes="cardNotes"
           :choosing="choosing"
           :disabled="store.isBusy || deciding"
+          :paid="mockupsPaid"
           :locale="locale"
           @select="choose"
           @open="openMockup"
@@ -3019,30 +3053,55 @@ onBeforeUnmount(() => {
           :cells="matrixCells"
           :selected="activeCell"
           :locale="locale"
-          @select="selectedCell = $event"
+          @select="selectCell"
         >
           <div class="grid gap-7">
-            <DesignObservationList
-              v-if="observation !== null"
-              :twin="observation.twin"
-              :alternative="observation.alternative"
-              :run-id="observation.runId"
-              :findings="observation.findings"
-              :critique="observation.critique"
-              :validations="observationValidations"
-              :validating="loopStore.validating"
-              :failure="validationFailure"
-              :applied="appliedInsights"
-              :applying="applyingSource"
-              :apply-failure="applyFailure"
-              :screens="observation.screens"
-              :elements="observation.elements"
-              :workflows="observation.workflows"
-              :locale="locale"
-              @confirm="validate($event, true)"
-              @dismiss="validate($event, false)"
-              @apply-insight="applyInsight"
-            />
+            <div v-if="observation !== null" data-testid="design-observations">
+              <button
+                type="button"
+                class="flex min-h-12 w-full items-start gap-3 rounded-field border border-night-line-strong bg-on-night/3 px-4 py-3 text-left text-[15px] leading-6 font-semibold text-on-night transition-colors duration-150 hover:bg-night-hover"
+                :aria-expanded="observationsOpen ? 'true' : 'false'"
+                :aria-controls="`${uid}-observations`"
+                data-testid="design-observations-toggle"
+                @click="observationsOpen = !observationsOpen"
+              >
+                <span
+                  :class="[
+                    'inline-block w-3 shrink-0 text-xs leading-6 text-on-night-3 transition-transform duration-150',
+                    observationsOpen ? 'rotate-90' : '',
+                  ]"
+                  aria-hidden="true"
+                  >▸</span
+                >
+                <span class="min-w-0 flex-1 break-words" data-testid="design-observations-label">{{
+                  observationsLabel
+                }}</span>
+              </button>
+              <div :id="`${uid}-observations`" data-testid="design-observations-region">
+                <DesignObservationList
+                  v-if="observationsOpen"
+                  class="mt-4"
+                  :twin="observation.twin"
+                  :alternative="observation.alternative"
+                  :run-id="observation.runId"
+                  :findings="observation.findings"
+                  :critique="observation.critique"
+                  :validations="observationValidations"
+                  :validating="loopStore.validating"
+                  :failure="validationFailure"
+                  :applied="appliedInsights"
+                  :applying="applyingSource"
+                  :apply-failure="applyFailure"
+                  :screens="observation.screens"
+                  :elements="observation.elements"
+                  :workflows="observation.workflows"
+                  :locale="locale"
+                  @confirm="validate($event, true)"
+                  @dismiss="validate($event, false)"
+                  @apply-insight="applyInsight"
+                />
+              </div>
+            </div>
             <ProjectDesignEvaluationPanel
               v-if="current.package.prototype"
               :project-id="projectId"
@@ -3422,7 +3481,13 @@ onBeforeUnmount(() => {
                     status: item.status,
                   })
                 }}
-                · {{ money(item.cost_microusd) }} · {{ item.generation_id }}
+                ·
+                {{
+                  item.provider_kind === "CLAUDE_CODE_CLI"
+                    ? copy.subscription
+                    : money(item.cost_microusd)
+                }}
+                · {{ item.generation_id }}
               </li>
             </ul>
           </section>

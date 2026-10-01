@@ -372,6 +372,28 @@ function fakeUsageApi(cost = 412000) {
   } satisfies ModelUsageApi;
 }
 
+function fakeSubscriptionUsageApi() {
+  const paid = fakeUsageApi(412000);
+  return {
+    ...paid,
+    usage: vi.fn(async () => {
+      const report = await paid.usage();
+      return {
+        items: [
+          {
+            ...report.items[0]!,
+            generation_id: "generation-usage-2",
+            provider_kind: "CLAUDE_CODE_CLI" as const,
+            cost_microusd: null,
+          },
+          ...report.items,
+        ],
+        totals: { ...report.totals, generations: 2 },
+      };
+    }),
+  } satisfies ModelUsageApi;
+}
+
 function readyRequirements(version: RequirementsSpecificationVersionPayload) {
   return {
     status: "READY_FOR_DESIGN_EXPLORATION" as const,
@@ -1480,6 +1502,43 @@ describe("ProjectDesignFlow", () => {
     },
   );
 
+  it.each([
+    [
+      "say that it is not paid",
+      { ...GENERATED, paid: false },
+      "en",
+      false,
+      "Drawing uses your Claude subscription: it spends no credit.",
+    ],
+    [
+      "say that it is not paid, in Italian",
+      { ...GENERATED, paid: false },
+      "it",
+      false,
+      "Il disegno usa il tuo abbonamento di Claude: non spende credito.",
+    ],
+    [
+      "say that it is paid",
+      { ...GENERATED, paid: true },
+      "en",
+      true,
+      "Drawing uses the hosted model and has a cost.",
+    ],
+    ["do not say", GENERATED, "en", true, "Drawing uses the hosted model and has a cost."],
+  ] as const)(
+    "says under the drawing of a mockup what it spends when the capabilities %s",
+    async (_label, capabilities, locale, paid, note) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale, mockupsApi: fakeMockupsApi({ capabilities }) });
+      await flushPromises();
+
+      expect(wrapper.getComponent(DesignAlternativeComparison).props("paid")).toBe(paid);
+      for (const code of ["DES-001", "DES-002"]) {
+        expect(card(wrapper, code).get('[data-testid="alternative-draw-cost"]').text()).toBe(note);
+      }
+    },
+  );
+
   it("names the screens and the elements of the applied mockup in the texts of the review", async () => {
     const api = new FakeDesignApi(GENERATED_SELECTED);
     const loop = fakeLoopApi();
@@ -1529,6 +1588,7 @@ describe("ProjectDesignFlow", () => {
     const wrapper = mountFlow(api, { loop, mockupsApi, pinsApi, locale: "it", attach: true });
     await flushPromises();
 
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = wrapper.get('[data-testid="design-observation-list"]');
     expect(list.text()).toContain("Da «Desk» non si capisce come arrivare a «Booking».");
     expect(list.text()).toContain("Dove: Desk · Guest name");
@@ -1849,6 +1909,7 @@ describe("ProjectDesignFlow", () => {
       "«I see the next arrival, but the flow slows me down at peak times.»",
     );
     expect(cells[0]?.attributes("aria-pressed")).toBe("true");
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = () => wrapper.get('[data-testid="design-observation-list"]');
     expect(list().get("h3").text()).toBe("Receptionist Twin su DES-001 · Guided reservation flow");
 
@@ -1867,6 +1928,211 @@ describe("ProjectDesignFlow", () => {
     expect(list().get('[data-testid="design-observation-avatar"] img').attributes("src")).toBe(
       matrixImage,
     );
+  });
+
+  it.each([
+    [
+      "en",
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (6)",
+      "6 observations",
+    ],
+    [
+      "it",
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (6)",
+      "6 osservazioni",
+    ],
+  ] as const)(
+    "keeps the observations of the cell chosen by default closed when the step loads (%s)",
+    async (locale, sentence, count) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const toggle = wrapper.get('[data-testid="design-observations-toggle"]');
+      expect(toggle.element.tagName).toBe("BUTTON");
+      expect(toggle.attributes("type")).toBe("button");
+      expect(toggle.attributes("aria-expanded")).toBe("false");
+      expect(toggle.get('[data-testid="design-observations-label"]').text()).toBe(sentence);
+      const region = wrapper.get(`[id="${toggle.attributes("aria-controls")}"]`);
+      expect(region.attributes("data-testid")).toBe("design-observations-region");
+      expect(region.element.children).toHaveLength(0);
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="design-critique-list"]').exists()).toBe(false);
+      const cells = wrapper.findAll('[data-testid="design-twin-matrix-cell"]');
+      expect(cells.map((cell) => cell.attributes("aria-pressed"))).toEqual(["true", "false"]);
+      expect(cells[0]?.get('[data-testid="design-twin-matrix-count"]').text()).toBe(count);
+    },
+  );
+
+  it.each([
+    [
+      "en",
+      "Close the observations",
+      "Receptionist Twin on DES-001 · Guided reservation flow",
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (6)",
+    ],
+    [
+      "it",
+      "Chiudi le osservazioni",
+      "Receptionist Twin su DES-001 · Guided reservation flow",
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (6)",
+    ],
+  ] as const)(
+    "opens the observations with their button and closes them again (%s)",
+    async (locale, close, heading, sentence) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+      const label = () => wrapper.get('[data-testid="design-observations-label"]').text();
+      await toggle().trigger("click");
+      expect(toggle().attributes("aria-expanded")).toBe("true");
+      expect(label()).toBe(close);
+      const region = wrapper.get(`[id="${toggle().attributes("aria-controls")}"]`);
+      const list = region.get('[data-testid="design-observation-list"]');
+      expect(list.get("h3").text()).toBe(heading);
+      expect(list.findAll('[data-testid="design-critique-list"]')).toHaveLength(6);
+      expect(list.findAll('[data-testid="design-critique-item"]')).toHaveLength(6);
+
+      await toggle().trigger("click");
+      expect(toggle().attributes("aria-expanded")).toBe("false");
+      expect(label()).toBe(sentence);
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    },
+  );
+
+  it("opens the observations when the person clicks a cell of the matrix and keeps them open on another cell", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const label = () => wrapper.get('[data-testid="design-observations-label"]').text();
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    const cell = (alternativeId: string) =>
+      wrapper
+        .findAll('[data-testid="design-twin-matrix-cell"]')
+        .find((item) => item.attributes("data-alternative") === alternativeId)!;
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(cell(SECOND_DESIGN_ALTERNATIVE_ID).attributes("aria-pressed")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+    expect(list().text()).toContain("Dense tiles may hide the next arrival.");
+
+    await cell(DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe("Receptionist Twin on DES-001 · Guided reservation flow");
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    expect(label()).toBe(
+      "Read every observation of Receptionist Twin on DES-002 · Reservation operations dashboard (6)",
+    );
+
+    await cell(SECOND_DESIGN_ALTERNATIVE_ID).trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+  });
+
+  it("opens the observations again by itself when a decision taken in them fails after the person closed them", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([
+      evaluationRun(TWIN_ID, GENERATED_SELECTED, [
+        finding("UTF-001", "The guest name lacks a format hint.", TWIN_ID),
+      ]),
+    ]);
+    let refuse: (error: Error) => void = () => undefined;
+    loop.validate = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          refuse = reject;
+        }),
+    );
+    const wrapper = mountFlow(api, { loop, locale: "it" });
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    expect(wrapper.get('[data-testid="design-observations-label"]').text()).toBe(
+      "Leggi tutte le osservazioni di Receptionist Twin su DES-001 · Guided reservation flow (1)",
+    );
+    await toggle().trigger("click");
+    await list().get('[data-testid="design-observation-confirm"]').trigger("click");
+    expect(list().get('[data-testid="design-observation-saving"]').text()).toBe(
+      "Salvo la tua decisione…",
+    );
+
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+
+    refuse(new Error("Design loop API request failed with status 503"));
+    await flushPromises();
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    const error = list().get('[data-testid="design-observation-error"]');
+    expect(error.attributes("role")).toBe("alert");
+    expect(error.text()).toBe("Non è stato possibile salvare la tua decisione. Riprova.");
+    expect(list().get('[data-testid="design-observation"]').attributes("data-decision")).toBe(
+      "NONE",
+    );
+  });
+
+  it("opens the observations again by itself when bringing one into the project fails after the person closed them", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const loop = fakeLoopApi();
+    let refuse: (error: Error) => void = () => undefined;
+    vi.mocked(loop.applyInsight).mockImplementation(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          refuse = reject;
+        }),
+    );
+    const wrapper = mountFlow(api, { loop });
+    await flushPromises();
+
+    const toggle = () => wrapper.get('[data-testid="design-observations-toggle"]');
+    const list = () => wrapper.get('[data-testid="design-observation-list"]');
+    await wrapper.findAll('[data-testid="design-twin-matrix-cell"]')[1]!.trigger("click");
+    await list()
+      .get('[data-testid="design-critique-bring"] [data-target="REQUIREMENTS"]')
+      .trigger("click");
+    expect(list().get('[role="status"]').text()).toBe("Bringing it into the project…");
+
+    await toggle().trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+
+    refuse(new Error("Design loop API request failed with status 503"));
+    await flushPromises();
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(list().get("h3").text()).toBe(
+      "Receptionist Twin on DES-002 · Reservation operations dashboard",
+    );
+    expect(list().get('[role="alert"]').text()).toBe(
+      "The insight could not be brought into the project. Try again.",
+    );
+  });
+
+  it("starts with the observations closed again when another project is opened", async () => {
+    const api = new FakeDesignApi(GENERATED_UNSELECTED);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(true);
+
+    await wrapper.setProps({ projectId: "00000000-0000-4000-8000-000000000199" });
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="design-observations-toggle"]').attributes("aria-expanded"),
+    ).toBe("false");
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
   });
 
   it("records the decisions on the findings of the review and brings a concern into the project", async () => {
@@ -1897,6 +2163,7 @@ describe("ProjectDesignFlow", () => {
     const wrapper = mountFlow(api, { loop, locale: "it" });
     await flushPromises();
 
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
     const list = () => wrapper.get('[data-testid="design-observation-list"]');
     expect(list().text()).toContain("The guest name lacks a format hint.");
     await list().get('[data-testid="design-observation-confirm"]').trigger("click");
@@ -1984,9 +2251,10 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
 
     expect(pinsApi.pins).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "run-1", "access-token");
-    expect(
-      wrapper.findAll('[data-testid="design-observation-number"]').map((item) => item.text()),
-    ).toEqual(["1", "2"]);
+    expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="design-observations-label"]').text()).toBe(
+      "Read every observation of Receptionist Twin on DES-001 · Guided reservation flow (2)",
+    );
 
     await card(wrapper, "DES-001").get('[data-testid="alternative-open"]').trigger("click");
     await flushPromises();
@@ -2012,6 +2280,11 @@ describe("ProjectDesignFlow", () => {
     document.body.querySelector<HTMLElement>("[data-testid='mockup-dialog-close']")?.click();
     await flushPromises();
     expect(document.body.querySelector("[data-testid='mockup-dialog']")).toBeNull();
+
+    await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+    expect(
+      wrapper.findAll('[data-testid="design-observation-number"]').map((item) => item.text()),
+    ).toEqual(["1", "2"]);
   });
 
   it("asks for changes with a rule that stays valid and shows the designer at work", async () => {
@@ -2249,6 +2522,40 @@ describe("ProjectDesignFlow", () => {
     expect(details.text()).toContain("10,234 in · 17,890 out · 3,120 reasoning");
   });
 
+  it.each([
+    [
+      "en",
+      "Cost of the generations",
+      "· subscription · generation-usage-2",
+      "· $0.412 · generation-usage-1",
+      "$0.412",
+    ],
+    ["it", "Costo delle generazioni", "· abbonamento · generation-usage-2", "0,412", "0,412"],
+  ] as const)(
+    "shows a generation made on the Claude subscription without an amount and the cost of the paid ones (%s)",
+    async (locale, costLabel, subscriptionLine, paidLine, cost) => {
+      const api = new FakeDesignApi(GENERATED_UNSELECTED);
+      const wrapper = mountFlow(api, {
+        locale,
+        usageApi: fakeSubscriptionUsageApi(),
+        mockupsApi: fakeMockupsApi({ capabilities: GENERATED }),
+      });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      const [subscription, paid] = details
+        .findAll("li")
+        .filter((item) => item.text().includes("generation-usage-"));
+      expect(subscription?.text()).toContain(subscriptionLine);
+      expect(subscription?.text()).not.toMatch(/\$|USD/);
+      expect(paid?.text()).toContain(paidLine);
+      const labels = details.findAll("dt").map((item) => item.text());
+      expect(labels).toContain(costLabel);
+      expect(details.findAll("dd")[labels.indexOf(costLabel)]?.text()).toContain(cost);
+    },
+  );
+
   it("tells only in the technical details what the Studio repaired in a drawn mockup", async () => {
     const api = new FakeDesignApi(GENERATED_UNSELECTED);
     const repaired = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_UNSELECTED, {
@@ -2302,6 +2609,36 @@ describe("ProjectDesignFlow", () => {
     await flushPromises();
     await expectAccessible(wrapper.element, { iframes: false });
   });
+
+  it.each([
+    ["the opinions of the twins", GENERATED_UNSELECTED, []],
+    [
+      "the findings of the review",
+      GENERATED_SELECTED,
+      [
+        evaluationRun(TWIN_ID, GENERATED_SELECTED, [
+          finding("UTF-001", "The guest name lacks a format hint.", TWIN_ID),
+          { ...finding("UTF-002", "The totals are hard to find.", TWIN_ID), severity: "critical" },
+        ]),
+      ],
+    ],
+  ] as const)(
+    "has no axe violations with the observations of %s closed and open",
+    async (_label, version, runs) => {
+      const api = new FakeDesignApi(version);
+      const loop = fakeLoopApi();
+      vi.mocked(loop.runs).mockResolvedValue([...runs]);
+      const wrapper = mountFlow(api, { loop, locale: "it" });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(false);
+      await expectAccessible(wrapper.element);
+
+      await wrapper.get('[data-testid="design-observations-toggle"]').trigger("click");
+      expect(wrapper.find('[data-testid="design-observation-list"]').exists()).toBe(true);
+      await expectAccessible(wrapper.element);
+    },
+  );
 });
 
 describe("designChangeSentence", () => {
