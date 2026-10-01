@@ -5,6 +5,12 @@ import type { ModelRuntimeComponent, ModelRuntimeReadiness } from "@/api/modelRu
 import { expectAccessible } from "@/test/axe";
 import ModelRuntimeStatus from "./ModelRuntimeStatus.vue";
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 const CLAUDE_CODE_READY = {
   ready: true,
   kind: "CLAUDE_CODE_CLI",
@@ -47,12 +53,12 @@ describe("model runtime status", () => {
       global: { plugins: [createPinia()] },
     });
     await flushPromises();
-    expect(wrapper.get("h2").text()).toBe("AI assistants");
-    expect(wrapper.get("[role='status']").text()).toContain("Real AI assistants are not connected");
-    expect(wrapper.text()).toContain("Real AI assistants are not connected");
+    expect(wrapper.get("h2").text()).toBe("AI model");
+    expect(wrapper.get("[role='status']").text()).toContain("The real AI model is not connected");
+    expect(wrapper.text()).toContain("The real AI model is not connected");
     await wrapper.get("button").trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("assistants are connected and ready");
+    expect(wrapper.text()).toContain("The AI model is connected and ready");
     expect(query).toHaveBeenCalledTimes(2);
   });
 
@@ -171,10 +177,64 @@ describe("model runtime status", () => {
     );
     await flushPromises();
     expect(wrapper.get("[role='status']").text()).toBe(
-      "The AI assistants cannot be reached right now. Try again shortly.",
+      "The AI model cannot be reached right now. Try again shortly.",
     );
     expect(wrapper.find('[data-testid="model-runtime-claude-code"]').exists()).toBe(false);
   });
+
+  it.each([
+    [
+      "it",
+      "Modello AI",
+      [
+        "Questo ambiente usa simulazioni di sviluppo. Il modello AI reale non è collegato.",
+        "Il modello AI è collegato e pronto a ricevere richieste.",
+        "Il modello AI non è al momento raggiungibile. Riprova tra poco.",
+        "Non è stato possibile verificare la disponibilità del modello.",
+      ],
+    ],
+    [
+      "en",
+      "AI model",
+      [
+        "This environment uses development simulations. The real AI model is not connected.",
+        "The AI model is connected and ready for requests.",
+        "The AI model cannot be reached right now. Try again shortly.",
+        "Could not check model availability.",
+      ],
+    ],
+  ] as const)(
+    "speaks of the model, of no team and of no step by its old name in %s",
+    async (locale, title, sentences) => {
+      const query = vi
+        .fn()
+        .mockResolvedValueOnce({ mode: "DEVELOPMENT_FIXTURES", ready: false })
+        .mockResolvedValueOnce({ mode: "REAL_REQUIRED", ready: true })
+        .mockResolvedValueOnce({ mode: "REAL_REQUIRED", ready: false })
+        .mockRejectedValueOnce(new Error("offline"));
+      const wrapper = mount(ModelRuntimeStatus, {
+        props: {
+          locale,
+          query,
+          authorize: <T>(operation: (token: string) => Promise<T>) => operation("token"),
+        },
+        global: { plugins: [createPinia()] },
+      });
+      await flushPromises();
+      const seen = [wrapper.get("[role='status']").text()];
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await wrapper.get("button").trigger("click");
+        await flushPromises();
+        seen.push(wrapper.get("[role='status']").text());
+      }
+      expect(wrapper.get("h2").text()).toBe(title);
+      expect(seen).toEqual(sentences);
+      for (const sentence of [title, ...seen]) {
+        expect(sentence).not.toMatch(OLD_STEP_NAMES);
+        expect(sentence).not.toMatch(TEAM_WORDS);
+      }
+    },
+  );
 
   it("hides the line about Claude Code while it checks again", async () => {
     const query = vi

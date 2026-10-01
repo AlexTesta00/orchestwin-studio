@@ -29,8 +29,8 @@ const roles: Record<AgentIdentifier, RoleIdentity> = {
     steps: [1],
   },
   TEAM_SELECTOR: {
-    it: ["Organizzatore del team", "Propone gli specialisti adatti alla tua idea."],
-    en: ["Team planner", "Suggests the specialists your idea needs."],
+    it: ["Organizzatore delle prospettive", "Propone le prospettive adatte alla tua idea."],
+    en: ["Perspectives planner", "Suggests the perspectives your idea needs."],
     image: "ur",
     steps: [2],
   },
@@ -198,11 +198,11 @@ export function twinIdentity(
     name: role ? (locale === "it" ? "Specialista" : "Specialist") : "User Twin",
     description: role
       ? locale === "it"
-        ? "Contribuisce al lavoro del team."
-        : "Contributes to the team's work."
+        ? "Contribuisce al lavoro sul progetto."
+        : "Contributes to the work on the project."
       : locale === "it"
         ? "Rappresenta un punto di vista degli utenti del prodotto."
-        : "Represents a perspective of your product's users.",
+        : "Represents a point of view of your product's users.",
     avatar: role ? roleAvatar(role) : twinAvatar(identityKey, peers),
     isUser: !role,
   };

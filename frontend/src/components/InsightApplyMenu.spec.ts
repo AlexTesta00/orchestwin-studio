@@ -13,6 +13,12 @@ import { surfaceKey } from "./UiSurface.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 function application(
   overrides: Partial<InsightApplicationPayload> = {},
 ): InsightApplicationPayload {
@@ -92,11 +98,29 @@ describe("InsightApplyMenu", () => {
     );
     const note = wrapper.get('[data-testid="insight-brief-note"]');
     expect(note.text()).toBe(
-      "Nel brief cambia il punto di partenza: brief, squadra, twin, requisiti e design andranno approvati di nuovo.",
+      "Nel brief cambia il punto di partenza: brief, prospettive, twin, requisiti e design andranno approvati di nuovo.",
     );
     expect(wrapper.get('[data-testid="insight-apply-brief"]').attributes("aria-describedby")).toBe(
       note.attributes("id"),
     );
+  });
+
+  it.each([
+    [
+      "it",
+      "Nel brief cambia il punto di partenza: brief, prospettive, twin, requisiti e design andranno approvati di nuovo.",
+    ],
+    [
+      "en",
+      "In the brief it changes the starting point: brief, perspectives, twins, requirements and design will need approval again.",
+    ],
+  ] as const)("names no step by its old name and speaks of no team in %s", async (locale, note) => {
+    const wrapper = mountMenu(fakeApi(), CHAT_SOURCE, locale);
+    await wrapper.get('[data-testid="insight-apply-requirements"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="insight-brief-note"]').text()).toBe(note);
+    expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+    expect(wrapper.text()).not.toMatch(TEAM_WORDS);
   });
 
   it("applies the insight to the requirements and reports the created code", async () => {

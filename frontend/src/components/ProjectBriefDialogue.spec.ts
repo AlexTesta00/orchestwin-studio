@@ -9,6 +9,12 @@ import { expectAccessible } from "@/test/axe";
 import type { BriefDialogueResponse, BriefDialogueTurnPayload } from "@/types/briefDialogue";
 import ProjectBriefDialogue from "./ProjectBriefDialogue.vue";
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 const BRIEF = {
   id: "brief-2",
   project_id: "project-1",
@@ -436,6 +442,39 @@ describe("project brief dialogue", () => {
       await flushPromises();
 
       expect(wrapper.get("[data-testid='brief-dialogue-progress']").text()).toBe(sentence);
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "names no step by its old name and speaks of no team in %s",
+    async (locale) => {
+      const entry = mountDialogue(fakeApi(null), null, locale);
+      await flushPromises();
+      expect(entry.find("[data-testid='brief-dialogue-entry']").exists()).toBe(true);
+      expect(entry.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(entry.text()).not.toMatch(TEAM_WORDS);
+      entry.unmount();
+
+      setActivePinia(createPinia());
+      const question = mountDialogue(
+        fakeApi(
+          response("BRIEF_DIALOGUE_CURRENT", [
+            turn(1, "problem", { kind: "TEXT", text: "Si perdono i nomi.", items: null }),
+            turn(2, "goals", null),
+          ]),
+        ),
+        null,
+        locale,
+      );
+      await flushPromises();
+      expect(question.find("[data-testid='brief-dialogue-pending']").exists()).toBe(true);
+      expect(question.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(question.text()).not.toMatch(TEAM_WORDS);
+      await question.get("[data-testid='brief-dialogue-compose']").trigger("click");
+      await flushPromises();
+      expect(question.find("[data-testid='brief-dialogue-synthesized']").exists()).toBe(true);
+      expect(question.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(question.text()).not.toMatch(TEAM_WORDS);
     },
   );
 

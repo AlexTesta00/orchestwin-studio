@@ -24,12 +24,12 @@ let mounted = true;
 const copy = computed(() =>
   props.locale === "it"
     ? {
-        title: "Assistenti AI",
-        ready: "Gli assistenti AI sono collegati e pronti a ricevere richieste.",
+        title: "Modello AI",
+        ready: "Il modello AI è collegato e pronto a ricevere richieste.",
         development:
-          "Questo ambiente usa simulazioni di sviluppo. Gli assistenti AI reali non sono collegati.",
-        unavailable: "Gli assistenti AI non sono al momento raggiungibili. Riprova tra poco.",
-        unknown: "Non è stato possibile verificare la disponibilità degli assistenti.",
+          "Questo ambiente usa simulazioni di sviluppo. Il modello AI reale non è collegato.",
+        unavailable: "Il modello AI non è al momento raggiungibile. Riprova tra poco.",
+        unknown: "Non è stato possibile verificare la disponibilità del modello.",
         refresh: "Verifica disponibilità",
         checking: "Verifica in corso…",
         claudeReady: "Claude Code {version}, abbonamento {subscription}",
@@ -44,12 +44,12 @@ const copy = computed(() =>
           "Claude Code è collegato a un account senza abbonamento di Claude: accedi con l'account del tuo abbonamento.",
       }
     : {
-        title: "AI assistants",
-        ready: "The AI assistants are connected and ready for requests.",
+        title: "AI model",
+        ready: "The AI model is connected and ready for requests.",
         development:
-          "This environment uses development simulations. Real AI assistants are not connected.",
-        unavailable: "The AI assistants cannot be reached right now. Try again shortly.",
-        unknown: "Could not check assistant availability.",
+          "This environment uses development simulations. The real AI model is not connected.",
+        unavailable: "The AI model cannot be reached right now. Try again shortly.",
+        unknown: "Could not check model availability.",
         refresh: "Check availability",
         checking: "Checking…",
         claudeReady: "Claude Code {version}, {subscription} subscription",

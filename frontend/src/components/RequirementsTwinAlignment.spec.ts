@@ -19,6 +19,12 @@ const PROJECT_ID = "project-1";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 function status(
   overrides: Partial<RequirementsAlignmentPayload> = {},
 ): RequirementsAlignmentPayload {
@@ -104,13 +110,13 @@ describe("RequirementsTwinAlignment", () => {
     expect(wrapper.find("button").exists()).toBe(false);
   });
 
-  it("updates the requirements to the current twins and asks to approve them again", async () => {
+  it("updates the requirements to the current versions and asks to approve them again", async () => {
     const api = new FakeAlignmentApi(status());
     const wrapper = mountAlignment(api);
     await flushPromises();
-    expect(wrapper.get(card).find("h2").text()).toBe("I twin sono cambiati");
+    expect(wrapper.get(card).find("h2").text()).toBe("Requisiti da aggiornare");
     expect(wrapper.get(text).text()).toBe(
-      "Questi requisiti sono stati scritti per i twin precedenti. Aggiornali perché seguano i twin attuali: il contenuto resta lo stesso, poi li approvi di nuovo.",
+      "Qualcosa a monte è cambiato (twin, brief o prospettive): i requisiti restano gli stessi e vengono riagganciati alle versioni nuove.",
     );
     expect(wrapper.get(update).text()).toBe("Aggiorna i requisiti");
     await wrapper.get(update).trigger("click");
@@ -122,7 +128,7 @@ describe("RequirementsTwinAlignment", () => {
     expect(done.text()).toContain(
       "La versione 3 dei requisiti è pronta con lo stesso contenuto. Approvala di nuovo qui sotto.",
     );
-    expect(wrapper.get(card).find("h2").text()).toBe("I requisiti seguono i twin attuali");
+    expect(wrapper.get(card).find("h2").text()).toBe("I requisiti seguono le versioni attuali");
     expect(wrapper.find(update).exists()).toBe(false);
     await wrapper.setProps({ refreshKey: REALIGNMENT.content_hash });
     await flushPromises();
@@ -170,7 +176,7 @@ describe("RequirementsTwinAlignment", () => {
     const wrapper = mountAlignment(api);
     await flushPromises();
     expect(wrapper.get(text).text()).toBe(
-      "Approva prima i twin nel passo User Twin, poi torna qui per aggiornare i requisiti.",
+      "Prima aggiorna e approva i twin in User Twin, poi torna qui per aggiornare i requisiti.",
     );
     expect(wrapper.find(update).exists()).toBe(false);
     expect(wrapper.get(card).find("details").exists()).toBe(false);
@@ -187,10 +193,7 @@ describe("RequirementsTwinAlignment", () => {
   });
 
   it.each([
-    [
-      "REQUIREMENTS_CONTEXT_CHANGED",
-      "Sono cambiati anche il brief o la squadra, quindi questi requisiti non si possono aggiornare automaticamente.",
-    ],
+    ["REQUIREMENTS_CONTEXT_CHANGED", "Questi requisiti non si possono aggiornare automaticamente."],
     [
       "TWIN_NO_LONGER_AVAILABLE",
       "Questi requisiti citano un twin che non fa più parte del progetto, quindi non si possono aggiornare automaticamente.",
@@ -206,6 +209,49 @@ describe("RequirementsTwinAlignment", () => {
     expect(details.get("code").text()).toBe(issue);
     expect(wrapper.find(update).exists()).toBe(false);
   });
+
+  it.each([
+    [
+      "it",
+      "Requisiti da aggiornare",
+      "Qualcosa a monte è cambiato (twin, brief o prospettive): i requisiti restano gli stessi e vengono riagganciati alle versioni nuove.",
+      "I requisiti seguono le versioni attuali",
+    ],
+    [
+      "en",
+      "Requirements to update",
+      "Something upstream changed (twins, brief or perspectives): the requirements stay the same and are re-anchored to the new versions.",
+      "The requirements follow the current versions",
+    ],
+  ] as const)(
+    "names no step by its old name and speaks of no team in %s",
+    async (locale, title, ready, doneTitle) => {
+      for (const issue of [
+        "USER_TWINS_APPROVAL_REQUIRED",
+        "REQUIREMENTS_REVISION_PENDING",
+        "TWIN_NO_LONGER_AVAILABLE",
+        "REQUIREMENTS_CONTEXT_CHANGED",
+      ]) {
+        const waiting = mountAlignment(new FakeAlignmentApi(status({ issue })), { locale });
+        await flushPromises();
+        expect(waiting.get(card).find("h2").text()).toBe(title);
+        expect(waiting.text()).not.toMatch(OLD_STEP_NAMES);
+        expect(waiting.text()).not.toMatch(TEAM_WORDS);
+        waiting.unmount();
+      }
+      const wrapper = mountAlignment(new FakeAlignmentApi(status()), { locale });
+      await flushPromises();
+      expect(wrapper.get(text).text()).toBe(ready);
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+      await wrapper.get(update).trigger("click");
+      await flushPromises();
+      expect(wrapper.get(card).find("h2").text()).toBe(doneTitle);
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+      wrapper.unmount();
+    },
+  );
 
   it("explains a refused update and keeps the button available", async () => {
     const api = new FakeAlignmentApi(status());

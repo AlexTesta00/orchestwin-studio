@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { modelFeedback } from "./modelFeedback";
+import { generationProgress, modelFeedback } from "./modelFeedback";
 
 const REFUSALS = [
   [
     "UX_DESIGNER_REQUIRED",
-    "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
-    "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+    "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo.",
   ],
   [
     "REQUIREMENTS_ANALYST_REQUIRED",
-    "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
-    "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+    "The Product perspective is missing: open Perspectives and prepare them again.",
+    "Manca la prospettiva Prodotto: apri Prospettive e preparale di nuovo.",
   ],
   [
     "GROUNDED_INPUT_REQUIRED",
@@ -32,6 +32,33 @@ const REFUSALS = [
 
 const API_CODE = /\b[A-Z]{2,}(?:_[A-Z]+)+\b/;
 
+const CODES = [
+  "WEB_SOURCE_MOCKUP_STRUCTURE_MISMATCH",
+  "SOURCE_DESIGN_STRUCTURE_MISMATCH",
+  "INVALID_MOCKUP_OUTPUT",
+  "DESIGN_CONTEXT_CHANGED",
+  "REAL_MOCKUP_MODEL_NOT_CONFIGURED",
+  "SOURCE_JAVASCRIPT_SYNTAX_INVALID",
+  "SOURCE_JAVASCRIPT_PARSER_UNAVAILABLE",
+  "INVALID_PROVIDER_OUTPUT",
+  "PROPOSAL_REJECTED",
+  "UX_DESIGNER_REQUIRED",
+  "REQUIREMENTS_ANALYST_REQUIRED",
+  "GROUNDED_INPUT_REQUIRED",
+  "INCOMPLETE_OUTPUT",
+  "CONTEXT_BUDGET_EXCEEDED",
+  "PROVIDER_UNAVAILABLE",
+  "TIMEOUT",
+  "INVALID_API_RESPONSE",
+  "SOURCE_CONTEXT_LIMIT_EXCEEDED",
+] as const;
+
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 describe("modelFeedback", () => {
   it.each(REFUSALS)(
     "puts %s into plain words in English and in Italian",
@@ -48,6 +75,40 @@ describe("modelFeedback", () => {
       expect(sentences.filter((sentence) => API_CODE.test(sentence))).toEqual([]);
       expect(new Set(sentences).size).toBe(REFUSALS.length);
     }
+  });
+
+  it("names no step by its old name and speaks of no team, in English and in Italian", () => {
+    for (const locale of ["en", "it"] as const) {
+      const sentences = [
+        ...CODES.map((code) => modelFeedback(code, locale) ?? ""),
+        generationProgress(locale),
+      ];
+
+      expect(sentences.filter((sentence) => sentence.length === 0)).toEqual([]);
+      expect(sentences.filter((sentence) => OLD_STEP_NAMES.test(sentence))).toEqual([]);
+      expect(sentences.filter((sentence) => TEAM_WORDS.test(sentence))).toEqual([]);
+    }
+  });
+
+  it("speaks of the model, not of an assistant, while it prepares or cannot answer", () => {
+    expect(generationProgress("en")).toBe(
+      "The model is preparing the proposal. This may take a few minutes; keep this page open.",
+    );
+    expect(generationProgress("it")).toBe(
+      "Il modello sta preparando la proposta. Può richiedere alcuni minuti: lascia aperta questa pagina.",
+    );
+    expect(modelFeedback("PROVIDER_UNAVAILABLE", "en")).toBe(
+      "The model cannot be reached. Check its availability in Project details before retrying.",
+    );
+    expect(modelFeedback("PROVIDER_UNAVAILABLE", "it")).toBe(
+      "Il modello non è raggiungibile. Controlla la sua disponibilità in Dettagli del progetto prima di riprovare.",
+    );
+    expect(modelFeedback("INCOMPLETE_OUTPUT", "en")).toBe(
+      "The model did not complete its response. Your project has been preserved. You can try again.",
+    );
+    expect(modelFeedback("INCOMPLETE_OUTPUT", "it")).toBe(
+      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+    );
   });
 
   it("has no sentence for a code it does not know or for a missing code", () => {

@@ -8,6 +8,12 @@ import ProjectArtifactGraph from "./ProjectArtifactGraph.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("access-token");
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 function fakeApi(): ArtifactGraphApi {
   return {
     current: async () => ARTIFACT_GRAPH,
@@ -22,17 +28,20 @@ function mountGraph(
   options: {
     api?: ArtifactGraphApi;
     saveExport?: (blob: Blob, filename: string) => void;
+    locale?: "en" | "it";
   } = {},
 ) {
   const props: {
     projectId: string;
     authorize: typeof authorize;
     api: ArtifactGraphApi;
+    locale: "en" | "it";
     saveExport?: (blob: Blob, filename: string) => void;
   } = {
     projectId: ARTIFACT_GRAPH_PROJECT_ID,
     authorize,
     api: options.api ?? fakeApi(),
+    locale: options.locale ?? "en",
   };
 
   if (options.saveExport !== undefined) {
@@ -79,6 +88,36 @@ describe("ProjectArtifactGraph", () => {
     expect(relationshipRowsAfter[0]?.text()).toContain("GROUNDED_IN");
     expect(relationshipRowsAfter[0]?.text()).toContain("DESIGN-v2");
   });
+
+  it.each([
+    [
+      "it",
+      "Tutte le fasi",
+      ["Brief, Prospettive e User Twin", "Definizione", "Design e valutazione"],
+    ],
+    [
+      "en",
+      "All stages",
+      ["Brief, Perspectives and User Twin", "Definition", "Design & Evaluation"],
+    ],
+  ] as const)(
+    "names the stages after the steps and speaks of no team in %s",
+    async (locale, allStages, stages) => {
+      const wrapper = mountGraph({ locale });
+
+      await flushPromises();
+
+      expect(
+        wrapper.findAll("section[aria-label] article h4").map((title) => title.text()),
+      ).toEqual(stages);
+      expect(wrapper.findAll("select option").map((option) => option.text())).toEqual([
+        allStages,
+        ...stages,
+      ]);
+      expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+      expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+    },
+  );
 
   it("downloads the server-generated JSON export through an injected saver", async () => {
     const saveExport = vi.fn<(blob: Blob, filename: string) => void>();

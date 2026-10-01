@@ -12,8 +12,8 @@ const messages: Record<string, [string, string]> = {
     "Il modello ha restituito un mockup incoerente. Il design corrente è invariato; genera una nuova bozza.",
   ],
   DESIGN_CONTEXT_CHANGED: [
-    "The design changed during generation. Refresh this step before generating another mockup.",
-    "Il design è cambiato durante la generazione. Aggiorna il passaggio prima di generare un altro mockup.",
+    "The design changed during generation. Reload the page before generating another mockup.",
+    "Il design è cambiato durante la generazione. Ricarica la pagina prima di generare un altro mockup.",
   ],
   REAL_MOCKUP_MODEL_NOT_CONFIGURED: [
     "The UX/UI model is not connected. Check model status before generating a mockup.",
@@ -36,28 +36,28 @@ const messages: Record<string, [string, string]> = {
     "Il modello non è riuscito a preparare questa proposta a partire dai passi approvati. Il progetto è invariato. Puoi riprovare.",
   ],
   UX_DESIGNER_REQUIRED: [
-    "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
-    "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+    "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo.",
   ],
   REQUIREMENTS_ANALYST_REQUIRED: [
-    "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
-    "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+    "The Product perspective is missing: open Perspectives and prepare them again.",
+    "Manca la prospettiva Prodotto: apri Prospettive e preparale di nuovo.",
   ],
   GROUNDED_INPUT_REQUIRED: [
     "The approved steps do not give the model enough facts for this proposal. Add details to the brief or to the earlier steps, then try again.",
     "I passi approvati non danno al modello abbastanza informazioni per questa proposta. Aggiungi dettagli al brief o ai passi precedenti, poi riprova.",
   ],
   INCOMPLETE_OUTPUT: [
-    "The assistant did not complete its response. Your project has been preserved. You can try again.",
-    "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+    "The model did not complete its response. Your project has been preserved. You can try again.",
+    "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
   ],
   CONTEXT_BUDGET_EXCEEDED: [
     "The project exceeds the model context window. Reduce the scope or configure a larger context.",
     "Il progetto supera il contesto del modello. Riduci l’ambito o configura un contesto maggiore.",
   ],
   PROVIDER_UNAVAILABLE: [
-    "The AI assistant cannot be reached. Check assistant availability in Project tools and details before retrying.",
-    "L’assistente AI non è raggiungibile. Controlla la disponibilità in Strumenti e dettagli del progetto prima di riprovare.",
+    "The model cannot be reached. Check its availability in Project details before retrying.",
+    "Il modello non è raggiungibile. Controlla la sua disponibilità in Dettagli del progetto prima di riprovare.",
   ],
   TIMEOUT: [
     "Generation timed out. Check model status before retrying.",
@@ -79,6 +79,6 @@ export function modelFeedback(code: string | null | undefined, locale: "en" | "i
 
 export function generationProgress(locale: "en" | "it") {
   return locale === "it"
-    ? "L’assistente sta preparando la proposta. Può richiedere alcuni minuti: lascia aperta questa pagina."
-    : "The assistant is preparing the proposal. This may take a few minutes; keep this page open.";
+    ? "Il modello sta preparando la proposta. Può richiedere alcuni minuti: lascia aperta questa pagina."
+    : "The model is preparing the proposal. This may take a few minutes; keep this page open.";
 }

@@ -74,7 +74,7 @@ const messages = {
     brief: "Set aside for the brief",
     briefSetAside: "Set aside for the brief",
     briefNote:
-      "In the brief it changes the starting point: brief, team, twins, requirements and design will need approval again.",
+      "In the brief it changes the starting point: brief, perspectives, twins, requirements and design will need approval again.",
     briefFull: "You have already set aside {max} insights, the most for one brief version.",
     field: "Brief field",
     busy: "Applying…",
@@ -103,7 +103,7 @@ const messages = {
     brief: "Metti da parte per il brief",
     briefSetAside: "Messo da parte per il brief",
     briefNote:
-      "Nel brief cambia il punto di partenza: brief, squadra, twin, requisiti e design andranno approvati di nuovo.",
+      "Nel brief cambia il punto di partenza: brief, prospettive, twin, requisiti e design andranno approvati di nuovo.",
     briefFull: "Hai già messo da parte {max} spunti, il massimo per una versione del brief.",
     field: "Campo del brief",
     busy: "Applico…",

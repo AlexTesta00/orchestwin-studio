@@ -101,7 +101,7 @@ const messages = {
     confirmation:
       "{twin} will be added to this project as a new twin. Its profile stays the same and every observation keeps the note that it comes from {project}. After the import you approve the twins of this project again.",
     add: "Add the twin",
-    added: "{twin} was added. Now approve the twins again at the end of this step.",
+    added: "{twin} was added. Now approve the twins again at the bottom of the page.",
     loadingProjects: "Loading your projects…",
     loadingTwins: "Loading the twins of {project}…",
     readingFile: "Reading the file…",
@@ -121,13 +121,13 @@ const messages = {
       TWIN_BELONGS_TO_PROJECT: "This twin comes from this same project.",
       USER_TWINS_REQUIRED: "This project has no twins yet: create them first.",
       USER_TWINS_OUTDATED:
-        "The Brief or the Team of this project changed: create its twins again first.",
+        "The Brief or the Perspectives of this project changed: update its twins first.",
       SOURCE_TWINS_NOT_APPROVED: "The twins of that project are not approved yet.",
       SOURCE_PROJECT_NOT_FOUND: "That project cannot be found, or it has no brief yet.",
       SOURCE_TWIN_NOT_FOUND: "That twin is no longer among the approved twins of its project.",
       PROJECT_NOT_FOUND: "This project cannot be found. Reload the page.",
       BRIEF_APPROVAL_REQUIRED: "Approve the Brief of this project first.",
-      TEAM_APPROVAL_REQUIRED: "Approve the Team of this project first.",
+      TEAM_APPROVAL_REQUIRED: "Approve the Perspectives of this project first.",
       TWIN_DOCUMENT_INVALID: "The twin file is damaged or incomplete.",
       TWIN_DOCUMENT_UNSUPPORTED:
         "The twin file comes from a different version of the Studio and cannot be used.",
@@ -180,8 +180,7 @@ const messages = {
     confirmation:
       "Il twin «{twin}» sarà aggiunto a questo progetto. Il suo profilo resta lo stesso e ogni osservazione conserva la nota che arriva da {project}. Dopo l'aggiunta approvi di nuovo i twin di questo progetto.",
     add: "Aggiungi il twin",
-    added:
-      "Il twin «{twin}» è stato aggiunto. Ora approva di nuovo i twin in fondo a questo passo.",
+    added: "Il twin «{twin}» è stato aggiunto. Ora approva di nuovo i twin in fondo alla pagina.",
     loadingProjects: "Carico i tuoi progetti…",
     loadingTwins: "Carico i twin di {project}…",
     readingFile: "Leggo il file…",
@@ -200,13 +199,13 @@ const messages = {
       TWIN_BELONGS_TO_PROJECT: "Questo twin viene proprio da questo progetto.",
       USER_TWINS_REQUIRED: "Questo progetto non ha ancora twin: creali prima.",
       USER_TWINS_OUTDATED:
-        "Il Brief o la Squadra di questo progetto sono cambiati: prima crea di nuovo i suoi twin.",
+        "Il Brief o le Prospettive di questo progetto sono cambiati: prima aggiorna i suoi twin.",
       SOURCE_TWINS_NOT_APPROVED: "I twin di quel progetto non sono ancora approvati.",
       SOURCE_PROJECT_NOT_FOUND: "Quel progetto non si trova, oppure non ha ancora un brief.",
       SOURCE_TWIN_NOT_FOUND: "Quel twin non è più tra i twin approvati del suo progetto.",
       PROJECT_NOT_FOUND: "Questo progetto non si trova. Ricarica la pagina.",
       BRIEF_APPROVAL_REQUIRED: "Prima approva il Brief di questo progetto.",
-      TEAM_APPROVAL_REQUIRED: "Prima approva la Squadra di questo progetto.",
+      TEAM_APPROVAL_REQUIRED: "Prima approva le Prospettive di questo progetto.",
       TWIN_DOCUMENT_INVALID: "Il file del twin è danneggiato o incompleto.",
       TWIN_DOCUMENT_UNSUPPORTED:
         "Il file del twin viene da un'altra versione dello Studio e non si può usare.",
