@@ -32,6 +32,7 @@ from orchestwin.api.design import (
     DesignRevisionService,
 )
 from orchestwin.api.runtime_configuration import load_runtime_connection_settings
+from orchestwin.api.sections import build_sections_service
 from orchestwin.api.training import SqlAlchemyTrainingApiService, TrainingApiService
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import (
@@ -70,6 +71,7 @@ from orchestwin.models.runtime import (
     load_team_proposal_runtime_settings,
 )
 from orchestwin.persistence import DatabaseRuntime, create_database_runtime
+from orchestwin.projects import design_runtime
 from orchestwin.projects.application import (
     LocalProjectApplicationService,
     ProjectApplicationService,
@@ -83,6 +85,7 @@ from orchestwin.projects.clarification_application import (
     ProjectClarificationApplicationService,
 )
 from orchestwin.projects.code_change_state import SqlAlchemyProjectStateQueryService
+from orchestwin.projects.design_realignment_service import DesignRealignmentService
 from orchestwin.projects.design_runtime import build_design_services
 from orchestwin.projects.persistence import (
     SqlAlchemyProjectBriefGateUnitOfWorkFactory,
@@ -105,7 +108,9 @@ from orchestwin.projects.requirements_runtime import (
     SqlAlchemyRequirementsQueryService,
     build_requirements_services,
 )
+from orchestwin.projects.sections_service import SectionsService
 from orchestwin.training.adapter_artifacts import ContentAddressedAdapterRegistry
+from orchestwin.twins.realignment_service import UserModelingRealignmentService
 from orchestwin.twins.runtime import (
     ManagedUserModelingUnitOfWorkFactory,
     SqlAlchemyUserModelingGovernanceAdapter,
@@ -203,7 +208,10 @@ class ApplicationRuntime:
     project_diagram_service: ProjectDiagramService | None = None
     knowledge_package_service: KnowledgePackageService | None = None
     twin_import_service: TwinImportService | None = None
+    user_modeling_realignment_service: UserModelingRealignmentService | None = None
     requirements_realignment_service: RequirementsRealignmentService | None = None
+    design_realignment_service: DesignRealignmentService | None = None
+    sections_service: SectionsService | None = None
     project_import_service: ProjectImportService | None = None
     training_api_service: TrainingApiService | None = None
 
@@ -328,10 +336,32 @@ def create_default_runtime(
         user_modeling_gates=user_modeling.gates,
         candidates=SqlAlchemyTwinImportCandidateQuery(database_runtime.session_factory),
     )
+    user_modeling_realignment_service = UserModelingRealignmentService(
+        governance=SqlAlchemyUserModelingGovernanceAdapter(database_runtime.session_factory),
+        team_queries=agent_team_service,
+        uow_factory=ManagedUserModelingUnitOfWorkFactory(database_runtime.session_factory),
+    )
     requirements_realignment_service = RequirementsRealignmentService(
         uow_factory=ManagedRequirementsUnitOfWorkFactory(database_runtime.session_factory),
         user_modeling_queries=user_modeling.queries,
         user_modeling_gates=user_modeling.gates,
+        user_modeling_context=user_modeling_realignment_service,
+    )
+    design_realignment_service = DesignRealignmentService(
+        uow_factory=design_runtime.ManagedDesignUnitOfWorkFactory(database_runtime.session_factory),
+        requirements_queries=requirements.queries,
+        requirements_gates=requirements.gate,
+    )
+    sections_service = build_sections_service(
+        database_runtime=database_runtime,
+        user_modeling_services=user_modeling,
+        user_modeling_realignment_service=user_modeling_realignment_service,
+        requirements_realignment_service=requirements_realignment_service,
+        requirements_gate_service=requirements.gate,
+        design_realignment_service=design_realignment_service,
+        design_gate_service=design.gate,
+        real_model_runtime=real_models,
+        proposal_evidence_store=proposal_evidence_store,
     )
     project_import_service = ProjectImportService(session_factory=database_runtime.session_factory)
 
@@ -360,7 +390,10 @@ def create_default_runtime(
         project_diagram_service=project_diagram_service,
         knowledge_package_service=knowledge_package_service,
         twin_import_service=twin_import_service,
+        user_modeling_realignment_service=user_modeling_realignment_service,
         requirements_realignment_service=requirements_realignment_service,
+        design_realignment_service=design_realignment_service,
+        sections_service=sections_service,
         project_import_service=project_import_service,
         training_api_service=SqlAlchemyTrainingApiService(
             session_factory=database_runtime.session_factory,
