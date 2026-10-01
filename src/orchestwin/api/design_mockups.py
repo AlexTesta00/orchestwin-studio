@@ -53,7 +53,7 @@ from orchestwin.models.generated_mockup_instructions import (
     mockup_instruction,
 )
 from orchestwin.models.generation_budget import provider_result_cost_microusd
-from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS
+from orchestwin.models.hosted_configuration import HOSTED_PROVIDER_KINDS, ModelPrices
 from orchestwin.models.output_language import dominant_language
 from orchestwin.models.proposal_evidence import (
     ProposalEvidenceError,
@@ -64,6 +64,7 @@ from orchestwin.models.proposal_evidence import (
 )
 from orchestwin.models.proposal_generation import ProposalGenerationError
 from orchestwin.models.real_runtime import RealModelRuntimeError
+from orchestwin.models.structured_generation import StructuredGenerationProviderKind
 
 MOCKUP_RULES = (
     "Act as the UX/UI designer. Produce an actual visual mockup of the selected design in the "
@@ -144,6 +145,7 @@ class MockupCapabilities(BaseModel):
     iterations: bool
     model: str | None
     static_check: bool
+    paid: bool
 
 
 class MockupStatus(StrEnum):
@@ -186,6 +188,15 @@ def generated_route(generator, purpose):
 
 def _alternative(package, alternative_id):
     return next((item for item in package.alternatives if item.id == alternative_id), None)
+
+
+def _route_kind(route):
+    return getattr(getattr(route, "configuration", None), "provider_kind", None)
+
+
+def _unpriced(route) -> bool:
+    prices = getattr(getattr(route, "configuration", None), "prices", None)
+    return isinstance(prices, ModelPrices) and prices.unpriced
 
 
 def _result_cost(result) -> int:
@@ -358,6 +369,8 @@ class ModelMockupApplication:
             iterations=iterations is not None,
             model=model if chosen is not None and isinstance(model, str) else None,
             static_check=getattr(self.runtime, "final_evaluator_runtime", None) is not None,
+            paid=chosen is None
+            or _route_kind(chosen) is not StructuredGenerationProviderKind.CLAUDE_CODE_CLI,
         )
 
     @evidence_application
@@ -461,7 +474,7 @@ class ModelMockupApplication:
 
     async def require_budget(self, route, project_id):
         budget = getattr(route, "budget", None)
-        if budget is None:
+        if budget is None or _unpriced(route):
             return
         reader = getattr(self._proposal_evidence_store, "spent_microusd", None)
         if reader is None:
