@@ -43,6 +43,7 @@ from orchestwin.api.design import (
     DesignRevisionPayload,
 )
 from orchestwin.api.design_mockups import MockupCapabilities
+from orchestwin.api.design_realignment import DesignAlignmentPayload, DesignRealignmentPayload
 from orchestwin.api.design_review_pins import ReviewDocumentPayload, ReviewPinsPayload
 from orchestwin.api.generation_jobs import GenerationJob, GenerationJobKind, GenerationOperation
 from orchestwin.api.generation_requests import request_key
@@ -62,6 +63,11 @@ from orchestwin.api.requirements import (
     RequirementsSpecificationPayload,
     RequirementsSpecificationVersionPayload,
 )
+from orchestwin.api.requirements_realignment import (
+    RequirementsAlignmentPayload,
+    RequirementsRealignmentPayload,
+)
+from orchestwin.api.sections import ProjectSectionsPayload, SectionsAlignmentPayload
 from orchestwin.api.services import ApplicationRuntime
 from orchestwin.api.teams import (
     AgentCatalogResponse,
@@ -81,6 +87,10 @@ from orchestwin.api.user_modeling import (
     SnapshotGenerationCommandPayload,
     UserModelingReadinessPayload,
     UserModelingSnapshotVersionPayload,
+)
+from orchestwin.api.user_modeling_realignment import (
+    UserModelingAlignmentPayload,
+    UserModelingRealignmentPayload,
 )
 from orchestwin.artifacts.bound_mockups import bound_mockup_from_snapshot
 from orchestwin.artifacts.design_evaluation import synthetic_finding_from_snapshot
@@ -241,11 +251,19 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/twin-updates/{update_id}/decision"),
         ("POST", project + "/user-twins/{twin_id}/observations"),
         ("POST", project + "/user-twins/{twin_id}/observations/{code}/retire"),
+        ("GET", project + "/sections"),
+        ("POST", project + "/sections/alignment"),
+        ("GET", project + "/user-modeling/context-alignment"),
+        ("POST", project + "/user-modeling/context-alignment"),
+        ("GET", project + "/requirements/twin-alignment"),
+        ("POST", project + "/requirements/twin-alignment"),
+        ("GET", project + "/design/requirements-alignment"),
+        ("POST", project + "/design/requirements-alignment"),
     }
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 125
+    assert len(ROUTES) == 133
 
 
 class _Client:
@@ -733,11 +751,22 @@ def test_the_answers_of_a_studio_without_a_model_fit_the_real_models() -> None:
             "POST", base + "/gates/project-brief/decisions", {"action": "APPROVE"}
         )
         assert decided[0] == 200
-        blocked = fits(
-            TeamProposalGenerationResponse, client.call("POST", base + "/team-proposals"), 409
+        contested = fits(
+            TeamProposalGenerationResponse, client.call("POST", base + "/team-proposals"), 201
         )
-        assert blocked["status"] == "BLOCKED_BY_CONSTRAINTS"
-        assert blocked["issues"]
+        assert contested["status"] == "CREATED"
+        assert contested["issues"] == contested["version"]["constraint_issues"]
+        assert contested["issues"]
+        fits(TeamProposalVersionResponse, (200, contested["version"]))
+        selected = [*contested["version"]["selected_agent_ids"], "BACKEND_ENGINEER"]
+        edited = fits(
+            TeamEditResponse,
+            client.call(
+                "PATCH", base + "/team-proposals/current", {"selected_agent_ids": selected}
+            ),
+            201,
+        )
+        assert edited["status"] == "UPDATED"
         assert studio.errors == []
 
 
@@ -762,6 +791,68 @@ def test_the_latest_mockup_has_the_keys_of_the_real_answer() -> None:
             "cost_microusd",
         ]
         DesignPackagePayload.model_validate(latest["package"]).to_domain()
+        assert studio.errors == []
+
+
+def test_the_sections_and_the_re_anchoring_fit_the_real_models() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed(studio)
+        project = studio.seed_project(owner=EMAIL, name="Calcolo mancia", through="design")
+        base = f"/projects/{project.id}"
+        fits(ProjectSectionsPayload, client.call("GET", base + "/sections"))
+        studio.seed_perspective_change(project.id, "SECURITY_REVIEWER")
+        behind = fits(ProjectSectionsPayload, client.call("GET", base + "/sections"))
+        assert behind["alignment"]["sections"] == ["USER_TWINS", "REQUIREMENTS", "DESIGN"]
+
+        path = base + "/user-modeling/context-alignment"
+        fits(UserModelingAlignmentPayload, client.call("GET", path))
+        fits(UserModelingRealignmentPayload, client.call("POST", path), 201)
+        fits(GateCommandPayload, client.call("POST", base + "/user-modeling/gate/submit"))
+        fits(
+            GateCommandPayload,
+            client.call("POST", base + "/user-modeling/gate/decision", {"action": "APPROVE"}),
+        )
+        path = base + "/requirements/twin-alignment"
+        fits(RequirementsAlignmentPayload, client.call("GET", path))
+        fits(RequirementsRealignmentPayload, client.call("POST", path), 201)
+        fits(
+            RequirementsGateSubmissionPayload,
+            client.call("POST", base + "/requirements/gate/submit"),
+        )
+        fits(
+            RequirementsGateDecisionPayload,
+            client.call("POST", base + "/requirements/gate/decision", {"action": "APPROVE"}),
+        )
+        path = base + "/design/requirements-alignment"
+        fits(DesignAlignmentPayload, client.call("GET", path))
+        fits(DesignRealignmentPayload, client.call("POST", path), 201)
+        status, refused = client.call("POST", path)
+        assert (status, refused) == (409, {"detail": {"code": "ALREADY_ALIGNED"}})
+
+        other = studio.seed_project(owner=EMAIL, name="Gesto", through="design")
+        other_base = f"/projects/{other.id}"
+        studio.seed_requirement_removed(other.id)
+        removed = fits(DesignAlignmentPayload, client.call("GET", other_base + path[len(base) :]))
+        assert removed["missing_codes"] == ["REQ-004", "AC-004"]
+        blocked = fits(
+            SectionsAlignmentPayload, client.call("POST", other_base + "/sections/alignment")
+        )
+        assert [item["outcome"] for item in blocked["results"]] == ["BLOCKED"]
+
+        last = studio.seed_project(owner=EMAIL, name="Requisiti", through="design")
+        studio.seed_requirements_change(last.id)
+        gesture = fits(
+            SectionsAlignmentPayload, client.call("POST", f"/projects/{last.id}/sections/alignment")
+        )
+        assert gesture["status"] == "ALIGNED"
+        fits(
+            DesignGateSubmissionPayload,
+            client.call("POST", f"/projects/{last.id}/design/gate/submit"),
+        )
+        nothing = fits(
+            SectionsAlignmentPayload, client.call("POST", f"/projects/{last.id}/sections/alignment")
+        )
+        assert (nothing["status"], nothing["results"]) == ("NOTHING_TO_ALIGN", [])
         assert studio.errors == []
 
 
