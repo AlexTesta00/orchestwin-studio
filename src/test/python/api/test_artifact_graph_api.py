@@ -5,27 +5,36 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
+from typing import Self
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from orchestwin.api.app import create_app
 from orchestwin.api.auth import AuthApiSettings, current_user_dependency
 from orchestwin.api.services import ApplicationRuntime
+from orchestwin.artifacts import traceability_runtime
+from orchestwin.artifacts.design_realignment import realigned_design_version
 from orchestwin.artifacts.traceability import (
     CrossStageArtifactGraph,
     build_cross_stage_artifact_graph,
 )
+from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.config import ApplicationSettings, RuntimeEnvironment
 from orchestwin.identity.domain import NormalizedEmail, UserAccount
+from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
 
 FIXTURE_DIRECTORY = Path(__file__).resolve().parents[1] / "artifacts"
 FIXTURE_PACKAGE_NAME = "artifact_graph_api_fixtures"
 OWNER_ID = UUID("00000000-0000-4000-8000-000000000002")
 NOW = datetime(2026, 8, 21, 16, 0, tzinfo=UTC)
+CHANGED_REQUIREMENTS_ID = UUID("00000000-0000-4000-8000-00000000c101")
+REALIGNED_DESIGN_ID = UUID("00000000-0000-4000-8000-00000000c102")
 
 
 def load_design_fixtures() -> ModuleType:
@@ -172,3 +181,84 @@ def test_application_registers_artifact_graph_routes_and_runtime_state() -> None
     assert "get" in paths[graph_path]
     assert "get" in paths[export_path]
     assert application.state.artifact_graph_query_service is marker
+
+
+def changed_requirements() -> RequirementsSpecificationVersion:
+    written = DESIGN_FIXTURES.requirements_version()
+    reworded = replace(
+        written.specification,
+        requirements=tuple(
+            replace(requirement, title=f"{requirement.title} and confirm them")
+            for requirement in written.specification.requirements
+        ),
+    )
+    return RequirementsSpecificationVersion(
+        id=CHANGED_REQUIREMENTS_ID,
+        project_id=written.project_id,
+        version_number=2,
+        based_on_version_number=1,
+        specification=reworded,
+        content_hash=reworded.content_hash,
+        created_by_user_id=OWNER_ID,
+        created_at=NOW,
+    )
+
+
+class Session:
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *_details: object) -> None:
+        return None
+
+
+class Repository:
+    def __init__(self, version: object) -> None:
+        self.version = version
+
+    def __call__(self, session: Session, *, owner_user_id: UUID) -> Self:
+        return self
+
+    async def current(self, *, project_id: UUID) -> object:
+        return self.version
+
+
+def stored_graph(monkeypatch: pytest.MonkeyPatch, requirements, design):
+    monkeypatch.setattr(
+        traceability_runtime,
+        "SqlAlchemyRequirementsSpecificationRepository",
+        Repository(requirements),
+    )
+    monkeypatch.setattr(
+        traceability_runtime, "SqlAlchemyDesignPackageRepository", Repository(design)
+    )
+    service = SqlAlchemyArtifactGraphQueryService(Session)
+    return client(service).get(f"/api/v1/projects/{PROJECT_ID}/artifacts/graph")
+
+
+def test_the_graph_stays_available_between_new_requirements_and_the_design_realignment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = changed_requirements()
+    written = DESIGN_FIXTURES.design_version()
+    realigned = realigned_design_version(
+        written,
+        current,
+        version_id=REALIGNED_DESIGN_ID,
+        created_by_user_id=OWNER_ID,
+        created_at=NOW,
+    )
+
+    behind = stored_graph(monkeypatch, current, written)
+    aligned = stored_graph(monkeypatch, current, realigned)
+
+    assert behind.status_code == 200
+    assert behind.json()["requirements_reference"]["artifact_id"] == str(CHANGED_REQUIREMENTS_ID)
+    assert behind.json()["design_reference"] is None
+    assert behind.json()["stage_counts"]["DESIGN"] == 0
+    assert aligned.status_code == 200
+    assert aligned.json()["design_reference"]["artifact_id"] == str(REALIGNED_DESIGN_ID)
+    assert aligned.json()["stage_counts"]["DESIGN"] > 0
+    assert aligned.json()["content_hash"] == (
+        build_cross_stage_artifact_graph(current, realigned).content_hash
+    )

@@ -10,6 +10,7 @@ from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepos
 from orchestwin.artifacts.traceability import (
     CrossStageArtifactGraph,
     build_cross_stage_artifact_graph,
+    grounded_design,
 )
 from orchestwin.projects.requirements_persistence import (
     SqlAlchemyRequirementsSpecificationRepository,
@@ -47,7 +48,9 @@ class SqlAlchemyArtifactGraphQueryService:
                 return None
 
             design = await design_repository.current(project_id=project_id)
-            return build_cross_stage_artifact_graph(requirements, design)
+            return build_cross_stage_artifact_graph(
+                requirements, grounded_design(requirements, design)
+            )
 
 
 __all__ = ["SqlAlchemyArtifactGraphQueryService"]
