@@ -6,6 +6,7 @@ import ProjectAcceptanceTestsPanel from "./ProjectAcceptanceTestsPanel.vue";
 import ProjectDevelopmentPanel from "./ProjectDevelopmentPanel.vue";
 import UiAgentMessage from "./UiAgentMessage.vue";
 import UiButton from "./UiButton.vue";
+import UiCommandLine from "./UiCommandLine.vue";
 import { surfaceKey, type SurfaceContext } from "./UiSurface.vue";
 
 import { apiClient } from "../api/client";
@@ -25,6 +26,21 @@ const AGENT_AVATAR = "/team/fe.webp";
 const STAGE_KEYS: readonly KnowledgeStage[] = ["brief", "team", "twins", "requirements", "design"];
 const TWINS_STAGE = STAGE_KEYS.indexOf("twins");
 const DESIGN_STAGE = STAGE_KEYS.indexOf("design");
+const FOLDER_NAME_LIMIT = 40;
+const TERMINAL_STEPS = [
+  { key: "login", command: "ut login --studio {address}" },
+  { key: "folder", command: "mkdir {folder}; cd {folder}" },
+  { key: "link", command: "ut init --project {project} --mode design-code" },
+  { key: "editor", command: "code ." },
+] as const;
+const DEVELOPMENT_STEPS = [
+  { key: "git", command: "git init" },
+  { key: "code", command: "ut code" },
+  { key: "test", command: "ut test --static ." },
+  { key: "align", command: "ut align" },
+  { key: "learn", command: "ut twins update" },
+  { key: "status", command: "ut status" },
+] as const;
 
 const props = withDefaults(
   defineProps<{
@@ -34,9 +50,11 @@ const props = withDefaults(
     authorize?: AuthorizedRequest;
     api?: KnowledgePackagesApi;
     saveExport?: (blob: Blob, fileName: string) => void;
+    studioAddress?: string;
   }>(),
   {
     locale: "en",
+    studioAddress: () => window.location.origin,
   },
 );
 
@@ -115,8 +133,31 @@ const messages = {
     approved: "approved",
     pending: "pending",
     howTo: "How to use it",
+    terminalWay: "From the terminal, with `ut`",
+    terminalSteps: {
+      login: "Log in to the Studio from the terminal. You need this only once on this computer.",
+      folder: "Create an empty folder for the project and go into it.",
+      link: "Link the folder to this project: `ut` downloads the knowledge folder here.",
+      editor:
+        "Open the folder in Visual Studio Code: the OrchesTwin panel shows the state of the project and runs the same commands.",
+    },
+    developmentWay: "Then, during development",
+    developmentSteps: {
+      git: "Put the folder under git: `ut align` works on the commits.",
+      code: "Have your coding agent write the application, with the requirements and the design as context.",
+      test: "Check the acceptance criteria in the browsers of this computer (with `--url` if the application has an address of its own).",
+      align:
+        "Have the twins review the commits and bring code, design and requirements back in line.",
+      learn: "Have the twins propose what they learned from the development.",
+      status: "See where the project stands.",
+    },
+    zipWay: "Without `ut`: download the zip",
+    folder: "project",
+    copyCommand: "Copy",
+    commandCopied: "Copied",
+    commandNotCopied: "Could not copy",
     steps: [
-      "Extract the archive inside your project, for example in a folder named orchestwin.",
+      "Download the folder with the button above and extract it into your project, in a folder named orchestwin.",
       "Open ORCHESTWIN.md: it is the index and explains every file.",
       "Build with your own tools. Requirements, screens and elements have stable codes to quote in your work.",
       "When the scope changes, come back to the Studio, approve the new version and download the folder again.",
@@ -198,8 +239,30 @@ const messages = {
     approved: "approvato",
     pending: "in attesa",
     howTo: "Come usarla",
+    terminalWay: "Dal terminale, con `ut`",
+    terminalSteps: {
+      login: "Accedi allo Studio dal terminale. Serve una volta sola su questo computer.",
+      folder: "Crea una cartella vuota per il progetto ed entraci.",
+      link: "Collega la cartella a questo progetto: `ut` scarica qui la cartella di conoscenza.",
+      editor:
+        "Apri la cartella in Visual Studio Code: il pannello OrchesTwin mostra lo stato del progetto e lancia gli stessi comandi.",
+    },
+    developmentWay: "Poi, durante lo sviluppo",
+    developmentSteps: {
+      git: "Metti la cartella sotto git: `ut align` lavora sui commit.",
+      code: "Fai scrivere l'applicazione al tuo agente di programmazione, con requisiti e design come contesto.",
+      test: "Verifica i criteri di accettazione nei browser di questo computer (con `--url` se l'applicazione ha un suo indirizzo).",
+      align: "Fai esaminare i commit ai twin e riallinea codice, design e requisiti.",
+      learn: "Fai proporre ai twin che cosa hanno imparato dallo sviluppo.",
+      status: "Guarda a che punto è il progetto.",
+    },
+    zipWay: "Senza `ut`: scarica lo zip",
+    folder: "progetto",
+    copyCommand: "Copia",
+    commandCopied: "Copiato",
+    commandNotCopied: "Copia non riuscita",
     steps: [
-      "Estrai l'archivio dentro il tuo progetto, per esempio in una cartella chiamata orchestwin.",
+      "Scarica la cartella con il pulsante qui sopra ed estraila nel tuo progetto, in una cartella chiamata orchestwin.",
       "Apri ORCHESTWIN.md: è l'indice e spiega ogni file.",
       "Realizza il progetto con i tuoi strumenti. Requisiti, schermate ed elementi hanno codici stabili da citare nel lavoro.",
       "Quando lo scopo cambia, torna nello Studio, approva la nuova versione e scarica di nuovo la cartella.",
@@ -273,6 +336,28 @@ const versions = computed<KnowledgePackageVersionPayload[]>(() =>
 );
 const latest = computed(() => versions.value[0] ?? null);
 const earlier = computed(() => versions.value.slice(1));
+const folderName = computed(
+  () => folderSlug(latest.value?.project_name ?? "") || copy.value.folder,
+);
+const terminalSteps = computed(() => {
+  const values = {
+    address: props.studioAddress,
+    folder: folderName.value,
+    project: props.projectId,
+  };
+  return TERMINAL_STEPS.map((step) => ({
+    key: step.key,
+    text: copy.value.terminalSteps[step.key],
+    command: fill(step.command, values),
+  }));
+});
+const developmentSteps = computed(() =>
+  DEVELOPMENT_STEPS.map((step) => ({
+    key: step.key,
+    text: copy.value.developmentSteps[step.key],
+    command: step.command,
+  })),
+);
 const loadingHistory = computed(
   () => packages.projectId === props.projectId && packages.pending.load,
 );
@@ -322,6 +407,16 @@ const dateFormat = computed(
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function folderSlug(name: string): string {
+  const slug = name
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return Array.from(slug).slice(0, FOLDER_NAME_LIMIT).join("").replace(/-+$/, "");
 }
 
 function plural(count: number, key: "twins" | "diagrams" | "tables" | "findings"): string {
@@ -690,16 +785,27 @@ watch(() => props.projectId, loadHistory, { immediate: true });
       <section
         class="rounded-tile border border-night-line bg-night-raised p-6"
         aria-labelledby="package-howto-title"
+        data-testid="package-howto"
       >
         <h2 id="package-howto-title" class="m-0 mb-4 text-lg leading-tight font-semibold">
           {{ copy.howTo }}
         </h2>
-        <ol class="m-0 grid list-none gap-3.5 p-0">
+        <h3 class="m-0 mb-3 text-[15px] leading-snug font-semibold" data-testid="package-cli-title">
+          <template v-for="part in commandParts(copy.terminalWay)" :key="part.key">
+            <code
+              v-if="part.command"
+              class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+              >{{ part.text }}</code
+            >
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </h3>
+        <ol class="m-0 list-none space-y-4 p-0" data-testid="package-cli-steps">
           <li
-            v-for="(step, index) in copy.steps"
-            :key="step"
-            class="flex gap-3 text-[15px] leading-normal text-on-night-2"
-            data-testid="package-step"
+            v-for="(step, index) in terminalSteps"
+            :key="step.key"
+            class="flex gap-3"
+            data-testid="package-cli-step"
           >
             <span
               class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border-[1.5px] border-on-night/50 text-xs font-semibold text-on-night"
@@ -707,9 +813,100 @@ watch(() => props.projectId, loadHistory, { immediate: true });
             >
               {{ index + 1 }}
             </span>
-            <span>{{ step }}</span>
+            <div class="min-w-0 flex-1">
+              <p
+                class="m-0 mb-2 text-[15px] leading-normal text-on-night-2"
+                data-testid="package-cli-text"
+              >
+                <template v-for="part in commandParts(step.text)" :key="part.key">
+                  <code
+                    v-if="part.command"
+                    class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                    >{{ part.text }}</code
+                  >
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </p>
+              <UiCommandLine
+                :command="step.command"
+                :copy-label="copy.copyCommand"
+                :copied-label="copy.commandCopied"
+                :failed-label="copy.commandNotCopied"
+              />
+            </div>
           </li>
         </ol>
+        <template v-if="designApproved">
+          <h3
+            class="m-0 mt-6 mb-3 text-[15px] leading-snug font-semibold"
+            data-testid="package-development-title"
+          >
+            {{ copy.developmentWay }}
+          </h3>
+          <ul class="m-0 list-none space-y-4 p-0" data-testid="package-development-steps">
+            <li
+              v-for="step in developmentSteps"
+              :key="step.key"
+              data-testid="package-development-step"
+            >
+              <p
+                class="m-0 mb-2 text-[15px] leading-normal text-on-night-2"
+                data-testid="package-development-text"
+              >
+                <template v-for="part in commandParts(step.text)" :key="part.key">
+                  <code
+                    v-if="part.command"
+                    class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                    >{{ part.text }}</code
+                  >
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </p>
+              <UiCommandLine
+                :command="step.command"
+                :copy-label="copy.copyCommand"
+                :copied-label="copy.commandCopied"
+                :failed-label="copy.commandNotCopied"
+              />
+            </li>
+          </ul>
+        </template>
+        <details class="group mt-6 border-t border-on-night/10 pt-1" data-testid="package-zip">
+          <summary
+            class="flex min-h-11 cursor-pointer list-none items-center gap-2.5 text-sm font-semibold text-petrol-on-night-2 [&::-webkit-details-marker]:hidden"
+          >
+            <span
+              aria-hidden="true"
+              class="inline-block h-1.5 w-1.5 shrink-0 -rotate-45 border-r-[1.5px] border-b-[1.5px] border-petrol-on-night-2 transition-transform duration-150 group-open:rotate-45"
+            />
+            <span>
+              <template v-for="part in commandParts(copy.zipWay)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </span>
+          </summary>
+          <ol class="m-0 grid list-none gap-3.5 p-0 pt-2 pb-1">
+            <li
+              v-for="(step, index) in copy.steps"
+              :key="step"
+              class="flex gap-3 text-[15px] leading-normal text-on-night-2"
+              data-testid="package-step"
+            >
+              <span
+                class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border-[1.5px] border-on-night/50 text-xs font-semibold text-on-night"
+                aria-hidden="true"
+              >
+                {{ index + 1 }}
+              </span>
+              <span>{{ step }}</span>
+            </li>
+          </ol>
+        </details>
       </section>
     </div>
 
