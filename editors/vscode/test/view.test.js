@@ -304,6 +304,22 @@ describe("renderPanel", () => {
     }
   });
 
+  it("names the steps as the Studio names them", () => {
+    const names = {
+      en: ["Brief", "Perspectives", "User Twin", "Definition", "Design & Evaluation"],
+      it: ["Brief", "Prospettive", "User Twin", "Definizione", "Design e valutazione"],
+    };
+    for (const language of LANGUAGES) {
+      const html = render(states.partial, language);
+      const list = html.match(/<ol class="steps"[^>]*>([\s\S]*?)<\/ol>/)[1];
+      const shown = [...list.matchAll(/<span>([^<]*)<\/span>/g)].map((match) => decode(match[1]));
+      assert.deepEqual(shown, names[language]);
+      assert.ok(
+        plain(html).includes(sentence(language, "next.init", { stage: names[language][1] })),
+      );
+    }
+  });
+
   it("names a broken file and says that its parts are not available", () => {
     for (const language of LANGUAGES) {
       const page = plain(render(states.broken, language));
