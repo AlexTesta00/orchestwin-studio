@@ -9,6 +9,7 @@ import pytest
 
 from orchestwin.models import hosted_schema
 from orchestwin.models.hosted_schema import (
+    CLAUDE_CODE_SCHEMA_MAX_CHARACTERS,
     HostedSchemaError,
     SchemaViolation,
     hosted_output_schema,
@@ -22,6 +23,7 @@ from orchestwin.models.structured_generation import (
     StructuredGenerationProviderKind,
     failed_structured_generation_result,
 )
+from orchestwin.projects.requirements_primitives import canonical_json
 from src.test.python.evaluation import test_proposer_evaluator as review
 from src.test.python.models.test_hosted_support import REVIEW_SCHEMA, VALID_REVIEW
 from src.test.python.models.test_model_proposals import make_generator
@@ -29,6 +31,7 @@ from src.test.python.models.test_proposal_evidence import stage_case
 
 ANTHROPIC = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 OPENAI = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED
+CLAUDE_CODE = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
 TASKS = ("design", "requirements", "user-twin-evaluation")
 ANTHROPIC_UNSUPPORTED = frozenset(
     {
@@ -318,7 +321,7 @@ def test_tuples_and_intersections_become_their_common_definition():
     ],
 )
 def test_constructs_outside_both_subsets_fail_before_any_request(schema, code):
-    for kind in (ANTHROPIC, OPENAI):
+    for kind in (ANTHROPIC, OPENAI, CLAUDE_CODE):
         with pytest.raises(HostedSchemaError) as failure:
             hosted_output_schema(schema, kind)
         assert failure.value.code == code
@@ -408,3 +411,59 @@ def test_the_message_lists_at_most_five_paths():
     message = violation_message(violations)
     assert message.count("(type)") == 5
     assert message.endswith("and 3 more.")
+
+
+@pytest.mark.parametrize("task", TASKS)
+def test_the_claude_code_schema_is_the_anthropic_reduction(real_cases, task):
+    canonical, answer = real_cases[task]
+    before = copy.deepcopy(canonical)
+    reduced = hosted_output_schema(canonical, CLAUDE_CODE)
+    assert canonical == before
+    assert reduced == hosted_output_schema(canonical, ANTHROPIC)
+    assert len(canonical_json(reduced)) <= CLAUDE_CODE_SCHEMA_MAX_CHARACTERS
+    assert validate_against_schema(answer, reduced) == ()
+
+
+def _schema_with_choices(count, padding=0):
+    choices = [f"{index:08d}" for index in range(count)]
+    choices[0] += "x" * padding
+    return {
+        "type": "object",
+        "properties": {"choice": {"type": "string", "enum": choices}},
+        "required": ["choice"],
+        "additionalProperties": False,
+    }
+
+
+def test_a_claude_code_schema_longer_than_the_command_line_allows_is_refused():
+    limit = CLAUDE_CODE_SCHEMA_MAX_CHARACTERS
+    assert limit == 24_000
+    base = len(canonical_json(hosted_output_schema(_schema_with_choices(1), CLAUDE_CODE)))
+    count = (limit - base) // 11 + 1
+    padding = limit - base - 11 * (count - 1)
+    fitting = hosted_output_schema(_schema_with_choices(count, padding), CLAUDE_CODE)
+    assert len(canonical_json(fitting)) == limit
+    longer = _schema_with_choices(count, padding + 1)
+    with pytest.raises(HostedSchemaError) as failure:
+        hosted_output_schema(longer, CLAUDE_CODE)
+    assert failure.value.code == "HOSTED_SCHEMA_TOO_LARGE"
+    assert len(canonical_json(hosted_output_schema(longer, ANTHROPIC))) == limit + 1
+
+
+def test_recursion_is_refused_for_claude_code_as_for_anthropic():
+    schema = {
+        "$defs": {
+            "Node": {
+                "type": "object",
+                "properties": {"children": {"type": "array", "items": {"$ref": "#/$defs/Node"}}},
+                "required": ["children"],
+                "additionalProperties": False,
+            }
+        },
+        "type": "object",
+        "properties": {"root": {"$ref": "#/$defs/Node"}},
+        "required": ["root"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(HostedSchemaError, match="HOSTED_SCHEMA_RECURSION_UNSUPPORTED"):
+        hosted_output_schema(schema, CLAUDE_CODE)

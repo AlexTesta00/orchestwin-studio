@@ -115,6 +115,8 @@ class GenerationBudget:
         retry_note: str | None = None,
     ) -> str | None:
         estimate = estimated_cost_microusd(request, configuration, retry_note)
+        if estimate == 0:
+            return None
         if estimate > self.per_generation_microusd:
             return GENERATION_BUDGET_EXCEEDED
         scope = current_proposal_evidence()

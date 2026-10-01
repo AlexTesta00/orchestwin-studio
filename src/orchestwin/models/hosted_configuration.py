@@ -36,7 +36,11 @@ PROVIDERS_CONFIGURATION_MAX_BYTES: Final = 32_768
 ANTHROPIC_PROVIDER_ID: Final = "anthropic"
 ANTHROPIC_RUNTIME_ID: Final = "anthropic-messages"
 OPENAI_COMPATIBLE_RUNTIME_ID: Final = "openai-chat-completions"
-HOSTED_RUNTIME_IDS: Final = frozenset({ANTHROPIC_RUNTIME_ID, OPENAI_COMPATIBLE_RUNTIME_ID})
+CLAUDE_CODE_PROVIDER_ID: Final = "claude-code"
+CLAUDE_CODE_RUNTIME_ID: Final = "claude-code-print"
+HOSTED_RUNTIME_IDS: Final = frozenset(
+    {ANTHROPIC_RUNTIME_ID, OPENAI_COMPATIBLE_RUNTIME_ID, CLAUDE_CODE_RUNTIME_ID}
+)
 PROVIDER_MANAGED_TOKENIZER: Final = "provider-managed"
 HOSTED_TEMPERATURE: Final = 1.0
 DEFAULT_COMPLETION_PATH: Final = "/v1/chat/completions"
@@ -44,8 +48,13 @@ HOSTED_PROVIDER_KINDS: Final = frozenset(
     {
         StructuredGenerationProviderKind.ANTHROPIC_HOSTED,
         StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED,
+        StructuredGenerationProviderKind.CLAUDE_CODE_CLI,
     }
 )
+SUBSCRIPTION_MODEL_PRICED: Final = "SUBSCRIPTION_MODEL_PRICED"
+BILLING_SUBSCRIPTION: Final = "SUBSCRIPTION"
+BILLING_API: Final = "API"
+BILLING_MIXED: Final = "MIXED"
 MICROUSD_PER_USD: Final = Decimal(1_000_000)
 _IDENTIFIER: Final = r"^[a-z0-9][a-z0-9_-]{0,63}$"
 _API_KEY_ENV: Final = r"^ORCHESTWIN_[A-Z0-9_]{1,48}_API_KEY$"
@@ -167,11 +176,34 @@ class LocalProviderEntry(_Entry):
         return value
 
 
+class ClaudeCodeProviderEntry(_Entry):
+    id: str = Field(pattern=_IDENTIFIER)
+    kind: Literal["CLAUDE_CODE_CLI"]
+    executable: Path | None = None
+
+    @property
+    def provider_kind(self) -> StructuredGenerationProviderKind:
+        return StructuredGenerationProviderKind.CLAUDE_CODE_CLI
+
+    @field_validator("executable")
+    @classmethod
+    def absolute_executable(cls, value: Path | None) -> Path | None:
+        if value is not None and (not value.is_absolute() or ".." in value.parts):
+            raise ValueError("the Claude Code program must be an absolute path")
+        return value
+
+
 ProviderEntry = Annotated[
-    AnthropicProviderEntry | OpenAICompatibleHostedProviderEntry | LocalProviderEntry,
+    AnthropicProviderEntry
+    | OpenAICompatibleHostedProviderEntry
+    | ClaudeCodeProviderEntry
+    | LocalProviderEntry,
     Field(discriminator="kind"),
 ]
-HostedProviderEntry = AnthropicProviderEntry | OpenAICompatibleHostedProviderEntry
+KeyedProviderEntry = AnthropicProviderEntry | OpenAICompatibleHostedProviderEntry
+HostedProviderEntry = (
+    AnthropicProviderEntry | OpenAICompatibleHostedProviderEntry | ClaudeCodeProviderEntry
+)
 
 
 class ModelPrices(_Entry):
@@ -179,6 +211,13 @@ class ModelPrices(_Entry):
     output: str = Field(pattern=_PRICE)
     cache_read: str = Field(pattern=_PRICE)
     cache_write: str = Field(pattern=_PRICE)
+
+    @property
+    def unpriced(self) -> bool:
+        return all(
+            Decimal(value) == 0
+            for value in (self.input, self.output, self.cache_read, self.cache_write)
+        )
 
     @property
     def input_per_million(self) -> Decimal:
@@ -307,7 +346,10 @@ class ProvidersConfiguration(_Entry):
             raise ValueError("routes name an unknown model entry")
         for entry in self.models:
             if isinstance(entry, HostedModelEntry):
-                hosted_identity(providers[entry.provider], entry)
+                provider = providers[entry.provider]
+                hosted_identity(provider, entry)
+                if isinstance(provider, ClaudeCodeProviderEntry) and not entry.prices.unpriced:
+                    raise HostedConfigurationError(SUBSCRIPTION_MODEL_PRICED)
         return self
 
     def provider(self, provider_id: str) -> ProviderEntry:
@@ -322,8 +364,24 @@ class ProvidersConfiguration(_Entry):
                 return item
         raise HostedConfigurationError("HOSTED_MODEL_ENTRY_UNKNOWN")
 
-    def hosted_providers(self) -> tuple[HostedProviderEntry, ...]:
-        return tuple(item for item in self.providers if not isinstance(item, LocalProviderEntry))
+    def hosted_providers(self) -> tuple[KeyedProviderEntry, ...]:
+        return tuple(
+            item
+            for item in self.providers
+            if isinstance(item, AnthropicProviderEntry | OpenAICompatibleHostedProviderEntry)
+        )
+
+    def billing(self) -> str:
+        subscription = StructuredGenerationProviderKind.CLAUDE_CODE_CLI
+        kinds = {
+            self.provider(self.model(target).provider).provider_kind
+            for target in self.routes.targets()
+        }
+        if kinds == {subscription}:
+            return BILLING_SUBSCRIPTION
+        if subscription in kinds:
+            return BILLING_MIXED
+        return BILLING_API
 
     def hosted_model(self, entry_id: str) -> HostedModelConfiguration:
         entry = self.model(entry_id)
@@ -405,6 +463,8 @@ def hosted_identity(provider: ProviderEntry, entry: HostedModelEntry) -> ModelRu
         provider_id, runtime_id = ANTHROPIC_PROVIDER_ID, ANTHROPIC_RUNTIME_ID
     elif isinstance(provider, OpenAICompatibleHostedProviderEntry):
         provider_id, runtime_id = provider.host, OPENAI_COMPATIBLE_RUNTIME_ID
+    elif isinstance(provider, ClaudeCodeProviderEntry):
+        provider_id, runtime_id = CLAUDE_CODE_PROVIDER_ID, CLAUDE_CODE_RUNTIME_ID
     else:
         raise HostedConfigurationError("HOSTED_PROVIDER_REQUIRED")
     digest = hashlib.sha256(
@@ -431,8 +491,18 @@ def parse_providers_configuration(raw: bytes) -> ProvidersConfiguration:
         raise HostedConfigurationError("HOSTED_PROVIDERS_CONFIGURATION_INVALID")
     try:
         return ProvidersConfiguration.model_validate(strict_json_object(raw))
+    except ValidationError as error:
+        raise HostedConfigurationError(_validation_code(error)) from None
     except (ValueError, TypeError):
         raise HostedConfigurationError("HOSTED_PROVIDERS_CONFIGURATION_INVALID") from None
+
+
+def _validation_code(error: ValidationError) -> str:
+    for item in error.errors():
+        cause = (item.get("ctx") or {}).get("error")
+        if isinstance(cause, HostedConfigurationError) and cause.code == SUBSCRIPTION_MODEL_PRICED:
+            return SUBSCRIPTION_MODEL_PRICED
+    return "HOSTED_PROVIDERS_CONFIGURATION_INVALID"
 
 
 def load_providers_configuration(path: Path) -> tuple[ProvidersConfiguration, bytes]:
@@ -501,6 +571,11 @@ def declared_limits_problem(
 __all__ = [
     "ANTHROPIC_PROVIDER_ID",
     "ANTHROPIC_RUNTIME_ID",
+    "BILLING_API",
+    "BILLING_MIXED",
+    "BILLING_SUBSCRIPTION",
+    "CLAUDE_CODE_PROVIDER_ID",
+    "CLAUDE_CODE_RUNTIME_ID",
     "DEFAULT_COMPLETION_PATH",
     "HOSTED_PROVIDER_KINDS",
     "HOSTED_RUNTIME_IDS",
@@ -508,12 +583,15 @@ __all__ = [
     "OPENAI_COMPATIBLE_RUNTIME_ID",
     "PROVIDERS_CONFIGURATION_MAX_BYTES",
     "PROVIDER_MANAGED_TOKENIZER",
+    "SUBSCRIPTION_MODEL_PRICED",
     "AnthropicProviderEntry",
     "BudgetSettings",
+    "ClaudeCodeProviderEntry",
     "HostedConfigurationError",
     "HostedModelConfiguration",
     "HostedModelEntry",
     "HostedProviderEntry",
+    "KeyedProviderEntry",
     "LocalModelEntry",
     "LocalProviderEntry",
     "ModelPrices",
