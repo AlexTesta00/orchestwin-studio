@@ -2,19 +2,25 @@
 import { computed } from "vue";
 
 import { useSurface, type SurfaceContext } from "./UiSurface.vue";
-import type { ProfileObservationPayload } from "../types/userModeling";
+import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
+import { claimText, readableClaim } from "./twinRepresentation";
+import type { ProfileObservationPayload, ReadableClaim } from "../types/userModeling";
 
 type Locale = "en" | "it";
 
 const props = withDefaults(
   defineProps<{
-    observation: ProfileObservationPayload;
+    observation: ProfileObservationPayload | ReadableClaim;
+    summaryLabel?: string | undefined;
+    testId?: string;
     locale?: Locale;
     surface?: SurfaceContext | undefined;
   }>(),
   {
     locale: "en",
     surface: undefined,
+    summaryLabel: undefined,
+    testId: "provenance-inspector",
   },
 );
 
@@ -42,6 +48,11 @@ const palettes = {
 };
 
 const palette = computed(() => palettes[context.value]);
+const claim = computed(() =>
+  "display_status" in props.observation
+    ? props.observation
+    : readableClaim(props.observation, props.observation.observation_key),
+);
 
 const copy = computed(() => {
   if (props.locale === "it") {
@@ -71,17 +82,23 @@ const copy = computed(() => {
     class="rounded-field border"
     :class="palette.box"
     :data-surface-context="context"
-    data-testid="provenance-inspector"
+    :data-testid="testId"
   >
     <summary
       class="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold transition-colors duration-150"
       :class="palette.summary"
     >
-      {{ copy.provenance }}
+      {{ summaryLabel ?? copy.provenance }}
       ({{ observation.provenance.length }})
     </summary>
 
     <div class="grid gap-3 border-t px-3 py-3" :class="palette.divider">
+      <p class="m-0 text-sm" :class="palette.text">{{ claimText(claim, locale) }}</p>
+      <UserModelingEpistemicBadge
+        :status="claim.display_status"
+        :show-details="false"
+        :locale="locale"
+      />
       <p v-if="observation.provenance.length === 0" class="m-0 text-sm" :class="palette.text">
         {{ copy.noEvidence }}
       </p>

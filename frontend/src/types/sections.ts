@@ -6,6 +6,7 @@ export type SectionState =
 export type SectionReason =
   | "BRIEF_CHANGED"
   | "PERSPECTIVES_CHANGED"
+  | "ARCHETYPES_CHANGED"
   | "USER_TWINS_CHANGED"
   | "REQUIREMENTS_CHANGED"
   | "FOLDER_BEHIND"
@@ -19,9 +20,10 @@ export type SectionBlock =
   | "TWIN_NO_LONGER_AVAILABLE"
   | "REVISION_PENDING"
   | "UPSTREAM_NOT_READY"
-  | "PREPARE_AGAIN";
+  | "PREPARE_AGAIN"
+  | "PREPARE_TWINS";
 
-export type AlignableSectionKey = "USER_TWINS" | "REQUIREMENTS" | "DESIGN";
+export type AlignableSectionKey = "TEAM" | "USER_TWINS" | "REQUIREMENTS" | "DESIGN";
 
 export interface ProjectSectionPayload {
   key: ProjectStage;

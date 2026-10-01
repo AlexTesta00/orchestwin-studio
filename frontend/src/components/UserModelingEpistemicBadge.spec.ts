@@ -12,7 +12,7 @@ describe("UserModelingEpistemicBadge", () => {
       props: { status: "MODEL_INFERRED", confidence: 0.424, humanValidation: "REQUIRED" },
     });
 
-    expect(wrapper.get('[data-testid="epistemic-status"]').text()).toBe("Model inferred");
+    expect(wrapper.get('[data-testid="epistemic-status"]').text()).toBe("Inferred");
     expect(wrapper.text()).toContain("Confidence 42%");
     const bar = wrapper.get('[role="progressbar"]');
     expect(bar.attributes("aria-valuenow")).toBe("42");
@@ -33,7 +33,7 @@ describe("UserModelingEpistemicBadge", () => {
       },
     });
 
-    expect(wrapper.get('[data-testid="epistemic-status"]').text()).toBe("Fornito dall'utente");
+    expect(wrapper.get('[data-testid="epistemic-status"]').text()).toBe("Ipotizzato");
     expect(wrapper.text()).toContain("Confidenza 100%");
     expect(wrapper.get('[data-testid="human-validation"]').text()).toBe(
       "Nessuna validazione aggiuntiva richiesta",

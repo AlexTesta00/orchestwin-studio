@@ -2,6 +2,10 @@ import { sendGeneration } from "./generationJobs";
 import { ApiRequestError } from "./requestError";
 
 import type {
+  ArchetypePayload,
+  ArchetypeInput,
+  ArchetypeEditRequest,
+  ArchetypeArchiveRequest,
   GateCommandPayload,
   GateDecisionRequest,
   HumanGateEventPayload,
@@ -21,7 +25,7 @@ import type {
 
 const DEFAULT_API_BASE_PATH = "/api/v1";
 
-type HttpMethod = "GET" | "POST";
+type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 interface RequestOptions {
   method: HttpMethod;
@@ -38,6 +42,24 @@ export interface UserModelingApiOptions {
 export class UserModelingApiError extends ApiRequestError {}
 
 export interface UserModelingApi {
+  getArchetypes(projectId: string, accessToken: string): Promise<ArchetypePayload[]>;
+  createArchetype(
+    projectId: string,
+    request: ArchetypeInput,
+    accessToken: string,
+  ): Promise<ArchetypePayload>;
+  editArchetype(
+    projectId: string,
+    personaId: string,
+    request: ArchetypeEditRequest,
+    accessToken: string,
+  ): Promise<ArchetypePayload>;
+  archiveArchetype(
+    projectId: string,
+    personaId: string,
+    request: ArchetypeArchiveRequest,
+    accessToken: string,
+  ): Promise<ArchetypePayload>;
   getCurrentPersonas(projectId: string, accessToken: string): Promise<PersonaVersionPayload[]>;
   proposePersonas(projectId: string, accessToken: string): Promise<PersonaProposalCommandPayload>;
 
@@ -240,6 +262,31 @@ function createUserModelingApi(options: UserModelingApiOptions = {}): UserModeli
   }
 
   return {
+    getArchetypes(projectId, accessToken) {
+      return requestJson(`${baseProjectPath(projectId)}/archetypes`, {
+        method: "GET",
+        accessToken,
+      });
+    },
+    createArchetype(projectId, request, accessToken) {
+      return requestJson(`${baseProjectPath(projectId)}/archetypes`, {
+        method: "POST",
+        accessToken,
+        body: request,
+      });
+    },
+    editArchetype(projectId, personaId, request, accessToken) {
+      return requestJson(
+        `${baseProjectPath(projectId)}/archetypes/${encodeURIComponent(personaId)}`,
+        { method: "PATCH", accessToken, body: request },
+      );
+    },
+    archiveArchetype(projectId, personaId, request, accessToken) {
+      return requestJson(
+        `${baseProjectPath(projectId)}/archetypes/${encodeURIComponent(personaId)}`,
+        { method: "DELETE", accessToken, body: request },
+      );
+    },
     getCurrentPersonas(projectId, accessToken) {
       return requestJson(`${baseProjectPath(projectId)}/personas`, { method: "GET", accessToken });
     },

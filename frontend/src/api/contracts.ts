@@ -62,7 +62,10 @@ export type ProjectNextAction =
   | "CONFIRM_TWINS"
   | "APPROVE_REQUIREMENTS"
   | "APPROVE_DESIGN"
-  | "DOWNLOAD_FOLDER";
+  | "DOWNLOAD_FOLDER"
+  | "UPDATE_SECTIONS"
+  | "PREPARE_TWINS"
+  | "PREPARE_DESIGN";
 
 export interface ProjectResponse {
   readonly id: string;
