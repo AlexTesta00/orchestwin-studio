@@ -20,6 +20,7 @@ import type {
   OwnerAgentRationaleInput,
   ProposedTeamMemberResponse,
   TeamRoleConstraintResponse,
+  TeamSelectionIssueResponse,
   TeamSelectionReasonResponse,
 } from "@/api/team-contracts";
 import type { HumanGateEventResponse } from "@/api/workflow-contracts";
@@ -96,6 +97,10 @@ const { t, te, locale } = useI18n({
         refresh: "Refresh",
         retry: "Try again",
         constraintIssues: "The brief contains contradictory role signals.",
+        contradiction:
+          "{role}: the brief rules it out ({excluded}) and also calls for it ({required}). Fix one of the two texts in the Brief step, then propose the team again.",
+        quotedTerm: "“{term}”",
+        termsInFields: "{terms} in {fields}",
         workersOne: "1 assistant will work on the project.",
         workersOther: "{n} assistants will work on the project.",
         decisionApprove: "{workers} You can change the team later.",
@@ -292,6 +297,23 @@ const { t, te, locale } = useI18n({
           ACCESSIBILITY_REVIEW: "Accessibility review",
           SYSTEM_INTEGRATION: "System integration",
         },
+        fields: {
+          name: "Name",
+          description: "The idea",
+          problem: "The problem",
+          goals: "Goals",
+          target_users: "For whom",
+          domain: "Context",
+          technical_constraints: "Technical constraints",
+          temporal_constraints: "Timing",
+          budget: "Budget",
+          functional_requirements: "What it must do",
+          non_functional_requirements: "Expected qualities",
+          risks: "Risks",
+          stakeholders: "People involved",
+          available_artifacts: "Available materials",
+          definition_of_done: "When it is done",
+        },
       },
     },
     it: {
@@ -335,6 +357,10 @@ const { t, te, locale } = useI18n({
         refresh: "Aggiorna",
         retry: "Riprova",
         constraintIssues: "Il brief contiene segnali contraddittori relativi ai ruoli.",
+        contradiction:
+          "{role}: il brief lo esclude ({excluded}) e insieme lo richiede ({required}). Correggi uno dei due testi nel passo Brief e riproponi la squadra.",
+        quotedTerm: "«{term}»",
+        termsInFields: "{terms} in {fields}",
         workersOne: "1 assistente lavorerà al progetto.",
         workersOther: "{n} assistenti lavoreranno al progetto.",
         decisionApprove: "{workers} Potrai cambiare la squadra più avanti.",
@@ -534,6 +560,23 @@ const { t, te, locale } = useI18n({
           SECURITY_REVIEW: "Revisione della sicurezza",
           ACCESSIBILITY_REVIEW: "Revisione dell'accessibilità",
           SYSTEM_INTEGRATION: "Integrazione dei sistemi",
+        },
+        fields: {
+          name: "Nome",
+          description: "L'idea",
+          problem: "Il problema",
+          goals: "Obiettivi",
+          target_users: "Per chi",
+          domain: "Contesto",
+          technical_constraints: "Vincoli tecnici",
+          temporal_constraints: "Tempi",
+          budget: "Budget",
+          functional_requirements: "Cosa deve fare",
+          non_functional_requirements: "Qualità attese",
+          risks: "Rischi",
+          stakeholders: "Persone coinvolte",
+          available_artifacts: "Materiali disponibili",
+          definition_of_done: "Quando sarà finito",
         },
       },
     },
@@ -899,6 +942,36 @@ function reasonText(reason: TeamSelectionReasonResponse): string {
   return translatedOrFallback(`flow.reasons.${reason.code}`, humanize(reason.code));
 }
 
+function uniqueValues<T>(values: readonly T[]): T[] {
+  return [...new Set(values)];
+}
+
+function fieldText(field: string): string {
+  return translatedOrFallback(`flow.fields.${field}`, field);
+}
+
+function evidenceText(reasons: readonly TeamSelectionReasonResponse[]): string {
+  const terms = uniqueValues(reasons.flatMap((reason) => reason.evidence.terms));
+  if (terms.length === 0) {
+    return uniqueValues(reasons.map((reason) => reasonText(reason))).join(", ");
+  }
+  const quoted = terms.map((term) => t("flow.quotedTerm", { term })).join(", ");
+  const fields = uniqueValues(reasons.flatMap((reason) => reason.evidence.fields));
+  if (fields.length === 0) return quoted;
+  return t("flow.termsInFields", {
+    terms: quoted,
+    fields: fields.map((field) => fieldText(field)).join(", "),
+  });
+}
+
+function issueText(issue: TeamSelectionIssueResponse): string {
+  return t("flow.contradiction", {
+    role: twinIdentity(issue.agent_id, "", uiLocale.value).name,
+    excluded: evidenceText(issue.impossible_reasons),
+    required: evidenceText(issue.mandatory_reasons),
+  });
+}
+
 function errorText(detail: string): string {
   return translatedOrFallback(`flow.errors.${detail}`, detail);
 }
@@ -1187,9 +1260,7 @@ function eventLabel(event: HumanGateEventResponse): string {
           :key="`${issue.code}:${issue.agent_id}`"
           class="font-semibold"
         >
-          {{ twinIdentity(issue.agent_id, "", uiLocale).name }}
-          ·
-          {{ humanize(issue.code) }}
+          {{ issueText(issue) }}
         </li>
       </ul>
     </UiStateBlock>
