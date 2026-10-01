@@ -380,7 +380,7 @@ def _add_requirement_stage(
                 reference=team_root,
                 stage=ArtifactGraphStage.CONTEXT,
                 display_code=f"TEAM-v{team.version_number}",
-                title="Approved Agent Team",
+                title="Approved perspectives",
             ),
             _node(
                 reference=user_modeling_root,
@@ -786,6 +786,20 @@ def _add_design_stage(
     return root
 
 
+def grounded_design(
+    requirements: RequirementsSpecificationVersion,
+    design: DesignPackageVersion | None,
+) -> DesignPackageVersion | None:
+    if (
+        design is None
+        or design.project_id != requirements.project_id
+        or design.package.grounding.requirements_reference
+        != _exact_requirements_reference(requirements)
+    ):
+        return None
+    return design
+
+
 def build_cross_stage_artifact_graph(
     requirements: RequirementsSpecificationVersion,
     design: DesignPackageVersion | None = None,
@@ -835,4 +849,5 @@ __all__ = [
     "ArtifactGraphStage",
     "CrossStageArtifactGraph",
     "build_cross_stage_artifact_graph",
+    "grounded_design",
 ]
