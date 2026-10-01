@@ -32,13 +32,6 @@ class FakeDeterministicTeamProposalAdapter:
     ) -> TeamProposalGenerationResult:
         """Return a reproducible mandatory-only team proposal."""
         constraints = request.constraints
-
-        if constraints.has_conflicts:
-            return TeamProposalGenerationResult(
-                status=(TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS),
-                issues=constraints.issues,
-            )
-
         members = tuple(
             ProposedTeamMember(
                 agent_id=constraint.agent_id,
@@ -70,4 +63,5 @@ class FakeDeterministicTeamProposalAdapter:
         return TeamProposalGenerationResult(
             status=(TeamProposalGenerationStatus.PROPOSED),
             proposal=proposal,
+            issues=constraints.issues,
         )

@@ -34,8 +34,11 @@ from orchestwin.agents.selection_rules import (
     RuleEvidence,
     TeamRoleConstraint,
     TeamRoleConstraintKind,
+    TeamSelectionIssue,
+    TeamSelectionIssueCode,
     TeamSelectionReason,
     TeamSelectionReasonCode,
+    contradiction_issue,
 )
 from orchestwin.models.team_proposals import (
     AgentTeamProposal,
@@ -240,6 +243,42 @@ def _reason_from_snapshot(
     )
 
 
+def _issue_from_snapshot(
+    value: object,
+    constraints: tuple[TeamRoleConstraint, ...],
+) -> TeamSelectionIssue:
+    snapshot = _required_mapping(
+        value,
+        label="team constraint issue",
+    )
+    code = TeamSelectionIssueCode(
+        _required_string(
+            snapshot.get("code"),
+            label="team constraint issue code",
+        )
+    )
+    agent_id = AgentIdentifier(
+        _required_string(
+            snapshot.get("agent_id"),
+            label="team constraint issue agent ID",
+        )
+    )
+    constraint = next(
+        (candidate for candidate in constraints if candidate.agent_id is agent_id),
+        None,
+    )
+
+    if constraint is None or constraint.kind is not TeamRoleConstraintKind.CONFLICT:
+        raise ValueError("a persisted constraint issue must reference a conflicting role")
+
+    issue = contradiction_issue(constraint)
+
+    if issue.code is not code:
+        raise ValueError("a persisted constraint issue must keep its contradiction code")
+
+    return issue
+
+
 def constraints_from_snapshot(
     value: object,
 ) -> DeterministicTeamConstraints:
@@ -252,10 +291,6 @@ def constraints_from_snapshot(
         snapshot.get("issues"),
         label="team constraint issues",
     )
-
-    if raw_issues:
-        raise ValueError("a persisted proposal must not contain constraint conflicts")
-
     raw_constraints = _required_list(
         snapshot.get("role_constraints"),
         label="team role constraints",
@@ -317,6 +352,7 @@ def constraints_from_snapshot(
             )
         ),
         role_constraints=tuple(constraints),
+        issues=tuple(_issue_from_snapshot(issue, tuple(constraints)) for issue in raw_issues),
     )
 
     if result.to_snapshot() != dict(snapshot):

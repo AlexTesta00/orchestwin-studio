@@ -139,6 +139,17 @@ class RuleEvidence:
             raise ValueError("rule evidence terms must be unique and lexicographically ordered")
 
 
+def merge_rule_evidence(
+    evidence: Iterable[RuleEvidence],
+) -> RuleEvidence:
+    items = tuple(evidence)
+
+    return RuleEvidence(
+        fields=_ordered_fields(field for item in items for field in item.fields),
+        terms=tuple(sorted({term for item in items for term in item.terms})),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class TeamSelectionReason:
     """One typed explanation for a role constraint."""
@@ -175,7 +186,10 @@ class TeamRoleConstraint:
     @property
     def owner_editable(self) -> bool:
         """Return whether the owner may add or remove this role."""
-        return self.kind is TeamRoleConstraintKind.OPTIONAL
+        return self.kind in (
+            TeamRoleConstraintKind.OPTIONAL,
+            TeamRoleConstraintKind.CONFLICT,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +211,32 @@ class TeamSelectionIssue:
         """Require evidence for both sides of a conflict."""
         if not self.mandatory_reasons or not self.impossible_reasons:
             raise ValueError("a team-selection conflict requires mandatory and impossible reasons")
+
+
+_IMPOSSIBLE_REASON_CODES: Final = frozenset(
+    {
+        TeamSelectionReasonCode.CATALOG_MODE_INCOMPATIBLE,
+        TeamSelectionReasonCode.EXPLICIT_SCOPE_EXCLUSION,
+    }
+)
+
+
+def contradiction_issue(
+    constraint: TeamRoleConstraint,
+) -> TeamSelectionIssue:
+    if constraint.kind is not TeamRoleConstraintKind.CONFLICT:
+        raise ValueError("only a conflicting role constraint describes a contradiction")
+
+    return TeamSelectionIssue(
+        code=TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS,
+        agent_id=constraint.agent_id,
+        mandatory_reasons=tuple(
+            reason for reason in constraint.reasons if reason.code not in _IMPOSSIBLE_REASON_CODES
+        ),
+        impossible_reasons=tuple(
+            reason for reason in constraint.reasons if reason.code in _IMPOSSIBLE_REASON_CODES
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
