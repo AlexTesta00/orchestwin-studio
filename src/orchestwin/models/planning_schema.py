@@ -82,6 +82,9 @@ def constrain_planning_schema(schema, context, task):
                 target.update(type="string", enum=list(context["twins"]))
             elif name == "sources":
                 target.update(type="string", enum=list(context["evidence"]))
+    if task == "requirements":
+        for name, limit in context.get("limits", {}).items():
+            schema["properties"][name]["maxItems"] = limit
     if task == "design":
         if context.get("purpose") not in (None, HOSTED_DESIGN_PURPOSE):
             return

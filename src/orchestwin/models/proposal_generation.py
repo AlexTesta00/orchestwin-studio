@@ -269,7 +269,7 @@ class ProposalGenerator:
         contract_version = {
             "personas": 4,
             "user-twins": 4,
-            "requirements": 3,
+            "requirements": 4,
             "design": 11,
             "architecture": 7,
             "twin-discussion": 5,
