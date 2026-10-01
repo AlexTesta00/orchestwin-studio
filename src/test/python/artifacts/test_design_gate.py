@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
 from orchestwin.artifacts.design_gate import (
     DesignGateDecisionStatus,
     DesignGateSubmissionStatus,
@@ -394,3 +396,161 @@ def test_gate_five_reports_missing_package_without_creating_state() -> None:
     assert result.status is DesignGateSubmissionStatus.PACKAGE_NOT_FOUND
     assert gates.latest is None
     assert gates.events == []
+
+
+def numbered_version(number: int) -> DesignPackageVersion:
+    first = design_package()
+
+    return design_version(
+        version_number=number,
+        package=replace(
+            first,
+            open_questions=(
+                *first.open_questions,
+                f"Does version {number} keep the guided path?",
+            ),
+        ),
+    )
+
+
+def design_attempt(
+    service: LocalDesignGateService,
+    packages: InMemoryPackages,
+    clock: MutableClock,
+    number: int,
+    action: HumanGateAction,
+):
+    packages.current = numbered_version(number)
+    clock.advance()
+    submitted = run(service.submit(project_id=PROJECT_ID, owner_user_id=OWNER_ID))
+
+    if submitted.status is not DesignGateSubmissionStatus.SUBMITTED:
+        return submitted, None
+
+    clock.advance()
+    decided = run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=action,
+            reason=(None if action is HumanGateAction.APPROVE else "Not this design."),
+        )
+    )
+
+    assert decided.status is DesignGateDecisionStatus.APPLIED
+    assert decided.gate is not None
+    assert 1 <= decided.gate.iteration <= decided.gate.max_iterations
+
+    return submitted, decided.gate
+
+
+def test_every_approved_design_package_renews_the_budget_of_attempts() -> None:
+    service, packages, gates, clock = service_fixture(None)
+
+    approved = [
+        design_attempt(
+            service,
+            packages,
+            clock,
+            number,
+            HumanGateAction.APPROVE,
+        )[1]
+        for number in range(1, 6)
+    ]
+
+    assert [(gate.iteration, gate.max_iterations) for gate in approved if gate is not None] == [
+        (1, 3),
+        (2, 4),
+        (3, 5),
+        (4, 6),
+        (5, 7),
+    ]
+    assert gates.latest == approved[-1]
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_rejected_design_packages_in_a_row_still_reach_the_limit(
+    approvals: int,
+) -> None:
+    service, packages, _gates, clock = service_fixture(None)
+
+    for number in range(1, approvals + 1):
+        design_attempt(service, packages, clock, number, HumanGateAction.APPROVE)
+
+    rejected = [
+        design_attempt(service, packages, clock, number, HumanGateAction.REJECT)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    refused, _ = design_attempt(
+        service,
+        packages,
+        clock,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+
+    assert [gate.status for gate in rejected if gate is not None] == [HumanGateStatus.REJECTED] * 3
+    assert refused.status is DesignGateSubmissionStatus.ITERATION_LIMIT_REACHED
+    assert refused.gate is not None
+    assert (refused.gate.iteration, refused.gate.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_design_packages_sent_back_in_a_row_still_pause_for_a_person(
+    approvals: int,
+) -> None:
+    service, packages, _gates, clock = service_fixture(None)
+
+    for number in range(1, approvals + 1):
+        design_attempt(service, packages, clock, number, HumanGateAction.APPROVE)
+
+    sent_back = [
+        design_attempt(service, packages, clock, number, HumanGateAction.REQUEST_REVISION)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    blocked, _ = design_attempt(
+        service,
+        packages,
+        clock,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+    paused = sent_back[-1]
+
+    assert [gate.status for gate in sent_back if gate is not None] == [
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.PAUSED_NEEDS_HUMAN,
+    ]
+    assert paused is not None
+    assert (paused.iteration, paused.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+    assert blocked.status is DesignGateSubmissionStatus.GATE_BLOCKED
+
+
+def test_an_approval_found_stale_before_the_next_design_package_still_renews_the_budget() -> None:
+    service, packages, _gates, clock = service_fixture(None)
+
+    for number in range(1, 4):
+        design_attempt(service, packages, clock, number, HumanGateAction.APPROVE)
+
+    packages.current = numbered_version(4)
+    clock.advance()
+    stale = run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=HumanGateAction.APPROVE,
+        )
+    )
+    submitted = run(service.submit(project_id=PROJECT_ID, owner_user_id=OWNER_ID))
+
+    assert stale.status is DesignGateDecisionStatus.ARTIFACT_STALE
+    assert submitted.status is DesignGateSubmissionStatus.SUBMITTED
+    assert submitted.gate is not None
+    assert (submitted.gate.iteration, submitted.gate.max_iterations) == (4, 6)

@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
 from orchestwin.twins.epistemics import (
     ConfidenceScore,
     EpistemicStatus,
@@ -892,3 +894,235 @@ def test_decision_against_superseded_snapshot_marks_gate_stale() -> None:
     assert result.gate.status is HumanGateStatus.STALE
     assert result.event is not None
     assert result.event.kind is HumanGateEventKind.ARTIFACT_SUPERSEDED
+
+
+def numbered_snapshot_version(
+    number: int,
+) -> UserModelingSnapshotVersion:
+    first = snapshot_version()
+    original_twin = first.snapshot.twin_versions[0]
+    profile = replace(
+        original_twin.profile,
+        name=f"Receptionist Twin {number}",
+    )
+    base = None if number == 1 else number - 1
+    twin = UserTwinProfileVersion(
+        id=UUID(int=0x7000 + number),
+        project_id=PROJECT_ID,
+        twin_id=TWIN_ID,
+        version_number=number,
+        based_on_version_number=base,
+        profile=profile,
+        content_hash=profile.content_hash,
+        created_by_user_id=OWNER_ID,
+        created_at=CREATED_AT,
+    )
+    snapshot = create_user_modeling_snapshot(
+        project_id=PROJECT_ID,
+        project_brief_reference=(BRIEF_REFERENCE),
+        agent_team_reference=(TEAM_REFERENCE),
+        catalog_version=1,
+        catalog_content_hash=(CATALOG_HASH),
+        persona_versions=(first.snapshot.persona_versions),
+        twin_versions=(twin,),
+    )
+
+    return UserModelingSnapshotVersion(
+        id=UUID(int=0x6000 + number),
+        project_id=PROJECT_ID,
+        version_number=number,
+        based_on_version_number=base,
+        snapshot=snapshot,
+        content_hash=snapshot.content_hash,
+        created_by_user_id=OWNER_ID,
+        created_at=CREATED_AT,
+    )
+
+
+async def modeling_attempt(
+    service: LocalUserModelingGateService,
+    factory: MemoryGateUowFactory,
+    clock: MutableClock,
+    number: int,
+    action: HumanGateAction,
+):
+    factory.current_snapshots.version = numbered_snapshot_version(number)
+    clock.value += timedelta(minutes=1)
+    submitted = await service.submit(
+        project_id=PROJECT_ID,
+        owner_user_id=OWNER_ID,
+    )
+
+    if submitted.status is not UserModelingGateSubmissionStatus.SUBMITTED:
+        return submitted, None
+
+    clock.value += timedelta(minutes=1)
+    decided = await service.decide(
+        project_id=PROJECT_ID,
+        owner_user_id=OWNER_ID,
+        action=action,
+        reason=(None if action is HumanGateAction.APPROVE else "Not these twins."),
+    )
+
+    assert decided.status is (UserModelingGateDecisionStatus.APPLIED)
+    assert decided.gate is not None
+    assert 1 <= decided.gate.iteration <= decided.gate.max_iterations
+
+    return submitted, decided.gate
+
+
+def test_every_approved_snapshot_renews_the_budget_of_attempts() -> None:
+    (
+        service,
+        factory,
+        clock,
+    ) = build_service(None)
+
+    async def scenario():
+        return [
+            (
+                await modeling_attempt(
+                    service,
+                    factory,
+                    clock,
+                    number,
+                    HumanGateAction.APPROVE,
+                )
+            )[1]
+            for number in range(1, 6)
+        ]
+
+    approved = asyncio.run(scenario())
+
+    assert [(gate.iteration, gate.max_iterations) for gate in approved if gate is not None] == [
+        (1, 3),
+        (2, 4),
+        (3, 5),
+        (4, 6),
+        (5, 7),
+    ]
+    assert all(gate is not None and gate.status is HumanGateStatus.APPROVED for gate in approved)
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_rejected_snapshots_in_a_row_still_reach_the_limit(
+    approvals: int,
+) -> None:
+    (
+        service,
+        factory,
+        clock,
+    ) = build_service(None)
+
+    async def scenario():
+        for number in range(1, approvals + 1):
+            await modeling_attempt(service, factory, clock, number, HumanGateAction.APPROVE)
+
+        rejected = [
+            (await modeling_attempt(service, factory, clock, number, HumanGateAction.REJECT))[1]
+            for number in range(approvals + 1, approvals + 4)
+        ]
+        refused, _ = await modeling_attempt(
+            service,
+            factory,
+            clock,
+            approvals + 4,
+            HumanGateAction.APPROVE,
+        )
+
+        return rejected, refused
+
+    rejected, refused = asyncio.run(scenario())
+
+    assert [gate.status for gate in rejected if gate is not None] == [HumanGateStatus.REJECTED] * 3
+    assert refused.status is (UserModelingGateSubmissionStatus.ITERATION_LIMIT_REACHED)
+    assert refused.gate is not None
+    assert (refused.gate.iteration, refused.gate.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_snapshots_sent_back_in_a_row_still_pause_for_a_person(
+    approvals: int,
+) -> None:
+    (
+        service,
+        factory,
+        clock,
+    ) = build_service(None)
+
+    async def scenario():
+        for number in range(1, approvals + 1):
+            await modeling_attempt(service, factory, clock, number, HumanGateAction.APPROVE)
+
+        sent_back = [
+            (
+                await modeling_attempt(
+                    service,
+                    factory,
+                    clock,
+                    number,
+                    HumanGateAction.REQUEST_REVISION,
+                )
+            )[1]
+            for number in range(approvals + 1, approvals + 4)
+        ]
+        blocked, _ = await modeling_attempt(
+            service,
+            factory,
+            clock,
+            approvals + 4,
+            HumanGateAction.APPROVE,
+        )
+
+        return sent_back, blocked
+
+    sent_back, blocked = asyncio.run(scenario())
+    paused = sent_back[-1]
+
+    assert [gate.status for gate in sent_back if gate is not None] == [
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.PAUSED_NEEDS_HUMAN,
+    ]
+    assert paused is not None
+    assert (paused.iteration, paused.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+    assert blocked.status is (UserModelingGateSubmissionStatus.GATE_BLOCKED)
+
+
+def test_an_approval_found_stale_before_the_next_snapshot_still_renews_the_budget() -> None:
+    (
+        service,
+        factory,
+        clock,
+    ) = build_service(None)
+
+    async def scenario():
+        for number in range(1, 4):
+            await modeling_attempt(service, factory, clock, number, HumanGateAction.APPROVE)
+
+        factory.current_snapshots.version = numbered_snapshot_version(4)
+        clock.value += timedelta(minutes=1)
+        stale = await service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=(HumanGateAction.APPROVE),
+        )
+        submitted = await service.submit(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+
+        return stale, submitted
+
+    stale, submitted = asyncio.run(scenario())
+
+    assert stale.status is (UserModelingGateDecisionStatus.ARTIFACT_STALE)
+    assert submitted.status is (UserModelingGateSubmissionStatus.SUBMITTED)
+    assert submitted.gate is not None
+    assert (submitted.gate.iteration, submitted.gate.max_iterations) == (4, 6)

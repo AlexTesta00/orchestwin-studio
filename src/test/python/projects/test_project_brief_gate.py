@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
 from orchestwin.projects.brief_gate import (
     LocalProjectBriefGateService,
     ProjectBriefGateDecisionStatus,
@@ -573,3 +575,185 @@ def test_other_owner_cannot_find_the_current_brief() -> None:
 
     assert result.status is (ProjectBriefGateSubmissionStatus.BRIEF_NOT_FOUND)
     assert gates.gates == []
+
+
+def brief_attempt(
+    service: LocalProjectBriefGateService,
+    current_briefs: InMemoryCurrentBriefRepository,
+    number: int,
+    action: HumanGateAction,
+):
+    current_briefs.set_current(
+        owner_user_id=OWNER_ID,
+        version=complete_brief_version(
+            version_number=number,
+            description=f"Brief version {number}.",
+        ),
+    )
+    submitted = asyncio.run(
+        service.submit(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    if submitted.status is not ProjectBriefGateSubmissionStatus.SUBMITTED:
+        return submitted, None
+
+    decided = asyncio.run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=action,
+            reason=(None if action is HumanGateAction.APPROVE else "Not this version."),
+        )
+    )
+
+    assert decided.status is (ProjectBriefGateDecisionStatus.APPLIED)
+    assert decided.gate is not None
+    assert 1 <= decided.gate.iteration <= decided.gate.max_iterations
+
+    return submitted, decided.gate
+
+
+def test_every_approved_brief_renews_the_budget_of_attempts() -> None:
+    current_briefs = InMemoryCurrentBriefRepository()
+    gates = InMemoryHumanGateRepository()
+    service = build_service(
+        current_briefs,
+        gates,
+    )
+
+    approved = [
+        brief_attempt(
+            service,
+            current_briefs,
+            number,
+            HumanGateAction.APPROVE,
+        )[1]
+        for number in range(1, 6)
+    ]
+
+    assert [(gate.iteration, gate.max_iterations) for gate in approved if gate is not None] == [
+        (1, 3),
+        (2, 4),
+        (3, 5),
+        (4, 6),
+        (5, 7),
+    ]
+    assert [gate.status for gate in gates.gates] == [
+        *(HumanGateStatus.STALE,) * 4,
+        HumanGateStatus.APPROVED,
+    ]
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_rejected_briefs_in_a_row_still_reach_the_limit(
+    approvals: int,
+) -> None:
+    current_briefs = InMemoryCurrentBriefRepository()
+    gates = InMemoryHumanGateRepository()
+    service = build_service(
+        current_briefs,
+        gates,
+    )
+
+    for number in range(1, approvals + 1):
+        brief_attempt(service, current_briefs, number, HumanGateAction.APPROVE)
+
+    rejected = [
+        brief_attempt(service, current_briefs, number, HumanGateAction.REJECT)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    refused, _ = brief_attempt(
+        service,
+        current_briefs,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+
+    assert [gate.status for gate in rejected if gate is not None] == [HumanGateStatus.REJECTED] * 3
+    assert refused.status is (ProjectBriefGateSubmissionStatus.ITERATION_LIMIT_REACHED)
+    assert refused.gate is not None
+    assert (refused.gate.iteration, refused.gate.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_briefs_sent_back_in_a_row_still_pause_for_a_person(
+    approvals: int,
+) -> None:
+    current_briefs = InMemoryCurrentBriefRepository()
+    gates = InMemoryHumanGateRepository()
+    service = build_service(
+        current_briefs,
+        gates,
+    )
+
+    for number in range(1, approvals + 1):
+        brief_attempt(service, current_briefs, number, HumanGateAction.APPROVE)
+
+    sent_back = [
+        brief_attempt(service, current_briefs, number, HumanGateAction.REQUEST_REVISION)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    blocked, _ = brief_attempt(
+        service,
+        current_briefs,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+    paused = sent_back[-1]
+
+    assert [gate.status for gate in sent_back if gate is not None] == [
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.PAUSED_NEEDS_HUMAN,
+    ]
+    assert paused is not None
+    assert (paused.iteration, paused.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+    assert blocked.status is (ProjectBriefGateSubmissionStatus.GATE_BLOCKED)
+
+
+def test_an_approval_found_stale_before_the_next_submission_still_renews_the_budget() -> None:
+    current_briefs = InMemoryCurrentBriefRepository()
+    gates = InMemoryHumanGateRepository()
+    service = build_service(
+        current_briefs,
+        gates,
+    )
+
+    for number in range(1, 4):
+        brief_attempt(service, current_briefs, number, HumanGateAction.APPROVE)
+
+    current_briefs.set_current(
+        owner_user_id=OWNER_ID,
+        version=complete_brief_version(
+            version_number=4,
+            description="Brief version 4.",
+        ),
+    )
+    stale = asyncio.run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=(HumanGateAction.APPROVE),
+        )
+    )
+    submitted = asyncio.run(
+        service.submit(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert stale.status is (ProjectBriefGateDecisionStatus.ARTIFACT_STALE)
+    assert submitted.status is (ProjectBriefGateSubmissionStatus.SUBMITTED)
+    assert submitted.gate is not None
+    assert (submitted.gate.iteration, submitted.gate.max_iterations) == (4, 6)
+    assert len(submitted.events) == 1

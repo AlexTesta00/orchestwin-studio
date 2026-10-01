@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
 from orchestwin.projects.requirements import (
     RequirementKind,
     RequirementPriority,
@@ -538,3 +540,186 @@ def test_gate_four_reports_missing_specification_without_creating_state() -> Non
     assert result.status is (RequirementsGateSubmissionStatus.SPECIFICATION_NOT_FOUND)
     assert gates.latest is None
     assert gates.events == []
+
+
+def numbered_version(number: int) -> RequirementsSpecificationVersion:
+    first = version_one()
+    requirement = replace(
+        first.specification.requirements[0],
+        statement=f"The system must create reservations for party size {number}.",
+    )
+    specification = replace(
+        first.specification,
+        requirements=(requirement,),
+    )
+
+    return RequirementsSpecificationVersion(
+        id=UUID(int=0x4000 + number),
+        project_id=PROJECT_ID,
+        version_number=number,
+        based_on_version_number=None if number == 1 else number - 1,
+        specification=specification,
+        content_hash=specification.content_hash,
+        created_by_user_id=OWNER_ID,
+        created_at=STARTED_AT,
+    )
+
+
+def requirements_attempt(
+    service: LocalRequirementsGateService,
+    specifications: InMemorySpecifications,
+    clock: MutableClock,
+    number: int,
+    action: HumanGateAction,
+):
+    specifications.current = numbered_version(number)
+    clock.advance()
+    submitted = run(
+        service.submit(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    if submitted.status is not RequirementsGateSubmissionStatus.SUBMITTED:
+        return submitted, None
+
+    clock.advance()
+    decided = run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=action,
+            reason=(None if action is HumanGateAction.APPROVE else "Not these requirements."),
+        )
+    )
+
+    assert decided.status is RequirementsGateDecisionStatus.APPLIED
+    assert decided.gate is not None
+    assert 1 <= decided.gate.iteration <= decided.gate.max_iterations
+
+    return submitted, decided.gate
+
+
+def test_every_approved_specification_renews_the_budget_of_attempts() -> None:
+    service, specifications, gates, clock = service_fixture(None)
+
+    approved = [
+        requirements_attempt(
+            service,
+            specifications,
+            clock,
+            number,
+            HumanGateAction.APPROVE,
+        )[1]
+        for number in range(1, 6)
+    ]
+
+    assert [(gate.iteration, gate.max_iterations) for gate in approved if gate is not None] == [
+        (1, 3),
+        (2, 4),
+        (3, 5),
+        (4, 6),
+        (5, 7),
+    ]
+    assert gates.latest == approved[-1]
+    assert len(gates.events) == 14
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_rejected_specifications_in_a_row_still_reach_the_limit(
+    approvals: int,
+) -> None:
+    service, specifications, _gates, clock = service_fixture(None)
+
+    for number in range(1, approvals + 1):
+        requirements_attempt(service, specifications, clock, number, HumanGateAction.APPROVE)
+
+    rejected = [
+        requirements_attempt(service, specifications, clock, number, HumanGateAction.REJECT)[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    refused, _ = requirements_attempt(
+        service,
+        specifications,
+        clock,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+
+    assert [gate.status for gate in rejected if gate is not None] == [HumanGateStatus.REJECTED] * 3
+    assert refused.status is RequirementsGateSubmissionStatus.ITERATION_LIMIT_REACHED
+    assert refused.gate is not None
+    assert (refused.gate.iteration, refused.gate.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+
+
+@pytest.mark.parametrize("approvals", [0, 1, 4])
+def test_three_specifications_sent_back_in_a_row_still_pause_for_a_person(
+    approvals: int,
+) -> None:
+    service, specifications, _gates, clock = service_fixture(None)
+
+    for number in range(1, approvals + 1):
+        requirements_attempt(service, specifications, clock, number, HumanGateAction.APPROVE)
+
+    sent_back = [
+        requirements_attempt(
+            service,
+            specifications,
+            clock,
+            number,
+            HumanGateAction.REQUEST_REVISION,
+        )[1]
+        for number in range(approvals + 1, approvals + 4)
+    ]
+    blocked, _ = requirements_attempt(
+        service,
+        specifications,
+        clock,
+        approvals + 4,
+        HumanGateAction.APPROVE,
+    )
+    paused = sent_back[-1]
+
+    assert [gate.status for gate in sent_back if gate is not None] == [
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.REVISION_REQUESTED,
+        HumanGateStatus.PAUSED_NEEDS_HUMAN,
+    ]
+    assert paused is not None
+    assert (paused.iteration, paused.max_iterations) == (
+        approvals + 3,
+        approvals + 3,
+    )
+    assert blocked.status is RequirementsGateSubmissionStatus.GATE_BLOCKED
+
+
+def test_an_approval_found_stale_before_the_next_specification_still_renews_the_budget() -> None:
+    service, specifications, _gates, clock = service_fixture(None)
+
+    for number in range(1, 4):
+        requirements_attempt(service, specifications, clock, number, HumanGateAction.APPROVE)
+
+    specifications.current = numbered_version(4)
+    clock.advance()
+    stale = run(
+        service.decide(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            action=HumanGateAction.APPROVE,
+        )
+    )
+    submitted = run(
+        service.submit(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert stale.status is RequirementsGateDecisionStatus.ARTIFACT_STALE
+    assert submitted.status is RequirementsGateSubmissionStatus.SUBMITTED
+    assert submitted.gate is not None
+    assert (submitted.gate.iteration, submitted.gate.max_iterations) == (4, 6)
