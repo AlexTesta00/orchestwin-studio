@@ -26,6 +26,7 @@ from orchestwin.workflow.gates import (
     HumanGateType,
     create_human_gate,
     mark_human_gate_stale,
+    next_human_gate_iteration,
     transition_human_gate,
 )
 from orchestwin.workflow.repository import (
@@ -303,15 +304,23 @@ class LocalProjectBriefGateService:
                         stale_events.append(stale_result.event)
                         latest = stale_result.gate
 
-                next_iteration = latest.iteration + 1
-                max_iterations = latest.max_iterations
+                budget = next_human_gate_iteration(
+                    latest,
+                    await unit.gates.list_events_owned(
+                        project_id=project_id,
+                        owner_user_id=owner_user_id,
+                        gate_id=latest.id,
+                    ),
+                )
 
-                if next_iteration > max_iterations:
+                if budget is None:
                     return ProjectBriefGateSubmissionResult(
                         status=(ProjectBriefGateSubmissionStatus.ITERATION_LIMIT_REACHED),
                         gate=latest,
                         events=tuple(stale_events),
                     )
+
+                next_iteration, max_iterations = budget
             else:
                 next_iteration = 1
                 max_iterations = DEFAULT_GATE_ITERATION_LIMIT

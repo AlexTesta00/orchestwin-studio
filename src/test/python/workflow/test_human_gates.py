@@ -1,11 +1,13 @@
 """Tests for pure human-gate state transitions."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
 
 from orchestwin.workflow.gates import (
+    DEFAULT_GATE_ITERATION_LIMIT,
     GateArtifactReference,
     HumanGateAction,
     HumanGateEventKind,
@@ -15,6 +17,7 @@ from orchestwin.workflow.gates import (
     HumanGateType,
     create_human_gate,
     mark_human_gate_stale,
+    next_human_gate_iteration,
     transition_human_gate,
 )
 
@@ -23,6 +26,7 @@ OTHER_PROJECT_ID = UUID("00000000-0000-4000-8000-000000000011")
 OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
 OTHER_USER_ID = UUID("00000000-0000-4000-8000-000000000002")
 GATE_ID = UUID("00000000-0000-4000-8000-000000000020")
+OTHER_GATE_ID = UUID("00000000-0000-4000-8000-000000000021")
 FIRST_ARTIFACT_ID = UUID("00000000-0000-4000-8000-000000000030")
 SECOND_ARTIFACT_ID = UUID("00000000-0000-4000-8000-000000000031")
 CREATED_AT = datetime(
@@ -333,3 +337,173 @@ def test_stale_check_rejects_cross_project_artifact() -> None:
 
     assert result.status is (HumanGateTransitionStatus.REJECTED)
     assert result.issue is (HumanGateIssueCode.ARTIFACT_SCOPE_MISMATCH)
+
+
+def decided_gate(
+    action: HumanGateAction,
+    *,
+    iteration: int = 1,
+    max_iterations: int = 3,
+):
+    result = transition_human_gate(
+        submit_gate(
+            build_gate(
+                iteration=iteration,
+                max_iterations=max_iterations,
+            )
+        ),
+        action=action,
+        actor_user_id=OWNER_ID,
+        occurred_at=(CREATED_AT + timedelta(minutes=2)),
+        reason=(None if action is HumanGateAction.APPROVE else "Not this version."),
+    )
+
+    assert result.status is (HumanGateTransitionStatus.APPLIED)
+
+    return result.gate
+
+
+def superseded(gate):
+    result = mark_human_gate_stale(
+        gate,
+        current_artifact=artifact(
+            version=2,
+            hash_character="b",
+            artifact_id=(SECOND_ARTIFACT_ID),
+        ),
+        occurred_at=(CREATED_AT + timedelta(minutes=3)),
+    )
+
+    assert result.status is (HumanGateTransitionStatus.APPLIED)
+    assert result.event is not None
+
+    return (
+        result.gate,
+        result.event,
+    )
+
+
+@pytest.mark.parametrize(
+    ("iteration", "max_iterations", "expected"),
+    [
+        (1, 3, (2, 4)),
+        (3, 3, (4, 6)),
+        (6, 7, (7, 9)),
+    ],
+)
+def test_an_approved_gate_gives_the_next_version_a_fresh_budget(
+    iteration: int,
+    max_iterations: int,
+    expected: tuple[int, int],
+) -> None:
+    approved = decided_gate(
+        HumanGateAction.APPROVE,
+        iteration=iteration,
+        max_iterations=max_iterations,
+    )
+
+    assert approved.status is (HumanGateStatus.APPROVED)
+    assert next_human_gate_iteration(approved) == expected
+    assert expected[1] - expected[0] + 1 == DEFAULT_GATE_ITERATION_LIMIT
+
+
+def test_an_approval_superseded_by_a_new_version_keeps_its_fresh_budget() -> None:
+    stale, event = superseded(
+        decided_gate(
+            HumanGateAction.APPROVE,
+            iteration=3,
+            max_iterations=3,
+        )
+    )
+
+    assert stale.status is (HumanGateStatus.STALE)
+    assert event.previous_status is (HumanGateStatus.APPROVED)
+    assert next_human_gate_iteration(stale, (event,)) == (4, 6)
+    assert next_human_gate_iteration(stale) is None
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        HumanGateAction.REJECT,
+        HumanGateAction.REQUEST_REVISION,
+    ],
+)
+def test_a_gate_that_was_not_approved_keeps_its_budget(
+    action: HumanGateAction,
+) -> None:
+    middle, middle_event = superseded(
+        decided_gate(
+            action,
+            iteration=2,
+            max_iterations=4,
+        )
+    )
+    final, final_event = superseded(
+        decided_gate(
+            action,
+            iteration=4,
+            max_iterations=4,
+        )
+    )
+
+    assert next_human_gate_iteration(middle, (middle_event,)) == (3, 4)
+    assert next_human_gate_iteration(final, (final_event,)) is None
+
+
+def test_a_pending_gate_superseded_before_a_decision_keeps_its_budget() -> None:
+    stale, event = superseded(
+        submit_gate(
+            build_gate(
+                iteration=3,
+                max_iterations=3,
+            )
+        )
+    )
+
+    assert event.previous_status is (HumanGateStatus.PENDING_APPROVAL)
+    assert next_human_gate_iteration(stale, (event,)) is None
+
+
+def test_the_approval_of_another_gate_does_not_renew_the_budget() -> None:
+    stale, event = superseded(
+        decided_gate(
+            HumanGateAction.APPROVE,
+            iteration=3,
+            max_iterations=3,
+        )
+    )
+
+    assert next_human_gate_iteration(stale, (replace(event, gate_id=OTHER_GATE_ID),)) is None
+
+
+def test_a_fresh_budget_pauses_for_a_person_only_at_its_final_iteration() -> None:
+    budget = next_human_gate_iteration(
+        decided_gate(
+            HumanGateAction.APPROVE,
+            iteration=3,
+            max_iterations=3,
+        )
+    )
+
+    assert budget == (4, 6)
+
+    first = decided_gate(
+        HumanGateAction.REQUEST_REVISION,
+        iteration=4,
+        max_iterations=6,
+    )
+    final = decided_gate(
+        HumanGateAction.REQUEST_REVISION,
+        iteration=6,
+        max_iterations=6,
+    )
+
+    assert first.status is (HumanGateStatus.REVISION_REQUESTED)
+    assert final.status is (HumanGateStatus.PAUSED_NEEDS_HUMAN)
+
+    with pytest.raises(ValueError, match="final iteration"):
+        replace(final, max_iterations=7)
+
+    with pytest.raises(ValueError, match="within its configured limit"):
+        build_gate(iteration=7, max_iterations=6)
