@@ -17,9 +17,28 @@ from orchestwin.models.twin_chat import (
     twin_chat_context,
 )
 from orchestwin.models.twin_update import LEARNED_INSTRUCTION
-from orchestwin.projects.briefs import ProjectBrief
+from orchestwin.projects.brief_gate import (
+    ProjectBriefGateDecisionStatus,
+    ProjectBriefGateSubmissionStatus,
+    project_brief_gate_is_currently_approved,
+)
+from orchestwin.projects.briefs import (
+    BriefField,
+    ProjectBrief,
+    ProjectBriefVersion,
+    create_project_brief,
+)
 from orchestwin.twins.conversations import TwinConversationTurn, TwinInsightKind
+from orchestwin.workflow.gates import HumanGateAction
 from src.test.python.models.test_proposal_evidence import audited_generator
+from src.test.python.projects.test_project_brief_gate import (
+    NOW,
+    OWNER_ID,
+    PROJECT_ID,
+    InMemoryCurrentBriefRepository,
+    InMemoryHumanGateRepository,
+    build_service,
+)
 from src.test.python.twins.test_user_modeling_persistence import twin_version
 
 OUTPUT = {
@@ -46,6 +65,40 @@ def brief():
         goals=("Registrare un ospite in dieci secondi",),
         definition_of_done=("I test automatici passano",),
     )
+
+
+def approved_brief_without_goals():
+    written = create_project_brief(
+        name="Registro ospiti",
+        problem="La reception perde tempo a registrare gli ospiti.",
+        unknown_fields=[
+            field for field in BriefField if field not in {BriefField.NAME, BriefField.PROBLEM}
+        ],
+    )
+    version = ProjectBriefVersion(
+        id=uuid4(),
+        project_id=PROJECT_ID,
+        version_number=1,
+        schema_version=written.SCHEMA_VERSION,
+        brief=ProjectBrief.from_snapshot(json.loads(written.canonical_json())),
+        content_hash=written.content_hash,
+        created_by_user_id=OWNER_ID,
+        created_at=NOW,
+    )
+    briefs = InMemoryCurrentBriefRepository()
+    briefs.set_current(owner_user_id=OWNER_ID, version=version)
+    service = build_service(briefs, InMemoryHumanGateRepository())
+    submitted = asyncio.run(service.submit(project_id=PROJECT_ID, owner_user_id=OWNER_ID))
+    decision = asyncio.run(
+        service.decide(
+            project_id=PROJECT_ID, owner_user_id=OWNER_ID, action=HumanGateAction.APPROVE
+        )
+    )
+    assert submitted.status is ProjectBriefGateSubmissionStatus.SUBMITTED
+    assert decision.status is ProjectBriefGateDecisionStatus.APPLIED
+    assert decision.gate is not None
+    assert project_brief_gate_is_currently_approved(decision.gate, version) is True
+    return version
 
 
 def history(count):
@@ -91,6 +144,38 @@ def test_context_carries_profile_brief_bounded_history_and_question():
         )["project_brief"]
         is None
     )
+
+
+def test_an_approved_brief_with_unknown_goals_reaches_the_context_without_goals():
+    version = approved_brief_without_goals()
+    twin = twin_version()
+
+    context = twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=version.brief,
+        turns=(),
+        question="Come registri un ospite?",
+    )
+
+    assert version.brief.goals is None
+    assert BriefField.GOALS in version.brief.unknown_fields
+    assert context["project_brief"] == {
+        "name": "Registro ospiti",
+        "problem": "La reception perde tempo a registrare gli ospiti.",
+        "goals": [],
+    }
+    assert twin_chat_context(
+        project_id=twin.project_id,
+        twin_version=twin,
+        brief=brief(),
+        turns=(),
+        question="Come registri un ospite?",
+    )["project_brief"] == {
+        "name": "Registro ospiti",
+        "problem": "La reception perde tempo a registrare gli ospiti.",
+        "goals": ["Registrare un ospite in dieci secondi"],
+    }
 
 
 def test_answer_uses_the_twin_chat_task_with_the_grounding_instruction(tmp_path):

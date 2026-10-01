@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from orchestwin.models.change_review import brief_view
 from orchestwin.models.twin_update import with_learned
 from orchestwin.twins.conversations import (
     MAX_INSIGHT_CHARACTERS,
@@ -77,9 +78,7 @@ def twin_chat_context(*, project_id, twin_version, brief, turns, question, learn
             },
             learned,
         ),
-        "project_brief": None
-        if brief is None
-        else {"name": brief.name, "problem": brief.problem, "goals": list(brief.goals)},
+        "project_brief": brief_view(brief),
         "conversation": [
             {"question": turn.question, "reply": turn.reply} for turn in turns[-HISTORY_TURNS:]
         ],
