@@ -26,6 +26,7 @@ export interface DesignMockupCapabilitiesPayload {
   iterations: boolean;
   model: string | null;
   static_check?: boolean;
+  paid?: boolean;
 }
 
 export type GenerationJobKind = "MOCKUP" | "ITERATION" | "REQUEST";
@@ -170,7 +171,7 @@ export interface ReviewPinsPayload {
 }
 
 export type ModelProviderKind =
-  "ANTHROPIC_HOSTED" | "OPENAI_COMPATIBLE_HOSTED" | "OPENAI_COMPATIBLE_LOCAL";
+  "ANTHROPIC_HOSTED" | "OPENAI_COMPATIBLE_HOSTED" | "OPENAI_COMPATIBLE_LOCAL" | "CLAUDE_CODE_CLI";
 
 export interface ModelUsageItemPayload {
   generation_id: UUID;

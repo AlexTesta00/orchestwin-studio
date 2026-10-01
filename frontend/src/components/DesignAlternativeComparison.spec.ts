@@ -302,6 +302,21 @@ describe("DesignAlternativeComparison", () => {
     expect(cards.emitted("retry")).toEqual([[SECOND_DESIGN_ALTERNATIVE_ID]]);
   });
 
+  it("says that drawing uses the Claude subscription and spends no credit when it is not paid", async () => {
+    const cards = mountCards({
+      paid: false,
+      previews: { [SECOND_DESIGN_ALTERNATIVE_ID]: { kind: "missing" } },
+    });
+    const note = () => card(cards, "DES-002").get('[data-testid="alternative-draw-cost"]');
+    expect(note().text()).toBe("Drawing uses your Claude subscription: it spends no credit.");
+    expect(cards.text()).not.toContain("has a cost");
+    await cards.setProps({ locale: "it" });
+    expect(note().text()).toBe("Il disegno usa il tuo abbonamento di Claude: non spende credito.");
+    expect(cards.text()).not.toContain("ha un costo");
+    await cards.setProps({ paid: true });
+    expect(note().text()).toBe("Il disegno usa il modello ospitato e ha un costo.");
+  });
+
   it("shows a hint under the actions when the page gives one", () => {
     const cards = mountCards({
       hints: { [SECOND_DESIGN_ALTERNATIVE_ID]: "Try the mockup first: then you can choose it." },
