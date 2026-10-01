@@ -192,7 +192,14 @@ async function ask(): Promise<void> {
   }
   questionMissing.value = false;
   try {
-    await store.ask(props.projectId, twinId.value, text, authorize, props.api);
+    await store.ask(
+      props.projectId,
+      twinId.value,
+      props.twin.version_number,
+      text,
+      authorize,
+      props.api,
+    );
     question.value = "";
   } catch {
     return;
