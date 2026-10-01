@@ -7,11 +7,23 @@ from uuid import UUID
 
 import pytest
 
+from orchestwin.agents.catalog import AgentIdentifier
+from orchestwin.models.requirements import (
+    RequirementsBriefInput,
+    RequirementsTeamInput,
+    RequirementsUserModelingInput,
+    RequirementsUserTwinInput,
+)
+from orchestwin.projects.domain import ProjectMode
 from orchestwin.projects.requirements import (
     RequirementKind,
     RequirementPriority,
     create_requirement,
     create_user_story,
+)
+from orchestwin.projects.requirements_application import (
+    GovernedRequirementsContext,
+    specification_matches_context,
 )
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
@@ -38,7 +50,9 @@ from orchestwin.projects.requirements_realignment import (
     realignment_issue,
     referenced_twin_ids,
     requirements_are_aligned,
+    snapshot_brief_reference,
     snapshot_reference,
+    snapshot_team_reference,
     snapshot_twin_references,
 )
 from orchestwin.projects.requirements_specifications import (
@@ -47,6 +61,7 @@ from orchestwin.projects.requirements_specifications import (
     create_requirements_specification,
 )
 from orchestwin.twins.personas import PersonaProfileVersion
+from orchestwin.twins.realignment import realigned_user_modeling
 from orchestwin.twins.user_twins import (
     UserModelingSnapshotVersion,
     UserTwinProfileVersion,
@@ -67,6 +82,7 @@ OTHER_PROJECT_ID = UUID("00000000-0000-4000-8000-00000000d001")
 FIRST_SNAPSHOT_ID = UUID("00000000-0000-4000-8000-00000000d031")
 SECOND_SNAPSHOT_ID = UUID("00000000-0000-4000-8000-00000000d032")
 THIRD_SNAPSHOT_ID = UUID("00000000-0000-4000-8000-00000000d033")
+REANCHORED_SNAPSHOT_ID = UUID("00000000-0000-4000-8000-00000000d034")
 REQUIREMENTS_VERSION_ID = UUID("00000000-0000-4000-8000-00000000d041")
 REALIGNED_VERSION_ID = UUID("00000000-0000-4000-8000-00000000d042")
 CHECK_IN = UUID("00000000-0000-4000-8000-00000000d501")
@@ -88,6 +104,7 @@ RISK_ID = UUID("00000000-0000-4000-8000-00000000d541")
 DONE_ID = UUID("00000000-0000-4000-8000-00000000d551")
 WRITTEN_AT = datetime(2026, 9, 21, 9, 0, tzinfo=UTC)
 REVISED_AT = datetime(2026, 9, 25, 9, 0, tzinfo=UTC)
+REANCHORED_AT = datetime(2026, 9, 26, 9, 0, tzinfo=UTC)
 REALIGNED_AT = datetime(2026, 9, 27, 22, 0, tzinfo=UTC)
 BRIEF = VersionedArtifactReference(
     artifact_id=UUID("00000000-0000-4000-8000-00000000d010"),
@@ -411,6 +428,66 @@ def regenerated_snapshot(
     )
 
 
+def reanchored_snapshot() -> UserModelingSnapshotVersion:
+    first = first_snapshot()
+    return realigned_user_modeling(
+        first,
+        brief_reference=OTHER_BRIEF,
+        team_reference=OTHER_TEAM,
+        catalog_version=first.snapshot.catalog_version,
+        catalog_content_hash=first.snapshot.catalog_content_hash,
+        twin_version_ids={
+            RECEPTIONIST.twin_id: UUID("00000000-0000-4000-8000-00000000d102"),
+            AUDITOR.twin_id: UUID("00000000-0000-4000-8000-00000000d202"),
+        },
+        snapshot_version_id=REANCHORED_SNAPSHOT_ID,
+        created_by_user_id=OWNER_ID,
+        created_at=REANCHORED_AT,
+    ).snapshot_version
+
+
+def requirements_context(
+    snapshot: UserModelingSnapshotVersion,
+    *,
+    brief: VersionedArtifactReference,
+    team: VersionedArtifactReference,
+) -> GovernedRequirementsContext:
+    modeling_snapshot = snapshot.snapshot
+    return GovernedRequirementsContext(
+        project_id=snapshot.project_id,
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=RequirementsBriefInput(
+            reference=context(RequirementsContextKind.PROJECT_BRIEF, brief),
+            name="Hotel Front Desk",
+        ),
+        team=RequirementsTeamInput(
+            reference=context(RequirementsContextKind.AGENT_TEAM, team),
+            selected_agent_ids=(AgentIdentifier.REQUIREMENTS_ANALYST,),
+        ),
+        user_modeling=RequirementsUserModelingInput(
+            reference=snapshot_reference(snapshot),
+            user_twins=tuple(
+                RequirementsUserTwinInput(
+                    reference=reference,
+                    observations=tuple(
+                        sorted(
+                            version.profile.observations,
+                            key=lambda observation: observation.observation_key,
+                        )
+                    ),
+                )
+                for reference, version in zip(
+                    snapshot_twin_references(snapshot),
+                    modeling_snapshot.twin_versions,
+                    strict=True,
+                )
+            ),
+        ),
+        catalog_version=modeling_snapshot.catalog_version,
+        catalog_content_hash=modeling_snapshot.catalog_content_hash,
+    )
+
+
 def test_requirements_written_for_the_current_twins_are_aligned():
     first = first_snapshot()
     written = specification(first)
@@ -418,6 +495,27 @@ def test_requirements_written_for_the_current_twins_are_aligned():
     assert requirements_are_aligned(written, first)
     assert realignment_issue(written, first) is RequirementsRealignmentIssue.ALREADY_ALIGNED
     assert not requirements_are_aligned(written, second_snapshot())
+
+
+def test_requirements_are_aligned_only_when_brief_team_and_catalog_match_the_twins_as_well():
+    first = first_snapshot()
+    written = specification(first)
+
+    for requirements in (
+        replace(
+            written,
+            project_brief_reference=context(RequirementsContextKind.PROJECT_BRIEF, OTHER_BRIEF),
+        ),
+        replace(
+            written, agent_team_reference=context(RequirementsContextKind.AGENT_TEAM, OTHER_TEAM)
+        ),
+        replace(written, catalog_version=2),
+        replace(written, catalog_content_hash="e" * 64),
+    ):
+        assert not requirements_are_aligned(requirements, first)
+        assert realignment_issue(requirements, first) is None
+    assert snapshot_brief_reference(first) == written.project_brief_reference
+    assert snapshot_team_reference(first) == written.agent_team_reference
 
 
 def test_the_snapshot_references_describe_every_current_twin_in_canonical_order():
@@ -448,21 +546,72 @@ def test_the_snapshot_references_describe_every_current_twin_in_canonical_order(
     )
 
 
-def test_requirements_of_another_brief_team_catalog_or_project_cannot_be_realigned():
+def test_requirements_written_for_another_brief_team_or_catalog_can_now_be_realigned():
     written = specification(first_snapshot())
     second = second_snapshot()
 
     for requirements, snapshot in (
         (written, regenerated_snapshot(brief=OTHER_BRIEF)),
         (written, regenerated_snapshot(team=OTHER_TEAM)),
+        (written, reanchored_snapshot()),
         (replace(written, catalog_version=2), second),
         (replace(written, catalog_content_hash="e" * 64), second),
-        (replace(written, project_id=OTHER_PROJECT_ID), second),
     ):
-        assert (
-            realignment_issue(requirements, snapshot)
-            is RequirementsRealignmentIssue.CONTEXT_CHANGED
+        assert realignment_issue(requirements, snapshot) is None
+
+
+def test_requirements_of_another_project_cannot_be_realigned():
+    written = specification(first_snapshot())
+
+    issue = realignment_issue(replace(written, project_id=OTHER_PROJECT_ID), second_snapshot())
+
+    assert issue is RequirementsRealignmentIssue.PROJECT_MISMATCH
+    assert issue.value == "REQUIREMENTS_PROJECT_MISMATCH"
+
+
+def test_realignment_takes_brief_team_and_catalog_from_the_twins_and_keeps_every_source():
+    written = specification(first_snapshot())
+    snapshot = reanchored_snapshot()
+
+    realigned = realign_requirements(written, snapshot)
+
+    assert realigned.project_brief_reference == context(
+        RequirementsContextKind.PROJECT_BRIEF, OTHER_BRIEF
+    )
+    assert realigned.agent_team_reference == context(RequirementsContextKind.AGENT_TEAM, OTHER_TEAM)
+    assert (realigned.catalog_version, realigned.catalog_content_hash) == (1, CATALOG_HASH)
+    assert realigned.user_modeling_reference == snapshot_reference(snapshot)
+    assert realigned.user_twin_references == snapshot_twin_references(snapshot)
+    assert [requirement.sources for requirement in realigned.requirements] == [
+        requirement.sources for requirement in written.requirements
+    ]
+    assert [risk.sources for risk in realigned.risks] == [risk.sources for risk in written.risks]
+    assert realigned.requirements[0].sources[0].kind is RequirementSourceKind.PROJECT_BRIEF
+    assert realigned.requirements[0].sources[0].source_version == BRIEF.version_number
+    assert (
+        replace(
+            realigned,
+            project_brief_reference=written.project_brief_reference,
+            agent_team_reference=written.agent_team_reference,
+            user_modeling_reference=written.user_modeling_reference,
+            user_twin_references=written.user_twin_references,
+            requirements=written.requirements,
+            user_stories=written.user_stories,
+            scenarios=written.scenarios,
         )
+        == written
+    )
+    assert requirements_are_aligned(realigned, snapshot)
+    assert realignment_issue(realigned, snapshot) is RequirementsRealignmentIssue.ALREADY_ALIGNED
+
+
+def test_after_the_realignment_a_change_request_finds_the_requirements_in_the_current_context():
+    written = specification(first_snapshot())
+    snapshot = reanchored_snapshot()
+    current = requirements_context(snapshot, brief=OTHER_BRIEF, team=OTHER_TEAM)
+
+    assert not specification_matches_context(written, current)
+    assert specification_matches_context(realign_requirements(written, snapshot), current)
 
 
 def test_requirements_that_mention_a_twin_removed_from_the_snapshot_cannot_be_realigned():
@@ -563,8 +712,14 @@ def test_the_realigned_version_continues_the_requirements_lineage_with_a_new_has
     [
         (first_snapshot, RequirementsRealignmentIssue.ALREADY_ALIGNED),
         (
-            lambda: regenerated_snapshot(brief=OTHER_BRIEF),
-            RequirementsRealignmentIssue.CONTEXT_CHANGED,
+            lambda: modeling(
+                OTHER_PROJECT_ID,
+                (RECEPTIONIST, AUDITOR),
+                snapshot_id=THIRD_SNAPSHOT_ID,
+                brief=BRIEF,
+                team=TEAM,
+            ),
+            RequirementsRealignmentIssue.PROJECT_MISMATCH,
         ),
         (snapshot_without_the_auditor, RequirementsRealignmentIssue.TWIN_NO_LONGER_AVAILABLE),
     ],

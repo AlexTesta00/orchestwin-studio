@@ -10,7 +10,9 @@ import pytest
 from orchestwin.projects.requirements_application import RequirementsVersionAppendStatus
 from orchestwin.projects.requirements_realignment import (
     realign_requirements,
+    snapshot_brief_reference,
     snapshot_reference,
+    snapshot_team_reference,
 )
 from orchestwin.projects.requirements_realignment_service import (
     RequirementsAlignment,
@@ -24,10 +26,11 @@ from orchestwin.workflow.gates import HumanGate, HumanGateType
 from src.test.python.knowledge.knowledge_fixtures import approved_gate
 from src.test.python.knowledge.test_twin_import import OWNER_ID
 from src.test.python.projects.test_requirements_realignment import (
-    OTHER_BRIEF,
     PROJECT_ID,
+    REANCHORED_SNAPSHOT_ID,
+    SECOND_SNAPSHOT_ID,
     first_snapshot,
-    regenerated_snapshot,
+    reanchored_snapshot,
     requirements_version,
     second_snapshot,
     snapshot_without_the_auditor,
@@ -146,6 +149,22 @@ class Gates:
         return self.gate
 
 
+class Context:
+    def __init__(self, current: bool) -> None:
+        self.current = current
+        self.calls: list[tuple[UUID, UUID, UUID]] = []
+
+    async def snapshot_context_is_current(
+        self,
+        *,
+        owner_user_id: UUID,
+        project_id: UUID,
+        snapshot: UserModelingSnapshotVersion | None,
+    ) -> bool:
+        self.calls.append((owner_user_id, project_id, snapshot.id))
+        return self.current
+
+
 class Harness:
     def __init__(
         self,
@@ -154,13 +173,16 @@ class Harness:
         gate: HumanGate | None,
         versions: list[RequirementsSpecificationVersion],
         injected: bool = True,
+        current: bool | None = True,
     ) -> None:
         self.store = Store(versions)
         self.before = list(self.store.versions)
+        self.context = None if current is None else Context(current)
         dependencies = {
             "uow_factory": self.unit_of_work,
             "user_modeling_queries": Queries(snapshot),
             "user_modeling_gates": Gates(gate),
+            "user_modeling_context": self.context,
         }
         if injected:
             dependencies["clock"] = lambda: NOW
@@ -208,9 +230,6 @@ def blocked(name: str) -> Harness:
         return after_revision(gate=approved(first))
     if name == "REQUIREMENTS_ALREADY_ALIGNED":
         return after_revision(snapshot=first, gate=approved(first))
-    if name == "REQUIREMENTS_CONTEXT_CHANGED":
-        regenerated = regenerated_snapshot(brief=OTHER_BRIEF)
-        return after_revision(snapshot=regenerated, gate=approved(regenerated))
     if name == "TWIN_NO_LONGER_AVAILABLE":
         reduced = snapshot_without_the_auditor()
         return after_revision(snapshot=reduced, gate=approved(reduced))
@@ -224,7 +243,6 @@ BLOCKERS = (
     "USER_TWINS_REQUIRED",
     "USER_TWINS_APPROVAL_REQUIRED",
     "REQUIREMENTS_ALREADY_ALIGNED",
-    "REQUIREMENTS_CONTEXT_CHANGED",
     "TWIN_NO_LONGER_AVAILABLE",
     "REQUIREMENTS_REVISION_PENDING",
 )
@@ -361,3 +379,59 @@ def test_without_injected_identity_and_clock_the_realignment_uses_a_random_id_an
 
     assert version.id not in {REALIGNED_ID, harness.before[0].id}
     assert version.created_at.utcoffset().total_seconds() == 0
+
+
+def test_twins_approved_for_an_earlier_brief_or_team_are_not_approved_for_the_realignment():
+    harness = after_revision(current=False)
+
+    assert harness.status() == RequirementsAlignment(
+        aligned=False,
+        issue="USER_TWINS_APPROVAL_REQUIRED",
+        requirements_version_number=3,
+        snapshot_version_number=2,
+        twins_approved=False,
+    )
+    assert harness.refusal() == "USER_TWINS_APPROVAL_REQUIRED"
+    assert harness.nothing_written()
+    assert harness.context.calls == [(OWNER_ID, PROJECT_ID, SECOND_SNAPSHOT_ID)] * 2
+
+
+def test_the_context_of_the_twins_is_asked_only_when_gate_three_approves_them():
+    harness = after_revision(gate=approved(first_snapshot()))
+
+    assert harness.status().issue == "USER_TWINS_APPROVAL_REQUIRED"
+    assert harness.context.calls == []
+
+
+def test_without_the_context_of_the_twins_gate_three_alone_decides():
+    harness = after_revision(current=None)
+
+    assert harness.status().twins_approved is True
+    assert harness.realign().version_number == 4
+
+
+def test_requirements_written_for_an_earlier_brief_and_team_follow_the_re_anchored_twins():
+    reanchored = reanchored_snapshot()
+    harness = after_revision(snapshot=reanchored, gate=approved(reanchored))
+    written = harness.store.current
+
+    assert harness.status() == RequirementsAlignment(
+        aligned=False,
+        issue=None,
+        requirements_version_number=3,
+        snapshot_version_number=2,
+        twins_approved=True,
+    )
+
+    version = harness.realign()
+
+    specification = version.specification
+    assert specification == realign_requirements(written.specification, reanchored)
+    assert specification.project_brief_reference == snapshot_brief_reference(reanchored)
+    assert specification.agent_team_reference == snapshot_team_reference(reanchored)
+    assert specification.user_modeling_reference.artifact_id == REANCHORED_SNAPSHOT_ID
+    assert [requirement.sources for requirement in specification.requirements] == [
+        requirement.sources for requirement in written.specification.requirements
+    ]
+    assert harness.context.calls == [(OWNER_ID, PROJECT_ID, REANCHORED_SNAPSHOT_ID)] * 2
+    assert harness.status().issue == "REQUIREMENTS_ALREADY_ALIGNED"
