@@ -16,12 +16,13 @@ from http.cookies import SimpleCookie
 
 import pytest
 
+from orchestwin.agents.perspectives import perspective_views
 from orchestwin.agents.selection_rules import determine_team_constraints
 from orchestwin.knowledge.archive import read_verified_folder
 from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.projects.domain import ProjectMode
 
-from .support.fake_studio import COSTS, PREFIX, FakeStudio
+from .support.fake_studio import COSTS, PREFIX, FakeProject, FakeStudio
 from .support.folders import folder_frame, partial_archive, valid_archive
 
 STEPS = ("brief", "team", "twins", "requirements", "design")
@@ -963,33 +964,46 @@ def test_the_team_follows_the_real_rules(hosted: bool) -> None:
         assert suggested == (expected if hosted and "FRONTEND_ENGINEER" in optional else [])
         assert team["provider_kind"] == ("MODEL_ADAPTER" if hosted else "FAKE_DETERMINISTIC")
         assert "UX_UI_DESIGNER" in team["selected_agent_ids"]
+        assert team["perspectives"] == [
+            view.to_snapshot() for view in perspective_views(rules, team["selected_agent_ids"])
+        ]
+        assert client.get(base + "/team-proposals/current").json() == team
 
 
-def test_contradictory_signals_block_the_team_as_in_the_real_studio() -> None:
-    with FakeStudio(job_polls=0) as studio:
+CONTESTED_BRIEF = {
+    "name": "Archivio",
+    "description": "Una app con database ma senza backend.",
+    "problem": "Le ricette sono sparse.",
+    "goals": ["Ritrovare una ricetta"],
+    "target_users": ["Cuochi"],
+    "functional_requirements": ["Cercare una ricetta"],
+    "technical_constraints": ["No integrations."],
+    "unknown_fields": [
+        "domain",
+        "temporal_constraints",
+        "budget",
+        "non_functional_requirements",
+        "risks",
+        "stakeholders",
+        "available_artifacts",
+        "definition_of_done",
+    ],
+}
+
+
+def aspect(team: Mapping[str, object], key: str) -> dict:
+    engineering = next(
+        item for item in team["perspectives"] if item["key"] == "SOFTWARE_ENGINEERING"
+    )
+    return next(item for item in engineering["aspects"] if item["key"] == key)
+
+
+@pytest.mark.parametrize("hosted", [True, False])
+def test_a_contradiction_no_longer_blocks_the_team(hosted: bool) -> None:
+    with FakeStudio(hosted=hosted, job_polls=0) as studio:
         client = signed_in(studio)
         base = new_project(client)
-        fields = {
-            "name": "Archivio",
-            "description": "Una app con database ma senza backend.",
-            "problem": "Le ricette sono sparse.",
-            "goals": ["Ritrovare una ricetta"],
-            "target_users": ["Cuochi"],
-            "functional_requirements": ["Cercare una ricetta"],
-        }
-        unknown = [
-            "domain",
-            "technical_constraints",
-            "temporal_constraints",
-            "budget",
-            "non_functional_requirements",
-            "risks",
-            "stakeholders",
-            "available_artifacts",
-            "definition_of_done",
-        ]
-        created = client.post(base + "/brief-versions", {**fields, "unknown_fields": unknown})
-        assert created.status == 201
+        assert client.post(base + "/brief-versions", CONTESTED_BRIEF).status == 201
         approve(
             client, base + "/gates/project-brief/submit", base + "/gates/project-brief/decisions"
         )
@@ -999,17 +1013,130 @@ def test_contradictory_signals_block_the_team_as_in_the_real_studio() -> None:
         rules = determine_team_constraints(
             project_mode=ProjectMode(project.mode), brief=brief.brief
         )
-        assert rules.has_conflicts
-        blocked = client.post(base + "/team-proposals")
-        assert (blocked.status, blocked.json()["status"], blocked.json()["version"]) == (
-            409,
-            "BLOCKED_BY_CONSTRAINTS",
-            None,
-        )
-        assert [item["agent_id"] for item in blocked.json()["issues"]] == [
-            issue.agent_id.value for issue in rules.issues
+        assert [issue.agent_id.value for issue in rules.issues] == ["BACKEND_ENGINEER"]
+
+        created = client.post(base + "/team-proposals")
+        body = created.json()
+        team = body["version"]
+        assert (created.status, body["status"]) == (201, "CREATED")
+        assert body["issues"] == team["constraint_issues"]
+        assert [item["agent_id"] for item in body["issues"]] == ["BACKEND_ENGINEER"]
+        assert body["issues"][0]["code"] == "CONTRADICTORY_ROLE_SIGNALS"
+        assert "BACKEND_ENGINEER" not in team["selected_agent_ids"]
+        assert team["perspectives"] == [
+            view.to_snapshot() for view in perspective_views(rules, team["selected_agent_ids"])
         ]
-        assert client.get(base + "/model-usage").json()["items"] == []
+        services = aspect(team, "SERVICES")
+        assert (services["standing"], services["applied"], services["editable"]) == (
+            "CONTESTED",
+            False,
+            True,
+        )
+        assert services["requested"] == {"fields": ["description"], "terms": ["database"]}
+        assert services["excluded"] == {"fields": ["description"], "terms": ["senza backend"]}
+        integrations = aspect(team, "INTEGRATIONS")
+        assert (integrations["standing"], integrations["editable"]) == ("EXCLUDED", False)
+        constraint = next(
+            item for item in team["role_constraints"] if item["agent_id"] == "BACKEND_ENGINEER"
+        )
+        assert (constraint["kind"], constraint["owner_editable"]) == ("CONFLICT", True)
+        assert len(client.get(base + "/model-usage").json()["items"]) == (1 if hosted else 0)
+
+        again = client.post(base + "/team-proposals")
+        assert (again.status, again.json()["status"], again.json()["issues"]) == (
+            200,
+            "UNCHANGED",
+            body["issues"],
+        )
+
+        contested = [*team["selected_agent_ids"], "BACKEND_ENGINEER"]
+        added = client.send(
+            "PATCH", base + "/team-proposals/current", {"selected_agent_ids": contested}
+        )
+        edited = added.json()["version"]
+        assert (added.status, added.json()["status"]) == (201, "UPDATED")
+        member = next(item for item in edited["members"] if item["agent_id"] == "BACKEND_ENGINEER")
+        assert member["source"] == "OWNER_ADDED"
+        assert [item["statement"] for item in member["justifications"]] == ["Chosen by the owner."]
+        assert aspect(edited, "SERVICES")["applied"] is True
+        assert edited["constraint_issues"] == body["issues"]
+
+        refused = client.send(
+            "PATCH",
+            base + "/team-proposals/current",
+            {"selected_agent_ids": [*contested, "INTEGRATION_ENGINEER"]},
+        )
+        assert (refused.status, refused.json()["status"], refused.json()["issues"]) == (
+            422,
+            "REJECTED",
+            [{"code": "AGENT_NOT_SELECTABLE", "agent_id": "INTEGRATION_ENGINEER"}],
+        )
+
+        removed = client.send(
+            "PATCH",
+            base + "/team-proposals/current",
+            {"selected_agent_ids": team["selected_agent_ids"]},
+        )
+        assert (removed.status, aspect(removed.json()["version"], "SERVICES")["applied"]) == (
+            201,
+            False,
+        )
+        assert studio.errors == []
+
+
+def test_an_added_agent_keeps_the_rationale_of_the_owner() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="brief")
+        base = f"/projects/{seeded.id}"
+        team = client.post(base + "/team-proposals").json()["version"]
+        selected = [*team["selected_agent_ids"], "SECURITY_REVIEWER", "MOBILE_ENGINEER"]
+        reply = client.send(
+            "PATCH",
+            base + "/team-proposals/current",
+            {
+                "selected_agent_ids": selected,
+                "owner_rationales": [
+                    {"agent_id": "SECURITY_REVIEWER", "statement": "  Dati   dei clienti. "}
+                ],
+            },
+        )
+        edited = reply.json()["version"]
+        statements = {
+            member["agent_id"]: member["justifications"][0]["statement"]
+            for member in edited["members"]
+            if member["source"] == "OWNER_ADDED"
+        }
+        assert reply.status == 201
+        assert statements == {
+            "MOBILE_ENGINEER": "Chosen by the owner.",
+            "SECURITY_REVIEWER": "Dati dei clienti.",
+        }
+        security = next(item for item in edited["perspectives"] if item["key"] == "SECURITY")
+        assert (security["standing"], security["applied"], security["agent_id"]) == (
+            "OPTIONAL",
+            True,
+            "SECURITY_REVIEWER",
+        )
+        history = client.get(base + "/team-proposals").json()
+        assert all(
+            [item["key"] for item in version["perspectives"]]
+            == ["UX", "ACCESSIBILITY", "SOFTWARE_ENGINEERING", "PRODUCT", "SECURITY"]
+            for version in history
+        )
+        unused = client.send(
+            "PATCH",
+            base + "/team-proposals/current",
+            {
+                "selected_agent_ids": selected,
+                "owner_rationales": [{"agent_id": "FRONTEND_ENGINEER", "statement": "Web."}],
+            },
+        )
+        assert (unused.status, unused.json()["issues"]) == (
+            422,
+            [{"code": "UNUSED_RATIONALE", "agent_id": "FRONTEND_ENGINEER"}],
+        )
+        assert studio.errors == []
 
 
 @pytest.mark.parametrize("hosted", [True, False])
@@ -1900,4 +2027,865 @@ def test_the_seeding_helpers_give_a_project_in_the_named_state() -> None:
         for failure in failures:
             with pytest.raises(ValueError):
                 failure()
+        assert studio.errors == []
+
+
+ALIGNMENT_REASON = "Aligned to the current upstream versions with unchanged content."
+SECTION_KEYS = ["BRIEF", "TEAM", "USER_TWINS", "REQUIREMENTS", "DESIGN", "PACKAGE"]
+
+
+def states(sections: Mapping[str, object]) -> dict[str, tuple[object, ...]]:
+    return {
+        item["key"]: (
+            item["state"],
+            item["version_number"],
+            item["reasons"],
+            item["blocked"],
+            item["codes"],
+        )
+        for item in sections["sections"]
+    }
+
+
+def design_content(package: Mapping[str, object]) -> dict:
+    content = json.loads(json.dumps(package))
+    content.pop("grounding")
+    for alternative in content["alternatives"]:
+        alternative.pop("user_twin_references")
+    for critique in content["critiques"]:
+        critique.pop("user_twin_reference")
+    return content
+
+
+def twin_identities(project_snapshot: Mapping[str, object]) -> list[tuple[str, str]]:
+    return [
+        (twin["twin_id"], twin["profile"]["name"])
+        for twin in project_snapshot["snapshot"]["twin_versions"]
+    ]
+
+
+def last_reason(client: Client, path: str) -> str | None:
+    return client.get(path).json()[-1]["reason"]
+
+
+def published(client: Client, base: str) -> tuple[int, object]:
+    reply = client.post(base + "/knowledge-packages")
+    return reply.status, reply.json()
+
+
+def attempts(gate: Mapping[str, object]) -> tuple[object, ...]:
+    return gate["status"], gate["iteration"], gate["max_iterations"]
+
+
+def new_design(client: Client, project: FakeProject) -> Reply:
+    base = f"/projects/{project.id}"
+    package = project.current("design")["package"]
+    assertions = package["owner_assertions"]
+    package["owner_assertions"] = [*assertions, f"Controllo numero {len(assertions) + 1}"]
+    apply(client, base, package)
+    return client.post(base + "/design/gate/submit")
+
+
+def design_attempt(client: Client, project: FakeProject, action: str) -> tuple[object, ...]:
+    assert new_design(client, project).status == 200
+    reason = None if action == "APPROVE" else "Non ancora"
+    decided = client.post(
+        f"/projects/{project.id}/design/gate/decision", {"action": action, "reason": reason}
+    )
+    assert decided.status == 200
+    return attempts(decided.json()["gate"])
+
+
+def test_the_sections_of_a_seeded_project_follow_the_real_rules() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        empty = new_project(client)
+        early = studio.seed_project(owner=EMAIL, name="Presto", through="requirements")
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+
+        nothing = client.get(empty + "/sections").json()
+        assert nothing == {
+            "first_pass_complete": False,
+            "sections": [
+                {
+                    "key": key,
+                    "state": "NOT_STARTED",
+                    "version_number": None,
+                    "reasons": [],
+                    "blocked": None,
+                    "codes": [],
+                }
+                for key in SECTION_KEYS
+            ],
+            "alignment": {"available": False, "sections": [], "uncovered_codes": []},
+        }
+        first = client.get(f"/projects/{early.id}/sections").json()
+        assert first["first_pass_complete"] is False
+        assert [item["state"] for item in first["sections"]] == ["FINE"] * 4 + ["NOT_STARTED"] * 2
+
+        sections = client.get(base + "/sections").json()
+        assert sections == studio.sections(seeded.id) == seeded.sections()
+        assert sections["first_pass_complete"] is True
+        assert states(sections) == {
+            "BRIEF": ("FINE", 1, [], None, []),
+            "TEAM": ("FINE", 1, [], None, []),
+            "USER_TWINS": ("FINE", 1, [], None, []),
+            "REQUIREMENTS": ("FINE", 1, [], None, []),
+            "DESIGN": ("UPDATE_AVAILABLE", 2, ["EVALUATION_MISSING"], None, []),
+            "PACKAGE": ("NOT_STARTED", None, [], None, []),
+        }
+        design = seeded.current("design")
+        reviewed = client.post(
+            base + "/design/evaluations",
+            {"design_version_id": design["id"], "design_content_hash": design["content_hash"]},
+        )
+        assert reviewed.status == 201
+        assert published(client, base)[0] == 201
+        assert states(client.get(base + "/sections").json())["DESIGN"] == ("FINE", 2, [], None, [])
+        assert states(seeded.sections())["PACKAGE"] == ("FINE", 1, [], None, [])
+
+        seeded.seed_change()
+        learned = states(seeded.sections())["USER_TWINS"]
+        assert learned == ("UPDATE_AVAILABLE", 1, ["TWINS_LEARNED"], None, [])
+        assert states(seeded.sections())["PACKAGE"] == ("FINE", 1, [], None, [])
+
+        stranger = signed_in(studio, OTHER)
+        refused = {"detail": {"code": "PROJECT_NOT_FOUND"}}
+        assert (
+            stranger.get(base + "/sections").status,
+            stranger.get(base + "/sections").json(),
+        ) == (
+            404,
+            refused,
+        )
+        gesture = stranger.post(base + "/sections/alignment")
+        assert (gesture.status, gesture.json()) == (404, refused)
+        assert seeded.alignments() == []
+        assert studio.errors == []
+
+
+def test_without_a_model_a_pending_update_still_tells_that_the_twins_learned() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        seeded.seed_change()
+        studio.hosted = False
+        assert states(seeded.sections())["USER_TWINS"][0] == "FINE"
+        seeded.seed_update(0)
+        assert states(seeded.sections())["USER_TWINS"][2] == ["TWINS_LEARNED"]
+        assert studio.errors == []
+
+
+def test_the_gesture_re_anchors_twins_requirements_and_design_after_a_perspective_change() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        assert published(client, base)[0] == 201
+        twins_before = twin_identities(seeded.current("twins"))
+        design_before = seeded.current("design")
+
+        behind = studio.seed_perspective_change(seeded.id, "SECURITY_REVIEWER")
+        assert behind == client.get(base + "/sections").json()
+        assert states(behind) == {
+            "BRIEF": ("FINE", 1, [], None, []),
+            "TEAM": ("FINE", 2, [], None, []),
+            "USER_TWINS": ("TO_UPDATE", 1, ["PERSPECTIVES_CHANGED"], None, []),
+            "REQUIREMENTS": (
+                "TO_UPDATE",
+                1,
+                ["PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED"],
+                None,
+                [],
+            ),
+            "DESIGN": ("TO_UPDATE", 2, ["REQUIREMENTS_CHANGED"], None, []),
+            "PACKAGE": ("TO_UPDATE", 1, ["FOLDER_BEHIND"], None, []),
+        }
+        assert behind["alignment"] == {
+            "available": True,
+            "sections": ["USER_TWINS", "REQUIREMENTS", "DESIGN"],
+            "uncovered_codes": [],
+        }
+        security = next(
+            item for item in seeded.current("team")["perspectives"] if item["key"] == "SECURITY"
+        )
+        assert security["applied"] is True
+        assert published(client, base) == (409, {"detail": {"code": "USER_TWINS_OUTDATED"}})
+        assert seeded.stage == "USER_TWINS"
+
+        reply = client.post(base + "/sections/alignment")
+        answer = reply.json()
+        assert reply.status == 200
+        assert answer["status"] == "ALIGNED"
+        assert answer["results"] == [
+            {
+                "key": "USER_TWINS",
+                "outcome": "ALIGNED",
+                "issue": None,
+                "version_number": 2,
+                "codes": [],
+            },
+            {
+                "key": "REQUIREMENTS",
+                "outcome": "ALIGNED",
+                "issue": None,
+                "version_number": 2,
+                "codes": [],
+            },
+            {
+                "key": "DESIGN",
+                "outcome": "ALIGNED",
+                "issue": None,
+                "version_number": 3,
+                "codes": [],
+            },
+        ]
+        assert answer["sections"] == client.get(base + "/sections").json()
+        assert states(answer["sections"]) == {
+            "BRIEF": ("FINE", 1, [], None, []),
+            "TEAM": ("FINE", 2, [], None, []),
+            "USER_TWINS": ("FINE", 2, [], None, []),
+            "REQUIREMENTS": ("FINE", 2, [], None, []),
+            "DESIGN": ("UPDATE_AVAILABLE", 3, ["EVALUATION_MISSING"], None, []),
+            "PACKAGE": ("TO_UPDATE", 1, ["FOLDER_BEHIND"], None, []),
+        }
+        assert all(seeded.approved(stage) for stage in STEPS)
+        assert (seeded.stage, seeded.next_action) == ("PACKAGE", "DOWNLOAD_FOLDER")
+        twins_after = seeded.current("twins")
+        assert twin_identities(twins_after) == twins_before
+        assert [
+            twin["based_on_version_number"] for twin in twins_after["snapshot"]["twin_versions"]
+        ] == [
+            1,
+            1,
+        ]
+        team = seeded.current("team")
+        assert twins_after["snapshot"]["agent_team_reference"]["artifact_id"] == team["id"]
+        requirements = seeded.current("requirements")
+        assert (
+            requirements["specification"]["user_modeling_reference"]["artifact_id"]
+            == (twins_after["id"])
+        )
+        design = seeded.current("design")
+        assert design_content(design["package"]) == design_content(design_before["package"])
+        assert (
+            design["package"]["grounding"]["requirements_reference"]["artifact_id"]
+            == (requirements["id"])
+        )
+        for path in (
+            "/user-modeling/gate/events",
+            "/requirements/gate/events",
+            "/design/gate/events",
+        ):
+            assert last_reason(client, base + path) == ALIGNMENT_REASON
+        assert seeded.alignments() == [answer]
+        assert studio.alignments(seeded.id) == [answer]
+
+        status, folder = published(client, base)
+        assert (status, folder["version"]["version_number"]) == (201, 2)
+        assert states(seeded.sections())["PACKAGE"] == ("FINE", 2, [], None, [])
+        again = client.post(base + "/sections/alignment").json()
+        assert (again["status"], again["results"]) == ("NOTHING_TO_ALIGN", [])
+        assert len(seeded.alignments()) == 2
+        assert studio.spent_microusd == 0
+        assert studio.errors == []
+
+
+def test_the_gesture_re_anchors_the_design_after_a_requirements_change() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        before = seeded.current("design")
+
+        behind = studio.seed_requirements_change(seeded.id)
+        assert states(behind)["REQUIREMENTS"] == ("FINE", 2, [], None, [])
+        assert states(behind)["DESIGN"] == ("TO_UPDATE", 2, ["REQUIREMENTS_CHANGED"], None, [])
+        assert behind["alignment"] == {
+            "available": True,
+            "sections": ["DESIGN"],
+            "uncovered_codes": ["REQ-005"],
+        }
+        codes = [
+            item["code"] for item in seeded.current("requirements")["specification"]["requirements"]
+        ]
+        assert codes == ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005"]
+        mockup = {
+            "design_version_id": before["id"],
+            "design_content_hash": before["content_hash"],
+            "alternative_id": before["package"]["owner_selected_alternative_id"],
+        }
+        stale = client.post(base + "/design/mockups/jobs", mockup)
+        assert (stale.status, stale.json()) == (409, {"detail": {"code": "DESIGN_CONTEXT_CHANGED"}})
+        assert published(client, base) == (409, {"detail": {"code": "DESIGN_OUTDATED"}})
+
+        answer = client.post(base + "/sections/alignment").json()
+        assert (answer["status"], answer["results"]) == (
+            "ALIGNED",
+            [
+                {
+                    "key": "DESIGN",
+                    "outcome": "ALIGNED",
+                    "issue": None,
+                    "version_number": 3,
+                    "codes": [],
+                }
+            ],
+        )
+        assert states(answer["sections"])["DESIGN"] == (
+            "UPDATE_AVAILABLE",
+            3,
+            ["REQUIREMENTS_NOT_COVERED", "EVALUATION_MISSING"],
+            None,
+            ["REQ-005"],
+        )
+        after = seeded.current("design")
+        assert design_content(after["package"]) == design_content(before["package"])
+        fresh = {
+            **mockup,
+            "design_version_id": after["id"],
+            "design_content_hash": after["content_hash"],
+        }
+        assert client.post(base + "/design/mockups/jobs", fresh).status == 202
+        assert published(client, base)[0] == 201
+        assert studio.errors == []
+
+
+def test_a_new_brief_asks_to_prepare_the_perspectives_again_before_the_gesture() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        twins_before = twin_identities(seeded.current("twins"))
+
+        behind = studio.seed_brief_change(seeded.id)
+        assert states(behind) == {
+            "BRIEF": ("FINE", 2, [], None, []),
+            "TEAM": ("TO_UPDATE", 1, ["BRIEF_CHANGED"], "PREPARE_AGAIN", []),
+            "USER_TWINS": (
+                "TO_UPDATE",
+                1,
+                ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED"],
+                "UPSTREAM_NOT_READY",
+                [],
+            ),
+            "REQUIREMENTS": (
+                "TO_UPDATE",
+                1,
+                ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED"],
+                "UPSTREAM_NOT_READY",
+                [],
+            ),
+            "DESIGN": ("TO_UPDATE", 2, ["REQUIREMENTS_CHANGED"], "UPSTREAM_NOT_READY", []),
+            "PACKAGE": ("NOT_STARTED", None, [], None, []),
+        }
+        assert behind["alignment"]["available"] is False
+        assert published(client, base) == (409, {"detail": {"code": "TEAM_OUTDATED"}})
+        refused = client.post(base + "/sections/alignment").json()
+        assert refused["status"] == "NOTHING_TO_ALIGN"
+        assert refused["results"] == [
+            {
+                "key": "USER_TWINS",
+                "outcome": "BLOCKED",
+                "issue": "UPSTREAM_NOT_READY",
+                "version_number": None,
+                "codes": [],
+            },
+            {
+                "key": "REQUIREMENTS",
+                "outcome": "SKIPPED",
+                "issue": None,
+                "version_number": None,
+                "codes": [],
+            },
+            {
+                "key": "DESIGN",
+                "outcome": "SKIPPED",
+                "issue": None,
+                "version_number": None,
+                "codes": [],
+            },
+        ]
+        assert refused["sections"] == behind
+
+        prepared = client.post(base + "/team-proposals")
+        assert (prepared.status, prepared.json()["status"]) == (201, "CREATED")
+        approve(client, base + "/gates/agent-team/submit", base + "/gates/agent-team/decisions")
+        ready = client.get(base + "/sections").json()
+        assert states(ready)["TEAM"] == ("FINE", 2, [], None, [])
+        assert states(ready)["USER_TWINS"] == (
+            "TO_UPDATE",
+            1,
+            ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED"],
+            None,
+            [],
+        )
+        answer = client.post(base + "/sections/alignment").json()
+        assert answer["status"] == "ALIGNED"
+        assert [item["key"] for item in answer["results"]] == [
+            "USER_TWINS",
+            "REQUIREMENTS",
+            "DESIGN",
+        ]
+        assert twin_identities(seeded.current("twins")) == twins_before
+        assert seeded.current("twins")["snapshot"]["project_brief_reference"]["version_number"] == 2
+        assert published(client, base)[0] == 201
+        assert studio.errors == []
+
+
+def test_a_removed_requirement_and_a_pending_revision_block_the_design() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        removed = studio.seed_project(owner=EMAIL, name="Tolto", through="design")
+        pending = studio.seed_project(owner=EMAIL, name="Sospeso", through="design")
+
+        sections = studio.seed_requirement_removed(removed.id)
+        assert states(sections)["DESIGN"] == (
+            "TO_UPDATE",
+            2,
+            ["REQUIREMENTS_CHANGED"],
+            "REQUIREMENT_NO_LONGER_AVAILABLE",
+            ["REQ-004", "AC-004"],
+        )
+        assert sections["alignment"] == {
+            "available": False,
+            "sections": ["DESIGN"],
+            "uncovered_codes": [],
+        }
+        blocked = client.post(f"/projects/{removed.id}/sections/alignment").json()
+        assert (blocked["status"], blocked["results"]) == (
+            "NOTHING_TO_ALIGN",
+            [
+                {
+                    "key": "DESIGN",
+                    "outcome": "BLOCKED",
+                    "issue": "REQUIREMENT_NO_LONGER_AVAILABLE",
+                    "version_number": None,
+                    "codes": ["REQ-004", "AC-004"],
+                }
+            ],
+        )
+        assert removed.current("design")["version_number"] == 2
+
+        studio.seed_requirements_change(pending.id)
+        sections = studio.seed_design_revision(pending.id)
+        assert states(sections)["DESIGN"][3] == "REVISION_PENDING"
+        base = f"/projects/{pending.id}"
+        waiting = client.post(base + "/sections/alignment").json()
+        assert waiting["results"][0]["issue"] == "REVISION_PENDING"
+        diff = client.get(base + "/design/revisions").json()[-1]
+        assert diff["status"] == "PROPOSED"
+        decided = client.post(
+            f"{base}/design/revisions/{diff['id']}/decision",
+            {"decision": "REJECT", "reason": "Non serve"},
+        )
+        assert decided.status == 200
+        assert client.post(base + "/sections/alignment").json()["status"] == "ALIGNED"
+        assert studio.errors == []
+
+
+def test_the_gesture_goes_past_the_third_approval_of_a_gate() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        seeded.seed_version("design")
+        seeded.seed_version("design")
+        assert attempts(seeded.gate("design")) == ("APPROVED", 3, 5)
+        studio.seed_requirements_change(seeded.id)
+        answer = client.post(f"/projects/{seeded.id}/sections/alignment").json()
+        assert (answer["status"], answer["results"]) == (
+            "ALIGNED",
+            [
+                {
+                    "key": "DESIGN",
+                    "outcome": "ALIGNED",
+                    "issue": None,
+                    "version_number": 5,
+                    "codes": [],
+                }
+            ],
+        )
+        assert seeded.current("design")["version_number"] == 5
+        assert attempts(seeded.gate("design")) == ("APPROVED", 4, 6)
+        assert studio.errors == []
+
+
+def test_only_versions_not_approved_use_up_the_attempts_of_a_gate() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        decisions = ("REJECT", "REJECT", "APPROVE")
+        tried = [design_attempt(client, seeded, action) for action in decisions]
+        assert tried == [("REJECTED", 2, 4), ("REJECTED", 3, 4), ("APPROVED", 4, 4)]
+        studio.seed_requirements_change(seeded.id)
+        answer = client.post(f"/projects/{seeded.id}/sections/alignment").json()
+        assert (answer["status"], answer["results"]) == (
+            "ALIGNED",
+            [
+                {
+                    "key": "DESIGN",
+                    "outcome": "ALIGNED",
+                    "issue": None,
+                    "version_number": 6,
+                    "codes": [],
+                }
+            ],
+        )
+        assert attempts(seeded.gate("design")) == ("APPROVED", 5, 7)
+        tried = [design_attempt(client, seeded, "REJECT") for _ in range(3)]
+        assert tried == [("REJECTED", 6, 8), ("REJECTED", 7, 8), ("REJECTED", 8, 8)]
+        refused = new_design(client, seeded)
+        assert (refused.status, refused.json()) == (
+            409,
+            {"detail": {"code": "ITERATION_LIMIT_REACHED"}},
+        )
+        assert states(seeded.sections())["DESIGN"][:2] == ("IN_PROGRESS", 10)
+        assert studio.errors == []
+
+
+def test_the_twins_follow_the_brief_and_the_perspectives_through_their_route() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        early = studio.seed_project(owner=EMAIL, name="Presto", through="team")
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        early_path = f"/projects/{early.id}/user-modeling/context-alignment"
+        path = f"/projects/{seeded.id}/user-modeling/context-alignment"
+
+        assert client.get(early_path).json() == {
+            "aligned": False,
+            "issue": "USER_TWINS_NOT_FOUND",
+            "snapshot_version_number": None,
+            "brief_version_number": 1,
+            "team_version_number": 1,
+        }
+        missing = client.post(early_path)
+        assert (missing.status, missing.json()) == (
+            404,
+            {"detail": {"code": "USER_TWINS_NOT_FOUND"}},
+        )
+        assert client.get(path).json() == {
+            "aligned": True,
+            "issue": "ALREADY_ALIGNED",
+            "snapshot_version_number": 1,
+            "brief_version_number": 1,
+            "team_version_number": 1,
+        }
+        assert client.post(path).json() == {"detail": {"code": "ALREADY_ALIGNED"}}
+
+        twins_before = seeded.current("twins")
+        studio.seed_perspective_change(seeded.id, "MOBILE_ENGINEER")
+        assert client.get(path).json() == {
+            "aligned": False,
+            "issue": None,
+            "snapshot_version_number": 1,
+            "brief_version_number": 1,
+            "team_version_number": 2,
+        }
+        created = client.post(path)
+        body = created.json()
+        snapshot = seeded.current("twins")
+        assert created.status == 201
+        assert body == {
+            "snapshot_version_id": snapshot["id"],
+            "snapshot_version_number": 2,
+            "based_on_version_number": 1,
+            "content_hash": snapshot["content_hash"],
+            "twin_count": 2,
+            "gate_approval_required": True,
+        }
+        assert not seeded.approved("twins")
+        assert twin_identities(snapshot) == twin_identities(twins_before)
+        old = {twin["twin_id"]: twin for twin in twins_before["snapshot"]["twin_versions"]}
+        for twin in snapshot["snapshot"]["twin_versions"]:
+            earlier = old[twin["twin_id"]]
+            assert (twin["version_number"], twin["based_on_version_number"]) == (2, 1)
+            assert twin["profile"]["observations"] == earlier["profile"]["observations"]
+            assert twin["profile"]["persona_reference"] == earlier["profile"]["persona_reference"]
+            assert twin["profile"]["agent_team_reference"]["version_number"] == 2
+        assert (
+            snapshot["snapshot"]["persona_versions"] == twins_before["snapshot"]["persona_versions"]
+        )
+        assert client.get(path).json()["issue"] == "ALREADY_ALIGNED"
+        assert states(seeded.sections())["USER_TWINS"] == ("IN_PROGRESS", 2, [], None, [])
+
+        studio.seed_brief_change(early.id)
+        still_missing = client.post(early_path)
+        assert still_missing.json() == {"detail": {"code": "USER_TWINS_NOT_FOUND"}}
+        unapproved = studio.seed_project(owner=EMAIL, name="Nuovo brief", through="design")
+        fields = {
+            key: value
+            for key, value in unapproved.current("brief")["brief"].items()
+            if key not in ("provided_fields", "missing_fields")
+        }
+        changed = client.post(
+            f"/projects/{unapproved.id}/brief-versions",
+            {**fields, "description": "Una pagina per il conto."},
+        )
+        assert changed.status == 201
+        route = f"/projects/{unapproved.id}/user-modeling/context-alignment"
+        assert client.get(route).json()["issue"] == "BRIEF_APPROVAL_REQUIRED"
+        assert client.post(route).json() == {"detail": {"code": "BRIEF_APPROVAL_REQUIRED"}}
+        approve(
+            client,
+            f"/projects/{unapproved.id}/gates/project-brief/submit",
+            f"/projects/{unapproved.id}/gates/project-brief/decisions",
+        )
+        assert client.post(route).json() == {"detail": {"code": "TEAM_APPROVAL_REQUIRED"}}
+        stranger = signed_in(studio, OTHER)
+        assert stranger.get(path).json()["issue"] == "USER_TWINS_NOT_FOUND"
+        assert stranger.post(path).status == 404
+        assert studio.errors == []
+
+
+def test_the_requirements_follow_the_twins_through_their_route() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        client = signed_in(studio)
+        early = studio.seed_project(owner=EMAIL, name="Presto", through="twins")
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        path = base + "/requirements/twin-alignment"
+
+        assert client.get(f"/projects/{early.id}/requirements/twin-alignment").json() == {
+            "aligned": False,
+            "issue": "REQUIREMENTS_NOT_FOUND",
+            "requirements_version_number": None,
+            "snapshot_version_number": 1,
+            "twins_approved": True,
+        }
+        missing = client.post(f"/projects/{early.id}/requirements/twin-alignment")
+        assert (missing.status, missing.json()) == (
+            404,
+            {"detail": {"code": "REQUIREMENTS_NOT_FOUND"}},
+        )
+        assert client.get(path).json() == {
+            "aligned": True,
+            "issue": "REQUIREMENTS_ALREADY_ALIGNED",
+            "requirements_version_number": 1,
+            "snapshot_version_number": 1,
+            "twins_approved": True,
+        }
+        assert client.post(path).json() == {"detail": {"code": "REQUIREMENTS_ALREADY_ALIGNED"}}
+
+        studio.seed_perspective_change(seeded.id, "SECURITY_REVIEWER")
+        assert client.get(path).json() == {
+            "aligned": True,
+            "issue": "USER_TWINS_APPROVAL_REQUIRED",
+            "requirements_version_number": 1,
+            "snapshot_version_number": 1,
+            "twins_approved": False,
+        }
+        assert client.post(path).json() == {"detail": {"code": "USER_TWINS_APPROVAL_REQUIRED"}}
+        assert client.post(base + "/user-modeling/context-alignment").status == 201
+        assert client.get(path).json()["issue"] == "USER_TWINS_APPROVAL_REQUIRED"
+        approve(client, base + "/user-modeling/gate/submit", base + "/user-modeling/gate/decision")
+        assert published(client, base) == (409, {"detail": {"code": "REQUIREMENTS_OUTDATED"}})
+        assert client.get(path).json() == {
+            "aligned": False,
+            "issue": None,
+            "requirements_version_number": 1,
+            "snapshot_version_number": 2,
+            "twins_approved": True,
+        }
+        change = client.post(base + "/requirements/change-requests", {"request": "Aggiungi il bis"})
+        assert change.status == 201
+        assert client.post(path).json() == {"detail": {"code": "REQUIREMENTS_REVISION_PENDING"}}
+        diff = change.json()["diff"]
+        rejected = client.post(
+            f"{base}/requirements/revisions/{diff['id']}/decision",
+            {"decision": "REJECT", "reason": "Non ora"},
+        )
+        assert rejected.status == 200
+        created = client.post(path)
+        requirements = seeded.current("requirements")
+        snapshot = seeded.current("twins")
+        assert created.status == 201
+        assert created.json() == {
+            "version_id": requirements["id"],
+            "version_number": 2,
+            "based_on_version_number": 1,
+            "content_hash": requirements["content_hash"],
+            "user_modeling_version_number": 2,
+            "twin_count": 2,
+            "gate_approval_required": True,
+        }
+        specification = requirements["specification"]
+        assert specification["agent_team_reference"]["version_number"] == 2
+        assert specification["user_modeling_reference"]["artifact_id"] == snapshot["id"]
+        versions = {
+            twin["twin_id"]: twin["version_number"]
+            for twin in specification["user_twin_references"]
+        }
+        assert set(versions.values()) == {2}
+        assert all(
+            reference["version_number"] == 2
+            for story in specification["user_stories"]
+            for reference in (story["user_twin_reference"],)
+        )
+        assert not seeded.approved("requirements")
+        assert client.get(path).json()["issue"] == "REQUIREMENTS_ALREADY_ALIGNED"
+
+        lost = studio.seed_project(owner=EMAIL, name="Nuovi twin", through="design")
+        lost_base = f"/projects/{lost.id}"
+        studio.seed_perspective_change(lost.id, "SECURITY_REVIEWER")
+        regenerated = client.post(lost_base + "/user-modeling/snapshots/generate")
+        assert regenerated.status == 200
+        approve(
+            client,
+            lost_base + "/user-modeling/gate/submit",
+            lost_base + "/user-modeling/gate/decision",
+        )
+        assert client.post(lost_base + "/requirements/twin-alignment").json() == {
+            "detail": {"code": "TWIN_NO_LONGER_AVAILABLE"}
+        }
+        assert states(lost.sections())["REQUIREMENTS"][3] == "TWIN_NO_LONGER_AVAILABLE"
+        assert studio.errors == []
+
+
+def test_the_design_follows_the_requirements_through_its_route() -> None:
+    with FakeStudio(twins=3, job_polls=0) as studio:
+        client = signed_in(studio)
+        early = studio.seed_project(owner=EMAIL, name="Presto", through="requirements")
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        base = f"/projects/{seeded.id}"
+        path = base + "/design/requirements-alignment"
+
+        early_path = f"/projects/{early.id}/design/requirements-alignment"
+        assert client.get(early_path).json() == {
+            "aligned": False,
+            "issue": "DESIGN_NOT_FOUND",
+            "design_version_number": None,
+            "grounded_requirements_version_number": None,
+            "requirements_version_number": 1,
+            "missing_codes": [],
+            "uncovered_codes": [],
+        }
+        assert client.post(early_path).json() == {"detail": {"code": "DESIGN_NOT_FOUND"}}
+        assert client.get(path).json() == {
+            "aligned": True,
+            "issue": "ALREADY_ALIGNED",
+            "design_version_number": 2,
+            "grounded_requirements_version_number": 1,
+            "requirements_version_number": 1,
+            "missing_codes": [],
+            "uncovered_codes": [],
+        }
+        assert client.post(path).json() == {"detail": {"code": "ALREADY_ALIGNED"}}
+
+        change = client.post(base + "/requirements/change-requests", {"request": "Aggiungi il bis"})
+        diff = change.json()["diff"]
+        applied = client.post(
+            f"{base}/requirements/revisions/{diff['id']}/decision", {"decision": "APPROVE"}
+        )
+        assert applied.status == 200
+        assert client.get(path).json() == {
+            "aligned": False,
+            "issue": "REQUIREMENTS_APPROVAL_REQUIRED",
+            "design_version_number": 2,
+            "grounded_requirements_version_number": 1,
+            "requirements_version_number": 2,
+            "missing_codes": [],
+            "uncovered_codes": ["REQ-005"],
+        }
+        assert client.post(path).json() == {"detail": {"code": "REQUIREMENTS_APPROVAL_REQUIRED"}}
+        assert states(seeded.sections())["DESIGN"][3] == "UPSTREAM_NOT_READY"
+        approve(client, base + "/requirements/gate/submit", base + "/requirements/gate/decision")
+        assert client.get(path).json()["issue"] is None
+        created = client.post(path)
+        design = seeded.current("design")
+        assert created.status == 201
+        assert created.json() == {
+            "version_id": design["id"],
+            "version_number": 3,
+            "based_on_version_number": 2,
+            "content_hash": design["content_hash"],
+            "requirements_version_number": 2,
+            "gate_approval_required": True,
+            "uncovered_codes": ["REQ-005"],
+        }
+        assert not seeded.approved("design")
+        assert client.get(path).json()["issue"] == "ALREADY_ALIGNED"
+
+        removed = studio.seed_project(owner=EMAIL, name="Tolto", through="design")
+        studio.seed_requirement_removed(removed.id)
+        removed_path = f"/projects/{removed.id}/design/requirements-alignment"
+        status = client.get(removed_path).json()
+        assert (status["issue"], status["missing_codes"]) == (
+            "REQUIREMENT_NO_LONGER_AVAILABLE",
+            ["REQ-004", "AC-004"],
+        )
+        refused = client.post(removed_path)
+        assert (refused.status, refused.json()) == (
+            409,
+            {
+                "detail": {
+                    "code": "REQUIREMENT_NO_LONGER_AVAILABLE",
+                    "missing_codes": ["REQ-004", "AC-004"],
+                }
+            },
+        )
+
+        revised = studio.seed_project(owner=EMAIL, name="Rivisto", through="design")
+        studio.seed_requirements_change(revised.id)
+        studio.seed_design_revision(revised.id)
+        assert client.post(f"/projects/{revised.id}/design/requirements-alignment").json() == {
+            "detail": {"code": "DESIGN_REVISION_PENDING"}
+        }
+
+        fewer = studio.seed_project(owner=EMAIL, name="Meno twin", through="design")
+        with studio._lock:
+            current = fewer.requirements[-1]
+            specification = json.loads(json.dumps(current["specification"]))
+            dropped = specification["user_twin_references"].pop()["twin_id"]
+            for requirement in specification["requirements"]:
+                requirement["user_twin_references"] = [
+                    item
+                    for item in requirement["user_twin_references"]
+                    if item["twin_id"] != dropped
+                ]
+            studio._append_requirements(fewer, specification, fewer.account)
+            studio._approve(fewer, "requirements")
+        assert client.post(f"/projects/{fewer.id}/design/requirements-alignment").json() == {
+            "detail": {"code": "TWIN_SET_CHANGED"}
+        }
+        assert states(fewer.sections())["DESIGN"][3] == "TWIN_SET_CHANGED"
+        assert studio.errors == []
+
+
+def test_the_helpers_of_the_sections_refuse_what_cannot_be_seeded() -> None:
+    with FakeStudio(job_polls=0) as studio:
+        studio.add_account(EMAIL, PASSWORD)
+        early = studio.seed_project(owner=EMAIL, name="Presto", through="brief")
+        twins = studio.seed_project(owner=EMAIL, name="Twin", through="twins")
+        seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
+        failures = (
+            lambda: studio.seed_perspective_change(early.id, "SECURITY_REVIEWER"),
+            lambda: studio.seed_perspective_change(seeded.id, "UX_UI_DESIGNER"),
+            lambda: studio.seed_perspective_change(seeded.id, "NOBODY"),
+            lambda: studio.seed_requirements_change(twins.id),
+            lambda: studio.seed_requirement_removed(twins.id),
+            lambda: studio.seed_design_revision(twins.id),
+        )
+        for failure in failures:
+            with pytest.raises(ValueError):
+                failure()
+        removed = studio.seed_perspective_change(seeded.id, "FRONTEND_ENGINEER")
+        assert states(removed)["TEAM"] == ("FINE", 2, [], None, [])
+        assert "FRONTEND_ENGINEER" not in seeded.current("team")["selected_agent_ids"]
+        assert studio.seed_perspective_change(seeded.id, "FRONTEND_ENGINEER") == seeded.sections()
+        assert "FRONTEND_ENGINEER" in seeded.current("team")["selected_agent_ids"]
+        studio.seed_brief_change(seeded.id)
+        with pytest.raises(ValueError):
+            studio.seed_brief_change(seeded.id)
+        with pytest.raises(ValueError):
+            studio.seed_perspective_change(seeded.id, "SECURITY_REVIEWER")
+        studio.seed_design_revision(seeded.id)
+        with pytest.raises(ValueError):
+            studio.seed_design_revision(seeded.id)
+        with pytest.raises(KeyError):
+            studio.sections("00000000-0000-4000-8000-000000000000")
+        copied = seeded.sections()
+        copied["sections"].clear()
+        assert len(seeded.sections()["sections"]) == 6
+        assert studio.spent_microusd == 0
         assert studio.errors == []

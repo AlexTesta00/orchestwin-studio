@@ -27,15 +27,22 @@ from uuid import UUID
 from orchestwin.agents.catalog import (
     AGENT_CATALOG_CONTENT_HASH,
     AGENT_CATALOG_VERSION,
+    AgentIdentifier,
     all_agent_catalog_entries,
 )
+from orchestwin.agents.perspectives import perspective_views
 from orchestwin.agents.selection_rules import (
     DeterministicTeamConstraints,
+    RuleEvidence,
     TeamRoleConstraint,
     TeamRoleConstraintKind,
+    TeamSelectionIssue,
+    TeamSelectionIssueCode,
     TeamSelectionReason,
+    TeamSelectionReasonCode,
     determine_team_constraints,
 )
+from orchestwin.agents.team_gate import OWNER_CHOICE_STATEMENT
 from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requirement_codes
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
@@ -172,9 +179,23 @@ from orchestwin.projects.progress import (
     CatalogVersion,
     GateState,
     ProjectProgressFacts,
+    ProjectStage,
     TeamState,
     UserTwinsState,
     project_progress,
+)
+from orchestwin.projects.sections import (
+    BriefFacts,
+    DesignFacts,
+    FolderFacts,
+    ProjectSections,
+    RequirementsFacts,
+    SectionBlock,
+    SectionFacts,
+    SectionState,
+    TeamFacts,
+    UserTwinsFacts,
+    project_sections,
 )
 from orchestwin.twins.conversations import (
     MAX_QUESTION_CHARACTERS,
@@ -196,6 +217,7 @@ from orchestwin.workflow.gates import (
     HumanGateType,
     create_human_gate,
     mark_human_gate_stale,
+    next_human_gate_iteration,
     transition_human_gate,
 )
 
@@ -400,6 +422,30 @@ ALIGNMENT_WORDS = (
     ("DESIGN_OUTDATED", ("design",)),
     ("REQUIREMENTS_OUTDATED", ("requisit", "requirement")),
 )
+SECTION_STAGES = {
+    "BRIEF": "brief",
+    "TEAM": "team",
+    "USER_TWINS": "twins",
+    "REQUIREMENTS": "requirements",
+    "DESIGN": "design",
+}
+FOLDER_SECTIONS = {stage: ProjectStage(key) for key, stage in SECTION_STAGES.items()}
+DESIGN_ALIGNMENT_STATES = frozenset(
+    {SectionState.FINE, SectionState.UPDATE_AVAILABLE, SectionState.TO_UPDATE}
+)
+GESTURE_ISSUES = {
+    "USER_TWIN_REVISION_PENDING": "REVISION_PENDING",
+    "REQUIREMENTS_REVISION_PENDING": "REVISION_PENDING",
+    "DESIGN_REVISION_PENDING": "REVISION_PENDING",
+    "BRIEF_APPROVAL_REQUIRED": "UPSTREAM_NOT_READY",
+    "TEAM_APPROVAL_REQUIRED": "UPSTREAM_NOT_READY",
+    "USER_TWINS_REQUIRED": "UPSTREAM_NOT_READY",
+    "USER_TWINS_APPROVAL_REQUIRED": "UPSTREAM_NOT_READY",
+    "REQUIREMENTS_APPROVAL_REQUIRED": "UPSTREAM_NOT_READY",
+}
+ALIGNMENT_REASON = "Aligned to the current upstream versions with unchanged content."
+SPECIFICATION_ITEMS = ("requirements", "user_stories", "acceptance_criteria")
+CITED_KEYS = ("requirement_ids", "user_story_ids", "acceptance_criterion_ids")
 FIRST_LINE_LENGTH = 120
 LIST_LIMIT = 20
 CRITERION_LENGTH = 20
@@ -502,6 +548,9 @@ SEED_TEXTS = {
         "message": "Aggiunge la divisione del conto",
         "owner_task": "Scrivere il testo di aiuto della pagina.",
         "verdict_task": "Coprire il calcolo della mancia con un test automatico.",
+        "goal": "Ricordare la percentuale scelta l'ultima volta",
+        "requirement": "Il sistema permette di arrotondare la mancia all'euro.",
+        "assertion": "Il totale resta visibile in ogni schermata.",
         "observations": (
             (
                 "Chi paga al tavolo legge le cifre da lontano, spesso con poca luce.",
@@ -517,6 +566,9 @@ SEED_TEXTS = {
         "message": "Add the split of the bill",
         "owner_task": "Write the help text of the page.",
         "verdict_task": "Cover the tip calculation with an automated test.",
+        "goal": "Remember the percentage chosen last time",
+        "requirement": "The system lets people round the tip to the euro.",
+        "assertion": "The total stays visible on every screen.",
         "observations": (
             (
                 "People who pay at the table read the digits from a distance, often in dim light.",
@@ -1347,6 +1399,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects", "create_project"),
     Route("GET", "/projects/{project_id}", "get_project"),
     Route("PATCH", "/projects/{project_id}", "rename_project"),
+    Route("GET", "/projects/{project_id}/sections", "sections"),
+    Route("POST", "/projects/{project_id}/sections/alignment", "align_sections"),
     Route("GET", "/projects/{project_id}/brief-versions", "brief_history"),
     Route("POST", "/projects/{project_id}/brief-versions", "create_brief"),
     Route("GET", "/projects/{project_id}/brief-versions/current", "current_brief"),
@@ -1399,6 +1453,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/user-modeling/gate/decision", "twins_gate_decision"),
     Route("GET", "/projects/{project_id}/user-modeling/gate", "twins_gate_current"),
     Route("GET", "/projects/{project_id}/user-modeling/gate/events", "twins_gate_events"),
+    Route("GET", "/projects/{project_id}/user-modeling/context-alignment", "twins_alignment"),
+    Route("POST", "/projects/{project_id}/user-modeling/context-alignment", "realign_twins"),
     Route("GET", "/projects/{project_id}/user-twins/{twin_id}/conversation", "conversation"),
     Route(
         "POST",
@@ -1425,6 +1481,8 @@ ROUTES: tuple[Route, ...] = (
     ),
     Route("GET", "/projects/{project_id}/requirements/gate", "requirements_gate_current"),
     Route("GET", "/projects/{project_id}/requirements/gate/events", "requirements_gate_events"),
+    Route("GET", "/projects/{project_id}/requirements/twin-alignment", "requirements_alignment"),
+    Route("POST", "/projects/{project_id}/requirements/twin-alignment", "realign_requirements"),
     Route("POST", "/projects/{project_id}/design/proposals", "design_proposal"),
     Route("POST", "/projects/{project_id}/design/regenerations", "design_regeneration"),
     Route("GET", "/projects/{project_id}/design/current", "design_current"),
@@ -1442,6 +1500,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/design/gate/decision", "design_gate_decision"),
     Route("GET", "/projects/{project_id}/design/gate", "design_gate_current"),
     Route("GET", "/projects/{project_id}/design/gate/events", "design_gate_events"),
+    Route("GET", "/projects/{project_id}/design/requirements-alignment", "design_alignment"),
+    Route("POST", "/projects/{project_id}/design/requirements-alignment", "realign_design"),
     Route("POST", "/projects/{project_id}/design/mockups", "mockup_generate"),
     Route("GET", "/projects/{project_id}/design/mockups", "mockup_latest"),
     Route("GET", "/projects/{project_id}/design/mockups/capabilities", "mockup_capabilities"),
@@ -2116,6 +2176,8 @@ class FakeProject:
         self.iterations: list[dict[str, object]] = []
         self.runs: list[dict[str, object]] = []
         self.packages: list[dict[str, object]] = []
+        self.folders: list[dict[str, ArtifactVersion]] = []
+        self.gestures: list[dict[str, object]] = []
         self.archives: dict[int, bytes] = {}
         self.fingerprint: tuple[str, ...] | None = None
         self.usage: list[dict[str, object]] = []
@@ -2313,6 +2375,34 @@ class FakeProject:
     ) -> dict[str, object]:
         with self._studio._lock:
             return self._studio._seed_update(self, twin, observations)
+
+    def sections(self) -> dict[str, object]:
+        with self._studio._lock:
+            return _copy(self._studio._sections(self))
+
+    def alignments(self) -> list[dict[str, object]]:
+        with self._studio._lock:
+            return _copy(self.gestures)
+
+    def seed_perspective_change(self, agent_id: str) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_perspective_change(self, agent_id)
+
+    def seed_requirements_change(self) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_requirements_change(self)
+
+    def seed_brief_change(self) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_brief_change(self)
+
+    def seed_requirement_removed(self) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_requirement_removed(self)
+
+    def seed_design_revision(self) -> dict[str, object]:
+        with self._studio._lock:
+            return self._studio._seed_design_revision(self)
 
 
 class FakeStudio:
@@ -2512,6 +2602,27 @@ class FakeStudio:
             project = self._new_project(account, normalized, PROJECT_MODES[0])
             self._seed(project, through, approve=True, dropped=dropped)
             return project
+
+    def sections(self, project_id: str) -> dict[str, object]:
+        return self.project(project_id).sections()
+
+    def alignments(self, project_id: str) -> list[dict[str, object]]:
+        return self.project(project_id).alignments()
+
+    def seed_perspective_change(self, project_id: str, agent_id: str) -> dict[str, object]:
+        return self.project(project_id).seed_perspective_change(agent_id)
+
+    def seed_requirements_change(self, project_id: str) -> dict[str, object]:
+        return self.project(project_id).seed_requirements_change()
+
+    def seed_brief_change(self, project_id: str) -> dict[str, object]:
+        return self.project(project_id).seed_brief_change()
+
+    def seed_requirement_removed(self, project_id: str) -> dict[str, object]:
+        return self.project(project_id).seed_requirement_removed()
+
+    def seed_design_revision(self, project_id: str) -> dict[str, object]:
+        return self.project(project_id).seed_design_revision()
 
     def _now(self) -> datetime:
         if self._clock is None:
@@ -2967,10 +3078,10 @@ class FakeStudio:
                     self._save_gate(project, stage, stale.gate, stale.event)
                     events.append(stale.event)
                     latest = stale.gate
-            iteration = latest.iteration + 1
-            limit = latest.max_iterations
-            if iteration > limit:
+            budget = next_human_gate_iteration(latest, project.gate_events.get(str(latest.id), ()))
+            if budget is None:
                 return "ITERATION_LIMIT_REACHED", latest, events, None
+            iteration, limit = budget
         else:
             iteration, limit = 1, DEFAULT_GATE_ITERATION_LIMIT
         draft = create_human_gate(
@@ -3040,6 +3151,25 @@ class FakeStudio:
         status, _, _, issue = self._decide_gate(project, stage, reference, "APPROVE", None)
         if status != "APPLIED":
             raise RuntimeError(f"the seed could not approve {stage}: {status} {issue}")
+
+    def _approval_issue(self, project: FakeProject, stage: str, reason: str | None) -> str | None:
+        reference = self._require_reference(project, stage)
+        submitted, _, _, problem = self._submit_gate(project, stage, reference)
+        if submitted not in ("SUBMITTED", "ALREADY_PENDING"):
+            return problem or submitted
+        status, _, _, issue = self._decide_gate(project, stage, reference, "APPROVE", reason)
+        return None if status == "APPLIED" else issue or status
+
+    def _seed_approval(self, project: FakeProject, stage: str) -> None:
+        issue = self._approval_issue(project, stage, None)
+        if issue is not None:
+            raise ValueError(f"the fake studio refuses to approve {stage}: {issue}")
+
+    def _gate_approved(self, project: FakeProject, stage: str) -> bool:
+        artifact = project.artifact(stage)
+        return artifact is not None and _approves(
+            _gate_state(project.gates.get(stage)), _artifact_version(artifact)
+        )
 
     def _gate_events(self, project: FakeProject | None, stage: str, gate_id: str) -> list:
         if project is None:
@@ -3887,6 +4017,8 @@ class FakeStudio:
         previous: Sequence[Mapping[str, object]],
         rationales: Mapping[str, str],
         rules: Mapping[str, object],
+        *,
+        owner: bool = False,
     ) -> dict[str, object]:
         constraints = {str(item["agent_id"]): item for item in rules["role_constraints"]}
         earlier = {str(member["agent_id"]): member for member in previous}
@@ -3896,7 +4028,7 @@ class FakeStudio:
                 continue
             if agent in earlier:
                 members.append(copy.deepcopy(earlier[agent]))
-            elif agent in rationales:
+            elif owner:
                 members.append(
                     {
                         "agent_id": agent,
@@ -3905,7 +4037,7 @@ class FakeStudio:
                             _justification(
                                 "OWNER_RATIONALE",
                                 "OWNER_SELECTED_ROLE",
-                                statement=rationales[agent],
+                                statement=rationales.get(agent, OWNER_CHOICE_STATEMENT),
                             )
                         ],
                     }
@@ -3970,6 +4102,7 @@ class FakeStudio:
             "role_constraints": content["role_constraints"],
             "constraint_issues": content["constraint_issues"],
             "members": content["members"],
+            "perspectives": _perspectives(content),
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
         }
@@ -4011,22 +4144,14 @@ class FakeStudio:
         if not self._approvals(project)["brief"]:
             return _Answer(409, {"status": "BRIEF_NOT_APPROVED", "version": None, "issues": []})
         constraints = self._team_rules(project, project.brief)
-        if constraints.has_conflicts:
-            return _Answer(
-                409,
-                {
-                    "status": "BLOCKED_BY_CONSTRAINTS",
-                    "version": None,
-                    "issues": _rules_payload(constraints)["constraint_issues"],
-                },
-            )
         self._record(project, "TEAM_PROPOSAL")
         content = self._generated_team(project, project.brief, constraints)
+        issues = copy.deepcopy(content["constraint_issues"])
         current = project.team
         if current is not None and current["content_hash"] == _digest(content):
-            return _Answer(200, {"status": "UNCHANGED", "version": current, "issues": []})
+            return _Answer(200, {"status": "UNCHANGED", "version": current, "issues": issues})
         version = self._append_team(project, content, "PROPOSER_GENERATED", call.account)
-        return _Answer(201, {"status": "CREATED", "version": version, "issues": []})
+        return _Answer(201, {"status": "CREATED", "version": version, "issues": issues})
 
     def _route_team_history(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -4096,6 +4221,7 @@ class FakeStudio:
             list(current["members"]),
             dict(rationales),
             {key: current[key] for key in RULE_KEYS},
+            owner=True,
         )
         if _digest(content) == current["content_hash"]:
             return _Answer(
@@ -4956,27 +5082,7 @@ class FakeStudio:
         ):
             raise _Refusal(409, {"code": "REQUIREMENTS_REVISION_PENDING"})
         self._record(project, "REQUIREMENTS_CHANGE")
-        proposed = copy.deepcopy(current["specification"])
-        requirements = proposed["requirements"]
-        added = {
-            "id": self._new_id(),
-            "code": f"REQ-{len(requirements) + 1:03d}",
-            "title": OWNER_CHANGE[self.language],
-            "statement": " ".join(text.split()),
-            "kind": "FUNCTIONAL",
-            "priority": "SHOULD",
-            "sources": [
-                {
-                    "kind": "OWNER_INPUT",
-                    "source_id": "owner-request",
-                    "source_version": None,
-                    "content_hash": None,
-                    "locator": None,
-                }
-            ],
-            "user_twin_references": [],
-        }
-        requirements.append(added)
+        proposed, added = self._with_requirement(current["specification"], text)
         diff = {
             "id": self._new_id(),
             "project_id": project.id,
@@ -5014,6 +5120,46 @@ class FakeStudio:
         }
         project.requirement_diffs.append(diff)
         return _Answer(201, _revision_payload("CREATED", diff, None))
+
+    def _with_requirement(
+        self, specification: Mapping[str, object], text: str
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        proposed = copy.deepcopy(dict(specification))
+        requirements = proposed["requirements"]
+        numbers = [_code_number(item["code"]) for item in requirements]
+        added = {
+            "id": self._new_id(),
+            "code": f"REQ-{max(numbers, default=0) + 1:03d}",
+            "title": OWNER_CHANGE[self.language],
+            "statement": " ".join(text.split()),
+            "kind": "FUNCTIONAL",
+            "priority": "SHOULD",
+            "sources": [
+                {
+                    "kind": "OWNER_INPUT",
+                    "source_id": "owner-request",
+                    "source_version": None,
+                    "content_hash": None,
+                    "locator": None,
+                }
+            ],
+            "user_twin_references": [],
+        }
+        requirements.append(added)
+        return proposed, added
+
+    def _pending_requirements_diff(self, project: FakeProject) -> dict[str, object] | None:
+        current = project.specification
+        return next(
+            (
+                diff
+                for diff in project.requirement_diffs
+                if current is not None
+                and diff["status"] == "PROPOSED"
+                and diff["base_version_id"] == current["id"]
+            ),
+            None,
+        )
 
     def _route_requirements_revisions(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -5644,10 +5790,30 @@ class FakeStudio:
         current = None if project is None else project.design
         if project is None or current is None:
             raise _Refusal(404, {"code": "PACKAGE_NOT_FOUND"})
-        if any(
-            diff["status"] == "PROPOSED" and diff["base_version_id"] == current["id"]
-            for diff in project.design_diffs
-        ):
+        diff = self._design_diff(project, current, package, call.account)
+        return _Answer(201, _design_revision_payload("CREATED", diff, None))
+
+    def _pending_design_diff(self, project: FakeProject) -> dict[str, object] | None:
+        current = project.design
+        return next(
+            (
+                diff
+                for diff in project.design_diffs
+                if current is not None
+                and diff["status"] == "PROPOSED"
+                and diff["base_version_id"] == current["id"]
+            ),
+            None,
+        )
+
+    def _design_diff(
+        self,
+        project: FakeProject,
+        current: Mapping[str, object],
+        package: dict[str, object],
+        account: _Account,
+    ) -> dict[str, object]:
+        if self._pending_design_diff(project) is not None:
             raise _Refusal(409, {"code": "DIFF_ALREADY_PENDING"})
         before = current["package"]
         if sorted(str(item["id"]) for item in before["alternatives"]) != sorted(
@@ -5660,7 +5826,7 @@ class FakeStudio:
         diff = {
             "id": self._new_id(),
             "project_id": project.id,
-            "owner_user_id": call.account.id,
+            "owner_user_id": account.id,
             "base_version_id": current["id"],
             "base_version_number": current["version_number"],
             "base_content_hash": current["content_hash"],
@@ -5676,7 +5842,7 @@ class FakeStudio:
         }
         diff["content_hash"] = _digest(diff)
         project.design_diffs.append(diff)
-        return _Answer(201, _design_revision_payload("CREATED", diff, None))
+        return diff
 
     def _route_design_revisions(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -6389,14 +6555,573 @@ class FakeStudio:
     def _route_job(self, call: _Call) -> _Answer:
         return self._read_job(call, None)
 
+    def _sections(self, project: FakeProject) -> dict[str, object]:
+        return self._project_sections(project).to_snapshot()
+
+    def _project_sections(self, project: FakeProject, *, learning: bool = True) -> ProjectSections:
+        facts = self._section_facts(project)
+        draft = project_sections(facts)
+        twins = facts.user_twins
+        if (
+            learning
+            and twins is not None
+            and draft.section(ProjectStage.USER_TWINS).state is SectionState.FINE
+        ):
+            facts = replace(facts, user_twins=replace(twins, learned=self._twins_learned(project)))
+        design = draft.section(ProjectStage.DESIGN)
+        current, requirements = project.design, project.specification
+        if (
+            facts.design is not None
+            and current is not None
+            and requirements is not None
+            and design.state in DESIGN_ALIGNMENT_STATES
+            and design.blocked is not SectionBlock.UPSTREAM_NOT_READY
+        ):
+            facts = replace(
+                facts,
+                design=replace(
+                    facts.design,
+                    missing_codes=tuple(self._missing_codes(project, current, requirements)),
+                    uncovered_codes=tuple(self._uncovered_codes(current, requirements)),
+                ),
+            )
+        return project_sections(facts)
+
+    def _section_facts(self, project: FakeProject) -> SectionFacts:
+        brief = project.artifact("brief")
+        team, snapshot = project.team, project.snapshot
+        requirements, design = project.specification, project.design
+        return SectionFacts(
+            brief=None
+            if brief is None
+            else BriefFacts(
+                version=_artifact_version(brief), approved=self._gate_approved(project, "brief")
+            ),
+            team=None
+            if team is None
+            else TeamFacts(
+                version=_artifact_version(team),
+                approved=self._gate_approved(project, "team"),
+                brief=_team_brief_version(team),
+            ),
+            user_twins=None if snapshot is None else self._twins_facts(project, snapshot),
+            requirements=None
+            if requirements is None
+            else self._requirements_facts(project, requirements),
+            design=None if design is None else self._design_facts(project, design),
+            folder=None
+            if not project.packages
+            else FolderFacts(
+                version_number=int(project.packages[-1]["version_number"]),
+                stages={
+                    FOLDER_SECTIONS[stage]: held for stage, held in project.folders[-1].items()
+                },
+            ),
+            design_approved_once=self._first_pass_complete(project),
+        )
+
+    def _twins_facts(self, project: FakeProject, snapshot: Mapping[str, object]) -> UserTwinsFacts:
+        body = snapshot["snapshot"]
+        return UserTwinsFacts(
+            version=_artifact_version(snapshot),
+            approved=self._gate_approved(project, "twins"),
+            brief=_reference_version(body["project_brief_reference"]),
+            team=_reference_version(body["agent_team_reference"]),
+            twins=_twin_versions(body["twin_versions"]),
+        )
+
+    def _requirements_facts(
+        self, project: FakeProject, version: Mapping[str, object]
+    ) -> RequirementsFacts:
+        specification = version["specification"]
+        return RequirementsFacts(
+            version=_artifact_version(version),
+            approved=self._gate_approved(project, "requirements"),
+            brief=_reference_version(specification["project_brief_reference"]),
+            team=_reference_version(specification["agent_team_reference"]),
+            user_modeling=_reference_version(specification["user_modeling_reference"]),
+            twins=_twin_versions(specification["user_twin_references"]),
+            cited_twin_ids=frozenset(
+                UUID(identifier) for identifier in _referenced_twins(specification)
+            ),
+            revision_pending=self._pending_requirements_diff(project) is not None,
+        )
+
+    def _design_facts(self, project: FakeProject, version: Mapping[str, object]) -> DesignFacts:
+        package = version["package"]
+        grounding = package["grounding"]
+        has_mockup = (
+            package["owner_selected_alternative_id"] is not None
+            and package["prototype"] is not None
+        )
+        return DesignFacts(
+            version=_artifact_version(version),
+            approved=self._gate_approved(project, "design"),
+            requirements=_reference_version(grounding["requirements_reference"]),
+            team=_reference_version(grounding["agent_team_reference"]),
+            user_modeling=_reference_version(grounding["user_modeling_reference"]),
+            twins=_twin_versions(grounding["user_twin_references"]),
+            revision_pending=self._pending_design_diff(project) is not None,
+            has_mockup=has_mockup,
+            reviewed=has_mockup
+            and any(run["design_version_id"] == version["id"] for run in project.runs),
+        )
+
+    def _first_pass_complete(self, project: FakeProject) -> bool:
+        return any(
+            event.resulting_status is HumanGateStatus.APPROVED
+            and event.artifact.gate_type is HumanGateType.DESIGN
+            for events in project.gate_events.values()
+            for event in events
+        )
+
+    def _twins_learned(self, project: FakeProject) -> bool:
+        return any(
+            self._pending_update(project, str(twin["twin_id"])) is not None
+            or (self.hosted and any(self._new_material(project, str(twin["twin_id"]))))
+            for twin in self._approved_twins(project)
+        )
+
+    def _grounded_requirements(
+        self, project: FakeProject, design: Mapping[str, object]
+    ) -> dict[str, object] | None:
+        reference = design["package"]["grounding"]["requirements_reference"]
+        return _by_id(project.requirements, str(reference["artifact_id"]))
+
+    def _missing_codes(
+        self,
+        project: FakeProject,
+        design: Mapping[str, object],
+        requirements: Mapping[str, object],
+    ) -> list[str]:
+        grounded = self._grounded_requirements(project, design)
+        if grounded is None:
+            return []
+        cited = _cited_ids(design["package"])
+        current = {
+            str(item["id"])
+            for kind in SPECIFICATION_ITEMS
+            for item in requirements["specification"][kind]
+        }
+        return [
+            code
+            for kind in SPECIFICATION_ITEMS
+            for code in sorted(
+                str(item["code"])
+                for item in grounded["specification"][kind]
+                if str(item["id"]) in cited and str(item["id"]) not in current
+            )
+        ]
+
+    def _uncovered_codes(
+        self, design: Mapping[str, object], requirements: Mapping[str, object]
+    ) -> list[str]:
+        prototype = design["package"].get("prototype")
+        if prototype is None:
+            return []
+        cited = {
+            str(identifier)
+            for screen in prototype["screens"]
+            for holder in (screen, *screen["elements"])
+            for identifier in holder["requirement_ids"]
+        }
+        return sorted(
+            str(item["code"])
+            for item in requirements["specification"]["requirements"]
+            if str(item["id"]) not in cited
+        )
+
+    def _route_sections(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
+        return _Answer(200, self._sections(project))
+
+    def _route_align_sections(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
+        answer = self._aligned_sections(project, call.account)
+        project.gestures.append(_copy(answer))
+        return _Answer(200, answer)
+
+    def _aligned_sections(self, project: FakeProject, account: _Account) -> dict[str, object]:
+        before = self._project_sections(project, learning=False)
+        results: list[dict[str, object]] = []
+        for key in before.alignment.sections:
+            if results and results[-1]["outcome"] != "ALIGNED":
+                results.append(_alignment_result(key.value, "SKIPPED"))
+                continue
+            section = before.section(key)
+            if section.blocked is not None:
+                results.append(
+                    _alignment_result(
+                        key.value,
+                        "BLOCKED",
+                        issue=_gesture_issue(section.blocked.value),
+                        codes=section.codes,
+                    )
+                )
+                continue
+            results.append(self._update_section(project, key.value, account))
+        return {
+            "status": _gesture_status(results),
+            "results": results,
+            "sections": self._sections(project),
+        }
+
+    def _update_section(
+        self, project: FakeProject, key: str, account: _Account
+    ) -> dict[str, object]:
+        stage = SECTION_STAGES[key]
+        gate = project.gates.get(stage)
+        if gate is not None and next_human_gate_iteration(gate) is None:
+            return _alignment_result(key, "BLOCKED", issue="ITERATION_LIMIT_REACHED")
+        realign = {
+            "USER_TWINS": self._realign_twins,
+            "REQUIREMENTS": self._realign_requirements,
+            "DESIGN": self._realign_design,
+        }[key]
+        try:
+            realign(project, account)
+        except _Refusal as refusal:
+            code, missing = _refusal_code(refusal)
+            return _alignment_result(key, "BLOCKED", issue=_gesture_issue(code), codes=missing)
+        reference = self._require_reference(project, stage)
+        submitted, current, _, _ = self._submit_gate(project, stage, reference)
+        if submitted == "ALREADY_APPROVED" and current is not None:
+            return _alignment_result(key, "ALIGNED", version_number=current.artifact.version)
+        if submitted not in ("SUBMITTED", "ALREADY_PENDING"):
+            return _alignment_result(key, "BLOCKED", issue=_gesture_issue(submitted))
+        status, decided, _, issue = self._decide_gate(
+            project, stage, reference, "APPROVE", ALIGNMENT_REASON
+        )
+        if status != "APPLIED" or decided is None:
+            return _alignment_result(key, "BLOCKED", issue=_gesture_issue(issue or status))
+        return _alignment_result(key, "ALIGNED", version_number=decided.artifact.version)
+
+    def _twins_alignment_issue(self, project: FakeProject | None) -> str | None:
+        if project is None or project.snapshot is None:
+            return "USER_TWINS_NOT_FOUND"
+        approvals = self._approvals(project)
+        if not approvals["brief"]:
+            return "BRIEF_APPROVAL_REQUIRED"
+        if not approvals["team"]:
+            return "TEAM_APPROVAL_REQUIRED"
+        if self._snapshot_current(project, project.snapshot):
+            return "ALREADY_ALIGNED"
+        return None
+
+    def _route_twins_alignment(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        issue = self._twins_alignment_issue(project)
+        snapshot = None if project is None else project.snapshot
+        brief = None if project is None else project.brief
+        team = None if project is None else project.team
+        return _Answer(
+            200,
+            {
+                "aligned": issue == "ALREADY_ALIGNED",
+                "issue": issue,
+                "snapshot_version_number": None if snapshot is None else snapshot["version_number"],
+                "brief_version_number": None if brief is None else brief.number,
+                "team_version_number": None if team is None else team["version_number"],
+            },
+        )
+
+    def _route_realign_twins(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "USER_TWINS_NOT_FOUND"})
+        version = self._realign_twins(project, call.account)
+        return _Answer(
+            201,
+            {
+                "snapshot_version_id": version["id"],
+                "snapshot_version_number": version["version_number"],
+                "based_on_version_number": version["based_on_version_number"],
+                "content_hash": version["content_hash"],
+                "twin_count": len(version["snapshot"]["twin_versions"]),
+                "gate_approval_required": True,
+            },
+        )
+
+    def _realign_twins(self, project: FakeProject, account: _Account) -> dict[str, object]:
+        issue = self._twins_alignment_issue(project)
+        if issue is not None:
+            raise _Refusal(404 if issue == "USER_TWINS_NOT_FOUND" else 409, {"code": issue})
+        snapshot, brief, team = project.snapshot, project.brief, project.team
+        brief_reference = {
+            "artifact_id": brief.id,
+            "version_number": brief.number,
+            "content_hash": brief.content_hash,
+        }
+        team_reference = _plain_reference(team)
+        twins = []
+        for twin in snapshot["snapshot"]["twin_versions"]:
+            versions = project.twins[str(twin["twin_id"])]
+            previous = int(versions[-1]["version_number"])
+            profile = copy.deepcopy(twin["profile"])
+            profile["project_brief_reference"] = dict(brief_reference)
+            profile["agent_team_reference"] = dict(team_reference)
+            profile["catalog_version"] = AGENT_CATALOG_VERSION
+            profile["catalog_content_hash"] = AGENT_CATALOG_CONTENT_HASH
+            version = {
+                "id": self._new_id(),
+                "project_id": project.id,
+                "twin_id": twin["twin_id"],
+                "version_number": previous + 1,
+                "based_on_version_number": previous,
+                "content_hash": _digest(profile),
+                "created_by_user_id": account.id,
+                "created_at": _stamp(self._now()),
+                "profile": profile,
+            }
+            versions.append(version)
+            twins.append(version)
+        twins.sort(key=lambda item: str(item["twin_id"]))
+        body = copy.deepcopy(snapshot["snapshot"])
+        body["project_brief_reference"] = brief_reference
+        body["agent_team_reference"] = team_reference
+        body["catalog_version"] = AGENT_CATALOG_VERSION
+        body["catalog_content_hash"] = AGENT_CATALOG_CONTENT_HASH
+        body["twin_versions"] = twins
+        version = {
+            "id": self._new_id(),
+            "project_id": project.id,
+            "version_number": int(snapshot["version_number"]) + 1,
+            "based_on_version_number": snapshot["version_number"],
+            "content_hash": _digest(body),
+            "created_by_user_id": account.id,
+            "created_at": _stamp(self._now()),
+            "snapshot": body,
+        }
+        project.snapshots.append(version)
+        return version
+
+    def _requirements_alignment_issue(self, project: FakeProject | None) -> str | None:
+        current = None if project is None else project.specification
+        if project is None or current is None:
+            return "REQUIREMENTS_NOT_FOUND"
+        snapshot = project.snapshot
+        if snapshot is None:
+            return "USER_TWINS_REQUIRED"
+        if not self._approvals(project)["twins"]:
+            return "USER_TWINS_APPROVAL_REQUIRED"
+        specification = current["specification"]
+        if _requirements_aligned(specification, snapshot):
+            return "REQUIREMENTS_ALREADY_ALIGNED"
+        if not _referenced_twins(specification) <= _twin_ids(snapshot["snapshot"]["twin_versions"]):
+            return "TWIN_NO_LONGER_AVAILABLE"
+        if self._pending_requirements_diff(project) is not None:
+            return "REQUIREMENTS_REVISION_PENDING"
+        return None
+
+    def _route_requirements_alignment(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        current = None if project is None else project.specification
+        snapshot = None if project is None else project.snapshot
+        return _Answer(
+            200,
+            {
+                "aligned": current is not None
+                and snapshot is not None
+                and _requirements_aligned(current["specification"], snapshot),
+                "issue": self._requirements_alignment_issue(project),
+                "requirements_version_number": None
+                if current is None
+                else current["version_number"],
+                "snapshot_version_number": None if snapshot is None else snapshot["version_number"],
+                "twins_approved": project is not None and self._approvals(project)["twins"],
+            },
+        )
+
+    def _route_realign_requirements(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "REQUIREMENTS_NOT_FOUND"})
+        version = self._realign_requirements(project, call.account)
+        specification = version["specification"]
+        return _Answer(
+            201,
+            {
+                "version_id": version["id"],
+                "version_number": version["version_number"],
+                "based_on_version_number": version["based_on_version_number"],
+                "content_hash": version["content_hash"],
+                "user_modeling_version_number": specification["user_modeling_reference"][
+                    "version_number"
+                ],
+                "twin_count": len(specification["user_twin_references"]),
+                "gate_approval_required": True,
+            },
+        )
+
+    def _realign_requirements(self, project: FakeProject, account: _Account) -> dict[str, object]:
+        issue = self._requirements_alignment_issue(project)
+        if issue is not None:
+            raise _Refusal(404 if issue == "REQUIREMENTS_NOT_FOUND" else 409, {"code": issue})
+        snapshot = project.snapshot
+        body = snapshot["snapshot"]
+        specification = copy.deepcopy(project.specification["specification"])
+        twins = [_twin_reference(twin) for twin in body["twin_versions"]]
+        current = {str(twin["twin_id"]): twin for twin in twins}
+        specification["project_brief_reference"] = {
+            "kind": "PROJECT_BRIEF",
+            **_reference_fields(body["project_brief_reference"]),
+        }
+        specification["agent_team_reference"] = {
+            "kind": "AGENT_TEAM",
+            **_reference_fields(body["agent_team_reference"]),
+        }
+        specification["user_modeling_reference"] = {
+            "kind": "USER_MODELING",
+            **_plain_reference(snapshot),
+        }
+        specification["catalog_version"] = body["catalog_version"]
+        specification["catalog_content_hash"] = body["catalog_content_hash"]
+        specification["user_twin_references"] = twins
+        for requirement in specification["requirements"]:
+            requirement["user_twin_references"] = _sorted_twins(
+                current[str(reference["twin_id"])]
+                for reference in requirement["user_twin_references"]
+            )
+        for story in specification["user_stories"]:
+            story["user_twin_reference"] = dict(
+                current[str(story["user_twin_reference"]["twin_id"])]
+            )
+        for scenario in specification["scenarios"]:
+            scenario["actor"] = dict(current[str(scenario["actor"]["twin_id"])])
+        return self._append_requirements(project, specification, account)
+
+    def _design_alignment_issue(self, project: FakeProject | None) -> str | None:
+        design = None if project is None else project.design
+        if project is None or design is None:
+            return "DESIGN_NOT_FOUND"
+        requirements = project.specification
+        if requirements is None or not self._gate_approved(project, "requirements"):
+            return "REQUIREMENTS_APPROVAL_REQUIRED"
+        if _design_aligned(design, requirements):
+            return "ALREADY_ALIGNED"
+        if self._missing_codes(project, design, requirements):
+            return "REQUIREMENT_NO_LONGER_AVAILABLE"
+        if _twin_ids(design["package"]["grounding"]["user_twin_references"]) != _twin_ids(
+            requirements["specification"]["user_twin_references"]
+        ):
+            return "TWIN_SET_CHANGED"
+        if self._pending_design_diff(project) is not None:
+            return "DESIGN_REVISION_PENDING"
+        return None
+
+    def _route_design_alignment(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        design = None if project is None else project.design
+        requirements = None if project is None else project.specification
+        known = design is not None and requirements is not None
+        grounding = None if design is None else design["package"]["grounding"]
+        return _Answer(
+            200,
+            {
+                "aligned": known and _design_aligned(design, requirements),
+                "issue": self._design_alignment_issue(project),
+                "design_version_number": None if design is None else design["version_number"],
+                "grounded_requirements_version_number": None
+                if grounding is None
+                else grounding["requirements_reference"]["version_number"],
+                "requirements_version_number": None
+                if requirements is None
+                else requirements["version_number"],
+                "missing_codes": self._missing_codes(project, design, requirements)
+                if known
+                else [],
+                "uncovered_codes": self._uncovered_codes(design, requirements) if known else [],
+            },
+        )
+
+    def _route_realign_design(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "DESIGN_NOT_FOUND"})
+        version = self._realign_design(project, call.account)
+        requirements = project.specification
+        return _Answer(
+            201,
+            {
+                "version_id": version["id"],
+                "version_number": version["version_number"],
+                "based_on_version_number": version["based_on_version_number"],
+                "content_hash": version["content_hash"],
+                "requirements_version_number": requirements["version_number"],
+                "gate_approval_required": True,
+                "uncovered_codes": self._uncovered_codes(version, requirements),
+            },
+        )
+
+    def _realign_design(self, project: FakeProject, account: _Account) -> dict[str, object]:
+        issue = self._design_alignment_issue(project)
+        if issue == "REQUIREMENT_NO_LONGER_AVAILABLE":
+            missing = self._missing_codes(project, project.design, project.specification)
+            raise _Refusal(409, {"code": issue, "missing_codes": missing})
+        if issue is not None:
+            raise _Refusal(404 if issue == "DESIGN_NOT_FOUND" else 409, {"code": issue})
+        requirements = project.specification
+        specification = requirements["specification"]
+        twins = {str(twin["twin_id"]): twin for twin in specification["user_twin_references"]}
+        package = copy.deepcopy(project.design["package"])
+        package["grounding"] = _requirements_grounding(requirements)
+        for alternative in package["alternatives"]:
+            alternative["user_twin_references"] = [
+                dict(twins[str(reference["twin_id"])])
+                for reference in alternative["user_twin_references"]
+            ]
+        for critique in package["critiques"]:
+            twin_id = str(critique["user_twin_reference"]["twin_id"])
+            critique["user_twin_reference"] = dict(twins[twin_id])
+        return self._append_design(project, package, account)
+
+    def _publishable(self, project: FakeProject) -> list[str]:
+        return list(itertools.takewhile(lambda stage: self._gate_approved(project, stage), STAGES))
+
+    def _folder_issue(self, project: FakeProject, present: Sequence[str]) -> str | None:
+        keys = {stage: _key(project.artifact(stage)) for stage in present}
+        brief, team, twins = (keys.get(stage) for stage in ("brief", "team", "twins"))
+        if "team" in keys and _team_brief(project.team) != brief:
+            return "TEAM_OUTDATED"
+        if "twins" in keys:
+            body = project.snapshot["snapshot"]
+            if (
+                _reference_key(body["project_brief_reference"]),
+                _reference_key(body["agent_team_reference"]),
+            ) != (brief, team):
+                return "USER_TWINS_OUTDATED"
+        if "requirements" in keys:
+            context = project.specification["specification"]
+            if (
+                _reference_key(context["project_brief_reference"]),
+                _reference_key(context["agent_team_reference"]),
+                _reference_key(context["user_modeling_reference"]),
+            ) != (brief, team, twins):
+                return "REQUIREMENTS_OUTDATED"
+        if "design" in keys:
+            grounding = project.design["package"]["grounding"]
+            if (
+                _reference_key(grounding["requirements_reference"]),
+                _reference_key(grounding["agent_team_reference"]),
+                _reference_key(grounding["user_modeling_reference"]),
+            ) != (keys["requirements"], team, twins):
+                return "DESIGN_OUTDATED"
+        return None
+
     def _route_publish(self, call: _Call) -> _Answer:
         project = self._owned(call)
         if project is None:
             raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
-        approvals = self._approvals(project)
-        if not approvals["brief"]:
+        if not self._gate_approved(project, "brief"):
             raise _Refusal(409, {"code": "BRIEF_APPROVAL_REQUIRED"})
-        present = list(itertools.takewhile(lambda stage: approvals[stage], STAGES))
+        present = self._publishable(project)
+        issue = self._folder_issue(project, present)
+        if issue is not None:
+            raise _Refusal(409, {"code": issue})
         fingerprint = (
             *(str(project.artifact(stage)["id"]) for stage in present),
             f"changes={len(project.code_changes)}",
@@ -6471,6 +7196,9 @@ class FakeStudio:
             "entries": list(archive.entries),
         }
         project.packages.append(version)
+        project.folders.append(
+            {stage: _artifact_version(project.artifact(stage)) for stage in present}
+        )
         project.archives[number] = archive.content
         project.fingerprint = fingerprint
         return _Answer(201, {"reused": False, "version": version})
@@ -8299,6 +9027,101 @@ class FakeStudio:
         self._approve(project, stage)
         return _copy(version)
 
+    def _seed_perspective_change(self, project: FakeProject, agent_id: str) -> dict[str, object]:
+        team = project.team
+        if team is None or not self._approvals(project)["team"]:
+            raise ValueError("the perspectives of the project are not approved")
+        units = {
+            str(unit["agent_id"]): bool(unit["editable"])
+            for perspective in team["perspectives"]
+            for unit in (perspective, *perspective["aspects"])
+            if unit["agent_id"] is not None
+        }
+        if agent_id not in units:
+            raise ValueError(f"{agent_id} does not switch a perspective or an aspect")
+        if not units[agent_id]:
+            raise ValueError(f"the brief does not let the owner switch {agent_id}")
+        current = list(team["selected_agent_ids"])
+        selected = (
+            [agent for agent in current if agent != agent_id]
+            if agent_id in current
+            else [*current, agent_id]
+        )
+        content = self._team_content(
+            project,
+            project.brief,
+            selected,
+            list(team["members"]),
+            {},
+            {key: team[key] for key in RULE_KEYS},
+            owner=True,
+        )
+        self._append_team(project, content, "OWNER_EDITED", project.account)
+        self._seed_approval(project, "team")
+        return _copy(self._sections(project))
+
+    def _seed_requirements_change(self, project: FakeProject) -> dict[str, object]:
+        current = project.specification
+        if current is None or not self._approvals(project)["requirements"]:
+            raise ValueError("the requirements of the project are not approved")
+        if self._pending_requirements_diff(project) is not None:
+            raise ValueError("a proposed change of the requirements waits for its decision")
+        proposed, _ = self._with_requirement(
+            current["specification"], SEED_TEXTS[self.language]["requirement"]
+        )
+        self._append_requirements(project, proposed, project.account)
+        self._seed_approval(project, "requirements")
+        return _copy(self._sections(project))
+
+    def _seed_brief_change(self, project: FakeProject) -> dict[str, object]:
+        version = project.brief
+        if version is None or not self._approvals(project)["brief"]:
+            raise ValueError("the brief of the project is not approved")
+        goal = SEED_TEXTS[self.language]["goal"]
+        goals = version.brief.value_for(BriefField.GOALS) or ()
+        if goal in goals:
+            raise ValueError("the brief already holds the seeded goal")
+        unknown = set(version.brief.unknown_fields)
+        unknown.discard(BriefField.GOALS)
+        changed = replace(version.brief, goals=(*goals, goal), unknown_fields=frozenset(unknown))
+        self._append_brief(project, changed, project.account)
+        self._seed_approval(project, "brief")
+        return _copy(self._sections(project))
+
+    def _seed_requirement_removed(self, project: FakeProject) -> dict[str, object]:
+        current, design = project.specification, project.design
+        approvals = self._approvals(project)
+        if current is None or design is None or not approvals["requirements"]:
+            raise ValueError("the project needs approved requirements and a design")
+        if not approvals["design"]:
+            raise ValueError("the design of the project is not approved")
+        if self._pending_requirements_diff(project) is not None:
+            raise ValueError("a proposed change of the requirements waits for its decision")
+        specification = current["specification"]
+        cited = _cited_ids(design["package"])
+        removed = next(
+            (item for item in reversed(specification["requirements"]) if str(item["id"]) in cited),
+            None,
+        )
+        if removed is None or len(specification["requirements"]) < 2:
+            raise ValueError("the design cites no requirement that can be removed")
+        proposed = _without_requirement(specification, str(removed["id"]))
+        self._append_requirements(project, proposed, project.account)
+        self._seed_approval(project, "requirements")
+        return _copy(self._sections(project))
+
+    def _seed_design_revision(self, project: FakeProject) -> dict[str, object]:
+        design = project.design
+        if design is None or not self._approvals(project)["design"]:
+            raise ValueError("the design of the project is not approved")
+        package = copy.deepcopy(design["package"])
+        assertion = SEED_TEXTS[self.language]["assertion"]
+        if assertion in package["owner_assertions"]:
+            raise ValueError("the design already holds the seeded assertion")
+        package["owner_assertions"] = [*package["owner_assertions"], assertion]
+        self._seeded(lambda: self._design_diff(project, design, package, project.account))
+        return _copy(self._sections(project))
+
     def _seed_tasks(self, project: FakeProject) -> list[dict[str, object]]:
         twin_id = str(self._seed_twins(project)[0]["twin_id"])
         texts = SEED_TEXTS[self.language]
@@ -8534,8 +9357,6 @@ class FakeStudio:
         brief = project.brief
         assert brief is not None
         constraints = self._team_rules(project, brief, dropped)
-        if constraints.has_conflicts:
-            raise ValueError("the rules of the team conflict on the seeded brief")
         self._append_team(
             project,
             self._generated_team(project, brief, constraints, dropped),
@@ -9788,6 +10609,223 @@ def _plain_reference(artifact: Mapping[str, object]) -> dict[str, object]:
     }
 
 
+def _reference_fields(reference: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "artifact_id": reference["artifact_id"],
+        "version_number": reference["version_number"],
+        "content_hash": reference["content_hash"],
+    }
+
+
+def _key(artifact: Mapping[str, object] | None) -> tuple[str, int, str] | None:
+    if artifact is None:
+        return None
+    return (str(artifact["id"]), int(artifact["version_number"]), str(artifact["content_hash"]))
+
+
+def _reference_key(reference: Mapping[str, object]) -> tuple[str, int, str]:
+    return (
+        str(reference["artifact_id"]),
+        int(reference["version_number"]),
+        str(reference["content_hash"]),
+    )
+
+
+def _team_brief(team: Mapping[str, object] | None) -> tuple[str, int, str] | None:
+    if team is None:
+        return None
+    return (
+        str(team["brief_version_id"]),
+        int(team["brief_version_number"]),
+        str(team["brief_content_hash"]),
+    )
+
+
+def _twin_ids(items: Iterable[Mapping[str, object]]) -> frozenset[str]:
+    return frozenset(str(item["twin_id"]) for item in items)
+
+
+def _sorted_twins(items: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    return sorted((dict(item) for item in items), key=lambda item: str(item["twin_id"]))
+
+
+def _referenced_twins(specification: Mapping[str, object]) -> frozenset[str]:
+    return frozenset(
+        {
+            *(
+                str(reference["twin_id"])
+                for requirement in specification["requirements"]
+                for reference in requirement["user_twin_references"]
+            ),
+            *(
+                str(story["user_twin_reference"]["twin_id"])
+                for story in specification["user_stories"]
+            ),
+            *(str(scenario["actor"]["twin_id"]) for scenario in specification["scenarios"]),
+        }
+    )
+
+
+def _on_snapshot(
+    specification: Mapping[str, object], snapshot: Mapping[str, object] | None
+) -> bool:
+    if snapshot is None:
+        return False
+    twins = (_twin_reference(twin) for twin in snapshot["snapshot"]["twin_versions"])
+    return _reference_key(specification["user_modeling_reference"]) == _key(
+        snapshot
+    ) and _sorted_twins(specification["user_twin_references"]) == _sorted_twins(twins)
+
+
+def _requirements_aligned(
+    specification: Mapping[str, object], snapshot: Mapping[str, object]
+) -> bool:
+    body = snapshot["snapshot"]
+    return (
+        _reference_key(specification["project_brief_reference"])
+        == _reference_key(body["project_brief_reference"])
+        and _reference_key(specification["agent_team_reference"])
+        == _reference_key(body["agent_team_reference"])
+        and (specification["catalog_version"], specification["catalog_content_hash"])
+        == (body["catalog_version"], body["catalog_content_hash"])
+        and _on_snapshot(specification, snapshot)
+    )
+
+
+def _requirements_grounding(requirements: Mapping[str, object]) -> dict[str, object]:
+    specification = requirements["specification"]
+    return {
+        "requirements_reference": {
+            "kind": "REQUIREMENTS_SPECIFICATION",
+            **_plain_reference(requirements),
+        },
+        "agent_team_reference": {
+            "kind": "AGENT_TEAM",
+            **_reference_fields(specification["agent_team_reference"]),
+        },
+        "user_modeling_reference": {
+            "kind": "USER_MODELING",
+            **_reference_fields(specification["user_modeling_reference"]),
+        },
+        "catalog": {
+            "version": specification["catalog_version"],
+            "content_hash": specification["catalog_content_hash"],
+        },
+        "requirement_ids": _identifiers(specification["requirements"]),
+        "user_story_ids": _identifiers(specification["user_stories"]),
+        "acceptance_criterion_ids": _identifiers(specification["acceptance_criteria"]),
+        "user_twin_references": _sorted_twins(specification["user_twin_references"]),
+    }
+
+
+def _design_aligned(design: Mapping[str, object], requirements: Mapping[str, object]) -> bool:
+    return design["package"]["grounding"] == _requirements_grounding(requirements)
+
+
+def _cited_ids(package: Mapping[str, object]) -> frozenset[str]:
+    holders: list[Mapping[str, object]] = []
+    for alternative in package["alternatives"]:
+        holders.append(alternative)
+        holders.extend(alternative["workflows"])
+    holders.extend(package["concerns"])
+    prototype = package.get("prototype")
+    if prototype is not None:
+        for screen in prototype["screens"]:
+            holders.append(screen)
+            holders.extend(screen["elements"])
+    cited = {
+        str(identifier)
+        for holder in holders
+        for key in CITED_KEYS
+        for identifier in holder.get(key) or ()
+    }
+    bound = package.get("generated_mockup")
+    if bound is not None:
+        for value in bound["requirement_ids_by_code"].values():
+            cited.update(str(item) for item in (value if isinstance(value, list) else [value]))
+    return frozenset(cited)
+
+
+def _without_requirement(specification: Mapping[str, object], identifier: str) -> dict[str, object]:
+    proposed = copy.deepcopy(dict(specification))
+    proposed["requirements"] = [
+        item for item in proposed["requirements"] if str(item["id"]) != identifier
+    ]
+    dropped = set()
+    criteria = []
+    for item in proposed["acceptance_criteria"]:
+        item["requirement_ids"] = [
+            value for value in item["requirement_ids"] if str(value) != identifier
+        ]
+        if item["requirement_ids"]:
+            criteria.append(item)
+        else:
+            dropped.add(str(item["id"]))
+    proposed["acceptance_criteria"] = criteria
+    for key in ("user_stories", "scenarios", "risks", "definition_of_done"):
+        for item in proposed[key]:
+            item["requirement_ids"] = [
+                value for value in item["requirement_ids"] if str(value) != identifier
+            ]
+    for scenario in proposed["scenarios"]:
+        scenario["acceptance_criterion_ids"] = [
+            value for value in scenario["acceptance_criterion_ids"] if str(value) not in dropped
+        ]
+    return proposed
+
+
+def _twin_versions(items: Iterable[Mapping[str, object]]) -> frozenset[ArtifactVersion]:
+    return frozenset(
+        ArtifactVersion(
+            UUID(str(item["twin_id"])), int(item["version_number"]), str(item["content_hash"])
+        )
+        for item in items
+    )
+
+
+def _team_brief_version(team: Mapping[str, object]) -> ArtifactVersion:
+    return ArtifactVersion(
+        UUID(str(team["brief_version_id"])),
+        int(team["brief_version_number"]),
+        str(team["brief_content_hash"]),
+    )
+
+
+def _gesture_issue(code: str) -> str:
+    return GESTURE_ISSUES.get(code, code)
+
+
+def _alignment_result(
+    key: str,
+    outcome: str,
+    *,
+    issue: str | None = None,
+    version_number: int | None = None,
+    codes: Sequence[str] = (),
+) -> dict[str, object]:
+    return {
+        "key": key,
+        "outcome": outcome,
+        "issue": issue,
+        "version_number": version_number,
+        "codes": list(codes),
+    }
+
+
+def _gesture_status(results: Sequence[Mapping[str, object]]) -> str:
+    outcomes = [result["outcome"] for result in results]
+    if "ALIGNED" not in outcomes:
+        return "NOTHING_TO_ALIGN"
+    return "PARTIAL" if "BLOCKED" in outcomes else "ALIGNED"
+
+
+def _refusal_code(refusal: _Refusal) -> tuple[str, list[str]]:
+    detail = refusal.detail
+    if isinstance(detail, Mapping):
+        return str(detail.get("code")), [str(code) for code in detail.get("missing_codes", ())]
+    return str(detail), []
+
+
 def _gate_state(gate: HumanGate | None) -> GateState | None:
     if gate is None:
         return None
@@ -9917,6 +10955,51 @@ def _rules_payload(constraints: DeterministicTeamConstraints) -> dict[str, objec
     }
 
 
+def _selection_reason(payload: Mapping[str, object]) -> TeamSelectionReason:
+    evidence = payload["evidence"]
+    return TeamSelectionReason(
+        code=TeamSelectionReasonCode(str(payload["code"])),
+        evidence=RuleEvidence(
+            fields=tuple(BriefField(str(item)) for item in evidence["fields"]),
+            terms=tuple(str(item) for item in evidence["terms"]),
+        ),
+    )
+
+
+def _team_constraints(content: Mapping[str, object]) -> DeterministicTeamConstraints:
+    return DeterministicTeamConstraints(
+        catalog_version=int(content["catalog_version"]),
+        catalog_content_hash=str(content["catalog_content_hash"]),
+        project_mode=ProjectMode(str(content["project_mode"])),
+        role_constraints=tuple(
+            TeamRoleConstraint(
+                agent_id=AgentIdentifier(str(item["agent_id"])),
+                kind=TeamRoleConstraintKind(str(item["kind"])),
+                reasons=tuple(_selection_reason(reason) for reason in item["reasons"]),
+            )
+            for item in content["role_constraints"]
+        ),
+        issues=tuple(
+            TeamSelectionIssue(
+                code=TeamSelectionIssueCode(str(item["code"])),
+                agent_id=AgentIdentifier(str(item["agent_id"])),
+                mandatory_reasons=tuple(
+                    _selection_reason(reason) for reason in item["mandatory_reasons"]
+                ),
+                impossible_reasons=tuple(
+                    _selection_reason(reason) for reason in item["impossible_reasons"]
+                ),
+            )
+            for item in content["constraint_issues"]
+        ),
+    )
+
+
+def _perspectives(content: Mapping[str, object]) -> list[dict[str, object]]:
+    views = perspective_views(_team_constraints(content), content["selected_agent_ids"])
+    return [view.to_snapshot() for view in views]
+
+
 def _rule_justifications(constraint: Mapping[str, object]) -> list[dict[str, object]]:
     return [
         {
@@ -9971,13 +11054,12 @@ def _team_issues(
     blocked = {
         constraint["agent_id"]
         for constraint in current["role_constraints"]
-        if constraint["kind"] in ("IMPOSSIBLE", "CONFLICT")
+        if constraint["kind"] == "IMPOSSIBLE"
     }
     issues.extend(
         {"code": "AGENT_NOT_SELECTABLE", "agent_id": agent} for agent in set(selected) & blocked
     )
     added = set(selected) - set(current["selected_agent_ids"])
-    issues.extend({"code": "RATIONALE_REQUIRED", "agent_id": agent} for agent in added - set(named))
     issues.extend({"code": "UNUSED_RATIONALE", "agent_id": agent} for agent in set(named) - added)
     return sorted(
         issues, key=lambda issue: (AGENT_ORDER.index(str(issue["agent_id"])), str(issue["code"]))
