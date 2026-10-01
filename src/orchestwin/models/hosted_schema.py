@@ -15,6 +15,7 @@ from orchestwin.projects.requirements_primitives import canonical_json
 
 MAX_LISTED_VIOLATIONS: Final = 5
 MAX_PRUNED_PROPERTIES: Final = 20
+CLAUDE_CODE_SCHEMA_MAX_CHARACTERS: Final = 24_000
 VIOLATION_PREFIX: Final = "The hosted model answer violates the output schema at "
 HOSTED_TASK_REQUEST: Final = (
     "Carry out the task of the system instruction on this input and answer with one complete "
@@ -117,6 +118,8 @@ def hosted_output_schema(
         return _anthropic_schema(normalized)
     if provider_kind is StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED:
         return _openai_schema(normalized)
+    if provider_kind is StructuredGenerationProviderKind.CLAUDE_CODE_CLI:
+        return _claude_code_schema(normalized)
     raise HostedSchemaError("HOSTED_SCHEMA_PROVIDER_UNSUPPORTED")
 
 
@@ -441,6 +444,13 @@ def _anthropic_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return transformed
 
 
+def _claude_code_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    reduced = _anthropic_schema(schema)
+    if len(canonical_json(reduced)) > CLAUDE_CODE_SCHEMA_MAX_CHARACTERS:
+        raise HostedSchemaError("HOSTED_SCHEMA_TOO_LARGE")
+    return reduced
+
+
 def _without_constants(
     node: dict[str, Any], path: tuple[object, ...], constants: dict[tuple[object, ...], object]
 ) -> dict[str, Any]:
@@ -520,6 +530,7 @@ def _openai_node(node: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "CLAUDE_CODE_SCHEMA_MAX_CHARACTERS",
     "HOSTED_TASK_REQUEST",
     "MAX_LISTED_VIOLATIONS",
     "MAX_PRUNED_PROPERTIES",

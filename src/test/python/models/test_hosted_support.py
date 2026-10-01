@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
 import anthropic
 import httpx2
 
+from orchestwin.models.claude_code_cli import SYSTEM_PROMPT_OPTION, ProcessOutcome
 from orchestwin.models.hosted_configuration import (
     ProvidersConfiguration,
     parse_providers_configuration,
@@ -21,6 +23,37 @@ from src.test.python.models.test_proposal_evidence import MemoryEvidence
 
 REPOSITORY = Path(__file__).resolve().parents[4]
 EXAMPLE_PROVIDERS = REPOSITORY / "scripts" / "model-providers.example.json"
+CLAUDE_CODE_EXAMPLE = REPOSITORY / "scripts" / "model-providers.claude-code.example.json"
+CLAUDE_CODE_PRICES = {"input": "0", "output": "0", "cache_read": "0", "cache_write": "0"}
+CLAUDE_VERSION_LINE = b"2.1.286 (Claude Code)\n"
+CLAUDE_AUTH_STATUS = {
+    "loggedIn": True,
+    "authMethod": "claude.ai",
+    "apiProvider": "firstParty",
+    "email": "owner@example.com",
+    "subscriptionType": "max",
+}
+CLAUDE_USAGE = {
+    "input_tokens": 1200,
+    "output_tokens": 900,
+    "cache_creation_input_tokens": 50,
+    "cache_read_input_tokens": 100,
+    "output_tokens_details": {"thinking_tokens": 300},
+}
+CLAUDE_MODEL_USAGE = {
+    "claude-opus-5-5": {
+        "inputTokens": 1350,
+        "outputTokens": 900,
+        "maxOutputTokens": 128_000,
+        "contextWindow": 1_000_000,
+    },
+    "claude-haiku-4-5-20251001": {
+        "inputTokens": 400,
+        "outputTokens": 20,
+        "maxOutputTokens": 64_000,
+        "contextWindow": 200_000,
+    },
+}
 TEST_KEY = "test-key-not-real-anthropic-0001"
 GATEWAY_KEY = "test-key-not-real-gateway-0002"
 ANTHROPIC_KEY_ENV = "ORCHESTWIN_ANTHROPIC_API_KEY"
@@ -263,3 +296,107 @@ class SpendingEvidence(MemoryEvidence):
 
 def run(coroutine):
     return asyncio.run(coroutine)
+
+
+def claude_code_document(executable=None):
+    return {
+        "schema_version": 1,
+        "providers": [{"id": "claude-code", "kind": "CLAUDE_CODE_CLI", "executable": executable}],
+        "models": [
+            model_entry(
+                "design",
+                "claude-code",
+                "claude-opus-5-5",
+                reasoning_allowance_tokens=64_000,
+                prices=dict(CLAUDE_CODE_PRICES),
+            ),
+            model_entry(
+                "general",
+                "claude-code",
+                "claude-opus-5-5",
+                effort="medium",
+                reasoning_allowance_tokens=64_000,
+                timeout_seconds=900,
+                prices=dict(CLAUDE_CODE_PRICES),
+            ),
+        ],
+        "routes": {"default": "general", "tasks": {"design": "design"}, "purposes": {}},
+        "budget": {"per_generation_usd": "1.50", "per_project_usd": "10.00", "total_usd": "60.00"},
+    }
+
+
+def claude_answer(
+    payload=None,
+    *,
+    strict=True,
+    stop_reason=None,
+    subtype="success",
+    is_error=False,
+    api_error_status=None,
+    result=None,
+    usage=None,
+    model_usage=None,
+    session_id="session-synthetic-0001",
+):
+    output = VALID_REVIEW if payload is None else payload
+    document = {
+        "type": "result",
+        "subtype": subtype,
+        "is_error": is_error,
+        "api_error_status": api_error_status,
+        "duration_ms": 18_000,
+        "duration_api_ms": 17_500,
+        "num_turns": 2 if strict else 1,
+        "result": result if result is not None else ("Done." if strict else json.dumps(output)),
+        "stop_reason": stop_reason or ("tool_use" if strict else "end_turn"),
+        "session_id": session_id,
+        "total_cost_usd": 0.4213,
+        "usage": dict(CLAUDE_USAGE) if usage is None else usage,
+        "modelUsage": copy.deepcopy(CLAUDE_MODEL_USAGE) if model_usage is None else model_usage,
+        "uuid": "00000000-0000-4000-8000-00000000c1a0",
+    }
+    if strict:
+        document["structured_output"] = output
+    return json.dumps(document, ensure_ascii=False).encode("utf-8")
+
+
+def finished(stdout=b"", *, status=0, stderr=b""):
+    return ProcessOutcome(status=status, stdout=stdout, stderr=stderr)
+
+
+@dataclass(frozen=True)
+class ClaudeCall:
+    arguments: list
+    stdin: bytes
+    environment: dict
+    working_directory: Path
+    timeout_seconds: float
+    system: str | None
+
+
+class FakeClaudeRunner:
+    def __init__(self, *outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = []
+
+    async def __call__(self, arguments, stdin, environment, working_directory, timeout_seconds):
+        words = list(arguments)
+        system = None
+        if SYSTEM_PROMPT_OPTION in words:
+            prompt_file = Path(words[words.index(SYSTEM_PROMPT_OPTION) + 1])
+            if prompt_file.is_file():
+                system = prompt_file.read_bytes().decode("utf-8")
+        self.calls.append(
+            ClaudeCall(words, stdin, dict(environment), working_directory, timeout_seconds, system)
+        )
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        if callable(outcome):
+            return await outcome()
+        return outcome
+
+
+def readiness_runner(auth=None, *, version=CLAUDE_VERSION_LINE):
+    status = CLAUDE_AUTH_STATUS if auth is None else auth
+    return FakeClaudeRunner(finished(version), finished(json.dumps(status).encode("utf-8")))
