@@ -47,8 +47,8 @@ VERDICTS = (
     ("Utile, con riserve", "Trovo subito i prestiti in ritardo, ma vorrei filtrare per sede."),
     ("Chiaro e rapido", "Capisco in un attimo cosa devo fare e quale pulsante premere."),
 )
-REAL_FOLDER_CONTENT_HASH = "7538a61aa007ca71e6252472e2db9ff61ec8aa063ffe3638523584dd0f521396"
-REAL_DESIGN_SCHEMA_DIGEST = "002ed54ac37775d01dfa9fd1b2da4270129a595bf18860fc806232c28c48b8be"
+REAL_FOLDER_CONTENT_HASH = "48159cb8ca383656313ccbdb2696b966c96ce54f8757e6678ef2ebea4d189fdb"
+REAL_DESIGN_SCHEMA_DIGEST = "20b573209c09eb5270452df88bbfa04525e067e7c5f89a8366603c9adc930ab2"
 
 
 @cache

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import folder as knowledge
-from orchestwin.cli.api import twin_chat
+from orchestwin.cli.api import modeling, twin_chat
 from orchestwin.cli.api import twin_learning as learning_api
 from orchestwin.cli.errors import SIGN_IN_STATUS, USAGE_STATUS, ApiFailure, CliError
 from orchestwin.cli.flows import review, twin_conversation, twin_update
@@ -20,6 +21,7 @@ from orchestwin.cli.flows.twin_selection import (
     twins_from,
 )
 from orchestwin.cli.project import LOCAL_FOLDER, STEPS_FOLDER, read_json
+from orchestwin.cli.views import personas
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -32,6 +34,7 @@ NAME = "twins"
 NESTED_OPTIONS: Final[dict[str, object]] = {"color": False} if sys.version_info >= (3, 14) else {}
 LIST: Final = "list"
 SHOW: Final = "show"
+PERSONA: Final = "persona"
 ASK: Final = "ask"
 REVIEW: Final = "review"
 UPDATE: Final = "update"
@@ -69,6 +72,10 @@ FIELDS: Final = (
     "technical_literacy",
     "risk_sensitivity",
     "assumptions",
+    "description",
+    "represents",
+    "does_not_represent",
+    "evidence_gaps",
 )
 EPISTEMIC_STATUSES: Final = (
     "MODEL_INFERRED",
@@ -76,6 +83,7 @@ EPISTEMIC_STATUSES: Final = (
     "USER_PROVIDED",
     "HUMAN_VALIDATED",
     "EMPIRICALLY_SUPPORTED",
+    "CONTESTED",
 )
 SOURCE_KINDS: Final = (
     "PROJECT_BRIEF",
@@ -96,6 +104,10 @@ def configure(parser: argparse.ArgumentParser) -> None:
     _action(actions, parser, LIST, help="twins.help_list")
     show = _action(actions, parser, SHOW, help="twins.help_show")
     show.add_argument("twin", metavar="TWIN", help="twins.option_twin")
+    persona = _action(actions, parser, PERSONA, help="twins.help_persona")
+    persona.add_argument("twin", metavar="TWIN", help="twins.option_twin")
+    persona.add_argument("--why", choices=tuple(personas.PERSONA_FIELDS), help="twins.option_why")
+    persona.add_argument("--json", action="store_true", help="twins.option_json")
     ask = _action(actions, parser, ASK, help="twins.help_ask")
     ask.add_argument("twin", metavar="TWIN", help="twins.option_twin")
     ask.add_argument("question", metavar="QUESTION", nargs="*", help="twins.option_question")
@@ -121,6 +133,8 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         reason = reason_of(arguments.reason)
         return forget_observation(context, arguments.twin, code, reason)
     project = context.project()
+    if action == PERSONA:
+        return show_persona(context, project, arguments)
     if action == REVIEW:
         return review.run_review(context, context.client(), project)
     link = project.link()
@@ -136,14 +150,60 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
         return twin_conversation.converse(context, client, link.project_id, twin)
     if action == UPDATE:
         return update_twins(context, project, link, arguments.twin)
-    twins, online, learning = _readable_twins(context, project, link)
+    twins, online, learning, views = _readable_twins(context, project, link)
     if action == SHOW:
         twin = _selected(context, link, twins, arguments.twin, online=online, learning=learning)
         if twin is None:
             return 1
-        show_twin(context, twin, learning)
+        show_twin(context, twin, learning, view=views.get(twin.twin_id))
         return 0
-    show_list(context, link, twins, online=online, learning=learning)
+    show_list(context, link, twins, online=online, learning=learning, views=views)
+    return 0
+
+
+def show_persona(
+    context: CommandContext, project: ProjectFolder, arguments: argparse.Namespace
+) -> int:
+    link = project.link()
+    try:
+        snapshot = modeling.snapshot(context.client(), link.project_id)
+    except CliError as error:
+        if _offline_reason(error) is None:
+            raise
+        from orchestwin.knowledge.layout import stage_document
+
+        snapshot = read_json(project.knowledge / stage_document(TWINS_STAGE))
+        if not isinstance(snapshot, Mapping):
+            step = project.step(TWINS_STAGE)
+            snapshot = None if step is None else step.get("version")
+    if not isinstance(snapshot, Mapping):
+        raise CliError("TWINS_NOT_APPROVED")
+    versions = modeling.twins(snapshot)
+    twins = twins_from(versions)
+    twin = next((item for item in twins if item.twin_id == arguments.twin), None)
+    twin = twin or select(context, twins, arguments.twin)
+    if twin is None:
+        context.console.error("twins.no_match", value=arguments.twin)
+        return 1
+    version = next(item for item in versions if item.get("twin_id") == twin.twin_id)
+    reference = version.get("profile", {}).get("persona_reference", {})
+    archetype = next(
+        (
+            item
+            for item in snapshot.get("snapshot", {}).get("persona_versions", ())
+            if all(
+                item.get(key) == reference.get(key)
+                for key in ("persona_id", "version_number", "content_hash")
+            )
+        ),
+        None,
+    )
+    view = personas.view_of(version, archetype)
+    if arguments.json:
+        document = view if arguments.why is None else view["persona"][arguments.why]
+        context.console.write(json.dumps(document, ensure_ascii=False, indent=2))
+    else:
+        personas.show(context, twin.name, view, why=arguments.why)
     return 0
 
 
@@ -307,6 +367,7 @@ def show_list(
     *,
     online: bool,
     learning: learning_api.Learning | None = None,
+    views: Mapping[str, Mapping[str, object]] | None = None,
 ) -> None:
     console = context.console
     console.heading(context.text("twins.list_heading", project=link.project_name))
@@ -337,6 +398,14 @@ def show_list(
             row.append(str(learning_api.learned_count(entry)))
         rows.append(row)
     console.table(headers, rows)
+    for twin in twins:
+        view = (views or {}).get(twin.twin_id) or _fallback_view(twin)
+        console.write()
+        console.heading(twin.name)
+        personas.show_claim(
+            context, "description", (view.get("persona") or {}).get("description") or {}
+        )
+        personas.show_declaration(context, view)
     console.write()
     for twin in twins:
         if learning_api.pending_update(_entry(learning, twin)) is not None:
@@ -347,10 +416,19 @@ def show_list(
 
 
 def show_twin(
-    context: CommandContext, twin: Twin, learning: learning_api.Learning | None = None
+    context: CommandContext,
+    twin: Twin,
+    learning: learning_api.Learning | None = None,
+    *,
+    view: Mapping[str, object] | None = None,
 ) -> None:
     console = context.console
     console.heading(twin.name)
+    view = view or _fallback_view(twin)
+    personas.show_claim(
+        context, "description", (view.get("persona") or {}).get("description") or {}
+    )
+    personas.show_declaration(context, view)
     role = twin.role
     if role is not None and folded(role) != folded(twin.name):
         console.say("twins.role", role=role)
@@ -517,10 +595,18 @@ def _selected(
 
 def _readable_twins(
     context: CommandContext, project: ProjectFolder, link: ProjectLink
-) -> tuple[tuple[Twin, ...], bool, learning_api.Learning | None]:
+) -> tuple[
+    tuple[Twin, ...], bool, learning_api.Learning | None, Mapping[str, Mapping[str, object]]
+]:
     client = context.client()
     try:
-        twins = studio_twins(client, link.project_id)
+        if not twin_chat.approved(twin_chat.readiness(client, link.project_id)):
+            raise CliError("TWINS_NOT_APPROVED")
+        snapshot = twin_chat.current_snapshot(client, link.project_id)
+        if snapshot is None:
+            raise CliError("TWINS_NOT_APPROVED")
+        twins = twins_from(twin_chat.twin_versions(snapshot))
+        views = personas.views_of(snapshot)
         document = learning_api.overview(client, link.project_id)
     except CliError as error:
         reason = _offline_reason(error)
@@ -529,9 +615,18 @@ def _readable_twins(
             raise
         source, versions, learning = local
         context.console.say(OFFLINE_KEYS[reason], studio=client.studio.origin, source=source)
-        return twins_from(versions), False, learning
+        return (
+            twins_from(versions),
+            False,
+            learning,
+            {str(version.get("twin_id")): personas.view_of(version) for version in versions},
+        )
     learning = None if document is None else learning_api.learning_of(document)
-    return twins, True, learning
+    return twins, True, learning, views
+
+
+def _fallback_view(twin: Twin) -> Mapping[str, object]:
+    return personas.view_of({"profile": {"observations": twin.observations}})
 
 
 def _offline_reason(error: CliError) -> str | None:

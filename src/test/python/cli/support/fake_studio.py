@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import copy
 import email.parser
@@ -30,7 +31,9 @@ from orchestwin.agents.catalog import (
     AgentIdentifier,
     all_agent_catalog_entries,
 )
+from orchestwin.agents.persistence.repositories import proposal_from_snapshot
 from orchestwin.agents.perspectives import perspective_views
+from orchestwin.agents.realignment import reanchored_team, team_selection_can_realign
 from orchestwin.agents.selection_rules import (
     DeterministicTeamConstraints,
     RuleEvidence,
@@ -197,6 +200,7 @@ from orchestwin.projects.sections import (
     UserTwinsFacts,
     project_sections,
 )
+from orchestwin.twins.archetypes import ArchetypeFailure, ArchetypeService
 from orchestwin.twins.conversations import (
     MAX_QUESTION_CHARACTERS,
     MAX_TURNS_PER_CONVERSATION,
@@ -206,6 +210,14 @@ from orchestwin.twins.conversations import (
     TwinInsightKind,
     normalized_text,
 )
+from orchestwin.twins.persistence.repositories import VersionAppendStatus
+from orchestwin.twins.persistence.snapshots import (
+    persona_profile_from_snapshot,
+    user_twin_profile_from_snapshot,
+)
+from orchestwin.twins.personas import PersonaProfileVersion
+from orchestwin.twins.representation import ArchetypeInput, archetype_payload, twin_view
+from orchestwin.twins.user_twins import UserTwinProfileVersion
 from orchestwin.workflow.gates import (
     DEFAULT_GATE_ITERATION_LIMIT,
     GateArtifactReference,
@@ -1434,11 +1446,23 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/projects/{project_id}/team-proposals/current", "team_current"),
     Route("PATCH", "/projects/{project_id}/team-proposals/current", "team_edit"),
     Route("GET", "/projects/{project_id}/readiness", "team_readiness"),
+    Route("GET", "/projects/{project_id}/team/context-alignment", "team_alignment"),
+    Route("POST", "/projects/{project_id}/team/context-alignment", "realign_team"),
     Route("POST", "/projects/{project_id}/gates/agent-team/submit", "team_gate_submit"),
     Route("GET", "/projects/{project_id}/gates/agent-team/current", "team_gate_current"),
     Route("POST", "/projects/{project_id}/gates/agent-team/decisions", "team_gate_decision"),
     Route("GET", "/projects/{project_id}/gates/agent-team/{gate_id}/events", "team_gate_events"),
     Route("GET", "/projects/{project_id}/user-modeling/personas", "personas"),
+    Route("GET", "/projects/{project_id}/user-modeling/archetypes", "archetypes"),
+    Route("POST", "/projects/{project_id}/user-modeling/archetypes", "archetype_create"),
+    Route(
+        "PATCH", "/projects/{project_id}/user-modeling/archetypes/{persona_id}", "archetype_edit"
+    ),
+    Route(
+        "DELETE",
+        "/projects/{project_id}/user-modeling/archetypes/{persona_id}",
+        "archetype_archive",
+    ),
     Route("POST", "/projects/{project_id}/user-modeling/personas/proposals", "persona_proposals"),
     Route(
         "POST",
@@ -2252,6 +2276,8 @@ class FakeProject:
     def current(self, stage: str) -> dict[str, object] | None:
         with self._studio._lock:
             artifact = self.artifact(stage)
+            if artifact is not None and _stage(stage) == "twins":
+                return self._studio._readable_snapshot(artifact)
             return None if artifact is None else _copy(artifact)
 
     def gate(self, stage: str) -> dict[str, object] | None:
@@ -2942,7 +2968,7 @@ class FakeStudio:
         return answer
 
     def _progress(self, project: FakeProject) -> tuple[str, str]:
-        progress = project_progress(self._facts(project))
+        progress = project_progress(self._facts(project), sections=self._project_sections(project))
         return progress.current_stage.value, progress.next_action.value
 
     def _facts(self, project: FakeProject) -> ProjectProgressFacts:
@@ -3006,6 +3032,7 @@ class FakeStudio:
             and twins_state.team == team_state.artifact
             and twins_state.catalog == team_state.catalog
             and _approves(facts.user_twins_gate, twins_state.artifact)
+            and self._archetypes_current(project, project.snapshot)
         )
         return {
             "brief": brief,
@@ -4153,6 +4180,76 @@ class FakeStudio:
         version = self._append_team(project, content, "PROPOSER_GENERATED", call.account)
         return _Answer(201, {"status": "CREATED", "version": version, "issues": issues})
 
+    def _team_alignment_issue(self, project: FakeProject | None) -> str | None:
+        if project is None or project.team is None:
+            return "TEAM_NOT_FOUND"
+        if not self._gate_approved(project, "brief"):
+            return "BRIEF_APPROVAL_REQUIRED"
+        if not self._gate_approved(project, "team"):
+            return "TEAM_APPROVAL_REQUIRED"
+        if self._team_matches(project):
+            return "ALREADY_ALIGNED"
+        if not team_selection_can_realign(
+            _fake_team_proposal(project.team),
+            brief=project.brief.brief,
+            project_mode=ProjectMode(project.mode),
+        ):
+            return "PREPARE_AGAIN"
+        return None
+
+    def _route_team_alignment(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        issue = self._team_alignment_issue(project)
+        return _Answer(
+            200,
+            {
+                "aligned": issue == "ALREADY_ALIGNED",
+                "issue": issue,
+                "team_version_number": None
+                if project is None or project.team is None
+                else project.team["version_number"],
+                "brief_version_number": None
+                if project is None or project.brief is None
+                else project.brief.number,
+            },
+        )
+
+    def _realign_team(self, project: FakeProject, account: _Account) -> dict[str, object]:
+        issue = self._team_alignment_issue(project)
+        if issue is not None:
+            raise _Refusal(404 if issue == "TEAM_NOT_FOUND" else 409, {"code": issue})
+        proposal = reanchored_team(
+            _fake_team_proposal(project.team),
+            brief=_fake_brief_version(project.brief),
+            project_mode=ProjectMode(project.mode),
+        )
+        content = self._team_content(
+            project,
+            project.brief,
+            [agent.value for agent in proposal.selected_agent_ids],
+            proposal.to_snapshot()["members"],
+            {},
+            _rules_payload(proposal.constraints),
+            owner=True,
+        )
+        return self._append_team(project, content, "OWNER_EDITED", account)
+
+    def _route_realign_team(self, call: _Call) -> _Answer:
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "TEAM_NOT_FOUND"})
+        version = self._realign_team(project, call.account)
+        return _Answer(
+            200,
+            {
+                "version_id": version["id"],
+                "version_number": version["version_number"],
+                "based_on_version_number": version["based_on_version_number"],
+                "content_hash": version["content_hash"],
+                "gate_approval_required": True,
+            },
+        )
+
     def _route_team_history(self, call: _Call) -> _Answer:
         project = self._owned(call)
         return _Answer(200, [] if project is None else list(project.teams))
@@ -4388,7 +4485,165 @@ class FakeStudio:
     def _current_personas(self, project: FakeProject | None) -> list[dict[str, object]]:
         if project is None:
             return []
-        return [project.personas[key][-1] for key in sorted(project.personas)]
+        return [
+            project.personas[key][-1]
+            for key in sorted(project.personas)
+            if not project.personas[key][-1]["profile"].get("archived", False)
+        ]
+
+    def _archetype_service(self, project: FakeProject) -> ArchetypeService:
+        class Unit:
+            def __init__(unit, *, owner_user_id):
+                unit.owner = owner_user_id
+                unit.staged = copy.deepcopy(project.personas)
+                unit.personas = unit
+
+            async def __aenter__(unit):
+                return unit
+
+            async def __aexit__(unit, *_args):
+                return None
+
+            async def lock_project(unit, *, project_id):
+                return str(project_id) == project.id and str(unit.owner) == project.account.id
+
+            async def has_pending_revision(unit, *, project_id):
+                return str(project_id) == project.id and any(
+                    update["status"] == "PROPOSED" for update in project.updates
+                )
+
+            async def list_current(unit, *, project_id):
+                return tuple(_fake_persona(versions[-1]) for versions in unit.staged.values())
+
+            async def current(unit, *, project_id, persona_id):
+                versions = unit.staged.get(str(persona_id))
+                return None if not versions else _fake_persona(versions[-1])
+
+            async def append(unit, version):
+                unit.staged.setdefault(str(version.persona_id), []).append(version.to_snapshot())
+                return VersionAppendStatus.APPENDED
+
+            async def commit(unit):
+                project.personas = unit.staged
+
+        return ArchetypeService(
+            uow_factory=Unit, uuid_factory=lambda: UUID(self._new_id()), clock=self._now
+        )
+
+    def _archetype_input(self, call: _Call, *, editing: bool = False):
+        fields = _Fields(
+            call.json(),
+            (
+                "name",
+                "description",
+                "role",
+                "goals",
+                "context",
+                *(["based_on_version_number"] if editing else []),
+            ),
+        )
+        name = fields.text("name")
+        description = fields.text("description")
+        role = fields.text("role")
+        goals = fields.texts("goals", default=[], nullable=False)
+        context = fields.text("context", required=False, nullable=True)
+        base = fields.integer("based_on_version_number", minimum=1) if editing else None
+        fields.check()
+        try:
+            data = ArchetypeInput(
+                name=name,
+                description=description,
+                role=role,
+                goals=tuple(goals or ()),
+                context=context,
+            )
+        except (TypeError, ValueError) as error:
+            raise _domain_refusal(str(error)) from None
+        return data, base
+
+    def _archetype_command(self, call: _Call, operation: str, **arguments):
+        project = self._owned(call)
+        if project is None:
+            raise _Refusal(404, {"code": "PROJECT_NOT_FOUND"})
+        service = self._archetype_service(project)
+        try:
+            result = asyncio.run(
+                getattr(service, operation)(
+                    owner_user_id=UUID(call.account.id), project_id=UUID(project.id), **arguments
+                )
+            )
+        except ArchetypeFailure as error:
+            raise _Refusal(
+                404 if error.issue.value in {"PROJECT_NOT_FOUND", "ARCHETYPE_NOT_FOUND"} else 409,
+                {"code": error.issue.value},
+            ) from None
+        return result
+
+    def _route_archetypes(self, call: _Call) -> _Answer:
+        return _Answer(
+            200, [archetype_payload(item) for item in self._archetype_command(call, "list_current")]
+        )
+
+    def _route_archetype_create(self, call: _Call) -> _Answer:
+        data, _ = self._archetype_input(call)
+        return _Answer(201, archetype_payload(self._archetype_command(call, "create", data=data)))
+
+    def _route_archetype_edit(self, call: _Call) -> _Answer:
+        data, base = self._archetype_input(call, editing=True)
+        result = self._archetype_command(
+            call,
+            "edit",
+            persona_id=UUID(call.params["persona_id"]),
+            based_on_version_number=base,
+            data=data,
+        )
+        return _Answer(200, archetype_payload(result))
+
+    def _route_archetype_archive(self, call: _Call) -> _Answer:
+        fields = _Fields(call.json(), ("based_on_version_number",))
+        base = fields.integer("based_on_version_number", minimum=1)
+        fields.check()
+        result = self._archetype_command(
+            call,
+            "archive",
+            persona_id=UUID(call.params["persona_id"]),
+            based_on_version_number=base,
+        )
+        return _Answer(200, archetype_payload(result))
+
+    def _archetypes_current(self, project: FakeProject, snapshot: Mapping[str, object]) -> bool:
+        active = [
+            item
+            for item in self._current_personas(project)
+            if item["profile"]["confirmation_status"] != "REJECTED"
+        ]
+        if any(item["profile"]["confirmation_status"] != "CONFIRMED" for item in active):
+            return False
+
+        def key(item):
+            return item["id"], item["version_number"], item["content_hash"]
+
+        return {item["persona_id"]: key(item) for item in active} == {
+            item["persona_id"]: key(item) for item in snapshot["snapshot"]["persona_versions"]
+        }
+
+    def _readable_snapshot(self, snapshot: Mapping[str, object]) -> dict[str, object]:
+        document = copy.deepcopy(snapshot)
+        for twin in document["snapshot"]["twin_versions"]:
+            reference = twin["profile"]["persona_reference"]
+            persona = next(
+                (
+                    item
+                    for item in snapshot["snapshot"]["persona_versions"]
+                    if all(
+                        item[key] == reference[key]
+                        for key in ("persona_id", "version_number", "content_hash")
+                    )
+                ),
+                None,
+            )
+            twin["view"] = _fake_twin_view(twin, persona)
+        return document
 
     def _route_personas(self, call: _Call) -> _Answer:
         return _Answer(200, self._current_personas(self._owned(call)))
@@ -4512,7 +4767,13 @@ class FakeStudio:
         self._modeling_issue(project)
         assert project is not None
         snapshot = project.snapshot
-        if snapshot is not None and self._snapshot_current(project, snapshot):
+        if any(update["status"] == "PROPOSED" for update in project.updates):
+            raise _Refusal(409, {"code": "USER_TWIN_REVISION_PENDING"})
+        if (
+            snapshot is not None
+            and self._snapshot_current(project, snapshot)
+            and self._archetypes_current(project, snapshot)
+        ):
             raise _Refusal(409, {"code": "SNAPSHOT_ALREADY_EXISTS"})
         personas = self._current_personas(project)
         if not personas:
@@ -4530,8 +4791,8 @@ class FakeStudio:
                 "status": "CREATED",
                 "issue": None,
                 "proposal_issue": None,
-                "snapshot_version": created,
-                "twin_versions": created["snapshot"]["twin_versions"],
+                "snapshot_version": self._readable_snapshot(created),
+                "twin_versions": self._readable_snapshot(created)["snapshot"]["twin_versions"],
             },
         )
 
@@ -4557,9 +4818,24 @@ class FakeStudio:
         }
         team_reference = _plain_reference(team)
         twins = []
+        previous_twins = (
+            {}
+            if project.snapshot is None
+            else {
+                item["profile"]["persona_reference"]["persona_id"]: item
+                for item in project.snapshot["snapshot"]["twin_versions"]
+            }
+        )
         for persona in confirmed:
-            twin = self._twin_version(project, persona, brief, team_reference, account)
-            project.twins[str(twin["twin_id"])] = [twin]
+            twin = self._twin_version(
+                project,
+                persona,
+                brief,
+                team_reference,
+                account,
+                previous=previous_twins.get(persona["persona_id"]),
+            )
+            project.twins.setdefault(str(twin["twin_id"]), []).append(twin)
             twins.append(twin)
         twins.sort(key=lambda twin: str(twin["twin_id"]))
         ordered = sorted(confirmed, key=lambda persona: str(persona["persona_id"]))
@@ -4595,6 +4871,8 @@ class FakeStudio:
         brief: _BriefVersion,
         team_reference: Mapping[str, object],
         account: _Account,
+        *,
+        previous: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         texts = PROFILE[self.language]
         name = str(persona["profile"]["name"])
@@ -4617,10 +4895,28 @@ class FakeStudio:
             "risk_sensitivity": None,
             "assumptions": _items_value(texts["assumptions"]),
         }
+        source_values = {
+            item["observation_key"]: item["value"] for item in persona["profile"]["observations"]
+        }
+        for source_field in ("role", "goals", "context_of_use"):
+            supplied = source_values.get(f"persona.{source_field}")
+            if supplied is not None:
+                values[source_field] = supplied if supplied["kind"] in {"TEXT", "ITEMS"} else None
+        role_value = source_values.get("persona.role") or {}
+        values.update(
+            {
+                "description": source_values.get("persona.summary"),
+                "represents": _items_value([role_value["text"]])
+                if role_value.get("kind") == "TEXT" and role_value.get("text")
+                else None,
+                "does_not_represent": None,
+                "evidence_gaps": None,
+            }
+        )
         observations = [
             _observation(f"user_twin.{key}", value, source)
             if value is not None
-            else _unknown_observation(f"user_twin.{key}")
+            else _unknown_observation(f"user_twin.{key}", source)
             for key, value in values.items()
         ]
         profile = {
@@ -4647,9 +4943,9 @@ class FakeStudio:
         return {
             "id": self._new_id(),
             "project_id": project.id,
-            "twin_id": self._new_id(),
-            "version_number": 1,
-            "based_on_version_number": None,
+            "twin_id": self._new_id() if previous is None else previous["twin_id"],
+            "version_number": 1 if previous is None else int(previous["version_number"]) + 1,
+            "based_on_version_number": None if previous is None else previous["version_number"],
             "content_hash": _digest(profile),
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
@@ -4660,11 +4956,16 @@ class FakeStudio:
         project = self._owned(call)
         if project is None or project.snapshot is None:
             raise _Refusal(404, {"code": "USER_MODELING_SNAPSHOT_NOT_FOUND"})
-        return _Answer(200, project.snapshot)
+        return _Answer(200, self._readable_snapshot(project.snapshot))
 
     def _route_snapshot_history(self, call: _Call) -> _Answer:
         project = self._owned(call)
-        return _Answer(200, [] if project is None else list(project.snapshots))
+        return _Answer(
+            200,
+            []
+            if project is None
+            else [self._readable_snapshot(item) for item in project.snapshots],
+        )
 
     def _route_modeling_readiness(self, call: _Call) -> _Answer:
         project = self._owned(call)
@@ -4686,14 +4987,17 @@ class FakeStudio:
                     **base,
                     "approved_current_snapshot": False,
                     "context_current": True,
+                    "archetypes_current": False,
                     "workflow_state": "USER_MODELING_REQUIRED",
                     "twins": [],
                 },
             )
         context_current = self._snapshot_current(project, snapshot)
+        archetypes_current = self._archetypes_current(project, snapshot)
         reference = self._require_reference(project, "twins")
         approved = (
             context_current
+            and archetypes_current
             and gate is not None
             and gate.status is HumanGateStatus.APPROVED
             and gate.artifact == reference
@@ -4708,6 +5012,7 @@ class FakeStudio:
                 **base,
                 "approved_current_snapshot": approved,
                 "context_current": context_current,
+                "archetypes_current": archetypes_current,
                 "workflow_state": "READY_FOR_REQUIREMENTS_DEFINITION"
                 if approved
                 else "USER_MODELING_REVIEW_REQUIRED",
@@ -5642,16 +5947,26 @@ class FakeStudio:
         specification: Mapping[str, object],
     ) -> tuple[dict[str, object], dict[str, object]]:
         language = alternative["visual_language"]
+        identifiers = {
+            str(item["code"]): UUID(str(item["id"])) for item in specification["requirements"]
+        }
+
+        def current_codes(match):
+            codes = [code for code in match.group(2).split() if code in identifiers]
+            if not codes:
+                codes = [next(iter(identifiers))]
+            return f" data-req={match.group(1)}{' '.join(codes)}{match.group(1)}" if codes else ""
+
+        screens = self._screens(str(alternative["code"]), variant)
+        for screen in screens:
+            screen["markup"] = re.sub(r" data-req=([\"'])(.*?)\1", current_codes, screen["markup"])
         mockup = create_generated_mockup(
             design_alternative_id=UUID(str(alternative["id"])),
             title=str(language["product_name"]),
             styles=MOCKUP_STYLES,
-            screens=self._screens(str(alternative["code"]), variant),
+            screens=screens,
             token_names=language["tokens"],
         )
-        identifiers = {
-            str(item["code"]): UUID(str(item["id"])) for item in specification["requirements"]
-        }
         bound = create_bound_mockup(
             mockup=mockup,
             requirement_ids_by_code={
@@ -6603,6 +6918,7 @@ class FakeStudio:
                 version=_artifact_version(team),
                 approved=self._gate_approved(project, "team"),
                 brief=_team_brief_version(team),
+                alignable=self._team_alignment_issue(project) is None,
             ),
             user_twins=None if snapshot is None else self._twins_facts(project, snapshot),
             requirements=None
@@ -6628,6 +6944,7 @@ class FakeStudio:
             brief=_reference_version(body["project_brief_reference"]),
             team=_reference_version(body["agent_team_reference"]),
             twins=_twin_versions(body["twin_versions"]),
+            archetypes_current=self._archetypes_current(project, snapshot),
         )
 
     def _requirements_facts(
@@ -6778,6 +7095,7 @@ class FakeStudio:
         if gate is not None and next_human_gate_iteration(gate) is None:
             return _alignment_result(key, "BLOCKED", issue="ITERATION_LIMIT_REACHED")
         realign = {
+            "TEAM": self._realign_team,
             "USER_TWINS": self._realign_twins,
             "REQUIREMENTS": self._realign_requirements,
             "DESIGN": self._realign_design,
@@ -6808,6 +7126,10 @@ class FakeStudio:
             return "BRIEF_APPROVAL_REQUIRED"
         if not approvals["team"]:
             return "TEAM_APPROVAL_REQUIRED"
+        if not self._archetypes_current(project, project.snapshot):
+            return "ARCHETYPES_CHANGED"
+        if any(update["status"] == "PROPOSED" for update in project.updates):
+            return "USER_TWIN_REVISION_PENDING"
         if self._snapshot_current(project, project.snapshot):
             return "ALREADY_ALIGNED"
         return None
@@ -7080,7 +7402,12 @@ class FakeStudio:
         return self._append_design(project, package, account)
 
     def _publishable(self, project: FakeProject) -> list[str]:
-        return list(itertools.takewhile(lambda stage: self._gate_approved(project, stage), STAGES))
+        present = list(
+            itertools.takewhile(lambda stage: self._gate_approved(project, stage), STAGES)
+        )
+        if "twins" in present and not self._archetypes_current(project, project.snapshot):
+            return present[:2]
+        return present
 
     def _folder_issue(self, project: FakeProject, present: Sequence[str]) -> str | None:
         keys = {stage: _key(project.artifact(stage)) for stage in present}
@@ -7142,6 +7469,7 @@ class FakeStudio:
             version_number=number,
             created_at=created_at,
             state=self._state_sources(project, present[-1]),
+            language=self.language,
         )
         archive = folder_archive(folder)
         manifest = folder.manifest
@@ -11074,6 +11402,96 @@ def _items_value(items: Sequence[str]) -> dict[str, object]:
     return {"kind": "ITEMS", "text": None, "items": list(items), "reason": None}
 
 
+def _fake_team_proposal(version: Mapping[str, object]):
+    return proposal_from_snapshot(
+        {
+            "schema_version": version["schema_version"],
+            "project_id": version["project_id"],
+            "project_mode": version["project_mode"],
+            "provider": {key: version[key] for key in ("provider_id", "provider_version")}
+            | {"kind": version["provider_kind"]},
+            "brief_version": {
+                "id": version["brief_version_id"],
+                "version_number": version["brief_version_number"],
+                "content_hash": version["brief_content_hash"],
+            },
+            "catalog": {
+                "version": version["catalog_version"],
+                "content_hash": version["catalog_content_hash"],
+            },
+            "constraints": _team_constraints(version).to_snapshot(),
+            "constraints_content_hash": version["constraints_content_hash"],
+            "members": version["members"],
+        }
+    )
+
+
+def _fake_brief_version(version: _BriefVersion):
+    from orchestwin.projects.briefs import ProjectBriefVersion
+
+    return ProjectBriefVersion(
+        id=UUID(version.id),
+        project_id=UUID(version.payload["project_id"]),
+        version_number=version.number,
+        schema_version=version.brief.SCHEMA_VERSION,
+        brief=version.brief,
+        content_hash=version.brief.content_hash,
+        created_by_user_id=UUID(version.payload["created_by_user_id"]),
+        created_at=datetime.fromisoformat(version.payload["created_at"]),
+    )
+
+
+def _fake_persona(version: Mapping[str, object]) -> PersonaProfileVersion:
+    payload = copy.deepcopy(version["profile"])
+    payload.setdefault("schema_version", 1)
+    profile = persona_profile_from_snapshot(payload)
+    return PersonaProfileVersion(
+        id=UUID(version["id"]),
+        project_id=UUID(version["project_id"]),
+        persona_id=UUID(version["persona_id"]),
+        version_number=version["version_number"],
+        based_on_version_number=version.get("based_on_version_number"),
+        profile=profile,
+        content_hash=profile.content_hash,
+        created_by_user_id=UUID(version["created_by_user_id"]),
+        created_at=datetime.fromisoformat(version["created_at"]),
+    )
+
+
+def _fake_twin_view(
+    version: Mapping[str, object], persona: Mapping[str, object] | None
+) -> dict[str, object]:
+    payload = copy.deepcopy(version["profile"])
+    payload.setdefault("schema_version", 1)
+    payload.setdefault(
+        "catalog",
+        {
+            "version": payload.pop("catalog_version", AGENT_CATALOG_VERSION),
+            "content_hash": payload.pop("catalog_content_hash", AGENT_CATALOG_CONTENT_HASH),
+        },
+    )
+    payload.setdefault(
+        "requires_human_validation",
+        any(item["human_validation"] == "REQUIRED" for item in payload["observations"]),
+    )
+    archetype = None if persona is None else _fake_persona(persona)
+    if archetype is not None:
+        payload["persona_reference"]["content_hash"] = archetype.content_hash
+    profile = user_twin_profile_from_snapshot(payload)
+    twin = UserTwinProfileVersion(
+        id=UUID(version["id"]),
+        project_id=UUID(version["project_id"]),
+        twin_id=UUID(version["twin_id"]),
+        version_number=version["version_number"],
+        based_on_version_number=version.get("based_on_version_number"),
+        profile=profile,
+        content_hash=profile.content_hash,
+        created_by_user_id=UUID(version["created_by_user_id"]),
+        created_at=datetime.fromisoformat(version["created_at"]),
+    )
+    return twin_view(twin, archetype)
+
+
 def _observation(
     key: str, value: Mapping[str, object], source: Mapping[str, object]
 ) -> dict[str, object]:
@@ -11084,19 +11502,19 @@ def _observation(
         "confidence": 0.6,
         "provenance": [dict(source)],
         "human_validation": "REQUIRED",
-        "rationale": None,
+        "rationale": "Simulated inference from the cited project brief.",
     }
 
 
-def _unknown_observation(key: str) -> dict[str, object]:
+def _unknown_observation(key: str, source: Mapping[str, object]) -> dict[str, object]:
     return {
         "observation_key": key,
         "value": {"kind": "UNKNOWN", "text": None, "items": [], "reason": None},
-        "epistemic_status": "UNSUPPORTED_ASSUMPTION",
+        "epistemic_status": "MODEL_INFERRED",
         "confidence": 0.0,
-        "provenance": [],
+        "provenance": [dict(source)],
         "human_validation": "REQUIRED",
-        "rationale": None,
+        "rationale": "No value was supplied for this field.",
     }
 
 

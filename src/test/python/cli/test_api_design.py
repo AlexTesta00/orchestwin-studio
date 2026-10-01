@@ -219,6 +219,7 @@ def start_iteration(session: Session, request: str, rules: Sequence[str] = ()) -
 def test_the_paths_of_the_design_routes() -> None:
     assert design_api.design_path("p") == "/projects/p/design"
     assert design_api.proposals_path("p") == "/projects/p/design/proposals"
+    assert design_api.regenerations_path("p") == "/projects/p/design/regenerations"
     assert design_api.evaluations_path("p") == "/projects/p/design/evaluations"
     assert design_api.mockup_job_path("p", "j") == "/projects/p/design/mockups/jobs/j"
     assert design_api.iteration_job_path("p", "j") == "/projects/p/design/iterations/jobs/j"

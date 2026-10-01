@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from orchestwin.knowledge.archive import KnowledgeArchiveError, read_verified_folder, verify_folder
+from orchestwin.knowledge.folder import build_knowledge_folder
 from orchestwin.knowledge.layout import KNOWLEDGE_MANIFEST, STAGES
 from orchestwin.knowledge.schema import validate_document
 from orchestwin.knowledge.state import ProjectStateSources
@@ -15,7 +16,11 @@ from orchestwin.knowledge.state_documents import current_reference
 from orchestwin.projects import acceptance_tests as acceptance_domain
 from orchestwin.projects import code_changes as changes_domain
 from orchestwin.projects import twin_learning as learning_domain
-from src.test.python.knowledge.knowledge_fixtures import partial_sources, state_sources
+from src.test.python.knowledge.knowledge_fixtures import (
+    PUBLISHED_AT,
+    partial_sources,
+    state_sources,
+)
 
 from .support.folders import (
     ARCHIVE_PROJECT_ID,
@@ -87,6 +92,44 @@ def test_the_archive_passes_the_verification_of_the_studio() -> None:
         "complete": True,
     }
     assert verified.manifest["state"] == EMPTY_STATE
+
+
+@pytest.mark.parametrize("through", STAGES)
+def test_the_default_language_keeps_the_original_italian_documents(through: str) -> None:
+    expected = build_knowledge_folder(
+        partial_sources(through, project_name=DEFAULT_PROJECT_NAME, state=ProjectStateSources()),
+        version_number=1,
+        created_at=PUBLISHED_AT,
+    )
+    actual = stage_folder(through=through)
+
+    assert actual.manifest["project"]["language"] == "it"
+    assert actual.files == expected.files
+    assert actual.content_hash == expected.content_hash
+
+
+@pytest.mark.parametrize("through", STAGES)
+def test_english_documents_are_explicit_and_keep_valid_artifact_references(through: str) -> None:
+    verified = read_verified_folder(partial_archive(through=through, language="en"))
+
+    assert verified.manifest["project"]["language"] == "en"
+    assert verified.documents["brief"]["brief"]["fields"]["description"].startswith(
+        "The team needs a web product"
+    )
+    assert (
+        verified.documents["brief"]
+        != read_verified_folder(partial_archive(through=through)).documents["brief"]
+    )
+
+
+def test_all_complete_folder_helpers_accept_an_explicit_english_fixture() -> None:
+    expected = stage_folder(through="design", language="en")
+
+    assert valid_folder(language="en").files == expected.files
+    assert valid_files(language="en") == expected.files
+    assert entries(valid_archive(language="en")) == expected.files
+    assert entries(state_archive(state=ProjectStateSources(), language="en")) == expected.files
+    assert valid_folder().manifest["project"]["language"] == "it"
 
 
 def test_the_name_and_the_version_reach_the_manifest() -> None:

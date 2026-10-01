@@ -11,8 +11,9 @@ from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.flows import review
 from orchestwin.cli.http import UrlTransport
 from orchestwin.cli.project import ProjectFolder
+from orchestwin.knowledge.folder import folder_archive
 
-from .support.folders import valid_archive
+from .support.folders import stage_folder
 from .support.terminal import command_context, run_ut, terminal
 from .test_api_design import Session, choose, choose_in_the_web, design_session, draw, propose
 from .test_design_generate import Unreachable
@@ -89,7 +90,10 @@ def test_an_italian_folder_asks_the_studio_for_italian_from_an_english_terminal(
         chosen(session)
         project = ProjectFolder(session.folder)
         project.update_link(language="en")
-        local_folder.unpack(valid_archive(), project.knowledge)
+        local_folder.unpack(
+            folder_archive(stage_folder(through="design", language="it")).content,
+            project.knowledge,
+        )
         before = session.count("POST", EVALUATIONS)
         run = session.ut("design", "review")
         evaluations = session.requests("POST", EVALUATIONS)[before:]

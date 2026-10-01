@@ -87,7 +87,7 @@ def sections(document: str) -> dict[str, tuple[str, str]]:
     return {parts[index]: (parts[index + 1], parts[index + 2]) for index in range(1, len(parts), 3)}
 
 
-def test_a_folder_without_additions_keeps_every_byte_and_its_content_hash() -> None:
+def test_a_folder_without_design_additions_keeps_the_expected_base_files() -> None:
     sources = real_sources()
     folder = build_knowledge_folder(sources, version_number=3, created_at=PUBLISHED_AT)
     design = folder.files[schema_document("design")]

@@ -275,7 +275,7 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
     assert sum("Path TP-" in line and line.endswith("...") for line in lines) == 8
     body = json.loads(plan_body.body.decode("utf-8"))
     assert body["criteria"] is None and body["earlier"] is None
-    assert body["locale"] == "it-IT"
+    assert body["locale"] == "en-US"
     assert body["application"] == {"kind": "URL", "address": ADDRESS}
     assert body["snapshot"]["url"] == ADDRESS
     assert body["snapshot"]["title"] == "Tip calculator"
@@ -321,7 +321,7 @@ def test_a_first_run_plans_runs_both_browsers_records_and_is_reviewed(
         "application": {"kind": "URL", "address": ADDRESS},
         "browser": "all",
     }
-    assert work.site.starts[0] == ("chrome", "it-IT", True)
+    assert work.site.starts[0] == ("chrome", "en-US", True)
     assert all(direct for _, _, direct in work.site.starts)
     assert all(page_item.closed for page_item in work.site.pages)
 

@@ -114,6 +114,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Scarica la cartella di conoscenza: lancia `ut package publish`.",
         "en": "Download the knowledge folder: launch `ut package publish`.",
     },
+    "common.next_update_sections": {
+        "it": "Aggiorna le sezioni con `ut sections update`.",
+        "en": "Update the sections with `ut sections update`.",
+    },
+    "common.next_prepare_twins": {
+        "it": "Prepara di nuovo i twin con `ut init`.",
+        "en": "Prepare the twins again with `ut init`.",
+    },
+    "common.next_prepare_design": {
+        "it": "Prepara di nuovo il design con `ut design regenerate`.",
+        "en": "Prepare the design again with `ut design regenerate`.",
+    },
     "common.next_unknown": {
         "it": "Prossima azione nello Studio: {code}.",
         "en": "Next action in the Studio: {code}.",

@@ -341,7 +341,9 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
     if "team" in present:
         files[stage_text("team")] = team_markdown(sources.team, sources.team_gate)
     if "twins" in present:
-        files[stage_text("twins")] = twins_markdown(sources.modeling, sources.modeling_gate)
+        files[stage_text("twins")] = twins_markdown(
+            sources.modeling, sources.modeling_gate, language=folder_language(sources)
+        )
         files[FEEDBACK_LEARNING] = json_text(learning_document(sources))
     if "requirements" in present:
         files.update(_requirement_files(sources, package))
@@ -349,7 +351,7 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
         files[stage_document(stage)] = json_text(stage_document_payload(sources, stage))
     for twin in portable_twins(sources):
         files[twin.document_path] = json_text(twin.document)
-        files[twin.text_path] = twin_markdown(twin.document)
+        files[twin.text_path] = twin_markdown(twin.document, language=folder_language(sources))
     files.update(
         schema_files(design_additions=package is not None and has_design_additions(package))
     )

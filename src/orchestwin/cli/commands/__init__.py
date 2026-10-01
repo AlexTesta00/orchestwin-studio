@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from orchestwin.cli.commands import (
     align,
+    archetypes,
     code,
     design,
     init,
@@ -25,6 +26,7 @@ COMMANDS = (
     init,
     design,
     twins,
+    archetypes,
     package,
     align,
     watch,

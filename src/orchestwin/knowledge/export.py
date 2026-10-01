@@ -93,6 +93,13 @@ class KnowledgeSourceLoader:
             gate = await current_gate(**scope)
             if version is None or not is_approved(gate, version):
                 break
+            if (
+                name == "modeling"
+                and not await self.user_modeling_services.commands.snapshot_context_is_current(
+                    **scope, snapshot=version
+                )
+            ):
+                break
             approved[name] = version
             approved[f"{name}_gate"] = gate
         feedback = (

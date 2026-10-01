@@ -67,6 +67,10 @@ def proposals_path(project_id: str) -> str:
     return f"{design_path(project_id)}/proposals"
 
 
+def regenerations_path(project_id: str) -> str:
+    return f"{design_path(project_id)}/regenerations"
+
+
 def evaluations_path(project_id: str) -> str:
     return f"{design_path(project_id)}/evaluations"
 

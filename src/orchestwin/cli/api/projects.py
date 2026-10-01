@@ -39,6 +39,9 @@ STAGE_ACTIONS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 DOWNLOAD_FOLDER: Final = "DOWNLOAD_FOLDER"
+UPDATE_SECTIONS: Final = "UPDATE_SECTIONS"
+PREPARE_TWINS: Final = "PREPARE_TWINS"
+PREPARE_DESIGN: Final = "PREPARE_DESIGN"
 ALIGN_COMMAND: Final = "ut align"
 NEXT_COMMANDS: Final[Mapping[str, str]] = MappingProxyType(
     {
@@ -49,6 +52,9 @@ NEXT_COMMANDS: Final[Mapping[str, str]] = MappingProxyType(
         "APPROVE_REQUIREMENTS": "ut init",
         "APPROVE_DESIGN": "ut design",
         DOWNLOAD_FOLDER: "ut package publish",
+        UPDATE_SECTIONS: "ut sections update",
+        PREPARE_TWINS: "ut init",
+        PREPARE_DESIGN: "ut design regenerate",
     }
 )
 

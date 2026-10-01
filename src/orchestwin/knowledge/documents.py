@@ -17,9 +17,21 @@ from orchestwin.agents.proposals import TeamProposalVersion
 from orchestwin.agents.selection_rules import RuleEvidence
 from orchestwin.artifacts.design_packages import DesignPackageVersion
 from orchestwin.artifacts.visual_catalog import ARCHETYPES, LayoutArchetype
-from orchestwin.knowledge.layout import STAGE_LABELS, STAGES, VIEW_STAGES, present_stages
+from orchestwin.knowledge.layout import (
+    STAGE_LABELS,
+    STAGES,
+    VIEW_STAGES,
+    present_stages,
+    twin_slug,
+    twin_text,
+)
 from orchestwin.projects.briefs import BriefField, ProjectBriefVersion
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
+from orchestwin.twins.persistence.snapshots import (
+    persona_version_from_snapshot,
+    user_twin_version_from_snapshot,
+)
+from orchestwin.twins.representation import twin_view
 from orchestwin.twins.user_twins import UserModelingSnapshotVersion
 from orchestwin.workflow.gates import HumanGate
 
@@ -339,11 +351,13 @@ def _persona_names(snapshot: Mapping[str, object]) -> dict[tuple[str, object], s
     }
 
 
-def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str:
+def twins_markdown(
+    version: UserModelingSnapshotVersion, gate: HumanGate, *, language: str | None = None
+) -> str:
     snapshot = version.snapshot.to_snapshot()
     personas = _persona_names(snapshot)
     lines = _version_lines(STAGE_LABELS["twins"], version, gate)
-    lines.extend(["## Personas", ""])
+    lines.extend(["## Archetipi" if language == "it" else "## Archetypes", ""])
     for persona in snapshot["persona_versions"]:
         profile = persona["profile"]
         lines.extend(
@@ -354,7 +368,11 @@ def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str
                 f"{title_text(profile['confirmation_status'])}, "
                 f"version {persona['version_number']}.",
                 "",
-                *observation_table(profile["observations"]),
+                *markdown_bullets(
+                    _observation_value(item["value"])
+                    for item in profile["observations"]
+                    if item["observation_key"] == "persona.summary"
+                ),
                 "",
             ]
         )
@@ -363,6 +381,17 @@ def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str
         profile = twin["profile"]
         reference = profile["persona_reference"]
         persona = personas.get((str(reference["persona_id"]), reference["version_number"]), UNSET)
+        exact = next(
+            item
+            for item in snapshot["persona_versions"]
+            if item["persona_id"] == reference["persona_id"]
+            and item["content_hash"] == reference["content_hash"]
+        )
+        view = twin_view(
+            user_twin_version_from_snapshot(twin), persona_version_from_snapshot(exact)
+        )
+        texts = _twin_texts(language)
+        path = twin_text(twin_slug(profile["name"], twin["twin_id"])).removeprefix("twins/")
         lines.extend(
             [
                 f"### {profile['name']}",
@@ -370,9 +399,12 @@ def twins_markdown(version: UserModelingSnapshotVersion, gate: HumanGate) -> str
                 f"Version {twin['version_number']}, "
                 f"validation status {profile['validation_status']}, human validation "
                 f"{'required' if profile['requires_human_validation'] else 'not required'}, "
-                f"persona {persona} (v{reference['version_number']}).",
+                f"{texts['archetype']} {persona} (v{reference['version_number']}).",
                 "",
-                *observation_table(profile["observations"]),
+                f"{texts['basis']}: {texts[view['basis']]}. "
+                + _observation_value(view["persona"]["description"]["value"]),
+                texts["provisional"] if view["basis"] == "PROVISIONAL" else "",
+                f"[{texts['persona']} · {texts['why']}]({path})",
                 "",
             ]
         )
@@ -782,41 +814,154 @@ def views_markdown(
     return "\n".join(lines)
 
 
-def twin_markdown(document: Mapping[str, object]) -> str:
+def _twin_texts(language: str | None) -> dict[str, str]:
+    labels = {
+        "archetype": ("Archetipo", "Archetype"),
+        "persona": ("Persona", "Persona"),
+        "basis": ("Fondamento", "Basis"),
+        "PROVISIONAL": ("Provvisorio", "Provisional"),
+        "EVIDENCE_BASED": ("Fondato su evidenze", "Evidence based"),
+        "represents": ("Rappresenta", "Represents"),
+        "does_not_represent": ("Non rappresenta", "Does not represent"),
+        "contexts": ("Contesti coperti", "Covered contexts"),
+        "persona_contexts": ("Contesti", "Contexts"),
+        "evidence_gaps": ("Limiti delle evidenze", "Evidence gaps"),
+        "description": ("Descrizione", "Description"),
+        "goals": ("Obiettivi", "Goals"),
+        "needs": ("Bisogni", "Needs"),
+        "behaviours": ("Comportamenti", "Behaviours"),
+        "pain_points": ("Difficoltà", "Pain points"),
+        "constraints": ("Vincoli", "Constraints"),
+        "EVIDENCED": ("Evidenziato", "Evidenced"),
+        "INFERRED": ("Dedotto", "Inferred"),
+        "HYPOTHESIZED": ("Ipotizzato", "Hypothesized"),
+        "CONTESTED": ("Contestato", "Contested"),
+        "UNKNOWN": ("Sconosciuto", "Unknown"),
+        "why": ("Perché?", "Why?"),
+        "missing_rationale": ("Motivazione non fornita.", "Rationale not provided."),
+        "missing_sources": ("Fonti non fornite.", "Sources not provided."),
+        "provisional": (
+            "Il brief e le scelte del proprietario non sono evidenze su utenti reali.",
+            "The brief and the owner's choices are not evidence about real users.",
+        ),
+    }
+    return {key: value[0 if language == "it" else 1] for key, value in labels.items()}
+
+
+def _claim_lines(label: str, claim: Mapping[str, object], texts: Mapping[str, str]) -> list[str]:
+    value = claim["value"]
+    shown = (
+        texts["UNKNOWN"] if value["kind"] in {"UNKNOWN", "ABSTAINED"} else _observation_value(value)
+    )
+    sources = claim["provenance"]
+    return [
+        f"- **{label}**: {shown} [{texts[claim['display_status']]}]",
+        "",
+        f"<details><summary>{texts['why']} · {label}</summary>",
+        "",
+        str(claim["rationale"] or texts["missing_rationale"]),
+        "",
+        *(
+            markdown_bullets(
+                " · ".join(
+                    str(source[key])
+                    for key in (
+                        "source_kind",
+                        "source_id",
+                        "source_version",
+                        "content_hash",
+                        "locator",
+                        "summary",
+                    )
+                    if source.get(key) is not None
+                )
+                for source in sources
+            )
+            if sources
+            else [texts["missing_sources"]]
+        ),
+        "",
+        "</details>",
+        "",
+    ]
+
+
+def twin_markdown(document: Mapping[str, object], *, language: str | None = None) -> str:
     origin = document["origin"]
     persona = document["persona"]
     twin = document["twin"]
     profile = twin["profile"]
     persona_profile = persona["profile"]
     modeling = origin["user_modeling"]
+    view = twin_view(user_twin_version_from_snapshot(twin), persona_version_from_snapshot(persona))
+    texts = _twin_texts(language)
     lines = [
         f"# {profile['name']}",
         "",
-        f"User twin version {twin['version_number']}, content hash "
-        f"`{twin['content_hash']}`, of the project {origin['project_name']}. "
-        f"Validation status {profile['validation_status']}, human "
-        f"validation {'required' if profile['requires_human_validation'] else 'not required'}. "
-        f"Approved with user modeling version {modeling['version_number']} on "
-        f"{origin['approved_at']}.",
+        (
+            f"User twin version {twin['version_number']}, content hash "
+            f"`{twin['content_hash']}`, of the project {origin['project_name']}. "
+            f"Validation status {profile['validation_status']}, human "
+            f"validation {'required' if profile['requires_human_validation'] else 'not required'}. "
+            f"Approved with user modeling version {modeling['version_number']} on "
+            f"{origin['approved_at']}."
+            if language != "it"
+            else f"User Twin versione {twin['version_number']}, hash del contenuto "
+            f"`{twin['content_hash']}`, del progetto {origin['project_name']}. "
+            f"Stato di validazione {profile['validation_status']}, validazione umana "
+            f"{'richiesta' if profile['requires_human_validation'] else 'non richiesta'}. "
+            f"Approvato con il modello utenti versione {modeling['version_number']} il "
+            f"{origin['approved_at']}."
+        ),
         "",
-        "A user twin is a model of a kind of user, not a person: its observations are "
-        "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
-        "document is a self-contained copy that another OrchesTwin project can import.",
+        (
+            "A user twin is a model of a kind of user, not a person: its observations are "
+            "assumptions with a declared epistemic status and confidence. `twin.json` next to this "
+            "document is a self-contained copy that another OrchesTwin project can import."
+            if language != "it"
+            else "Uno User Twin è un modello di un tipo di utente: le sue osservazioni sono "
+            "ipotesi con stato epistemico e confidenza dichiarati. `twin.json` accanto a "
+            "questo documento è una copia autonoma che un altro progetto OrchesTwin può importare."
+        ),
         "",
-        "## Persona",
+        f"## {texts['archetype']}",
         "",
-        f"{persona_profile['name']}: source {title_text(persona_profile['source'])}, "
+        f"{persona_profile['name']}: {'fonte' if language == 'it' else 'source'} "
+        f"{title_text(persona_profile['source'])}, "
         f"{title_text(persona_profile['kind'])}, "
-        f"{title_text(persona_profile['confirmation_status'])}, version "
+        f"{title_text(persona_profile['confirmation_status'])}, "
+        f"{'versione' if language == 'it' else 'version'} "
         f"{persona['version_number']}.",
         "",
-        *observation_table(persona_profile["observations"]),
-        "",
-        "## Profile",
-        "",
-        *observation_table(profile["observations"]),
+        f"{texts['basis']}: **{texts[view['basis']]}**.",
+        texts["provisional"] if view["basis"] == "PROVISIONAL" else "",
         "",
     ]
+    for field in ("represents", "does_not_represent", "contexts", "evidence_gaps"):
+        lines.extend(_claim_lines(texts[field], view[field], texts))
+    lines.extend(
+        [f"## {texts['persona']}", "", f"<details><summary>{texts['persona']}</summary>", ""]
+    )
+    for field, claim in view["persona"].items():
+        lines.extend(
+            _claim_lines(texts["persona_contexts" if field == "contexts" else field], claim, texts)
+        )
+    lines.extend(
+        [
+            "</details>",
+            "",
+            f"<details><summary>{'Profilo' if language == 'it' else 'Profile'} · JSON</summary>",
+            "",
+            "## Profilo" if language == "it" else "## Profile",
+            "",
+            *observation_table(profile["observations"]),
+            "",
+            "[JSON](twin.json)",
+            "",
+            "</details>",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

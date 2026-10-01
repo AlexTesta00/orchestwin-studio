@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from functools import cache
 
 from orchestwin.knowledge.folder import KnowledgeFolder, build_knowledge_folder, folder_archive
 from orchestwin.knowledge.layout import STAGES
+from orchestwin.knowledge.stage_documents import stage_versions
 from orchestwin.knowledge.state import ProjectStateSources
 from src.test.python.knowledge.knowledge_fixtures import (
     PUBLISHED_AT,
     REAL_PROJECT_ID,
     RECEPTION_TWIN,
     VOLUNTEER_TWIN,
-    partial_sources,
     real_documents,
+    sources_of,
 )
 
 DEFAULT_PROJECT_NAME = "Calcolo mancia"
@@ -23,6 +26,88 @@ TEST_ADDRESS = "http://127.0.0.1:41234/"
 TEST_TITLE = "Lista ospiti"
 TASK_COMMIT = "4f2a9c1e7b3d5a8f0c6e2b9d1a7f3c5e8b0d2a46"
 LEARNING_UPDATE_ID = "00000000-0000-4000-8000-00000000f001"
+
+
+def _fixture_documents(language: str) -> dict[str, dict[str, object]]:
+    documents = real_documents()
+    if language == "it":
+        return documents
+    brief = documents["brief"]["brief"]["fields"]
+    brief["description"] = (
+        "The team needs a web product to manage the guest list and check reservations at the reception desk."
+    )
+    brief["problem"] = (
+        "The information is spread across files and the team cannot find the current guest list when people arrive."
+    )
+    brief["goals"] = [
+        "Keep the information available to the team.",
+        "Check the guest list and record arrivals.",
+    ]
+    brief["target_users"] = ["Reception staff and volunteer organizers."]
+    brief["budget"] = "No budget is available."
+    brief["definition_of_done"] = ["A volunteer adds three guests and sees them on the list."]
+    brief["domain"] = "Community events"
+    brief["functional_requirements"] = [
+        "Enter a guest's name and add it to the list.",
+        "Show the list with a sequence number and the guest's name.",
+        "Reject empty names with a visible message.",
+    ]
+    brief["non_functional_requirements"] = [
+        "The product must be easy to use on a tablet.",
+        "The user does not need to register.",
+    ]
+    brief["risks"] = ["The same guest name may be entered more than once."]
+    brief["stakeholders"] = ["The workshop coordinator."]
+    brief["technical_constraints"] = ["A static web application with no backend."]
+    brief["temporal_constraints"] = "The product must be ready before the next workshop."
+    specification = documents["requirements"]["specification"]
+    for item in specification["requirements"]:
+        item["statement"] = (
+            f"The system must support {item['code']} for the user and keep the information available to the team."
+        )
+    for item in specification["user_stories"]:
+        item["goal"] = f"complete {item['code']} with the current information for the team"
+    for item in specification["acceptance_criteria"]:
+        item["statement"] = (
+            f"When the user follows {item['code']}, the system shows the current information and confirms the action."
+        )
+    hashes: dict[str, str] = {}
+
+    def refresh(value):
+        if isinstance(value, dict):
+            return {key: refresh(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [refresh(item) for item in value]
+        return hashes.get(value, value) if isinstance(value, str) else value
+
+    def rehash(version, key):
+        previous = version["content_hash"]
+        current = hashlib.sha256(
+            json.dumps(
+                version[key], ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest()
+        version["content_hash"] = current
+        hashes[previous] = current
+
+    for stage, key in (
+        ("brief", "brief"),
+        ("team", "proposal"),
+        ("twins", "snapshot"),
+        ("requirements", "specification"),
+        ("design", "package"),
+    ):
+        version = refresh(documents[stage])
+        if stage == "twins":
+            for persona in version[key]["persona_versions"]:
+                rehash(persona, "profile")
+            version = refresh(version)
+            for twin in version[key]["twin_versions"]:
+                rehash(twin, "profile")
+            version = refresh(version)
+        rehash(version, key)
+        documents[stage] = version
+    return documents
 
 
 @cache
@@ -79,9 +164,19 @@ def stage_folder(
     version_number: int = 1,
     created_at: datetime = PUBLISHED_AT,
     state: ProjectStateSources | None = None,
+    language: str = "it",
 ) -> KnowledgeFolder:
-    sources = partial_sources(
-        through, project_name=project_name, state=state or ProjectStateSources()
+    present = STAGES[: STAGES.index(through) + 1]
+    versions = {
+        stage: version
+        for stage, version in stage_versions(_fixture_documents(language)).items()
+        if stage in present
+    }
+    sources = sources_of(
+        versions,
+        project_id=REAL_PROJECT_ID,
+        project_name=project_name,
+        state=state or ProjectStateSources(),
     )
     return build_knowledge_folder(sources, version_number=version_number, created_at=created_at)
 
@@ -91,30 +186,49 @@ def valid_folder(
     project_name: str = DEFAULT_PROJECT_NAME,
     version_number: int = 1,
     created_at: datetime = PUBLISHED_AT,
+    language: str = "it",
 ) -> KnowledgeFolder:
     return stage_folder(
         through=COMPLETE_STAGE,
         project_name=project_name,
         version_number=version_number,
         created_at=created_at,
+        language=language,
     )
 
 
-def valid_archive(*, project_name: str = DEFAULT_PROJECT_NAME, version_number: int = 1) -> bytes:
-    folder = valid_folder(project_name=project_name, version_number=version_number)
+def valid_archive(
+    *, project_name: str = DEFAULT_PROJECT_NAME, version_number: int = 1, language: str = "it"
+) -> bytes:
+    folder = valid_folder(
+        project_name=project_name, version_number=version_number, language=language
+    )
     return folder_archive(folder).content
 
 
 def valid_files(
-    *, project_name: str = DEFAULT_PROJECT_NAME, version_number: int = 1
+    *, project_name: str = DEFAULT_PROJECT_NAME, version_number: int = 1, language: str = "it"
 ) -> dict[str, str]:
-    return dict(valid_folder(project_name=project_name, version_number=version_number).files)
+    return dict(
+        valid_folder(
+            project_name=project_name, version_number=version_number, language=language
+        ).files
+    )
 
 
 def partial_archive(
-    *, through: str, project_name: str = DEFAULT_PROJECT_NAME, version_number: int = 1
+    *,
+    through: str,
+    project_name: str = DEFAULT_PROJECT_NAME,
+    version_number: int = 1,
+    language: str = "it",
 ) -> bytes:
-    folder = stage_folder(through=through, project_name=project_name, version_number=version_number)
+    folder = stage_folder(
+        through=through,
+        project_name=project_name,
+        version_number=version_number,
+        language=language,
+    )
     return folder_archive(folder).content
 
 
@@ -123,12 +237,14 @@ def state_archive(
     project_name: str = DEFAULT_PROJECT_NAME,
     version_number: int = 1,
     state: ProjectStateSources,
+    language: str = "it",
 ) -> bytes:
     folder = stage_folder(
         through=COMPLETE_STAGE,
         project_name=project_name,
         version_number=version_number,
         state=state,
+        language=language,
     )
     return folder_archive(folder).content
 

@@ -88,9 +88,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "design.option_action": {
         "it": "che cosa fare: show (mostra), open (apre le anteprime), choose (sceglie "
         "un'alternativa), change (chiede una modifica), review (revisione dei twin), approve "
-        "(approva); senza azione il comando ti guida passo per passo",
+        "(approva), regenerate (rigenera le alternative); senza azione il comando ti guida "
+        "passo per passo",
         "en": "what to do: show, open (the previews), choose (an alternative), change (ask for "
-        "a change), review (by the twins), approve; without an action the command guides you "
+        "a change), review (by the twins), approve, regenerate (the alternatives); without "
+        "an action the command guides you "
         "step by step",
     },
     "design.option_value": {
@@ -632,6 +634,51 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The design is behind the sections upstream, so for now the Studio does not change "
         "it: nothing was applied. Re-anchor it with `ut sections update`, with its content "
         "unchanged, then try again.",
+    },
+    "design.recovery_requirement_removed": {
+        "it": "Il design cita {codes}, che la Definizione non contiene più. Puoi leggere le "
+        "anteprime storiche; per continuare rigenera le alternative con `ut design regenerate`.",
+        "en": "The design cites {codes}, which the Definition no longer contains. You can read "
+        "the historical previews; to continue, regenerate the alternatives with "
+        "`ut design regenerate`.",
+    },
+    "design.recovery_prepare_again": {
+        "it": "Questo design va preparato di nuovo. Puoi leggere le anteprime storiche; "
+        "per continuare rigenera le alternative con `ut design regenerate`.",
+        "en": "This design needs to be prepared again. You can read the historical previews; "
+        "to continue, regenerate the alternatives with `ut design regenerate`.",
+    },
+    "design.recovery_revision_pending": {
+        "it": "C'è una modifica proposta da decidere nello Studio web. Decidila prima di "
+        "rigenerare o cambiare il design; non ho avviato alcuna generazione.",
+        "en": "A proposed change is waiting for your decision in the web Studio. Decide it "
+        "before regenerating or changing the design; no generation was started.",
+    },
+    "design.recovery_blocked": {
+        "it": "Il design non può essere rigenerato o cambiato adesso. {blocked} "
+        "`ut sections` mostra che cosa completare prima.",
+        "en": "The design cannot be regenerated or changed now. {blocked} "
+        "`ut sections` shows what needs to be completed first.",
+    },
+    "design.menu_regenerate": {
+        "it": "Rigenera le alternative dai passi approvati",
+        "en": "Regenerate the alternatives from the approved steps",
+    },
+    "design.menu_update_sections": {
+        "it": "Aggiorna i collegamenti con `ut sections update`",
+        "en": "Update the links with `ut sections update`",
+    },
+    "design.regenerate_explicit": {
+        "it": "Preparo nuove alternative dai passi approvati. Il design precedente resta "
+        "nello storico; dovrai scegliere e approvare il nuovo design.",
+        "en": "I will prepare new alternatives from the approved steps. The previous design "
+        "stays in the history; you will need to choose and approve the new design.",
+    },
+    "design.no_model_regenerate": {
+        "it": "Questo Studio non ha un modello collegato per rigenerare le alternative. "
+        "Chi gestisce lo Studio può collegarne uno.",
+        "en": "This Studio has no model connected to regenerate the alternatives. Whoever "
+        "runs the Studio can connect one.",
     },
     "design.behind_blocked": {
         "it": "Il design è rimasto indietro rispetto alle sezioni a monte, quindi per ora lo "

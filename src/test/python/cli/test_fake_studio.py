@@ -2352,75 +2352,38 @@ def test_the_gesture_re_anchors_the_design_after_a_requirements_change() -> None
         assert studio.errors == []
 
 
-def test_a_new_brief_asks_to_prepare_the_perspectives_again_before_the_gesture() -> None:
+def test_a_new_brief_reanchors_valid_perspectives_before_the_other_sections() -> None:
     with FakeStudio(job_polls=0) as studio:
         client = signed_in(studio)
         seeded = studio.seed_project(owner=EMAIL, name="Seme", through="design")
         base = f"/projects/{seeded.id}"
         twins_before = twin_identities(seeded.current("twins"))
-
+        team_before = seeded.current("team")
         behind = studio.seed_brief_change(seeded.id)
-        assert states(behind) == {
-            "BRIEF": ("FINE", 2, [], None, []),
-            "TEAM": ("TO_UPDATE", 1, ["BRIEF_CHANGED"], "PREPARE_AGAIN", []),
-            "USER_TWINS": (
-                "TO_UPDATE",
-                1,
-                ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED"],
-                "UPSTREAM_NOT_READY",
-                [],
-            ),
-            "REQUIREMENTS": (
-                "TO_UPDATE",
-                1,
-                ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED"],
-                "UPSTREAM_NOT_READY",
-                [],
-            ),
-            "DESIGN": ("TO_UPDATE", 2, ["REQUIREMENTS_CHANGED"], "UPSTREAM_NOT_READY", []),
-            "PACKAGE": ("NOT_STARTED", None, [], None, []),
+        assert states(behind)["TEAM"] == ("TO_UPDATE", 1, ["BRIEF_CHANGED"], None, [])
+        assert behind["alignment"]["available"]
+        status = client.get(base + "/team/context-alignment").json()
+        assert status == {
+            "aligned": False,
+            "issue": None,
+            "team_version_number": 1,
+            "brief_version_number": 2,
         }
-        assert behind["alignment"]["available"] is False
         assert published(client, base) == (409, {"detail": {"code": "TEAM_OUTDATED"}})
-        refused = client.post(base + "/sections/alignment").json()
-        assert refused["status"] == "NOTHING_TO_ALIGN"
-        assert refused["results"] == [
-            {
-                "key": "USER_TWINS",
-                "outcome": "BLOCKED",
-                "issue": "UPSTREAM_NOT_READY",
-                "version_number": None,
-                "codes": [],
-            },
-            {
-                "key": "REQUIREMENTS",
-                "outcome": "SKIPPED",
-                "issue": None,
-                "version_number": None,
-                "codes": [],
-            },
-            {
-                "key": "DESIGN",
-                "outcome": "SKIPPED",
-                "issue": None,
-                "version_number": None,
-                "codes": [],
-            },
-        ]
-        assert refused["sections"] == behind
-
-        prepared = client.post(base + "/team-proposals")
-        assert (prepared.status, prepared.json()["status"]) == (201, "CREATED")
+        aligned = client.post(base + "/team/context-alignment")
+        assert aligned.status == 200
+        team = seeded.current("team")
+        assert aligned.json() == {
+            "version_id": team["id"],
+            "version_number": 2,
+            "based_on_version_number": 1,
+            "content_hash": team["content_hash"],
+            "gate_approval_required": True,
+        }
+        assert team["revision_kind"] == "OWNER_EDITED"
+        assert team["members"] == team_before["members"]
+        assert not seeded.approved("team")
         approve(client, base + "/gates/agent-team/submit", base + "/gates/agent-team/decisions")
-        ready = client.get(base + "/sections").json()
-        assert states(ready)["TEAM"] == ("FINE", 2, [], None, [])
-        assert states(ready)["USER_TWINS"] == (
-            "TO_UPDATE",
-            1,
-            ["BRIEF_CHANGED", "PERSPECTIVES_CHANGED"],
-            None,
-            [],
-        )
         answer = client.post(base + "/sections/alignment").json()
         assert answer["status"] == "ALIGNED"
         assert [item["key"] for item in answer["results"]] == [
@@ -2431,6 +2394,10 @@ def test_a_new_brief_asks_to_prepare_the_perspectives_again_before_the_gesture()
         assert twin_identities(seeded.current("twins")) == twins_before
         assert seeded.current("twins")["snapshot"]["project_brief_reference"]["version_number"] == 2
         assert published(client, base)[0] == 201
+        assert not any(
+            request.method == "POST" and request.path.endswith("/team-proposals")
+            for request in studio.requests
+        )
         assert studio.errors == []
 
 
@@ -2735,10 +2702,10 @@ def test_the_requirements_follow_the_twins_through_their_route() -> None:
             lost_base + "/user-modeling/gate/submit",
             lost_base + "/user-modeling/gate/decision",
         )
-        assert client.post(lost_base + "/requirements/twin-alignment").json() == {
-            "detail": {"code": "TWIN_NO_LONGER_AVAILABLE"}
-        }
-        assert states(lost.sections())["REQUIREMENTS"][3] == "TWIN_NO_LONGER_AVAILABLE"
+        reanchored = client.post(lost_base + "/requirements/twin-alignment")
+        assert reanchored.status == 201
+        assert reanchored.json()["gate_approval_required"]
+        assert not lost.approved("requirements")
         assert studio.errors == []
 
 

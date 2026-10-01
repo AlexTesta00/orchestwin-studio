@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from datetime import datetime
 from uuid import UUID
 
@@ -86,6 +87,12 @@ def modeling_version_from_document(
     document: Mapping[str, object],
 ) -> UserModelingSnapshotVersion:
     envelope = _envelope("twins", document)
+    document = deepcopy(dict(document))
+    payload = document.get("snapshot")
+    if isinstance(payload, dict):
+        for version in payload.get("twin_versions") or ():
+            if isinstance(version, dict):
+                version.pop("view", None)
     snapshot = _payload("twins", document, user_modeling_snapshot_from_snapshot)
     return _built(
         "twins",
