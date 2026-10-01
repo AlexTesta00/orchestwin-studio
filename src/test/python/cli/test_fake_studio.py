@@ -766,6 +766,29 @@ def test_a_mockup_that_would_pass_the_ceiling_fails_inside_its_job() -> None:
         assert studio.spent_microusd == 1_000_000
 
 
+@pytest.mark.parametrize(
+    ("billing", "paid"), [("SUBSCRIPTION", False), ("API", True), ("MIXED", True)]
+)
+def test_the_budget_can_say_how_the_generations_are_billed(billing: str, paid: bool) -> None:
+    with FakeStudio(billing=billing) as studio:
+        client = signed_in(studio)
+        budget = client.get("/model-runtime/budget").json()
+        capabilities = client.get(new_project(client) + "/design/mockups/capabilities").json()
+
+    assert budget["billing"] == billing
+    assert budget["total_microusd"] == 60_000_000
+    assert capabilities["paid"] is paid
+
+
+def test_an_older_budget_has_no_billing_and_an_unknown_one_is_refused() -> None:
+    with FakeStudio() as studio:
+        budget = signed_in(studio).get("/model-runtime/budget").json()
+
+    assert "billing" not in budget
+    with pytest.raises(ValueError):
+        FakeStudio(billing="FREE")
+
+
 def test_a_studio_without_a_model_answers_like_the_real_one() -> None:
     with FakeStudio(hosted=False, job_polls=0) as studio:
         client = signed_in(studio)
@@ -795,6 +818,7 @@ def test_a_studio_without_a_model_answers_like_the_real_one() -> None:
             "generated_mockups": False,
             "iterations": False,
             "model": None,
+            "paid": True,
             "static_check": False,
         }
         current = client.get(seeded_base + "/design/current").json()

@@ -56,7 +56,13 @@ KNOWLEDGE_LABEL = f"{KNOWLEDGE}/"
 TAMPERED_FILE = "brief/brief.md"
 APPROVED = "APPROVED"
 MANDATORY = "MANDATORY"
-NO_MODEL = {"generated_mockups": False, "iterations": False, "model": None, "static_check": False}
+NO_MODEL = {
+    "generated_mockups": False,
+    "iterations": False,
+    "model": None,
+    "paid": True,
+    "static_check": False,
+}
 IMPORTED_STAGES = 5
 ALTERNATIVES = 3
 MANDATORY_SPECIALISTS: Mapping[str, str] = {

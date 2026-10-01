@@ -232,6 +232,7 @@ LANGUAGES = ("it", "en")
 STAGES = ("brief", "team", "twins", "requirements", "design")
 PROJECT_MODES = ("GREENFIELD_GENERATION", "BROWNFIELD_ASSESSMENT")
 JOB_STATUSES = ("RUNNING", "SUCCEEDED", "REJECTED", "FAILED")
+BILLINGS = ("SUBSCRIPTION", "API", "MIXED")
 REQUEST_OPERATIONS = (
     "PERSONA_PROPOSAL",
     "USER_TWIN_GENERATION",
@@ -2323,6 +2324,7 @@ class FakeStudio:
         hosted: bool = True,
         budget_usd: float | None = 60.0,
         spent_usd: float = 0.0,
+        billing: str | None = None,
         job_polls: int = 2,
         now: Callable[[], datetime] | None = None,
     ) -> None:
@@ -2336,9 +2338,12 @@ class FakeStudio:
             raise ValueError("budget_usd must be positive or None")
         if spent_usd < 0:
             raise ValueError("spent_usd must not be negative")
+        if billing is not None and billing not in BILLINGS:
+            raise ValueError("billing must be SUBSCRIPTION, API, MIXED or None")
         self.language = language
         self.twins = twins
         self.hosted = hosted
+        self.billing = billing
         self.job_polls = job_polls
         self.requests: list[RecordedRequest] = []
         self.errors: list[str] = []
@@ -3170,18 +3175,18 @@ class FakeStudio:
             raise _Refusal(503, {"code": "REAL_MODEL_RUNTIME_NOT_CONFIGURED"})
         if self._budget is None:
             raise _Refusal(503, {"code": "GENERATION_BUDGET_NOT_CONFIGURED"})
-        return _Answer(
-            200,
-            {
-                "currency": "USD",
-                "per_generation_microusd": min(PER_GENERATION_MICROUSD, self._budget),
-                "per_project_microusd": self._budget,
-                "total_microusd": self._budget,
-                "spent_total_microusd": self._spent,
-                "remaining_total_microusd": max(self._budget - self._spent, 0),
-                "period_start": None,
-            },
-        )
+        document: dict[str, object] = {
+            "currency": "USD",
+            "per_generation_microusd": min(PER_GENERATION_MICROUSD, self._budget),
+            "per_project_microusd": self._budget,
+            "total_microusd": self._budget,
+            "spent_total_microusd": self._spent,
+            "remaining_total_microusd": max(self._budget - self._spent, 0),
+            "period_start": None,
+        }
+        if self.billing is not None:
+            document["billing"] = self.billing
+        return _Answer(200, document)
 
     def _route_readiness(self, call: _Call) -> _Answer:
         if not self.hosted:
@@ -5764,6 +5769,7 @@ class FakeStudio:
                 "generated_mockups": self.hosted,
                 "iterations": self.hosted,
                 "model": MODEL if self.hosted else None,
+                "paid": self.billing != "SUBSCRIPTION",
                 "static_check": False,
             },
         )
