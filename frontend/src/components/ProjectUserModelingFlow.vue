@@ -61,12 +61,14 @@ const props = withDefaults(
     autoLoad?: boolean;
     upstream?: UpstreamValue;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
     autoLoad: true,
     upstream: null,
     active: true,
+    sectionsMode: false,
   },
 );
 
@@ -85,7 +87,10 @@ const autoProposalAttempted = ref(false);
 
 const proposalFollowsApproval = ref(false);
 
-const emit = defineEmits<{ "open-chat": [twin: UserTwinVersionPayload] }>();
+const emit = defineEmits<{
+  "open-chat": [twin: UserTwinVersionPayload];
+  "sections-changed": [];
+}>();
 
 const personaReasons = reactive<Record<string, string>>({});
 
@@ -130,7 +135,7 @@ const {
   projectId: () => props.projectId,
   operations: ["PERSONA_PROPOSAL", "USER_TWIN_GENERATION"],
   authorize: authorizedJobs,
-  onSettled: loadProject,
+  onSettled: reloadAndTell,
 });
 
 watch(modelingJob, (running) => {
@@ -236,7 +241,7 @@ const fieldLabels: Record<Locale, Record<UserTwinField, string>> = {
 
 const messages = {
   en: {
-    region: "User Twins",
+    region: "User Twin",
 
     loading: "Updating user profiles…",
     generating: "Preparing the profiles. This may take a few minutes; keep this page open.",
@@ -324,7 +329,10 @@ const messages = {
     profileTitle: "Profile of {name}",
 
     staleContext:
-      "The brief or team changed: generate and approve a new User Twin version before continuing.",
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
+
+    staleContextSections:
+      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
 
     generateTwins: "Create the twins",
 
@@ -410,7 +418,7 @@ const messages = {
 
     currentSnapshotApproved: "You have approved these user profiles.",
 
-    ready: "Ready for requirements definition.",
+    ready: "Ready for the Definition.",
 
     notReady: "Review and approve your user profiles to continue.",
 
@@ -445,7 +453,7 @@ const messages = {
 
     workflow: "Workflow state",
 
-    decisionCounter: "Decision {n} of {max}",
+    decisionCounter: "Decision no. {n}",
 
     technicalTwins: "Twins",
 
@@ -562,7 +570,10 @@ const messages = {
     profileTitle: "Il profilo di {name}",
 
     staleContext:
-      "Brief o team sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+      "Brief o prospettive sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+
+    staleContextSections:
+      "Brief o prospettive sono cambiati: usa «Aggiorna e conferma» qui sopra per tenere questi twin e riagganciarli, oppure creali di nuovo.",
 
     generateTwins: "Crea i twin",
 
@@ -647,7 +658,7 @@ const messages = {
 
     currentSnapshotApproved: "Hai approvato questi profili degli utenti.",
 
-    ready: "Pronto per la definizione dei requisiti.",
+    ready: "Pronto per la Definizione.",
 
     notReady: "Controlla e approva i profili degli utenti per proseguire.",
 
@@ -683,7 +694,7 @@ const messages = {
 
     workflow: "Stato del flusso",
 
-    decisionCounter: "Decisione {n} di {max}",
+    decisionCounter: "Decisione n. {n}",
 
     technicalTwins: "Twin",
 
@@ -726,8 +737,8 @@ const errorMessage = computed(() => {
       "Il modello ha restituito una proposta incompleta o non valida. Nessun artefatto è stato accettato. Puoi riprovare.",
     ],
     INCOMPLETE_OUTPUT: [
-      "The assistant did not complete its response. Your project has been preserved. You can try again.",
-      "L’assistente non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+      "The model did not complete its response. Your project has been preserved. You can try again.",
+      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
     ],
     PROVIDER_UNAVAILABLE: [
       "The local model is unavailable. Check model status above.",
@@ -816,11 +827,14 @@ const gatePaused = computed(
 const decisionCounter = computed(() =>
   fill(messages[props.locale].decisionCounter, {
     n: store.currentGate?.iteration ?? 1,
-    max: store.currentGate?.max_iterations ?? 1,
   }),
 );
 
 const contextStale = computed(() => store.readiness?.context_current === false);
+
+const staleContextText = computed(() =>
+  props.sectionsMode ? copy.value.staleContextSections : copy.value.staleContext,
+);
 
 const phase = computed<Phase>(() => {
   if (store.currentSnapshot !== null) return "twins";
@@ -870,7 +884,7 @@ const decisionCopy = computed(() => {
             : fill(text.readyToGenerate, { n: confirmedPersonas.value.length });
       return {
         primary: contextStale.value ? text.regenerateTwins : text.generateTwins,
-        description: contextStale.value ? `${text.staleContext} ${description}` : description,
+        description: contextStale.value ? `${staleContextText.value} ${description}` : description,
         disabled: !canGenerateTwins.value,
       };
     }
@@ -1252,10 +1266,21 @@ function authorizedJobs<T>(operation: (token: string) => Promise<T>): Promise<T>
   return props.authorize ? props.authorize(operation) : operation(props.accessToken);
 }
 
+function changed(): void {
+  emit("sections-changed");
+}
+
+async function reloadAndTell(): Promise<void> {
+  await loadProject();
+  changed();
+}
+
 async function proposePersonas(): Promise<void> {
   if (modelingJob.value !== null) return;
   dismissModelingJob();
-  await runAction((token) => store.proposePersonas(props.projectId, token));
+  if (await runAction((token) => store.proposePersonas(props.projectId, token))) {
+    changed();
+  }
 }
 
 const teamApproved = computed(
@@ -1333,12 +1358,18 @@ async function decidePersona(
   if (applied && rejectingPersonaId.value === persona.persona_id) {
     rejectingPersonaId.value = null;
   }
+
+  if (applied) {
+    changed();
+  }
 }
 
 async function generateTwins(): Promise<void> {
   if (modelingJob.value !== null) return;
   dismissModelingJob();
-  await runAction((token) => store.generateSnapshot(props.projectId, token));
+  if (await runAction((token) => store.generateSnapshot(props.projectId, token))) {
+    changed();
+  }
 }
 
 function openProfile(kind: ProfileTarget["kind"], id: string): void {
@@ -1499,6 +1530,7 @@ async function submitRevision(): Promise<void> {
 
   if (applied) {
     cancelRevision();
+    changed();
   }
 }
 
@@ -1514,7 +1546,7 @@ async function decideDiff(
     return;
   }
 
-  await runAction((token) =>
+  const decided = await runAction((token) =>
     store.decideRevision(
       props.projectId,
       diff.id,
@@ -1523,6 +1555,10 @@ async function decideDiff(
       reason.length > 0 ? reason : null,
     ),
   );
+
+  if (decided) {
+    changed();
+  }
 }
 
 async function submitGate(): Promise<boolean> {
@@ -1549,6 +1585,10 @@ async function decideGate(action: GateDecisionAction, note?: string): Promise<bo
 
   if (applied && note === undefined) {
     gateReason.value = "";
+  }
+
+  if (applied) {
+    changed();
   }
 
   return applied;
@@ -1743,7 +1783,7 @@ watchUpstream(
         :project-id="projectId"
         :locale="locale"
         :authorize="authorize"
-        @imported="loadProject"
+        @imported="reloadAndTell"
       />
     </div>
 
@@ -1753,7 +1793,7 @@ watchUpstream(
       role="status"
       data-testid="user-modeling-stale-context"
     >
-      {{ copy.staleContext }}
+      {{ staleContextText }}
     </div>
 
     <div

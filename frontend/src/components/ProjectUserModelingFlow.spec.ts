@@ -563,6 +563,7 @@ describe("ProjectUserModelingFlow", () => {
       },
       ACCESS_TOKEN,
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
 
     expect(
       store.currentPersonas.some((persona) => persona.profile.confirmation_status === "CONFIRMED"),
@@ -651,10 +652,12 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
     expect(bar.text()).toContain("Confirmed profiles: 1.");
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await decisionPrimary(wrapper, "generate").trigger("click");
     await flushPromises();
 
     expect(generate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 
   it("renders User Twin epistemic status, confidence, validation requirement and provenance", async () => {
@@ -949,8 +952,8 @@ describe("ProjectUserModelingFlow", () => {
       "OWNER_APPROVED_UT",
     );
 
-    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Ready for requirements definition",
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Ready for the Definition.",
     );
 
     expect(twinVersion.profile.validation_status).toBe("PROJECT_GROUNDED_UT");
@@ -959,7 +962,102 @@ describe("ProjectUserModelingFlow", () => {
     expect(wrapper.text()).toContain("You have approved these user profiles.");
     expect(wrapper.get('[data-testid="starting-personas"]').attributes("open")).toBeUndefined();
     expect(wrapper.find('[data-testid="twins-decision"]').exists()).toBe(false);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
+
+  it.each(["en", "it"] as const)(
+    "names the region of the step User Twin for screen readers in %s",
+    (locale) => {
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      expect(wrapper.get('[data-testid="user-modeling-step"]').attributes("aria-label")).toBe(
+        "User Twin",
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", " · Decision no. 1"],
+    ["it", " · Decisione n. 1"],
+  ] as const)(
+    "numbers the decision on the twins in %s without a limit of attempts",
+    async (locale, counter) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = readinessReview;
+      store.currentGate = pendingGate;
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      await openTechnicalDetails(wrapper);
+
+      const details = wrapper.get('[data-testid="user-modeling-technical-details"]').text();
+      expect(details).toContain(counter);
+      expect(details).not.toMatch(/ of 3| di 3/);
+      wrapper.unmount();
+    },
+  );
+
+  it("says in Italian that the approved twins are ready for the Definition", () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.readiness = readinessApproved;
+    store.currentGate = approvedGate;
+    const wrapper = mount(ProjectUserModelingFlow, {
+      global: { plugins: [createAppI18n("it")] },
+      props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale: "it", autoLoad: false },
+    });
+
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Pronto per la Definizione.",
+    );
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "The model did not complete its response. Your project has been preserved. You can try again.",
+    ],
+    [
+      "it",
+      "Il modello non ha completato la risposta. Il progetto è stato conservato. Puoi riprovare.",
+    ],
+  ] as const)(
+    "says in %s that the model, not an assistant, did not complete its response",
+    async (locale, sentence) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = {
+        ...readinessReview,
+        gate_exists: false,
+        gate_id: null,
+        gate_status: null,
+      };
+      vi.spyOn(userModelingApi, "submitGate").mockRejectedValue(new Error("INCOMPLETE_OUTPUT"));
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      await decisionPrimary(wrapper, "approve").trigger("click");
+      await flushPromises();
+
+      expect(wrapper.get('[role="alert"]').text()).toContain(sentence);
+      expect(wrapper.text()).not.toMatch(/assistant|assistente/i);
+      expect(wrapper.emitted("sections-changed")).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
 
   it("confirms the twins with one press that submits them and then approves them", async () => {
     const store = useUserModelingStore();
@@ -1150,7 +1248,7 @@ describe("ProjectUserModelingFlow", () => {
     );
   });
 
-  it("asks to create the twins again when the brief or the team changed", () => {
+  it("asks to create the twins again when the brief or the perspectives changed", () => {
     const store = useUserModelingStore();
     store.activateProject(PROJECT_ID);
     store.applySnapshot(snapshot);
@@ -1158,13 +1256,53 @@ describe("ProjectUserModelingFlow", () => {
     store.currentGate = pendingGate;
     const wrapper = mountFlow();
 
-    expect(wrapper.get('[data-testid="user-modeling-stale-context"]').text()).toContain(
-      "The brief or team changed",
+    expect(wrapper.get('[data-testid="user-modeling-stale-context"]').text()).toBe(
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
     );
     expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins again");
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
     expect(wrapper.find('[data-testid="twins-other-decisions"]').exists()).toBe(false);
   });
+
+  it.each([
+    [
+      "en",
+      "The brief or the perspectives changed: generate and approve a new User Twin version before continuing.",
+      "The brief or the perspectives changed: use «Update and confirm» above to keep these twins and re-anchor them, or create them again.",
+    ],
+    [
+      "it",
+      "Brief o prospettive sono cambiati: genera una nuova versione degli User Twin e approvala prima di proseguire.",
+      "Brief o prospettive sono cambiati: usa «Aggiorna e conferma» qui sopra per tenere questi twin e riagganciarli, oppure creali di nuovo.",
+    ],
+  ] as const)(
+    "names in %s the gesture above for twins behind the brief or the perspectives only in sections mode",
+    async (locale, firstPass, sections) => {
+      const store = useUserModelingStore();
+      store.activateProject(PROJECT_ID);
+      store.applySnapshot(snapshot);
+      store.readiness = { ...readinessReview, context_current: false };
+      store.currentGate = pendingGate;
+      const wrapper = mount(ProjectUserModelingFlow, {
+        global: { plugins: [createAppI18n(locale)] },
+        props: { projectId: PROJECT_ID, accessToken: ACCESS_TOKEN, locale, autoLoad: false },
+      });
+
+      const notice = () => wrapper.get('[data-testid="user-modeling-stale-context"]').text();
+      const bar = () => wrapper.get('[data-testid="twins-decision"][data-decision="generate"]');
+      expect(notice()).toBe(firstPass);
+      expect(bar().text()).toContain(firstPass);
+      expect(notice()).not.toMatch(/team|squadra/i);
+
+      await wrapper.setProps({ sectionsMode: true });
+
+      expect(notice()).toBe(sections);
+      expect(bar().text()).toContain(sections);
+      expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
 
   it("mounts its decision in the bar of the page when the page offers one", async () => {
     const target = document.createElement("div");
@@ -1621,6 +1759,7 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(load).toHaveBeenCalledTimes(1);
     expect(load).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(store.currentSnapshot?.id).toBe(snapshotTwo.id);
     expect(
       wrapper.findAll('[data-testid="open-twin-chat"]').map((button) => button.text()),

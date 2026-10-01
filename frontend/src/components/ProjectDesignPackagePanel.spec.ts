@@ -23,10 +23,10 @@ import type { UserTwinVersionPayload } from "../types/userModeling";
 const PROJECT_ID = SELECTED_DESIGN_VERSION.project_id;
 const STAGES = [
   { label: "Brief", version: 2, approved: true },
-  { label: "Team", version: 1, approved: true },
-  { label: "User Twins", version: 1, approved: true },
-  { label: "Requirements", version: 3, approved: true },
-  { label: "Design", version: 1, approved: true },
+  { label: "Perspectives", version: 1, approved: true },
+  { label: "User Twin", version: 1, approved: true },
+  { label: "Definition", version: 3, approved: true },
+  { label: "Design & Evaluation", version: 1, approved: true },
 ];
 
 function twin(name: string): UserTwinVersionPayload {
@@ -148,6 +148,7 @@ interface MountOptions {
   saveExport?: () => void;
   preview?: (slot: PreviewSlot) => VNode;
   studioAddress?: string;
+  sectionsMode?: boolean;
 }
 
 function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
@@ -165,6 +166,7 @@ function mountPanel(api: KnowledgePackagesApi, options: MountOptions = {}) {
       api,
       saveExport,
       ...(options.studioAddress === undefined ? {} : { studioAddress: options.studioAddress }),
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
     },
     slots: options.preview === undefined ? {} : { preview: options.preview },
     attachTo: document.body,
@@ -398,7 +400,7 @@ describe("ProjectDesignPackagePanel", () => {
     const action = wrapper.get('[data-testid="download-package"]');
     expect(action.attributes("disabled")).toBeUndefined();
     expect(spoken(wrapper.get('[data-testid="package-partial"]'))).toBe(
-      "La cartella contiene 3 passi su 5: restano da approvare Requirements e Design. Ogni passo entra nella cartella quando lo approvi.",
+      "La cartella contiene 3 passi su 5: restano da approvare Definition e Design & Evaluation. Ogni passo entra nella cartella quando lo approvi.",
     );
     expect(wrapper.find('[data-testid="package-not-ready"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="package-hero"] h2').text()).toBe("La cartella prende forma");
@@ -420,8 +422,8 @@ describe("ProjectDesignPackagePanel", () => {
       "Manager",
     ]);
     expect(wrapper.find('[data-testid="package-design"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="package-no-design"]').text()).toContain(
-      "dopo l'approvazione del passo Design",
+    expect(wrapper.get('[data-testid="package-no-design"]').text()).toBe(
+      "Il design scelto compare qui dopo l'approvazione di Design e valutazione.",
     );
 
     await action.trigger("click");
@@ -434,8 +436,9 @@ describe("ProjectDesignPackagePanel", () => {
     );
     expect(wrapper.get('[data-testid="package-latest"]').text()).toBe("27 file · versione 1");
     expect(wrapper.get('[data-testid="package-version-progress"]').text()).toBe(
-      "3 passi su 5, il prossimo è Requirements",
+      "3 passi su 5, il prossimo è Definition",
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     wrapper.unmount();
   });
 
@@ -456,7 +459,7 @@ describe("ProjectDesignPackagePanel", () => {
       "0 twins, each in its own reusable file",
     );
     expect(wrapper.get('[data-testid="package-version-progress"]').text()).toBe(
-      "2 of 5 steps, next: User Twins",
+      "2 of 5 steps, next: User Twin",
     );
     wrapper.unmount();
   });
@@ -490,22 +493,22 @@ describe("ProjectDesignPackagePanel", () => {
     [
       "en",
       4,
-      "The folder holds 4 of 5 steps: Design is still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 4 of 5 steps: Design & Evaluation is still to approve. Each step joins the folder when you approve it.",
     ],
     [
       "en",
       3,
-      "The folder holds 3 of 5 steps: Requirements and Design are still to approve. Each step joins the folder when you approve it.",
+      "The folder holds 3 of 5 steps: Definition and Design & Evaluation are still to approve. Each step joins the folder when you approve it.",
     ],
     [
       "it",
       4,
-      "La cartella contiene 4 passi su 5: resta da approvare Design. Ogni passo entra nella cartella quando lo approvi.",
+      "La cartella contiene 4 passi su 5: resta da approvare Design & Evaluation. Ogni passo entra nella cartella quando lo approvi.",
     ],
     [
       "it",
       1,
-      "La cartella contiene 1 passo su 5: restano da approvare Team, User Twins, Requirements e Design. Ogni passo entra nella cartella quando lo approvi.",
+      "La cartella contiene 1 passo su 5: restano da approvare Perspectives, User Twin, Definition e Design & Evaluation. Ogni passo entra nella cartella quando lo approvi.",
     ],
   ] as const)(
     "says in %s which steps a folder of %i approved steps still misses",
@@ -529,7 +532,7 @@ describe("ProjectDesignPackagePanel", () => {
 
     expect(
       wrapper.findAll('[data-testid="package-version-progress"]').map((item) => item.text()),
-    ).toEqual(["5 of 5 steps", "3 of 5 steps, next: Requirements"]);
+    ).toEqual(["5 of 5 steps", "3 of 5 steps, next: Definition"]);
     expect(wrapper.find('[data-testid="package-partial"]').exists()).toBe(false);
     wrapper.unmount();
   });
@@ -695,13 +698,8 @@ describe("ProjectDesignPackagePanel", () => {
     wrapper.unmount();
   });
 
-  it.each([
-    ["TEAM_OUTDATED", "Apri il passo Squadra"],
-    ["USER_TWINS_OUTDATED", "Apri il passo User Twin"],
-    ["REQUIREMENTS_OUTDATED", "aggiornali ai twin attuali"],
-    ["DESIGN_OUTDATED", "rigenera le alternative"],
-  ])("says which step to update when the server reports %s", async (code, expected) => {
-    const api = knowledgeApi({
+  function refusing(code: string): KnowledgePackagesApi {
+    return knowledgeApi({
       publish: vi.fn(() =>
         Promise.reject(
           new KnowledgePackagesApiError("The knowledge package request failed", {
@@ -712,15 +710,212 @@ describe("ProjectDesignPackagePanel", () => {
         ),
       ),
     });
-    const { wrapper, saveExport } = mountPanel(api, { locale: "it" });
-    await flushPromises();
+  }
 
-    await wrapper.get('[data-testid="download-package"]').trigger("click");
-    await flushPromises();
+  it.each([
+    [
+      "it",
+      "USER_TWINS_OUTDATED",
+      "User Twin è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+    ],
+    [
+      "it",
+      "REQUIREMENTS_OUTDATED",
+      "Definizione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+    ],
+    [
+      "it",
+      "DESIGN_OUTDATED",
+      "Design e valutazione è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+    ],
+    [
+      "it",
+      "TEAM_OUTDATED",
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
+    ],
+    [
+      "en",
+      "USER_TWINS_OUTDATED",
+      "User Twin is behind: use «Update and confirm» at the top of the page, then publish again.",
+    ],
+    [
+      "en",
+      "REQUIREMENTS_OUTDATED",
+      "Definition is behind: use «Update and confirm» at the top of the page, then publish again.",
+    ],
+    [
+      "en",
+      "DESIGN_OUTDATED",
+      "Design & Evaluation is behind: use «Update and confirm» at the top of the page, then publish again.",
+    ],
+    [
+      "en",
+      "TEAM_OUTDATED",
+      "The brief changed: prepare the perspectives again, then publish again.",
+    ],
+  ] as const)(
+    "says in %s what to do in sections mode when the server reports %s, without regenerating",
+    async (locale, code, expected) => {
+      const { wrapper, saveExport } = mountPanel(refusing(code), { locale, sectionsMode: true });
+      await flushPromises();
 
-    expect(wrapper.get('[data-testid="download-error"]').text()).toContain(expected);
-    expect(saveExport).not.toHaveBeenCalled();
-    wrapper.unmount();
+      await wrapper.get('[data-testid="download-package"]').trigger("click");
+      await flushPromises();
+
+      const error = wrapper.get('[data-testid="download-error"]');
+      expect(error.text()).toBe(expected);
+      expect(error.text()).not.toMatch(/rigenera|regenerate|squadra|team/i);
+      expect(saveExport).not.toHaveBeenCalled();
+      expect(wrapper.emitted("sections-changed")).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "it",
+      "USER_TWINS_OUTDATED",
+      "Il passo User Twin è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+    ],
+    [
+      "it",
+      "DESIGN_OUTDATED",
+      "Il passo Design e valutazione è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+    ],
+    [
+      "en",
+      "REQUIREMENTS_OUTDATED",
+      "The Definition step is behind: open it and bring it up to date, then publish again.",
+    ],
+    [
+      "en",
+      "TEAM_OUTDATED",
+      "The brief changed: prepare the perspectives again, then publish again.",
+    ],
+  ] as const)(
+    "says in %s what to do before the first pass is complete when the server reports %s",
+    async (locale, code, expected) => {
+      const { wrapper } = mountPanel(refusing(code), { locale });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="download-package"]').trigger("click");
+      await flushPromises();
+
+      const error = wrapper.get('[data-testid="download-error"]');
+      expect(error.text()).toBe(expected);
+      expect(error.text()).not.toMatch(
+        /Aggiorna e conferma|Update and confirm|rigenera|regenerate/,
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "it",
+      "Ho raccolto le cinque sezioni approvate in una cartella pronta per i tuoi strumenti di sviluppo.",
+      "Le cinque sezioni sono approvate. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+      "Le sezioni e le loro versioni",
+      ["5 sezioni su 5", "3 sezioni su 5, la prossima è Definition"],
+    ],
+    [
+      "en",
+      "I gathered the five approved sections into a folder ready for your development tools.",
+      "The five sections are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+      "The sections and their versions",
+      ["5 of 5 sections", "3 of 5 sections, next: Definition"],
+    ],
+  ] as const)(
+    "speaks in %s of sections once the first pass is complete",
+    async (locale, agent, intro, path, progress) => {
+      const api = knowledgeApi({
+        history: vi.fn(() =>
+          Promise.resolve({ project_id: PROJECT_ID, versions: [version(2), partialVersion(1)] }),
+        ),
+      });
+      const { wrapper } = mountPanel(api, { locale, sectionsMode: true });
+      await flushPromises();
+
+      expect(wrapper.get('[data-testid="agent-message"]').text()).toContain(agent);
+      expect(spoken(wrapper.get('[data-testid="package-hero"]'))).toContain(intro);
+      expect(spoken(wrapper.get('[data-testid="package-path"] summary'))).toBe(path);
+      expect(
+        wrapper.findAll('[data-testid="package-version-progress"]').map((item) => item.text()),
+      ).toEqual(progress);
+      expect(wrapper.text()).not.toMatch(/\bpass[oi]\b|\bsteps?\b/);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "it",
+      "La cartella contiene 3 sezioni su 5: restano da approvare Definition e Design & Evaluation. Ogni sezione entra nella cartella quando la approvi.",
+    ],
+    [
+      "en",
+      "The folder holds 3 of 5 sections: Definition and Design & Evaluation are still to approve. Each section joins the folder when you approve it.",
+    ],
+  ] as const)(
+    "says in %s which sections a partial folder still misses",
+    async (locale, expected) => {
+      const { wrapper } = mountPanel(knowledgeApi(), {
+        stages: approvedUpTo(3),
+        locale,
+        sectionsMode: true,
+      });
+      await flushPromises();
+
+      expect(spoken(wrapper.get('[data-testid="package-partial"]'))).toBe(expected);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    [
+      "it",
+      "I cinque passi sono approvati. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+      "La cartella raccoglierà brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    ],
+    [
+      "en",
+      "The five steps are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+      "The folder will hold the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    ],
+  ] as const)(
+    "names in %s the perspectives among what the folder holds",
+    async (locale, complete, waiting) => {
+      const ready = mountPanel(knowledgeApi(), { locale });
+      await flushPromises();
+      expect(spoken(ready.wrapper.get('[data-testid="package-hero"]'))).toContain(complete);
+      expect(ready.wrapper.text()).not.toMatch(/squadra|\bteam\b/i);
+      ready.wrapper.unmount();
+
+      const empty = mountPanel(knowledgeApi(), { locale, stages: approvedUpTo(0) });
+      await flushPromises();
+      expect(spoken(empty.wrapper.get('[data-testid="package-hero"]'))).toContain(waiting);
+      empty.wrapper.unmount();
+    },
+  );
+
+  it("tells the page about a new folder only after a publication", async () => {
+    const download = mountPanel(
+      knowledgeApi({
+        history: vi.fn(() =>
+          Promise.resolve({ project_id: PROJECT_ID, versions: [version(2), version(1)] }),
+        ),
+      }),
+    );
+    await flushPromises();
+    await download.wrapper.findAll('[data-testid="download-version"]')[1]!.trigger("click");
+    await flushPromises();
+    expect(download.wrapper.emitted("sections-changed")).toBeUndefined();
+
+    await download.wrapper.get('[data-testid="download-package"]').trigger("click");
+    await flushPromises();
+    expect(download.wrapper.emitted("sections-changed")).toHaveLength(1);
+    download.wrapper.unmount();
   });
 
   it("shows the current declarative preview as an inert thumbnail by default", async () => {
@@ -774,10 +969,17 @@ describe("ProjectDesignPackagePanel", () => {
     const second = mountPanel(knowledgeApi(), { locale: "it" });
     await flushPromises();
     expect(second.wrapper.find('[data-testid="package-design"]').exists()).toBe(false);
-    expect(second.wrapper.get('[data-testid="package-no-design"]').text()).toContain(
-      "dopo l'approvazione del passo Design",
+    expect(second.wrapper.get('[data-testid="package-no-design"]').text()).toBe(
+      "Il design scelto compare qui dopo l'approvazione di Design e valutazione.",
     );
     second.wrapper.unmount();
+
+    const english = mountPanel(knowledgeApi());
+    await flushPromises();
+    expect(english.wrapper.get('[data-testid="package-no-design"]').text()).toBe(
+      "The chosen design appears here once Design & Evaluation is approved.",
+    );
+    english.wrapper.unmount();
   });
 
   it("counts the twins of the latest version when the twins are not loaded", async () => {
