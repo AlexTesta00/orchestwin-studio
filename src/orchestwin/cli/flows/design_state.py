@@ -62,6 +62,14 @@ SENTENCE_ENDINGS: Final = (".", "!", "?", "…")
 MINIMUM_WIDTH: Final = 20
 PROPOSED: Final = "PROPOSED"
 EMPTY: Final[Mapping[str, Mapping[str, object]]] = MappingProxyType({})
+NEXT_COMMANDS: Final = (
+    "design.after_code",
+    "design.after_test",
+    "design.after_tasks",
+    "design.after_align",
+    "design.after_twins",
+    "design.after_watch",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -533,6 +541,10 @@ def show_folder(
         console.say("design.folder_not_here", version=latest, path=str(target))
     else:
         console.say("design.folder_not_published")
+
+
+def show_next_commands(context: CommandContext) -> None:
+    context.console.items([context.text(key) for key in NEXT_COMMANDS])
 
 
 def show_summary(context: CommandContext, state: DesignState) -> None:

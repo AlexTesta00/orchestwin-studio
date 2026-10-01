@@ -356,7 +356,7 @@ def show_the_tests(scene: Scene, acceptance: Acceptance) -> None:
     as_json = scene.ut("status", "--json")
     assert as_json.status == 0, as_json.transcript()
     document = json.loads(as_json.output)
-    assert list(document)[-2:] == ["tests", "learning"], as_json.transcript()
+    assert list(document)[-3:] == ["tests", "learning", "sections"], as_json.transcript()
     assert document["tests"] == {
         "runs": len(acceptance.runs),
         "latest": {

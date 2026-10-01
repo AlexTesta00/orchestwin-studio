@@ -8,6 +8,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import design_generate
+from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.messages import known
 
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ def run_review(context: CommandContext, client: StudioClient, project: ProjectFo
     if not chosen(version):
         console.say("design.review_not_chosen")
         return 1
-    locale = review_locale(link.language or context.language)
+    locale = review_locale(project_language(project, context.language))
     try:
         run = _reviewed(context, client, link.project_id, version, locale)
     except CliError as error:

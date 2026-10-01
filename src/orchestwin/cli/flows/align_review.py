@@ -11,6 +11,7 @@ from orchestwin.cli.api import modeling as modeling_api
 from orchestwin.cli.api import twin_chat
 from orchestwin.cli.errors import ApiFailure, CliError
 from orchestwin.cli.flows import changes as git
+from orchestwin.cli.flows.code_order import project_language
 from orchestwin.cli.flows.design_state import bullets, wrapped
 from orchestwin.cli.flows.review import places, review_locale
 from orchestwin.cli.messages import text as message_text
@@ -128,7 +129,7 @@ def dismiss_folder_commit(
 
 
 def project_text(context: CommandContext, workspace: Workspace, key: str, **values: object) -> str:
-    language = workspace.project.link().language or context.language
+    language = project_language(workspace.project, context.language)
     return message_text(key, "it" if language.lower().startswith("it") else "en", **values)
 
 
@@ -175,7 +176,7 @@ def review_estimate(twins: int) -> costs.Estimate:
 
 
 def locale(context: CommandContext, project: ProjectFolder) -> str:
-    return review_locale(project.link().language or context.language)
+    return review_locale(project_language(project, context.language))
 
 
 def review(

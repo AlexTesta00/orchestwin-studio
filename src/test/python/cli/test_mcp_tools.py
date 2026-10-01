@@ -20,6 +20,7 @@ from orchestwin.cli.mcp.protocol import RpcError
 from orchestwin.cli.mcp.server import quiet_context
 from orchestwin.cli.mcp.tools import Tools
 from orchestwin.cli.messages import text
+from orchestwin.cli.project import ProjectFolder
 from src.test.python.knowledge.knowledge_fixtures import (
     ALIGNED_COMMIT,
     PENDING_COMMIT,
@@ -185,6 +186,13 @@ def build(
     bundle = terminal(tmp_path, transport=NoNetwork() if transport is None else transport)
     context = quiet_context(command_context(bundle.environment, language=language))
     return Tools(context, spend=spend), bundle
+
+
+def folder_language(project: ProjectFolder, language: str | None) -> None:
+    def change(document: dict) -> None:
+        document["project"]["language"] = language
+
+    edit_json(project.knowledge / "orchestwin.json", change)
 
 
 def run(tools: Tools, name: str, **arguments: object) -> dict[str, object]:
@@ -357,42 +365,54 @@ def test_the_project_state_joins_the_link_the_folder_and_the_development_state(
     assert [task["code"] for task in document["open_tasks"]] == [sources.tasks[0]["code"]]
 
 
-def test_the_next_step_speaks_the_language_of_the_link(tmp_path: Path) -> None:
-    state_folder(tmp_path, language="en-US")
-    tools, _ = build(tmp_path, language="it")
-
-    document = run(tools, "project_state")
-
-    assert document["next"] == (
-        "Open tasks for the code: 1 (TSK-001). Carry them out, commit, then launch `ut align`."
-    )
+OPEN_TASKS_NEXT = {
+    "en": "Open tasks for the code: 1 (TSK-001). Carry them out, commit, then launch `ut align`.",
+    "it": "Compiti aperti per il codice: 1 (TSK-001). Realizzali, fai il commit, poi lancia "
+    "`ut align`.",
+}
 
 
-def test_without_a_language_in_the_link_the_language_of_the_command_is_used(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("folder", "link", "command", "expected"),
+    [
+        ("en-US", "it", "it", "en"),
+        ("it", "en", "en", "it"),
+        (None, "en-US", "it", "en"),
+        (None, None, "it", "it"),
+        (None, None, "en", "en"),
+    ],
+)
+def test_the_next_step_speaks_the_language_of_the_folder_then_of_the_link_then_of_the_command(
+    tmp_path: Path, folder: str | None, link: str | None, command: str, expected: str
 ) -> None:
-    state_folder(tmp_path, language=None)
-    tools, _ = build(tmp_path, language="it")
+    project = state_folder(tmp_path, language=link)
+    folder_language(project, folder)
+    tools, _ = build(tmp_path, language=command)
 
-    assert run(tools, "project_state")["next"].startswith("Compiti aperti per il codice: 1")
+    assert run(tools, "project_state")["next"] == OPEN_TASKS_NEXT[expected]
 
 
 @pytest.mark.parametrize(
     ("through", "language", "sentence"),
     [
-        ("brief", "it", "Il prossimo passo da approvare è «Squadra»: continua con `ut init`."),
-        ("twins", "en", 'The next step to approve is "Requirements": go on with `ut init`.'),
+        (
+            "brief",
+            "it",
+            "Il prossimo passo da approvare è «Prospettive»: continua con `ut init`.",
+        ),
+        ("twins", "en", 'The next step to approve is "Definition": go on with `ut init`.'),
         (
             "requirements",
             "it",
-            "Il prossimo passo da approvare è «Design»: continua con `ut design`.",
+            "Il prossimo passo da approvare è «Design e valutazione»: continua con `ut design`.",
         ),
     ],
 )
 def test_a_partial_folder_names_the_next_step_and_its_command(
     tmp_path: Path, through: str, language: str, sentence: str
 ) -> None:
-    with_archive(tmp_path, partial_archive(through=through), language=language)
+    project = with_archive(tmp_path, partial_archive(through=through), language=language)
+    folder_language(project, language)
     tools, _ = build(tmp_path)
 
     document = run(tools, "project_state")
@@ -701,12 +721,13 @@ def test_the_requirements_come_whole_or_selected_by_their_codes(tmp_path: Path) 
 def test_the_requirements_of_a_folder_without_them_are_a_stage_not_approved(
     tmp_path: Path,
 ) -> None:
-    with_archive(tmp_path, partial_archive(through="twins"), language="en")
+    project = with_archive(tmp_path, partial_archive(through="twins"), language="en")
+    folder_language(project, "en")
     tools, _ = build(tmp_path)
 
     assert refused(tools, "get_requirements") == {
         "code": "STAGE_NOT_APPROVED",
-        "message": 'The step "Requirements" is not approved yet, so the knowledge folder does '
+        "message": 'The step "Definition" is not approved yet, so the knowledge folder does '
         "not hold it: go on with `ut init`. (STAGE_NOT_APPROVED)",
         "stage": "requirements",
     }
@@ -808,8 +829,8 @@ def test_the_design_of_a_folder_without_it_is_a_stage_not_approved(tmp_path: Pat
 
     assert refused(tools, "get_design") == {
         "code": "STAGE_NOT_APPROVED",
-        "message": "Il passo «Design» non è ancora approvato, quindi la cartella di conoscenza "
-        "non lo contiene: continua con `ut design`. (STAGE_NOT_APPROVED)",
+        "message": "Il passo «Design e valutazione» non è ancora approvato, quindi la cartella "
+        "di conoscenza non lo contiene: continua con `ut design`. (STAGE_NOT_APPROVED)",
         "stage": "design",
     }
 
@@ -918,7 +939,8 @@ def test_paid_tools_without_spend_are_refused_in_the_language_of_the_project(
 def test_paid_tools_without_spend_are_refused_in_english_for_an_english_project(
     tmp_path: Path,
 ) -> None:
-    state_folder(tmp_path, language="en")
+    project = state_folder(tmp_path, language="en")
+    folder_language(project, "en")
     tools, _ = build(tmp_path, language="it")
 
     assert refused(tools, "review_changes", commit="HEAD")["message"] == (
@@ -1113,8 +1135,9 @@ def test_asking_needs_approved_twins_and_the_sign_in(tmp_path: Path) -> None:
     }
     assert refused(waiting, "ask_twin", twin="1", question="Ciao?") == {
         "code": "TWINS_NOT_APPROVED",
-        "message": "I twin di questo progetto non sono approvati nello Studio: confermali con "
-        "`ut init`, poi riprova. (TWINS_NOT_APPROVED)",
+        "message": "I twin di questo progetto non sono approvati nello Studio, oppure sono "
+        "rimasti indietro: aggiornali con `ut sections update` o confermali con `ut init`, poi "
+        "riprova. (TWINS_NOT_APPROVED)",
     }
 
 
@@ -1156,6 +1179,7 @@ def test_a_review_of_a_named_commit_resolves_it_first(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project = state_folder(tmp_path, language="en")
+    folder_language(project, "en")
     store_session(tmp_path)
     calls = fake_git(
         monkeypatch,
@@ -1174,6 +1198,25 @@ def test_a_review_of_a_named_commit_resolves_it_first(
     assert document["id"] == change_run()["id"]
     assert calls[1:3] == [("resolve", "4f2a9c1"), ("resolve", f"{PENDING_COMMIT}^")]
     assert transport.requests("POST", REVIEWS)[0].json() == {"locale": "en-US", "again": False}
+
+
+def test_an_italian_folder_asks_the_studio_for_italian_from_an_english_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = state_folder(tmp_path, language="en")
+    folder_language(project, "it")
+    store_session(tmp_path)
+    fake_git(monkeypatch, root=project.root)
+    transport = ScriptedTransport()
+    transport.expect("POST", CHANGES, status=201, body=recorded_change())
+    transport.expect("POST", REVIEWS, status=201, body={"status": "REVIEWED", "run": change_run()})
+    tools, _ = build(tmp_path, spend=True, transport=transport)
+
+    run(tools, "review_changes")
+
+    assert transport.requests("POST", REVIEWS)[0].json() == {"locale": "it-IT", "again": False}
+    assert run(tools, "project_state")["next"] == OPEN_TASKS_NEXT["it"]
+    transport.assert_done()
 
 
 def test_a_review_that_exists_gives_the_latest_run(
@@ -1415,7 +1458,7 @@ def test_the_eleven_tools_end_with_the_tools_of_the_tests_and_of_the_tasks(
         "description": "The tasks for the code read from the knowledge folder: the text, the "
         "requirements, screens and criteria they are about, where they come from (a critique of "
         "a twin on a commit or on the tests, the decision on a commit, or the owner) and their "
-        "status; with status all also the ones done or dropped. Free.",
+        "status; with status all also the ones done or dropped. No spending.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1439,7 +1482,7 @@ def test_the_eleven_tools_end_with_the_tools_of_the_tests_and_of_the_tasks(
     }
     assert italian.definitions()[10]["title"] == "Compiti per il codice"
     assert italian.definitions()[10]["description"].endswith(
-        "con status all anche quelli fatti o lasciati cadere. Gratuito."
+        "con status all anche quelli fatti o lasciati cadere. Nessuna spesa."
     )
     assert (
         "(una critica di un twin su un commit o sui test, la decisione su un commit, oppure il "
@@ -1450,7 +1493,7 @@ def test_the_eleven_tools_end_with_the_tools_of_the_tests_and_of_the_tasks(
         "title": "Outcome of the acceptance tests",
         "description": "The latest runs of the acceptance tests on the application under "
         "development, read from the knowledge folder: status of every criterion, outcome of "
-        "every path in every browser and the critiques of the twins. Free.",
+        "every path in every browser and the critiques of the twins. No spending.",
         "inputSchema": {
             "type": "object",
             "properties": {

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from orchestwin.cli import folder as local_folder
 from orchestwin.cli.api import design as design_api
 from orchestwin.cli.errors import ApiFailure
 from orchestwin.cli.flows import review
 from orchestwin.cli.http import UrlTransport
 from orchestwin.cli.project import ProjectFolder
 
+from .support.folders import valid_archive
 from .support.terminal import command_context, run_ut, terminal
 from .test_api_design import Session, choose, choose_in_the_web, design_session, draw, propose
 from .test_design_generate import Unreachable
@@ -77,6 +80,23 @@ def test_the_review_in_italian(tmp_path: Path) -> None:
     assert "Revisione dei twin, versione 2" in run.output
     assert "- Importante: Il pulsante principale è in fondo" in run.output
     assert "(schermata “Calcolo mancia”, elemento “Dividi il conto”)" in run.output
+
+
+def test_an_italian_folder_asks_the_studio_for_italian_from_an_english_terminal(
+    tmp_path: Path,
+) -> None:
+    with design_session(tmp_path) as session:
+        chosen(session)
+        project = ProjectFolder(session.folder)
+        project.update_link(language="en")
+        local_folder.unpack(valid_archive(), project.knowledge)
+        before = session.count("POST", EVALUATIONS)
+        run = session.ut("design", "review")
+        evaluations = session.requests("POST", EVALUATIONS)[before:]
+
+    assert run.status == 0, run.errors
+    assert [json.loads(item.body)["locale"] for item in evaluations] == ["it-IT"]
+    assert run.output.startswith("I am about to ask the twins to review the chosen design.")
 
 
 def test_the_review_needs_a_chosen_design(tmp_path: Path) -> None:

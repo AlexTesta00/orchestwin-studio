@@ -421,10 +421,7 @@ def test_requirements_that_are_outdated_get_a_change_approved(tmp_path: Path) ->
     assert run.status == 0, run.errors
     assert "  1. Ask a change of the requirements with this request" in run.output
     assert "Change applied: the requirements are at version 2." in run.output
-    assert (
-        "The requirements changed: check the design with `ut design`, because it may no longer "
-        "match them." in run.output
-    )
+    assert "check the design with `ut design`" not in run.output
     assert changes[0]["decision"]["kind"] == "REQUIREMENTS_CHANGE"
     assert requirements is not None and requirements["version_number"] == 2
     assert saved["version"]["version_number"] == 2
@@ -746,10 +743,7 @@ def test_code_drift_can_ask_the_requirements_to_follow_the_code(tmp_path: Path) 
 
     assert run.status == 0, run.errors
     assert "Change applied: the requirements are at version 2." in run.output
-    assert (
-        "The requirements changed: check the design with `ut design`, because it may no longer "
-        "match them." in run.output
-    )
+    assert said("align.design_realigned", version=3) in run.output.splitlines()
     assert change["decision"]["kind"] == "REQUIREMENTS_CHANGE"
     assert change["decision"]["note"] == "Each person chooses a tip"
     assert requirements is not None and requirements["version_number"] == 2
@@ -1454,7 +1448,7 @@ def test_a_requirements_realignment_names_the_reviews_that_are_now_stale(tmp_pat
     lines = run.output.splitlines()
     hint = said("align.recheck_hint", count=1)
     assert run.status == 0, run.errors
-    assert lines[lines.index(said("align.requirements_check_design")) + 1] == hint
+    assert lines.index(hint) > lines.index(said("align.design_realigned", version=3))
     assert lines.count(hint) == 1
 
 
@@ -1472,3 +1466,192 @@ def test_a_normal_align_says_the_stale_reviews_at_the_end(tmp_path: Path) -> Non
     assert run.status == 0, run.errors
     assert lines[-2].startswith("Development: commits recorded: 2;")
     assert lines[-1] == said("align.recheck_hint", count=1)
+
+
+REQUIREMENTS_COMMIT = "New requirement: split among friends"
+CHANGE_APPLIED = ["y", "", "", "y", "y"]
+
+
+def gestures(studio: FakeStudio) -> list[str]:
+    return [
+        request.path
+        for request in studio.requests
+        if request.method == "POST" and request.path.endswith("/sections/alignment")
+    ]
+
+
+def package_of(version: dict[str, object] | None) -> dict[str, object]:
+    assert version is not None
+    package = dict(version["package"])
+    package.pop("grounding")
+    return package
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_the_requirements_branch_ends_with_the_gesture_the_approval_and_the_folder(
+    tmp_path: Path, language: str
+) -> None:
+    with session(tmp_path, language=language) as current:
+        before = current.project.current("design")
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
+            answers=CHANGE_APPLIED if language == "en" else ["s", "", "", "s", "s"],
+            language=language,
+        )
+        after = current.project.current("design")
+        approved = current.project.approved("design")
+        sections = current.project.sections()
+        sent = gestures(current.studio)
+        decisions = current.decisions()
+        published = current.project.knowledge_versions()
+
+    lines = run.output.splitlines()
+    design = next(item for item in sections["sections"] if item["key"] == "DESIGN")
+    assert run.status == 0, run.errors
+    realigned = lines.index(said("align.design_realigned", language, version=3))
+    assert lines[realigned + 1 : realigned + 3] == [
+        said("sections.not_covered", language, codes=", ".join(design["codes"])),
+        said("sections.evaluation_missing", language),
+    ]
+    assert design["codes"]
+    assert said("sections.evaluation_after", language) not in lines
+    assert said("align.folder_updated", language, version=1) in lines
+    assert sent == [f"/api/v1/projects/{current.project.id}/sections/alignment"]
+    assert after is not None and after["version_number"] == 3
+    assert approved
+    assert package_of(after) == package_of(before)
+    assert decisions == {FIRST: "REQUIREMENTS_CHANGE"}
+    assert len(published) == 1
+    assert [item["key"] for item in sections["sections"] if item["state"] == "TO_UPDATE"] == []
+    assert design["state"] == "UPDATE_AVAILABLE"
+
+
+def test_a_discarded_change_of_the_requirements_records_nothing(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
+            answers=["y", "", "", "n"],
+        )
+        decisions = current.decisions()
+        requirements = current.project.current("requirements")
+        sent = gestures(current.studio)
+
+    assert run.status == 0, run.errors
+    assert said("align.decided_later") in run.output.splitlines()
+    assert "Decision recorded" not in run.output
+    assert decisions == {FIRST: None}
+    assert requirements is not None and requirements["version_number"] == 1
+    assert sent == []
+
+
+def test_requirements_left_waiting_send_no_gesture(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
+            answers=["y", "", "", "y", "n"],
+        )
+        decisions = current.decisions()
+        sent = gestures(current.studio)
+
+    assert run.status == 0, run.errors
+    assert said("align.requirements_left", version=2) in run.output.splitlines()
+    assert decisions == {FIRST: "REQUIREMENTS_CHANGE"}
+    assert sent == []
+
+
+def test_a_design_that_cannot_be_re_anchored_is_told_with_its_codes(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        current.studio.fail_next(
+            "POST",
+            "/projects/{project_id}/sections/alignment",
+            status=200,
+            body={
+                "status": "NOTHING_TO_ALIGN",
+                "results": [
+                    {
+                        "key": "DESIGN",
+                        "outcome": "BLOCKED",
+                        "issue": "REQUIREMENT_NO_LONGER_AVAILABLE",
+                        "version_number": None,
+                        "codes": ["REQ-002"],
+                    }
+                ],
+                "sections": None,
+            },
+        )
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
+            answers=CHANGE_APPLIED,
+        )
+        published = current.project.knowledge_versions()
+
+    lines = run.output.splitlines()
+    assert run.status == 0, run.errors
+    assert (
+        "Design & Evaluation cannot be updated by itself: the design cites REQ-002, which the "
+        "Definition no longer contains: regenerate the alternatives in the Design & Evaluation "
+        "step of the web Studio. Then go on with `ut design`." in lines
+    )
+    assert not any(line.startswith("Knowledge folder updated") for line in lines)
+    assert published == []
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "key", "values"),
+    [
+        (404, {"detail": "Not Found"}, "align.design_not_realigned", {}),
+        (
+            503,
+            {"detail": {"code": "SECTIONS_SERVICE_UNAVAILABLE"}},
+            "align.design_realign_failed",
+            {"code": "SECTIONS_SERVICE_UNAVAILABLE"},
+        ),
+    ],
+)
+def test_a_studio_that_cannot_re_anchor_the_design_says_so(
+    tmp_path: Path, status: int, body: dict[str, object], key: str, values: dict[str, str]
+) -> None:
+    with session(tmp_path) as current:
+        current.studio.fail_next(
+            "POST", "/projects/{project_id}/sections/alignment", status=status, body=body
+        )
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, REQUIREMENTS_COMMIT)]),
+            answers=CHANGE_APPLIED,
+        )
+        decisions = current.decisions()
+
+    assert run.status == 0, run.errors
+    assert said(key, **values) in run.output.splitlines()
+    assert decisions == {FIRST: "REQUIREMENTS_CHANGE"}
+
+
+def test_the_reviews_of_align_use_the_language_of_the_knowledge_folder(tmp_path: Path) -> None:
+    with session(tmp_path) as current:
+        folder = current.root / "orchestwin"
+        folder.mkdir()
+        manifest = {
+            "package": {"version_number": 1, "content_hash": "c"},
+            "project": {"id": current.project.id, "name": NAME, "language": "it"},
+            "stages": {},
+            "files": {},
+        }
+        (folder / "orchestwin.json").write_text(json.dumps(manifest), encoding="utf-8")
+        run = current.ut(
+            "align",
+            processes=current.repository([commit(FIRST, "Add the amount field")]),
+            answers=["y", ""],
+        )
+        locales = [
+            json.loads(request.body)["locale"]
+            for request in current.studio.requests
+            if request.path.endswith("/reviews") and request.method == "POST"
+        ]
+
+    assert run.status == 0, run.errors
+    assert locales == ["it-IT"]

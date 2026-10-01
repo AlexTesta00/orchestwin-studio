@@ -718,11 +718,12 @@ def test_twins_not_approved_yet_name_the_command_that_approves_them(tmp_path: Pa
     assert italian.status == 1
     assert italian.output == ""
     assert italian.errors == (
-        "I twin di questo progetto non sono ancora approvati, oppure vanno approvati di nuovo "
-        "dopo un cambiamento del brief o della squadra. Confermali con `ut init`, poi riprova.\n"
+        "I twin di questo progetto non sono ancora approvati, oppure sono rimasti indietro dopo "
+        "un cambiamento del brief o delle prospettive. Se sono indietro aggiornali con "
+        "`ut sections update`, altrimenti confermali con `ut init`; poi riprova.\n"
     )
     assert english.status == 1
-    assert "Confirm them with `ut init`, then try again." in english.errors
+    assert "otherwise confirm them with `ut init`. Then try again." in english.errors
 
 
 def test_without_sign_in_the_twins_come_from_the_knowledge_folder(tmp_path: Path) -> None:

@@ -54,10 +54,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Knowledge folder: not published yet.",
     },
     "status.next_folder_current": {
-        "it": "La cartella di conoscenza è aggiornata: lo sviluppo continua con `ut align` e "
-        "`ut watch`.",
-        "en": "The knowledge folder is up to date: the development goes on with `ut align` and "
-        "`ut watch`.",
+        "it": "La cartella di conoscenza è aggiornata: lo sviluppo continua con questi comandi:",
+        "en": "The knowledge folder is up to date: the development goes on with these commands:",
     },
     "status.alignment": {
         "it": "Sviluppo: commit registrati: {recorded}; dopo il punto allineato: {pending}; "

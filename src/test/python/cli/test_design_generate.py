@@ -31,18 +31,17 @@ NO_MODEL = (
 )
 REFUSALS = {
     ("UX_DESIGNER_REQUIRED", "en"): (
-        "The design alternatives were not prepared: the approved team of this project has no "
-        "UX/UI designer, the specialist who prepares them (UX_DESIGNER_REQUIRED). A team "
-        "approved before 29 September 2026 may lack the designer; new teams always have one. "
-        "Change the team and approve it again in the web Studio, then launch `ut design` "
-        "again.\n"
+        "The design alternatives were not prepared: in the approved perspectives of this "
+        "project User experience (UX) is not fully applied (UX_DESIGNER_REQUIRED). It can "
+        "happen with perspectives approved before 29 September 2026. Prepare the perspectives "
+        "again and approve them in the web Studio, then launch `ut design` again.\n"
     ),
     ("UX_DESIGNER_REQUIRED", "it"): (
-        "Le alternative di design non sono state preparate: la squadra approvata di questo "
-        "progetto non ha il designer UX/UI, lo specialista che le prepara (UX_DESIGNER_REQUIRED). "
-        "Una squadra approvata prima del 29 settembre 2026 può non averlo; le squadre nuove lo "
-        "hanno sempre. Cambia la squadra e approvala di nuovo nello Studio web, poi rilancia "
-        "`ut design`.\n"
+        "Le alternative di design non sono state preparate: nelle prospettive approvate di "
+        "questo progetto l'Esperienza d'uso (UX) non è applicata per intero "
+        "(UX_DESIGNER_REQUIRED). Può succedere con le prospettive approvate prima del 29 "
+        "settembre 2026. Prepara di nuovo le prospettive e approvale nello Studio web, poi "
+        "rilancia `ut design`.\n"
     ),
     ("GROUNDED_INPUT_REQUIRED", "en"): (
         "The design alternatives were not prepared: the approved steps do not give the model "

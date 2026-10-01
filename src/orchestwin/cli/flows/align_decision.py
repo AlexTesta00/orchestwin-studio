@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import costs
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import requirements as requirements_api
+from orchestwin.cli.api import sections as sections_api
 from orchestwin.cli.api import tasks as tasks_api
+from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.console import Choice, selected_choice
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
@@ -342,13 +344,13 @@ def requirements_branch(
         if error.code in ENDING_CODES or error.status in UNRECORDABLE:
             raise
         report(context, error, "init")
-        record(workspace, item.commit, changes_api.REQUIREMENTS_CHANGE, note=request)
-        console.say("align.decided_requirements", commit=git.short(item.commit))
-        return changes_api.REQUIREMENTS_CHANGE, error.status
+        console.say("align.decided_later")
+        return None, error.status
+    if updated.get("id") == version.get("id"):
+        console.say("align.decided_later")
+        return None, 0
     record(workspace, item.commit, changes_api.REQUIREMENTS_CHANGE, note=request)
     console.say("align.decided_requirements", commit=git.short(item.commit))
-    if updated.get("id") == version.get("id"):
-        return changes_api.REQUIREMENTS_CHANGE, 0
     number = updated.get("version_number") or "-"
     if not console.confirm("align.requirements_approve", default=True, version=number):
         console.say("align.requirements_left", version=number)
@@ -365,9 +367,42 @@ def requirements_branch(
         report(context, error, "init")
         return changes_api.REQUIREMENTS_CHANGE, error.status
     journey.conclude(REQUIREMENTS_STAGE, updated, gate)
-    console.say("align.requirements_check_design")
+    realign_design(context, workspace)
     recheck_hint(context, workspace)
     return changes_api.REQUIREMENTS_CHANGE, 0
+
+
+def realign_design(context: CommandContext, workspace: Workspace) -> None:
+    console = context.console
+    try:
+        gesture = sections_api.align(workspace.client, workspace.project_id)
+    except CliError as error:
+        if error.status in ENDING_STATUSES:
+            raise
+        console.say("align.design_realign_failed", code=str(error.values.get("code", error.code)))
+        return
+    if gesture is None:
+        console.say("align.design_not_realigned")
+        return
+    after = gesture.sections
+    for result in gesture.results:
+        if result.outcome == sections_api.SKIPPED:
+            continue
+        if result.outcome == sections_api.ALIGNED and result.key == sections_api.DESIGN:
+            number = result.version_number
+            console.say("align.design_realigned", version="-" if number is None else number)
+            continue
+        console.write(sections_command.result_line(context, after, result))
+    for line in sections_command.after_lines(
+        context, after, gesture.aligned, covered=False, evaluation="sections.evaluation_missing"
+    ):
+        console.write(line)
+    if not gesture.aligned:
+        return
+    if after is not None and after.behind():
+        console.say("sections.folder_waits")
+        return
+    refresh_folder(context, workspace)
 
 
 def menu(context: CommandContext, options: Sequence[Choice]) -> Choice:

@@ -428,3 +428,31 @@ def test_importing_the_command_line_loads_no_heavy_module() -> None:
     )
 
     assert result.stdout.strip() == "[]"
+
+
+def test_the_sections_command_is_registered_after_status_and_loads_only_the_command_line() -> None:
+    source = Path(orchestwin.__file__).resolve().parents[1]
+    paths = [str(source), os.environ.get("PYTHONPATH", "")]
+    code = (
+        "import sys\n"
+        "import orchestwin.cli.main\n"
+        "from orchestwin.cli.commands import sections\n"
+        "from orchestwin.cli.api import sections as api\n"
+        "loaded = sorted({'.'.join(name.split('.')[:2]) for name in sys.modules "
+        "if name.startswith('orchestwin.') or name.split('.')[0] in ('fastapi', 'sqlalchemy')})\n"
+        "print(loaded)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(path for path in paths if path)},
+        check=True,
+        timeout=120,
+    )
+    names = [module.NAME for module in COMMANDS]
+
+    assert result.stdout.strip() == "['orchestwin.cli']"
+    assert names[names.index("status") + 1] == "sections"
+    assert command_help_key("sections") == "sections.help"

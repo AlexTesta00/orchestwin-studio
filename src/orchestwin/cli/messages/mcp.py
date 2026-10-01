@@ -90,7 +90,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "Durante lo sviluppo un twin può aver imparato osservazioni nuove sul suo gruppo, "
         "approvate dal proprietario: get_twin e list_twins le mostrano, e dove contraddicono il "
         "profilo valgono loro, perché sono più recenti. Gli strumenti che leggono la cartella "
-        "sono gratuiti, compresi get_tasks con i compiti aperti per il codice e "
+        "non spendono nulla, compresi get_tasks con i compiti aperti per il codice e "
         "get_test_results con gli ultimi esiti dei test; ask_twin e review_changes spendono sul "
         "modello e ora rispondono con un errore, perché il server è stato avviato senza "
         "--spend. Lo stesso vale per run_tests, che verifica i criteri di accettazione "
@@ -104,8 +104,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "people. During the development a twin may have learned new observations about its "
         "group, approved by the owner: get_twin and list_twins show them, and where they "
         "contradict the profile they prevail, because they are newer. The tools that read the "
-        "folder are free, get_tasks with the open tasks for the code and get_test_results with "
-        "the latest outcome of the tests included; ask_twin and review_changes spend on the "
+        "folder spend nothing, get_tasks with the open tasks for the code and get_test_results "
+        "with the latest outcome of the tests included; ask_twin and review_changes spend on the "
         "model and now answer with an error, because the server was started without --spend. "
         "The same holds for run_tests, which checks the acceptance criteria on the application "
         "in the browsers of this computer. Decisions on the commits and on the tasks stay with "
@@ -120,7 +120,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "Durante lo sviluppo un twin può aver imparato osservazioni nuove sul suo gruppo, "
         "approvate dal proprietario: get_twin e list_twins le mostrano, e dove contraddicono il "
         "profilo valgono loro, perché sono più recenti. Gli strumenti che leggono la cartella "
-        "sono gratuiti, compresi get_tasks con i compiti aperti per il codice e "
+        "non spendono nulla, compresi get_tasks con i compiti aperti per il codice e "
         "get_test_results con gli ultimi esiti dei test; ask_twin e review_changes spendono sul "
         "modello a ogni chiamata e sono permessi, perché il server è stato avviato con --spend. "
         "È permesso anche run_tests: verifica i criteri di accettazione sull'applicazione nei "
@@ -135,8 +135,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "people. During the development a twin may have learned new observations about its "
         "group, approved by the owner: get_twin and list_twins show them, and where they "
         "contradict the profile they prevail, because they are newer. The tools that read the "
-        "folder are free, get_tasks with the open tasks for the code and get_test_results with "
-        "the latest outcome of the tests included; ask_twin and review_changes spend on the "
+        "folder spend nothing, get_tasks with the open tasks for the code and get_test_results "
+        "with the latest outcome of the tests included; ask_twin and review_changes spend on the "
         "model at each call and are allowed, because the server was started with --spend. "
         "run_tests is allowed too: it checks the acceptance criteria on the application in the "
         "browsers of this computer, records the outcome in the Studio and spends on the model "
@@ -254,47 +254,47 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Stato del progetto letto dalla cartella di conoscenza: passi approvati, versioni "
         "di requisiti e design da realizzare, punto allineato, commit successivi e quante loro "
         "revisioni sono da rifare perché fatte su versioni precedenti, compiti aperti per il "
-        "codice e che cosa fare dopo. Gratuito.",
+        "codice e che cosa fare dopo. Nessuna spesa.",
         "en": "State of the project read from the knowledge folder: approved steps, "
         "requirements and design versions to implement, aligned point, later commits and how "
         "many of their reviews need doing again because they were made on earlier versions, "
-        "open tasks for the code and what to do next. Free.",
+        "open tasks for the code and what to do next. No spending.",
     },
     "mcp.title_list_twins": {"it": "User Twin del progetto", "en": "User Twins of the project"},
     "mcp.describe_list_twins": {
         "it": "Elenca gli User Twin approvati con numero, nome, ruolo, primo obiettivo, versione "
         "(per esempio 1.2: profilo approvato 1, due passi di apprendimento durante lo sviluppo) "
         "e numero di osservazioni imparate durante lo sviluppo. Gli User Twin sono profili dei "
-        "gruppi di utenti simulati dal modello. Gratuito.",
+        "gruppi di utenti simulati dal modello. Nessuna spesa.",
         "en": "List the approved User Twins with number, name, role, first goal, version (for "
         "example 1.2: approved profile 1, two learning steps during the development) and the "
         "number of observations learned during the development. User Twins are profiles of the "
-        "user groups simulated by the model. Free.",
+        "user groups simulated by the model. No spending.",
     },
     "mcp.title_get_twin": {"it": "Profilo di un User Twin", "en": "Profile of a User Twin"},
     "mcp.describe_get_twin": {
         "it": "Profilo completo di un User Twin: ruolo, obiettivi, frustrazioni, difficoltà, "
         "contesto d'uso e ogni osservazione con la sua origine; in learned, le osservazioni che "
-        "il twin ha imparato durante lo sviluppo, approvate dal proprietario. Gratuito.",
+        "il twin ha imparato durante lo sviluppo, approvate dal proprietario. Nessuna spesa.",
         "en": "Full profile of a User Twin: role, goals, frustrations, pain points, context of "
         "use and every observation with its origin; in learned, the observations that the twin "
-        "learned during the development, approved by the owner. Free.",
+        "learned during the development, approved by the owner. No spending.",
     },
     "mcp.title_get_requirements": {"it": "Requisiti approvati", "en": "Approved requirements"},
     "mcp.describe_get_requirements": {
         "it": "Requisiti approvati con storie utente e criteri di accettazione; con codes solo "
-        "i codici indicati e ciò che cita quei requisiti. Gratuito.",
+        "i codici indicati e ciò che cita quei requisiti. Nessuna spesa.",
         "en": "Approved requirements with user stories and acceptance criteria; with codes "
-        "only the given codes and what cites those requirements. Free.",
+        "only the given codes and what cites those requirements. No spending.",
     },
     "mcp.title_get_design": {"it": "Design approvato", "en": "Approved design"},
     "mcp.describe_get_design": {
         "it": "Il design approvato: alternativa scelta, flussi e schermate con i loro elementi "
         "visibili; con screen una sola schermata con le transizioni da e verso di essa. "
-        "Gratuito.",
+        "Nessuna spesa.",
         "en": "The approved design: chosen alternative, workflows and screens with their "
         "visible elements; with screen only one screen with the transitions from and to it. "
-        "Free.",
+        "No spending.",
     },
     "mcp.title_get_feedback": {
         "it": "Critiche dei twin sul codice",
@@ -303,10 +303,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.describe_get_feedback": {
         "it": "Le ultime revisioni dei commit: critiche dei twin con i loro rilievi, verdetto "
         "di allineamento e compiti proposti; con commit solo le revisioni di quel commit. "
-        "Gratuito.",
+        "Nessuna spesa.",
         "en": "The latest reviews of the commits: critiques of the twins with their findings, "
         "alignment verdict and proposed tasks; with commit only the reviews of that commit. "
-        "Free.",
+        "No spending.",
     },
     "mcp.title_ask_twin": {"it": "Domanda a un User Twin", "en": "Ask a User Twin"},
     "mcp.describe_ask_twin": {
@@ -343,10 +343,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mcp.describe_get_test_results": {
         "it": "Le ultime esecuzioni dei test di accettazione sull'applicazione in sviluppo, lette "
         "dalla cartella di conoscenza: stato di ogni criterio, esito di ogni percorso in ogni "
-        "browser e critiche dei twin. Gratuito.",
+        "browser e critiche dei twin. Nessuna spesa.",
         "en": "The latest runs of the acceptance tests on the application under development, "
         "read from the knowledge folder: status of every criterion, outcome of every path in "
-        "every browser and the critiques of the twins. Free.",
+        "every browser and the critiques of the twins. No spending.",
     },
     "mcp.title_run_tests": {
         "it": "Verifica dei criteri di accettazione",
@@ -370,11 +370,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "I compiti per il codice letti dalla cartella di conoscenza: il testo, i requisiti, "
         "le schermate e i criteri che riguardano, da dove vengono (una critica di un twin su un "
         "commit o sui test, la decisione su un commit, oppure il proprietario) e il loro stato; "
-        "con status all anche quelli fatti o lasciati cadere. Gratuito.",
+        "con status all anche quelli fatti o lasciati cadere. Nessuna spesa.",
         "en": "The tasks for the code read from the knowledge folder: the text, the "
         "requirements, screens and criteria they are about, where they come from (a critique of "
         "a twin on a commit or on the tests, the decision on a commit, or the owner) and their "
-        "status; with status all also the ones done or dropped. Free.",
+        "status; with status all also the ones done or dropped. No spending.",
     },
     "mcp.describe_disabled": {
         "it": "Ora non disponibile: il server è stato avviato senza --spend.",
@@ -543,10 +543,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The chosen design has no screen {screen}. Screens: {screens}.",
     },
     "mcp.errors.TWINS_NOT_APPROVED": {
-        "it": "I twin di questo progetto non sono approvati nello Studio: confermali con "
-        "`ut init`, poi riprova.",
-        "en": "The twins of this project are not approved in the Studio: confirm them with "
-        "`ut init`, then try again.",
+        "it": "I twin di questo progetto non sono approvati nello Studio, oppure sono rimasti "
+        "indietro: aggiornali con `ut sections update` o confermali con `ut init`, poi riprova.",
+        "en": "The twins of this project are not approved in the Studio, or they fell behind: "
+        "update them with `ut sections update` or confirm them with `ut init`, then try again.",
     },
     "mcp.errors.TWIN_ANSWER_FAILED": {
         "it": "{name} non ha potuto rispondere: il modello non ha dato una risposta valida "

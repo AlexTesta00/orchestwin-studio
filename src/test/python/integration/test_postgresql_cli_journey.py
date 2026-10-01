@@ -65,6 +65,7 @@ NO_MODEL = {
 }
 IMPORTED_STAGES = 5
 ALTERNATIVES = 3
+SECTION_KEYS = ["BRIEF", "TEAM", "USER_TWINS", "REQUIREMENTS", "DESIGN", "PACKAGE"]
 MANDATORY_SPECIALISTS: Mapping[str, str] = {
     "UX_UI_DESIGNER": "CORE_USER_CENTERED_DESIGN",
     "ACCESSIBILITY_REVIEWER": "CORE_ACCESSIBILITY_DISCIPLINE",
@@ -398,7 +399,9 @@ def show_the_state(scene: Scene) -> None:
     budget = scene.api.request("GET", "/model-runtime/budget")
     assert (budget.status, budget.code) == (503, "REAL_MODEL_RUNTIME_NOT_CONFIGURED")
     assert scene.folder_numbers() == list(range(INIT_FOLDER, 0, -1))
-    assert json.loads(as_json.output) == {
+    document = json.loads(as_json.output)
+    sections = document.pop("sections", None)
+    assert document == {
         "schema_version": 1,
         "kind": "project",
         "source": "studio",
@@ -442,6 +445,13 @@ def show_the_state(scene: Scene) -> None:
             ]
         },
     }, as_json.transcript()
+    assert isinstance(sections, Mapping), as_json.transcript()
+    assert sections["first_pass_complete"] is False, as_json.transcript()
+    assert [item["key"] for item in sections["sections"]] == SECTION_KEYS, as_json.transcript()
+    offline_json = scene.ut("status", "--offline", "--json")
+    assert offline_json.status == 0, offline_json.transcript()
+    assert offline_json.exchanges == (), offline_json.transcript()
+    assert json.loads(offline_json.output)["sections"] is None, offline_json.transcript()
 
 
 def show_the_design_without_a_model(scene: Scene) -> None:

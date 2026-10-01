@@ -402,8 +402,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Decision recorded: a change of the requirements was asked from commit {commit}.",
     },
     "align.requirements_approve": {
-        "it": "Approvi di nuovo i requisiti, ora alla versione {version}?",
-        "en": "Do you approve the requirements again, now at version {version}?",
+        "it": "Approvi i requisiti alla versione {version}? Dopo riaggancio il design approvato "
+        "a questa versione, con i contenuti invariati.",
+        "en": "Do you approve the requirements at version {version}? Then the approved design "
+        "is re-anchored to this version, with its content unchanged.",
     },
     "align.requirements_left": {
         "it": "I requisiti alla versione {version} aspettano la tua approvazione: approvali con "
@@ -411,11 +413,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The requirements at version {version} wait for your approval: approve them with "
         "`ut init`.",
     },
-    "align.requirements_check_design": {
-        "it": "I requisiti sono cambiati: controlla il design con `ut design`, perché potrebbe "
-        "non corrispondere più.",
-        "en": "The requirements changed: check the design with `ut design`, because it may no "
-        "longer match them.",
+    "align.design_realigned": {
+        "it": "Il design è stato riagganciato alla Definizione nuova e confermato alla versione "
+        "{version}, senza ridisegnare le alternative.",
+        "en": "The design was re-anchored to the new Definition and confirmed at version "
+        "{version}, without redrawing the alternatives.",
+    },
+    "align.design_not_realigned": {
+        "it": "Questo Studio non sa ancora riagganciare il design alla Definizione nuova: "
+        "aggiornalo, poi lancia `ut sections update`.",
+        "en": "This Studio cannot re-anchor the design to the new Definition yet: update it, "
+        "then launch `ut sections update`.",
+    },
+    "align.design_realign_failed": {
+        "it": "Il design non è stato riagganciato alla Definizione nuova ({code}): riprova più "
+        "tardi con `ut sections update`.",
+        "en": "The design was not re-anchored to the new Definition ({code}): try again later "
+        "with `ut sections update`.",
     },
     "align.request_keep": {
         "it": "Premi Invio per inviarla così, oppure scrivi il tuo testo:",
