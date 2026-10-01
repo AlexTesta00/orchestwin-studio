@@ -97,6 +97,7 @@ class Report:
     tests: AcceptanceSummary | None = None
     stale_reviews: int = 0
     learning: tuple[TwinLearning, ...] | None = None
+    billing: str = usage.API_BILLING
 
     @property
     def folder_current(self) -> bool:
@@ -142,6 +143,7 @@ class Report:
                     "currency": "USD",
                     "project_spent_usd": _rounded(self.spent_usd),
                     "remaining_usd": _rounded(self.remaining_usd),
+                    "billing": self.billing,
                 }
                 if self.has_budget
                 else None
@@ -175,6 +177,7 @@ class _Studio:
     tests: AcceptanceSummary | None = None
     stale_reviews: int = 0
     learning: tuple[TwinLearning, ...] | None = None
+    billing: str = usage.API_BILLING
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -233,6 +236,7 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         tests=found.tests if found.tests is not None else local_tests(project),
         stale_reviews=found.stale_reviews,
         learning=found.learning if found.learning is not None else local_learning(project),
+        billing=found.billing,
     )
 
 
@@ -481,7 +485,7 @@ def _studio_facts(
         development = changes_api.development(client, link.project_id) if approved else None
         tests = tests_api.summary(client, link.project_id) if approved else None
         learning = studio_learning(client, link.project_id) if _twins_approved(steps) else None
-        has_budget, spent, remaining = _spending(client, link.project_id)
+        has_budget, spent, remaining, billing = _spending(client, link.project_id)
     except CliError as error:
         reason = _offline_reason(error)
         if reason is None:
@@ -497,6 +501,7 @@ def _studio_facts(
         tests=tests,
         stale_reviews=0 if development is None else development.stale_reviews,
         learning=learning,
+        billing=billing,
     )
 
 
@@ -530,18 +535,20 @@ def _offline_reason(error: CliError) -> str | None:
     return None
 
 
-def _spending(client: StudioClient, project_id: str) -> tuple[bool, float | None, float | None]:
+def _spending(
+    client: StudioClient, project_id: str
+) -> tuple[bool, float | None, float | None, str]:
     try:
         budget = usage.budget(client)
         if budget is None:
-            return False, None, None
+            return False, None, None, usage.API_BILLING
         used = usage.project_usage(client, project_id)
     except ApiFailure as failure:
         if failure.http_status >= 500:
-            return False, None, None
+            return False, None, None, usage.API_BILLING
         raise
     spent = None if used is None else usage.spent_usd(used)
-    return True, spent, usage.remaining_usd(budget)
+    return True, spent, usage.remaining_usd(budget), usage.billing(budget)
 
 
 def _local_summary(project: ProjectFolder) -> tuple[FolderSummary | None, str | None]:
@@ -629,6 +636,9 @@ def _folder_lines(context: CommandContext, report: Report) -> None:
 
 def _spending_line(context: CommandContext, report: Report) -> None:
     if not report.has_budget:
+        return
+    if report.billing == usage.SUBSCRIPTION_BILLING:
+        context.console.say("status.subscription")
         return
     language = context.language
     spent, remaining = report.spent_usd, report.remaining_usd

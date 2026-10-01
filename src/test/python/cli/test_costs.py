@@ -4,8 +4,16 @@ from pathlib import Path
 
 import pytest
 
+from orchestwin.cli.api import usage
 from orchestwin.cli.context import CommandContext
-from orchestwin.cli.costs import ESTIMATES, Estimate, confirm_spending, estimate, minutes_text
+from orchestwin.cli.costs import (
+    ESTIMATES,
+    Estimate,
+    confirm_spending,
+    estimate,
+    minutes_text,
+    uses_subscription,
+)
 from orchestwin.cli.errors import ApiFailure, CliError
 
 from .support.terminal import Terminal, command_context, store_session, terminal
@@ -147,6 +155,91 @@ def test_a_budget_without_the_spending_so_far_shows_only_the_estimate(tmp_path: 
     confirm_spending(context, context.client(), ["BRIEF_DIALOGUE"])
 
     assert bundle.output == "Estimate: 0.09 USD, about 1 min.\n"
+
+
+SUBSCRIPTION_LINES = {
+    "en": "This generation runs on the Claude subscription: it spends no credit. Estimated "
+    "time: about 10 min.",
+    "it": "Questa generazione usa l'abbonamento di Claude: non spende credito. Tempo stimato: "
+    "circa 10 min.",
+}
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+@pytest.mark.parametrize("assume_yes", [False, True])
+def test_on_the_subscription_one_line_is_shown_and_nothing_is_asked(
+    tmp_path: Path, language: str, assume_yes: bool
+) -> None:
+    poor = {**BUDGET, "remaining_total_microusd": 1_000_000, "billing": "SUBSCRIPTION"}
+    transport = with_budget(poor).expect("GET", BUDGET_PATH, body=poor)
+    context, bundle = prepared(
+        tmp_path, transport, answers=("n",), assume_yes=assume_yes, language=language
+    )
+
+    confirm_spending(context, context.client(), ["MOCKUP", "MOCKUP"], minutes=10.0)
+    confirm_spending(context, context.client(), ["MOCKUP", "MOCKUP"], minutes=10.0, ask=False)
+
+    assert bundle.output.splitlines() == [SUBSCRIPTION_LINES[language]] * 2
+    assert context.environment.stdin.readline() == "n\n"
+    transport.assert_done()
+
+
+@pytest.mark.parametrize("billing", ["API", "MIXED", None, "SOMETHING_NEW"])
+def test_api_mixed_and_an_older_studio_still_show_the_amount_and_ask(
+    tmp_path: Path, billing: str | None
+) -> None:
+    budget = BUDGET if billing is None else {**BUDGET, "billing": billing}
+    context, bundle = prepared(tmp_path, with_budget(budget), answers=("n",))
+
+    with pytest.raises(CliError) as caught:
+        confirm_spending(context, context.client(), ["MOCKUP"])
+
+    assert caught.value.code == "SPENDING_REFUSED"
+    assert bundle.output.splitlines() == [
+        "Estimate: 1.30-1.60 USD, about 10 min. Credit left in the Studio: 25.13 USD.",
+        "Go ahead with this spending? [Y/n] ",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "expected"),
+    [
+        (200, {**BUDGET, "billing": "SUBSCRIPTION"}, True),
+        (200, {**BUDGET, "billing": "MIXED"}, False),
+        (200, {**BUDGET, "billing": "API"}, False),
+        (200, BUDGET, False),
+        (404, {"detail": "Not Found"}, False),
+        (503, {"detail": {"code": "GENERATION_BUDGET_NOT_CONFIGURED"}}, False),
+        (503, {"detail": {"code": "PROPOSAL_EVIDENCE_UNAVAILABLE"}}, False),
+    ],
+)
+def test_whether_the_studio_generates_on_the_subscription(
+    tmp_path: Path, status: int, body: object, expected: bool
+) -> None:
+    transport = with_budget(body, status=status)
+    context, bundle = prepared(tmp_path, transport)
+
+    assert uses_subscription(context.client()) is expected
+    assert bundle.output == ""
+    transport.assert_done()
+
+
+@pytest.mark.parametrize(
+    ("document", "billing"),
+    [
+        ({"billing": "SUBSCRIPTION"}, "SUBSCRIPTION"),
+        ({"billing": "MIXED"}, "MIXED"),
+        ({"billing": "API"}, "API"),
+        ({}, "API"),
+        ({"billing": "subscription"}, "API"),
+        ({"billing": 1}, "API"),
+        (None, "API"),
+        (["SUBSCRIPTION"], "API"),
+    ],
+)
+def test_the_billing_of_a_budget_document(document: object, billing: str) -> None:
+    assert usage.billing(document) == billing
+    assert usage.on_subscription(document) is (billing == "SUBSCRIPTION")
 
 
 def test_the_estimates_of_the_contract() -> None:

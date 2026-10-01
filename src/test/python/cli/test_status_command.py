@@ -136,6 +136,7 @@ def expect_studio(
     routes: bool = True,
     tests: dict[str, object] | None = None,
     learning: dict[str, object] | None = None,
+    billing: str | None = None,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -225,7 +226,11 @@ def expect_studio(
     elif twins_approved:
         transport.expect("GET", f"{BASE}/twin-learning", status=404, body={"detail": "Not Found"})
     if budget:
-        transport.expect("GET", f"{API}/model-runtime/budget", body=BUDGET)
+        transport.expect(
+            "GET",
+            f"{API}/model-runtime/budget",
+            body=BUDGET if billing is None else {**BUDGET, "billing": billing},
+        )
         transport.expect(
             "GET",
             f"{BASE}/model-usage",
@@ -548,11 +553,65 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
         "currency": "USD",
         "project_spent_usd": 0.42,
         "remaining_usd": 25.13,
+        "billing": "API",
     }
     assert document["alignment"] is None
     assert document["tests"] is None
     assert document["learning"] is None
     assert list(document)[-3:] == ["alignment", "tests", "learning"]
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        ("en", "Generations run on the Claude subscription: no credit is spent."),
+        ("it", "Le generazioni usano l'abbonamento di Claude: nessun credito speso."),
+    ],
+)
+def test_on_the_subscription_the_status_says_that_no_credit_is_spent(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    signed_in_folder(tmp_path)
+    text = expect_studio(ScriptedTransport(), billing="SUBSCRIPTION")
+    as_json = expect_studio(ScriptedTransport(), billing="SUBSCRIPTION")
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[-1] == line
+    assert "USD" not in run.output
+    assert document["spending"] == {
+        "currency": "USD",
+        "project_spent_usd": 0.42,
+        "remaining_usd": 25.13,
+        "billing": "SUBSCRIPTION",
+    }
+    text.assert_done()
+    as_json.assert_done()
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_the_spending_and_the_credit_are_shown(
+    tmp_path: Path, billing: str
+) -> None:
+    signed_in_folder(tmp_path)
+    text = expect_studio(ScriptedTransport(), billing=billing)
+    as_json = expect_studio(ScriptedTransport(), billing=billing)
+
+    run = run_ut(["status"], tmp_path, transport=text)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    assert run.output.splitlines()[-1] == (
+        "Spent on this project: 0.42 USD. Credit left in the Studio: 25.13 USD."
+    )
+    assert document["spending"]["billing"] == billing
+    assert list(document["spending"]) == [
+        "currency",
+        "project_spent_usd",
+        "remaining_usd",
+        "billing",
+    ]
 
 
 def saved_steps(project: ProjectFolder) -> None:

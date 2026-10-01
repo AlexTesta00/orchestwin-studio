@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
+
 from orchestwin.cli.flows.changes import git_command, log_arguments
 from orchestwin.cli.http import Reply, UrlTransport
 
@@ -86,8 +88,10 @@ class Session:
 
 
 @contextmanager
-def session(tmp_path: Path, *, hosted: bool = True, language: str = "en") -> Iterator[Session]:
-    with FakeStudio(language=language, hosted=hosted, twins=2) as studio:
+def session(
+    tmp_path: Path, *, hosted: bool = True, language: str = "en", billing: str | None = None
+) -> Iterator[Session]:
+    with FakeStudio(language=language, hosted=hosted, twins=2, billing=billing) as studio:
         studio.add_account(EMAIL, TEST_PASSWORD)
         project = studio.seed_project(owner=EMAIL, name=NAME, through="design")
         login = run_ut(
@@ -175,6 +179,53 @@ def test_the_twins_review_until_the_cap_and_the_commits_are_still_recorded(
     assert [change["commit"] for change in changes] == [THIRD, SECOND]
     assert all(change["decision"] is None for change in changes)
     assert run.slept >= 4.0
+
+
+def test_on_the_subscription_the_cap_still_stops_the_reviews(tmp_path: Path) -> None:
+    with session(tmp_path, billing="SUBSCRIPTION") as current:
+        second = commit(SECOND, "Show the tip", FIRST)
+        third = commit(THIRD, "Round the tip", SECOND)
+        processes = repository(
+            current.root, [FIRST, SECOND, THIRD], [(FIRST, [second]), (SECOND, [third])]
+        )
+
+        run = current.ut(
+            "watch", "--twins", "--max-usd", "1", "--interval", "2", processes=processes
+        )
+        runs = current.project.change_reviews()
+
+    assert run.status == 0, run.errors
+    lines = run.output.splitlines()
+    assert (
+        "The twins review each new commit on the Claude subscription: they spend no credit. To "
+        "spare the subscription, in this session they stop before going over 1.00 USD of "
+        "reviews at paid prices (--max-usd)." in lines
+    )
+    assert not any(line.startswith("Credit left") for line in lines)
+    assert (
+        "The next review would go over 1.00 USD of reviews at paid prices (--max-usd): the twins "
+        "stop reviewing, the commits are still recorded. Have the others reviewed with "
+        "`ut align`." in lines
+    )
+    assert "estimated spending" not in run.output
+    assert [item["commit"] for item in runs] == [SECOND]
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_the_cap_is_a_spending_and_the_credit_is_shown(
+    tmp_path: Path, billing: str
+) -> None:
+    with session(tmp_path, billing=billing) as current:
+        quiet = repository(current.root, [FIRST, FIRST], [], interrupt=False)
+        run = current.ut("watch", "--once", "--twins", processes=quiet)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[-3:] == [
+        "The twins review each new commit, up to 5.00 USD of estimated spending in this "
+        "session (--max-usd).",
+        "Credit left in the Studio: 60.00 USD.",
+        "No new commit to record.",
+    ]
 
 
 def test_once_makes_one_check(tmp_path: Path) -> None:
@@ -341,6 +392,20 @@ def test_the_introduction_in_italian(tmp_path: Path) -> None:
         "I twin esaminano ogni nuovo commit, fino a 5,00 USD di spesa stimata in questa "
         "sessione (--max-usd).",
         "Credito rimasto nello Studio: 60,00 USD.",
+        "Nessun commit nuovo da registrare.",
+    ]
+
+
+def test_the_introduction_on_the_subscription_in_italian(tmp_path: Path) -> None:
+    with session(tmp_path, language="it", billing="SUBSCRIPTION") as current:
+        processes = repository(current.root, [FIRST, FIRST], [], interrupt=False)
+        run = current.ut("watch", "--once", "--twins", processes=processes, language="it")
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[-2:] == [
+        "I twin esaminano ogni nuovo commit con l'abbonamento di Claude: non spendono credito. "
+        "Per non consumare troppo l'abbonamento, in questa sessione si fermano prima di superare "
+        "5,00 USD di esami ai prezzi a pagamento (--max-usd).",
         "Nessun commit nuovo da registrare.",
     ]
 

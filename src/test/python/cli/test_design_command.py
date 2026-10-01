@@ -235,6 +235,102 @@ def test_show_without_a_ceiling_promises_no_estimate(tmp_path: Path) -> None:
     assert alternatives.output.endswith("Launch `ut design` to have the mockups drawn.\n")
 
 
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        (
+            "en",
+            [
+                "Draw the missing mockups: DES-001, DES-002 (Claude subscription, no credit "
+                "spent, about 10 min)",
+                "Leave",
+            ],
+        ),
+        (
+            "it",
+            [
+                "Disegna i mockup che mancano: DES-001, DES-002 (abbonamento di Claude, nessun "
+                "credito speso, circa 10 min)",
+                "Esci",
+            ],
+        ),
+    ],
+)
+def test_on_the_subscription_the_menu_shows_the_time_without_an_amount(
+    tmp_path: Path, language: str, expected: list[str]
+) -> None:
+    with design_session(tmp_path, language=language, billing="SUBSCRIPTION") as session:
+        propose(session)
+        run = session.ut("design", answers=["leave"], language=language)
+        budgets = session.count("GET", "/model-runtime/budget")
+
+    assert run.status == 0, run.errors
+    assert menu(run.output.replace("Che cosa vuoi fare?", "What do you want to do?")) == expected
+    assert "USD" not in run.output
+    assert budgets == 1
+
+
+def test_on_the_subscription_a_chosen_design_offers_its_steps_without_an_amount(
+    tmp_path: Path,
+) -> None:
+    with design_session(tmp_path, billing="SUBSCRIPTION") as session:
+        ready(session)
+        choose(session, "DES-002")
+        run = session.ut("design", answers=["leave"])
+
+    assert run.status == 0, run.errors
+    assert menu(run.output) == [
+        "Open the previews in the browser",
+        "Ask for a change in words; right after, the twins review it (Claude subscription, no "
+        "credit spent, about 9 min)",
+        "Have the twins review the design (Claude subscription, no credit spent, about 2 min)",
+        "Approve the design; then the knowledge folder appears in orchestwin/",
+        "Choose another alternative; right after, the twins review it (Claude subscription, no "
+        "credit spent, about 2 min)",
+        "Leave",
+    ]
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_the_menu_shows_the_amount(tmp_path: Path, billing: str) -> None:
+    with design_session(tmp_path, billing=billing) as session:
+        propose(session)
+        run = session.ut("design", answers=["leave"])
+
+    assert run.status == 0, run.errors
+    assert menu(run.output) == [
+        "Draw the missing mockups: DES-001, DES-002 (estimate 2.60-3.20 USD, about 10 min)",
+        "Leave",
+    ]
+
+
+def test_a_budget_that_cannot_be_read_ends_the_guided_command(tmp_path: Path) -> None:
+    with design_session(tmp_path, billing="SUBSCRIPTION") as session:
+        ready(session)
+        session.studio.fail_next(
+            "GET",
+            "/model-runtime/budget",
+            status=500,
+            body={"detail": {"code": "BUDGET_STORE_FAILED"}},
+        )
+        run = session.ut("design", answers=["leave"])
+
+    assert run.status != 0
+    assert "What do you want to do?" not in run.output
+
+
+def test_on_the_subscription_show_promises_no_estimate_of_a_spending(tmp_path: Path) -> None:
+    with design_session(tmp_path, billing="SUBSCRIPTION") as session:
+        empty = session.ut("design", "show")
+        propose(session)
+        alternatives = session.ut("design", "show")
+
+    assert empty.output.endswith(
+        "The design does not exist yet. Launch `ut design` to prepare it.\n"
+    )
+    assert alternatives.output.endswith("Launch `ut design` to have the mockups drawn.\n")
+
+
 def test_ready_mockups_in_italian(tmp_path: Path) -> None:
     with design_session(tmp_path, language="it") as session:
         ready(session)

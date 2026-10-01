@@ -131,8 +131,9 @@ def session(
     fetch: bool = False,
     hidden: str | None = None,
     later: str = "",
+    billing: str | None = None,
 ) -> Iterator[Session]:
-    with FakeStudio(language=language, hosted=hosted, twins=twins) as studio:
+    with FakeStudio(language=language, hosted=hosted, twins=twins, billing=billing) as studio:
         studio.add_account(EMAIL, TEST_PASSWORD)
         project = studio.seed_project(owner=EMAIL, name=NAME, through="design")
         login = run_ut(
@@ -567,6 +568,54 @@ def test_without_room_in_max_usd_a_blocked_path_stays_blocked(
     assert lines[-2:] == ["", messages.text("test.failed_summary", "en")]
     assert wrong.status == 2
     assert "(TEST_MAX_USD_INVALID)" in wrong.errors
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "The blocked paths are not planned again: a new plan runs on the Claude subscription "
+            "and spends no credit, but at paid prices it would go over the limit of --max-usd "
+            "(0.40 USD).",
+        ),
+        (
+            "it",
+            "I percorsi bloccati non vengono ripianificati: un piano nuovo usa l'abbonamento di "
+            "Claude e non spende credito, ma ai prezzi a pagamento supererebbe il limite di "
+            "--max-usd (0,40 USD).",
+        ),
+    ],
+)
+def test_on_the_subscription_the_limit_of_max_usd_is_said_without_the_amount(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str, line: str
+) -> None:
+    with session(tmp_path, monkeypatch, language=language, billing="SUBSCRIPTION") as work:
+        work.site.fail_open("chrome", 3)
+        run = work.ut(
+            "test", "--url", ADDRESS, "--no-review", "--max-usd", "0.4", language=language
+        )
+        planned = len(work.requests("POST", "/test-plans"))
+
+    assert run.status == 1
+    assert line in lines_of(run)
+    assert "would bring the spending" not in run.output
+    assert "la spesa arriverebbe" not in run.output
+    assert planned == 1
+
+
+def test_with_mixed_routes_the_limit_of_max_usd_names_the_amount(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with session(tmp_path, monkeypatch, billing="MIXED") as work:
+        work.site.fail_open("chrome", 3)
+        run = work.ut("test", "--url", ADDRESS, "--no-review", "--max-usd", "0.4")
+
+    assert run.status == 1
+    assert (
+        "The blocked paths are not planned again: a new plan would bring the spending to 0.50 "
+        "USD, over the limit of --max-usd (0.40 USD)." in lines_of(run)
+    )
 
 
 def test_a_failed_expectation_fails_the_criterion_and_the_command(

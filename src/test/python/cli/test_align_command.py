@@ -123,8 +123,11 @@ def session(
     through: str = "design",
     budget_usd: float | None = 60.0,
     link_language: str | None = None,
+    billing: str | None = None,
 ) -> Iterator[Session]:
-    with FakeStudio(language=language, hosted=hosted, twins=2, budget_usd=budget_usd) as studio:
+    with FakeStudio(
+        language=language, hosted=hosted, twins=2, budget_usd=budget_usd, billing=billing
+    ) as studio:
         studio.add_account(EMAIL, TEST_PASSWORD)
         project = studio.seed_project(owner=EMAIL, name=NAME, through=through)
         login = run_ut(
@@ -1262,6 +1265,76 @@ def test_recheck_dry_run_lists_the_versions_and_spends_nothing(
     assert said("align.dry_run_estimate", language, amount=amount, minutes="6 min") in lines
     assert lines[-1] == said("align.recheck_hint", language, count=2)
     assert reviews == []
+
+
+@pytest.mark.parametrize(
+    ("language", "line"),
+    [
+        (
+            "en",
+            "These reviews run on the Claude subscription: they spend no credit. Estimated time: "
+            "about 3 min. Without --dry-run they really start.",
+        ),
+        (
+            "it",
+            "Questi esami usano l'abbonamento di Claude: non spendono credito. Tempo stimato: "
+            "circa 3 min. Senza --dry-run partono davvero.",
+        ),
+    ],
+)
+def test_on_the_subscription_the_dry_run_gives_the_time_without_an_amount(
+    tmp_path: Path, language: str, line: str
+) -> None:
+    with session(tmp_path, language=language, billing="SUBSCRIPTION") as current:
+        processes = current.repository([commit(FIRST, "Add the amount field")])
+        run = current.ut("align", "--dry-run", processes=processes, language=language)
+        reviews = review_bodies(current.studio)
+
+    assert run.status == 0, run.errors
+    assert line in run.output.splitlines()
+    assert "USD" not in run.output
+    assert reviews == []
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_on_the_subscription_the_recheck_dry_run_gives_the_time_without_an_amount(
+    tmp_path: Path, language: str
+) -> None:
+    with session(tmp_path, language=language, billing="SUBSCRIPTION") as current:
+        stale_changes(current)
+        run = current.ut("align", "--recheck", "--dry-run", language=language, variables=WIDE)
+
+    assert run.status == 0, run.errors
+    assert said("align.dry_run_subscription", language, minutes="6 min") in run.output.splitlines()
+    assert "USD" not in run.output
+
+
+def test_on_the_subscription_the_reviews_start_without_a_question(tmp_path: Path) -> None:
+    with session(tmp_path, billing="SUBSCRIPTION") as current:
+        run = current.ut("align", processes=current.repository(ALIGNED_PAIR), answers=[""])
+        runs = current.project.change_reviews()
+
+    lines = run.output.splitlines()
+    assert run.status == 0, run.errors
+    assert (
+        "This generation runs on the Claude subscription: it spends no credit. Estimated time: "
+        "about 6 min." in lines
+    )
+    assert "Go ahead with this spending?" not in run.output
+    assert len(runs) == 2
+
+
+@pytest.mark.parametrize("billing", ["MIXED", "API"])
+def test_with_paid_routes_the_dry_run_names_its_amount(tmp_path: Path, billing: str) -> None:
+    with session(tmp_path, billing=billing) as current:
+        processes = current.repository([commit(FIRST, "Add the amount field")])
+        run = current.ut("align", "--dry-run", processes=processes)
+
+    assert run.status == 0, run.errors
+    assert (
+        "Estimate of these reviews: 0.45-0.80 USD, about 3 min. Without --dry-run they really "
+        "start." in run.output.splitlines()
+    )
 
 
 def test_recheck_reviews_again_the_oldest_first_and_opens_each_menu(tmp_path: Path) -> None:

@@ -261,6 +261,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
                 explained = explained or outcome.explained
             continue
         priced = prices.shown()
+        subscription = prices.subscription()
         modelless = prices.modelless(state)
         try:
             if reveal and state.documents:
@@ -273,7 +274,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             else:
                 describe(context, client, project, state, everything=False, modelless=modelless)
                 described = True
-            options = menu(context, state, priced, modelless)
+            options = menu(context, state, priced, modelless, subscription=subscription)
             if len(options) == 1:
                 return 0
             console.write()
@@ -368,7 +369,12 @@ def continue_running(
 
 
 def menu(
-    context: CommandContext, state: DesignState, priced: bool, modelless: bool = False
+    context: CommandContext,
+    state: DesignState,
+    priced: bool,
+    modelless: bool = False,
+    *,
+    subscription: bool = False,
 ) -> list[Choice]:
     text = context.text
     kind = state.kind
@@ -378,7 +384,13 @@ def menu(
     if state.generated and state.documents:
         options.append(Choice(OPEN, text("design.menu_open")))
     if waiting and state.choosable() and not modelless:
-        label = with_estimate(context, priced, text("design.menu_choose"), [review.REVIEW])
+        label = with_estimate(
+            context,
+            priced,
+            text("design.menu_choose"),
+            [review.REVIEW],
+            subscription=subscription,
+        )
         options.append(Choice(CHOOSE, label))
     missing = state.missing_mockups()
     if waiting and missing:
@@ -389,6 +401,7 @@ def menu(
             text("design.menu_mockups", codes=codes),
             ["MOCKUP"] * len(missing),
             minutes=costs.ESTIMATES["MOCKUP"].minutes,
+            subscription=subscription,
         )
         options.append(Choice(MOCKUPS, label))
     if state.pending_change is not None:
@@ -398,17 +411,31 @@ def menu(
         and design_change.unavailable(state) is None
     ):
         label = with_estimate(
-            context, priced, text("design.menu_change"), [design_change.ITERATION, review.REVIEW]
+            context,
+            priced,
+            text("design.menu_change"),
+            [design_change.ITERATION, review.REVIEW],
+            subscription=subscription,
         )
         options.append(Choice(CHANGE, label))
     if kind == design_state.CHOSEN:
         if state.review is None and reviewable:
-            label = with_estimate(context, priced, text("design.menu_review"), [review.REVIEW])
+            label = with_estimate(
+                context,
+                priced,
+                text("design.menu_review"),
+                [review.REVIEW],
+                subscription=subscription,
+            )
             options.append(Choice(REVIEW, label))
         options.append(Choice(APPROVE, text("design.menu_approve")))
         if state.choosable() and not modelless:
             label = with_estimate(
-                context, priced, text("design.menu_choose_other"), [review.REVIEW]
+                context,
+                priced,
+                text("design.menu_choose_other"),
+                [review.REVIEW],
+                subscription=subscription,
             )
             options.append(Choice(CHOOSE, label))
     options.append(Choice(LEAVE, text("design.menu_leave")))
@@ -422,10 +449,13 @@ def with_estimate(
     operations: Sequence[str],
     *,
     minutes: float | None = None,
+    subscription: bool = False,
 ) -> str:
-    if not priced:
+    if not priced and not subscription:
         return label
-    estimate = design_generate.estimate_text(context, operations, minutes=minutes)
+    estimate = design_generate.estimate_text(
+        context, operations, minutes=minutes, subscription=subscription
+    )
     return context.text("design.priced", label=label, estimate=estimate)
 
 

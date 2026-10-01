@@ -11,6 +11,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Stima: {amount} USD, circa {minutes}.",
         "en": "Estimate: {amount} USD, about {minutes}.",
     },
+    "costs.subscription": {
+        "it": "Questa generazione usa l'abbonamento di Claude: non spende credito. Tempo stimato: "
+        "circa {minutes}.",
+        "en": "This generation runs on the Claude subscription: it spends no credit. Estimated "
+        "time: about {minutes}.",
+    },
     "costs.over_credit": {
         "it": "La stima supera il credito rimasto: lo Studio potrebbe rifiutare la generazione.",
         "en": "The estimate is above the credit left: the Studio may refuse the generation.",

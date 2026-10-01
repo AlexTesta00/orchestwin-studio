@@ -113,6 +113,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "Credito rimasto nello Studio: {remaining} USD.",
         "en": "Credit left in the Studio: {remaining} USD.",
     },
+    "status.subscription": {
+        "it": "Le generazioni usano l'abbonamento di Claude: nessun credito speso.",
+        "en": "Generations run on the Claude subscription: no credit is spent.",
+    },
     "status.offline_requested": {
         "it": "Stato letto da questa cartella, come chiesto con --offline.",
         "en": "State read from this folder, as asked with --offline.",

@@ -200,6 +200,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The blocked paths are not planned again: a new plan would bring the spending to "
         "{amount} USD, over the limit of --max-usd ({limit} USD).",
     },
+    "test.replan_over_budget_subscription": {
+        "it": "I percorsi bloccati non vengono ripianificati: un piano nuovo usa l'abbonamento di "
+        "Claude e non spende credito, ma ai prezzi a pagamento supererebbe il limite di "
+        "--max-usd ({limit} USD).",
+        "en": "The blocked paths are not planned again: a new plan runs on the Claude "
+        "subscription and spends no credit, but at paid prices it would go over the limit of "
+        "--max-usd ({limit} USD).",
+    },
     "test.replan_limit": {
         "it": "I percorsi bloccati non vengono ripianificati: il piano salvato ha già {count} "
         "piani aggiuntivi, il massimo che lo Studio accetta. Chiedi un piano nuovo con "
