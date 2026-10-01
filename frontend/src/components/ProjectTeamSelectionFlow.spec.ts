@@ -9,6 +9,7 @@ import type {
   AgentTeamApi,
   OwnerAgentRationaleInput,
   TeamProposalVersionResponse,
+  TeamSelectionIssueResponse,
   TeamSelectionReasonResponse,
 } from "@/api/team-contracts";
 import type { HumanGateResponse, HumanGateStatus } from "@/api/workflow-contracts";
@@ -349,6 +350,54 @@ async function refresh(wrapper: FlowWrapper): Promise<void> {
   await openTechnicalDetails(wrapper);
   await wrapper.get('[data-testid="team-refresh"]').trigger("click");
   await flushPromises();
+}
+
+const SERVER_CONTRADICTION: TeamSelectionIssueResponse = {
+  code: "CONTRADICTORY_ROLE_SIGNALS",
+  agent_id: "BACKEND_ENGINEER",
+  mandatory_reasons: [
+    { code: "BACKEND_DELIVERY_SIGNAL", evidence: { fields: ["budget"], terms: ["server"] } },
+  ],
+  impossible_reasons: [
+    {
+      code: "EXPLICIT_SCOPE_EXCLUSION",
+      evidence: { fields: ["description", "technical_constraints"], terms: ["senza server"] },
+    },
+  ],
+};
+
+const MIXED_CONTRADICTION: TeamSelectionIssueResponse = {
+  code: "CONTRADICTORY_ROLE_SIGNALS",
+  agent_id: "BACKEND_ENGINEER",
+  mandatory_reasons: [
+    { code: "CORE_ARCHITECTURE_DISCIPLINE", evidence: { fields: [], terms: [] } },
+    {
+      code: "BACKEND_DELIVERY_SIGNAL",
+      evidence: { fields: ["technical_constraints", "budget"], terms: ["database", "server"] },
+    },
+    {
+      code: "EXTERNAL_INTEGRATION_SIGNAL",
+      evidence: { fields: ["technical_constraints", "risks"], terms: ["api", "server"] },
+    },
+  ],
+  impossible_reasons: [{ code: "CATALOG_MODE_INCOMPATIBLE", evidence: { fields: [], terms: [] } }],
+};
+
+function blockedApi(issue: TeamSelectionIssueResponse): AgentTeamApi {
+  return {
+    ...fakeApi({ current: null, history: [], gate: null }),
+    async generateProjectTeamProposal() {
+      return { status: "BLOCKED_BY_CONSTRAINTS", version: null, issues: [issue] };
+    },
+  };
+}
+
+async function showBlockedGeneration(issue: TeamSelectionIssueResponse, locale: "en" | "it") {
+  const wrapper = mountFlow(blockedApi(issue), undefined, locale);
+  await flushPromises();
+  await wrapper.get('[data-testid="generate-team"]').trigger("click");
+  await flushPromises();
+  return wrapper;
 }
 
 describe("ProjectTeamSelectionFlow", () => {
@@ -1039,5 +1088,39 @@ describe("ProjectTeamSelectionFlow", () => {
     expect(wrapper.get('[data-testid="team-technical-details"]').text()).toContain(
       "L'accessibilità fa parte di ogni progetto",
     );
+  });
+
+  it("says in Italian which words in which brief fields both exclude and require a role", async () => {
+    const wrapper = await showBlockedGeneration(SERVER_CONTRADICTION, "it");
+
+    const block = wrapper.get('[role="alert"]');
+    expect(block.text()).toContain("Il brief contiene segnali contraddittori relativi ai ruoli.");
+    const items = block.findAll("li").map((item) => item.text());
+    expect(items).toEqual([
+      "Sviluppatore dei servizi: il brief lo esclude («senza server» in L'idea, Vincoli tecnici) e insieme lo richiede («server» in Budget). Correggi uno dei due testi nel passo Brief e riproponi la squadra.",
+    ]);
+    expect(wrapper.text()).not.toContain("Contradictory");
+  });
+
+  it("says in English which words in which brief fields both exclude and require a role", async () => {
+    const wrapper = await showBlockedGeneration(SERVER_CONTRADICTION, "en");
+
+    const block = wrapper.get('[role="alert"]');
+    expect(block.text()).toContain("The brief contains contradictory role signals.");
+    const items = block.findAll("li").map((item) => item.text());
+    expect(items).toEqual([
+      "Service developer: the brief rules it out (“senza server” in The idea, Technical constraints) and also calls for it (“server” in Budget). Fix one of the two texts in the Brief step, then propose the team again.",
+    ]);
+    expect(wrapper.text()).not.toContain("Contradictory");
+    await expectAccessible(wrapper.element);
+  });
+
+  it("tells the reason when a side has no words and merges the words of several reasons once", async () => {
+    const wrapper = await showBlockedGeneration(MIXED_CONTRADICTION, "en");
+
+    const items = wrapper.findAll('[role="alert"] li').map((item) => item.text());
+    expect(items).toEqual([
+      "Service developer: the brief rules it out (Incompatible with the project mode) and also calls for it (“database”, “server”, “api” in Technical constraints, Budget, Risks). Fix one of the two texts in the Brief step, then propose the team again.",
+    ]);
   });
 });
