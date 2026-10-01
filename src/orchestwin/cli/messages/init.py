@@ -489,6 +489,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "it": "La motivazione per {name} non serve: non è un'aggiunta.",
         "en": "The reason for {name} is not needed: it is not an addition.",
     },
+    "init.team_blocked": {
+        "it": "{name}: il brief lo esclude ({excluded}) e insieme lo richiede ({required}).",
+        "en": "{name}: the brief rules it out ({excluded}) and also calls for it ({required}).",
+    },
+    "init.team_blocked_evidence": {"it": "{terms} in {fields}", "en": "{terms} in {fields}"},
+    "init.team_blocked_term": {"it": "«{term}»", "en": "«{term}»"},
     "init.reason_catalog_always_present": {
         "it": "componente sempre presente dello Studio",
         "en": "always-present component of the Studio",
@@ -995,10 +1001,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "init.errors.TEAM_BLOCKED": {
         "it": "La squadra non si può proporre: il brief insieme chiede ed esclude questi "
-        "ruoli: {agents}. Correggi il brief nell'interfaccia web, poi rilancia `ut init`.",
+        "ruoli: {agents}.{details} Correggi il brief nello Studio web (passo Brief, "
+        "«Modifica il brief di persona»), poi rilancia `ut init`.",
         "en": "The team cannot be proposed: the brief both asks for and excludes these "
-        "roles: {agents}. Correct the brief in the web interface, then launch `ut init` "
-        "again.",
+        "roles: {agents}.{details} Correct the brief in the web Studio (step Brief, "
+        "«Edit the brief yourself»), then launch `ut init` again.",
     },
     "init.errors.NO_PROFILE_CONFIRMED": {
         "it": "Nessun profilo degli utenti è confermato, quindi gli User Twin non si possono "

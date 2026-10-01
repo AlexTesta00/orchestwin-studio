@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -15,6 +15,7 @@ from orchestwin.cli.messages import text
 from .support.fake_studio import FakeStudio
 from .support.terminal import (
     PROJECT_ID,
+    Run,
     command_context,
     link_folder,
     run_ut,
@@ -214,27 +215,126 @@ def test_a_spending_ceiling_reached_names_the_ceiling(tmp_path: Path) -> None:
     )
 
 
-def test_a_team_blocked_by_the_brief_names_the_roles(tmp_path: Path) -> None:
-    blocked = {
-        "status": "BLOCKED_BY_CONSTRAINTS",
-        "version": None,
-        "issues": [
-            {
-                "code": "CONTRADICTORY_ROLE_SIGNALS",
-                "agent_id": "MOBILE_ENGINEER",
-                "mandatory_reasons": [],
-                "impossible_reasons": [],
-            }
-        ],
-    }
-    with FakeStudio(language="en") as studio:
-        sign_in(studio, tmp_path)
-        studio.fail_next("POST", PROPOSALS, status=409, body=blocked)
+def cause(code: str, fields: Sequence[str] = (), terms: Sequence[str] = ()) -> dict[str, object]:
+    return {"code": code, "evidence": {"fields": list(fields), "terms": list(terms)}}
 
-        run = ut(tmp_path, *UNTIL_TEAM, answers=BEFORE_TEAM)
+
+def conflict(
+    agent: str, required: list[dict[str, object]], excluded: list[dict[str, object]]
+) -> dict[str, object]:
+    return {
+        "code": "CONTRADICTORY_ROLE_SIGNALS",
+        "agent_id": agent,
+        "mandatory_reasons": required,
+        "impossible_reasons": excluded,
+    }
+
+
+SERVERLESS = conflict(
+    "BACKEND_ENGINEER",
+    required=[cause("BACKEND_DELIVERY_SIGNAL", ["budget"], ["server"])],
+    excluded=[
+        cause(
+            "EXPLICIT_SCOPE_EXCLUSION", ["description", "technical_constraints"], ["senza server"]
+        )
+    ],
+)
+
+
+def blocked_run(tmp_path: Path, *issues: Mapping[str, object], language: str = "en") -> Run:
+    body = {"status": "BLOCKED_BY_CONSTRAINTS", "version": None, "issues": list(issues)}
+    with FakeStudio(language=language) as studio:
+        sign_in(studio, tmp_path)
+        studio.fail_next("POST", PROPOSALS, status=409, body=body)
+        return ut(tmp_path, *UNTIL_TEAM, answers=BEFORE_TEAM, language=language)
+
+
+def test_a_team_blocked_by_the_brief_names_the_roles(tmp_path: Path) -> None:
+    run = blocked_run(tmp_path, SERVERLESS)
 
     assert run.status == 1
-    assert "the brief both asks for and excludes these roles: Mobile developer." in run.errors
+    assert (
+        "Service developer: the brief rules it out («senza server» in The idea, Technical "
+        "constraints) and also calls for it («server» in Budget)." in run.errors
+    )
+    assert (
+        "The team cannot be proposed: the brief both asks for and excludes these roles: "
+        "Service developer. Service developer: the brief rules it out («senza server» in The "
+        "idea, Technical constraints) and also calls for it («server» in Budget). Correct the "
+        "brief in the web Studio (step Brief, «Edit the brief yourself»), then launch "
+        "`ut init` again." in run.errors.splitlines()
+    )
+    assert saved_stages(tmp_path) == ["brief"]
+
+
+def test_a_team_blocked_by_the_brief_says_in_italian_where_to_correct_it(tmp_path: Path) -> None:
+    run = blocked_run(tmp_path, SERVERLESS, language="it")
+
+    assert run.status == 1
+    assert (
+        "La squadra non si può proporre: il brief insieme chiede ed esclude questi ruoli: "
+        "Sviluppatore dei servizi. Sviluppatore dei servizi: il brief lo esclude («senza "
+        "server» in L'idea, Vincoli tecnici) e insieme lo richiede («server» in Budget). "
+        "Correggi il brief nello Studio web (passo Brief, «Modifica il brief di persona»), poi "
+        "rilancia `ut init`." in run.errors.splitlines()
+    )
+
+
+def test_a_blocked_role_without_evidence_is_explained_by_its_reasons(tmp_path: Path) -> None:
+    issue = conflict(
+        "MOBILE_ENGINEER",
+        required=[cause("MOBILE_DELIVERY_SIGNAL"), cause("MOBILE_DELIVERY_SIGNAL")],
+        excluded=[cause("CATALOG_MODE_INCOMPATIBLE"), {"code": "BRAND_NEW_RULE"}],
+    )
+
+    run = blocked_run(tmp_path, issue)
+
+    assert run.status == 1
+    assert (
+        "Mobile developer: the brief rules it out (not suited to the mode of the project, brand "
+        "new rule) and also calls for it (the brief asks for a product for phones and tablets)."
+        in run.errors
+    )
+
+
+def test_a_blocked_role_without_reasons_is_named_once(tmp_path: Path) -> None:
+    run = blocked_run(tmp_path, conflict("BACKEND_ENGINEER", [], []))
+
+    assert run.status == 1
+    assert (
+        "The team cannot be proposed: the brief both asks for and excludes these roles: "
+        "Service developer. Correct the brief in the web Studio (step Brief, «Edit the brief "
+        "yourself»), then launch `ut init` again." in run.errors.splitlines()
+    )
+
+
+def test_the_words_of_several_reasons_and_roles_are_merged_in_order(tmp_path: Path) -> None:
+    backend = conflict(
+        "BACKEND_ENGINEER",
+        required=[
+            cause("BACKEND_DELIVERY_SIGNAL", ["description", "budget"], ["database", "server"]),
+            cause("EXTERNAL_INTEGRATION_SIGNAL", ["budget", "risks"], ["server", "api"]),
+        ],
+        excluded=[cause("EXPLICIT_SCOPE_EXCLUSION", ["technical_constraints"], ["senza server"])],
+    )
+    mobile = conflict(
+        "MOBILE_ENGINEER",
+        required=[cause("MOBILE_DELIVERY_SIGNAL", ["description"], ["iphone"])],
+        excluded=[cause("EXPLICIT_SCOPE_EXCLUSION", ["technical_constraints"], ["web only"])],
+    )
+
+    run = blocked_run(tmp_path, backend, mobile)
+
+    assert run.status == 1
+    assert (
+        "The team cannot be proposed: the brief both asks for and excludes these roles: "
+        "Service developer, Mobile developer. Service developer: the brief rules it out "
+        "(«senza server» in Technical constraints) and also calls for it («database», "
+        "«server», «api» in The idea, Budget, Risks). Mobile developer: the brief rules it "
+        "out («web only» in Technical constraints) and also calls for it («iphone» in The "
+        "idea). Correct the brief in the web Studio (step Brief, «Edit the brief yourself»), "
+        "then launch `ut init` again." in run.errors.splitlines()
+    )
 
 
 def test_an_answers_file_can_stop_at_the_team(tmp_path: Path) -> None:
@@ -496,4 +596,33 @@ def test_a_team_approved_before_without_the_designer_is_noted_once_at_the_end(
         assert lines[design + 1].endswith(
             "The team is changed and approved again in the web Studio."
         )
+    transport.assert_done()
+
+
+def test_a_contradiction_is_written_only_with_something_to_say_on_both_sides(
+    tmp_path: Path,
+) -> None:
+    store_session(tmp_path)
+    folder = link_folder(tmp_path / "project")
+    transport = ScriptedTransport()
+    context = command_context(terminal(tmp_path, transport=transport).environment)
+    journey = Journey(context, context.client(), folder, script=None, until=None, idea=None)
+    words_only = conflict(
+        "MOBILE_ENGINEER",
+        required=[cause("MOBILE_DELIVERY_SIGNAL", [], ["iphone"])],
+        excluded=[cause("EXPLICIT_SCOPE_EXCLUSION", ["delivery_channel"], ["web only", " "])],
+    )
+    one_sided = conflict("MOBILE_ENGINEER", [], [cause("CATALOG_MODE_INCOMPATIBLE")])
+    broken = {
+        "agent_id": "MOBILE_ENGINEER",
+        "mandatory_reasons": "MOBILE_DELIVERY_SIGNAL",
+        "impossible_reasons": [cause("EXPLICIT_SCOPE_EXCLUSION", ["budget"], ["web only"])],
+    }
+
+    assert init_team.contradiction(journey, words_only) == (
+        "Mobile developer: the brief rules it out («web only» in delivery channel) and also "
+        "calls for it («iphone»)."
+    )
+    assert init_team.contradiction(journey, one_sided) is None
+    assert init_team.contradiction(journey, broken) is None
     transport.assert_done()
