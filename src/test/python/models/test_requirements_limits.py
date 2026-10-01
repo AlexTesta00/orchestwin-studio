@@ -29,6 +29,7 @@ from orchestwin.projects.briefs import BriefField
 
 from .test_fake_requirements import proposal_request
 from .test_model_proposals import make_generator
+from .test_perspective_guidance import DEFINITION_SENTENCES
 from .test_proposal_evidence import Command, MemoryEvidence, audited_generator
 from .test_requirements_change_proposals import OWNER_REQUEST, baseline_instruction, sha256
 
@@ -192,7 +193,7 @@ def test_the_schema_bounds_the_six_lists_and_changes_nothing_else():
     assert bounded == free
 
 
-def test_the_model_receives_the_limits_in_the_schema_of_contract_four(tmp_path):
+def test_the_model_receives_the_limits_in_the_schema_of_contract_five(tmp_path):
     request = proposal_request()
     answer, _, _ = at_limits(request)
 
@@ -200,8 +201,8 @@ def test_the_model_receives_the_limits_in_the_schema_of_contract_four(tmp_path):
     output_schema = payload["response_format"]["json_schema"]
     sent = json.loads(payload["messages"][1]["content"])
 
-    assert output_schema["name"] == "proposal-requirements-v4"
-    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v4"
+    assert output_schema["name"] == "proposal-requirements-v5"
+    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v5"
     assert sent["context"]["limits"] == FIXTURE_LIMITS
     assert {
         name: output_schema["schema"]["properties"][name]["maxItems"] for name in LISTS
@@ -264,7 +265,9 @@ def test_the_local_route_records_why_an_answer_above_a_limit_is_refused(tmp_path
 
 def test_the_instruction_asks_for_proportion_right_after_the_coverage_and_keeps_the_rest():
     instruction = baseline_instruction()
+    added = f" {PROPORTION} {DEFINITION_SENTENCES}"
 
-    assert f"{COVERAGE} {PROPORTION} Keep criteria concrete and testable." in instruction
-    assert instruction.count("context.limits") == 1
-    assert sha256(instruction.replace(f" {PROPORTION}", "")) == PREVIOUS_INSTRUCTION_SHA256
+    assert f"{COVERAGE}{added} Keep criteria concrete and testable." in instruction
+    assert instruction.count(PROPORTION) == 1
+    assert instruction.count("context.limits") == 2
+    assert sha256(instruction.replace(added, "")) == PREVIOUS_INSTRUCTION_SHA256

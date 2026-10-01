@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from orchestwin.agents.perspectives import GuidanceStage, perspective_guidance
 from orchestwin.artifacts import design as domain
 from orchestwin.artifacts.design_packages import (
     create_design_concern,
@@ -65,7 +66,7 @@ from orchestwin.twins.epistemics import ConfidenceScore, ObservationProvenance
 
 TITLE_LENGTH: Final = 200
 TEXT_LENGTH: Final = 2000
-HOSTED_DESIGN_CONTRACT_VERSION: Final = 101
+HOSTED_DESIGN_CONTRACT_VERSION: Final = 104
 LANGUAGE_GROUPS: Final = ("requirements", "stories", "criteria", "scenarios")
 LANGUAGE_MIN_WORDS: Final = 4
 ALTERNATIVE_TEXT_LISTS: Final = (
@@ -207,8 +208,12 @@ class HostedDesignDraft(DesignDraft):
     critiques: Annotated[tuple[HostedCritiqueDraft, ...], Field(min_length=2)]
 
 
-def hosted_design_context(context):
-    return {**context, "purpose": HOSTED_DESIGN_PURPOSE}
+def hosted_design_context(context, selected_agent_ids):
+    return {
+        **context,
+        "purpose": HOSTED_DESIGN_PURPOSE,
+        "perspectives": perspective_guidance(selected_agent_ids, GuidanceStage.DESIGN),
+    }
 
 
 def requirement_code_map(spec):

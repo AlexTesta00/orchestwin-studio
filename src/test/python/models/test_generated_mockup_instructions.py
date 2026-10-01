@@ -500,7 +500,7 @@ def test_only_the_confirmed_observations_of_the_given_review_reach_the_context()
 def test_the_contract_versions_of_the_design_purposes():
     assert dict(DESIGN_CONTRACT_VERSIONS) == {
         "DESIGN_MOCKUP": 7,
-        "DESIGN_ALTERNATIVES_HOSTED": 101,
+        "DESIGN_ALTERNATIVES_HOSTED": 104,
         "DESIGN_MOCKUP_HTML": 102,
         "DESIGN_ITERATION": 103,
     }
