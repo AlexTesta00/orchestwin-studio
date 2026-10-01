@@ -20,12 +20,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "model for each twin) and let you review it",
     },
     "twins.help_learn": {
-        "it": "scrivi tu una cosa che un twin ha imparato (gratis)",
-        "en": "write yourself something a twin learned (free)",
+        "it": "scrivi tu una cosa che un twin ha imparato (nessuna spesa)",
+        "en": "write yourself something a twin learned (no spending)",
     },
     "twins.help_forget": {
-        "it": "ritira un'osservazione che un twin aveva imparato (gratis)",
-        "en": "retire an observation a twin had learned (free)",
+        "it": "ritira un'osservazione che un twin aveva imparato (nessuna spesa)",
+        "en": "retire an observation a twin had learned (no spending)",
     },
     "twins.option_update_twin": {
         "it": "numero del twin nell'elenco, oppure l'inizio del suo nome; senza, ogni twin con "
@@ -300,12 +300,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Conversation ended: questions and answers stay saved in the Studio.",
     },
     "twins.errors.TWINS_NOT_APPROVED": {
-        "it": "I twin di questo progetto non sono ancora approvati, oppure vanno approvati di "
-        "nuovo dopo un cambiamento del brief o della squadra. Confermali con `ut init`, poi "
-        "riprova.",
-        "en": "The twins of this project are not approved yet, or they must be approved again "
-        "after a change of the brief or of the team. Confirm them with `ut init`, then try "
-        "again.",
+        "it": "I twin di questo progetto non sono ancora approvati, oppure sono rimasti indietro "
+        "dopo un cambiamento del brief o delle prospettive. Se sono indietro aggiornali con "
+        "`ut sections update`, altrimenti confermali con `ut init`; poi riprova.",
+        "en": "The twins of this project are not approved yet, or they fell behind after a "
+        "change of the brief or of the perspectives. If they are behind, update them with "
+        "`ut sections update`; otherwise confirm them with `ut init`. Then try again.",
     },
     "twins.errors.TWIN_QUESTION_TOO_LONG": {
         "it": "La domanda è troppo lunga: al massimo {limit} caratteri. Accorciala e rilancia "

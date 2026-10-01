@@ -10,6 +10,7 @@ from orchestwin.cli import costs, jobs
 from orchestwin.cli.api import twin_chat
 from orchestwin.cli.context import CommandContext
 from orchestwin.cli.errors import ApiFailure, CliError
+from orchestwin.cli.flows import code_order
 from orchestwin.cli.flows.review import review_locale
 from orchestwin.cli.flows.twin_conversation import model_failure
 from orchestwin.cli.flows.twin_selection import OBSERVATION_PREFIX, Twin, matching, twins_from
@@ -413,12 +414,12 @@ def open_session(context: CommandContext) -> Session:
         context=context,
         project=project,
         link=link,
-        language=project_language(link.language, context.language),
+        language=project_language(project, context.language),
     )
 
 
-def project_language(value: str | None, fallback: str) -> str:
-    chosen = value if value and value.strip() else fallback
+def project_language(project: ProjectFolder | None, fallback: str) -> str:
+    chosen = fallback if project is None else code_order.project_language(project, fallback)
     return ITALIAN if chosen.strip().lower().startswith(ITALIAN) else ENGLISH
 
 
@@ -775,7 +776,7 @@ def review_changes(session: Session, values: Mapping[str, object]) -> dict[str, 
         client,
         link.project_id,
         changes_api.review_path(link.project_id, commit.hash),
-        changes_api.review_body(review_locale(link.language or context.language), False),
+        changes_api.review_body(review_locale(session.language), False),
         label=context.text("mcp.label_review", commit=commit.hash[:SHORT_COMMIT]),
         limit_seconds=REVIEW_LIMIT_SECONDS,
     )

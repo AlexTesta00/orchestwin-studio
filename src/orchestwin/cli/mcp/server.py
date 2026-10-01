@@ -112,7 +112,8 @@ class Server:
 
     def _instructions(self) -> str:
         link = self._link()
-        language = project_language(None if link is None else link.language, self._context.language)
+        project = None if link is None else ProjectFolder.find(self._context.directory)
+        language = project_language(project, self._context.language)
         name = "-" if link is None else link.project_name
         if self._spend:
             return text("mcp.instructions_spend", language, project=name)

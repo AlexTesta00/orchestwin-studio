@@ -28,6 +28,24 @@ BUDGET = {
     "remaining_total_microusd": 25_130_000,
     "period_start": None,
 }
+AFTER_DESIGN = {
+    "en": [
+        "- `ut code` writes the application with your coding agent.",
+        "- `ut test` checks the acceptance criteria in the browsers.",
+        "- `ut tasks` shows the things left to do.",
+        "- `ut align` compares the commits with the requirements and the design.",
+        "- `ut twins update` shows what the twins learned.",
+        "- `ut watch` watches the commits and records them in the Studio.",
+    ],
+    "it": [
+        "- `ut code` scrive l'applicazione con il tuo agente di programmazione.",
+        "- `ut test` verifica i criteri di accettazione nei browser.",
+        "- `ut tasks` mostra le cose che restano da fare.",
+        "- `ut align` confronta i commit con i requisiti e il design.",
+        "- `ut twins update` mostra che cosa hanno imparato i twin.",
+        "- `ut watch` osserva i commit e li registra nello Studio.",
+    ],
+}
 
 
 def gate(artifact_id: str, content_hash: str, status: str = "APPROVED") -> dict[str, object]:
@@ -137,6 +155,7 @@ def expect_studio(
     tests: dict[str, object] | None = None,
     learning: dict[str, object] | None = None,
     billing: str | None = None,
+    sections: dict[str, object] | None = None,
 ) -> ScriptedTransport:
     requirements = version("requirements-1", 1, "hr")
     design = version("design-2", 2, "hd")
@@ -205,6 +224,10 @@ def expect_studio(
             "versions": [] if folder is None else [{"version_number": folder}],
         },
     )
+    if sections is None:
+        transport.expect("GET", f"{BASE}/sections", status=404, body={"detail": "Not Found"})
+    else:
+        transport.expect("GET", f"{BASE}/sections", body=sections)
     if later_approved and routes:
         expect_alignment(
             transport, alignment_document() if alignment is None else alignment, recorded
@@ -284,14 +307,14 @@ def test_status_from_the_studio_in_english(tmp_path: Path) -> None:
         f"Studio: {LOCAL}",
         "Mode: design only",
         "",
-        "Step          State                      Version",
-        "------------  -------------------------  -------",
-        "Brief         approved                   2",
-        "Team          approved                   1",
-        "User Twins    waiting for your approval  1",
-        "Requirements  later                      -",
-        "Design        later                      -",
-        "Package       later                      -",
+        "Step                 State                      Version",
+        "-------------------  -------------------------  -------",
+        "Brief                approved                   2",
+        "Perspectives         approved                   1",
+        "User Twin            waiting for your approval  1",
+        "Definition           later                      -",
+        "Design & Evaluation  later                      -",
+        "Dossier              later                      -",
         "",
         "Next step: Confirm the twins: launch `ut init`.",
         "Knowledge folder: not published yet.",
@@ -318,14 +341,14 @@ def test_status_from_the_studio_in_italian_with_an_older_folder(tmp_path: Path) 
     lines = run.output.splitlines()
     assert lines[3] == "Modalità: solo design"
     assert lines[5:13] == [
-        "Passo      Stato                Versione",
-        "---------  -------------------  --------",
-        "Brief      approvato            2",
-        "Squadra    approvato            1",
-        "User Twin  approvato            1",
-        "Requisiti  approvato            1",
-        "Design     approvato            2",
-        "Pacchetto  pronto da scaricare  3",
+        "Passo                 Stato                Versione",
+        "--------------------  -------------------  --------",
+        "Brief                 approvato            2",
+        "Prospettive           approvato            1",
+        "User Twin             approvato            1",
+        "Definizione           approvato            1",
+        "Design e valutazione  approvato            2",
+        "Dossier               pronto da scaricare  3",
     ]
     assert lines[14:] == [
         "Prossimo passo: Scarica la cartella di conoscenza: lancia `ut package publish`.",
@@ -357,9 +380,10 @@ def test_a_folder_at_the_version_of_the_studio_sends_the_development_to_ut_align
 
     assert run.status == 0
     lines = run.output.splitlines()
-    assert lines[14:18] == [
-        "Next step: The knowledge folder is up to date: the development goes on with "
-        "`ut align` and `ut watch`.",
+    assert lines[14:] == [
+        "Next step: The knowledge folder is up to date: the development goes on with these "
+        "commands:",
+        *AFTER_DESIGN["en"],
         "Knowledge folder: version 3 in this folder, version 3 in the Studio.",
         "Development: commits recorded: 2; none aligned yet (waiting: 2); open tasks for the "
         "code: 0.",
@@ -558,7 +582,8 @@ def test_status_as_json_from_the_studio(tmp_path: Path) -> None:
     assert document["alignment"] is None
     assert document["tests"] is None
     assert document["learning"] is None
-    assert list(document)[-3:] == ["alignment", "tests", "learning"]
+    assert document["sections"] is None
+    assert list(document)[-4:] == ["alignment", "tests", "learning", "sections"]
 
 
 @pytest.mark.parametrize(
@@ -672,17 +697,17 @@ def test_offline_status_uses_the_manifest_of_the_knowledge_folder(tmp_path: Path
     [
         (
             "en",
-            "Next step: The knowledge folder is up to date: the development goes on with "
-            "`ut align` and `ut watch`.",
+            "Next step: The knowledge folder is up to date: the development goes on with these "
+            "commands:",
         ),
         (
             "it",
             "Prossimo passo: La cartella di conoscenza è aggiornata: lo sviluppo continua con "
-            "`ut align` e `ut watch`.",
+            "questi comandi:",
         ),
     ],
 )
-def test_offline_a_complete_folder_sends_the_development_to_ut_align(
+def test_offline_a_complete_folder_names_the_commands_that_follow_the_design(
     tmp_path: Path, language: str, line: str
 ) -> None:
     project = link_folder(tmp_path / "project")
@@ -692,8 +717,10 @@ def test_offline_a_complete_folder_sends_the_development_to_ut_align(
         ["--lang", language, "status", "--offline"], tmp_path, transport=ScriptedTransport()
     )
 
+    lines = run.output.splitlines()
+    position = lines.index(line)
     assert run.status == 0
-    assert line in run.output.splitlines()
+    assert lines[position + 1 : position + 7] == AFTER_DESIGN[language]
 
 
 def test_offline_a_partial_folder_still_asks_to_download_the_complete_one(tmp_path: Path) -> None:
@@ -809,11 +836,11 @@ def test_outside_a_linked_folder_the_projects_are_listed(tmp_path: Path) -> None
     assert run.output.splitlines() == [
         f"Projects in the Studio {LOCAL}",
         "=" * len(f"Projects in the Studio {LOCAL}"),
-        "Project            Step                Your turn",
-        "-----------------  ------------------  -----------------------------------------",
-        "Calcolo mancia     3 of 6: User Twins  Confirm the twins: launch `ut init`.",
-        "Registro prestiti  6 of 6: Package     Download the knowledge folder: launch `ut",
-        "                                       package publish`.",
+        "Project            Step               Your turn",
+        "-----------------  -----------------  ------------------------------------------",
+        "Calcolo mancia     3 of 6: User Twin  Confirm the twins: launch `ut init`.",
+        "Registro prestiti  6 of 6: Dossier    Download the knowledge folder: launch `ut",
+        "                                      package publish`.",
     ]
 
 
@@ -973,7 +1000,7 @@ def test_the_latest_run_of_the_tests_follows_the_development_line(
             "summary": TEST_SUMMARY,
         },
     }
-    assert list(document)[-2:] == ["tests", "learning"]
+    assert list(document)[-3:] == ["tests", "learning", "sections"]
     text.assert_done()
 
 
@@ -1266,7 +1293,7 @@ def test_what_the_twins_learned_follows_the_tests_line(tmp_path: Path, language:
     assert lines[position - 1].startswith(("Acceptance tests:", "Verifica dei criteri:"))
     assert lines[position + 1].startswith(("Spent", "Spesa"))
     assert document["learning"] == LEARNED_TWINS
-    assert list(document)[-1] == "learning"
+    assert list(document)[-2:] == ["learning", "sections"]
     text.assert_done()
 
 
@@ -1358,3 +1385,290 @@ def test_a_learning_route_that_fails_hard_is_an_error(tmp_path: Path) -> None:
 
     assert run.status == 1
     assert "FORBIDDEN" in run.errors
+
+
+def section(
+    key: str,
+    state: str,
+    number: int | None = None,
+    *,
+    reasons: tuple[str, ...] = (),
+    blocked: str | None = None,
+    codes: tuple[str, ...] = (),
+) -> dict[str, object]:
+    return {
+        "key": key,
+        "state": state,
+        "version_number": number,
+        "reasons": list(reasons),
+        "blocked": blocked,
+        "codes": list(codes),
+    }
+
+
+def sections_document(
+    *items: dict[str, object],
+    first_pass: bool = True,
+    available: bool = False,
+    aligned: tuple[str, ...] = (),
+    uncovered: tuple[str, ...] = (),
+) -> dict[str, object]:
+    return {
+        "first_pass_complete": first_pass,
+        "sections": list(items),
+        "alignment": {
+            "available": available,
+            "sections": list(aligned),
+            "uncovered_codes": list(uncovered),
+        },
+    }
+
+
+ALL_FINE = sections_document(
+    section("BRIEF", "FINE", 2),
+    section("TEAM", "FINE", 1),
+    section("USER_TWINS", "FINE", 1),
+    section("REQUIREMENTS", "FINE", 1),
+    section("DESIGN", "FINE", 2),
+    section("PACKAGE", "FINE", 3),
+)
+EVERY_STATE = sections_document(
+    section("BRIEF", "FINE", 2),
+    section("TEAM", "UPDATE_AVAILABLE", 2),
+    section("USER_TWINS", "TO_UPDATE", 1, reasons=("PERSPECTIVES_CHANGED",)),
+    section("REQUIREMENTS", "IN_PROGRESS", 3),
+    section("DESIGN", "NOT_STARTED"),
+    section("PACKAGE", "NOT_STARTED"),
+)
+PERSPECTIVE_CHANGED = sections_document(
+    section("BRIEF", "FINE", 2),
+    section("TEAM", "FINE", 2),
+    section("USER_TWINS", "TO_UPDATE", 1, reasons=("PERSPECTIVES_CHANGED",)),
+    section("REQUIREMENTS", "TO_UPDATE", 3, reasons=("PERSPECTIVES_CHANGED", "USER_TWINS_CHANGED")),
+    section("DESIGN", "TO_UPDATE", 4, reasons=("REQUIREMENTS_CHANGED",)),
+    section("PACKAGE", "TO_UPDATE", 6, reasons=("FOLDER_BEHIND",)),
+    available=True,
+    aligned=("USER_TWINS", "REQUIREMENTS", "DESIGN"),
+)
+DESIGN_WAITING = sections_document(
+    *(item for item in ALL_FINE["sections"] if item["key"] not in {"DESIGN", "PACKAGE"}),
+    section("DESIGN", "IN_PROGRESS", 3),
+    section("PACKAGE", "TO_UPDATE", 3, reasons=("FOLDER_BEHIND",), blocked="UPSTREAM_NOT_READY"),
+)
+SECTION_TABLES = {
+    "en": [
+        "Section              State             Version",
+        "-------------------  ----------------  -------",
+        "Brief                Up to date        v2",
+        "Perspectives         Update available  v2",
+        "User Twin            To update         v1",
+        "Definition           Your turn         v3",
+        "Design & Evaluation  Waiting           -",
+        "Dossier              Waiting           -",
+    ],
+    "it": [
+        "Sezione               Stato                      Versione",
+        "--------------------  -------------------------  --------",
+        "Brief                 A posto                    v2",
+        "Prospettive           Aggiornamento disponibile  v2",
+        "User Twin             Da aggiornare              v1",
+        "Definizione           Tocca a te                 v3",
+        "Design e valutazione  In attesa                  -",
+        "Dossier               In attesa                  -",
+    ],
+}
+BEHIND_LINES = {
+    "en": "User Twin, Definition, Design & Evaluation to update: something upstream changed. "
+    "The content you approved stays the same, it is only re-anchored to the new versions. "
+    "Update and confirm with `ut sections update`.",
+    "it": "User Twin, Definizione, Design e valutazione da aggiornare: a monte qualcosa è "
+    "cambiato. I contenuti che hai approvato restano gli stessi, vengono solo riagganciati "
+    "alle versioni nuove. Aggiorna e conferma con `ut sections update`.",
+}
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_after_the_first_pass_the_table_shows_every_state_of_the_sections(
+    tmp_path: Path, language: str
+) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=EVERY_STATE)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=transport)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[5:13] == SECTION_TABLES[language]
+    transport.assert_done()
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_sections_behind_are_told_with_the_gesture_in_place_of_the_next_step(
+    tmp_path: Path, language: str
+) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=PERSPECTIVE_CHANGED)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=transport)
+
+    lines = run.output.splitlines()
+    assert run.status == 0, run.errors
+    assert lines[13:15] == ["", BEHIND_LINES[language]]
+    assert lines[15].startswith(("Knowledge folder:", "Cartella di conoscenza:"))
+    assert not any(line.startswith(("Next step", "Prossimo passo")) for line in lines)
+    assert "ut package publish" not in run.output
+    transport.assert_done()
+
+
+def test_a_section_waiting_for_the_owner_gives_the_next_step_of_its_stage(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    waiting = sections_document(
+        section("BRIEF", "IN_PROGRESS", 3),
+        *(item for item in ALL_FINE["sections"] if item["key"] != "BRIEF"),
+    )
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=waiting)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    lines = run.output.splitlines()
+    assert lines[7] == "Brief                Your turn   v3"
+    assert lines[13:15] == ["", "Next step: Approve the brief: launch `ut init`."]
+
+
+def test_every_section_up_to_date_names_the_commands_after_the_design(tmp_path: Path) -> None:
+    project = signed_in_folder(tmp_path)
+    local_manifest(project, 3)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=ALL_FINE)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    lines = run.output.splitlines()
+    assert lines[13:21] == [
+        "",
+        "Next step: The knowledge folder is up to date: the development goes on with these "
+        "commands:",
+        *AFTER_DESIGN["en"],
+    ]
+    transport.assert_done()
+
+
+def test_during_the_first_pass_the_steps_stay_and_the_sentences_follow(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    first_pass = sections_document(
+        section("BRIEF", "FINE", 2),
+        section("TEAM", "TO_UPDATE", 1, reasons=("BRIEF_CHANGED",), blocked="PREPARE_AGAIN"),
+        section(
+            "USER_TWINS",
+            "TO_UPDATE",
+            1,
+            reasons=("BRIEF_CHANGED", "PERSPECTIVES_CHANGED"),
+            blocked="UPSTREAM_NOT_READY",
+        ),
+        section("REQUIREMENTS", "NOT_STARTED"),
+        section("DESIGN", "NOT_STARTED"),
+        section("PACKAGE", "FINE", 1),
+        first_pass=False,
+        aligned=("USER_TWINS",),
+    )
+    transport = expect_studio(ScriptedTransport(), sections=first_pass)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+
+    lines = run.output.splitlines()
+    assert lines[5] == "Step                 State                      Version"
+    assert lines[9] == "User Twin            waiting for your approval  1"
+    assert lines[13:16] == [
+        "",
+        "Perspectives cannot be updated by itself: the brief changed: prepare the perspectives "
+        "again. Launch `ut init`.",
+        "Knowledge folder: not published yet.",
+    ]
+
+
+def test_during_the_first_pass_a_dossier_behind_keeps_the_next_step(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    first_pass = sections_document(
+        section("BRIEF", "FINE", 2),
+        section("TEAM", "FINE", 1),
+        section("USER_TWINS", "IN_PROGRESS", 1),
+        section("REQUIREMENTS", "NOT_STARTED"),
+        section("DESIGN", "NOT_STARTED"),
+        section("PACKAGE", "TO_UPDATE", 1, reasons=("FOLDER_BEHIND",)),
+        first_pass=False,
+    )
+    transport = expect_studio(ScriptedTransport(), sections=first_pass)
+
+    run = run_ut(["--lang", "it", "status"], tmp_path, transport=transport)
+
+    assert run.output.splitlines()[13:16] == [
+        "",
+        "Il Dossier non contiene ancora le ultime versioni approvate: pubblicalo con "
+        "`ut package publish`.",
+        "Prossimo passo: Conferma i twin: lancia `ut init`.",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("en", "Next step: Choose and approve the design: launch `ut design`."),
+        ("it", "Prossimo passo: Scegli e approva il design: lancia `ut design`."),
+    ],
+)
+def test_a_dossier_waiting_for_the_design_in_progress_keeps_the_next_step(
+    tmp_path: Path, language: str, expected: str
+) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=DESIGN_WAITING)
+
+    run = run_ut(["--lang", language, "status"], tmp_path, transport=transport)
+
+    lines = run.output.splitlines()
+    assert run.status == 0, run.errors
+    assert lines[13:15] == ["", expected]
+    assert lines[15].startswith(("Knowledge folder:", "Cartella di conoscenza:"))
+    assert "ut package publish" not in run.output
+    transport.assert_done()
+
+
+def test_the_json_ends_with_the_object_of_the_sections_as_it_is(tmp_path: Path) -> None:
+    signed_in_folder(tmp_path)
+    extra = {**PERSPECTIVE_CHANGED, "added_later": {"kept": True}}
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP, sections=extra)
+
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=transport).output)
+
+    assert list(document)[-1] == "sections"
+    assert document["sections"] == extra
+    assert document["next_command"] == "ut package publish"
+    transport.assert_done()
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (404, {"detail": "Not Found"}),
+        (405, {"detail": "Method Not Allowed"}),
+        (503, {"detail": {"code": "SECTIONS_SERVICE_UNAVAILABLE"}}),
+        (200, {"sections": "not a list"}),
+    ],
+)
+def test_a_studio_without_usable_sections_shows_the_steps_as_today(
+    tmp_path: Path, status: int, body: dict[str, object]
+) -> None:
+    signed_in_folder(tmp_path)
+    transport = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+    transport.expected = [
+        item for item in transport.expected if not item.path.endswith("/sections")
+    ]
+    transport.expect("GET", f"{BASE}/sections", status=status, body=body)
+    as_json = expect_studio(ScriptedTransport(), **PACKAGE_STEP)
+    as_json.expected = [item for item in as_json.expected if not item.path.endswith("/sections")]
+    as_json.expect("GET", f"{BASE}/sections", status=status, body=body)
+
+    run = run_ut(["status"], tmp_path, transport=transport)
+    document = json.loads(run_ut(["status", "--json"], tmp_path, transport=as_json).output)
+
+    assert run.status == 0, run.errors
+    assert run.output.splitlines()[5].startswith("Step ")
+    assert document["sections"] is None
+    transport.assert_done()

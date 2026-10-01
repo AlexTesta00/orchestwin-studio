@@ -221,6 +221,23 @@ def test_a_named_twin_is_the_only_one_updated(tmp_path: Path) -> None:
     assert [entry["label"] for entry in entries] == ["1.0", "1.1"]
 
 
+def test_an_italian_folder_asks_the_studio_for_italian_from_an_english_terminal(
+    tmp_path: Path,
+) -> None:
+    with FakeStudio(language="en", twins=1) as studio:
+        project = seeded(tmp_path, studio)
+        project.seed_change()
+        twin = names(project)[0]
+        folder = ProjectFolder(tmp_path / "project")
+        folder.update_link(language="en")
+        knowledge.unpack(valid_archive(), folder.knowledge)
+        run = ut(tmp_path, "twins", "update", answers=["k", "k", "k"])
+        proposals = posted(studio, "/updates")
+
+    assert run.output.splitlines()[0] == say("twins.update_to_generate", names=twin)
+    assert [json.loads(request.body) for request in proposals] == [{"locale": "it-IT"}]
+
+
 def test_a_name_that_matches_no_twin_updates_nothing(tmp_path: Path) -> None:
     with FakeStudio(language="en", twins=2) as studio:
         project = seeded(tmp_path, studio)

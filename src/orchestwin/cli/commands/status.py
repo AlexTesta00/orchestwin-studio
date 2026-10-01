@@ -9,15 +9,19 @@ from typing import TYPE_CHECKING, Final
 from orchestwin.cli import folder as knowledge
 from orchestwin.cli.api import changes as changes_api
 from orchestwin.cli.api import projects as project_api
+from orchestwin.cli.api import sections as sections_api
 from orchestwin.cli.api import tests as tests_api
 from orchestwin.cli.api import usage
+from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.costs import usd_text
 from orchestwin.cli.errors import SIGN_IN_STATUS, ApiFailure, CliError
+from orchestwin.cli.flows import design_state
 from orchestwin.cli.flows.test_report import moment_text
 from orchestwin.cli.messages import known
 from orchestwin.cli.project import STEP_STAGES, read_json
 
 if TYPE_CHECKING:
+    from orchestwin.cli.api.sections import Sections
     from orchestwin.cli.api.tests import AcceptanceSummary
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
@@ -98,6 +102,7 @@ class Report:
     stale_reviews: int = 0
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
+    sections: Sections | None = None
 
     @property
     def folder_current(self) -> bool:
@@ -163,6 +168,7 @@ class Report:
             "learning": (
                 {"twins": [twin.document() for twin in self.learning]} if self.learning else None
             ),
+            "sections": None if self.sections is None else dict(self.sections.document),
         }
 
 
@@ -178,6 +184,7 @@ class _Studio:
     stale_reviews: int = 0
     learning: tuple[TwinLearning, ...] | None = None
     billing: str = usage.API_BILLING
+    sections: Sections | None = None
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -237,6 +244,7 @@ def project_report(context: CommandContext, project: ProjectFolder, *, offline: 
         stale_reviews=found.stale_reviews,
         learning=found.learning if found.learning is not None else local_learning(project),
         billing=found.billing,
+        sections=found.sections,
     )
 
 
@@ -249,7 +257,26 @@ def show(context: CommandContext, report: Report) -> None:
     if report.reason is not None:
         console.say(f"status.offline_{report.reason}", studio=report.studio)
     console.write()
-    console.table(
+    found = report.sections
+    if found is not None and found.first_pass_complete:
+        sections_command.table(context, found)
+    else:
+        steps_table(context, report.steps)
+    console.write()
+    for line in () if found is None else sections_command.sentences(context, found):
+        console.write(line)
+    next_lines(context, report)
+    _folder_lines(context, report)
+    if report.alignment is not None:
+        show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
+    if report.tests is not None:
+        show_tests(context, report.tests)
+    show_learning(context, report.learning)
+    _spending_line(context, report)
+
+
+def steps_table(context: CommandContext, steps: tuple[project_api.StepState, ...]) -> None:
+    context.console.table(
         [
             context.text("status.column_step"),
             context.text("status.column_state"),
@@ -261,21 +288,32 @@ def show(context: CommandContext, report: Report) -> None:
                 context.text(STATE_KEYS[step.state]),
                 "-" if step.version is None else str(step.version),
             ]
-            for step in report.steps
+            for step in steps
         ],
     )
-    console.write()
+
+
+def next_lines(context: CommandContext, report: Report) -> None:
+    console = context.console
+    found = report.sections
+    if found is not None and any(
+        section.key != sections_api.PACKAGE or section.blocked is None
+        for section in found.behind(
+            sections_api.SECTION_KEYS if found.first_pass_complete else sections_api.UPSTREAM
+        )
+    ):
+        return
+    if found is not None and found.first_pass_complete:
+        waiting = found.in_progress()
+        action = None if waiting is None else project_api.STAGE_ACTIONS.get(waiting.key)
+        if action is not None:
+            console.say("status.next", action=next_action_text(context, action))
+            return
     if report.next_action == project_api.DOWNLOAD_FOLDER and report.folder_current:
         console.say("status.next", action=context.text("status.next_folder_current"))
-    else:
-        console.say("status.next", action=next_action_text(context, report.next_action))
-    _folder_lines(context, report)
-    if report.alignment is not None:
-        show_alignment(context, report.alignment, stale_reviews=report.stale_reviews)
-    if report.tests is not None:
-        show_tests(context, report.tests)
-    show_learning(context, report.learning)
-    _spending_line(context, report)
+        design_state.show_next_commands(context)
+        return
+    console.say("status.next", action=next_action_text(context, report.next_action))
 
 
 def show_alignment(
@@ -481,6 +519,7 @@ def _studio_facts(
             return UNREACHABLE
         found = project_api.get_project(client, link.project_id)
         steps = project_api.step_states(client, link.project_id)
+        sections = studio_sections(client, link.project_id)
         approved = _design_approved(steps)
         development = changes_api.development(client, link.project_id) if approved else None
         tests = tests_api.summary(client, link.project_id) if approved else None
@@ -502,7 +541,17 @@ def _studio_facts(
         stale_reviews=0 if development is None else development.stale_reviews,
         learning=learning,
         billing=billing,
+        sections=sections,
     )
+
+
+def studio_sections(client: StudioClient, project_id: str) -> Sections | None:
+    try:
+        return sections_api.sections(client, project_id)
+    except ApiFailure as failure:
+        if failure.http_status >= SERVER_ERROR or failure.http_status == HEALTHY:
+            return None
+        raise
 
 
 def studio_learning(client: StudioClient, project_id: str) -> tuple[TwinLearning, ...] | None:

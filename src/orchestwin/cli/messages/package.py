@@ -392,10 +392,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "Approve it with `ut init`, then try again.",
     },
     "package.errors.TEAM_APPROVAL_REQUIRED": {
-        "it": "La cartella di conoscenza non si può ancora pubblicare: la squadra non è "
-        "approvata. Approvala con `ut init`, poi riprova.",
-        "en": "The knowledge folder cannot be published yet: the team is not approved. "
-        "Approve it with `ut init`, then try again.",
+        "it": "La cartella di conoscenza non si può ancora pubblicare: le prospettive non sono "
+        "approvate. Approvale con `ut init`, poi riprova.",
+        "en": "The knowledge folder cannot be published yet: the perspectives are not approved. "
+        "Approve them with `ut init`, then try again.",
     },
     "package.errors.USER_MODELING_APPROVAL_REQUIRED": {
         "it": "La cartella di conoscenza non si può ancora pubblicare: i twin non sono "
@@ -416,32 +416,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "Choose it and approve it with `ut design`, then try again.",
     },
     "package.errors.TEAM_OUTDATED": {
-        "it": "La cartella di conoscenza non si può pubblicare: la squadra approvata non "
-        "corrisponde più al brief attuale. Approvala di nuovo con `ut init`, poi riprova.",
-        "en": "The knowledge folder cannot be published: the approved team no longer matches "
-        "the current brief. Approve it again with `ut init`, then try again.",
+        "it": "La cartella di conoscenza non si può pubblicare: la sezione Prospettive è "
+        "rimasta indietro, perché il brief è cambiato. Prepara di nuovo le prospettive con "
+        "`ut init`, poi riprova.",
+        "en": "The knowledge folder cannot be published: the Perspectives section is behind, "
+        "because the brief changed. Prepare the perspectives again with `ut init`, then try "
+        "again.",
     },
     "package.errors.USER_TWINS_OUTDATED": {
-        "it": "La cartella di conoscenza non si può pubblicare: i twin confermati non "
-        "corrispondono più al brief o alla squadra attuali. Confermali di nuovo con "
-        "`ut init`, poi riprova.",
-        "en": "The knowledge folder cannot be published: the confirmed twins no longer match "
-        "the current brief or team. Confirm them again with `ut init`, then try again.",
+        "it": "La cartella di conoscenza non si può pubblicare: la sezione User Twin è rimasta "
+        "indietro rispetto al brief o alle prospettive. Aggiornala con `ut sections update`: i "
+        "twin restano gli stessi e la cartella viene pubblicata.",
+        "en": "The knowledge folder cannot be published: the User Twin section is behind the "
+        "brief or the perspectives. Update it with `ut sections update`: the twins stay the "
+        "same and the folder is published.",
     },
     "package.errors.REQUIREMENTS_OUTDATED": {
-        "it": "La cartella di conoscenza non si può pubblicare: i requisiti approvati non "
-        "corrispondono più ai passi prima di loro. Approvali di nuovo con `ut init`, poi "
-        "riprova.",
-        "en": "The knowledge folder cannot be published: the approved requirements no longer "
-        "match the steps before them. Approve them again with `ut init`, then try again.",
+        "it": "La cartella di conoscenza non si può pubblicare: la sezione Definizione è "
+        "rimasta indietro rispetto ai twin, al brief o alle prospettive. Aggiornala con "
+        "`ut sections update`: i requisiti restano gli stessi e la cartella viene pubblicata.",
+        "en": "The knowledge folder cannot be published: the Definition section is behind the "
+        "twins, the brief or the perspectives. Update it with `ut sections update`: the "
+        "requirements stay the same and the folder is published.",
     },
     "package.errors.DESIGN_OUTDATED": {
-        "it": "La cartella di conoscenza non si può pubblicare: il design approvato non "
-        "corrisponde più ai requisiti, alla squadra o ai twin attuali. Approvalo di nuovo con "
-        "`ut design`, poi riprova.",
-        "en": "The knowledge folder cannot be published: the approved design no longer "
-        "matches the current requirements, team or twins. Approve it again with `ut design`, "
-        "then try again.",
+        "it": "La cartella di conoscenza non si può pubblicare: la sezione Design e valutazione "
+        "è rimasta indietro rispetto ai requisiti, ai twin o alle prospettive. Aggiornala con "
+        "`ut sections update`: il design resta lo stesso e la cartella viene pubblicata.",
+        "en": "The knowledge folder cannot be published: the Design & Evaluation section is "
+        "behind the requirements, the twins or the perspectives. Update it with "
+        "`ut sections update`: the design stays the same and the folder is published.",
     },
     "package.errors.PROJECT_NOT_FOUND": {
         "it": "Lo Studio non trova questo progetto per il tuo account, oppure il progetto non "

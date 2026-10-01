@@ -244,6 +244,8 @@ def approve(
         files=summary.file_count,
     )
     console.say("design.folder_contents")
+    console.say("design.after_heading")
+    design_state.show_next_commands(context)
     return 0
 
 

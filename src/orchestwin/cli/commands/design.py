@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from orchestwin.cli import costs
+from orchestwin.cli.api import sections as sections_api
+from orchestwin.cli.commands import sections as sections_command
 from orchestwin.cli.console import Choice
 from orchestwin.cli.errors import (
     INTERRUPTED_STATUS,
@@ -27,6 +29,7 @@ from orchestwin.cli.flows import (
 )
 
 if TYPE_CHECKING:
+    from orchestwin.cli.api.sections import Sections
     from orchestwin.cli.client import StudioClient
     from orchestwin.cli.context import CommandContext
     from orchestwin.cli.flows.design_state import Alternative, DesignState
@@ -97,7 +100,7 @@ def run(context: CommandContext, arguments: argparse.Namespace) -> int:
     except CliError as error:
         if error.code != design_generate.CONTEXT_CHANGED:
             raise
-        console.error("design.errors.DESIGN_CONTEXT_CHANGED", **error.values)
+        report_changed(context, client, project, error)
         design_state.show_summary(context, design_state.read_state(client, project))
         return error.status
 
@@ -245,7 +248,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             except CliError as error:
                 if error.code != design_generate.CONTEXT_CHANGED:
                     raise
-                report(context, error)
+                report_changed(context, client, project, error)
             continue
         if kind == design_state.JOB_RUNNING:
             followed = True
@@ -254,7 +257,7 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
             except CliError as error:
                 if error.code != design_generate.CONTEXT_CHANGED:
                     raise
-                report(context, error)
+                report_changed(context, client, project, error)
             else:
                 reveal = reveal or outcome.reveal
                 described = described or outcome.displayed
@@ -285,7 +288,10 @@ def guided(context: CommandContext, client: StudioClient, project: ProjectFolder
         except CliError as error:
             if not recoverable(error):
                 raise
-            report(context, error)
+            if error.code == design_generate.CONTEXT_CHANGED:
+                report_changed(context, client, project, error)
+            else:
+                report(context, error)
 
 
 def describe(
@@ -526,3 +532,32 @@ def report(context: CommandContext, error: CliError) -> None:
     from orchestwin.cli.main import report_error
 
     report_error(context.console, error, NAME)
+
+
+def report_changed(
+    context: CommandContext, client: StudioClient, project: ProjectFolder, error: CliError
+) -> None:
+    console = context.console
+    found = design_sections(client, project)
+    design = None if found is None else found.section(sections_api.DESIGN)
+    if found is None or design is None or not design.behind:
+        console.error("design.errors.DESIGN_CONTEXT_CHANGED", **error.values)
+    elif design.blocked is None:
+        console.error("design.behind")
+    else:
+        blocked = sections_command.blocked_text(
+            context,
+            design.stage,
+            sections_api.block_of(design.blocked),
+            design.blocked,
+            design.codes,
+            None,
+        )
+        console.error("design.behind_blocked", blocked=blocked)
+
+
+def design_sections(client: StudioClient, project: ProjectFolder) -> Sections | None:
+    try:
+        return sections_api.sections(client, project.link().project_id)
+    except CliError:
+        return None

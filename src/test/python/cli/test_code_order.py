@@ -245,6 +245,13 @@ def write_tasks(project: ProjectFolder, tasks: Sequence[dict[str, object]]) -> N
     edit_json(project.knowledge / "state" / "state.json", change)
 
 
+def folder_language(project: ProjectFolder, language: str | None) -> None:
+    def change(document: dict) -> None:
+        document["project"]["language"] = language
+
+    edit_json(project.knowledge / "orchestwin.json", change)
+
+
 def order_of(
     project: ProjectFolder,
     work: Work,
@@ -281,8 +288,9 @@ def test_the_work_order_of_a_complete_folder_follows_the_template(tmp_path: Path
 
 
 def test_without_open_tasks_the_order_builds_the_application(tmp_path: Path) -> None:
-    project = linked(tmp_path, language="en")
+    project = linked(tmp_path, language="it")
     write_tasks(project, [DONE_TASK, DROPPED_TASK])
+    folder_language(project, "en")
 
     order = order_of(project, work_for(open_tasks(project), (), None), language="it", spend=True)
 
@@ -376,24 +384,50 @@ def test_a_knowledge_folder_with_another_name_is_named_everywhere(tmp_path: Path
 
 
 @pytest.mark.parametrize(
-    ("link", "command", "expected"),
+    ("folder", "link", "command", "expected"),
     [
-        ("it", "en", "Italian"),
-        ("it-IT", "en", "Italian"),
-        ("en", "it", "English"),
-        (None, "it", "Italian"),
-        (None, "en", "English"),
-        ("  ", "it", "Italian"),
+        ("it", None, "en", "Italian"),
+        ("it", "en", "en", "Italian"),
+        ("en", "it", "it", "English"),
+        (None, "it", "en", "Italian"),
+        (None, "it-IT", "en", "Italian"),
+        (None, "en", "it", "English"),
+        ("  ", "it", "en", "Italian"),
+        (None, None, "it", "Italian"),
+        (None, None, "en", "English"),
+        (None, "  ", "it", "Italian"),
     ],
 )
-def test_the_language_of_the_application_comes_from_the_link_then_from_the_command(
-    tmp_path: Path, link: str | None, command: str, expected: str
+def test_the_language_of_the_application_comes_from_the_folder_then_the_link_then_the_command(
+    tmp_path: Path, folder: str | None, link: str | None, command: str, expected: str
 ) -> None:
     project = linked(tmp_path, language=link)
+    folder_language(project, folder)
 
     order = order_of(project, Work(), language=command)
 
     assert f"is written in {expected}." in order
+
+
+@pytest.mark.parametrize(
+    ("folder", "link", "command", "expected"),
+    [
+        ("it", None, "en", "it"),
+        ("en", "it", "it", "en"),
+        (None, "it", "en", "it"),
+        (None, None, "en", "en"),
+    ],
+)
+def test_the_language_of_the_project_is_read_from_the_folder_first(
+    tmp_path: Path, folder: str | None, link: str | None, command: str, expected: str
+) -> None:
+    project = linked(tmp_path, language=link)
+    folder_language(project, folder)
+    broken = linked(tmp_path / "broken", language=link)
+    (broken.knowledge / "orchestwin.json").write_text("{", encoding="utf-8")
+
+    assert code_order.project_language(project, command) == expected
+    assert code_order.project_language(broken, command) == (link or command)
 
 
 @pytest.mark.parametrize(

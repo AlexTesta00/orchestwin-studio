@@ -239,9 +239,24 @@ def facts_of(project: ProjectFolder, summary: FolderSummary, *, language: str) -
         knowledge_folder=link.knowledge_folder,
         version_number=summary.version_number,
         alternative=alternative_code(project),
-        language=language_name(link.language, language),
+        language=language_name(project_language(project, language, summary=summary)),
         present=frozenset(name for name in READ_FIRST if root.joinpath(*name.split("/")).is_file()),
     )
+
+
+def project_language(
+    project: ProjectFolder, fallback: str, *, summary: FolderSummary | None = None
+) -> str:
+    found = folder_language(project) if summary is None else _text(summary.language)
+    return found or _text(project.link().language) or fallback
+
+
+def folder_language(project: ProjectFolder) -> str | None:
+    try:
+        found = knowledge.summary(project.knowledge)
+    except CliError:
+        return None
+    return None if found is None else _text(found.language)
 
 
 def alternative_code(project: ProjectFolder) -> str | None:
@@ -261,9 +276,8 @@ def alternative_code(project: ProjectFolder) -> str | None:
     return None
 
 
-def language_name(value: str | None, fallback: str) -> str:
-    chosen = value if value and value.strip() else fallback
-    return ITALIAN if chosen.strip().lower().startswith("it") else ENGLISH
+def language_name(value: str) -> str:
+    return ITALIAN if value.strip().lower().startswith("it") else ENGLISH
 
 
 def work_order(facts: OrderFacts, work: Work, *, spend: bool) -> str:

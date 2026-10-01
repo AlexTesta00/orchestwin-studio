@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from orchestwin.cli import folder as knowledge
+from orchestwin.cli import messages
 from orchestwin.cli.commands.package import moment_text
 from orchestwin.cli.http import Reply, UrlTransport, unreachable
 from orchestwin.cli.messages import known
@@ -317,6 +318,40 @@ def test_publish_names_the_step_that_is_missing(tmp_path: Path) -> None:
         "La cartella di conoscenza non si può ancora pubblicare: il design non è approvato. "
         "Sceglilo e approvalo con `ut design`, poi riprova.\n"
     )
+    assert not knowledge_folder(tmp_path).exists()
+
+
+BEHIND_SECTIONS = {
+    "TEAM_OUTDATED": ("Perspectives", "Prospettive", "`ut init`"),
+    "USER_TWINS_OUTDATED": ("User Twin", "User Twin", "`ut sections update`"),
+    "REQUIREMENTS_OUTDATED": ("Definition", "Definizione", "`ut sections update`"),
+    "DESIGN_OUTDATED": ("Design & Evaluation", "Design e valutazione", "`ut sections update`"),
+}
+
+
+@pytest.mark.parametrize("code", list(BEHIND_SECTIONS))
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_a_section_behind_names_the_section_and_the_command_that_updates_it(
+    tmp_path: Path, code: str, language: str
+) -> None:
+    with FakeStudio(language="en") as studio:
+        seeded(tmp_path, studio)
+        studio.fail_next(
+            "POST",
+            "/projects/{project_id}/knowledge-packages",
+            status=409,
+            body={"detail": {"code": code}},
+        )
+        run = ut(tmp_path, "--lang", language, "package", "publish")
+
+    english, italian, command = BEHIND_SECTIONS[code]
+    sentence = run.errors.rstrip("\n")
+    assert run.status == 1
+    assert run.output.splitlines() == progress(PUBLISHING[language], NOT_COMPLETED, language)
+    assert sentence == messages.text(f"package.errors.{code}", language)
+    assert (english if language == "en" else italian) in sentence
+    assert sentence.endswith(".") and command in sentence
+    assert not any(word in sentence.lower() for word in ("approv", "squadr", "team", "confirm"))
     assert not knowledge_folder(tmp_path).exists()
 
 

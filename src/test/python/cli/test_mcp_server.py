@@ -26,7 +26,7 @@ from .test_mcp_knowledge import (
     state_folder,
 )
 from .test_mcp_protocol import call, initialize, notification, request
-from .test_mcp_tools import CHANGES, fake_git, recorded_change
+from .test_mcp_tools import CHANGES, fake_git, folder_language, recorded_change
 
 EMAIL = "owner@example.com"
 TURNS = "/projects/{project_id}/user-twins/{twin_id}/conversation/turns"
@@ -165,7 +165,8 @@ def test_initialize_introduces_the_server_in_the_language_of_the_project(tmp_pat
 
 
 def test_with_spend_the_instructions_say_that_the_paid_tools_are_allowed(tmp_path: Path) -> None:
-    state_folder(tmp_path, language="en")
+    project = state_folder(tmp_path, language="en")
+    folder_language(project, "en")
 
     run = serve(tmp_path, initialize(), spend=True, language="it")
 
@@ -178,11 +179,33 @@ def test_with_spend_the_instructions_say_that_the_paid_tools_are_allowed(tmp_pat
         "ask_twin and review_changes spend on the model at each call and are allowed, because "
         "the server was started with --spend."
     ) in instructions
+    assert "The tools that read the folder spend nothing" in instructions
+    assert not re.search(r"\bfree\b", instructions, flags=re.IGNORECASE)
     assert run.errors.startswith(
         "Server MCP orchestwin-twins avviato per il progetto «Calcolo mancia» "
     )
     assert "Strumenti a pagamento: permessi (--spend)." in run.errors
     assert run.errors.endswith("L'input si è chiuso: il server MCP si ferma.\n")
+
+
+def test_the_instructions_speak_the_language_of_the_folder_before_the_link_and_the_command(
+    tmp_path: Path,
+) -> None:
+    project = state_folder(tmp_path, language="en")
+    folder_language(project, "it")
+
+    run = serve(tmp_path, initialize(), language="en")
+
+    instructions = messages(run)[1]["result"]["instructions"]
+    assert instructions.startswith(
+        "Questo server dà agli agenti dell'editor la conoscenza approvata del progetto "
+        "«Calcolo mancia» di OrchesTwin Studio"
+    )
+    assert "Gli strumenti che leggono la cartella non spendono nulla" in instructions
+    assert "gratuit" not in instructions
+    assert run.errors.startswith(
+        'MCP server orchestwin-twins started for the project "Calcolo mancia"'
+    )
 
 
 @pytest.mark.parametrize(
@@ -251,7 +274,9 @@ def test_the_eleven_tools_are_listed_with_schemas_that_hold_together(tmp_path: P
         "description": "How many reviews to give, newest first: 1 to 20, usually 3.",
     }
     assert tools[0]["title"] == "Project state"
-    assert tools[0]["description"].endswith("what to do next. Free.")
+    assert tools[0]["description"].endswith("what to do next. No spending.")
+    for tool in tools:
+        assert not re.search(r"\bfree\b", tool["description"], flags=re.IGNORECASE), tool["name"]
 
 
 def test_the_tools_speak_the_language_of_the_command(tmp_path: Path) -> None:
@@ -264,6 +289,10 @@ def test_the_tools_speak_the_language_of_the_command(tmp_path: Path) -> None:
     assert tools[6]["description"].endswith(
         "Ora non disponibile: il server è stato avviato senza --spend."
     )
+    assert tools[0]["description"].endswith("che cosa fare dopo. Nessuna spesa.")
+    assert [
+        tool["name"] for tool in tools if re.search("gratuit|gratis", tool["description"])
+    ] == []
 
 
 def test_the_free_tools_answer_from_a_schema_three_folder(tmp_path: Path) -> None:
@@ -301,7 +330,8 @@ def test_the_free_tools_answer_from_a_schema_three_folder(tmp_path: Path) -> Non
 
 
 def test_the_free_tools_answer_from_a_schema_two_folder(tmp_path: Path) -> None:
-    schema_two_folder(tmp_path, language="en")
+    project = schema_two_folder(tmp_path, language="en")
+    folder_language(project, "en")
 
     run = serve(
         tmp_path,
