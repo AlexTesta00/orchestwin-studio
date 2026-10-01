@@ -1,10 +1,18 @@
 import { ApiRequestError } from "./requestError";
 
+export interface ModelRuntimeComponent {
+  ready: boolean;
+  code?: string;
+  kind?: string;
+  version?: string | null;
+  subscription?: string | null;
+}
+
 export interface ModelRuntimeReadiness {
   mode: "DEVELOPMENT_FIXTURES" | "REAL_REQUIRED";
   ready: boolean;
   code?: string;
-  components?: Record<string, { ready: boolean; code?: string }>;
+  components?: Record<string, ModelRuntimeComponent>;
 }
 
 export async function modelRuntimeReadiness(
