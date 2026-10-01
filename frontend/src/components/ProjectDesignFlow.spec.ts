@@ -5,6 +5,11 @@ import { defineComponent, h, vShow, withDirectives } from "vue";
 
 import { createAppI18n } from "@/i18n";
 import { createDesignApi, type DesignApi } from "../api/design";
+import {
+  DesignAlignmentApiError,
+  type DesignAlignmentApi,
+  type DesignAlignmentPayload,
+} from "../api/designAlignment";
 import type { DesignIterationsApi } from "../api/designIterations";
 import type { DesignLoopApi } from "../api/designLoop";
 import { DesignMockupsApiError, type DesignMockupsApi } from "../api/designMockups";
@@ -205,6 +210,58 @@ const GENERATED_SELECTED: DesignPackageVersionPayload = {
     owner_assertions: ["The tone stays kind"],
   },
 };
+
+const REANCHORED_DESIGN_VERSION: DesignPackageVersionPayload = {
+  ...GENERATED_SELECTED,
+  id: "00000000-0000-4000-8000-0000000001a0",
+  version_number: 3,
+  based_on_version_number: 2,
+  content_hash: "a".repeat(64),
+  package: {
+    ...GENERATED_SELECTED.package,
+    grounding: {
+      ...GENERATED_SELECTED.package.grounding,
+      requirements_reference: {
+        ...DESIGN_REQUIREMENTS,
+        artifact_id: REQUIREMENTS_V2.id,
+        version_number: REQUIREMENTS_V2.version_number,
+        content_hash: REQUIREMENTS_V2.content_hash,
+      },
+    },
+  },
+};
+
+function alignment(overrides: Partial<DesignAlignmentPayload> = {}): DesignAlignmentPayload {
+  return {
+    aligned: false,
+    issue: null,
+    design_version_number: 2,
+    grounded_requirements_version_number: 1,
+    requirements_version_number: 2,
+    missing_codes: [],
+    uncovered_codes: [],
+    ...overrides,
+  };
+}
+
+function alignmentRouteMissing(): DesignAlignmentApiError {
+  return new DesignAlignmentApiError("The design alignment request failed", {
+    status: 404,
+    code: null,
+    payload: { detail: "Not Found" },
+  });
+}
+
+function fakeAlignmentApi(answer: DesignAlignmentPayload | Error) {
+  return {
+    status: vi.fn(async (): Promise<DesignAlignmentPayload> => {
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer;
+    }),
+  } satisfies Pick<DesignAlignmentApi, "status">;
+}
 
 function mockupResult(
   alternativeId: string,
@@ -747,6 +804,26 @@ class FakeDesignApi implements DesignApi {
   }
 }
 
+function approvedReadiness(version: DesignPackageVersionPayload): DesignReadinessPayload {
+  return {
+    status: "READY_FOR_ARCHITECTURE_PLANNING",
+    version,
+    gate: {
+      ...PENDING_DESIGN_GATE,
+      status: "APPROVED",
+      artifact: {
+        ...PENDING_DESIGN_GATE.artifact,
+        artifact_id: version.id,
+        version: version.version_number,
+        content_hash: version.content_hash,
+      },
+    },
+    has_package: true,
+    package_ready_for_gate: true,
+    approved_current_package: true,
+  };
+}
+
 function designToPrepare(version: DesignPackageVersionPayload): FakeDesignApi {
   const api = new FakeDesignApi(version);
   const prepared = api.readinessResult;
@@ -777,6 +854,8 @@ interface MountOptions {
   locale?: "en" | "it";
   loop?: DesignLoopApi;
   requirementsApi?: FakeRequirementsGate;
+  alignmentApi?: Pick<DesignAlignmentApi, "status">;
+  sectionsMode?: boolean;
   mockupsApi?: DesignMockupsApi;
   iterationsApi?: DesignIterationsApi;
   pinsApi?: DesignReviewPinsApi;
@@ -799,6 +878,8 @@ function mountFlow(api: FakeDesignApi, options: MountOptions = {}) {
       loopApi: options.loop ?? loopApi,
       requirementsApi:
         options.requirementsApi ?? new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V1)),
+      alignmentApi: options.alignmentApi ?? fakeAlignmentApi(alignmentRouteMissing()),
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
       mockupsApi: options.mockupsApi ?? fakeMockupsApi(),
       ...(options.iterationsApi === undefined ? {} : { iterationsApi: options.iterationsApi }),
       ...(options.pinsApi === undefined ? {} : { pinsApi: options.pinsApi }),
@@ -886,11 +967,16 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.get('[data-testid="design-preview"]').text()).toContain(
       "Model-generated draft · not applied",
     );
+    expect(wrapper.get('[data-testid="design-preview"]').text()).toContain(
+      "the application is built from the knowledge folder with your own tools.",
+    );
     expect(api.proposedPackage).toBeNull();
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
 
     await card(wrapper, "DES-002").get('[data-testid="alternative-choose"]').trigger("click");
     await flushPromises();
 
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(api.proposeRevision).toHaveBeenCalledTimes(1);
     expect(api.proposedPackage?.owner_selected_alternative_id).toBe(SECOND_DESIGN_ALTERNATIVE_ID);
     expect(api.proposedPackage?.prototype?.design_alternative_id).toBe(
@@ -1012,6 +1098,7 @@ describe("ProjectDesignFlow", () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-next-step"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(true);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(3);
   });
 
   it("explains a rejected regeneration in plain words instead of showing its code", async () => {
@@ -2301,7 +2388,9 @@ describe("ProjectDesignFlow", () => {
 
     const bar = barOf(wrapper);
     expect(bar.get('[data-testid="decision-primary"]').text()).toBe("Approva il design scelto");
-    expect(bar.text()).toContain("Approvi DES-001 · Guided reservation flow.");
+    expect(bar.text()).toContain(
+      "Approvi DES-001 · Guided reservation flow. La cartella di conoscenza conterrà questo design e il parere dei twin.",
+    );
     await bar.get('[data-testid="decision-secondary"]').trigger("click");
     const note = wrapper.get('[data-testid="decision-note"]');
     expect(note.attributes("placeholder")).toBe(
@@ -2393,8 +2482,10 @@ describe("ProjectDesignFlow", () => {
     expect(barOf(wrapper).text()).toContain("A new version is waiting above");
     expect(barOf(wrapper).find('[data-testid="decision-secondary"]').exists()).toBe(false);
 
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await panel.get('[data-testid="design-iteration-apply"]').trigger("click");
     await flushPromises();
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
     expect(api.proposals).toEqual([proposal.package]);
     expect(api.decisions).toEqual(["APPROVE"]);
     expect(wrapper.find('[data-testid="design-iteration-ready"]').exists()).toBe(false);
@@ -2422,8 +2513,21 @@ describe("ProjectDesignFlow", () => {
     expect(api.gateActions.map((item) => item.action)).toEqual(["APPROVE"]);
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="design-readiness"]').text()).toBe(
-      "Design approvato da te. Ora il pacchetto.",
+      "Design approvato da te. Ora il Dossier.",
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+  });
+
+  it("says in English that the Dossier follows the approved design", async () => {
+    const api = new FakeDesignApi(SELECTED_DESIGN_VERSION);
+    api.readinessResult = approvedReadiness(SELECTED_DESIGN_VERSION);
+    const wrapper = mountFlow(api);
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-readiness"]').text()).toBe(
+      "Design approved by you. Next: the Dossier.",
+    );
+    expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
   });
 
   it("approves with the same button when only the approval failed the first time", async () => {
@@ -2456,6 +2560,9 @@ describe("ProjectDesignFlow", () => {
     const note = wrapper.get('[data-testid="decision-note"]');
     expect(note.attributes("placeholder")).toBe(
       "Write what is wrong: the request is recorded with your note. For a different design, choose the other alternative or regenerate the alternatives.",
+    );
+    expect(barOf(wrapper).text()).toContain(
+      "The current design does not change: your note stays in the history of the design.",
     );
     expect(wrapper.find('[data-testid="design-request-rule"]').exists()).toBe(false);
     await note.setValue("The dashboard is too dense.");
@@ -2556,6 +2663,24 @@ describe("ProjectDesignFlow", () => {
     },
   );
 
+  it.each([
+    ["en", "Approved · Decision no. 1"],
+    ["it", "Approvato · Decisione n. 1"],
+  ] as const)(
+    "numbers the decision on the design in %s without a limit of attempts",
+    async (locale, approval) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const wrapper = mountFlow(api, { locale });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const details = wrapper.get('[data-testid="step-technical-details-content"]');
+      expect(details.text()).toContain(approval);
+      expect(details.text()).not.toMatch(/ of 3| di 3/);
+    },
+  );
+
   it("tells only in the technical details what the Studio repaired in a drawn mockup", async () => {
     const api = new FakeDesignApi(GENERATED_UNSELECTED);
     const repaired = mockupResult(DESIGN_ALTERNATIVE_ID, GENERATED_UNSELECTED, {
@@ -2639,6 +2764,241 @@ describe("ProjectDesignFlow", () => {
       await expectAccessible(wrapper.element);
     },
   );
+});
+
+describe("ProjectDesignFlow in sections mode", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    while (mounted.length > 0) {
+      mounted.pop()?.unmount();
+    }
+    document.body.innerHTML = "";
+  });
+
+  function drawnMockups() {
+    return fakeMockupsApi({
+      capabilities: GENERATED,
+      documents: {
+        [`${DESIGN_ALTERNATIVE_ID}|applied`]: mockupDocument(DESIGN_ALTERNATIVE_ID, "applied"),
+      },
+    });
+  }
+
+  it.each([
+    [
+      "en",
+      "You approved this design. You can still ask for changes in words: the new version comes back here for your approval.",
+      "Ask for changes",
+      "The designer is drawing the new version you asked for: the approved design stays as it is until you apply it.",
+    ],
+    [
+      "it",
+      "Hai approvato questo design. Puoi ancora chiedere modifiche a parole: la nuova versione torna qui per la tua approvazione.",
+      "Chiedi modifiche",
+      "Il designer sta disegnando la nuova versione che hai chiesto: il design approvato resta com'è finché non la applichi.",
+    ],
+  ] as const)(
+    "offers in %s the change in words on an approved design only in sections mode",
+    async (locale, sentence, secondary, drawing) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const iterationsApi = fakeIterationsApi(() => job(null));
+      const wrapper = mountFlow(api, { mockupsApi: drawnMockups(), iterationsApi, locale });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="design-readiness"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+
+      await wrapper.setProps({ sectionsMode: true });
+
+      const bar = barOf(wrapper);
+      expect(bar.text()).toContain(sentence);
+      expect(bar.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+      expect(bar.get('[data-testid="decision-secondary"]').text()).toBe(secondary);
+      await expectAccessible(wrapper.element, { iframes: false });
+
+      await bar.get('[data-testid="decision-secondary"]').trigger("click");
+      await wrapper.get('[data-testid="decision-note"]').setValue("Metti la ricerca in alto");
+      await wrapper.get('[data-testid="decision-send"]').trigger("click");
+      await flushPromises();
+
+      expect(iterationsApi.startJob.mock.calls[0]?.[1]).toEqual({
+        design_version_id: GENERATED_SELECTED.id,
+        design_content_hash: GENERATED_SELECTED.content_hash,
+        request: "Metti la ricerca in alto",
+        assertions: [],
+      });
+      expect(api.gateActions).toEqual([]);
+      expect(wrapper.get('[data-testid="design-iteration-panel"]').attributes("data-phase")).toBe(
+        "drawing",
+      );
+      expect(barOf(wrapper).text()).toContain(drawing);
+    },
+  );
+
+  it("keeps the review and the discussion of an approved design available as today", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+    const wrapper = mountFlow(api, { mockupsApi: drawnMockups(), sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-evaluate"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="design-discussion-panel"]').exists()).toBe(true);
+  });
+
+  it.each([
+    [
+      "en",
+      "The design was re-anchored to the new Definition: you can ask the twins for a new evaluation.",
+    ],
+    [
+      "it",
+      "Il design è stato riagganciato alla Definizione nuova: puoi chiedere ai twin una nuova valutazione.",
+    ],
+  ] as const)(
+    "says in %s next to the review that a re-anchored design can be evaluated again and starts no review by itself",
+    async (locale, sentence) => {
+      const api = new FakeDesignApi(REANCHORED_DESIGN_VERSION);
+      api.readinessResult = approvedReadiness(REANCHORED_DESIGN_VERSION);
+      api.historyResult = [GENERATED_SELECTED, REANCHORED_DESIGN_VERSION];
+      const loop = reviewingLoopApi();
+      vi.mocked(loop.runs).mockResolvedValue([evaluationRun(TWIN_ID, GENERATED_SELECTED)]);
+      const wrapper = mountFlow(api, {
+        loop,
+        locale,
+        sectionsMode: true,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+        alignmentApi: fakeAlignmentApi(
+          alignment({
+            aligned: true,
+            issue: "ALREADY_ALIGNED",
+            grounded_requirements_version_number: 2,
+          }),
+        ),
+      });
+      await flushPromises();
+
+      const notice = wrapper.get('[data-testid="design-reanchored-review"]');
+      expect(notice.text()).toBe(sentence);
+      const panel = wrapper.getComponent(ProjectDesignEvaluationPanel);
+      expect(notice.element.nextElementSibling).toBe(panel.element);
+      expect(panel.props("autoEvaluateVersionId")).toBeNull();
+      expect(loop.evaluate).not.toHaveBeenCalled();
+      await expectAccessible(wrapper.element);
+
+      await panel.get('[data-testid="design-evaluate"]').trigger("click");
+      await flushPromises();
+
+      expect(loop.evaluate).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(loop.evaluate).mock.calls[0]?.[1]).toMatchObject({
+        design_version_id: REANCHORED_DESIGN_VERSION.id,
+        mode: "TWIN_REVIEW",
+      });
+    },
+  );
+
+  it("says nothing about a re-anchoring for a version that only changed the design", async () => {
+    const iterated: DesignPackageVersionPayload = {
+      ...GENERATED_SELECTED,
+      id: "00000000-0000-4000-8000-0000000001a1",
+      version_number: 3,
+      based_on_version_number: 2,
+      content_hash: "b".repeat(64),
+    };
+    const api = new FakeDesignApi(iterated);
+    api.historyResult = [GENERATED_SELECTED, iterated];
+    const loop = reviewingLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([evaluationRun(TWIN_ID, GENERATED_SELECTED)]);
+    const wrapper = mountFlow(api, { loop, sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-reanchored-review"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="design-evaluation-panel"]').exists()).toBe(true);
+    expect(loop.evaluate).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a re-anchoring once the re-anchored design has its own review", async () => {
+    const api = new FakeDesignApi(REANCHORED_DESIGN_VERSION);
+    api.readinessResult = approvedReadiness(REANCHORED_DESIGN_VERSION);
+    api.historyResult = [GENERATED_SELECTED, REANCHORED_DESIGN_VERSION];
+    const loop = fakeLoopApi();
+    vi.mocked(loop.runs).mockResolvedValue([
+      evaluationRun(TWIN_ID, GENERATED_SELECTED),
+      { ...evaluationRun(TWIN_ID, REANCHORED_DESIGN_VERSION), id: "run-2" },
+    ]);
+    const wrapper = mountFlow(api, { loop, sectionsMode: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="design-reanchored-review"]').exists()).toBe(false);
+  });
+
+  it.each([
+    [
+      "it",
+      "Il design è agganciato alla Definizione v1; ora c'è la v2. Le alternative restano: usa «Aggiorna e conferma» qui sopra per riagganciarlo.",
+    ],
+    [
+      "en",
+      "The design is anchored to Definition v1; now there is v2. The alternatives stay: use «Update and confirm» above to re-anchor it.",
+    ],
+  ] as const)(
+    "tells in %s to re-anchor an approved design above instead of regenerating it",
+    async (locale, sentence) => {
+      const api = new FakeDesignApi(GENERATED_SELECTED);
+      api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+      const alignmentApi = fakeAlignmentApi(alignment());
+      const wrapper = mountFlow(api, {
+        locale,
+        sectionsMode: true,
+        requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+        alignmentApi,
+      });
+      await flushPromises();
+
+      expect(alignmentApi.status).toHaveBeenCalledWith(DESIGN_PROJECT_ID, "access-token");
+      expect(wrapper.get('[data-testid="design-next-step-reanchor"]').text()).toContain(sentence);
+      expect(wrapper.find('[data-testid="design-regenerate"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="design-next-regenerate"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+    },
+  );
+
+  it("keeps the regeneration as the way out when the design cites a requirement that is gone", async () => {
+    const api = new FakeDesignApi(GENERATED_SELECTED);
+    api.readinessResult = approvedReadiness(GENERATED_SELECTED);
+    const loop = fakeLoopApi();
+    vi.mocked(loop.regenerate).mockImplementation(async () => {
+      api.readinessResult = { ...api.readinessResult, version: REGENERATED_DESIGN_VERSION };
+      return {
+        status: "CREATED",
+        version: REGENERATED_DESIGN_VERSION,
+        issue: null,
+        proposal_issue: null,
+        persistence_status: "APPENDED",
+      };
+    });
+    const wrapper = mountFlow(api, {
+      loop,
+      sectionsMode: true,
+      requirementsApi: new FakeRequirementsGate(readyRequirements(REQUIREMENTS_V2)),
+      alignmentApi: fakeAlignmentApi(
+        alignment({ issue: "REQUIREMENT_NO_LONGER_AVAILABLE", missing_codes: ["REQ-003"] }),
+      ),
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="design-next-step"]').text()).toContain(
+      "Design & Evaluation cannot be updated by itself: the design cites REQ-003, which the Definition no longer contains: regenerate the alternatives in the Design & Evaluation step.",
+    );
+    await wrapper.get('[data-testid="design-next-regenerate"]').trigger("click");
+    await flushPromises();
+    expect(loop.regenerate).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+  });
 });
 
 describe("designChangeSentence", () => {
@@ -2996,8 +3356,8 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
   const NO_DESIGNER = { code: "PROPOSAL_REJECTED", proposal_issue: "UX_DESIGNER_REQUIRED" };
   const NO_REASON = { code: "PROPOSAL_REJECTED" };
   const DESIGNER_MISSING = {
-    en: "The team of this project has no UX/UI designer, so the design alternatives cannot be prepared. Go back to the Team step, add the designer and approve the team again.",
-    it: "La squadra di questo progetto non ha un designer UX/UI, quindi le alternative di design non si possono preparare. Torna al passo Squadra, aggiungi il designer e approva di nuovo la squadra.",
+    en: "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    it: "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo.",
   };
   const NOT_PREPARED = {
     en: "The model could not prepare this proposal from the approved steps. Your project is unchanged. You can try again.",
@@ -3083,7 +3443,7 @@ describe("ProjectDesignFlow and a refused first proposal", () => {
     { how: "through a job", background: true, locale: "en" },
     { how: "through a job", background: true, locale: "it" },
   ] as const)(
-    "says that the team has no designer when the proposal is refused $how ($locale)",
+    "says that the UX perspective is missing when the proposal is refused $how ($locale)",
     async ({ background, locale }) => {
       const wrapper = await generateRefused(NO_DESIGNER, background, locale);
 

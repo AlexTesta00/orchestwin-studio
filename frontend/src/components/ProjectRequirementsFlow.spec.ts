@@ -551,7 +551,7 @@ function readyApi(
 function mountFlow(
   api: RequirementsApi,
   autoLoad = false,
-  options: { locale?: "en" | "it"; attach?: boolean } = {},
+  options: { locale?: "en" | "it"; attach?: boolean; sectionsMode?: boolean } = {},
 ) {
   const locale = options.locale ?? "en";
   return mount(ProjectRequirementsFlow, {
@@ -561,6 +561,7 @@ function mountFlow(
       autoLoad,
       authorize,
       api,
+      ...(options.sectionsMode === undefined ? {} : { sectionsMode: options.sectionsMode }),
     },
     global: { plugins: [createAppI18n(locale)] },
     ...(options.attach ? { attachTo: document.body } : {}),
@@ -794,8 +795,9 @@ describe("ProjectRequirementsFlow", () => {
     expect(api.submitCalls).toBe(1);
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
-      "Requirements approved by you. Next: the design.",
+      "Requirements approved by you. Next: Design & Evaluation.",
     );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 
   it("does not send a revision request without a reason", async () => {
@@ -1280,7 +1282,8 @@ describe("ProjectRequirementsFlow", () => {
 
     const content = details.get('[data-testid="step-technical-details-content"]');
     expect(content.text()).toContain(VERSION.content_hash);
-    expect(content.text()).toContain("decision 1 of 3");
+    expect(content.text()).toContain("Waiting for your approval · Decision no. 1");
+    expect(content.text()).not.toContain("1 of 3");
     expect(content.text()).toContain("Sources: functional_requirements[0]");
     expect(content.text()).toContain("Receptionist Twin v1");
     expect(content.find('[data-testid="version-comparison"]').exists()).toBe(false);
@@ -2208,6 +2211,194 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
   });
 });
 
+describe("ProjectRequirementsFlow in sections mode", () => {
+  const APPROVED_GATE: HumanGatePayload = {
+    ...PENDING_GATE,
+    status: "APPROVED",
+    event_sequence: 2,
+  };
+
+  const CHECKED_VERSION: RequirementsSpecificationVersionPayload = {
+    ...VERSION,
+    specification: {
+      ...RICH_SPECIFICATION,
+      requirements: [RICH_SPECIFICATION.requirements[0]!],
+    },
+  };
+
+  function approvedApi(): FakeApi {
+    const api = new FakeApi();
+    api.readinessResult = {
+      status: "READY_FOR_DESIGN_EXPLORATION",
+      version: VERSION,
+      gate: APPROVED_GATE,
+      approved_current_specification: true,
+    };
+    api.historyResult = [VERSION];
+    return api;
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("offers no change request on an approved specification outside sections mode", async () => {
+    const wrapper = mountFlow(approvedApi(), true, { attach: true });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
+      "Requirements approved by you. Next: Design & Evaluation.",
+    );
+    expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="decision-secondary"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "You approved these requirements. You can still ask for a change in words: the new version comes back here for your approval.",
+      "Ask for changes",
+      "Approve the requirements",
+    ],
+    [
+      "it",
+      "Hai approvato questi requisiti. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
+      "Chiedi modifiche",
+      "Approva i requisiti",
+    ],
+  ] as const)(
+    "offers in %s the change in words on an approved specification in sections mode",
+    async (locale, sentence, secondary, primary) => {
+      const wrapper = mountFlow(approvedApi(), true, { attach: true, locale, sectionsMode: true });
+      await flushPromises();
+
+      const bar = wrapper.get('[data-testid="decision-bar"]');
+      expect(bar.text()).toContain(sentence);
+      expect(bar.get('[data-testid="decision-secondary"]').text()).toBe(secondary);
+      expect(bar.get('[data-testid="decision-primary"]').text()).toBe(primary);
+      expect(bar.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+      expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(true);
+      await expectAccessible(wrapper.element);
+      wrapper.unmount();
+    },
+  );
+
+  it("asks the analyst for the change without recording a request and approves the new version with one gesture", async () => {
+    const api = approvedApi();
+    api.changeOutcome = "proposed";
+    api.nextVersion = VERSION_2;
+    const decideRevision = api.decideRevision.bind(api);
+    vi.spyOn(api, "decideRevision").mockImplementation(async (...args) => {
+      const result = await decideRevision(...args);
+      api.readinessResult = {
+        ...api.readinessResult,
+        status: "REQUIREMENTS_APPROVAL_REQUIRED",
+        approved_current_specification: false,
+      };
+      return result;
+    });
+    const wrapper = mountFlow(api, true, { attach: true, sectionsMode: true });
+    await flushPromises();
+
+    await askFor(wrapper, "Add the search by name.");
+
+    expect(api.calls).toEqual(["request-change"]);
+    expect(api.changeRequests).toEqual(["Add the search by name."]);
+    expect(api.decideGateCalls).toEqual([]);
+    const change = wrapper.get('[data-testid="requirements-pending-change"]');
+    expect(change.get('[data-testid="requirements-change-request"] blockquote').text()).toBe(
+      "Add the search by name.",
+    );
+    expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
+      "The new version is waiting above: apply it, then approve the requirements here.",
+    );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+
+    await change.get('[data-testid="approve-requirements-diff"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("sections-changed")).toHaveLength(2);
+    const primary = wrapper.get('[data-testid="decision-primary"]');
+    expect(primary.text()).toBe("Approve the requirements");
+    expect(primary.attributes("disabled")).toBeUndefined();
+
+    await primary.trigger("click");
+    await flushPromises();
+
+    expect(api.calls).toEqual(["request-change", "submit", "decide:APPROVE"]);
+    expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(true);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(3);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      false,
+      "When you approve, the designer prepares the design alternatives and the twins try them.",
+    ],
+    [
+      "en",
+      true,
+      "When you approve, the sections that follow are updated with one gesture, without losing their content.",
+    ],
+    ["it", false, "Approvando, il designer prepara le alternative di design e i twin le provano."],
+    [
+      "it",
+      true,
+      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+    ],
+  ] as const)(
+    "says in %s what follows the approval, in sections mode %s",
+    async (locale, sectionsMode, sentence) => {
+      const wrapper = mountFlow(readyApi(PENDING_GATE, CHECKED_VERSION), true, {
+        locale,
+        sectionsMode,
+      });
+      await flushPromises();
+
+      expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(sentence);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "Perspectives", /\bTeam\b/],
+    ["it", "Prospettive", /Squadra/],
+  ] as const)(
+    "names in %s the perspectives the requirements follow in the technical details",
+    async (locale, label, old) => {
+      const wrapper = mountFlow(readyApi(PENDING_GATE), true, { locale });
+      await flushPromises();
+
+      await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
+      const content = wrapper.get('[data-testid="step-technical-details-content"]');
+      expect(content.findAll("dt").map((item) => item.text())).toContain(label);
+      expect(content.text()).not.toMatch(old);
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    ["en", "The Definition could not be loaded."],
+    ["it", "Non è stato possibile caricare la Definizione."],
+  ] as const)("says in %s that the Definition could not be loaded", async (locale, sentence) => {
+    const api = new FakeApi();
+    vi.spyOn(api, "readiness").mockRejectedValue("offline");
+    const wrapper = mountFlow(api, true, { locale });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-error"]').text()).toContain(sentence);
+    wrapper.unmount();
+  });
+});
+
 describe("ProjectRequirementsFlow and requirements still being written", () => {
   function requirementsJob(overrides: Partial<GenerationRequestJob> = {}): GenerationRequestJob {
     return {
@@ -2422,8 +2613,8 @@ describe("ProjectRequirementsFlow and a refused proposal", () => {
   const FEW_FACTS = { code: "PROPOSAL_REJECTED", proposal_issue: "GROUNDED_INPUT_REQUIRED" };
   const NO_REASON = { code: "PROPOSAL_REJECTED" };
   const ANALYST_MISSING = {
-    en: "The team of this project has no needs analyst, so the requirements cannot be prepared. Go back to the Team step, add the analyst and approve the team again.",
-    it: "La squadra di questo progetto non ha un analista delle esigenze, quindi i requisiti non si possono preparare. Torna al passo Squadra, aggiungi l’analista e approva di nuovo la squadra.",
+    en: "The Product perspective is missing: open Perspectives and prepare them again.",
+    it: "Manca la prospettiva Prodotto: apri Prospettive e preparale di nuovo.",
   };
   const FACTS_MISSING = {
     en: "The approved steps do not give the model enough facts for this proposal. Add details to the brief or to the earlier steps, then try again.",
@@ -2549,7 +2740,7 @@ describe("ProjectRequirementsFlow and a refused proposal", () => {
     { how: "through a job", background: true, locale: "en" },
     { how: "through a job", background: true, locale: "it" },
   ] as const)(
-    "says that the team has no analyst when the first proposal is refused $how ($locale)",
+    "says that the Product perspective is missing when the first proposal is refused $how ($locale)",
     async ({ background, locale }) => {
       const wrapper = await proposeRefused(NO_ANALYST, background, locale);
 

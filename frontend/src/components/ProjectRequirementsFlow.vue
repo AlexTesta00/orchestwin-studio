@@ -85,6 +85,7 @@ const props = withDefaults(
     api?: RequirementsApi;
     upstream?: UpstreamValue;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
@@ -92,8 +93,11 @@ const props = withDefaults(
     prerequisiteReady: true,
     upstream: null,
     active: true,
+    sectionsMode: false,
   },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 provide(
   surfaceKey,
@@ -242,6 +246,10 @@ const messages = {
     approveGate: "Approve the requirements",
     barDefault:
       "When you approve, the designer prepares the design alternatives and the twins try them.",
+    barDefaultSections:
+      "When you approve, the sections that follow are updated with one gesture, without losing their content.",
+    barApproved:
+      "You approved these requirements. You can still ask for a change in words: the new version comes back here for your approval.",
     barPending:
       "A proposed change is waiting above: if you approve now, it stays out of this version.",
     barGaps: [
@@ -276,7 +284,7 @@ const messages = {
     closedText:
       "To change them, propose the change on each requirement: the new version comes back here for your approval.",
     yourNote: "Your note",
-    ready: "Requirements approved by you. Next: the design.",
+    ready: "Requirements approved by you. Next: Design & Evaluation.",
     version: "Version",
     statusPending: "waiting for your decision",
     statusApproved: "approved",
@@ -288,9 +296,9 @@ const messages = {
     basedOn: "Based on version",
     created: "Created",
     approval: "Approval",
-    decisionCounter: "decision {n} of {max}",
+    decisionCounter: "Decision no. {n}",
     brief: "Brief",
-    team: "Team",
+    team: "Perspectives",
     twins: "User Twins",
     catalog: "Requirements catalogue",
     none: "None",
@@ -303,7 +311,7 @@ const messages = {
     applied: "Applied",
     discarded: "Discarded",
     openInText: "{code} · {title}: read it in the text",
-    loadError: "The Requirements stage could not be loaded.",
+    loadError: "The Definition could not be loaded.",
   },
   it: {
     loading: "Carico i requisiti…",
@@ -418,6 +426,10 @@ const messages = {
     reasonRequired: "Per respingere o scartare serve una motivazione.",
     approveGate: "Approva i requisiti",
     barDefault: "Approvando, il designer prepara le alternative di design e i twin le provano.",
+    barDefaultSections:
+      "Approvando, le sezioni che seguono si aggiornano con un gesto, senza perdere i contenuti.",
+    barApproved:
+      "Hai approvato questi requisiti. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
     barPending:
       "Una modifica proposta aspetta qui sopra: se approvi ora, resta fuori da questa versione.",
     barGaps: [
@@ -452,7 +464,7 @@ const messages = {
     closedText:
       "Per cambiarli, proponi la modifica sul requisito: la nuova versione torna qui per la tua approvazione.",
     yourNote: "La tua nota",
-    ready: "Requisiti approvati da te. Ora il design.",
+    ready: "Requisiti approvati da te. Ora Design e valutazione.",
     version: "Versione",
     statusPending: "in attesa della tua decisione",
     statusApproved: "approvata",
@@ -464,9 +476,9 @@ const messages = {
     basedOn: "Basata sulla versione",
     created: "Creata il",
     approval: "Approvazione",
-    decisionCounter: "decisione {n} di {max}",
+    decisionCounter: "Decisione n. {n}",
     brief: "Brief",
-    team: "Squadra",
+    team: "Prospettive",
     twins: "User Twin",
     catalog: "Catalogo dei requisiti",
     none: "Nessuno",
@@ -479,7 +491,7 @@ const messages = {
     applied: "Applicata",
     discarded: "Scartata",
     openInText: "{code} · {title}: leggilo nel testo",
-    loadError: "Non è stato possibile caricare la fase dei requisiti.",
+    loadError: "Non è stato possibile caricare la Definizione.",
   },
 } as const;
 
@@ -770,10 +782,11 @@ const changeRequestText = computed(() => {
 const pendingItems = computed(() =>
   pendingDiffs.value.map((diff) => ({ diff, request: requestOf(diff) })),
 );
+const approvedChanges = computed(() => props.sectionsMode && decisionState.value === "approved");
 const barVisible = computed(
   () =>
     decisionState.value === "approve" ||
-    (decisionState.value === "revision" && !changeUnavailable.value),
+    ((decisionState.value === "revision" || approvedChanges.value) && !changeUnavailable.value),
 );
 const closedVisible = computed(
   () =>
@@ -791,17 +804,24 @@ const barDescription = computed(() => {
     return pendingDiffs.value.length > 0 ? text.barWaiting : text.barRevision;
   }
 
+  if (decisionState.value === "approved") {
+    return pendingDiffs.value.length > 0 ? text.barWaiting : text.barApproved;
+  }
+
   if (pendingDiffs.value.length > 0) {
     return text.barPending;
   }
 
   const missing = withoutCriteria.value.length;
-  return missing > 0 ? countSentence(missing, text.barGaps) : text.barDefault;
+
+  if (missing > 0) {
+    return countSentence(missing, text.barGaps);
+  }
+
+  return props.sectionsMode ? text.barDefaultSections : text.barDefault;
 });
 const decisionCounter = computed(() =>
-  copy.value.decisionCounter
-    .replace("{n}", String(store.gate?.iteration ?? 1))
-    .replace("{max}", String(store.gate?.max_iterations ?? 1)),
+  copy.value.decisionCounter.replace("{n}", String(store.gate?.iteration ?? 1)),
 );
 const statusSummary = computed(() => {
   const text = copy.value;
@@ -997,11 +1017,22 @@ async function load(): Promise<void> {
   await run(() => store.load(props.projectId, authorizedRequest, api.value));
 }
 
+function changed(): void {
+  emit("sections-changed");
+}
+
+async function reloadAndTell(): Promise<void> {
+  await load();
+  changed();
+}
+
 async function generate(): Promise<void> {
   if (!props.prerequisiteReady || store.isBusy || requirementsJob.value !== null) return;
   dismissRequirementsJob();
   const generated = await run(() => store.generate(props.projectId, authorizedRequest, api.value));
-  if (!generated && isGenerationInterrupted(store.error?.code)) {
+  if (generated) {
+    changed();
+  } else if (isGenerationInterrupted(store.error?.code)) {
     localError.value = null;
   }
 }
@@ -1014,7 +1045,7 @@ const {
   projectId: () => props.projectId,
   operations: ["REQUIREMENTS_PROPOSAL", CHANGE_OPERATION],
   authorize: authorizedRequest,
-  onSettled: load,
+  onSettled: reloadAndTell,
 });
 
 const proposalJob = computed(() =>
@@ -1148,6 +1179,7 @@ async function submitRevision(): Promise<void> {
 
   if (applied) {
     cancelEdit();
+    changed();
   }
 }
 
@@ -1197,6 +1229,7 @@ async function decideDiff(
 
   if (decided) {
     changeFailure.value = null;
+    changed();
   }
 }
 
@@ -1221,7 +1254,7 @@ async function decideGate(action: RequirementsGateDecisionAction): Promise<boole
     return false;
   }
 
-  return run(() =>
+  const decided = await run(() =>
     store.decideGate(
       props.projectId,
       action,
@@ -1230,6 +1263,12 @@ async function decideGate(action: RequirementsGateDecisionAction): Promise<boole
       api.value,
     ),
   );
+
+  if (decided) {
+    changed();
+  }
+
+  return decided;
 }
 
 async function approve(): Promise<void> {
@@ -1269,7 +1308,9 @@ async function recordRequest(reason: string): Promise<boolean> {
     store.decideGate(props.projectId, "REQUEST_REVISION", authorizedRequest, reason, api.value),
   );
 
-  if (!requested) {
+  if (requested) {
+    changed();
+  } else {
     localError.value = copy.value.requestFailed;
   }
 
@@ -1285,6 +1326,7 @@ async function askForChange(request: string): Promise<void> {
   try {
     await asked;
     await decisionBar.value?.completeRequest();
+    changed();
   } catch (error) {
     if (props.projectId !== projectId) {
       return;
@@ -1338,7 +1380,7 @@ async function requestChanges(note: string): Promise<void> {
       if (!(await recordRequest(request))) {
         return;
       }
-    } else if (decisionState.value !== "revision") {
+    } else if (decisionState.value !== "revision" && !approvedChanges.value) {
       return;
     }
 
@@ -1545,7 +1587,7 @@ onBeforeUnmount(() => {
       :locale="locale"
       :refresh-key="`${current.content_hash}:${store.pendingDiffs.length}:${upstreamReloads}`"
       :authorize="authorize"
-      @realigned="load"
+      @realigned="reloadAndTell"
     />
 
     <UiStateBlock

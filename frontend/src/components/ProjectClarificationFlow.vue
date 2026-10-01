@@ -38,9 +38,12 @@ const props = withDefaults(
     api?: ProjectWorkflowApi;
     authorize?: AuthorizedRequest;
     active?: boolean;
+    sectionsMode?: boolean;
   }>(),
-  { history: () => [], active: true },
+  { history: () => [], active: true, sectionsMode: false },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 const auth = useAuthStore();
 const store = useClarificationStore();
@@ -98,6 +101,7 @@ const { t, te, locale } = useI18n({
           "You asked for changes: update the brief and approve it again in the bar at the bottom.",
         needsHuman: "The approval has stopped because the maximum number of revisions was reached.",
         pausedText: "This step is paused.",
+        pausedSection: "This section is paused.",
         moreActions: "Other decisions",
         gateReason: "Reason for your decision",
         approveBrief: "Approve the brief",
@@ -116,7 +120,7 @@ const { t, te, locale } = useI18n({
         barPending:
           "{count} proposals are still to decide: if you approve now, those points stay open.",
         barPendingOne: "1 proposal is still to decide: if you approve now, that point stays open.",
-        barReady: "The brief is complete. Once you approve it, the team starts working.",
+        barReady: "The brief is complete. Once you approve it, you can prepare the perspectives.",
         requestRevision: "Ask for changes",
         pause: "Pause",
         resume: "Resume",
@@ -234,6 +238,7 @@ const { t, te, locale } = useI18n({
         needsHuman:
           "L'approvazione si è fermata perché è stato raggiunto il numero massimo di revisioni.",
         pausedText: "Questo passo è in pausa.",
+        pausedSection: "Questa sezione è in pausa.",
         moreActions: "Altre decisioni",
         gateReason: "Motivazione della decisione",
         approveBrief: "Approva il brief",
@@ -253,7 +258,7 @@ const { t, te, locale } = useI18n({
         barPending:
           "Restano {count} proposte da decidere: se approvi ora, quei punti restano aperti.",
         barPendingOne: "Resta 1 proposta da decidere: se approvi ora, quel punto resta aperto.",
-        barReady: "Il brief è completo. Approvandolo, la squadra inizia a lavorare.",
+        barReady: "Il brief è completo. Approvandolo, potrai preparare le prospettive.",
         requestRevision: "Chiedi modifiche",
         pause: "Metti in pausa",
         resume: "Riprendi",
@@ -500,6 +505,10 @@ function executeAuthorized<T>(operation: (accessToken: string) => Promise<T>): P
   return auth.withAccessToken(apiClient, operation);
 }
 
+function changed(): void {
+  emit("sections-changed");
+}
+
 async function load(): Promise<void> {
   localError.value = null;
 
@@ -619,6 +628,7 @@ async function createAssumption(): Promise<void> {
 
   if (result !== null) {
     assumptionStatement.value = "";
+    changed();
   }
 }
 
@@ -630,20 +640,33 @@ async function acceptAssumption(assumption: BriefAssumptionResponse): Promise<vo
   startContentAction();
   localError.value = null;
 
-  await store.acceptAssumption(
+  const result = await store.acceptAssumption(
     props.projectId,
     assumption.id,
     assumptionReason(assumption) || null,
     resolvedApi.value,
     executeAuthorized,
   );
+
+  if (result !== null) {
+    changed();
+  }
 }
 
 async function acceptAllAssumptions(): Promise<void> {
   startContentAction();
   localError.value = null;
 
-  await store.acceptAllAssumptions(props.projectId, null, resolvedApi.value, executeAuthorized);
+  const result = await store.acceptAllAssumptions(
+    props.projectId,
+    null,
+    resolvedApi.value,
+    executeAuthorized,
+  );
+
+  if (result !== null) {
+    changed();
+  }
 }
 
 async function rejectAssumption(assumption: BriefAssumptionResponse): Promise<void> {
@@ -659,13 +682,17 @@ async function rejectAssumption(assumption: BriefAssumptionResponse): Promise<vo
     return;
   }
 
-  await store.rejectAssumption(
+  const result = await store.rejectAssumption(
     props.projectId,
     assumption.id,
     reason,
     resolvedApi.value,
     executeAuthorized,
   );
+
+  if (result !== null) {
+    changed();
+  }
 }
 
 async function decideGate(
@@ -692,6 +719,7 @@ async function decideGate(
 
   if (result !== null) {
     gateReason.value = "";
+    changed();
   }
 
   return result !== null;
@@ -1020,7 +1048,7 @@ async function requestRevision(text: string): Promise<void> {
               {{ t("flow.needsHuman") }}
             </template>
             <template v-else-if="gateTargetsBrief && store.gate?.status === 'PAUSED'">
-              {{ t("flow.pausedText") }}
+              {{ sectionsMode ? t("flow.pausedSection") : t("flow.pausedText") }}
             </template>
             <template v-else-if="canSubmitBrief">{{ t("flow.approveInBar") }}</template>
           </p>

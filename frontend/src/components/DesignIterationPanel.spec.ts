@@ -809,6 +809,21 @@ describe("design iteration panel", () => {
     );
   });
 
+  it("names the section of the design by its new name and no failure by an old step name", () => {
+    expect(generationFailureText("GENERATED_MOCKUP_PATH_INACTIVE", "en")).toBe(
+      "The model that draws the mockups is not in use for this project: Design & Evaluation shows the simple preview.",
+    );
+    expect(generationFailureText("GENERATED_MOCKUP_PATH_INACTIVE", "it")).toBe(
+      "Il modello che disegna i mockup non è in uso per questo progetto: Design e valutazione mostra l'anteprima semplice.",
+    );
+    for (const locale of ["it", "en"] as const) {
+      const named = CONTRACT_FAILURES.filter((code) =>
+        /\bstep\b|\bpasso\b|squadra|\bteam\b/i.test(generationFailureText(code, locale)),
+      );
+      expect({ locale, named }).toEqual({ locale, named: [] });
+    }
+  });
+
   it("offers to try again only when trying again can help", () => {
     for (const code of [
       "GENERATION_BUDGET_EXCEEDED",

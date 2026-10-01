@@ -51,12 +51,16 @@ const props = withDefaults(
     api?: KnowledgePackagesApi;
     saveExport?: (blob: Blob, fileName: string) => void;
     studioAddress?: string;
+    sectionsMode?: boolean;
   }>(),
   {
     locale: "en",
     studioAddress: () => window.location.origin,
+    sectionsMode: false,
   },
 );
+
+const emit = defineEmits<{ "sections-changed": [] }>();
 
 defineSlots<{
   preview?(props: {
@@ -84,11 +88,11 @@ const messages = {
     titlePartial: "The folder is taking shape",
     titleWaiting: "The folder is not ready yet",
     intro:
-      "The five steps are approved. The folder holds the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
+      "The five steps are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
     introPartial:
       "The folder holds the steps approved so far as text, tables and diagrams. You can prepare it now and again after each approval.",
     introWaiting:
-      "The folder will hold the brief, the team, the twins, the requirements and the chosen design as text, tables and diagrams.",
+      "The folder will hold the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
     notReady: "The folder can be prepared as soon as the brief is approved.",
     held: ["{count} of {total} steps", "{count} of {total} steps"],
     partial: [
@@ -103,15 +107,15 @@ const messages = {
     reused: "Nothing changed since version {number}: the same folder was downloaded again: {file}",
     failed: "The folder could not be prepared.",
     downloadFailed: "The folder could not be downloaded.",
+    behind:
+      "{section} is behind: use «Update and confirm» at the top of the page, then publish again.",
+    behindStep:
+      "The {section} step is behind: open it and bring it up to date, then publish again.",
+    perspectivesBehind: "The brief changed: prepare the perspectives again, then publish again.",
     outdated: {
-      TEAM_OUTDATED:
-        "The team follows an earlier version of the brief. Open the Team step, update the team and approve it again.",
-      USER_TWINS_OUTDATED:
-        "The twins follow an earlier version of the brief or of the team. Open the User Twins step and approve them again.",
-      REQUIREMENTS_OUTDATED:
-        "The requirements follow an earlier version of the twins. Open the Requirements step, update them to the current twins and approve them again.",
-      DESIGN_OUTDATED:
-        "The design follows an earlier version of the requirements. Open the Design step, regenerate the alternatives and approve the design again.",
+      USER_TWINS_OUTDATED: "User Twin",
+      REQUIREMENTS_OUTDATED: "Definition",
+      DESIGN_OUTDATED: "Design & Evaluation",
     },
     contents: "What it contains",
     twins: ["twin, in its own reusable file", "twins, each in its own reusable file"],
@@ -125,7 +129,7 @@ const messages = {
       "{reviews} twin reviews · {decisions} decisions of yours · {discussions} approved discussions",
     countedLater: "Diagrams, tables and observations are counted when you prepare the folder.",
     design: "The chosen design",
-    noDesign: "The chosen design appears here once the design step is approved.",
+    noDesign: "The chosen design appears here once Design & Evaluation is approved.",
     noPreview: "No preview",
     path: "The steps and their versions",
     stageVersion: "version {number}",
@@ -189,11 +193,11 @@ const messages = {
     titlePartial: "La cartella prende forma",
     titleWaiting: "La cartella non è ancora pronta",
     intro:
-      "I cinque passi sono approvati. La cartella raccoglie brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+      "I cinque passi sono approvati. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
     introPartial:
       "La cartella raccoglie i passi approvati finora in forma di testo, tabelle e diagrammi. Puoi prepararla subito e di nuovo dopo ogni approvazione.",
     introWaiting:
-      "La cartella raccoglierà brief, squadra, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+      "La cartella raccoglierà brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
     notReady: "La cartella si può preparare appena il brief è approvato.",
     held: ["{count} passo su {total}", "{count} passi su {total}"],
     partial: [
@@ -209,15 +213,16 @@ const messages = {
       "Non è cambiato nulla dalla versione {number}: ho scaricato di nuovo la stessa cartella: {file}",
     failed: "Non è stato possibile preparare la cartella.",
     downloadFailed: "Non è stato possibile scaricare la cartella.",
+    behind:
+      "{section} è rimasta indietro: usa «Aggiorna e conferma» in cima alla pagina, poi pubblica di nuovo.",
+    behindStep:
+      "Il passo {section} è rimasto indietro: aprilo e aggiornalo, poi pubblica di nuovo.",
+    perspectivesBehind:
+      "Il brief è cambiato: prepara di nuovo le prospettive, poi pubblica di nuovo.",
     outdated: {
-      TEAM_OUTDATED:
-        "La squadra segue una versione precedente del brief. Apri il passo Squadra, aggiorna la squadra e approvala di nuovo.",
-      USER_TWINS_OUTDATED:
-        "I twin seguono una versione precedente del brief o della squadra. Apri il passo User Twin e approvali di nuovo.",
-      REQUIREMENTS_OUTDATED:
-        "I requisiti seguono una versione precedente dei twin. Apri il passo Requisiti, aggiornali ai twin attuali e approvali di nuovo.",
-      DESIGN_OUTDATED:
-        "Il design segue una versione precedente dei requisiti. Apri il passo Design, rigenera le alternative e approva di nuovo il design.",
+      USER_TWINS_OUTDATED: "User Twin",
+      REQUIREMENTS_OUTDATED: "Definizione",
+      DESIGN_OUTDATED: "Design e valutazione",
     },
     contents: "Che cosa contiene",
     twins: ["twin, in un file riutilizzabile", "twin, ciascuno in un file riutilizzabile"],
@@ -231,7 +236,7 @@ const messages = {
       "{reviews} revisioni dei twin · {decisions} tue decisioni · {discussions} discussioni approvate",
     countedLater: "Diagrammi, tabelle e osservazioni si contano quando prepari la cartella.",
     design: "Il design scelto",
-    noDesign: "Il design scelto compare qui dopo l'approvazione del passo Design.",
+    noDesign: "Il design scelto compare qui dopo l'approvazione di Design e valutazione.",
     noPreview: "Nessuna anteprima",
     path: "I passi e le loro versioni",
     stageVersion: "versione {number}",
@@ -283,12 +288,51 @@ const messages = {
   },
 } as const;
 
+const sectionMessages = {
+  en: {
+    agentReady:
+      "I gathered the five approved sections into a folder ready for your development tools.",
+    agentPartial:
+      "I gather the sections approved so far into a folder ready for your development tools; the next ones join it when you approve them.",
+    agentWaiting:
+      "As soon as the brief is approved, I will gather the approved sections into a folder ready for your development tools.",
+    intro:
+      "The five sections are approved. The folder holds the brief, the perspectives, the twins, the requirements and the chosen design as text, tables and diagrams.",
+    introPartial:
+      "The folder holds the sections approved so far as text, tables and diagrams. You can prepare it now and again after each approval.",
+    held: ["{count} of {total} sections", "{count} of {total} sections"],
+    partialRule: "Each section joins the folder when you approve it.",
+    path: "The sections and their versions",
+    versionNext: "{held}, next: {step}",
+  },
+  it: {
+    agentReady:
+      "Ho raccolto le cinque sezioni approvate in una cartella pronta per i tuoi strumenti di sviluppo.",
+    agentPartial:
+      "Raccolgo le sezioni approvate finora in una cartella pronta per i tuoi strumenti di sviluppo; le prossime si aggiungono quando le approvi.",
+    agentWaiting:
+      "Appena il brief è approvato, raccoglierò le sezioni approvate in una cartella pronta per i tuoi strumenti di sviluppo.",
+    intro:
+      "Le cinque sezioni sono approvate. La cartella raccoglie brief, prospettive, twin, requisiti e design scelto in forma di testo, tabelle e diagrammi.",
+    introPartial:
+      "La cartella raccoglie le sezioni approvate finora in forma di testo, tabelle e diagrammi. Puoi prepararla subito e di nuovo dopo ogni approvazione.",
+    held: ["{count} sezione su {total}", "{count} sezioni su {total}"],
+    partialRule: "Ogni sezione entra nella cartella quando la approvi.",
+    path: "Le sezioni e le loro versioni",
+    versionNext: "{held}, la prossima è {step}",
+  },
+} as const;
+
 const auth = useAuthStore();
 const design = useDesignStore();
 const modeling = useUserModelingStore();
 const packages = useKnowledgePackagesStore();
 
-const copy = computed(() => messages[props.locale]);
+const copy = computed(() =>
+  props.sectionsMode
+    ? { ...messages[props.locale], ...sectionMessages[props.locale] }
+    : messages[props.locale],
+);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const outcome = ref<{ reused: boolean; number: number; file: string } | null>(null);
@@ -476,8 +520,15 @@ function failureMessage(fallback: string): string {
   if (code === "BRIEF_APPROVAL_REQUIRED") {
     return copy.value.notReady;
   }
-  const outdated: Readonly<Record<string, string>> = copy.value.outdated;
-  return outdated[code] ?? fallback;
+  if (code === "TEAM_OUTDATED") {
+    return copy.value.perspectivesBehind;
+  }
+  const sections: Readonly<Record<string, string>> = copy.value.outdated;
+  const section = sections[code];
+  if (section === undefined) {
+    return fallback;
+  }
+  return fill(props.sectionsMode ? copy.value.behind : copy.value.behindStep, { section });
 }
 
 async function fetchVersion(number: number): Promise<string> {
@@ -493,6 +544,7 @@ async function prepare(): Promise<void> {
 
   try {
     const publication = await packages.publish(props.projectId, authorizedRequest, props.api);
+    emit("sections-changed");
     const file = await fetchVersion(publication.version.version_number);
     outcome.value = {
       reused: publication.reused,
