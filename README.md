@@ -23,11 +23,11 @@ La persona approva ogni passo con un gesto e nessuna generazione parte senza un 
 Sei passi dal browser o dal terminale, ognuno approvato con un gesto:
 
 1. **Brief**: un dialogo completa il brief una domanda alla volta; ciò che non dici viene proposto e segnato come ipotesi.
-2. **Squadra**: gli specialisti AI del progetto, con il motivo di ciascuno; designer UX/UI e specialista di accessibilità sono sempre presenti.
+2. **Prospettive**: le competenze con cui guardare il progetto (esperienza d'uso, accessibilità, ingegneria del software, prodotto, sicurezza), ricavate dal brief e modificabili; ognuna porta le sue considerazioni quando si scrivono requisiti e design. Esperienza d'uso e accessibilità sono sempre applicate.
 3. **User Twin**: utenti sintetici ricavati dal brief, con obiettivi, difficoltà e contesto d'uso; puoi fare loro domande.
-4. **Requisiti**: requisiti, storie e criteri di accettazione; una richiesta di modifica a parole produce una nuova versione da approvare.
-5. **Design**: alternative con scelte visive distinte, mockup in HTML disegnati dal modello, il parere di ogni twin su ogni alternativa, modifiche a parole con regole che restano valide, revisione dei twin sul mockup scelto.
-6. **Cartella di conoscenza**: una cartella `orchestwin/` versionata e verificabile, pubblicata dal brief in poi, con brief, squadra, twin, requisiti, design, mockup, diagrammi Mermaid, tabelle CSV, schemi JSON e lo stato dello sviluppo (commit registrati, critiche dei twin, decisioni, attività per il codice).
+4. **Definizione**: requisiti, storie e criteri di accettazione; una richiesta di modifica a parole produce una nuova versione da approvare.
+5. **Design e valutazione**: alternative con scelte visive distinte, mockup in HTML disegnati dal modello, il parere di ogni twin su ogni alternativa, modifiche a parole con regole che restano valide, revisione dei twin sul mockup scelto.
+6. **Dossier**: la cartella di conoscenza `orchestwin/`, versionata e verificabile, pubblicata dal brief in poi, con brief, prospettive, twin, requisiti, design, mockup, diagrammi Mermaid, tabelle CSV, schemi JSON e lo stato dello sviluppo (commit registrati, critiche dei twin, decisioni, attività per il codice).
 
 Poi, durante lo sviluppo: `ut align` fa criticare i commit ai twin e chiede al modello se codice, design e requisiti sono ancora allineati, e propone il riallineamento (una nuova versione del design o dei requisiti, oppure attività per il codice); `ut watch` osserva i commit; `ut mcp` dà la stessa conoscenza agli agenti dell'editor (Claude Code, Cursor, VS Code) attraverso il protocollo MCP.
 
@@ -113,7 +113,7 @@ Il frontend di sviluppo risponde su http://localhost:5173 e inoltra `/api` all'A
 
 ### Portare un progetto dello Studio nel tuo editor
 
-Dal passo 6 del web (Pacchetto) si copiano gli stessi comandi, già compilati con l'indirizzo dello Studio e l'identificativo del progetto:
+Dal passo 6 del web (Dossier) si copiano gli stessi comandi, già compilati con l'indirizzo dello Studio e l'identificativo del progetto:
 
 ```powershell
 ut login --studio http://127.0.0.1:8080
@@ -129,7 +129,7 @@ code .
 ```powershell
 ut login --studio http://127.0.0.1:8080
 mkdir calcolo-mancia; cd calcolo-mancia
-ut init                 # idea, brief, squadra, user twin, requisiti: una domanda alla volta
+ut init                 # idea, brief, prospettive, user twin, requisiti: una domanda alla volta
 ut design               # alternative, mockup nel browser, modifiche a parole, revisione dei twin, approvazione
 git init
 ut code                 # l'agente di programmazione scrive l'applicazione da requisiti e design
@@ -145,7 +145,7 @@ ut status
 | Comando | Che cosa fa |
 |---|---|
 | `ut login` | Accede allo Studio (`--studio INDIRIZZO`) e conserva l'accesso nella cartella dell'utente, mai nel progetto. `ut logout` lo toglie. |
-| `ut init` | Crea un progetto nella cartella in cui ti trovi e lo porta dall'idea ai requisiti approvati: brief con una domanda alla volta, squadra, User Twin, requisiti. Con `--project ID` collega invece la cartella a un progetto che esiste già nello Studio e ne scarica la cartella di conoscenza. Con `--answers FILE` fa il percorso senza domande. |
+| `ut init` | Crea un progetto nella cartella in cui ti trovi e lo porta dall'idea ai requisiti approvati: brief con una domanda alla volta, prospettive, User Twin, requisiti. Con `--project ID` collega invece la cartella a un progetto che esiste già nello Studio e ne scarica la cartella di conoscenza. Con `--answers FILE` fa il percorso senza domande. |
 | `ut design` | Guida nel design: alternative, mockup nel browser, parere dei twin, scelta e approvazione. Le azioni singole sono `show`, `open`, `choose`, `change "modifica a parole"` (con `--rule` per una regola che resta valida), `review`, `approve`. |
 | `ut twins` | Elenca gli User Twin. `show` ne mostra uno, `ask` gli fa una domanda, `review` fa rivedere il design scelto, `update` propone che cosa i twin hanno imparato dallo sviluppo, `learn` e `forget` aggiungono o ritirano a mano un'osservazione. |
 | `ut package` | Mostra lo stato della cartella di conoscenza. `publish` pubblica una versione nuova e la scarica in `orchestwin/`, `pull` scarica una versione già pubblicata, `verify` controlla la cartella senza lo Studio, `history` elenca le versioni, `import` crea un progetto da una cartella o dal suo zip. |
@@ -155,7 +155,8 @@ ut status
 | `ut tasks` | Mostra i compiti aperti per il codice. `add`, `done`, `drop`, `reopen` li cambiano; `from-test` e `from-commit` trasformano in compiti i rilievi dei twin. |
 | `ut watch` | Osserva i commit e li registra; con `--twins` li fa esaminare man mano, entro il limite di esami fissato con `--max-usd`. |
 | `ut mcp` | Avvia il server MCP `orchestwin-twins`, che dà agli agenti dell'editor la conoscenza approvata del progetto; `--config claude-code`, `cursor` o `vscode` mostra la configurazione da copiare. |
-| `ut status` | Mostra a che punto è il progetto e qual è il prossimo passo; `--offline` legge solo la cartella. |
+| `ut status` | Mostra le sezioni del progetto con il loro stato e il prossimo passo; `--offline` legge solo la cartella. |
+| `ut sections` | Mostra le sezioni con il loro stato; `update` riaggancia alle versioni nuove ciò che è rimasto indietro (twin, requisiti, design) senza rigenerare, lo approva e pubblica la cartella. |
 
 - Ogni comando ha `--help`; `--lang it|en` sceglie la lingua, `--project-dir` indica la cartella del progetto quando non è quella in cui ti trovi.
 - `ut login` chiede la password a terminale e non la salva; l'accesso sta in `%APPDATA%\orchestwin` su Windows, `~/Library/Application Support/orchestwin` su macOS, `~/.config/orchestwin` altrove.
@@ -177,7 +178,7 @@ I test di integrazione su PostgreSQL: `npm run test:integration:python` con le v
 
 | Cartella | Contenuto |
 |---|---|
-| `src/orchestwin` | backend: dominio dei progetti, squadra, twin, requisiti, design, cartella di conoscenza, cambiamenti del codice e critiche, provider dei modelli, API FastAPI, comando `ut` (`cli`) |
+| `src/orchestwin` | backend: dominio dei progetti, prospettive, twin, requisiti, design, cartella di conoscenza, cambiamenti del codice e critiche, provider dei modelli, API FastAPI, comando `ut` (`cli`) |
 | `src/test` | test Python, fixture, test di integrazione |
 | `frontend` | applicazione Vue 3 dello Studio, in italiano e in inglese |
 | `scripts` | avvio e arresto dello Studio, esempio di configurazione dei provider, verifiche |
