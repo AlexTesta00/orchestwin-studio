@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from uuid import UUID
 
+import pytest
+
+from orchestwin.agents.catalog import (
+    AgentIdentifier,
+    all_agent_catalog_entries,
+)
 from orchestwin.agents.proposals import (
     LocalTeamProposalApplicationService,
+    TeamProposalApplicationResult,
     TeamProposalApplicationStatus,
     TeamProposalRevisionKind,
     TeamProposalVersion,
@@ -16,11 +24,19 @@ from orchestwin.agents.proposals import (
     TeamProposalVersionCreationStatus,
     TeamSelectionContext,
 )
+from orchestwin.agents.selection_rules import (
+    TeamSelectionIssueCode,
+)
 from orchestwin.models.fake_team_proposals import (
     FakeDeterministicTeamProposalAdapter,
 )
 from orchestwin.models.team_proposals import (
+    ProposedTeamMember,
     TeamProposalGenerationResult,
+    TeamProposalGenerationStatus,
+    TeamProposalJustification,
+    TeamProposalJustificationKind,
+    TeamProposalMemberSource,
     TeamProposalPort,
     TeamProposalRequest,
 )
@@ -452,8 +468,7 @@ def test_gate_one_approval_is_required() -> None:
     assert proposals.versions == {}
 
 
-def test_constraint_conflict_blocks_persistence() -> None:
-    """Keep contradictory briefs out of the proposal history."""
+def test_constraint_conflict_stores_the_proposal_with_its_issue() -> None:
     version = complete_brief_version(
         description=("Use Vue for the frontend, but the final product must have no frontend.")
     )
@@ -476,11 +491,165 @@ def test_constraint_conflict_blocks_persistence() -> None:
             owner_user_id=OWNER_ID,
         )
     )
+    repeated = asyncio.run(
+        service.generate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert result.status is (TeamProposalApplicationStatus.CREATED)
+    assert result.version is not None
+    assert proposals.versions[PROJECT_ID] == [result.version]
+
+    constraints = result.version.proposal.constraints
+
+    assert result.issues == constraints.issues
+    assert [(issue.code, issue.agent_id) for issue in result.issues] == [
+        (
+            TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS,
+            AgentIdentifier.FRONTEND_ENGINEER,
+        )
+    ]
+    assert result.version.proposal.selected_agent_ids == constraints.mandatory_agent_ids
+    assert AgentIdentifier.FRONTEND_ENGINEER not in result.version.proposal.selected_agent_ids
+    assert repeated.status is (TeamProposalApplicationStatus.UNCHANGED)
+    assert repeated.version == result.version
+    assert repeated.issues == result.issues
+
+
+class BlockingProposalAdapter:
+    async def propose(
+        self,
+        request: TeamProposalRequest,
+    ) -> TeamProposalGenerationResult:
+        return TeamProposalGenerationResult(
+            status=(TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS),
+            issues=request.constraints.issues,
+        )
+
+
+class OwnerAddingProposalAdapter:
+    async def propose(
+        self,
+        request: TeamProposalRequest,
+    ) -> TeamProposalGenerationResult:
+        result = await FakeDeterministicTeamProposalAdapter().propose(request)
+
+        assert result.proposal is not None
+
+        members = {member.agent_id: member for member in result.proposal.members}
+        members[AgentIdentifier.MOBILE_ENGINEER] = ProposedTeamMember(
+            agent_id=AgentIdentifier.MOBILE_ENGINEER,
+            source=TeamProposalMemberSource.OWNER_ADDED,
+            justifications=(
+                TeamProposalJustification(
+                    kind=TeamProposalJustificationKind.OWNER_RATIONALE,
+                    code="OWNER_SELECTED_ROLE",
+                    statement="Not chosen by the owner.",
+                ),
+            ),
+        )
+
+        return replace(
+            result,
+            proposal=replace(
+                result.proposal,
+                members=tuple(
+                    members[entry.agent_id]
+                    for entry in all_agent_catalog_entries()
+                    if entry.agent_id in members
+                ),
+            ),
+        )
+
+
+def test_an_adapter_that_still_blocks_keeps_the_proposal_out_of_the_history() -> None:
+    version = complete_brief_version(
+        description=("Use Vue for the frontend, but the final product must have no frontend.")
+    )
+    contexts = InMemoryTeamSelectionContextRepository()
+    proposals = InMemoryTeamProposalVersionRepository()
+    contexts.set_context(
+        selection_context(
+            version=version,
+            gate=approved_gate(version),
+        )
+    )
+    service = build_service(
+        contexts,
+        proposals,
+        proposal_port=BlockingProposalAdapter(),
+    )
+
+    result = asyncio.run(
+        service.generate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
 
     assert result.status is (TeamProposalApplicationStatus.BLOCKED_BY_CONSTRAINTS)
     assert result.version is None
     assert result.issues
     assert proposals.versions == {}
+
+
+def test_a_generated_proposal_cannot_claim_an_owner_addition() -> None:
+    version = complete_brief_version()
+    contexts = InMemoryTeamSelectionContextRepository()
+    proposals = InMemoryTeamProposalVersionRepository()
+    contexts.set_context(
+        selection_context(
+            version=version,
+            gate=approved_gate(version),
+        )
+    )
+    service = build_service(
+        contexts,
+        proposals,
+        proposal_port=OwnerAddingProposalAdapter(),
+    )
+
+    result = asyncio.run(
+        service.generate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert result.status is (TeamProposalApplicationStatus.INVALID_PROPOSAL)
+    assert proposals.versions == {}
+
+
+def test_successful_results_carry_exactly_the_issues_of_their_version() -> None:
+    version = complete_brief_version(
+        description=("Use Vue for the frontend, but the final product must have no frontend.")
+    )
+    contexts = InMemoryTeamSelectionContextRepository()
+    proposals = InMemoryTeamProposalVersionRepository()
+    contexts.set_context(
+        selection_context(
+            version=version,
+            gate=approved_gate(version),
+        )
+    )
+    created = asyncio.run(
+        build_service(contexts, proposals).generate(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+        )
+    )
+
+    assert created.version is not None
+
+    for issues in ((), (*created.issues, *created.issues)):
+        with pytest.raises(ValueError, match="carry exactly the constraint issues"):
+            TeamProposalApplicationResult(
+                status=TeamProposalApplicationStatus.CREATED,
+                version=created.version,
+                issues=issues,
+            )
 
 
 def test_context_change_during_generation_prevents_persistence() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from orchestwin.agents.catalog import (
     AGENT_CATALOG_CONTENT_HASH,
     AGENT_CATALOG_VERSION,
     AgentIdentifier,
+    all_agent_catalog_entries,
 )
 from orchestwin.agents.selection_rules import (
     TeamSelectionReasonCode,
@@ -22,7 +24,9 @@ from orchestwin.models.fake_team_proposals import (
     FakeDeterministicTeamProposalAdapter,
 )
 from orchestwin.models.team_proposals import (
+    AgentTeamProposal,
     ProposedTeamMember,
+    TeamProposalGenerationResult,
     TeamProposalGenerationStatus,
     TeamProposalJustification,
     TeamProposalJustificationKind,
@@ -50,6 +54,7 @@ CREATED_AT = datetime(
     0,
     tzinfo=UTC,
 )
+CATALOG_ORDER = tuple(entry.agent_id for entry in all_agent_catalog_entries())
 
 
 def build_request(
@@ -222,17 +227,122 @@ def test_suggested_member_requires_proposer_rationale() -> None:
         )
 
 
-def test_constraint_conflict_blocks_fake_proposal() -> None:
-    """Return typed blocking issues instead of choosing silently."""
+def test_constraint_conflict_gives_a_mandatory_only_proposal_with_the_issues() -> None:
     request = build_conflicting_request()
     adapter = FakeDeterministicTeamProposalAdapter()
 
     result = asyncio.run(adapter.propose(request))
 
-    assert result.status is (TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS)
-    assert result.proposal is None
+    assert result.status is (TeamProposalGenerationStatus.PROPOSED)
+    assert result.proposal is not None
     assert result.issues == (request.constraints.issues)
     assert result.issues[0].agent_id is AgentIdentifier.FRONTEND_ENGINEER
+    assert result.proposal.constraints == request.constraints
+    assert result.proposal.selected_agent_ids == request.constraints.mandatory_agent_ids
+    assert AgentIdentifier.FRONTEND_ENGINEER not in result.proposal.selected_agent_ids
+    assert asyncio.run(adapter.propose(request)) == result
+
+
+def test_a_proposed_result_carries_exactly_the_issues_of_its_proposal() -> None:
+    adapter = FakeDeterministicTeamProposalAdapter()
+    contested = asyncio.run(adapter.propose(build_conflicting_request()))
+    clean = asyncio.run(adapter.propose(build_request()))
+
+    assert contested.proposal is not None
+    assert clean.proposal is not None
+
+    for proposal, issues in (
+        (contested.proposal, ()),
+        (clean.proposal, contested.issues),
+    ):
+        with pytest.raises(ValueError, match="carries exactly the constraint issues"):
+            TeamProposalGenerationResult(
+                status=TeamProposalGenerationStatus.PROPOSED,
+                proposal=proposal,
+                issues=issues,
+            )
+
+    with pytest.raises(ValueError, match="requires a proposal"):
+        TeamProposalGenerationResult(status=TeamProposalGenerationStatus.PROPOSED)
+
+    blocked = TeamProposalGenerationResult(
+        status=TeamProposalGenerationStatus.BLOCKED_BY_CONSTRAINTS,
+        issues=contested.issues,
+    )
+
+    assert blocked.proposal is None
+
+
+def proposal_with(
+    request: TeamProposalRequest,
+    agent_id: AgentIdentifier,
+    source: TeamProposalMemberSource,
+) -> AgentTeamProposal:
+    result = asyncio.run(FakeDeterministicTeamProposalAdapter().propose(request))
+
+    assert result.proposal is not None
+
+    kind = (
+        TeamProposalJustificationKind.OWNER_RATIONALE
+        if source is TeamProposalMemberSource.OWNER_ADDED
+        else TeamProposalJustificationKind.PROPOSER_RATIONALE
+    )
+    member = ProposedTeamMember(
+        agent_id=agent_id,
+        source=source,
+        justifications=(
+            TeamProposalJustification(
+                kind=kind,
+                code="OWNER_SELECTED_ROLE",
+                statement="Chosen by the owner.",
+            ),
+        ),
+    )
+
+    return replace(
+        result.proposal,
+        members=tuple(
+            sorted(
+                (*result.proposal.members, member),
+                key=lambda candidate: CATALOG_ORDER.index(candidate.agent_id),
+            )
+        ),
+    )
+
+
+def test_a_contested_agent_joins_as_the_owners_addition() -> None:
+    request = build_conflicting_request()
+
+    proposal = proposal_with(
+        request,
+        AgentIdentifier.FRONTEND_ENGINEER,
+        TeamProposalMemberSource.OWNER_ADDED,
+    )
+
+    assert proposal.owner_added_agent_ids == (AgentIdentifier.FRONTEND_ENGINEER,)
+    assert proposal.constraints.issues == request.constraints.issues
+
+
+def test_a_contested_agent_never_joins_as_a_suggestion_of_the_proposer() -> None:
+    with pytest.raises(ValueError, match="contested agent may join only as the owner's addition"):
+        proposal_with(
+            build_conflicting_request(),
+            AgentIdentifier.FRONTEND_ENGINEER,
+            TeamProposalMemberSource.PROPOSER_SUGGESTED,
+        )
+
+
+@pytest.mark.parametrize(
+    "source",
+    (TeamProposalMemberSource.OWNER_ADDED, TeamProposalMemberSource.PROPOSER_SUGGESTED),
+)
+def test_an_impossible_agent_never_joins(source: TeamProposalMemberSource) -> None:
+    request = build_request(description="A Vue web application with no mobile application.")
+
+    assert request.constraints.impossible_agent_ids == (AgentIdentifier.MOBILE_ENGINEER,)
+
+    with pytest.raises(ValueError, match="cannot include an impossible agent"):
+        proposal_with(request, AgentIdentifier.MOBILE_ENGINEER, source)
 
 
 def test_fake_proposal_is_reproducible_and_hashable() -> None:

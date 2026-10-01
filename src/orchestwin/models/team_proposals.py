@@ -312,11 +312,14 @@ class AgentTeamProposal:
         for member in self.members:
             constraint = self.constraints.constraint_for(member.agent_id)
 
-            if constraint.kind in {
-                TeamRoleConstraintKind.IMPOSSIBLE,
-                TeamRoleConstraintKind.CONFLICT,
-            }:
-                raise ValueError("team proposal cannot include an impossible or conflicting agent")
+            if constraint.kind is TeamRoleConstraintKind.IMPOSSIBLE:
+                raise ValueError("team proposal cannot include an impossible agent")
+
+            if (
+                constraint.kind is TeamRoleConstraintKind.CONFLICT
+                and member.source is not TeamProposalMemberSource.OWNER_ADDED
+            ):
+                raise ValueError("a contested agent may join only as the owner's addition")
 
             if constraint.kind is TeamRoleConstraintKind.MANDATORY:
                 if member.source is not TeamProposalMemberSource.DETERMINISTIC_MANDATORY:
@@ -471,8 +474,11 @@ class TeamProposalGenerationResult:
     def __post_init__(self) -> None:
         """Protect proposed and blocked result shapes."""
         if self.status is TeamProposalGenerationStatus.PROPOSED:
-            if self.proposal is None or self.issues:
-                raise ValueError("a proposed result requires only a proposal")
+            if self.proposal is None:
+                raise ValueError("a proposed result requires a proposal")
+
+            if self.issues != self.proposal.constraints.issues:
+                raise ValueError("a proposed result carries exactly the constraint issues")
 
             return
 

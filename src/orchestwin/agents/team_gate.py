@@ -14,7 +14,7 @@ from dataclasses import (
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import TracebackType
-from typing import Protocol, Self
+from typing import Final, Protocol, Self
 from uuid import UUID, uuid4
 
 from orchestwin.agents.catalog import (
@@ -49,6 +49,7 @@ from orchestwin.workflow.gates import (
     HumanGateType,
     create_human_gate,
     mark_human_gate_stale,
+    next_human_gate_iteration,
     transition_human_gate,
 )
 from orchestwin.workflow.repository import (
@@ -57,6 +58,8 @@ from orchestwin.workflow.repository import (
 
 _AGENT_ORDER = tuple(entry.agent_id for entry in all_agent_catalog_entries())
 _AGENT_POSITION = {agent_id: position for position, agent_id in enumerate(_AGENT_ORDER)}
+
+OWNER_CHOICE_STATEMENT: Final = "Chosen by the owner."
 
 
 class TeamEditIssueCode(StrEnum):
@@ -626,15 +629,23 @@ class LocalAgentTeamApprovalService:
                         stale_events.append(stale_result.event)
                         latest = stale_result.gate
 
-                next_iteration = latest.iteration + 1
-                max_iterations = latest.max_iterations
+                budget = next_human_gate_iteration(
+                    latest,
+                    await unit.gates.list_events_owned(
+                        project_id=project_id,
+                        owner_user_id=owner_user_id,
+                        gate_id=latest.id,
+                    ),
+                )
 
-                if next_iteration > max_iterations:
+                if budget is None:
                     return AgentTeamGateSubmissionResult(
                         status=(AgentTeamGateSubmissionStatus.ITERATION_LIMIT_REACHED),
                         gate=latest,
                         events=tuple(stale_events),
                     )
+
+                next_iteration, max_iterations = budget
             else:
                 next_iteration = 1
                 max_iterations = DEFAULT_GATE_ITERATION_LIMIT
@@ -971,10 +982,7 @@ class LocalAgentTeamApprovalService:
         for agent_id in selected:
             constraint = current.proposal.constraints.constraint_for(agent_id)
 
-            if constraint.kind in {
-                TeamRoleConstraintKind.IMPOSSIBLE,
-                TeamRoleConstraintKind.CONFLICT,
-            }:
+            if constraint.kind is TeamRoleConstraintKind.IMPOSSIBLE:
                 issues.append(
                     TeamEditIssue(
                         code=(TeamEditIssueCode.AGENT_NOT_SELECTABLE),
@@ -984,14 +992,6 @@ class LocalAgentTeamApprovalService:
 
         newly_added = selected - current_selected
         rationale_ids = set(rationale_counts)
-
-        for agent_id in newly_added - rationale_ids:
-            issues.append(
-                TeamEditIssue(
-                    code=(TeamEditIssueCode.RATIONALE_REQUIRED),
-                    agent_id=agent_id,
-                )
-            )
 
         for agent_id in rationale_ids - newly_added:
             issues.append(
@@ -1040,7 +1040,7 @@ class LocalAgentTeamApprovalService:
                 members.append(existing)
                 continue
 
-            rationale = rationales[agent_id]
+            rationale = rationales.get(agent_id)
             members.append(
                 ProposedTeamMember(
                     agent_id=agent_id,
@@ -1049,7 +1049,9 @@ class LocalAgentTeamApprovalService:
                         TeamProposalJustification(
                             kind=(TeamProposalJustificationKind.OWNER_RATIONALE),
                             code=("OWNER_SELECTED_ROLE"),
-                            statement=(rationale.statement),
+                            statement=(
+                                OWNER_CHOICE_STATEMENT if rationale is None else rationale.statement
+                            ),
                         ),
                     ),
                 )

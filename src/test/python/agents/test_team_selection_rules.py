@@ -717,6 +717,88 @@ def test_a_request_before_a_contrast_still_conflicts_with_the_exclusion_after_it
     assert constraints.issues[0].code is TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS
 
 
+def test_the_owner_may_switch_only_optional_and_contested_roles() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Calcolatrice",
+            description="Una app con database ma senza backend.",
+            technical_constraints=["Vue", "No mobile"],
+        ),
+    )
+
+    kinds = {
+        constraint.agent_id: (constraint.kind, constraint.owner_editable)
+        for constraint in constraints.role_constraints
+    }
+
+    assert kinds[AgentIdentifier.FRONTEND_ENGINEER] == (TeamRoleConstraintKind.MANDATORY, False)
+    assert kinds[AgentIdentifier.BACKEND_ENGINEER] == (TeamRoleConstraintKind.CONFLICT, True)
+    assert kinds[AgentIdentifier.MOBILE_ENGINEER] == (TeamRoleConstraintKind.IMPOSSIBLE, False)
+    assert kinds[AgentIdentifier.SECURITY_REVIEWER] == (TeamRoleConstraintKind.OPTIONAL, True)
+    assert constraints.issues[0].code is TeamSelectionIssueCode.CONTRADICTORY_ROLE_SIGNALS
+    assert all(
+        constraint.owner_editable
+        is (
+            constraint.kind
+            in {
+                TeamRoleConstraintKind.OPTIONAL,
+                TeamRoleConstraintKind.CONFLICT,
+            }
+        )
+        for constraint in constraints.role_constraints
+    )
+
+
+def test_a_contested_constraint_gives_back_the_issue_of_the_rules() -> None:
+    constraints = determine_team_constraints(
+        project_mode=ProjectMode.GREENFIELD_GENERATION,
+        brief=create_project_brief(
+            name="Contradictory project",
+            description="Use HTML screens, but the final product must be headless.",
+            technical_constraints=["Vue", "Nessun backend"],
+            functional_requirements=["Store the data in a database."],
+        ),
+    )
+
+    assert constraints.conflicting_agent_ids == (
+        AgentIdentifier.FRONTEND_ENGINEER,
+        AgentIdentifier.BACKEND_ENGINEER,
+    )
+    assert (
+        tuple(
+            selection_rules.contradiction_issue(constraints.constraint_for(agent_id))
+            for agent_id in constraints.conflicting_agent_ids
+        )
+        == constraints.issues
+    )
+
+    with pytest.raises(ValueError, match="only a conflicting role constraint"):
+        selection_rules.contradiction_issue(
+            constraints.constraint_for(AgentIdentifier.MOBILE_ENGINEER)
+        )
+
+
+def test_merged_evidence_keeps_the_order_of_the_brief_and_of_the_terms() -> None:
+    merged = selection_rules.merge_rule_evidence(
+        (
+            RuleEvidence(fields=(BriefField.TECHNICAL_CONSTRAINTS,), terms=("vue", "website")),
+            RuleEvidence(),
+            RuleEvidence(
+                fields=(BriefField.DESCRIPTION, BriefField.TECHNICAL_CONSTRAINTS),
+                terms=("browser", "vue"),
+            ),
+        )
+    )
+
+    assert merged == RuleEvidence(
+        fields=(BriefField.DESCRIPTION, BriefField.TECHNICAL_CONSTRAINTS),
+        terms=("browser", "vue", "website"),
+    )
+    assert selection_rules.merge_rule_evidence(()) == RuleEvidence()
+    assert selection_rules.merge_rule_evidence(iter((merged,))) == merged
+
+
 def test_a_mark_inside_a_word_does_not_split_the_sentence() -> None:
     brief = create_project_brief(
         name="Calcolatrice", description="Il sito usa Vue.js senza server."

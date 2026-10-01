@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from copy import deepcopy
 from datetime import UTC, datetime
 from io import StringIO
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
+import pytest
 from alembic import command
 from alembic.script import (
     ScriptDirectory,
@@ -19,6 +23,9 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,
 )
 
+from orchestwin.agents.catalog import (
+    AgentIdentifier,
+)
 from orchestwin.agents.persistence.models import (
     TeamProposalVersionRecord,
 )
@@ -26,12 +33,19 @@ from orchestwin.agents.persistence.repositories import (
     SqlAlchemyTeamProposalVersionRepository,
     latest_owned_team_proposal_statement,
     proposal_from_snapshot,
+    team_proposal_record_to_domain,
+)
+from orchestwin.agents.perspectives import (
+    perspective_views,
 )
 from orchestwin.agents.proposals import (
     TeamProposalVersionCreationStatus,
 )
 from orchestwin.agents.selection_rules import (
     determine_team_constraints,
+)
+from orchestwin.knowledge.stage_documents import (
+    team_version_from_document,
 )
 from orchestwin.models.fake_team_proposals import (
     FakeDeterministicTeamProposalAdapter,
@@ -69,9 +83,15 @@ NOW = datetime(
 TEST_DATABASE_URL = (
     "postgresql+psycopg://user:database-secret-must-not-leak-8472@localhost:5432/orchestwin"
 )
+CONTRADICTION = "Una app con database ma senza backend."
+GOLDEN_TEAM = (
+    Path(__file__).resolve().parents[1] / "knowledge" / "data" / "guest_list" / "team.json"
+)
 
 
-def build_proposal():
+def build_proposal(
+    description: str = "A Vue web application with a FastAPI backend.",
+):
     """Create one deterministic fake proposal."""
     provided_fields = {
         BriefField.NAME,
@@ -80,7 +100,7 @@ def build_proposal():
     }
     brief = create_project_brief(
         name="Persistence project",
-        description=("A Vue web application with a FastAPI backend."),
+        description=description,
         technical_constraints=[
             "Vue frontend",
             "FastAPI backend",
@@ -209,6 +229,126 @@ def test_repository_creates_first_immutable_version() -> None:
     assert record.content_hash == (proposal.content_hash)
     assert record.revision_kind == ("PROPOSER_GENERATED")
     assert record.based_on_version_number is None
+
+
+def test_contradiction_snapshot_round_trips_with_its_issue() -> None:
+    proposal = build_proposal(CONTRADICTION)
+    snapshot = proposal.to_snapshot()
+    backend = next(
+        constraint
+        for constraint in snapshot["constraints"]["role_constraints"]
+        if constraint["agent_id"] == "BACKEND_ENGINEER"
+    )
+
+    reconstructed = proposal_from_snapshot(snapshot)
+
+    assert snapshot["constraints"]["issues"] == [
+        {"code": "CONTRADICTORY_ROLE_SIGNALS", "agent_id": "BACKEND_ENGINEER"}
+    ]
+    assert (backend["kind"], backend["owner_editable"]) == ("CONFLICT", True)
+    assert reconstructed == proposal
+    assert reconstructed.constraints.issues == proposal.constraints.issues
+    assert reconstructed.content_hash == proposal.content_hash
+    assert AgentIdentifier.BACKEND_ENGINEER not in reconstructed.selected_agent_ids
+
+
+def test_repository_stores_a_proposal_with_its_constraint_issue() -> None:
+    proposal = build_proposal(CONTRADICTION)
+    project = ProjectRecord(
+        id=PROJECT_ID,
+        owner_user_id=OWNER_ID,
+        display_name="Persistence project",
+        mode=(ProjectMode.GREENFIELD_GENERATION.value),
+        current_brief_version=1,
+        archived_at=None,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session = Mock(spec=AsyncSession)
+    session.scalar = AsyncMock(side_effect=[project, None])
+    session.flush = AsyncMock()
+    repository = SqlAlchemyTeamProposalVersionRepository(
+        session,
+        clock=lambda: NOW,
+        uuid_factory=lambda: PROPOSAL_ID,
+    )
+
+    result = asyncio.run(
+        repository.create_generated_owned(
+            project_id=PROJECT_ID,
+            owner_user_id=OWNER_ID,
+            proposal=proposal,
+        )
+    )
+
+    assert result.status is (TeamProposalVersionCreationStatus.CREATED)
+    assert result.version is not None
+    assert result.version.proposal.constraints.issues == proposal.constraints.issues
+
+    record = session.add.call_args.args[0]
+
+    assert record.content == proposal.to_snapshot()
+    assert record.constraints_content_hash == proposal.constraints.content_hash
+    assert team_proposal_record_to_domain(record).proposal == proposal
+
+
+def test_stored_issues_must_name_exactly_the_contested_roles() -> None:
+    contested = build_proposal(CONTRADICTION).to_snapshot()
+    without_issue = deepcopy(contested)
+    without_issue["constraints"]["issues"] = []
+    other_agent = deepcopy(contested)
+    other_agent["constraints"]["issues"][0]["agent_id"] = "MOBILE_ENGINEER"
+    unknown_code = deepcopy(contested)
+    unknown_code["constraints"]["issues"][0]["code"] = "SOMETHING_ELSE"
+    old_flag = deepcopy(contested)
+
+    for constraint in old_flag["constraints"]["role_constraints"]:
+        if constraint["kind"] == "CONFLICT":
+            constraint["owner_editable"] = False
+
+    invented = build_proposal().to_snapshot()
+    invented["constraints"]["issues"] = deepcopy(contested["constraints"]["issues"])
+
+    for snapshot in (without_issue, other_agent, unknown_code, old_flag, invented):
+        with pytest.raises(ValueError):
+            proposal_from_snapshot(snapshot)
+
+
+def test_a_proposal_stored_before_this_sprint_still_reads_and_keeps_its_hash() -> None:
+    document = json.loads(GOLDEN_TEAM.read_text(encoding="utf-8"))
+    version = team_version_from_document(document)
+    proposal = proposal_from_snapshot(document["proposal"])
+    views = {
+        view.key.value: view.to_snapshot()
+        for view in perspective_views(proposal.constraints, proposal.selected_agent_ids)
+    }
+
+    assert proposal == version.proposal
+    assert proposal.to_snapshot() == document["proposal"]
+    assert version.content_hash == document["content_hash"]
+    assert proposal.content_hash == (
+        "a33b4badb0a16f53683c7bce63f2dbfe517bec709eadf734ccd7dc6a5114f884"
+    )
+    assert proposal.constraints.content_hash == document["proposal"]["constraints_content_hash"]
+    assert proposal.constraints.issues == ()
+    assert views["UX"]["requested"] == {
+        "fields": ["technical_constraints"],
+        "terms": ["applicazione web"],
+    }
+    assert (views["ACCESSIBILITY"]["standing"], views["ACCESSIBILITY"]["applied"]) == (
+        "ALWAYS",
+        False,
+    )
+    assert views["SOFTWARE_ENGINEERING"]["aspects"][1] == {
+        "key": "SERVICES",
+        "agent_id": "BACKEND_ENGINEER",
+        "standing": "EXCLUDED",
+        "applied": False,
+        "editable": False,
+        "requested": {"fields": [], "terms": []},
+        "excluded": {"fields": ["technical_constraints"], "terms": ["nessun backend"]},
+    }
+    assert (views["SECURITY"]["standing"], views["SECURITY"]["applied"]) == ("OPTIONAL", False)
 
 
 def test_migration_creates_immutable_team_proposals() -> None:

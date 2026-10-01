@@ -320,9 +320,12 @@ class TeamProposalApplicationResult:
         }
 
         if successful:
-            if self.version is None or self.issues:
+            if self.version is None:
+                raise ValueError("successful team-proposal results require a persisted version")
+
+            if self.issues != self.version.proposal.constraints.issues:
                 raise ValueError(
-                    "successful team-proposal results require only a persisted version"
+                    "successful team-proposal results carry exactly the constraint issues"
                 )
 
             return
@@ -481,6 +484,7 @@ class LocalTeamProposalApplicationService:
         return TeamProposalApplicationResult(
             status=application_status,
             version=persisted.version,
+            issues=persisted.version.proposal.constraints.issues,
         )
 
     async def current(
@@ -553,4 +557,5 @@ class LocalTeamProposalApplicationService:
             and proposal.catalog_version == constraints.catalog_version
             and proposal.catalog_content_hash == constraints.catalog_content_hash
             and proposal.constraints == constraints
+            and not proposal.owner_added_agent_ids
         )
