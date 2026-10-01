@@ -70,13 +70,15 @@ export const useTwinChatStore = defineStore("twinChat", {
     async ask(
       projectId: string,
       twinId: string,
+      twinVersionNumber: number,
       question: string,
       authorize: AuthorizedTwinChatRequest,
       api: TwinChatApi = twinChatApi,
     ): Promise<TwinConversationPayload> {
       this.begin(twinId);
       try {
-        const expected = this.conversations[twinId]?.turns.length ?? 0;
+        const held = this.conversations[twinId];
+        const expected = held?.twin_version_number === twinVersionNumber ? held.turns.length : 0;
         const conversation = await authorize((token) =>
           api.ask(projectId, twinId, { question, expected_turn_count: expected }, token),
         );
