@@ -6,7 +6,61 @@ export type EpistemicStatus =
   | "EMPIRICALLY_SUPPORTED"
   | "HUMAN_VALIDATED"
   | "MODEL_INFERRED"
-  | "UNSUPPORTED_ASSUMPTION";
+  | "UNSUPPORTED_ASSUMPTION"
+  | "CONTESTED";
+
+export type ReadableClaimStatus =
+  "EVIDENCED" | "INFERRED" | "HYPOTHESIZED" | "CONTESTED" | "UNKNOWN";
+export type TwinBasis = "PROVISIONAL" | "EVIDENCE_BASED";
+export interface ReadableClaim {
+  observation_key: string;
+  value: ObservationValuePayload;
+  display_status: ReadableClaimStatus;
+  rationale: string | null;
+  provenance: EvidenceReferencePayload[];
+}
+export interface TwinPersonaPayload {
+  description: ReadableClaim;
+  goals: ReadableClaim;
+  needs: ReadableClaim;
+  behaviours: ReadableClaim;
+  pain_points: ReadableClaim;
+  constraints: ReadableClaim;
+  contexts: ReadableClaim;
+}
+export interface TwinRepresentationPayload {
+  basis: TwinBasis;
+  represents: ReadableClaim;
+  does_not_represent: ReadableClaim;
+  contexts: ReadableClaim;
+  evidence_gaps: ReadableClaim;
+  empirically_supported_fields: string[];
+  unsupported_fields: string[];
+  persona: TwinPersonaPayload;
+}
+export interface ArchetypeInput {
+  name: string;
+  description: string;
+  role: string;
+  goals: string[];
+  context: string | null;
+}
+export interface ArchetypeEditRequest extends ArchetypeInput {
+  based_on_version_number: number;
+}
+export interface ArchetypeArchiveRequest {
+  based_on_version_number: number;
+}
+export interface ArchetypePayload extends Omit<ArchetypeInput, "description" | "role"> {
+  description: string | null;
+  role: string | null;
+  persona_id: UUID;
+  version_id: UUID;
+  version_number: number;
+  source: PersonaSource;
+  confirmation_status: PersonaConfirmationStatus;
+  archived: boolean;
+}
 
 export type EvidenceSourceKind =
   | "PROJECT_BRIEF"
@@ -50,7 +104,11 @@ export type UserTwinField =
   | "operational_constraints"
   | "technical_literacy"
   | "risk_sensitivity"
-  | "assumptions";
+  | "assumptions"
+  | "description"
+  | "represents"
+  | "does_not_represent"
+  | "evidence_gaps";
 
 export type PersonaOwnerDecision = "CONFIRM" | "REJECT";
 
@@ -112,6 +170,7 @@ export interface ArtifactReferencePayload {
 }
 
 export interface PersonaProfilePayload {
+  archived?: boolean;
   name: string;
   source: PersonaSource;
   kind: PersonaKind;
@@ -153,6 +212,7 @@ export interface UserTwinProfilePayload {
 }
 
 export interface UserTwinVersionPayload {
+  view?: TwinRepresentationPayload;
   id: UUID;
   project_id: UUID;
   twin_id: UUID;
@@ -263,10 +323,10 @@ export interface PersonaDecisionRequest {
 export interface ProfileReplacementRequest {
   field: UserTwinField;
   value: ObservationValuePayload;
-  epistemic_status: "USER_PROVIDED" | "HUMAN_VALIDATED";
+  epistemic_status: "USER_PROVIDED" | "HUMAN_VALIDATED" | "CONTESTED";
   confidence: number;
   provenance: EvidenceReferencePayload[];
-  human_validation: "NOT_REQUIRED";
+  human_validation: HumanValidationRequirement;
   rationale?: string | null;
 }
 
@@ -342,6 +402,7 @@ export interface UserModelingReadinessPayload {
 
   approved_current_snapshot: boolean;
   context_current?: boolean;
+  archetypes_current?: boolean;
   workflow_state: UserModelingWorkflowState;
 
   twins: EffectiveTwinLifecyclePayload[];

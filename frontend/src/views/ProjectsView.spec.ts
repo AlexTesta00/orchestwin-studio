@@ -109,6 +109,25 @@ describe("projects page", () => {
     vi.spyOn(apiClient, "listProjects").mockResolvedValue([EXISTING]);
   });
 
+  it.each([
+    ["it", "Tocca a te: Aggiorna le sezioni"],
+    ["en", "Your turn: Update the sections"],
+  ] as const)("shows the available sections gesture in %s", async (locale, expected) => {
+    vi.spyOn(apiClient, "listProjects").mockResolvedValue([
+      project(
+        "existing",
+        "Workshop guest list",
+        2,
+        "GREENFIELD_GENERATION",
+        "TEAM",
+        "UPDATE_SECTIONS",
+      ),
+    ]);
+    const { wrapper } = await mountProjects(locale);
+    expect(wrapper.get('[data-testid="project-next"]').text().replace(/\s+/g, " ")).toBe(expected);
+    wrapper.unmount();
+  });
+
   it("offers to start from a knowledge folder next to the usual new project", async () => {
     const { wrapper } = await mountProjects();
     const start = wrapper.get('[data-testid="import-project"]');
@@ -375,8 +394,10 @@ describe("projects page", () => {
     ["BRIEF", "APPROVE_BRIEF", "Brief", "Your turn: Approve the brief"],
     ["TEAM", "APPROVE_TEAM", "Perspectives", "Your turn: Approve the perspectives"],
     ["USER_TWINS", "CONFIRM_TWINS", "User Twin", "Your turn: Confirm the twins"],
+    ["USER_TWINS", "PREPARE_TWINS", "User Twin", "Your turn: Prepare the twins again"],
     ["REQUIREMENTS", "APPROVE_REQUIREMENTS", "Definition", "Your turn: Approve the requirements"],
     ["DESIGN", "APPROVE_DESIGN", "Design & Evaluation", "Your turn: Choose and approve the design"],
+    ["DESIGN", "PREPARE_DESIGN", "Design & Evaluation", "Your turn: Prepare the design again"],
     ["PACKAGE", "DOWNLOAD_FOLDER", "Dossier", "Your turn: Download the folder"],
   ])("names the step %s and its action in English", async (stage, action, name, next) => {
     vi.spyOn(apiClient, "listProjects").mockResolvedValue([
@@ -393,7 +414,9 @@ describe("projects page", () => {
   it.each<[ProjectStage, ProjectNextAction, string, string]>([
     ["TEAM", "APPROVE_TEAM", "Prospettive", "Tocca a te: Approva le prospettive"],
     ["USER_TWINS", "CONFIRM_TWINS", "User Twin", "Tocca a te: Conferma i twin"],
+    ["USER_TWINS", "PREPARE_TWINS", "User Twin", "Tocca a te: Prepara di nuovo i twin"],
     ["DESIGN", "APPROVE_DESIGN", "Design e valutazione", "Tocca a te: Scegli e approva il design"],
+    ["DESIGN", "PREPARE_DESIGN", "Design e valutazione", "Tocca a te: Prepara di nuovo il design"],
   ])("names the step %s and its action in Italian", async (stage, action, name, next) => {
     vi.spyOn(apiClient, "listProjects").mockResolvedValue([
       project("one", "Guest list", 1, "GREENFIELD_GENERATION", stage, action),

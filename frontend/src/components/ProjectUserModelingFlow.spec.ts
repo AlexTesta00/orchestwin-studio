@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from "pinia";
+import { createPinia, getActivePinia, setActivePinia } from "pinia";
 
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils";
 
@@ -16,12 +16,13 @@ import {
   generationJobsApi,
   type GenerationRequestJob,
 } from "../api/generationJobs";
-import { userModelingApi } from "../api/userModeling";
+import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 
 import { useTeamStore } from "../stores/team";
 import { useUserModelingStore } from "../stores/userModeling";
 
 import type {
+  ArchetypePayload,
   HumanGatePayload,
   PersonaProposalCommandPayload,
   PersonaVersionPayload,
@@ -448,7 +449,7 @@ function mountFlow(attachTo?: HTMLElement) {
   return mount(ProjectUserModelingFlow, {
     ...(attachTo === undefined ? {} : { attachTo }),
     global: {
-      plugins: [createAppI18n("en")],
+      plugins: [getActivePinia()!, createAppI18n("en")],
     },
     props: {
       projectId: PROJECT_ID,
@@ -599,7 +600,7 @@ describe("ProjectUserModelingFlow", () => {
     await flushPromises();
     expect(document.activeElement?.id).toBe(`persona-reason-${PERSONA_ID}`);
     expect(wrapper.get(`#persona-reason-${PERSONA_ID}`).attributes("placeholder")).toBe(
-      "Explain why this profile does not describe who will use the product…",
+      "Explain why this archetype does not describe who will use the product…",
     );
 
     await wrapper.get('[data-testid="persona-card"] [data-variant="quiet"]').trigger("click");
@@ -645,13 +646,13 @@ describe("ProjectUserModelingFlow", () => {
     expect(bar.find('[data-testid="decision-secondary"]').exists()).toBe(false);
     expect(decisionPrimary(wrapper, "generate").text()).toBe("Create the twins");
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
-    expect(bar.text()).toContain("Confirm or set aside every proposed profile");
+    expect(bar.text()).toContain("Confirm or set aside every proposed archetype");
 
     store.personaVersions = [confirmedPersona];
     await flushPromises();
 
     expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
-    expect(bar.text()).toContain("Confirmed profiles: 1.");
+    expect(bar.text()).toContain("Confirmed archetypes: 1.");
     expect(wrapper.emitted("sections-changed")).toBeUndefined();
     await decisionPrimary(wrapper, "generate").trigger("click");
     await flushPromises();
@@ -687,7 +688,7 @@ describe("ProjectUserModelingFlow", () => {
 
     expect(openProfileInPage()).toBe(true);
     const profile = profilePanel().get('[data-testid="twin-profile-details"]');
-    expect(profile.text()).toContain("Model inferred");
+    expect(profile.text()).toContain("Inferred");
 
     expect(profile.text()).toContain("42%");
 
@@ -720,7 +721,7 @@ describe("ProjectUserModelingFlow", () => {
     expect(card.get('[data-testid="hypothesis-chip"]').text()).toBe("1 hypothesis to verify");
     expect(card.text()).toContain("Goals");
     expect(card.text()).toContain("Reduce booking errors");
-    expect(card.text()).toContain("Hotel receptionist");
+    expect(card.text()).toContain("Unknown");
     expect(wrapper.get('[data-testid="user-modeling-count"]').text()).toBe(
       "1 twin to approve. The twins' answers are simulated: hypotheses to weigh, not opinions of real people.",
     );
@@ -1781,6 +1782,226 @@ describe("ProjectUserModelingFlow", () => {
     ).toBe(true);
     expect(wrapper.findComponent(TwinImportPanel).exists()).toBe(true);
     await expectAccessible(wrapper.element);
+  });
+});
+
+describe("ProjectUserModelingFlow archetypes", () => {
+  const data = {
+    name: "Receptionist",
+    description: "Checks in hotel guests",
+    role: "Receptionist",
+    goals: ["Fast check-in"],
+    context: null,
+  };
+  const archetype: ArchetypePayload = {
+    ...data,
+    persona_id: PERSONA_ID,
+    version_id: PERSONA_VERSION_ID,
+    version_number: 2,
+    source: "OWNER_PROVIDED",
+    confirmation_status: "CONFIRMED",
+    archived: false,
+  };
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.innerHTML = "";
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("creates a manual archetype and refreshes the flow without generating twins", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.archetypes = [];
+    const create = vi.spyOn(userModelingApi, "createArchetype").mockResolvedValue(archetype);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([archetype]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      snapshot_exists: false,
+      archetypes_current: false,
+    });
+    const generate = vi.spyOn(store, "generateSnapshot");
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="archetype-add"]').trigger("click");
+    await wrapper.get('[data-testid="archetype-name"]').setValue(data.name);
+    await wrapper.get('[data-testid="archetype-description"]').setValue(data.description);
+    await wrapper.get('[data-testid="archetype-role"]').setValue(data.role);
+    await wrapper.get('[data-testid="archetype-goals"]').setValue("Fast check-in");
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(create).toHaveBeenCalledWith(PROJECT_ID, data, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(wrapper.find('[data-testid="archetype-save"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("Archetypes");
+    expect(decisionPrimary(wrapper, "generate").text()).toContain("Create the twins");
+    expect(decisionPrimary(wrapper, "generate").text()).not.toContain("again");
+    expect(wrapper.text()).not.toContain("The archetypes changed.");
+    expect(generate).not.toHaveBeenCalled();
+    await expectAccessible(wrapper.element);
+  });
+
+  it("edits with the displayed version and keeps the old snapshot for reference", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.archetypes = [archetype];
+    const edited = {
+      ...archetype,
+      version_number: 3,
+      description: "Works the morning reception shift",
+    };
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockResolvedValue(edited);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([edited]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([
+      { ...confirmedPersona, version_number: 3 },
+    ]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      context_current: true,
+      archetypes_current: false,
+    });
+    const generate = vi.spyOn(store, "generateSnapshot").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      snapshot_version: snapshot,
+      twin_versions: [twinVersion],
+    });
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    await wrapper.get('[data-testid="archetype-description"]').setValue(edited.description);
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(edit).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { ...data, description: edited.description, based_on_version_number: 2 },
+      ACCESS_TOKEN,
+    );
+    expect(store.currentSnapshot).toEqual(snapshot);
+    expect(store.snapshotHistory).toEqual([snapshot]);
+    expect(wrapper.text()).toContain("The archetypes changed.");
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeUndefined();
+    await decisionPrimary(wrapper, "generate").trigger("click");
+    await flushPromises();
+    expect(generate).toHaveBeenCalledWith(PROJECT_ID, ACCESS_TOKEN);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(2);
+  });
+
+  it("requires explicit archival confirmation and preserves snapshot history", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    store.archetypes = [archetype];
+    const archive = vi
+      .spyOn(userModelingApi, "archiveArchetype")
+      .mockResolvedValue({ ...archetype, archived: true, version_number: 3 });
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      archetypes_current: false,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-delete-${PERSONA_ID}"]`).trigger("click");
+    expect(archive).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("history preserved");
+    expect(wrapper.text()).toContain("requirements and design");
+    await wrapper.get('[data-testid="archetype-delete-confirm"]').trigger("click");
+    await flushPromises();
+    expect(archive).toHaveBeenCalledWith(
+      PROJECT_ID,
+      PERSONA_ID,
+      { based_on_version_number: 2 },
+      ACCESS_TOKEN,
+    );
+    expect(store.currentSnapshot).toEqual(snapshot);
+    expect(store.currentTwins).toEqual([twinVersion]);
+    expect(store.currentPersonas).toEqual([]);
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
+    expect(decisionPrimary(wrapper, "generate").attributes("disabled")).toBeDefined();
+  });
+
+  it("explains a conflict and discards the stale draft only after reloading", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.archetypes = [archetype];
+    const edit = vi.spyOn(userModelingApi, "editArchetype").mockRejectedValue(
+      new UserModelingApiError("ARCHETYPE_VERSION_CONFLICT", {
+        code: "ARCHETYPE_VERSION_CONFLICT",
+        status: 409,
+        payload: null,
+      }),
+    );
+    vi.spyOn(userModelingApi, "getReadiness").mockResolvedValue({
+      ...readinessReview,
+      snapshot_exists: false,
+      gate_exists: false,
+      archetypes_current: false,
+    });
+    vi.spyOn(userModelingApi, "getCurrentPersonas").mockResolvedValue([confirmedPersona]);
+    vi.spyOn(userModelingApi, "getSnapshotHistory").mockResolvedValue([]);
+    vi.spyOn(userModelingApi, "getArchetypes").mockResolvedValue([
+      { ...archetype, version_number: 3, description: "Current description" },
+    ]);
+    const wrapper = mountFlow();
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    await wrapper.get('[data-testid="archetype-save"]').trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("This archetype changed.");
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("sections-changed")).toBeUndefined();
+    await wrapper.get('[data-testid="archetype-reload"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="archetype-save"]').exists()).toBe(false);
+    await wrapper.get(`[data-testid="archetype-edit-${PERSONA_ID}"]`).trigger("click");
+    expect(
+      (wrapper.get('[data-testid="archetype-description"]').element as HTMLTextAreaElement).value,
+    ).toBe("Current description");
+  });
+
+  it("makes contestation an explicit choice with a required explanation", async () => {
+    const store = useUserModelingStore();
+    store.activateProject(PROJECT_ID);
+    store.applySnapshot(snapshot);
+    const propose = vi.spyOn(store, "proposeRevision").mockResolvedValue({
+      status: "CREATED",
+      issue: null,
+      proposal_issue: null,
+      diff: proposedDiff,
+      twin_version: null,
+      snapshot_version: null,
+    });
+    const wrapper = mountFlow();
+    await wrapper.get('[data-testid="open-twin-profile"]').trigger("click");
+    const panel = profilePanel();
+    await panel.get('[data-testid="edit-twin-observation"]').trigger("click");
+    expect((panel.get('input[value="USER_PROVIDED"]').element as HTMLInputElement).checked).toBe(
+      true,
+    );
+    await panel.get('input[value="CONTESTED"]').setValue(true);
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
+    expect(propose).not.toHaveBeenCalled();
+    await panel
+      .get('[data-testid="revision-rationale"]')
+      .setValue("Guests are served by several roles");
+    await panel.get('[data-testid="submit-revision"]').trigger("submit");
+    await flushPromises();
+    expect(propose).toHaveBeenCalledWith(
+      PROJECT_ID,
+      TWIN_ID,
+      [
+        expect.objectContaining({
+          field: "goals",
+          epistemic_status: "CONTESTED",
+          rationale: "Guests are served by several roles",
+          human_validation: "REQUIRED",
+        }),
+      ],
+      ACCESS_TOKEN,
+    );
+    expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
 });
 

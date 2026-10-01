@@ -8,7 +8,8 @@ import { PROJECT_STAGES, type ProjectStage } from "@/api/contracts";
 import type { ProjectSectionsPayload, SectionsAlignmentPayload } from "@/types/sections";
 
 type Locale = "en" | "it";
-type ReasonKey = "requirementMissing" | "twins" | "revision" | "upstream" | "prepare" | "unknown";
+type ReasonKey =
+  "requirementMissing" | "twins" | "revision" | "upstream" | "prepare" | "prepareTwins" | "unknown";
 type LineKind =
   | "done"
   | "nothing"
@@ -48,6 +49,7 @@ const REASONS: ReadonlyMap<string, ReasonKey> = new Map<string, ReasonKey>([
   ["USER_TWINS_APPROVAL_REQUIRED", "upstream"],
   ["REQUIREMENTS_APPROVAL_REQUIRED", "upstream"],
   ["PREPARE_AGAIN", "prepare"],
+  ["PREPARE_TWINS", "prepareTwins"],
 ]);
 
 const props = withDefaults(
@@ -77,6 +79,8 @@ provide(
 
 const messages = {
   en: {
+    archetypesBehind:
+      "{sections} to update: the archetypes changed. Prepare and approve the updated twins, then update the dependent sections. Earlier versions remain in the history.",
     behind:
       "{sections} to update: something upstream changed. The content you approved stays the same, it is only re-anchored to the new versions.",
     uncovered:
@@ -95,6 +99,8 @@ const messages = {
       revision: "a proposed change is waiting for your decision",
       upstream: "the section upstream has to be settled first",
       prepare: "the brief changed: prepare the perspectives again",
+      prepareTwins:
+        "the archetypes changed: prepare and approve the updated twins in the User Twin step",
       unknown: "it could not be done right now, try again in a moment",
     },
     evaluation:
@@ -104,6 +110,8 @@ const messages = {
     open: "Open {section}",
   },
   it: {
+    archetypesBehind:
+      "{sections} da aggiornare: gli archetipi sono cambiati. Prepara e approva i twin aggiornati, poi aggiorna le sezioni dipendenti. Le versioni precedenti restano nello storico.",
     behind:
       "{sections} da aggiornare: a monte qualcosa è cambiato. I contenuti che hai approvato restano gli stessi, vengono solo riagganciati alle versioni nuove.",
     uncovered:
@@ -122,6 +130,8 @@ const messages = {
       revision: "c'è una modifica proposta da decidere",
       upstream: "prima va sistemata la sezione a monte",
       prepare: "il brief è cambiato: prepara di nuovo le prospettive",
+      prepareTwins:
+        "gli archetipi sono cambiati: prepara e approva i twin aggiornati nel passo User Twin",
       unknown: "non è stato possibile farlo adesso, riprova tra poco",
     },
     evaluation:
@@ -177,7 +187,7 @@ function blockedLine(
       section: label(key),
       reason: fill(copy.value.reasons[reason], { codes: listOf(codes) }),
     }),
-    link: reason === "prepare" ? "TEAM" : null,
+    link: reason === "prepare" ? "TEAM" : reason === "prepareTwins" ? "USER_TWINS" : null,
   };
 }
 
@@ -250,7 +260,12 @@ const lines = computed<NoticeLine[]>(() => {
     collected.push({
       key: "behind",
       kind: "behind",
-      parts: partsOf(copy.value.behind, { sections: listOf(summary.sections.map(label)) }),
+      parts: partsOf(
+        props.sections.sections.some((section) => section.reasons.includes("ARCHETYPES_CHANGED"))
+          ? copy.value.archetypesBehind
+          : copy.value.behind,
+        { sections: listOf(summary.sections.map(label)) },
+      ),
       link: null,
     });
     if (summary.uncovered_codes.length > 0) {

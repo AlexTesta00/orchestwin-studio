@@ -105,6 +105,60 @@ afterEach(() => {
 });
 
 describe("ProjectSectionsNotice", () => {
+  it.each(["it", "en"] as const)(
+    "explains archetype regeneration and opens User Twin in %s",
+    async (locale) => {
+      const wrapper = mountNotice(
+        {
+          sections: sectionsOf(
+            {
+              USER_TWINS: {
+                state: "TO_UPDATE",
+                reasons: ["ARCHETYPES_CHANGED"],
+                blocked: "PREPARE_TWINS",
+              },
+              REQUIREMENTS: {
+                state: "TO_UPDATE",
+                reasons: ["USER_TWINS_CHANGED"],
+                blocked: "UPSTREAM_NOT_READY",
+              },
+              DESIGN: {
+                state: "TO_UPDATE",
+                reasons: ["REQUIREMENTS_CHANGED"],
+                blocked: "UPSTREAM_NOT_READY",
+              },
+            },
+            { available: false, sections: ["USER_TWINS", "REQUIREMENTS", "DESIGN"] },
+          ),
+        },
+        locale,
+      );
+      expect(wrapper.text()).toContain(
+        locale === "it"
+          ? "prepara e approva i twin aggiornati"
+          : "prepare and approve the updated twins",
+      );
+      expect(wrapper.text()).not.toContain(
+        locale === "it" ? "restano gli stessi" : "stays the same",
+      );
+      expect(wrapper.find(gesture).exists()).toBe(false);
+      await wrapper.get('[data-target="USER_TWINS"]').trigger("click");
+      expect(wrapper.emitted("open")?.[0]).toEqual(["USER_TWINS"]);
+    },
+  );
+
+  it("starts the gesture at the team when an approved brief changes and selections remain valid", async () => {
+    const wrapper = mountNotice({
+      sections: sectionsOf(
+        { TEAM: { state: "TO_UPDATE", reasons: ["BRIEF_CHANGED"] } },
+        { available: true, sections: ["TEAM"] },
+      ),
+    });
+    expect(wrapper.find(gesture).exists()).toBe(true);
+    expect(wrapper.text()).toContain("Prospettive da aggiornare");
+    await wrapper.get(gesture).trigger("click");
+    expect(wrapper.emitted("align")).toHaveLength(1);
+  });
   it.each<[Locale, string[], string]>([
     [
       "it",

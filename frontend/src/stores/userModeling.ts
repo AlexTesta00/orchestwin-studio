@@ -2,6 +2,8 @@ import { defineStore } from "pinia";
 
 import { UserModelingApiError, userModelingApi } from "../api/userModeling";
 import type {
+  ArchetypePayload,
+  ArchetypeInput,
   GateCommandPayload,
   GateDecisionAction,
   HumanGateEventPayload,
@@ -18,6 +20,8 @@ import type {
 
 export type UserModelingOperation =
   | "load"
+  | "save-archetype"
+  | "archive-archetype"
   | "propose-personas"
   | "decide-persona"
   | "generate-snapshot"
@@ -40,6 +44,7 @@ interface UserModelingState {
   loadSequence: number;
 
   personaVersions: PersonaVersionPayload[];
+  archetypes: ArchetypePayload[] | null;
   twinVersions: UserTwinVersionPayload[];
 
   currentSnapshot: UserModelingSnapshotVersionPayload | null;
@@ -61,6 +66,8 @@ interface UserModelingState {
 function emptyPendingState(): Record<UserModelingOperation, boolean> {
   return {
     load: false,
+    "save-archetype": false,
+    "archive-archetype": false,
     "propose-personas": false,
     "decide-persona": false,
     "generate-snapshot": false,
@@ -171,6 +178,7 @@ export const useUserModelingStore = defineStore("userModeling", {
     loadSequence: 0,
 
     personaVersions: [],
+    archetypes: null,
     twinVersions: [],
 
     currentSnapshot: null,
@@ -194,6 +202,9 @@ export const useUserModelingStore = defineStore("userModeling", {
     },
 
     currentPersonas(state): PersonaVersionPayload[] {
+      if (state.archetypes !== null || state.personaVersions.length > 0) {
+        return state.personaVersions.filter((version) => version.profile.archived !== true);
+      }
       if (state.currentSnapshot !== null) {
         return state.currentSnapshot.snapshot.persona_versions;
       }
@@ -221,6 +232,7 @@ export const useUserModelingStore = defineStore("userModeling", {
   actions: {
     resetProjectState(): void {
       this.personaVersions = [];
+      this.archetypes = null;
       this.twinVersions = [];
 
       this.currentSnapshot = null;
@@ -320,7 +332,7 @@ export const useUserModelingStore = defineStore("userModeling", {
       try {
         const readiness = await userModelingApi.getReadiness(projectId, accessToken);
 
-        const [currentSnapshot, snapshotHistory, currentGate, gateEvents, personas] =
+        const [currentSnapshot, snapshotHistory, currentGate, gateEvents, personas, archetypes] =
           await Promise.all([
             readiness.snapshot_exists
               ? userModelingApi.getCurrentSnapshot(projectId, accessToken)
@@ -336,6 +348,9 @@ export const useUserModelingStore = defineStore("userModeling", {
               ? userModelingApi.getGateEvents(projectId, accessToken)
               : Promise.resolve([]),
             userModelingApi.getCurrentPersonas(projectId, accessToken),
+            readiness.archetypes_current === undefined
+              ? Promise.resolve(null)
+              : userModelingApi.getArchetypes(projectId, accessToken),
           ]);
 
         // A token refresh can start this load while a gate command is being retried.
@@ -345,6 +360,7 @@ export const useUserModelingStore = defineStore("userModeling", {
         }
 
         this.readiness = readiness;
+        this.archetypes = archetypes;
 
         this.snapshotHistory = [...snapshotHistory];
 
@@ -354,9 +370,8 @@ export const useUserModelingStore = defineStore("userModeling", {
 
         this.gateEvents = [...gateEvents];
 
+        this.personaVersions = [...personas];
         if (currentSnapshot !== null) {
-          this.personaVersions = [...currentSnapshot.snapshot.persona_versions];
-
           this.twinVersions = [...currentSnapshot.snapshot.twin_versions];
         } else {
           this.personaVersions = [...personas];
@@ -384,6 +399,7 @@ export const useUserModelingStore = defineStore("userModeling", {
 
         if (this.isRequestCurrent(projectId, epoch)) {
           this.personaVersions = [...result.versions];
+          if (this.archetypes !== null) await this.refreshArchetypes(projectId, accessToken, epoch);
         }
 
         return result;
@@ -422,6 +438,7 @@ export const useUserModelingStore = defineStore("userModeling", {
 
         if (this.isRequestCurrent(projectId, epoch) && result.version !== null) {
           this.personaVersions = upsertPersona(this.personaVersions, result.version);
+          if (this.archetypes !== null) await this.refreshArchetypes(projectId, accessToken, epoch);
         }
 
         return result;
@@ -431,6 +448,71 @@ export const useUserModelingStore = defineStore("userModeling", {
         throw error;
       } finally {
         this.endOperation("decide-persona", projectId, epoch);
+      }
+    },
+
+    async refreshArchetypes(projectId: string, accessToken: string, epoch: number): Promise<void> {
+      const [archetypes, personas, readiness] = await Promise.all([
+        userModelingApi.getArchetypes(projectId, accessToken),
+        userModelingApi.getCurrentPersonas(projectId, accessToken),
+        userModelingApi.getReadiness(projectId, accessToken),
+      ]);
+      if (this.isRequestCurrent(projectId, epoch)) {
+        this.archetypes = archetypes;
+        this.personaVersions = personas;
+        this.readiness = readiness;
+      }
+    },
+
+    async saveArchetype(
+      projectId: string,
+      data: ArchetypeInput,
+      accessToken: string,
+      archetype: ArchetypePayload | null = null,
+    ) {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.beginOperation("save-archetype");
+      try {
+        const result =
+          archetype === null
+            ? await userModelingApi.createArchetype(projectId, data, accessToken)
+            : await userModelingApi.editArchetype(
+                projectId,
+                archetype.persona_id,
+                { ...data, based_on_version_number: archetype.version_number },
+                accessToken,
+              );
+        if (this.isRequestCurrent(projectId, epoch))
+          await this.refreshArchetypes(projectId, accessToken, epoch);
+        return result;
+      } catch (error) {
+        this.captureError(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.endOperation("save-archetype", projectId, epoch);
+      }
+    },
+
+    async archiveArchetype(projectId: string, archetype: ArchetypePayload, accessToken: string) {
+      this.activateProject(projectId);
+      const epoch = this.projectEpoch;
+      this.beginOperation("archive-archetype");
+      try {
+        const result = await userModelingApi.archiveArchetype(
+          projectId,
+          archetype.persona_id,
+          { based_on_version_number: archetype.version_number },
+          accessToken,
+        );
+        if (this.isRequestCurrent(projectId, epoch))
+          await this.refreshArchetypes(projectId, accessToken, epoch);
+        return result;
+      } catch (error) {
+        this.captureError(error, projectId, epoch);
+        throw error;
+      } finally {
+        this.endOperation("archive-archetype", projectId, epoch);
       }
     },
 
