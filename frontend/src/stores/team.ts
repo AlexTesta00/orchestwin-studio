@@ -9,7 +9,6 @@ import type {
   AgentTeamGateDecisionAction,
   AgentTeamGateDecisionResponse,
   AgentTeamGateSubmissionResponse,
-  OwnerAgentRationaleInput,
   ProjectReadinessResponse,
   TeamEditResponse,
   TeamProposalGenerationResponse,
@@ -167,7 +166,6 @@ export const useTeamStore = defineStore("team", () => {
   async function editCurrent(
     targetProjectId: string,
     selectedAgentIds: readonly AgentIdentifier[],
-    ownerRationales: readonly OwnerAgentRationaleInput[],
     api: AgentTeamApi,
     authorize: TeamAuthorizedRequest,
   ): Promise<TeamEditResponse | null> {
@@ -175,7 +173,6 @@ export const useTeamStore = defineStore("team", () => {
       const result = await authorize((accessToken) =>
         api.editCurrentProjectTeamProposal(accessToken, targetProjectId, {
           selected_agent_ids: selectedAgentIds,
-          owner_rationales: ownerRationales,
         }),
       );
 
