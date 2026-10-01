@@ -240,6 +240,28 @@ describe("ProjectDesignEvaluationPanel", () => {
     ]);
   });
 
+  it.each([
+    [
+      "en",
+      "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
+    ],
+    [
+      "it",
+      "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
+    ],
+  ] as const)(
+    "introduces the reviews in %s without asking to regenerate the design",
+    async (locale, intro) => {
+      const api = fakeApi([run("run-1", [finding("UTF-001", "The guest name lacks a hint.")])]);
+      const wrapper = mountPanel(api, locale);
+      await flushPromises();
+
+      const history = wrapper.get('[data-testid="design-evaluation-history"]');
+      expect(history.get("p").text()).toBe(intro);
+      expect(history.text()).not.toMatch(/rigenera|regenerate/i);
+    },
+  );
+
   it("runs the static accessibility check and labels every run with its kind", async () => {
     const api = fakeApi([run("run-1", [finding("UTF-001", "The guest name lacks a hint.")])]);
     vi.mocked(api.evaluate).mockResolvedValueOnce(run("run-2", [], "s67-static-check"));

@@ -85,7 +85,7 @@ const messages = {
   en: {
     title: "The twins' review of the chosen design",
     intro:
-      "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, regenerate the design and evaluate again.",
+      "Each twin reads the mockup and reports simulated findings: they are design hypotheses to weigh, not evidence from real users. Bring a finding into the brief, the requirements or the design, bring the design up to date and evaluate again.",
     history: "All the reviews ({n})",
     evaluate: "Ask the twins to evaluate the design",
     autoEvaluate: "The review starts on its own when you apply a design.",
@@ -164,7 +164,7 @@ const messages = {
   it: {
     title: "La revisione dei twin sul design scelto",
     intro:
-      "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, rigenera il design e valuta di nuovo.",
+      "Ogni twin legge il mockup e riporta osservazioni simulate: sono ipotesi di design da pesare, non evidenze di utenti reali. Porta un'osservazione nel brief, nei requisiti o nel design, aggiorna il design e valuta di nuovo.",
     history: "Tutte le revisioni ({n})",
     evaluate: "Chiedi ai twin di valutare il design",
     autoEvaluate: "La valutazione parte da sola quando applichi un design.",

@@ -30,9 +30,9 @@ const messages = {
     remove: "Remove",
     close: "Close",
     doneOne:
-      "1 insight added to the brief, version {version}. Brief, team, twins, requirements and design need approval again.",
+      "1 insight added to the brief, version {version}. Brief, perspectives, twins, requirements and design need approval again.",
     doneMany:
-      "{count} insights added to the brief, version {version}. Brief, team, twins, requirements and design need approval again.",
+      "{count} insights added to the brief, version {version}. Brief, perspectives, twins, requirements and design need approval again.",
     alreadyApplied: "One insight had already been applied: remove it and try again.",
     dismissed: "One insight comes from a dismissed observation: remove it and try again.",
     failed: "The operation failed: {code}",
@@ -51,9 +51,9 @@ const messages = {
     remove: "Togli",
     close: "Chiudi",
     doneOne:
-      "Aggiunto al brief 1 spunto, versione {version}. Brief, squadra, twin, requisiti e design vanno approvati di nuovo.",
+      "Aggiunto al brief 1 spunto, versione {version}. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
     doneMany:
-      "Aggiunti al brief {count} spunti, versione {version}. Brief, squadra, twin, requisiti e design vanno approvati di nuovo.",
+      "Aggiunti al brief {count} spunti, versione {version}. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
     alreadyApplied: "Uno spunto era già stato applicato: toglilo e riprova.",
     dismissed: "Uno spunto viene da un'osservazione messa da parte: toglilo e riprova.",
     failed: "Operazione non riuscita: {code}",

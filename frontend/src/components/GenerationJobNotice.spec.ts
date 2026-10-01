@@ -2,10 +2,16 @@ import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
-import type { GenerationRequestJob } from "../api/generationJobs";
+import { GENERATION_OPERATIONS, type GenerationRequestJob } from "../api/generationJobs";
 import { expectAccessible } from "../test/axe";
 
 const STARTED_AT = "2026-09-28T10:00:00+00:00";
+
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
 
 function job(overrides: Partial<GenerationRequestJob> = {}): GenerationRequestJob {
   return {
@@ -200,7 +206,41 @@ describe("GenerationJobNotice", () => {
     expect(wrapper.text()).toContain(
       "The generation of the new round of the discussion did not succeed.",
     );
-    expect(wrapper.text()).toContain("The AI assistant cannot be reached.");
+    expect(wrapper.text()).toContain("The model cannot be reached.");
+  });
+
+  it.each([
+    [
+      "en",
+      "The User experience (UX) perspective is missing: open Perspectives and prepare them again.",
+    ],
+    ["it", "Manca la prospettiva Esperienza d'uso (UX): apri Prospettive e preparale di nuovo."],
+  ] as const)("names no step by its old name and speaks of no team in %s", (locale, missing) => {
+    for (const operation of GENERATION_OPERATIONS) {
+      for (const failure of [
+        null,
+        { operation, code: "PROVIDER_UNAVAILABLE", lost: false },
+        { operation, code: "UX_DESIGNER_REQUIRED", lost: false },
+        { operation, code: "REQUIREMENTS_ANALYST_REQUIRED", lost: false },
+        { operation, code: "GENERATION_JOB_NOT_FOUND", lost: true },
+      ]) {
+        const wrapper = mount(GenerationJobNotice, {
+          props: { job: failure === null ? job({ operation }) : null, failure, locale },
+        });
+        expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+        expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+        wrapper.unmount();
+      }
+    }
+    const refused = mount(GenerationJobNotice, {
+      props: {
+        job: null,
+        failure: { operation: "DESIGN_PROPOSAL", code: "UX_DESIGNER_REQUIRED", lost: false },
+        locale,
+      },
+    });
+    expect(refused.get("[data-testid='generation-job-failure']").text()).toContain(missing);
+    refused.unmount();
   });
 
   it("tells that a very long generation may still be ready later", () => {

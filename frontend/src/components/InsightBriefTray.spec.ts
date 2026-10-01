@@ -14,6 +14,12 @@ import InsightBriefTray from "./InsightBriefTray.vue";
 
 const authorize = <T>(operation: (accessToken: string) => Promise<T>) => operation("token");
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 function item(index: number, overrides: Partial<InsightTrayItem> = {}): InsightTrayItem {
   return {
     sourceKind: "TWIN_CHAT_INSIGHT",
@@ -141,15 +147,37 @@ describe("InsightBriefTray", () => {
     await wrapper.get('[data-testid="insight-brief-tray-apply"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[role="status"]').text()).toBe(
-      "2 insights added to the brief, version 4. Brief, team, twins, requirements and design need approval again.",
+      "2 insights added to the brief, version 4. Brief, perspectives, twins, requirements and design need approval again.",
     );
     tray.add("project-1", item(3));
     await flushPromises();
     await wrapper.get('[data-testid="insight-brief-tray-apply"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[role="status"]').text()).toBe(
-      "1 insight added to the brief, version 4. Brief, team, twins, requirements and design need approval again.",
+      "1 insight added to the brief, version 4. Brief, perspectives, twins, requirements and design need approval again.",
     );
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "it",
+      "Aggiunto al brief 1 spunto, versione 4. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
+    ],
+    [
+      "en",
+      "1 insight added to the brief, version 4. Brief, perspectives, twins, requirements and design need approval again.",
+    ],
+  ] as const)("names no step by its old name and speaks of no team in %s", async (locale, done) => {
+    useInsightTrayStore().add("project-1", item(1));
+    const wrapper = mountTray(fakeApi(), locale);
+    expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+    expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+    await wrapper.get('[data-testid="insight-brief-tray-apply"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="status"]').text()).toBe(done);
+    expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+    expect(wrapper.text()).not.toMatch(TEAM_WORDS);
     wrapper.unmount();
   });
 
@@ -184,7 +212,7 @@ describe("InsightBriefTray", () => {
     expect(tray.itemsOf("project-1")).toEqual([]);
     expect(wrapper.find('[data-testid="insight-brief-tray-apply"]').exists()).toBe(false);
     expect(wrapper.get('[role="status"]').text()).toBe(
-      "Aggiunti al brief 2 spunti, versione 4. Brief, squadra, twin, requisiti e design vanno approvati di nuovo.",
+      "Aggiunti al brief 2 spunti, versione 4. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
     );
     const close = wrapper.get('[data-testid="insight-brief-tray-close"]');
     expect(close.text()).toBe("Chiudi");
@@ -290,7 +318,7 @@ describe("InsightBriefTray", () => {
     finish();
     await flushPromises();
     expect(wrapper.get('[role="status"]').text()).toBe(
-      "Aggiunto al brief 1 spunto, versione 2. Brief, squadra, twin, requisiti e design vanno approvati di nuovo.",
+      "Aggiunto al brief 1 spunto, versione 2. Brief, prospettive, twin, requisiti e design vanno approvati di nuovo.",
     );
     wrapper.unmount();
   });

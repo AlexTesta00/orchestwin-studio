@@ -8,6 +8,12 @@ import DesignObservationList, {
   type ObservationFinding,
 } from "./DesignObservationList.vue";
 
+const OLD_STEP_NAMES =
+  /passo Squadra|Team step|passo Requisiti|Requirements step|passo Pacchetto|Package step|\bPacchetto\b/;
+
+const TEAM_WORDS =
+  /\b(?:squadr[ae]|teams?|agent[ei]|agents?|assistent[ei]|assistants?|specialist[ai]|specialists?|ruol[oi]|roles?|membr[oi]|members?)\b/i;
+
 const twin = { id: "twin-vb", name: "Volontari al banco" };
 const alternative = { id: "alt-1", code: "DES-001", title: "Vista Scheda" };
 
@@ -363,6 +369,35 @@ describe("design observation list", () => {
     expect(cards(wrapper)[0]?.text()).toContain("I confirm");
     expect(cards(wrapper)[0]?.text()).toContain("Not relevant");
   });
+
+  it.each([
+    ["it", ["Brief", "Requisiti", "Design"]],
+    ["en", ["Brief", "Requirements", "Design"]],
+  ] as const)(
+    "names the places where a finding goes, no step by its old name and no team, in %s",
+    (locale, targets) => {
+      const first = findings[0] as ObservationFinding;
+      const second = findings[1] as ObservationFinding;
+      const review = mountList({
+        locale,
+        validations: {
+          [key(first)]: { decision: "OWNER_CONFIRMED" },
+          [key(second)]: { decision: "OWNER_DISMISSED" },
+        },
+      });
+      const critiqueList = mountList({ locale, findings: null, critique });
+      expect(
+        review
+          .get("[data-testid='design-observation-bring']")
+          .findAll("button")
+          .map((button) => button.text()),
+      ).toEqual(targets);
+      for (const wrapper of [review, critiqueList]) {
+        expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
+        expect(wrapper.text()).not.toMatch(TEAM_WORDS);
+      }
+    },
+  );
 
   it("has no axe violations for a review and for a critique", async () => {
     const first = findings[0] as ObservationFinding;
