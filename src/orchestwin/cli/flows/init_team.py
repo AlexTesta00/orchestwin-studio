@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from orchestwin.cli.api import brief as brief_api
 from orchestwin.cli.api import team as team_api
 from orchestwin.cli.api.projects import approves
 from orchestwin.cli.console import Choice
@@ -93,10 +94,15 @@ def propose(journey: Journey) -> Mapping[str, object]:
         passthrough=(team_api.BLOCKED,),
     )
     if status >= 400:
-        agents = [str(issue.get("agent_id")) for issue in team_api.issues(document)]
+        issues = team_api.issues(document)
+        agents = [str(issue.get("agent_id")) for issue in issues]
+        sentences = [sentence for issue in issues if (sentence := contradiction(journey, issue))]
         raise CliError(
             "TEAM_BLOCKED",
-            values={"agents": ", ".join(agent_name(journey, agent) for agent in agents)},
+            values={
+                "agents": ", ".join(agent_name(journey, agent) for agent in agents),
+                "details": "".join(f" {sentence}" for sentence in sentences),
+            },
         )
     version = team_api.version(document)
     if version is None:
@@ -195,6 +201,58 @@ def refusals(journey: Journey, document: object) -> None:
             journey.say(f"init.team_issue_{code.lower()}", name=name)
         else:
             journey.say("init.team_issue", name=name, code=code)
+
+
+def contradiction(journey: Journey, issue: Mapping[str, object]) -> str | None:
+    excluded = _evidence(journey, issue.get("impossible_reasons"))
+    required = _evidence(journey, issue.get("mandatory_reasons"))
+    if not excluded or not required:
+        return None
+    return journey.text(
+        "init.team_blocked",
+        name=agent_name(journey, str(issue.get("agent_id"))),
+        excluded=excluded,
+        required=required,
+    )
+
+
+def _evidence(journey: Journey, reasons: object) -> str:
+    if not isinstance(reasons, list):
+        return ""
+    items = [item for item in reasons if isinstance(item, Mapping)]
+    proofs = [proof for item in items if isinstance(proof := item.get("evidence"), Mapping)]
+    terms = _unique(term for proof in proofs for term in _texts(proof.get("terms")))
+    fields = _unique(field for proof in proofs for field in _texts(proof.get("fields")))
+    if not terms:
+        codes = _texts([item.get("code") for item in items])
+        return ", ".join(_unique(_reason_text(journey, code) for code in codes))
+    quoted = ", ".join(journey.text("init.team_blocked_term", term=term) for term in terms)
+    if not fields:
+        return quoted
+    labels = ", ".join(_field_label(journey, field) for field in fields)
+    return journey.text("init.team_blocked_evidence", terms=quoted, fields=labels)
+
+
+def _reason_text(journey: Journey, code: str) -> str:
+    if code in team_api.REASON_CODES:
+        return journey.text(f"init.reason_{code.lower()}")
+    return code.lower().replace("_", " ")
+
+
+def _field_label(journey: Journey, field: str) -> str:
+    if field in brief_api.FIELDS:
+        return journey.text(f"init.field_{field}")
+    return field.replace("_", " ")
+
+
+def _texts(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _unique(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(values))
 
 
 def _edited(journey: Journey, status: int, document: object) -> Mapping[str, object]:
