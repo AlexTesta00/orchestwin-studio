@@ -8,6 +8,7 @@ import {
   provide,
   reactive,
   ref,
+  shallowRef,
   watch,
 } from "vue";
 
@@ -110,6 +111,8 @@ const editingRequirementId = ref<string | null>(null);
 const gateReason = ref("");
 const diffReasons = reactive<Record<string, string>>({});
 const storiesOpen = ref(false);
+const checksOpen = ref(false);
+const openRequirementIds = shallowRef<ReadonlySet<string>>(new Set());
 const highlighted = ref<string | null>(null);
 const decisionBar = ref<InstanceType<typeof UiDecisionBar> | null>(null);
 const barTarget = ref<HTMLElement | null>(null);
@@ -146,6 +149,24 @@ const messages = {
     criterionCount: ["acceptance criterion", "acceptance criteria"],
     scenarioCount: ["usage scenario", "usage scenarios"],
     viewLabel: "Views of the requirements",
+    digestBoth: [
+      "In short: {must} thing the application must do and {should} it should do.",
+      "In short: {must} things the application must do and {should} it should do.",
+    ],
+    digestMust: [
+      "In short: {must} thing the application must do.",
+      "In short: {must} things the application must do.",
+    ],
+    digestShould: [
+      "In short: {should} thing the application should do.",
+      "In short: {should} things the application should do.",
+    ],
+    digestRows: [
+      "The title is below: open the row to read the detail or propose a change.",
+      "The titles are below: open a row to read the detail or propose a change.",
+    ],
+    openAll: "Open every detail",
+    closeAll: "Close every detail",
     mustGroup: "Must do",
     shouldGroup: "Should do",
     askedBy: "Asked by",
@@ -173,6 +194,8 @@ const messages = {
     doneLabel: "When it is finished",
     mitigation: "Remedy",
     onlyIf: "Only if {condition}.",
+    checksTitle: "Acceptance criteria, risks and completion conditions ({count})",
+    checksPurpose: "They serve whoever writes the code and the automatic checks of `ut test`.",
     storiesTitle: "Stories and usage scenarios",
     benefit: "Why",
     trigger: "Starts when",
@@ -297,6 +320,24 @@ const messages = {
     criterionCount: ["criterio di verifica", "criteri di verifica"],
     scenarioCount: ["scenario d'uso", "scenari d'uso"],
     viewLabel: "Vista dei requisiti",
+    digestBoth: [
+      "In breve: {must} cosa che l'applicazione deve fare e {should} che dovrebbe fare.",
+      "In breve: {must} cose che l'applicazione deve fare e {should} che dovrebbe fare.",
+    ],
+    digestMust: [
+      "In breve: {must} cosa che l'applicazione deve fare.",
+      "In breve: {must} cose che l'applicazione deve fare.",
+    ],
+    digestShould: [
+      "In breve: {should} cosa che l'applicazione dovrebbe fare.",
+      "In breve: {should} cose che l'applicazione dovrebbe fare.",
+    ],
+    digestRows: [
+      "Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+      "Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    openAll: "Apri tutti i dettagli",
+    closeAll: "Chiudi tutti i dettagli",
     mustGroup: "Deve fare",
     shouldGroup: "Dovrebbe fare",
     askedBy: "Chiesto da",
@@ -324,6 +365,8 @@ const messages = {
     doneLabel: "Quando è finito",
     mitigation: "Rimedio",
     onlyIf: "Solo se {condition}.",
+    checksTitle: "Criteri di verifica, rischi e condizioni di fine lavoro ({count})",
+    checksPurpose: "Servono a chi scrive il codice e ai controlli automatici di `ut test`.",
     storiesTitle: "Storie e scenari d'uso",
     benefit: "Perché",
     trigger: "Inizia quando",
@@ -510,6 +553,32 @@ const summaryLine = computed(() => {
   return `${text.preparedBy} · ${counts.join(", ")}`;
 });
 
+const digest = computed(() => {
+  const total = requirements.value.length;
+
+  if (total === 0) {
+    return null;
+  }
+
+  const text = copy.value;
+  const must = requirements.value.filter((item) => item.priority === "MUST").length;
+  const should = total - must;
+  const lead =
+    should === 0
+      ? formOf(must, text.digestMust)
+      : must === 0
+        ? formOf(should, text.digestShould)
+        : formOf(must, text.digestBoth);
+
+  return `${fill(lead, { must, should })} ${formOf(total, text.digestRows)}`;
+});
+
+const allRequirementsOpen = computed(
+  () =>
+    requirements.value.length > 0 &&
+    requirements.value.every((requirement) => openRequirementIds.value.has(requirement.id)),
+);
+
 const coverageNotice = computed(() => {
   const missingCriteria = withoutCriteria.value;
   const missingStories = withoutStories.value;
@@ -564,6 +633,10 @@ const checkCards = computed<CheckCard[]>(() => {
     })),
   ];
 });
+const checkCodes = computed(() => new Set(checkCards.value.map((card) => card.code)));
+const checksTitle = computed(() =>
+  fill(copy.value.checksTitle, { count: checkCards.value.length }),
+);
 
 const storiesSummary = computed(() =>
   [
@@ -801,6 +874,21 @@ function counted(count: number, [singular, plural]: readonly [string, string]): 
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formOf(count: number, [one, many]: readonly [string, string]): string {
+  return count === 1 ? one : many;
+}
+
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ""));
+}
+
+function commandParts(text: string): { key: number; text: string; command: boolean }[] {
+  return text
+    .split("`")
+    .map((part, index) => ({ key: index, text: part, command: index % 2 === 1 }))
+    .filter((part) => part.text.length > 0);
+}
+
 function countSentence(count: number, [one, many]: readonly [string, string]): string {
   return count === 1
     ? one
@@ -843,6 +931,38 @@ function tabIdOf(target: ArtifactView): string | undefined {
 
 function itemClass(code: string): string {
   return highlighted.value === code ? "bg-petrol-on-night/12 ring-1 ring-petrol-on-night/60" : "";
+}
+
+function detailIdOf(requirement: RequirementPayload): string {
+  return `requirement-detail-${requirement.id}`;
+}
+
+function isRequirementOpen(requirement: RequirementPayload): boolean {
+  return openRequirementIds.value.has(requirement.id);
+}
+
+function openRequirements(ids: readonly string[]): void {
+  const closed = ids.filter((id) => !openRequirementIds.value.has(id));
+
+  if (closed.length > 0) {
+    openRequirementIds.value = new Set([...openRequirementIds.value, ...closed]);
+  }
+}
+
+function toggleRequirement(requirement: RequirementPayload): void {
+  const next = new Set(openRequirementIds.value);
+
+  if (!next.delete(requirement.id)) {
+    next.add(requirement.id);
+  }
+
+  openRequirementIds.value = next;
+}
+
+function toggleAllRequirements(): void {
+  openRequirementIds.value = allRequirementsOpen.value
+    ? new Set()
+    : new Set(requirements.value.map((requirement) => requirement.id));
 }
 
 function authorizedRequest<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
@@ -1268,6 +1388,12 @@ function onStoriesToggle(event: Event): void {
   }
 }
 
+function onChecksToggle(event: Event): void {
+  if (event.target instanceof HTMLDetailsElement) {
+    checksOpen.value = event.target.open;
+  }
+}
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window.matchMedia === "function" &&
@@ -1280,6 +1406,16 @@ async function openItem(code: string): Promise<void> {
 
   if (collapsedCodes.value.has(code)) {
     storiesOpen.value = true;
+  }
+
+  if (checkCodes.value.has(code)) {
+    checksOpen.value = true;
+  }
+
+  const requirement = requirements.value.find((item) => item.code === code);
+
+  if (requirement !== undefined) {
+    openRequirements([requirement.id]);
   }
 
   await nextTick();
@@ -1349,6 +1485,22 @@ watchUpstream(
     upstreamReloads.value += 1;
     if (props.autoLoad) void load();
   },
+);
+
+watch(
+  pendingDiffs,
+  (pending, previous) => {
+    const known = new Set((previous ?? []).map((diff) => diff.id));
+
+    openRequirements(
+      pending
+        .filter((diff) => !known.has(diff.id))
+        .flatMap((diff) => diff.operations)
+        .filter((operation) => operation.artifact_kind === "REQUIREMENT")
+        .map((operation) => operation.artifact_id),
+    );
+  },
+  { immediate: true },
 );
 
 onMounted(() => {
@@ -1622,6 +1774,28 @@ onBeforeUnmount(() => {
         class="grid gap-4"
         data-testid="requirements-text-view"
       >
+        <div
+          v-if="digest !== null"
+          class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
+        >
+          <p
+            class="m-0 min-w-0 flex-[1_1_320px] text-[15px] leading-normal text-on-night-2"
+            data-testid="requirements-digest"
+          >
+            {{ digest }}
+          </p>
+          <UiButton
+            v-if="requirements.length > 1"
+            variant="outline"
+            class="shrink-0"
+            :aria-expanded="allRequirementsOpen ? 'true' : 'false'"
+            data-testid="requirements-toggle-all"
+            @click="toggleAllRequirements"
+          >
+            {{ allRequirementsOpen ? copy.closeAll : copy.openAll }}
+          </UiButton>
+        </div>
+
         <section
           class="rounded-tile border border-night-line bg-night-raised px-5 pt-2 pb-2 sm:px-6"
           data-testid="requirements-groups"
@@ -1635,46 +1809,74 @@ onBeforeUnmount(() => {
                 v-for="requirement in group.items"
                 :key="requirement.id"
                 :class="[
-                  '-mx-3 grid gap-3 rounded-field border-b border-on-night/8 px-3 py-4 transition-colors duration-500 last:border-b-0 sm:grid-cols-[76px_minmax(0,1fr)_auto] sm:gap-4',
+                  '-mx-3 rounded-field border-b border-on-night/8 transition-colors duration-500 last:border-b-0',
                   itemClass(requirement.code),
                 ]"
                 :data-requirements-item="requirement.code"
                 tabindex="-1"
                 data-testid="requirement-row"
               >
-                <span class="font-mono text-xs text-on-night-3 sm:pt-[3px]">
-                  {{ requirement.code }}
-                </span>
-                <div class="min-w-0">
-                  <p class="m-0 text-base font-semibold">{{ requirement.title }}</p>
-                  <p class="m-0 mt-0.5 text-[15px] leading-normal">{{ requirement.statement }}</p>
-                  <div
-                    class="mt-2.5 flex flex-wrap items-center gap-2 text-[13px] text-on-night-3"
-                    data-testid="requirement-meta"
+                <button
+                  type="button"
+                  class="flex min-h-12 w-full cursor-pointer items-start gap-3 rounded-field px-3 py-3 text-left transition-colors duration-150 hover:bg-night-hover"
+                  :aria-expanded="isRequirementOpen(requirement) ? 'true' : 'false'"
+                  :aria-controls="detailIdOf(requirement)"
+                  data-testid="requirement-toggle"
+                  @click="toggleRequirement(requirement)"
+                >
+                  <span
+                    :class="[
+                      'inline-block w-3 shrink-0 text-xs leading-6 text-on-night-3 transition-transform duration-150',
+                      isRequirementOpen(requirement) ? 'rotate-90' : '',
+                    ]"
+                    aria-hidden="true"
+                    >▸</span
                   >
-                    <template v-if="twinNames(requirement).length > 0">
-                      <span>{{ copy.askedBy }}</span>
-                      <span
-                        v-for="name in twinNames(requirement)"
-                        :key="name"
-                        :title="name"
-                        class="inline-flex min-h-6 items-center rounded-pill border border-dashed border-violet-on-night px-2 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
-                        data-testid="requirement-twin"
-                        >{{ name }}</span
-                      >
-                      <span class="sr-only">{{ copy.twinsHypothesis }}</span>
-                      <span aria-hidden="true">·</span>
-                    </template>
-                    <span v-if="criteriaOf(requirement).length > 0">
-                      {{ copy.verification }}: {{ criteriaOf(requirement).join(", ") }}
-                    </span>
-                    <span v-else class="font-medium text-warn-on-night">
-                      {{ copy.noVerification }}
-                    </span>
+                  <span
+                    class="grid min-w-0 flex-1 gap-0.5 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-4"
+                  >
+                    <span class="font-mono text-xs text-on-night-3 sm:pt-[3px]">{{
+                      requirement.code
+                    }}</span
+                    >{{ " " }}<span class="text-base font-semibold">{{ requirement.title }}</span>
+                  </span>
+                </button>
+                <div
+                  v-show="isRequirementOpen(requirement)"
+                  :id="detailIdOf(requirement)"
+                  class="grid gap-4 pr-3 pb-4 pl-9 sm:pl-32"
+                  data-testid="requirement-detail"
+                >
+                  <div class="min-w-0">
+                    <p class="m-0 text-[15px] leading-normal">{{ requirement.statement }}</p>
+                    <div
+                      class="mt-2.5 flex flex-wrap items-center gap-2 text-[13px] text-on-night-3"
+                      data-testid="requirement-meta"
+                    >
+                      <template v-if="twinNames(requirement).length > 0">
+                        <span>{{ copy.askedBy }}</span>
+                        <span
+                          v-for="name in twinNames(requirement)"
+                          :key="name"
+                          :title="name"
+                          class="inline-flex min-h-6 items-center rounded-pill border border-dashed border-violet-on-night px-2 text-xs font-medium whitespace-nowrap text-violet-on-night-2"
+                          data-testid="requirement-twin"
+                          >{{ name }}</span
+                        >
+                        <span class="sr-only">{{ copy.twinsHypothesis }}</span>
+                        <span aria-hidden="true">·</span>
+                      </template>
+                      <span v-if="criteriaOf(requirement).length > 0">
+                        {{ copy.verification }}: {{ criteriaOf(requirement).join(", ") }}
+                      </span>
+                      <span v-else class="font-medium text-warn-on-night">
+                        {{ copy.noVerification }}
+                      </span>
+                    </div>
                   </div>
                   <form
                     v-if="editingRequirementId === requirement.id"
-                    class="mt-4 grid gap-4 rounded-field border border-night-line-strong bg-night-panel p-4"
+                    class="grid gap-4 rounded-field border border-night-line-strong bg-night-panel p-4"
                     data-testid="requirement-edit-form"
                     @submit.prevent="submitRevision"
                   >
@@ -1731,46 +1933,78 @@ onBeforeUnmount(() => {
                       <UiButton variant="quiet" @click="cancelEdit">{{ copy.cancel }}</UiButton>
                     </div>
                   </form>
+                  <UiButton
+                    v-else
+                    variant="outline"
+                    class="justify-self-start"
+                    data-testid="edit-requirement"
+                    @click="startEdit(requirement)"
+                  >
+                    {{ copy.edit }}
+                  </UiButton>
                 </div>
-                <UiButton
-                  v-if="editingRequirementId !== requirement.id"
-                  variant="outline"
-                  class="self-start justify-self-start"
-                  data-testid="edit-requirement"
-                  @click="startEdit(requirement)"
-                >
-                  {{ copy.edit }}
-                </UiButton>
               </li>
             </ul>
           </template>
         </section>
 
-        <div
+        <details
           v-if="checkCards.length > 0"
-          class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
+          class="group rounded-tile border border-night-line bg-night-raised"
+          :open="checksOpen"
           data-testid="requirements-checks"
+          @toggle="onChecksToggle"
         >
-          <div
-            v-for="card in checkCards"
-            :key="card.code"
-            :class="[
-              'rounded-panel border border-night-line bg-night-raised p-[18px] transition-colors duration-500',
-              itemClass(card.code),
-            ]"
-            :data-requirements-item="card.code"
-            tabindex="-1"
-            data-testid="requirements-check"
+          <summary
+            class="flex min-h-12 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5 px-5 py-3 [&::-webkit-details-marker]:hidden"
           >
-            <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
-              {{ card.label }} · {{ card.code }}
+            <span
+              class="inline-block text-xs text-on-night-3 group-open:rotate-90"
+              aria-hidden="true"
+              >▸</span
+            >
+            <span class="text-[15px] font-semibold">{{ checksTitle }}</span>
+          </summary>
+          <div class="grid gap-3 border-t border-night-line px-5 py-4">
+            <p
+              class="m-0 text-sm leading-normal text-on-night-2"
+              data-testid="requirements-checks-purpose"
+            >
+              <template v-for="part in commandParts(copy.checksPurpose)" :key="part.key">
+                <code
+                  v-if="part.command"
+                  class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"
+                  >{{ part.text }}</code
+                >
+                <template v-else>{{ part.text }}</template>
+              </template>
             </p>
-            <p class="m-0 mt-2 text-sm leading-normal">{{ card.text }}</p>
-            <p v-if="card.note !== null" class="m-0 mt-1.5 text-sm leading-normal text-on-night-2">
-              {{ card.note }}
-            </p>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+              <div
+                v-for="card in checkCards"
+                :key="card.code"
+                :class="[
+                  'rounded-panel border border-night-line bg-night-raised p-[18px] transition-colors duration-500',
+                  itemClass(card.code),
+                ]"
+                :data-requirements-item="card.code"
+                tabindex="-1"
+                data-testid="requirements-check"
+              >
+                <p class="m-0 font-mono text-[11px] tracking-[0.06em] text-on-night-3 uppercase">
+                  {{ card.label }} · {{ card.code }}
+                </p>
+                <p class="m-0 mt-2 text-sm leading-normal">{{ card.text }}</p>
+                <p
+                  v-if="card.note !== null"
+                  class="m-0 mt-1.5 text-sm leading-normal text-on-night-2"
+                >
+                  {{ card.note }}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
 
         <details
           v-if="stories.length + scenarios.length > 0"

@@ -18,6 +18,7 @@ import type {
   HumanGateEventPayload,
   HumanGatePayload,
   HumanGateStatus,
+  RequirementPriority,
   RequirementsReadinessPayload,
   RequirementsRevisionDecisionRequest,
   RequirementsRevisionPayload,
@@ -621,6 +622,44 @@ function noteOf(wrapper: ReturnType<typeof mountFlow>): string {
   return (wrapper.get('[data-testid="decision-note"]').element as HTMLTextAreaElement).value;
 }
 
+function rowOf(wrapper: ReturnType<typeof mountFlow>, code: string) {
+  return wrapper.get(`[data-testid="requirement-row"][data-requirements-item="${code}"]`);
+}
+
+async function openRow(wrapper: ReturnType<typeof mountFlow>, code: string): Promise<void> {
+  await rowOf(wrapper, code).get('[data-testid="requirement-toggle"]').trigger("click");
+}
+
+function spokenText(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((hidden) => hidden.remove());
+  return (copy.textContent ?? "").trim();
+}
+
+function expandedOf(wrapper: ReturnType<typeof mountFlow>): (string | undefined)[] {
+  return wrapper
+    .findAll('[data-testid="requirement-toggle"]')
+    .map((toggle) => toggle.attributes("aria-expanded"));
+}
+
+function prioritized(
+  priorities: readonly RequirementPriority[],
+): RequirementsSpecificationVersionPayload {
+  return {
+    ...VERSION,
+    specification: {
+      ...VERSION.specification,
+      requirements: priorities.map((priority, index) => ({
+        ...VERSION.specification.requirements[0]!,
+        id: `00000000-0000-4000-8000-0000000004${String(index).padStart(2, "0")}`,
+        code: `REQ-${String(index + 1).padStart(3, "0")}`,
+        title: `Requirement ${index + 1}`,
+        priority,
+      })),
+    },
+  };
+}
+
 describe("ProjectRequirementsFlow", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -673,7 +712,8 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true);
 
     await flushPromises();
-    await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
+    await openRow(wrapper, "REQ-001");
+    await rowOf(wrapper, "REQ-001").get('[data-testid="edit-requirement"]').trigger("click");
     expect(
       wrapper
         .find('[data-testid="requirement-row"] [data-testid="requirement-edit-form"]')
@@ -854,7 +894,7 @@ describe("ProjectRequirementsFlow", () => {
 
   it("shows the requirements by priority, who asked for them and how they are checked", async () => {
     const api = readyApi(null, RICH_VERSION);
-    const wrapper = mountFlow(api, true);
+    const wrapper = mountFlow(api, true, { attach: true });
     await flushPromises();
 
     expect(wrapper.get('[data-testid="requirements-summary"]').text()).toBe(
@@ -869,6 +909,16 @@ describe("ProjectRequirementsFlow", () => {
       "REQ-001",
       "REQ-002",
     ]);
+    expect(
+      rows.map((row) => spokenText(row.get('[data-testid="requirement-toggle"]').element)),
+    ).toEqual(["REQ-001 Create reservations", "REQ-002 Works on tablets"]);
+    expect(rows.map((row) => row.get('[data-testid="requirement-detail"]').isVisible())).toEqual([
+      false,
+      false,
+    ]);
+
+    await wrapper.get('[data-testid="requirements-toggle-all"]').trigger("click");
+
     expect(rows[0]!.get('[data-testid="requirement-meta"]').text()).toContain("Asked by");
     expect(rows[0]!.get('[data-testid="requirement-twin"]').text()).toBe("Receptionist Twin");
     expect(rows[0]!.get('[data-testid="requirement-twin"]').classes()).toContain("border-dashed");
@@ -885,6 +935,10 @@ describe("ProjectRequirementsFlow", () => {
     );
     expect(notice.find("button").exists()).toBe(false);
 
+    const checks = wrapper.get('[data-testid="requirements-checks"]');
+    expect(checks.attributes("open")).toBeUndefined();
+    await checks.get("summary").trigger("click");
+    expect(checks.attributes("open")).toBeDefined();
     expect(
       wrapper
         .findAll('[data-testid="requirements-check"]')
@@ -904,6 +958,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
       "One requirement has no way to be checked yet: if you approve now, it stays unchecked.",
     );
+    wrapper.unmount();
   });
 
   it("counts the gaps in words and lists the codes in Italian", async () => {
@@ -968,6 +1023,7 @@ describe("ProjectRequirementsFlow", () => {
     wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "AC-001");
     await flushPromises();
 
+    expect(wrapper.get('[data-testid="requirements-checks"]').attributes("open")).toBeDefined();
     expect(document.activeElement?.getAttribute("data-requirements-item")).toBe("AC-001");
     wrapper.unmount();
   });
@@ -1246,6 +1302,8 @@ describe("ProjectRequirementsFlow", () => {
     await flushPromises();
     await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
     (wrapper.get('[data-testid="requirements-stories"]').element as HTMLDetailsElement).open = true;
+    (wrapper.get('[data-testid="requirements-checks"]').element as HTMLDetailsElement).open = true;
+    await wrapper.get('[data-testid="requirements-toggle-all"]').trigger("click");
 
     await expectAccessible(wrapper.element);
     wrapper.unmount();
@@ -1357,6 +1415,7 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true);
     await flushPromises();
 
+    await openRow(wrapper, "REQ-001");
     await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
     await wrapper.get('[data-testid="submit-requirements-revision"]').trigger("submit");
     await flushPromises();
@@ -1432,6 +1491,355 @@ describe("ProjectRequirementsFlow", () => {
     expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeUndefined();
     await expectAccessible(wrapper.element);
+  });
+});
+
+describe("ProjectRequirementsFlow and the titles first", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it.each([
+    [
+      "several things it must do and several it should do",
+      "en",
+      ["MUST", "MUST", "MUST", "SHOULD", "COULD"],
+      "In short: 3 things the application must do and 2 it should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "several things it must do and several it should do",
+      "it",
+      ["MUST", "MUST", "MUST", "SHOULD", "COULD"],
+      "In breve: 3 cose che l'applicazione deve fare e 2 che dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "one thing it must do and one it should do",
+      "en",
+      ["MUST", "SHOULD"],
+      "In short: 1 thing the application must do and 1 it should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "one thing it must do and one it should do",
+      "it",
+      ["MUST", "SHOULD"],
+      "In breve: 1 cosa che l'applicazione deve fare e 1 che dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "only things it must do",
+      "en",
+      ["MUST", "MUST"],
+      "In short: 2 things the application must do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "only things it must do",
+      "it",
+      ["MUST", "MUST"],
+      "In breve: 2 cose che l'applicazione deve fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "a single thing it must do",
+      "en",
+      ["MUST"],
+      "In short: 1 thing the application must do. The title is below: open the row to read the detail or propose a change.",
+    ],
+    [
+      "a single thing it must do",
+      "it",
+      ["MUST"],
+      "In breve: 1 cosa che l'applicazione deve fare. Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "only things it should do",
+      "en",
+      ["SHOULD", "WONT_FOR_NOW"],
+      "In short: 2 things the application should do. The titles are below: open a row to read the detail or propose a change.",
+    ],
+    [
+      "only things it should do",
+      "it",
+      ["SHOULD", "WONT_FOR_NOW"],
+      "In breve: 2 cose che l'applicazione dovrebbe fare. Qui sotto trovi i titoli: apri una riga per leggere il dettaglio o proporre una modifica.",
+    ],
+    [
+      "a single thing it should do",
+      "en",
+      ["COULD"],
+      "In short: 1 thing the application should do. The title is below: open the row to read the detail or propose a change.",
+    ],
+    [
+      "a single thing it should do",
+      "it",
+      ["COULD"],
+      "In breve: 1 cosa che l'applicazione dovrebbe fare. Qui sotto trovi il titolo: apri la riga per leggere il dettaglio o proporre una modifica.",
+    ],
+  ] as const)(
+    "opens the text with a digest of %s in %s",
+    async (_case, locale, priorities, sentence) => {
+      const wrapper = mountFlow(readyApi(null, prioritized(priorities)), true, { locale });
+      await flushPromises();
+
+      const text = wrapper.get('[data-testid="requirements-text-view"]');
+      const digest = text.get('[data-testid="requirements-digest"]');
+      expect(digest.text()).toBe(sentence);
+      expect(text.element.firstElementChild?.contains(digest.element)).toBe(true);
+      expect(
+        wrapper
+          .get('[data-testid="requirements-summary"]')
+          .element.compareDocumentPosition(digest.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(wrapper.find('[data-testid="requirements-toggle-all"]').exists()).toBe(
+        priorities.length > 1,
+      );
+    },
+  );
+
+  it("shows each requirement as a closed row with its code and title that opens on click", async () => {
+    const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale: "it" });
+    await flushPromises();
+
+    const row = rowOf(wrapper, "REQ-001");
+    const toggle = row.get('[data-testid="requirement-toggle"]');
+    const detail = row.get('[data-testid="requirement-detail"]');
+    expect(toggle.element.tagName).toBe("BUTTON");
+    expect(toggle.attributes("type")).toBe("button");
+    expect(spokenText(toggle.element)).toBe("REQ-001 Create reservations");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(toggle.attributes("aria-controls")).toBe(detail.attributes("id"));
+    expect(detail.isVisible()).toBe(false);
+    expect(row.get("p").isVisible()).toBe(false);
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.get("p").text()).toBe("The system must create reservations.");
+    const meta = detail.get('[data-testid="requirement-meta"]');
+    expect(meta.text()).toContain("Chiesto da");
+    expect(meta.get('[data-testid="requirement-twin"]').text()).toBe("Receptionist Twin");
+    expect(meta.text()).toContain("Verifica: AC-001");
+    expect(detail.get('[data-testid="edit-requirement"]').text()).toBe("Proponi modifica");
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(detail.isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it.each([
+    ["en", "Open every detail", "Close every detail"],
+    ["it", "Apri tutti i dettagli", "Chiudi tutti i dettagli"],
+  ] as const)("opens and closes every row at once in %s", async (locale, openAll, closeAll) => {
+    const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale });
+    await flushPromises();
+
+    const all = wrapper.get('[data-testid="requirements-toggle-all"]');
+    const details = () =>
+      wrapper.findAll('[data-testid="requirement-detail"]').map((detail) => detail.isVisible());
+    expect(all.element.tagName).toBe("BUTTON");
+    expect(all.attributes("type")).toBe("button");
+    expect(all.text()).toBe(openAll);
+    expect(all.attributes("aria-expanded")).toBe("false");
+    expect(
+      all.element.compareDocumentPosition(
+        wrapper.get('[data-testid="requirements-groups"]').element,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await all.trigger("click");
+
+    expect(expandedOf(wrapper)).toEqual(["true", "true"]);
+    expect(details()).toEqual([true, true]);
+    expect(all.text()).toBe(closeAll);
+    expect(all.attributes("aria-expanded")).toBe("true");
+
+    await all.trigger("click");
+
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    expect(details()).toEqual([false, false]);
+    expect(all.text()).toBe(openAll);
+    expect(all.attributes("aria-expanded")).toBe("false");
+
+    await openRow(wrapper, "REQ-001");
+    expect(all.text()).toBe(openAll);
+    await openRow(wrapper, "REQ-002");
+    expect(all.text()).toBe(closeAll);
+    expect(all.attributes("aria-expanded")).toBe("true");
+    wrapper.unmount();
+  });
+
+  it("opens the row of a requirement and the block of the checks that the diagram points to", async () => {
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: {
+        projectId: PROJECT_ID,
+        locale: "it",
+        autoLoad: true,
+        authorize,
+        api: readyApi(null, RICH_VERSION),
+      },
+      global: { plugins: [createAppI18n("it")], stubs: { ProjectDiagramsView: true } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "REQ-002");
+    await flushPromises();
+
+    const row = rowOf(wrapper, "REQ-002");
+    const detail = row.get('[data-testid="requirement-detail"]');
+    expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(true);
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.text()).toContain("The desk can use the app on a tablet.");
+    expect(document.activeElement).toBe(row.element);
+    expect(row.classes()).toContain("ring-petrol-on-night/60");
+    const checks = wrapper.get('[data-testid="requirements-checks"]');
+    expect(checks.attributes("open")).toBeUndefined();
+
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "AC-001");
+    await flushPromises();
+
+    const card = checks.get('[data-requirements-item="AC-001"]');
+    expect(checks.attributes("open")).toBeDefined();
+    expect(card.isVisible()).toBe(true);
+    expect(document.activeElement).toBe(card.element);
+    expect(card.classes()).toContain("ring-petrol-on-night/60");
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    wrapper.unmount();
+  });
+
+  it("proposes a change from inside an open row and keeps the row open", async () => {
+    const api = readyApi(null, RICH_VERSION);
+    const wrapper = mountFlow(api, true, { attach: true, locale: "it" });
+    await flushPromises();
+
+    await openRow(wrapper, "REQ-001");
+    const row = rowOf(wrapper, "REQ-001");
+    await row.get('[data-testid="edit-requirement"]').trigger("click");
+
+    const form = row.get('[data-testid="requirement-edit-form"]');
+    expect(form.isVisible()).toBe(true);
+    expect(row.find('[data-testid="edit-requirement"]').exists()).toBe(false);
+    await form
+      .get('[data-testid="requirement-statement"]')
+      .setValue("The system must create guest reservations.");
+    await form.get('[data-testid="submit-requirements-revision"]').trigger("submit");
+    await flushPromises();
+
+    expect(api.proposedSpecification?.requirements.map((item) => item.statement)).toEqual([
+      "The system must create guest reservations.",
+      "The desk can use the app on a tablet.",
+    ]);
+    expect(wrapper.get('[data-testid="requirements-pending-change"]').text()).toContain(
+      "Prima · REQ-001",
+    );
+    expect(row.find('[data-testid="requirement-edit-form"]').exists()).toBe(false);
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+    expect(row.get('[data-testid="requirement-detail"]').isVisible()).toBe(true);
+    expect(row.get('[data-testid="edit-requirement"]').text()).toBe("Proponi modifica");
+    wrapper.unmount();
+  });
+
+  it("opens by itself the row of a requirement with a change waiting for a decision", async () => {
+    const api = readyApi(PENDING_GATE, RICH_VERSION);
+    api.diffs = [DIFF];
+    const readiness = vi.spyOn(api, "readiness");
+    const wrapper = mountFlow(api, true, { attach: true });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="requirements-pending-change"]').text()).toContain(
+      "Before · REQ-001",
+    );
+    expect(expandedOf(wrapper)).toEqual(["true", "false"]);
+    const row = rowOf(wrapper, "REQ-001");
+    expect(row.get('[data-testid="requirement-detail"]').isVisible()).toBe(true);
+
+    await row.get('[data-testid="requirement-toggle"]').trigger("click");
+    await wrapper.setProps({ upstream: "twins-1:APPROVED" });
+    await wrapper.setProps({ upstream: "twins-2:APPROVED" });
+    await flushPromises();
+
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(true);
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    wrapper.unmount();
+  });
+
+  it.each([
+    [
+      "en",
+      "Acceptance criteria, risks and completion conditions (3)",
+      "They serve whoever writes the code and the automatic checks of ut test.",
+    ],
+    [
+      "it",
+      "Criteri di verifica, rischi e condizioni di fine lavoro (3)",
+      "Servono a chi scrive il codice e ai controlli automatici di ut test.",
+    ],
+  ] as const)(
+    "keeps the criteria, the risks and the completion conditions in a collapsed block in %s",
+    async (locale, summary, purpose) => {
+      const wrapper = mountFlow(readyApi(null, RICH_VERSION), true, { attach: true, locale });
+      await flushPromises();
+
+      const checks = wrapper.get('[data-testid="requirements-checks"]');
+      const cards = () =>
+        wrapper.findAll('[data-testid="requirements-check"]').map((card) => card.isVisible());
+      expect(checks.element.tagName).toBe("DETAILS");
+      expect(checks.attributes("open")).toBeUndefined();
+      expect(spokenText(checks.get("summary").element)).toBe(summary);
+      expect(cards()).toEqual([false, false, false]);
+      expect(
+        wrapper
+          .get('[data-testid="requirements-groups"]')
+          .element.compareDocumentPosition(checks.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        checks.element.compareDocumentPosition(
+          wrapper.get('[data-testid="requirements-stories"]').element,
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      await checks.get("summary").trigger("click");
+      await flushPromises();
+
+      expect(checks.attributes("open")).toBeDefined();
+      const content = checks.element.querySelector("summary + div");
+      expect(content?.firstElementChild?.getAttribute("data-testid")).toBe(
+        "requirements-checks-purpose",
+      );
+      const first = checks.get('[data-testid="requirements-checks-purpose"]');
+      expect(first.text()).toBe(purpose);
+      expect(first.findAll("code").map((item) => item.text())).toEqual(["ut test"]);
+      expect(cards()).toEqual([true, true, true]);
+      wrapper.unmount();
+    },
+  );
+
+  it("has no axe violations on the text with every row closed and with one row open", async () => {
+    const wrapper = mountFlow(readyApi(PENDING_GATE, RICH_VERSION), true, {
+      attach: true,
+      locale: "it",
+    });
+    await flushPromises();
+
+    const text = wrapper.get('[data-testid="requirements-text-view"]');
+    expect(expandedOf(wrapper)).toEqual(["false", "false"]);
+    await expectAccessible(text.element);
+
+    await openRow(wrapper, "REQ-002");
+
+    expect(expandedOf(wrapper)).toEqual(["false", "true"]);
+    await expectAccessible(text.element);
+    wrapper.unmount();
   });
 });
 
@@ -1546,6 +1954,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
       "Add the search by name.",
     );
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
+    expect(expandedOf(wrapper)).toEqual(["true"]);
 
     await change.get('[data-testid="approve-requirements-diff"]').trigger("click");
     await flushPromises();
@@ -1558,9 +1967,9 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
       "access-token",
     );
     expect(wrapper.find('[data-testid="requirements-pending-change"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="requirements-text-view"]').text()).toContain(
-      "The system must create guest reservations.",
-    );
+    const detail = rowOf(wrapper, "REQ-001").get('[data-testid="requirement-detail"]');
+    expect(detail.isVisible()).toBe(true);
+    expect(detail.text()).toContain("The system must create guest reservations.");
     const primary = wrapper.get('[data-testid="decision-primary"]');
     expect(primary.text()).toBe("Approve the requirements");
     expect(primary.attributes("disabled")).toBeUndefined();
@@ -1764,6 +2173,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     expect(wrapper.find('[data-testid="requirements-change"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="requirements-error"]').exists()).toBe(false);
 
+    await openRow(wrapper, "REQ-001");
     await wrapper.get('[data-testid="edit-requirement"]').trigger("click");
     await wrapper.get('[data-testid="submit-requirements-revision"]').trigger("submit");
     await flushPromises();
