@@ -2,8 +2,8 @@ from __future__ import annotations
 
 MESSAGES = {
     "definition.help": {
-        "it": "Leggi la Definizione del progetto, anche dalla cartella locale.",
-        "en": "Read the project Definition, including from the local folder.",
+        "it": "Leggi la Definizione del progetto o richiedi esplicitamente i journey.",
+        "en": "Read the project Definition or explicitly request journeys.",
     },
     "definition.option_all": {
         "it": "mostra dettagli, collegamenti e fonti",
@@ -12,6 +12,27 @@ MESSAGES = {
     "definition.option_json": {
         "it": "mostra la specifica completa in JSON",
         "en": "show the complete specification as JSON",
+    },
+    "definition.option_journeys": {
+        "it": "richiedi journey per gli scenari della Definizione",
+        "en": "request journeys for the Definition scenarios",
+    },
+    "definition.journey_request": {
+        "it": "Richiedi journey per gli scenari della Definizione corrente: descrivi fasi e azioni ordinate, punti di contatto fondati, criticità come ipotesi e bisogni collegati. Conserva gli altri contenuti e i journey già presenti.",
+        "en": "Request journeys for the current Definition scenarios: describe ordered phases and actions, grounded touchpoints, difficulties as hypotheses and linked needs. Preserve the other contents and existing journeys.",
+    },
+    "definition.journeys": {"it": "Journey", "en": "Journey"},
+    "definition.journey_count": {"it": "Journey: {count}.", "en": "Journeys: {count}."},
+    "definition.phases": {"it": "Fasi", "en": "Phases"},
+    "definition.action": {"it": "Azione", "en": "Action"},
+    "definition.touchpoint": {"it": "Punto di contatto", "en": "Touchpoint"},
+    "definition.errors.DEFINITION_JOURNEYS_OPTIONS": {
+        "it": "Usa `ut definition journeys` per richiederli; `--all` e `--json` leggono la Definizione con `ut definition`.",
+        "en": "Use `ut definition journeys` to request them; `--all` and `--json` read the Definition with `ut definition`.",
+    },
+    "definition.errors.REQUIREMENTS_REVISION_PENDING": {
+        "it": "Decidi prima la revisione della Definizione in attesa con `ut init`.",
+        "en": "Decide the pending Definition revision first with `ut init`.",
     },
     "definition.heading": {
         "it": "Definizione (versione {version})",

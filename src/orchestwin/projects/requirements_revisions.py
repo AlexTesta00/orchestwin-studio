@@ -7,6 +7,7 @@ from typing import Final
 from uuid import UUID
 
 from orchestwin.projects.requirements import Requirement, UserStory
+from orchestwin.projects.requirements_journeys import UserJourney
 from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     canonical_json,
@@ -30,7 +31,8 @@ REQUIREMENTS_DIFF_SCHEMA_VERSION: Final = 1
 _MAX_DECISION_REASON_LENGTH: Final = 2000
 
 type RequirementsArtifact = (
-    UserNeed
+    UserJourney
+    | UserNeed
     | Requirement
     | UserStory
     | AcceptanceCriterion
@@ -44,6 +46,7 @@ class RequirementsArtifactKind(StrEnum):
     """Artifact collections that can change in a specification diff."""
 
     NEED = "NEED"
+    JOURNEY = "JOURNEY"
     REQUIREMENT = "REQUIREMENT"
     USER_STORY = "USER_STORY"
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
@@ -529,6 +532,8 @@ def materialize_approved_requirements_diff(
 
 def _artifact_kind(artifact: RequirementsArtifact) -> RequirementsArtifactKind:
     """Return the collection kind of one typed requirements artifact."""
+    if isinstance(artifact, UserJourney):
+        return RequirementsArtifactKind.JOURNEY
     if isinstance(artifact, UserNeed):
         return RequirementsArtifactKind.NEED
     if isinstance(artifact, Requirement):
@@ -554,6 +559,7 @@ def _collections(
 ) -> tuple[tuple[RequirementsArtifactKind, tuple[RequirementsArtifact, ...]], ...]:
     """Return every revisable collection in deterministic kind order."""
     return (
+        (RequirementsArtifactKind.JOURNEY, specification.journeys),
         (RequirementsArtifactKind.NEED, specification.needs),
         (RequirementsArtifactKind.REQUIREMENT, specification.requirements),
         (RequirementsArtifactKind.USER_STORY, specification.user_stories),

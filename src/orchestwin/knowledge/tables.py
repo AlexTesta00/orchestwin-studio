@@ -36,6 +36,19 @@ _CRITIQUE_ASPECTS: Final = (
 )
 _STAGE_COLUMNS: Final = {
     _REQUIREMENTS_STAGE: {
+        "journeys": (
+            "code",
+            "title",
+            "scenario",
+            "actor",
+            "phase_number",
+            "phase_title",
+            "action",
+            "touchpoint",
+            "criticalities",
+            "needs",
+            "sources",
+        ),
         "needs": (
             "code",
             "title",
@@ -163,9 +176,10 @@ TABLE_COLUMNS: Final = {
     table_document(stage, name): columns
     for stage, tables in _STAGE_COLUMNS.items()
     for name, columns in tables.items()
-    if name != "needs"
+    if name not in ("needs", "journeys")
 }
 NEEDS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["needs"]
+JOURNEYS_TABLE_COLUMNS: Final = _STAGE_COLUMNS[_REQUIREMENTS_STAGE]["journeys"]
 CRITIQUE_VERDICT_COLUMNS: Final = ("verdict", "quote")
 REQUIREMENTS_CHAIN_COLUMNS: Final = {
     "requirements": ("need_ids",),
@@ -611,6 +625,24 @@ def requirements_tables(specification: Mapping[str, object]) -> dict[str, str]:
                 }
             )
         extra = REQUIREMENTS_CHAIN_COLUMNS
+        if specification.get("journeys"):
+            tables["journeys"] = [
+                {
+                    "code": journey["code"],
+                    "title": journey["title"],
+                    "scenario": _code(journey["scenario_id"], scenario_codes),
+                    "actor": scenario_actors[str(journey["scenario_id"])],
+                    "phase_number": index,
+                    "phase_title": phase["title"],
+                    "action": phase["action"],
+                    "touchpoint": phase["touchpoint"],
+                    "criticalities": phase["criticalities"],
+                    "needs": _references(phase["need_ids"], need_codes),
+                    "sources": _source_cells(specification, journey["sources"]),
+                }
+                for journey in specification["journeys"]
+                for index, phase in enumerate(journey["phases"], 1)
+            ]
     return _stage_tables(_REQUIREMENTS_STAGE, tables, extra)
 
 
@@ -647,6 +679,7 @@ def knowledge_tables(
 
 __all__ = [
     "CRITIQUE_VERDICT_COLUMNS",
+    "JOURNEYS_TABLE_COLUMNS",
     "NEEDS_TABLE_COLUMNS",
     "REQUIREMENTS_CHAIN_COLUMNS",
     "TABLE_COLUMNS",

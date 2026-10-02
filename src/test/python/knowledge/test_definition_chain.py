@@ -38,7 +38,7 @@ NEW_PROJECT = UUID("11111111-1111-4111-8111-111111119201")
 NEW_BRIEF = UUID("22222222-2222-4222-8222-222222229201")
 
 
-def definition_documents(schema_version: int = 2):
+def definition_documents(schema_version: int = 2, *, journeys: bool = False):
     documents = real_documents()
     if schema_version == 1:
         return documents
@@ -85,6 +85,32 @@ def definition_documents(schema_version: int = 2):
         )
     for item in (*specification["requirements"], *specification["user_stories"]):
         item["need_ids"] = [NEED_ID]
+    if journeys:
+        specification["journeys"] = [
+            {
+                "id": str(UUID(int=9232)),
+                "code": "JRN-001",
+                "title": "Accogliere un ospite",
+                "scenario_id": specification["scenarios"][0]["id"],
+                "sources": [source, external],
+                "phases": [
+                    {
+                        "title": "Verifica iniziale",
+                        "action": "Cercare il nome nella lista.",
+                        "touchpoint": "Lista degli ospiti",
+                        "criticalities": ["Possibili omonimi."],
+                        "need_ids": [NEED_ID],
+                    },
+                    {
+                        "title": "Accoglienza",
+                        "action": "Confermare il nome con l'ospite.",
+                        "touchpoint": None,
+                        "criticalities": [],
+                        "need_ids": [NEED_ID],
+                    },
+                ],
+            }
+        ]
     bound = specification_from_snapshot(specification)
     previous = documents["requirements"]["content_hash"]
     documents["requirements"]["specification"] = bound.to_snapshot()
@@ -96,9 +122,10 @@ def definition_documents(schema_version: int = 2):
     return documents
 
 
-def definition_folder(schema_version: int = 2):
+def definition_folder(schema_version: int = 2, *, journeys: bool = False):
     sources = sources_of(
-        stage_versions(definition_documents(schema_version)), project_id=REAL_PROJECT_ID
+        stage_versions(definition_documents(schema_version, journeys=journeys)),
+        project_id=REAL_PROJECT_ID,
     )
     return build_knowledge_folder(sources, version_number=1, created_at=PUBLISHED_AT)
 
@@ -262,3 +289,80 @@ def test_published_schema_distinguishes_legacy_and_enriched_definitions() -> Non
     assert not validator.is_valid(invalid)
     with pytest.raises(KnowledgeSchemaError):
         validate_document("requirements", invalid)
+
+
+@pytest.mark.parametrize("folder_version", [2, 3])
+def test_journey_import_preserves_phase_order_and_sources_and_remaps_every_link(
+    folder_version: int,
+) -> None:
+    folder = definition_folder(journeys=True)
+    verified = verify_folder(
+        schema_two_files(folder.files) if folder_version == 2 else folder.files
+    )
+    before = verified.documents["requirements"]["specification"]["journeys"][0]
+    imported = plan_project_import(
+        verified,
+        project_id=NEW_PROJECT,
+        brief_version_id=NEW_BRIEF,
+        owner_user_id=OWNER_ID,
+        created_at=PUBLISHED_AT,
+    )
+    after = plan_documents(imported, owner_user_id=OWNER_ID, created_at=PUBLISHED_AT)
+    journey = after["requirements"]["specification"]["journeys"][0]
+    assert journey["id"] == imported.identities[before["id"]]
+    assert journey["scenario_id"] == imported.identities[before["scenario_id"]]
+    assert [phase["title"] for phase in journey["phases"]] == ["Verifica iniziale", "Accoglienza"]
+    assert all(phase["need_ids"] == [imported.identities[NEED_ID]] for phase in journey["phases"])
+    assert next(
+        source for source in journey["sources"] if source["kind"] == "SYSTEM_ARTIFACT"
+    ) == next(source for source in before["sources"] if source["kind"] == "SYSTEM_ARTIFACT")
+    assert document_differences(verified.documents, after) == []
+    republished = build_knowledge_folder(
+        sources_of(stage_versions(after), project_id=NEW_PROJECT),
+        version_number=1,
+        created_at=PUBLISHED_AT,
+    )
+    assert view_differences(folder.files, republished.files) == []
+    assert any(item["kind"] == "JOURNEY" for item in folder.manifest["identifiers"])
+
+
+@pytest.mark.parametrize("language", ["en", "it"])
+def test_journey_csv_document_and_diagram_show_ordered_phases_and_real_links(language: str) -> None:
+    documents = definition_documents(journeys=True)
+    specification = documents["requirements"]["specification"]
+    table = requirements_tables(specification)[table_document("requirements", "journeys")]
+    rows = list(csv.DictReader(io.StringIO(table)))
+    assert [row["phase_number"] for row in rows] == ["1", "2"]
+    assert [row["phase_title"] for row in rows] == ["Verifica iniziale", "Accoglienza"]
+    assert all(row["scenario"] == "SCN-001" and row["needs"] == "NED-001" for row in rows)
+    assert "https://example.org/owner-material" in rows[0]["sources"]
+    sources = sources_of(stage_versions(documents), project_id=REAL_PROJECT_ID)
+    text = requirements_markdown(sources.requirements, sources.requirements_gate, locale=language)
+    assert "## Journey" in text
+    assert text.index("#### 1. Verifica iniziale") < text.index("#### 2. Accoglienza")
+    assert "Lista degli ospiti" in text and "Possibili omonimi." in text
+    assert "](\u0023scn-001)" in text and "](\u0023ned-001)" in text
+    assert ("Punto di contatto" if language == "it" else "Touchpoint") in text
+    diagram = requirements_traceability_diagram(specification, locale=language).source
+    assert f'SCN001 -->|"{"espande" if language == "it" else "expands"}"| JRN001' in diagram
+    assert f'JRN001 -->|"{"rivela" if language == "it" else "reveals"}"| NED001' in diagram
+
+
+def test_ordinary_definition_omits_journey_views_and_schema_rejects_invalid_journeys() -> None:
+    document = definition_documents()["requirements"]
+    before = deepcopy(document["specification"])
+    parsed = specification_from_snapshot(before)
+    assert parsed.to_snapshot() == before and "journeys" not in before
+    assert table_document("requirements", "journeys") not in requirements_tables(before)
+    schema = knowledge_schemas()["requirements"]
+    assert Draft202012Validator(schema).is_valid(document)
+    for value in (None, []):
+        invalid = deepcopy(document)
+        invalid["specification"]["journeys"] = value
+        assert not Draft202012Validator(schema).is_valid(invalid)
+        with pytest.raises(KnowledgeSchemaError):
+            validate_document("requirements", invalid)
+    enriched = definition_documents(journeys=True)["requirements"]
+    assert Draft202012Validator(schema).is_valid(enriched)
+    enriched["specification"]["schema_version"] = 1
+    assert not Draft202012Validator(schema).is_valid(enriched)

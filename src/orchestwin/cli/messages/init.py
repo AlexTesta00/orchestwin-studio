@@ -767,6 +767,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "init.artifact_acceptance_criterion": {"it": "il criterio", "en": "the criterion"},
     "init.artifact_scenario": {"it": "lo scenario", "en": "the scenario"},
     "init.artifact_need": {"it": "il bisogno", "en": "the need"},
+    "init.artifact_journey": {"it": "il journey", "en": "the journey"},
     "init.artifact_risk": {"it": "il rischio", "en": "the risk"},
     "init.artifact_definition_of_done": {
         "it": "la condizione di fine lavoro",

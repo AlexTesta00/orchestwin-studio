@@ -354,6 +354,7 @@ class RequirementsProposalRequest:
     catalog_content_hash: str
     current_specification: RequirementsSpecification | None = None
     owner_request: str | None = None
+    include_journeys: bool = False
 
     def __post_init__(self) -> None:
         """Protect current fixed-catalog metadata."""
@@ -375,6 +376,13 @@ class RequirementsProposalRequest:
         if (self.current_specification is None) != (self.owner_request is None):
             raise ValueError(
                 "a requirements change needs the current specification and the owner request"
+            )
+
+        if type(self.include_journeys) is not bool:
+            raise ValueError("include_journeys must be a boolean")
+        if self.include_journeys and self.current_specification is None:
+            raise ValueError(
+                "journey generation requires the current specification and owner request"
             )
 
         if self.current_specification is None or self.owner_request is None:
@@ -425,6 +433,7 @@ class RequirementsProposalRequest:
             **snapshot,
             "current_specification": self.current_specification.to_snapshot(),
             "owner_request": self.owner_request,
+            **({"include_journeys": True} if self.include_journeys else {}),
         }
 
     def canonical_json(self) -> str:

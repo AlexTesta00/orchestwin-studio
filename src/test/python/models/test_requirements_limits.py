@@ -203,7 +203,7 @@ def test_the_schema_bounds_the_seven_lists_and_changes_nothing_else():
     assert bounded == free
 
 
-def test_the_model_receives_the_limits_in_the_schema_of_contract_six(tmp_path):
+def test_the_model_receives_the_limits_in_the_schema_of_contract_seven(tmp_path):
     request = proposal_request()
     answer, _, _ = at_limits(request)
 
@@ -211,8 +211,8 @@ def test_the_model_receives_the_limits_in_the_schema_of_contract_six(tmp_path):
     output_schema = payload["response_format"]["json_schema"]
     sent = json.loads(payload["messages"][1]["content"])
 
-    assert output_schema["name"] == "proposal-requirements-v6"
-    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v6"
+    assert output_schema["name"] == "proposal-requirements-v7"
+    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v7"
     assert sent["context"]["limits"] == FIXTURE_LIMITS
     assert {
         name: output_schema["schema"]["properties"][name]["maxItems"] for name in LISTS

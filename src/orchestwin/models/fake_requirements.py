@@ -16,6 +16,7 @@ from orchestwin.models.requirements import (
 )
 from orchestwin.models.requirements_drafts import (
     RequirementsDraft,
+    _require_journey_scope,
     requirements_context,
     requirements_limits,
     requirements_view,
@@ -28,6 +29,7 @@ from orchestwin.projects.requirements import (
     create_requirement,
     create_user_story,
 )
+from orchestwin.projects.requirements_journeys import create_journey_phase, create_user_journey
 from orchestwin.projects.requirements_needs import create_user_need
 from orchestwin.projects.requirements_primitives import (
     RequirementSourceKind,
@@ -111,14 +113,17 @@ def _changed(request: RequirementsProposalRequest) -> RequirementsProposalResult
     first, *others = specification.requirements
 
     try:
-        statement = _bounded_text(f"{first.statement} ({request.owner_request})")
         if specification.schema_version == 1:
             specification = _enriched_legacy(request)
             first, *others = specification.requirements
-        changed = replace(
-            specification,
-            requirements=(replace(first, statement=statement), *others),
-        )
+        if request.include_journeys:
+            changed = replace(specification, journeys=_journeys(request, specification))
+        else:
+            statement = _bounded_text(f"{first.statement} ({request.owner_request})")
+            changed = replace(
+                specification,
+                requirements=(replace(first, statement=statement), *others),
+            )
         _validate_specification(request, changed)
     except (ValueError, KeyError):
         return _rejected(RequirementsProposalIssueCode.INVALID_PROVIDER_OUTPUT)
@@ -213,6 +218,55 @@ def _validate_specification(request, specification):
     for name, limit in requirements_limits(request).items():
         if len(getattr(draft, name)) > limit:
             raise ValueError(f"fake list {name} exceeds its limit of {limit}")
+    _require_journey_scope(request, specification)
+
+
+def _journeys(request, specification):
+    existing = {item.scenario_id: item for item in specification.journeys}
+    next_code = (
+        max((int(item.code.split("-")[1]) for item in specification.journeys), default=0) + 1
+    )
+    journeys = list(specification.journeys)
+    for scenario in specification.scenarios:
+        if scenario.id in existing:
+            continue
+        needs = tuple(item for item in specification.needs if scenario.id in item.scenario_ids)
+        count = min(len(scenario.steps), 32)
+        actions = tuple(
+            _bounded_text(
+                "; ".join(
+                    scenario.steps[
+                        index * len(scenario.steps) // count : (index + 1)
+                        * len(scenario.steps)
+                        // count
+                    ]
+                )
+            )
+            for index in range(count)
+        )
+        journeys.append(
+            create_user_journey(
+                journey_id=_artifact_id(request.content_hash, "journey", next_code),
+                code=f"JRN-{next_code:03d}",
+                title=scenario.title,
+                scenario_id=scenario.id,
+                phases=tuple(
+                    create_journey_phase(
+                        title=_title(action),
+                        action=action,
+                        touchpoint=None,
+                        criticalities=scenario.criticalities if index == 0 else (),
+                        need_ids=tuple(item.id for item in needs),
+                    )
+                    for index, action in enumerate(actions)
+                ),
+                sources=tuple(
+                    {*scenario.sources, *(source for item in needs for source in item.sources)}
+                ),
+            )
+        )
+        next_code += 1
+    return tuple(sorted(journeys, key=lambda item: item.code))
 
 
 def _requirement_seeds(

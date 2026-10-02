@@ -230,7 +230,11 @@ def requirements_view(version):
     codes = {str(value): key for key, value in requirement_code_map(spec).items()}
     if spec.schema_version == 2:
         codes.update(
-            {str(item.id): item.code for group in (spec.scenarios, spec.needs) for item in group}
+            {
+                str(item.id): item.code
+                for group in (spec.scenarios, spec.needs, spec.journeys)
+                for item in group
+            }
         )
     twins = {str(ref.twin_id): f"T{i}" for i, ref in enumerate(spec.user_twin_references, 1)}
 
@@ -263,6 +267,8 @@ def requirements_view(version):
     if spec.schema_version == 2:
         view["schema_version"] = 2
         view["needs"] = compact([item.to_snapshot() for item in spec.needs])
+        if spec.journeys:
+            view["journeys"] = compact([item.to_snapshot() for item in spec.journeys])
     return view
 
 

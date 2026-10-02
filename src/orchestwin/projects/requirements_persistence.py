@@ -19,6 +19,7 @@ from orchestwin.projects.requirements import (
 from orchestwin.projects.requirements_application import (
     RequirementsVersionAppendStatus,
 )
+from orchestwin.projects.requirements_journeys import JourneyPhase, UserJourney
 from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
@@ -538,6 +539,10 @@ def specification_from_snapshot(
     context = _mapping(_required(payload, "context"), label="requirements context")
     catalog = _mapping(_required(context, "catalog"), label="requirements catalog")
     specification = RequirementsSpecification(
+        journeys=tuple(
+            _journey_from_snapshot(item)
+            for item in _mapping_sequence(payload.get("journeys", ()), label="journeys collection")
+        ),
         schema_version=schema_version,
         needs=tuple(
             _need_from_snapshot(item)
@@ -1039,6 +1044,8 @@ def _artifact_from_snapshot(
     kind: RequirementsArtifactKind,
     payload: Mapping[str, object],
 ):
+    if kind is RequirementsArtifactKind.JOURNEY:
+        return _journey_from_snapshot(payload)
     if kind is RequirementsArtifactKind.NEED:
         return _need_from_snapshot(payload)
     if kind is RequirementsArtifactKind.REQUIREMENT:
@@ -1071,6 +1078,39 @@ def _need_from_snapshot(payload: Mapping[str, object]) -> UserNeed:
         sources=tuple(
             _source_from_snapshot(item)
             for item in _mapping_sequence(_required(payload, "sources"), label="user-need sources")
+        ),
+    )
+
+
+def _journey_phase_from_snapshot(payload: Mapping[str, object]) -> JourneyPhase:
+    return JourneyPhase(
+        title=_string(_required(payload, "title"), label="journey phase title"),
+        action=_string(_required(payload, "action"), label="journey phase action"),
+        touchpoint=_optional_string(
+            _required(payload, "touchpoint"), label="journey phase touchpoint"
+        ),
+        criticalities=_string_sequence(
+            _required(payload, "criticalities"), label="journey phase criticalities"
+        ),
+        need_ids=_uuid_sequence(_required(payload, "need_ids"), label="journey phase need IDs"),
+    )
+
+
+def _journey_from_snapshot(payload: Mapping[str, object]) -> UserJourney:
+    return UserJourney(
+        id=_uuid(_required(payload, "id"), label="user-journey ID"),
+        code=_string(_required(payload, "code"), label="user-journey code"),
+        title=_string(_required(payload, "title"), label="user-journey title"),
+        scenario_id=_uuid(_required(payload, "scenario_id"), label="user-journey scenario ID"),
+        phases=tuple(
+            _journey_phase_from_snapshot(item)
+            for item in _mapping_sequence(_required(payload, "phases"), label="user-journey phases")
+        ),
+        sources=tuple(
+            _source_from_snapshot(item)
+            for item in _mapping_sequence(
+                _required(payload, "sources"), label="user-journey sources"
+            )
         ),
     )
 

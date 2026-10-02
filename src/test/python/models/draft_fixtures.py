@@ -117,6 +117,8 @@ def proposal_draft(stage, value, request):
                 "definition_of_done",
             )
         }
+        if raw.get("journeys"):
+            result["journeys"] = result.get("journeys", convert(raw["journeys"]))
         for group, items in result.items():
             for original, item in zip(raw[group], items, strict=True):
                 for old, new in {
@@ -128,12 +130,15 @@ def proposal_draft(stage, value, request):
                     "actor": "twin",
                     "need_ids": "needs",
                     "scenario_ids": "scenarios",
+                    "scenario_id": "scenario",
                 }.items():
                     if old in item:
                         item[new] = item.pop(old)
                 if "sources" in item:
                     item["sources"] = [source_key(source) for source in original["sources"]]
                 item.pop("review_status", None)
+                for phase in item.get("phases", []):
+                    phase["needs"] = phase.pop("need_ids")
         return result
     if stage == "design":
         result = {

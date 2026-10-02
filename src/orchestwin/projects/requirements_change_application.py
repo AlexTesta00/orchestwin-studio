@@ -109,6 +109,7 @@ class LocalRequirementsChangeService:
         owner_user_id: UUID,
         project_id: UUID,
         owner_request: str,
+        include_journeys: bool = False,
     ) -> RequirementsChangeResult:
         context = await self._governance.load_current(
             owner_user_id=owner_user_id,
@@ -141,6 +142,7 @@ class LocalRequirementsChangeService:
                 context.to_proposal_request(),
                 current_specification=current.specification,
                 owner_request=owner_request,
+                include_journeys=include_journeys,
             )
         )
 

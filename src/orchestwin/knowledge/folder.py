@@ -87,6 +87,7 @@ _ENTRY_DATE_TIME: Final = (1980, 1, 1, 0, 0, 0)
 _DERIVED_FILES: Final = frozenset({KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST})
 _REQUIREMENT_KINDS: Final = (
     ("needs", "NEED"),
+    ("journeys", "JOURNEY"),
     ("requirements", "REQUIREMENT"),
     ("user_stories", "USER_STORY"),
     ("acceptance_criteria", "ACCEPTANCE_CRITERION"),

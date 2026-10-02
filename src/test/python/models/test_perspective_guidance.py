@@ -239,7 +239,7 @@ def test_the_planning_schemas_ignore_the_perspectives():
         assert guided == plain
 
 
-def test_the_model_receives_the_perspectives_in_contract_six_with_the_same_schema(tmp_path):
+def test_the_model_receives_the_perspectives_in_contract_seven_with_the_same_schema(tmp_path):
     configuration = local_configuration(tmp_path)
     every, sent = captured(
         ModelRequirementsAdapter, requirements_request(EVERY_AGENT), configuration, CapturePort()
@@ -250,9 +250,9 @@ def test_the_model_receives_the_perspectives_in_contract_six_with_the_same_schem
 
     assert sent["perspectives"] == perspective_guidance(EVERY_AGENT, GuidanceStage.DEFINITION)
     assert every.output_schema.canonical_schema_json == minimum.output_schema.canonical_schema_json
-    assert every.output_schema.schema_id == "proposal-requirements-v6"
-    assert every.output_schema.version_number == 6
-    assert every.prompt_version_ref == "proposal-requirements-v6"
+    assert every.output_schema.schema_id == "proposal-requirements-v7"
+    assert every.output_schema.version_number == 7
+    assert every.prompt_version_ref == "proposal-requirements-v7"
     assert every.task_id == "proposal-requirements-v1"
     assert every.system_instruction.count(DEFINITION_SENTENCES) == 1
 

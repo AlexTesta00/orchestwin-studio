@@ -64,9 +64,13 @@ LEGACY_DESIGN_VIEW_SHA256 = "35be539d01da9df45725918a21b17a27c999a870e944164cfc5
 DEFINITION_DESIGN_VIEW_SHA256 = "7d8fd69f2c9387137940d5ecdd4107c507fdd3edd5767dd10140f128b6cfe1fd"
 TEST_PLAN_SCHEMA_SHA256 = "e33ac0bcadbdc641104e307acb21c307a545b01e5bf25ea627d9f53870ce48b7"
 TEST_PLAN_INSTRUCTION_SHA256 = "846d0c0e47d355950147ee7147267132534894d2ab1ea7edc20786e6bd677fe9"
-REQUIREMENTS_SCHEMA_SHA256 = {
+REQUIREMENTS6_SCHEMA_SHA256 = {
     "baseline": "8b520303183a8bd3e8e9c9ca6cfefc6eb467f131c2329ad416bbd0cca307ae80",
     "change": "9aae707045690678e92fa2584d03682fac043a79cf6f196296c3a80471380cce",
+}
+REQUIREMENTS_SCHEMA_SHA256 = {
+    "baseline": "3fd1e2f5cd91853c7e05744edc335bfd265aa9e0e9ff58bd57deaca7e9694010",
+    "change": "7b01d7d87c313cd62015c8dcf6f34731d72cbedaaae137b07b261a9cd9136760",
 }
 
 
@@ -424,7 +428,7 @@ def test_schema_two_mockup_keeps_missing_and_uncovered_requirement_indexes():
 
 
 @pytest.mark.parametrize("purpose", ["baseline", "change"])
-def test_requirements_generation_uses_version_six_and_the_actual_full_schema(tmp_path, purpose):
+def test_requirements_generation_uses_version_seven_and_the_actual_full_schema(tmp_path, purpose):
     request = proposal_request() if purpose == "baseline" else change_request()
     _, sources, twins = requirements_context(request)
     specification = (
@@ -437,11 +441,16 @@ def test_requirements_generation_uses_version_six_and_the_actual_full_schema(tmp
     [call] = transport.calls
     schema = call["payload"]["response_format"]["json_schema"]
     assert result.specification.schema_version == 2
-    assert schema["name"] == "proposal-requirements-v6"
+    assert schema["name"] == "proposal-requirements-v7"
     assert (
-        call["payload"]["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v6"
+        call["payload"]["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v7"
     )
     assert sha256(canonical_json(schema["schema"])) == REQUIREMENTS_SCHEMA_SHA256[purpose]
+    historical = deepcopy(schema["schema"])
+    historical["properties"].pop("journeys")
+    historical["$defs"].pop("JourneyDraft")
+    historical["$defs"].pop("JourneyPhaseDraft")
+    assert sha256(canonical_json(historical)) == REQUIREMENTS6_SCHEMA_SHA256[purpose]
     if purpose == "change":
         assert result.specification == request.current_specification
 

@@ -440,8 +440,8 @@ describe("readProject", () => {
   });
 });
 
-for (const schemaVersion of [1, 2]) {
-  it(`reads criteria and current references from Definition schema ${schemaVersion}`, () => {
+for (const [schemaVersion, withJourneys] of [[1, false], [2, false], [2, true]]) {
+  it(`reads criteria and current references from Definition schema ${schemaVersion}, journeys ${withJourneys}`, () => {
     const base = fixtures.makeTemporaryFolder();
     try {
       const root = fixtures.writeCompleteProject(path.join(base, "definition"), "new");
@@ -449,8 +449,15 @@ for (const schemaVersion of [1, 2]) {
       const document = fixtures.readJson(root, file);
       document.specification.schema_version = schemaVersion;
       if (schemaVersion === 2) {
-        document.specification.needs = [{ code: "NED-001", title: "Settle the bill", scenario_ids: ["scenario"] }];
+        document.specification.needs = [{ id: "need", code: "NED-001", title: "Settle the bill", scenario_ids: ["scenario"] }];
         document.specification.scenarios = [{ id: "scenario", code: "SCN-001", context: "At the table", goal: "Settle the bill" }];
+      }
+      if (withJourneys) {
+        document.specification.journeys = [{
+          id: "journey", code: "JRN-001", title: "Settle the bill", scenario_id: "scenario",
+          phases: [{ title: "Review the bill", action: "Read the shares", touchpoint: null, criticalities: [], need_ids: ["need"] }],
+          sources: [{ kind: "OWNER_INPUT", source_id: "fixture", source_version: null, content_hash: null, locator: null }],
+        }];
       }
       fixtures.writeJson(root, file, document);
       const state = readProject(root);

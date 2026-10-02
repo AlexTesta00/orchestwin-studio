@@ -123,6 +123,8 @@ _TEXT: Final = {
         "twins": "User twins",
         "stories": "User stories",
         "needs": "Needs",
+        "journeys": "Journey",
+        "expands": "expands",
         "participates_in": "participates in",
         "reveals": "reveals",
         "motivates": "motivates",
@@ -182,6 +184,8 @@ _TEXT: Final = {
         "twins": "User twin",
         "stories": "Storie utente",
         "needs": "Bisogni",
+        "journeys": "Journey",
+        "expands": "espande",
         "participates_in": "partecipa a",
         "reveals": "rivela",
         "motivates": "motiva",
@@ -504,6 +508,7 @@ def requirements_traceability_diagram(
     scenarios = specification["scenarios"]
     risks = specification["risks"]
     needs = specification.get("needs", ())
+    journeys = specification.get("journeys", ())
     done = specification["definition_of_done"]
     codes = {
         **_codes(requirements),
@@ -533,6 +538,7 @@ def requirements_traceability_diagram(
     )
     for identifier, label, items, field in (
         ("NEEDS", text["needs"], needs, "title"),
+        ("JOURNEYS", text["journeys"], journeys, "title"),
         ("STORIES", text["stories"], stories, "goal"),
         ("REQUIREMENTS", text["requirements"], requirements, "title"),
         ("CRITERIA", text["criteria"], criteria, "statement"),
@@ -596,6 +602,31 @@ def requirements_traceability_diagram(
                 f'{_INDENT}{source} -->|"{_line(label)}"| {destination}'
                 for source, destination in pairs
             )
+    for label, pairs in (
+        (
+            text["expands"],
+            _edges(
+                (_identifier(str(scenario["code"])), _identifier(str(journey["code"])))
+                for journey in journeys
+                for scenario in scenarios
+                if scenario["id"] == journey["scenario_id"]
+            ),
+        ),
+        (
+            text["reveals"],
+            _edges(
+                (_identifier(str(journey["code"])), _identifier(str(need["code"])))
+                for journey in journeys
+                for phase in journey["phases"]
+                for need in needs
+                if need["id"] in phase["need_ids"]
+            ),
+        ),
+    ):
+        lines.extend(
+            f'{_INDENT}{source} -->|"{_line(label)}"| {destination}'
+            for source, destination in pairs
+        )
     for label, pairs in (
         (
             text["exercised_by"],

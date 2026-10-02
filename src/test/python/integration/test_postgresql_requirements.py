@@ -67,6 +67,7 @@ from orchestwin.projects.requirements_specifications import (
     create_requirements_specification,
 )
 from orchestwin.workflow.gates import HumanGateAction, HumanGateStatus
+from src.test.python.projects.test_requirements_journeys import journey_specification
 from src.test.python.projects.test_requirements_needs import enriched_specification
 
 pytestmark = pytest.mark.integration
@@ -116,6 +117,7 @@ def initial_specification_version(
     project_id: UUID,
     owner_user_id: UUID,
     schema_version: int = 1,
+    include_journeys: bool = False,
 ) -> RequirementsSpecificationVersion:
     """Create one complete version-one requirements baseline."""
     source = RequirementSourceReference(
@@ -198,8 +200,14 @@ def initial_specification_version(
 
     if schema_version == 2:
         specification = enriched_specification(specification)
+        if include_journeys:
+            specification = journey_specification(specification)
     return RequirementsSpecificationVersion(
-        id=UUID(int=INITIAL_VERSION_ID.int + (schema_version - 1) * 10000),
+        id=UUID(
+            int=INITIAL_VERSION_ID.int
+            + (schema_version - 1) * 10000
+            + int(include_journeys) * 10000
+        ),
         project_id=project_id,
         version_number=1,
         based_on_version_number=None,
@@ -220,9 +228,9 @@ def iterator_factory(values):
     return next_value
 
 
-async def run_integration_scenario(schema_version: int = 1) -> None:
+async def run_integration_scenario(schema_version: int = 1, include_journeys: bool = False) -> None:
     """Exercise requirements persistence, revisioning, Gate 4, and ownership."""
-    offset = (schema_version - 1) * 10000
+    offset = (schema_version - 1) * 10000 + int(include_journeys) * 10000
     diff_id = UUID(int=DIFF_ID.int + offset)
     revised_version_id = UUID(int=REVISED_VERSION_ID.int + offset)
     gate_id = UUID(int=GATE_ID.int + offset)
@@ -250,11 +258,11 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
         )
 
         owner_result = await identity.register(
-            email=f"requirements-owner-s{schema_version}@example.com",
+            email=f"requirements-owner-s{schema_version}{'-journeys' if include_journeys else ''}@example.com",
             password="Correct horse battery staple!",
         )
         other_result = await identity.register(
-            email=f"requirements-other-s{schema_version}@example.com",
+            email=f"requirements-other-s{schema_version}{'-journeys' if include_journeys else ''}@example.com",
             password="Another correct battery staple!",
         )
 
@@ -276,6 +284,7 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
             project_id=project.id,
             owner_user_id=owner.id,
             schema_version=schema_version,
+            include_journeys=include_journeys,
         )
 
         async with command_uow_factory(owner_user_id=owner.id) as unit:
@@ -292,6 +301,7 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
         assert current == initial
         assert current.specification.schema_version == schema_version
         assert bool(current.specification.needs) is (schema_version == 2)
+        assert bool(current.specification.journeys) is include_journeys
         assert (
             await queries.current(
                 owner_user_id=other.id,
@@ -347,6 +357,7 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
         assert decision.version.based_on_version_number == 1
         assert decision.version.specification.schema_version == schema_version
         assert decision.version.specification.needs == initial.specification.needs
+        assert decision.version.specification.journeys == initial.specification.journeys
         assert decision.version.specification.scenarios == initial.specification.scenarios
         assert (
             decision.version.specification.requirements[0].need_ids
@@ -442,6 +453,17 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
 
             assert row["traceability_snapshot"]["links"]
             assert row["schema_version"] == schema_version
+            assert (
+                any(
+                    node["reference"]["kind"] == "JOURNEY"
+                    for node in row["traceability_snapshot"]["nodes"]
+                )
+                is include_journeys
+            )
+            assert (
+                any(link["kind"] == "EXPANDS" for link in row["traceability_snapshot"]["links"])
+                is include_journeys
+            )
             assert any(
                 node["reference"]["kind"] == "NEED"
                 for node in row["traceability_snapshot"]["nodes"]
@@ -480,10 +502,16 @@ async def run_integration_scenario(schema_version: int = 1) -> None:
         await runtime.dispose()
 
 
-@pytest.mark.parametrize("schema_version", (1, 2))
-def test_postgresql_requirements_and_gate_four_main_path(schema_version: int) -> None:
+@pytest.mark.parametrize(
+    ("schema_version", "include_journeys"),
+    ((1, False), (2, False), (2, True)),
+    ids=("schema1", "schema2", "schema2-journeys"),
+)
+def test_postgresql_requirements_and_gate_four_main_path(
+    schema_version: int, include_journeys: bool
+) -> None:
     """Verify the Requirements stage on a migrated PostgreSQL database."""
     asyncio.run(
-        run_integration_scenario(schema_version),
+        run_integration_scenario(schema_version, include_journeys),
         loop_factory=asyncio.SelectorEventLoop,
     )

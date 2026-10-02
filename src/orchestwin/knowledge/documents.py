@@ -549,6 +549,10 @@ _DEFINITION_TEXTS: Final = {
         "twins": "User twins",
         "scenarios": "Scenarios",
         "needs": "Needs",
+        "journeys": "Journey",
+        "phases": "Phases",
+        "action": "Action",
+        "touchpoint": "Touchpoint",
         "stories": "User stories",
         "actor": "Actor",
         "context": "Context",
@@ -583,6 +587,10 @@ _DEFINITION_TEXTS: Final = {
         "twins": "Twin degli utenti",
         "scenarios": "Scenari",
         "needs": "Bisogni",
+        "journeys": "Journey",
+        "phases": "Fasi",
+        "action": "Azione",
+        "touchpoint": "Punto di contatto",
         "stories": "Storie",
         "actor": "Attore",
         "context": "Contesto",
@@ -625,6 +633,7 @@ def requirements_markdown(
     text = _DEFINITION_TEXTS[language]
     collections = (
         "scenarios",
+        "journeys",
         "needs",
         "user_stories",
         "requirements",
@@ -750,10 +759,48 @@ def requirements_markdown(
                 f"{text['needs']}: {links(revealed)}",
                 f"{text['requirements']}: {links(scenario['requirement_ids'])}",
                 f"{text['criteria']}: {links(scenario['acceptance_criterion_ids'])}",
+                *(
+                    [
+                        f"{text['journeys']}: {links(item['id'] for item in specification['journeys'] if item['scenario_id'] == scenario['id'])}"
+                    ]
+                    if specification.get("journeys")
+                    else []
+                ),
                 "",
                 *sources(scenario),
             ]
         )
+    if specification.get("journeys"):
+        lines.extend([f"## {text['journeys']}", ""])
+        for journey in specification["journeys"]:
+            scenario = items[str(journey["scenario_id"])]
+            lines.extend(
+                [
+                    *heading(journey, journey["title"]),
+                    f"{text['scenarios']}: {links([journey['scenario_id']])}",
+                    f"{text['actor']}: [{scenario['actor']['name']}](#{twin_anchors[str(scenario['actor']['twin_id'])]})",
+                    "",
+                    f"{text['phases']}:",
+                    "",
+                ]
+            )
+            for index, phase in enumerate(journey["phases"], 1):
+                lines.extend(
+                    [
+                        f"#### {index}. {phase['title']}",
+                        "",
+                        f"{text['action']}: {phase['action']}",
+                        f"{text['needs']}: {links(phase['need_ids'])}",
+                        "",
+                    ]
+                )
+                if phase.get("touchpoint"):
+                    lines.extend([f"{text['touchpoint']}: {phase['touchpoint']}", ""])
+                if phase.get("criticalities"):
+                    lines.extend(
+                        [f"{text['criticalities']}:", *markdown_bullets(phase["criticalities"]), ""]
+                    )
+            lines.extend(sources(journey))
     lines.extend([f"## {text['needs']}", ""])
     if not specification.get("needs"):
         lines.extend([text["legacy"], ""])
@@ -766,6 +813,13 @@ def requirements_markdown(
                 f"{text['scenarios']}: {links(need['scenario_ids'])}",
                 f"{text['stories']}: {links(item['id'] for item in specification['user_stories'] if need['id'] in item.get('need_ids', ()))}",
                 f"{text['requirements']}: {links(item['id'] for item in specification['requirements'] if need['id'] in item.get('need_ids', ()))}",
+                *(
+                    [
+                        f"{text['journeys']}: {links(item['id'] for item in specification['journeys'] if any(need['id'] in phase['need_ids'] for phase in item['phases']))}"
+                    ]
+                    if specification.get("journeys")
+                    else []
+                ),
                 "",
                 *sources(need),
             ]

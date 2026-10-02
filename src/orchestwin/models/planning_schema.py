@@ -42,6 +42,12 @@ def constrain_planning_schema(schema, context, task):
             prefix: [item["code"] for item in view[group]]
             for prefix, group in (("REQ", "requirements"), ("USR", "stories"), ("AC", "criteria"))
         }
+    elif context.get("include_journeys") and context.get("current_schema_version") == 2:
+        view = context["current_requirements"]
+        known = {
+            prefix: [item["code"] for item in view[group]]
+            for prefix, group in (("NED", "needs"), ("SCN", "scenarios"))
+        }
 
     if task == "design":
         known["DES"] = list(DESIGN_ALTERNATIVE_CODES)
@@ -63,6 +69,7 @@ def constrain_planning_schema(schema, context, task):
         "criteria": "AC",
         "needs": "NED",
         "scenarios": "SCN",
+        "scenario": "SCN",
         "acceptance_criterion_ids": "AC",
         "alternative": "DES",
         "alternatives": "DES",
@@ -87,6 +94,15 @@ def constrain_planning_schema(schema, context, task):
     if task == "requirements":
         for name, limit in context.get("limits", {}).items():
             schema["properties"][name]["maxItems"] = limit
+        if "journeys" in schema["properties"]:
+            existing = len(context.get("current_requirements", {}).get("journeys", []))
+            field = schema["properties"]["journeys"]
+            if context.get("include_journeys"):
+                field["minItems"] = max(1, existing)
+            else:
+                field.update(minItems=existing, maxItems=existing)
+            if existing or context.get("include_journeys"):
+                schema["required"] = [*schema.get("required", []), "journeys"]
     if task == "design":
         if context.get("purpose") not in (None, HOSTED_DESIGN_PURPOSE):
             return

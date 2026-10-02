@@ -458,6 +458,7 @@ class ModelRequirementsAdapter:
         from orchestwin.models.requirements_drafts import (
             REQUIREMENTS_CHAIN_INSTRUCTION,
             REQUIREMENTS_CHANGE_INSTRUCTION,
+            REQUIREMENTS_JOURNEYS_INSTRUCTION,
             RequirementsDraft,
             bind_requirements,
             requirements_context,
@@ -488,6 +489,7 @@ class ModelRequirementsAdapter:
             "All items are proposals, never executed tests or owner decisions. "
             "Do not invent source evidence, identifiers, hashes or approval state."
         )
+        instruction = f"{instruction} {REQUIREMENTS_JOURNEYS_INSTRUCTION}"
         if request.owner_request is not None:
             instruction = f"{instruction} {REQUIREMENTS_CHANGE_INSTRUCTION}"
         draft = await self.generator.generate(

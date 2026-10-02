@@ -138,10 +138,14 @@ def change(
 
 
 def decide(
-    journey: Journey, diff: Mapping[str, object], version: Mapping[str, object]
+    journey: Journey,
+    diff: Mapping[str, object],
+    version: Mapping[str, object],
+    *,
+    assume_yes: bool = False,
 ) -> Mapping[str, object]:
     show_diff(journey, diff)
-    if journey.script is not None:
+    if journey.script is not None or assume_yes:
         apply = True
     else:
         apply = journey.console.confirm("init.change_apply", default=True)
