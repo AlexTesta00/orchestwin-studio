@@ -319,8 +319,16 @@ def test_the_free_tools_answer_from_a_schema_three_folder(tmp_path: Path) -> Non
     assert [twin["name"] for twin in structured(answered[3])["twins"]] == [RECEPTION, VOLUNTEERS]
     assert structured(answered[4])["twin"]["number"] == 1
     requirements = structured(answered[5])
-    assert [item["code"] for item in requirements["requirements"]] == ["REQ-003"]
-    assert [item["code"] for item in requirements["user_stories"]] == ["USR-002"]
+    assert [item["code"] for item in requirements["requirements"]] == [
+        "REQ-001",
+        "REQ-002",
+        "REQ-003",
+        "REQ-004",
+    ]
+    assert [item["code"] for item in requirements["user_stories"]] == ["USR-001", "USR-002"]
+    assert [item["code"] for item in requirements["acceptance_criteria"]] == ["AC-001"]
+    assert requirements["schema_version"] == 1
+    assert requirements["needs"] == []
     assert requirements["unknown_codes"] == []
     screens = structured(answered[6])["chosen"]["screens"]
     assert [(screen["code"], len(screen["transitions"])) for screen in screens] == [("SCR-001", 3)]

@@ -62,11 +62,15 @@ def test_removed_requirements_offer_explicit_regeneration_without_mutating_on_en
 
 
 @pytest.mark.parametrize("guided", [False, True])
+@pytest.mark.parametrize("schema_version", [1, 2])
 def test_regeneration_uses_real_route_async_polling_and_returns_to_ordinary_choice(
-    tmp_path: Path, guided: bool
+    tmp_path: Path, guided: bool, schema_version: int
 ) -> None:
-    with design_session(tmp_path, through="design") as session:
+    with design_session(
+        tmp_path, through="design", requirements_schema_version=schema_version
+    ) as session:
         removed(session)
+        specification = copy.deepcopy(session.project.current("requirements")["specification"])
         before = session.project.current("design")
         arguments = ("design",) if guided else ("design", "regenerate")
         answers = ["regenerate", "y", "leave"] if guided else ["y"]
@@ -81,6 +85,13 @@ def test_regeneration_uses_real_route_async_polling_and_returns_to_ordinary_choi
         ]
         writes = session.writes()
         history = list(session.project.designs)
+        requirements = session.project.current("requirements")
+        assert requirements["specification"] == specification
+        assert requirements["specification"]["schema_version"] == schema_version
+        assert (
+            current["package"]["grounding"]["requirements_reference"]["content_hash"]
+            == requirements["content_hash"]
+        )
 
     assert run.status == 0, run.errors
     assert len(requests) == 1

@@ -46,6 +46,10 @@ from orchestwin.agents.selection_rules import (
     determine_team_constraints,
 )
 from orchestwin.agents.team_gate import OWNER_CHOICE_STATEMENT
+from orchestwin.api.requirements import (
+    RequirementsSpecificationDiffPayload,
+    RequirementsSpecificationPayload,
+)
 from orchestwin.artifacts.bound_mockups import create_bound_mockup, markup_requirement_codes
 from orchestwin.artifacts.design_evaluation import (
     ANCHOR_LABEL_LENGTH,
@@ -86,7 +90,9 @@ from orchestwin.knowledge.archive import (
     KnowledgeArchiveError,
     read_verified_folder,
 )
-from orchestwin.knowledge.folder import folder_archive
+from orchestwin.knowledge.folder import build_knowledge_folder, folder_archive
+from orchestwin.knowledge.sources import KnowledgeSources
+from orchestwin.knowledge.stage_documents import stage_versions
 from orchestwin.knowledge.state import (
     APPLICATION_KINDS,
     BROWSER_NAMES,
@@ -187,6 +193,7 @@ from orchestwin.projects.progress import (
     UserTwinsState,
     project_progress,
 )
+from orchestwin.projects.requirements_revisions import propose_requirements_diff
 from orchestwin.projects.sections import (
     BriefFacts,
     DesignFacts,
@@ -217,7 +224,11 @@ from orchestwin.twins.persistence.snapshots import (
 )
 from orchestwin.twins.personas import PersonaProfileVersion
 from orchestwin.twins.representation import ArchetypeInput, archetype_payload, twin_view
-from orchestwin.twins.user_twins import UserTwinProfileVersion
+from orchestwin.twins.user_twins import (
+    UserTwinProfileVersion,
+    VersionedArtifactReference,
+    create_user_modeling_snapshot,
+)
 from orchestwin.workflow.gates import (
     DEFAULT_GATE_ITERATION_LIMIT,
     GateArtifactReference,
@@ -232,8 +243,6 @@ from orchestwin.workflow.gates import (
     next_human_gate_iteration,
     transition_human_gate,
 )
-
-from .folders import folder_frame, stage_folder
 
 PREFIX = "/api/v1"
 EPOCH = datetime(2026, 9, 29, 8, 0, tzinfo=UTC)
@@ -2602,7 +2611,13 @@ class FakeStudio:
         name: str,
         through: str,
         team_without: Sequence[str] = (),
+        requirements_schema_version: int = 2,
     ) -> FakeProject:
+        if type(requirements_schema_version) is not int or requirements_schema_version not in (
+            1,
+            2,
+        ):
+            raise ValueError("requirements_schema_version must be 1 or 2")
         if isinstance(team_without, str):
             raise ValueError("team_without must be a sequence of agent identifiers")
         dropped = tuple(dict.fromkeys(team_without))
@@ -2626,7 +2641,13 @@ class FakeStudio:
             if not 1 <= len(normalized) <= MAX_PROJECT_NAME:
                 raise ValueError("the project name is not valid")
             project = self._new_project(account, normalized, PROJECT_MODES[0])
-            self._seed(project, through, approve=True, dropped=dropped)
+            self._seed(
+                project,
+                through,
+                approve=True,
+                dropped=dropped,
+                requirements_schema_version=requirements_schema_version,
+            )
             return project
 
     def sections(self, project_id: str) -> dict[str, object]:
@@ -4133,6 +4154,7 @@ class FakeStudio:
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
         }
+        version["content_hash"] = _fake_team_proposal(version).content_hash
         project.teams.append(version)
         return version
 
@@ -4175,7 +4197,11 @@ class FakeStudio:
         content = self._generated_team(project, project.brief, constraints)
         issues = copy.deepcopy(content["constraint_issues"])
         current = project.team
-        if current is not None and current["content_hash"] == _digest(content):
+        if (
+            current is not None
+            and current["content_hash"]
+            == _fake_team_proposal({**content, "project_id": project.id}).content_hash
+        ):
             return _Answer(200, {"status": "UNCHANGED", "version": current, "issues": issues})
         version = self._append_team(project, content, "PROPOSER_GENERATED", call.account)
         return _Answer(201, {"status": "CREATED", "version": version, "issues": issues})
@@ -4476,7 +4502,7 @@ class FakeStudio:
             "persona_id": persona_id,
             "version_number": number,
             "based_on_version_number": None if number == 1 else number - 1,
-            "content_hash": _digest(profile),
+            "content_hash": _fake_persona_profile(profile).content_hash,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
             "profile": profile,
@@ -4856,7 +4882,7 @@ class FakeStudio:
             "project_id": project.id,
             "version_number": 1 if previous is None else int(previous["version_number"]) + 1,
             "based_on_version_number": None if previous is None else previous["version_number"],
-            "content_hash": _digest(body),
+            "content_hash": _fake_modeling(body).content_hash,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
             "snapshot": body,
@@ -4946,7 +4972,7 @@ class FakeStudio:
             "twin_id": self._new_id() if previous is None else previous["twin_id"],
             "version_number": 1 if previous is None else int(previous["version_number"]) + 1,
             "based_on_version_number": None if previous is None else previous["version_number"],
-            "content_hash": _digest(profile),
+            "content_hash": _fake_twin_profile(profile).content_hash,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
             "profile": profile,
@@ -5169,7 +5195,7 @@ class FakeStudio:
         project.conversations[twin_id] = recorded
         return _Answer(201, {"status": "TWIN_TURN_RECORDED", "snapshot": recorded.to_snapshot()})
 
-    def _specification(self, project: FakeProject) -> dict[str, object]:
+    def _specification(self, project: FakeProject, *, schema_version: int = 2) -> dict[str, object]:
         brief = project.brief
         team = project.team
         snapshot = project.snapshot
@@ -5224,7 +5250,8 @@ class FakeStudio:
         ]
         title, preconditions, trigger, steps, outcome = SCENARIO[language]
         summary, mitigation = RISK[language]
-        return {
+        specification = {
+            "schema_version": 1,
             "project_id": project.id,
             "project_brief_reference": {
                 "kind": "PROJECT_BRIEF",
@@ -5281,6 +5308,65 @@ class FakeStudio:
             ],
         }
 
+        if schema_version == 2:
+            self._definition(
+                specification,
+                context=str(brief.brief.problem or brief.brief.description),
+                goal=str((brief.brief.goals or (goal,))[0]),
+            )
+        return specification
+
+    def _definition(
+        self,
+        specification: dict[str, object],
+        *,
+        context: str | None = None,
+        goal: str | None = None,
+    ) -> None:
+        twins = specification["user_twin_references"]
+        scenarios = specification["scenarios"]
+        source = copy.deepcopy(specification["requirements"][0]["sources"])
+        stories = specification["user_stories"]
+        template = copy.deepcopy(scenarios[0])
+        numbers = [_code_number(item["code"]) for item in scenarios]
+        for twin in twins:
+            if not any(item["actor"]["twin_id"] == twin["twin_id"] for item in scenarios):
+                scenario = copy.deepcopy(template)
+                scenario["id"] = self._new_id()
+                scenario["code"] = f"SCN-{max(numbers, default=0) + 1:03d}"
+                numbers.append(_code_number(scenario["code"]))
+                scenario["actor"] = copy.deepcopy(twin)
+                scenarios.append(scenario)
+        needs = []
+        for index, twin in enumerate(twins, start=1):
+            story = next(
+                item
+                for item in stories
+                if item["user_twin_reference"]["twin_id"] == twin["twin_id"]
+            )
+            owned = [item for item in scenarios if item["actor"]["twin_id"] == twin["twin_id"]]
+            for scenario in owned:
+                scenario["context"] = context or str(scenario["trigger"])
+                scenario["goal"] = goal or str(story["goal"])
+                scenario["criticalities"] = [
+                    str(item["summary"]) for item in specification["risks"]
+                ]
+                scenario["sources"] = copy.deepcopy(source)
+            need = {
+                "id": self._new_id(),
+                "code": f"NED-{index:03d}",
+                "title": str(story["goal"]),
+                "statement": str(story["benefit"]),
+                "scenario_ids": _identifiers(owned),
+                "sources": copy.deepcopy(source),
+            }
+            needs.append(need)
+            story["need_ids"] = [need["id"]]
+        for requirement in specification["requirements"]:
+            requirement["need_ids"] = _identifiers(needs)
+        specification["needs"] = needs
+        specification["schema_version"] = 2
+
     def _append_requirements(
         self, project: FakeProject, specification: dict[str, object], account: _Account
     ) -> dict[str, object]:
@@ -5290,7 +5376,7 @@ class FakeStudio:
             "project_id": project.id,
             "version_number": 1 if previous is None else int(previous["version_number"]) + 1,
             "based_on_version_number": None if previous is None else previous["version_number"],
-            "content_hash": _digest(specification),
+            "content_hash": _fake_requirements(specification).content_hash,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
             "specification": specification,
@@ -5387,42 +5473,21 @@ class FakeStudio:
         ):
             raise _Refusal(409, {"code": "REQUIREMENTS_REVISION_PENDING"})
         self._record(project, "REQUIREMENTS_CHANGE")
-        proposed, added = self._with_requirement(current["specification"], text)
-        diff = {
-            "id": self._new_id(),
-            "project_id": project.id,
-            "base_version_id": current["id"],
-            "base_version_number": current["version_number"],
-            "base_content_hash": current["content_hash"],
-            "proposed_content_hash": _digest(proposed),
-            "proposal_hash": _digest({"base": current["content_hash"], "proposed": proposed}),
-            "status": "PROPOSED",
-            "proposed_specification": proposed,
-            "operations": [
-                {
-                    "artifact_kind": "REQUIREMENT",
-                    "operation": "ADD",
-                    "artifact_id": added["id"],
-                    "display_code": added["code"],
-                    "before": None,
-                    "after": {
-                        "kind": "REQUIREMENT",
-                        "requirement": added,
-                        "user_story": None,
-                        "acceptance_criterion": None,
-                        "scenario": None,
-                        "risk": None,
-                        "definition_of_done": None,
-                    },
-                }
-            ],
-            "created_by_user_id": call.account.id,
-            "created_at": _stamp(self._now()),
-            "decided_by_user_id": None,
-            "decided_at": None,
-            "decision_reason": None,
-            "applied_specification_version_id": None,
+        proposed, _ = self._with_requirement(current["specification"], text)
+        base = {
+            **current,
+            "specification": _fake_requirements(current["specification"]).to_snapshot(),
         }
+        result = propose_requirements_diff(
+            base_version=stage_versions({"requirements": base})["requirements"],
+            proposed_specification=_fake_requirements(proposed),
+            diff_id=UUID(self._new_id()),
+            created_by_user_id=UUID(call.account.id),
+            created_at=self._now(),
+        )
+        if result.diff is None:
+            raise _Refusal(409, {"code": "REQUIREMENTS_UNCHANGED"})
+        diff = RequirementsSpecificationDiffPayload.from_domain(result.diff).model_dump(mode="json")
         project.requirement_diffs.append(diff)
         return _Answer(201, _revision_payload("CREATED", diff, None))
 
@@ -5430,6 +5495,8 @@ class FakeStudio:
         self, specification: Mapping[str, object], text: str
     ) -> tuple[dict[str, object], dict[str, object]]:
         proposed = copy.deepcopy(dict(specification))
+        if proposed.get("schema_version", 1) == 1:
+            self._definition(proposed)
         requirements = proposed["requirements"]
         numbers = [_code_number(item["code"]) for item in requirements]
         added = {
@@ -5450,6 +5517,7 @@ class FakeStudio:
             ],
             "user_twin_references": [],
         }
+        added["need_ids"] = _identifiers(proposed["needs"][:1])
         requirements.append(added)
         return proposed, added
 
@@ -5914,7 +5982,7 @@ class FakeStudio:
             "project_id": project.id,
             "version_number": 1 if previous is None else int(previous["version_number"]) + 1,
             "based_on_version_number": None if previous is None else previous["version_number"],
-            "content_hash": _digest(package),
+            "content_hash": _fake_design(package).content_hash,
             "package": package,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
@@ -7194,7 +7262,7 @@ class FakeStudio:
                 "twin_id": twin["twin_id"],
                 "version_number": previous + 1,
                 "based_on_version_number": previous,
-                "content_hash": _digest(profile),
+                "content_hash": _fake_twin_profile(profile).content_hash,
                 "created_by_user_id": account.id,
                 "created_at": _stamp(self._now()),
                 "profile": profile,
@@ -7213,7 +7281,7 @@ class FakeStudio:
             "project_id": project.id,
             "version_number": int(snapshot["version_number"]) + 1,
             "based_on_version_number": snapshot["version_number"],
-            "content_hash": _digest(body),
+            "content_hash": _fake_modeling(body).content_hash,
             "created_by_user_id": account.id,
             "created_at": _stamp(self._now()),
             "snapshot": body,
@@ -7463,14 +7531,7 @@ class FakeStudio:
             return _Answer(200, {"reused": True, "version": project.packages[-1]})
         number = len(project.packages) + 1
         created_at = self._now()
-        folder = stage_folder(
-            through=present[-1],
-            project_name=project.name,
-            version_number=number,
-            created_at=created_at,
-            state=self._state_sources(project, present[-1]),
-            language=self.language,
-        )
+        folder = self._knowledge_folder(project, present, number, created_at)
         archive = folder_archive(folder)
         manifest = folder.manifest
         views = [view for view in manifest["views"].values() if view]
@@ -9629,8 +9690,58 @@ class FakeStudio:
             "tests": min(len(tests), MAX_UPDATE_TESTS),
         }
 
+    def _knowledge_folder(
+        self, project: FakeProject, present: Sequence[str], number: int, moment: datetime
+    ):
+        documents = {}
+        for stage in present:
+            version = copy.deepcopy(project.artifact(stage))
+            if stage == "brief":
+                version["brief"] = project.brief.brief.to_snapshot()
+            elif stage == "team":
+                version["proposal"] = _fake_team_proposal(version).to_snapshot()
+                if version["revision_kind"] == "PROPOSER_GENERATED":
+                    version["based_on_version_number"] = None
+            elif stage == "twins":
+                version["snapshot"] = _fake_modeling(version["snapshot"]).to_snapshot()
+            elif stage == "requirements":
+                version["specification"] = _fake_requirements(
+                    version["specification"]
+                ).to_snapshot()
+            elif stage == "design":
+                version["package"] = _fake_design(version["package"]).to_snapshot()
+            documents[stage] = version
+        versions = stage_versions(documents)
+        values = {
+            "project_id": UUID(project.id),
+            "project_name": project.name,
+            "state": self._state_sources(project, present[-1]),
+        }
+        for stage, version in versions.items():
+            name = "modeling" if stage == "twins" else stage
+            values[name] = version
+            values[f"{name}_gate"] = project.gates[stage]
+        return build_knowledge_folder(
+            KnowledgeSources(**values), version_number=number, created_at=moment
+        )
+
     def _state_sources(self, project: FakeProject, through: str) -> ProjectStateSources:
-        frame = folder_frame(through)
+        frame = {
+            "reference": self._current_reference(project) if through == "design" else None,
+            "twins": tuple(
+                {
+                    "twin_id": twin["twin_id"],
+                    "twin_name": twin["profile"]["name"],
+                    "profile_version_number": twin["version_number"],
+                }
+                for twin in (
+                    []
+                    if project.snapshot is None
+                    or through not in ("twins", "requirements", "design")
+                    else project.snapshot["snapshot"]["twin_versions"]
+                )
+            ),
+        }
         return ProjectStateSources(
             aligned=self._aligned(project),
             changes=tuple(
@@ -9660,7 +9771,13 @@ class FakeStudio:
         )
 
     def _seed(
-        self, project: FakeProject, through: str, *, approve: bool, dropped: Sequence[str] = ()
+        self,
+        project: FakeProject,
+        through: str,
+        *,
+        approve: bool,
+        dropped: Sequence[str] = (),
+        requirements_schema_version: int = 2,
     ) -> None:
         account = project.account
         steps = STAGES[: STAGES.index(through) + 1]
@@ -9703,7 +9820,11 @@ class FakeStudio:
             self._approve(project, "twins")
         if "requirements" not in steps:
             return
-        self._append_requirements(project, self._specification(project), account)
+        self._append_requirements(
+            project,
+            self._specification(project, schema_version=requirements_schema_version),
+            account,
+        )
         if approve:
             self._approve(project, "requirements")
         if "design" not in steps:
@@ -11438,6 +11559,71 @@ def _fake_brief_version(version: _BriefVersion):
         content_hash=version.brief.content_hash,
         created_by_user_id=UUID(version.payload["created_by_user_id"]),
         created_at=datetime.fromisoformat(version.payload["created_at"]),
+    )
+
+
+def _fake_requirements(specification: Mapping[str, object]):
+    return RequirementsSpecificationPayload.model_validate(specification).to_domain()
+
+
+def _fake_design(package: Mapping[str, object]):
+    from orchestwin.api.design import DesignPackagePayload
+
+    return DesignPackagePayload.model_validate(package).to_domain()
+
+
+def _fake_persona_profile(profile: Mapping[str, object]):
+    payload = copy.deepcopy(dict(profile))
+    payload.setdefault("schema_version", 1)
+    return persona_profile_from_snapshot(payload)
+
+
+def _fake_twin_profile(profile: Mapping[str, object]):
+    payload = copy.deepcopy(dict(profile))
+    payload.setdefault("schema_version", 1)
+    payload.setdefault(
+        "catalog",
+        {
+            "version": payload.pop("catalog_version", AGENT_CATALOG_VERSION),
+            "content_hash": payload.pop("catalog_content_hash", AGENT_CATALOG_CONTENT_HASH),
+        },
+    )
+    payload.setdefault(
+        "requires_human_validation",
+        any(item["human_validation"] == "REQUIRED" for item in payload["observations"]),
+    )
+    return user_twin_profile_from_snapshot(payload)
+
+
+def _fake_modeling(body: Mapping[str, object]):
+    def reference(value):
+        return VersionedArtifactReference(
+            artifact_id=UUID(value["artifact_id"]),
+            version_number=value["version_number"],
+            content_hash=value["content_hash"],
+        )
+
+    return create_user_modeling_snapshot(
+        project_id=UUID(body["project_id"]),
+        project_brief_reference=reference(body["project_brief_reference"]),
+        agent_team_reference=reference(body["agent_team_reference"]),
+        catalog_version=body["catalog_version"],
+        catalog_content_hash=body["catalog_content_hash"],
+        persona_versions=(_fake_persona(version) for version in body["persona_versions"]),
+        twin_versions=(
+            UserTwinProfileVersion(
+                id=UUID(version["id"]),
+                project_id=UUID(version["project_id"]),
+                twin_id=UUID(version["twin_id"]),
+                version_number=version["version_number"],
+                based_on_version_number=version.get("based_on_version_number"),
+                profile=_fake_twin_profile(version["profile"]),
+                content_hash=version["content_hash"],
+                created_by_user_id=UUID(version["created_by_user_id"]),
+                created_at=datetime.fromisoformat(version["created_at"]),
+            )
+            for version in body["twin_versions"]
+        ),
     )
 
 

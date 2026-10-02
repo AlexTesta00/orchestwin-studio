@@ -23,7 +23,7 @@ from orchestwin.models.proposal_tasks import TASKS
 from orchestwin.projects.domain import ProjectMode
 
 from .support.fake_studio import COSTS, PREFIX, FakeProject, FakeStudio
-from .support.folders import folder_frame, partial_archive, valid_archive
+from .support.folders import partial_archive, valid_archive
 
 STEPS = ("brief", "team", "twins", "requirements", "design")
 EMAIL = "owner@example.com"
@@ -1906,7 +1906,7 @@ def test_the_tasks_the_stale_reviews_and_the_learning_reach_the_published_folder
         assert [twin["label"] for twin in learned["twins"]] == ["1.1", "1.0"]
         assert learned["twins"][0]["observations"] == entry["observations"]
         assert learned["twins"][0]["twin_id"] == manifest["twins"][0]["twin_id"]
-        assert learned["twins"][0]["twin_id"] != entry["twin_id"]
+        assert learned["twins"][0]["twin_id"] == entry["twin_id"]
         assert studio.errors == []
 
 
@@ -1922,9 +1922,8 @@ def test_the_state_sources_follow_the_frame_of_the_published_folder() -> None:
         complete = studio._state_sources(seeded, "design")
         partial = studio._state_sources(seeded, "requirements")
 
-        frame = folder_frame("design")
         reviews = {item["commit"]: item["review"] for item in complete.changes}
-        assert reviews[newer["commit"]]["reference"] == frame["reference"]
+        assert reviews[newer["commit"]]["reference"] == studio._current_reference(seeded)
         assert reviews[older["commit"]]["reference"] == older["review"]["reference"]
         assert all("stale" not in review for review in reviews.values())
         assert [item["review"]["reference"] for item in partial.changes] == [
@@ -1932,13 +1931,13 @@ def test_the_state_sources_follow_the_frame_of_the_published_folder() -> None:
             older["review"]["reference"],
         ]
         (learning,) = complete.learning
-        twin = frame["twins"][0]
+        twin = seeded.snapshot["snapshot"]["twin_versions"][0]
         assert learning == {
             **entry,
             "twin_id": twin["twin_id"],
-            "twin_name": twin["twin_name"],
-            "profile_version_number": twin["profile_version_number"],
-            "label": f"{twin['profile_version_number']}.1",
+            "twin_name": twin["profile"]["name"],
+            "profile_version_number": twin["version_number"],
+            "label": f"{twin['version_number']}.1",
         }
         assert partial.learning == complete.learning
         assert studio._state_sources(seeded, "team").learning == ()
@@ -2804,7 +2803,38 @@ def test_the_design_follows_the_requirements_through_its_route() -> None:
             current = fewer.requirements[-1]
             specification = json.loads(json.dumps(current["specification"]))
             dropped = specification["user_twin_references"].pop()["twin_id"]
+            specification["scenarios"] = [
+                item for item in specification["scenarios"] if item["actor"]["twin_id"] != dropped
+            ]
+            scenario_ids = {item["id"] for item in specification["scenarios"]}
+            specification["needs"] = [
+                item
+                for item in specification["needs"]
+                if any(identifier in scenario_ids for identifier in item["scenario_ids"])
+            ]
+            story_ids = {item["id"] for item in specification["user_stories"]}
+            need_ids = {item["id"] for item in specification["needs"]}
+            for story in specification["user_stories"]:
+                if story["user_twin_reference"]["twin_id"] == dropped:
+                    story["user_twin_reference"] = specification["user_twin_references"][0]
+                    actor_scenarios = {
+                        item["id"]
+                        for item in specification["scenarios"]
+                        if item["actor"]["twin_id"] == story["user_twin_reference"]["twin_id"]
+                    }
+                    story["need_ids"] = [
+                        item["id"]
+                        for item in specification["needs"]
+                        if actor_scenarios.intersection(item["scenario_ids"])
+                    ]
+            for criterion in specification["acceptance_criteria"]:
+                criterion["user_story_ids"] = [
+                    item for item in criterion["user_story_ids"] if item in story_ids
+                ]
             for requirement in specification["requirements"]:
+                requirement["need_ids"] = [
+                    item for item in requirement["need_ids"] if item in need_ids
+                ]
                 requirement["user_twin_references"] = [
                     item
                     for item in requirement["user_twin_references"]

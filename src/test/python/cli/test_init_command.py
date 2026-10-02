@@ -215,7 +215,7 @@ def test_the_whole_path_in_italian_says_what_happens_at_each_step(tmp_path: Path
     assert "Passo 4 di 4: Definizione" in lines
     assert "Archetipo 2 di 2: Titolare della pizzeria" in lines
     assert "  Difficoltà: Conti a mente sbagliati; Attesa alla cassa" in lines
-    assert "REQ-003  Divisione del conto       importante" in lines
+    assert "- Divisione del conto" in lines
     assert (
         'Fatto: il progetto "Calcolo mancia" ha approvati tutti i passi fino alla Definizione.'
         in (lines)

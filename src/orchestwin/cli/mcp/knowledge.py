@@ -240,73 +240,127 @@ def learning(root: Path) -> tuple[Mapping[str, object], ...]:
 
 def requirements_view(document: Mapping[str, object]) -> dict[str, object]:
     specification = _mapping(document.get("specification"))
-    requirements = mappings(specification.get("requirements"))
+    groups = ("requirements", "user_stories", "acceptance_criteria", "scenarios", "needs")
     codes = {
-        str(item.get("id")): code for item in requirements if (code := _text(item.get("code")))
+        str(item.get("id")): code
+        for group in groups
+        for item in mappings(specification.get(group))
+        if (code := _text(item.get("code")))
     }
-    return {
+    links = {
+        "requirement_ids": "requirement_codes",
+        "user_story_ids": "user_story_codes",
+        "acceptance_criterion_ids": "acceptance_criterion_codes",
+        "scenario_ids": "scenario_codes",
+        "need_ids": "need_codes",
+    }
+    fields = {
+        "requirements": ("code", "title", "statement", "kind", "priority"),
+        "user_stories": ("code", "goal", "benefit"),
+        "acceptance_criteria": ("code", "statement", "verification_method"),
+        "scenarios": (
+            "code",
+            "title",
+            "context",
+            "goal",
+            "preconditions",
+            "trigger",
+            "steps",
+            "criticalities",
+            "expected_outcome",
+        ),
+        "needs": ("code", "title", "statement"),
+    }
+    view: dict[str, object] = {
         "version_number": _number(document.get("version_number")),
-        "requirements": [
-            {
-                "code": _text(item.get("code")),
-                "title": _text(item.get("title")),
-                "statement": _text(item.get("statement")),
-                "kind": _text(item.get("kind")),
-                "priority": _text(item.get("priority")),
-            }
-            for item in requirements
-        ],
-        "user_stories": [
-            {
-                "code": _text(item.get("code")),
-                "goal": _text(item.get("goal")),
-                "benefit": _text(item.get("benefit")),
-                "requirement_codes": _codes(item.get("requirement_ids"), codes),
-            }
-            for item in mappings(specification.get("user_stories"))
-        ],
-        "acceptance_criteria": [
-            {
-                "code": _text(item.get("code")),
-                "statement": _text(item.get("statement")),
-                "requirement_codes": _codes(item.get("requirement_ids"), codes),
-                "verification_method": _text(item.get("verification_method")),
-            }
-            for item in mappings(specification.get("acceptance_criteria"))
-        ],
+        "schema_version": specification.get("schema_version", 1),
     }
+    for group in groups:
+        entries = []
+        for item in mappings(specification.get(group)):
+            entry = {key: item[key] for key in fields[group] if key in item}
+            for key, label in links.items():
+                if key in item:
+                    entry[label] = _codes(item[key], codes)
+            for key in ("actor", "user_twin_reference", "user_twin_references", "sources"):
+                if key in item:
+                    entry[key] = item[key]
+            entries.append(entry)
+        view[group] = entries
+    view["actors"] = requirement_actors(view)
+    return view
+
+
+def requirement_actors(view: Mapping[str, object]) -> list[Mapping[str, object]]:
+    actors: dict[str, Mapping[str, object]] = {}
+    for group in ("requirements", "user_stories", "scenarios"):
+        for item in mappings(view.get(group)):
+            references = mappings(item.get("user_twin_references"))
+            for key in ("actor", "user_twin_reference"):
+                actor = item.get(key)
+                if isinstance(actor, Mapping):
+                    references.append(actor)
+            for actor in references:
+                actors[str(actor.get("twin_id"))] = actor
+    return list(actors.values())
 
 
 def select_codes(
     view: Mapping[str, object], codes: Sequence[str]
 ) -> tuple[dict[str, object], list[str]]:
+    groups = ("requirements", "user_stories", "acceptance_criteria", "scenarios", "needs")
+    entries = {
+        str(item.get("code")): item for group in groups for item in mappings(view.get(group))
+    }
     wanted = {code.upper() for code in codes}
-    requirements = [item for item in mappings(view.get("requirements"))]
-    chosen = {item.get("code") for item in requirements if item.get("code") in wanted}
-
-    def picked(item: Mapping[str, object]) -> bool:
-        cited = item.get("requirement_codes")
-        cited_codes = set(cited) if isinstance(cited, list) else set()
-        return item.get("code") in wanted or bool(chosen & cited_codes)
-
-    stories = [item for item in mappings(view.get("user_stories")) if picked(item)]
-    criteria = [item for item in mappings(view.get("acceptance_criteria")) if picked(item)]
-    known = {
-        item.get("code")
-        for group in ("requirements", "user_stories", "acceptance_criteria")
-        for item in mappings(view.get(group))
+    selected = wanted & entries.keys()
+    link_keys = (
+        "requirement_codes",
+        "user_story_codes",
+        "acceptance_criterion_codes",
+        "scenario_codes",
+        "need_codes",
+    )
+    downstream = {
+        "SCN": (("needs", "scenario_codes"),),
+        "NED": (("requirements", "need_codes"), ("user_stories", "need_codes")),
+        "REQ": (
+            ("user_stories", "requirement_codes"),
+            ("acceptance_criteria", "requirement_codes"),
+        ),
+        "USR": (("acceptance_criteria", "user_story_codes"),),
     }
-    unknown: list[str] = []
-    for code in codes:
-        if code.upper() not in known and code.upper() not in unknown:
-            unknown.append(code.upper())
-    selected = {
+    for prefix in ("SCN", "NED", "REQ", "USR"):
+        upstream = {code for code in selected if code.startswith(prefix + "-")}
+        for group, key in downstream[prefix]:
+            selected.update(
+                str(item["code"])
+                for item in mappings(view.get(group))
+                if upstream & set(item.get(key, []))
+            )
+    while True:
+        dependencies = {
+            linked
+            for code in selected
+            for key in link_keys
+            for linked in entries[code].get(key, [])
+            if linked in entries
+        }
+        expanded = selected | dependencies
+        if expanded == selected:
+            break
+        selected = expanded
+    result = {
         **view,
-        "requirements": [item for item in requirements if item.get("code") in chosen],
-        "user_stories": stories,
-        "acceptance_criteria": criteria,
+        **{
+            group: [item for item in mappings(view.get(group)) if item.get("code") in selected]
+            for group in groups
+        },
     }
-    return selected, unknown
+    result["actors"] = requirement_actors(result)
+    return result, list(
+        dict.fromkeys(code.upper() for code in codes if code.upper() not in entries)
+    )
 
 
 def design_view(document: Mapping[str, object]) -> DesignView:

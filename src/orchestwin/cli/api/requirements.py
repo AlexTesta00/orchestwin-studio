@@ -18,6 +18,7 @@ UNCHANGED: Final = "REQUIREMENTS_UNCHANGED"
 PRIORITIES: Final = ("MUST", "SHOULD", "COULD", "WONT_FOR_NOW")
 KINDS: Final = ("FUNCTIONAL", "NON_FUNCTIONAL", "CONSTRAINT")
 ARTIFACT_KINDS: Final = (
+    "NEED",
     "REQUIREMENT",
     "USER_STORY",
     "ACCEPTANCE_CRITERION",
@@ -30,6 +31,7 @@ ARTIFACT_KEYS: Final = {
     "USER_STORY": "user_story",
     "ACCEPTANCE_CRITERION": "acceptance_criterion",
     "SCENARIO": "scenario",
+    "NEED": "need",
     "RISK": "risk",
     "DEFINITION_OF_DONE": "definition_of_done",
 }

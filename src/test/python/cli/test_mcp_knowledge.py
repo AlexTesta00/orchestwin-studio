@@ -419,7 +419,10 @@ def test_the_requirements_view_names_every_item_by_its_code() -> None:
     assert [item["code"] for item in view["requirements"]] == [
         f"REQ-00{number}" for number in range(1, 8)
     ]
-    assert view["requirements"][0] == {
+    assert {
+        key: view["requirements"][0][key]
+        for key in ("code", "title", "statement", "kind", "priority")
+    } == {
         "code": "REQ-001",
         "title": "Aggiunta ospite",
         "statement": "Inserire il nome di un ospite e aggiungerlo alla lista",
@@ -437,6 +440,7 @@ def test_the_requirements_view_names_every_item_by_its_code() -> None:
             "statement": "L'applicazione deve consentire l'inserimento di un nome ospite e la "
             "sua visualizzazione immediata nella lista.",
             "requirement_codes": ["REQ-001", "REQ-002"],
+            "user_story_codes": ["USR-002", "USR-001"],
             "verification_method": "DEMONSTRATION",
         }
     ]
@@ -445,12 +449,42 @@ def test_the_requirements_view_names_every_item_by_its_code() -> None:
 @pytest.mark.parametrize(
     ("codes", "requirements", "stories", "criteria", "unknown"),
     [
-        (["REQ-001"], ["REQ-001"], ["USR-002"], ["AC-001"], []),
-        (["REQ-004"], ["REQ-004"], ["USR-001"], [], []),
+        (
+            ["REQ-001"],
+            ["REQ-001", "REQ-002", "REQ-003", "REQ-004"],
+            ["USR-001", "USR-002"],
+            ["AC-001"],
+            [],
+        ),
+        (
+            ["REQ-004"],
+            ["REQ-001", "REQ-002", "REQ-003", "REQ-004"],
+            ["USR-001", "USR-002"],
+            ["AC-001"],
+            [],
+        ),
         (["REQ-006"], ["REQ-006"], [], [], []),
-        (["USR-001"], [], ["USR-001"], [], []),
-        (["AC-001", "XYZ-1", "xyz-1"], [], [], ["AC-001"], ["XYZ-1"]),
-        (["req-003", "REQ-002"], ["REQ-002", "REQ-003"], ["USR-001", "USR-002"], ["AC-001"], []),
+        (
+            ["USR-001"],
+            ["REQ-001", "REQ-002", "REQ-003", "REQ-004"],
+            ["USR-001", "USR-002"],
+            ["AC-001"],
+            [],
+        ),
+        (
+            ["AC-001", "XYZ-1", "xyz-1"],
+            ["REQ-001", "REQ-002", "REQ-003", "REQ-004"],
+            ["USR-001", "USR-002"],
+            ["AC-001"],
+            ["XYZ-1"],
+        ),
+        (
+            ["req-003", "REQ-002"],
+            ["REQ-001", "REQ-002", "REQ-003", "REQ-004"],
+            ["USR-001", "USR-002"],
+            ["AC-001"],
+            [],
+        ),
     ],
 )
 def test_codes_select_their_items_and_what_cites_the_requirements(

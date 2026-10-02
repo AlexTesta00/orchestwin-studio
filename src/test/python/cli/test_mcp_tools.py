@@ -709,13 +709,18 @@ def test_the_requirements_come_whole_or_selected_by_their_codes(tmp_path: Path) 
     assert [item["code"] for item in whole["user_stories"]] == ["USR-001", "USR-002"]
     assert [item["code"] for item in whole["acceptance_criteria"]] == ["AC-001"]
     assert "unknown_codes" not in whole
-    assert selected == {
-        "version_number": 2,
-        "requirements": [whole["requirements"][0]],
-        "user_stories": [whole["user_stories"][1]],
-        "acceptance_criteria": whole["acceptance_criteria"],
-        "unknown_codes": ["XYZ-9"],
-    }
+    assert selected["version_number"] == 2
+    assert selected["schema_version"] == 1
+    assert selected["needs"] == []
+    assert [item["code"] for item in selected["requirements"]] == [
+        "REQ-001",
+        "REQ-002",
+        "REQ-003",
+        "REQ-004",
+    ]
+    assert selected["user_stories"] == whole["user_stories"]
+    assert selected["acceptance_criteria"] == whole["acceptance_criteria"]
+    assert selected["unknown_codes"] == ["XYZ-9"]
 
 
 def test_the_requirements_of_a_folder_without_them_are_a_stage_not_approved(
