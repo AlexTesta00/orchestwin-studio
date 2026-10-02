@@ -12,6 +12,7 @@
   "command.twinsUpdate": "Let the twins learn from the development (ut twins update, may spend)",
   "command.openReport": "Open the report of the latest test run",
   "command.connectAgents": "Connect the twins to the agents of the editor",
+  "command.why": "Why? Read the artifact chain from the local folder (ut why --offline)",
   "configuration.title": "OrchesTwin",
-  "configuration.utCommand": "The program that the buttons of the panel start in the terminal: ut, or its full path."
+  "configuration.utCommand": "The program used by the panel: ut, or its full path. Why? runs it offline; development commands run in the terminal."
 }

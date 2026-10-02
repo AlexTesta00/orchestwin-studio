@@ -91,6 +91,11 @@
         "command": "orchestwin.connectAgents",
         "title": "%command.connectAgents%",
         "category": "OrchesTwin"
+      },
+      {
+        "command": "orchestwin.why",
+        "title": "%command.why%",
+        "category": "OrchesTwin"
       }
     ],
     "menus": {

@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { agentsState } = require("./agents");
+const { readWhyCatalog } = require("./why");
 
 const LOCAL_FOLDER = ".orchestwin";
 const KNOWLEDGE_FOLDER = "orchestwin";
@@ -189,6 +190,7 @@ function emptyState(root) {
     twins: emptyTwins("MISSING"),
     code: null,
     agents: agentsState(root),
+    why: { available: false, problem: "MISSING", items: [] },
   };
 }
 
@@ -734,6 +736,12 @@ function readLinkedProject(root) {
   const manifest = reader.read(inFolder(FOLDER_FILES.manifest));
   state.folder = folderOf(manifest, knowledge);
   if (state.folder.available) {
+    state.why = readWhyCatalog(
+      root,
+      knowledge,
+      manifest.value,
+      state.project.id,
+    );
     const documents = {
       state: reader.read(inFolder(FOLDER_FILES.state)),
       twins: reader.read(inFolder(FOLDER_FILES.twins)),
