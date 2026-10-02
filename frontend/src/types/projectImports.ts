@@ -31,6 +31,8 @@ export interface ProjectImportPayload {
   twins: ImportedTwinPayload[];
   imported_at: string;
   approval_required: string[];
+  why_verified?: boolean;
+  import_limits?: string[];
 }
 
 export interface ProjectImportOriginPayload {

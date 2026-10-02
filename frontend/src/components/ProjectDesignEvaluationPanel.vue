@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, useId, watch } from "vue";
 
 import GenerationJobNotice from "./GenerationJobNotice.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 import InsightApplyMenu from "./InsightApplyMenu.vue";
 import UiButton from "./UiButton.vue";
 import {
@@ -748,6 +749,16 @@ watch(autoReviewDue, (due) => {
                 <p class="m-0 text-[15px] leading-[1.4] font-semibold">
                   {{ entry.summary }}
                 </p>
+                <ArtifactWhy
+                  :code="entry.finding.finding_id"
+                  :title="entry.summary"
+                  kind="SYNTHETIC_FINDING"
+                  :version-number="entry.finding.artifact_version"
+                  :content-hash="entry.finding.content_hash"
+                  :contexts="[view.run.id, entry.finding.twin_id]"
+                  :locale="locale"
+                  test-id="finding-why"
+                />
                 <p class="m-0 text-[13px] text-on-night-3">
                   {{ copy.location }}: {{ entry.location }}
                 </p>

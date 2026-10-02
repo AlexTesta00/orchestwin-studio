@@ -14,6 +14,8 @@ import {
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import ArchetypeEditor from "./ArchetypeEditor.vue";
 import TwinPersonaView from "./TwinPersonaView.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
+import { twinClaimCode } from "./whyContext";
 import {
   archetypeOf,
   claimText,
@@ -2794,6 +2796,23 @@ watchUpstream(
                   :confidence="observation.confidence"
                   :human-validation="observation.human_validation"
                   :locale="locale"
+                />
+                <ArtifactWhy
+                  v-if="profileTwin"
+                  :code="
+                    twinClaimCode(
+                      profileTwin.twin_id,
+                      profileTwin.version_number,
+                      observation.observation_key,
+                    )
+                  "
+                  kind="USER_TWIN_CLAIM"
+                  :title="observationLabel(observation)"
+                  :artifact-id="profileTwin.twin_id"
+                  :version-number="profileTwin.version_number"
+                  :content-hash="profileTwin.content_hash"
+                  :locale="locale"
+                  test-id="claim-why"
                 />
                 <UserModelingProvenanceInspector :observation="observation" :locale="locale" />
               </div>

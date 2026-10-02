@@ -12,6 +12,10 @@ import {
   type ProjectStage,
 } from "@/api/contracts";
 import { projectImportsApi } from "@/api/projectImports";
+import { whyApi } from "@/api/why";
+import { whyContextKey } from "@/components/whyContext";
+import ProjectImportVerification from "@/components/ProjectImportVerification.vue";
+import { projectImportResult } from "@/stores/projectImportResults";
 import GeneratedMockupFrame from "@/components/GeneratedMockupFrame.vue";
 import InsightBriefTray from "@/components/InsightBriefTray.vue";
 import ProjectArtifactGraph from "@/components/ProjectArtifactGraph.vue";
@@ -259,6 +263,8 @@ const projectId = computed(() => {
   return value ?? "";
 });
 const trayVisible = computed(() => tray.isVisible(projectId.value));
+const importResult = computed(() => projectImportResult(projectId.value));
+provide(whyContextKey, { projectId: () => projectId.value, authorize: authorized, api: whyApi });
 const briefKnown = computed(() => !loading.value && !reloading.value && project.value !== null);
 
 function settledOnPage(
@@ -971,6 +977,11 @@ onUnmounted(() => {
           }}
         </p>
 
+        <ProjectImportVerification
+          v-if="importResult"
+          :result="importResult"
+          :locale="locale === 'it' ? 'it' : 'en'"
+        />
         <ProjectSectionsNotice
           v-if="(sectionsMode || evidenceReviewNotice) && sectionsData !== null"
           :sections="sectionsData"

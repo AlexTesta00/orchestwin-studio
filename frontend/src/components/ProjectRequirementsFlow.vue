@@ -17,6 +17,7 @@ import ArtifactViewSwitch, { type ArtifactView } from "./ArtifactViewSwitch.vue"
 import GenerationJobNotice from "./GenerationJobNotice.vue";
 import ProjectDiagramsView from "./ProjectDiagramsView.vue";
 import RequirementsTableView from "./RequirementsTableView.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 import RequirementsDefinitionView from "./RequirementsDefinitionView.vue";
 import RequirementsTraceabilityView from "./RequirementsTraceabilityView.vue";
 import RequirementsTwinAlignment from "./RequirementsTwinAlignment.vue";
@@ -1819,6 +1820,8 @@ onBeforeUnmount(() => {
         role="tabpanel"
         :aria-labelledby="tabIdOf('table')"
         :specification="specification"
+        :version-number="current.version_number"
+        :content-hash="current.content_hash"
         :locale="locale"
         data-testid="requirements-table-view"
       />
@@ -1871,6 +1874,8 @@ onBeforeUnmount(() => {
           ref="definitionView"
           :highlighted="highlighted"
           :specification="specification"
+          :version-number="current.version_number"
+          :content-hash="current.content_hash"
           :locale="locale"
           @select-item="openItem"
         />
@@ -1932,6 +1937,16 @@ onBeforeUnmount(() => {
                   class="grid gap-4 pr-3 pb-4 pl-9 sm:pl-32"
                   data-testid="requirement-detail"
                 >
+                  <ArtifactWhy
+                    :code="requirement.code"
+                    :title="requirement.title"
+                    kind="REQUIREMENT"
+                    :artifact-id="requirement.id"
+                    :version-number="current.version_number"
+                    :content-hash="current.content_hash"
+                    :locale="locale"
+                    test-id="requirement-why"
+                  />
                   <div class="min-w-0">
                     <p class="m-0 text-[15px] leading-normal">{{ requirement.statement }}</p>
                     <p

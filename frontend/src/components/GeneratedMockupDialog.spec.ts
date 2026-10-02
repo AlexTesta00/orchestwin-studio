@@ -11,6 +11,8 @@ import GeneratedMockupDialog, {
 } from "./GeneratedMockupDialog.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
 import source from "./GeneratedMockupDialog.vue?raw";
+import { whyContextKey } from "./whyContext";
+import { whyDocument, whyNode } from "../test/whyFixtures";
 
 function documentFor(entry: string): MockupDocument {
   return {
@@ -143,6 +145,59 @@ describe("generated mockup dialog", () => {
     expect(document.querySelector(".mockup-marker")).toBeNull();
     expect(all("[data-testid='mockup-dialog'] iframe")).toHaveLength(1);
     expect(source).not.toMatch(/v-html|innerHTML|allow-/);
+  });
+
+  it("adds precise Studio element controls without changing generated HTML or sandbox permissions", async () => {
+    const mockup = documentFor("SCR-001");
+    const node = whyNode({
+      key: "exact-element",
+      kind: "PROTOTYPE_ELEMENT",
+      code: "ELM-014",
+      title: "Ricerca",
+      declared_context: {
+        perspectives: [],
+        mockup: {
+          alternative_id: mockup.alternative_id,
+          prototype_id: "prototype",
+          screen_code: "SCR-001",
+          source: "LATEST",
+          document_hashes: { "SCR-001": mockup.content_hash },
+        },
+      },
+    });
+    const api = { document: vi.fn().mockResolvedValue(whyDocument([node])), explain: vi.fn() };
+    wrapper = mount(GeneratedMockupDialog, {
+      props: { title: "Prestiti", document: mockup, locale: "it" },
+      global: {
+        plugins: [createAppI18n("it")],
+        provide: {
+          [whyContextKey as symbol]: {
+            projectId: () => "project",
+            api,
+            authorize: <T>(request: (token: string) => Promise<T>) => request("token"),
+          },
+        },
+      },
+      attachTo: document.body,
+    });
+    const frame = query<HTMLIFrameElement>("iframe");
+    const html = frame.getAttribute("srcdoc");
+    const picker = query<HTMLDetailsElement>('[data-testid="mockup-why-elements"]');
+    query('[data-focus-guard="start"]').focus();
+    expect(document.activeElement).toBe(picker.querySelector("summary"));
+    picker.open = true;
+    picker.dispatchEvent(new Event("toggle"));
+    await flushPromises();
+    expect(query('[data-testid="mockup-why-element"]').textContent).toContain("Ricerca");
+    expect(query('[data-testid="mockup-element-why"]').getAttribute("data-why-code")).toBe(
+      node.key,
+    );
+    expect(frame.getAttribute("srcdoc")).toBe(html);
+    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(wrapper.getComponent(GeneratedMockupFrame).props("html")).toBe(mockup.html);
+    expect(api.explain).not.toHaveBeenCalled();
+    query('[data-focus-guard="start"]').focus();
+    expect(document.activeElement).toBe(query('[data-testid="mockup-element-why"] summary'));
   });
 
   it("closes with Escape, with its button and with a click outside the window", () => {

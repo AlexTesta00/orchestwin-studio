@@ -13,6 +13,7 @@ import UiSurface from "@/components/UiSurface.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useProjectsStore } from "@/stores/projects";
 import type { ProjectImportPayload } from "@/types/projectImports";
+import { rememberProjectImportResult } from "@/stores/projectImportResults";
 
 type Start = ProjectMode | "folder";
 
@@ -270,6 +271,7 @@ async function showAll(): Promise<void> {
 }
 
 async function onImported(payload: ProjectImportPayload): Promise<void> {
+  rememberProjectImportResult(payload);
   closeDialog();
   await projectStore.loadProjects(apiClient, auth);
   await router.push({
