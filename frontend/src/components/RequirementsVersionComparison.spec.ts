@@ -64,6 +64,28 @@ function version(
 }
 
 describe("RequirementsVersionComparison", () => {
+  it("compares a need by its surviving identity across definition versions", () => {
+    const before = version(1, "Search guests.");
+    const after = version(2, "Search guests.");
+    const need = {
+      id: "need-32",
+      code: "NED-001",
+      title: "Recognize guests",
+      statement: "Identify guests",
+      scenario_ids: ["scenario-32"],
+      sources: [],
+    };
+    before.specification.schema_version = 2;
+    after.specification.schema_version = 2;
+    before.specification.needs = [need];
+    after.specification.needs = [{ ...need, statement: "Identify guests reliably" }];
+    const wrapper = mount(RequirementsVersionComparison, {
+      props: { versions: [before, after], locale: "it" },
+    });
+    const row = wrapper.findAll("tbody tr").find((row) => row.text().includes("NED-001"))!;
+    expect(row.text()).toContain("Bisogno");
+    expect(row.text()).toContain("Modificato");
+  });
   it("reports changed artifacts between the latest two versions", () => {
     const wrapper = mount(RequirementsVersionComparison, {
       props: {

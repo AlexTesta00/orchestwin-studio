@@ -662,6 +662,70 @@ function prioritized(
 }
 
 describe("ProjectRequirementsFlow", () => {
+  it("opens a need selected from the diagram and preserves schema 2 when proposing a requirement edit", async () => {
+    const version: RequirementsSpecificationVersionPayload = structuredClone(RICH_VERSION);
+    const twin = version.specification.user_twin_references[0]!;
+    version.specification.schema_version = 2;
+    version.specification.scenarios = [
+      {
+        id: "scenario-32",
+        code: "SCN-001",
+        title: "Guest arrives",
+        actor: twin,
+        context: "At reception",
+        goal: "Recognize the guest",
+        trigger: "Guest arrives",
+        preconditions: [],
+        steps: ["Find the guest"],
+        criticalities: [],
+        sources: version.specification.requirements[0]!.sources,
+        expected_outcome: "Guest found",
+        requirement_ids: [REQUIREMENT_ID],
+        acceptance_criterion_ids: [],
+      },
+    ];
+    version.specification.needs = [
+      {
+        id: "need-32",
+        code: "NED-001",
+        title: "Recognize guests",
+        statement: "Recognize arriving guests",
+        scenario_ids: ["scenario-32"],
+        sources: version.specification.requirements[0]!.sources,
+      },
+    ];
+    for (const item of [
+      ...version.specification.requirements,
+      ...version.specification.user_stories,
+    ])
+      item.need_ids = ["need-32"];
+    const api = readyApi(null, version);
+    const wrapper = mount(ProjectRequirementsFlow, {
+      props: { projectId: PROJECT_ID, locale: "en", autoLoad: true, authorize, api },
+      global: { plugins: [createAppI18n("en")], stubs: { ProjectDiagramsView: true } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(api.calls).not.toContain("generate");
+    expect(wrapper.get('[data-testid="definition-needs-item"]').attributes("open")).toBeUndefined();
+    await wrapper.get('[data-testid="artifact-view-diagram"]').trigger("click");
+    wrapper.getComponent({ name: "ProjectDiagramsView" }).vm.$emit("select-node", "NED-001");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="definition-needs-item"]').attributes("open")).toBeDefined();
+    expect(document.activeElement?.getAttribute("data-requirements-item")).toBe("NED-001");
+    await openRow(wrapper, "REQ-001");
+    await rowOf(wrapper, "REQ-001").get('[data-testid="edit-requirement"]').trigger("click");
+    await wrapper
+      .get('[data-testid="requirement-edit-form"] input')
+      .setValue("Search arriving guests");
+    await wrapper.get('[data-testid="requirement-edit-form"]').trigger("submit");
+    await flushPromises();
+    expect(api.proposedSpecification?.schema_version).toBe(2);
+    expect(api.proposedSpecification?.needs).toEqual(version.specification.needs);
+    expect(api.proposedSpecification?.scenarios).toEqual(version.specification.scenarios);
+    expect(api.proposedSpecification?.requirements[0]?.need_ids).toEqual(["need-32"]);
+    wrapper.unmount();
+  });
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.spyOn(requirementsAlignmentApi, "status").mockResolvedValue(ALIGNED);
@@ -701,7 +765,9 @@ describe("ProjectRequirementsFlow", () => {
     const empty = wrapper.get('[data-testid="requirements-empty"]');
     expect(empty.get('[data-testid="agent-message"]').text()).toContain("Analista delle esigenze");
     expect(empty.text()).toContain("Approva prima i profili dei tuoi utenti");
-    expect(wrapper.get('[data-testid="generate-requirements"]').text()).toBe("Prepara i requisiti");
+    expect(wrapper.get('[data-testid="generate-requirements"]').text()).toBe(
+      "Prepara la definizione",
+    );
     expect(
       wrapper.get('[data-testid="generate-requirements"]').attributes("disabled"),
     ).toBeDefined();
@@ -766,14 +832,14 @@ describe("ProjectRequirementsFlow", () => {
     await flushPromises();
     const bar = wrapper.get('[data-testid="decision-bar"]');
     expect(bar.text()).toContain("The decision is yours");
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
     await wrapper.get('[data-testid="decision-primary"]').trigger("click");
     await flushPromises();
 
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(api.submitCalls).toBe(0);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toContain(
-      "Requirements approved by you",
+      "Definition approved by you",
     );
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="step-technical-details"]').text()).toContain(
@@ -795,7 +861,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(api.submitCalls).toBe(1);
     expect(api.decideGateCalls).toEqual(["APPROVE"]);
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
-      "Requirements approved by you. Next: Design & Evaluation.",
+      "Definition approved by you. Next: Design & Evaluation.",
     );
     expect(wrapper.emitted("sections-changed")).toHaveLength(1);
   });
@@ -857,7 +923,7 @@ describe("ProjectRequirementsFlow", () => {
 
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="requirements-gate-paused"]').text()).toContain(
-      "The approval of these requirements is paused.",
+      "The approval of this definition is paused.",
     );
     await wrapper.get('[data-testid="resume-requirements-gate"]').trigger("click");
     await flushPromises();
@@ -900,11 +966,11 @@ describe("ProjectRequirementsFlow", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-testid="requirements-summary"]').text()).toBe(
-      "Prepared by the Needs analyst · 2 requirements, 1 story, 1 acceptance criterion",
+      "Prepared by the Needs analyst · 0 usage scenarios, 0 needs, 1 story, 2 requirements, 1 acceptance criterion",
     );
     expect(wrapper.findAll('[data-testid="requirements-groups"] h2').map((h) => h.text())).toEqual([
-      "Must do",
-      "Should do",
+      "Functional requirements",
+      "Non-functional requirements",
     ]);
     const rows = wrapper.findAll('[data-testid="requirement-row"]');
     expect(rows.map((row) => row.attributes("data-requirements-item"))).toEqual([
@@ -913,7 +979,7 @@ describe("ProjectRequirementsFlow", () => {
     ]);
     expect(
       rows.map((row) => spokenText(row.get('[data-testid="requirement-toggle"]').element)),
-    ).toEqual(["REQ-001 Create reservations", "REQ-002 Works on tablets"]);
+    ).toEqual(["Create reservations", "Works on tablets"]);
     expect(rows.map((row) => row.get('[data-testid="requirement-detail"]').isVisible())).toEqual([
       false,
       false,
@@ -954,9 +1020,9 @@ describe("ProjectRequirementsFlow", () => {
       ],
       ["When it is finished · DOD-001", "Every essential requirement has a passing check."],
     ]);
-    const stories = wrapper.get('[data-testid="requirements-stories"]');
+    const stories = wrapper.get('[data-testid="definition-stories-item"]');
     expect(stories.attributes("open")).toBeUndefined();
-    expect(stories.get("summary").text()).toContain("1 story");
+    expect(stories.get("summary").text()).toContain("book a room quickly");
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
       "One requirement has no way to be checked yet: if you approve now, it stays unchecked.",
     );
@@ -985,7 +1051,7 @@ describe("ProjectRequirementsFlow", () => {
       "REQ-002 e REQ-003 sono senza criterio di verifica; REQ-002 e REQ-003 non sono legati a una storia.",
     );
     expect(wrapper.get('[data-testid="requirements-summary"]').text()).toBe(
-      "Preparati dall'Analista delle esigenze · 3 requisiti, 1 storia, 1 criterio di verifica",
+      "Preparati dall'Analista delle esigenze · 0 scenari d'uso, 0 bisogni, 1 storia, 3 requisiti, 1 criterio di verifica",
     );
   });
 
@@ -1016,7 +1082,7 @@ describe("ProjectRequirementsFlow", () => {
 
     expect(wrapper.findComponent({ name: "ProjectDiagramsView" }).exists()).toBe(false);
     expect(wrapper.get('[data-testid="requirements-text-view"]').isVisible()).toBe(true);
-    expect(wrapper.get('[data-testid="requirements-stories"]').attributes("open")).toBeDefined();
+    expect(wrapper.get('[data-testid="definition-stories-item"]').attributes("open")).toBeDefined();
     const story = wrapper.get('[data-requirements-item="USR-001"]');
     expect(document.activeElement).toBe(story.element);
     expect(story.classes()).toContain("ring-petrol-on-night/60");
@@ -1198,7 +1264,7 @@ describe("ProjectRequirementsFlow", () => {
     );
     expect(wrapper.text()).not.toContain("GATE_BLOCKED");
     expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
   });
 
   it("approves with the same button when only the approval failed the first time", async () => {
@@ -1215,7 +1281,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(api.submitCalls).toBe(1);
     expect(decide).toHaveBeenCalledTimes(1);
     expect(wrapper.get('[data-testid="requirements-error"]').text()).toBe(
-      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the requirements” again.",
+      "The requirements are ready for your approval, but the approval did not go through. Press “Approve the definition” again.",
     );
     expect(wrapper.find('[data-testid="requirements-readiness"]').exists()).toBe(false);
 
@@ -1304,7 +1370,8 @@ describe("ProjectRequirementsFlow", () => {
     const wrapper = mountFlow(api, true, { attach: true });
     await flushPromises();
     await wrapper.get('[data-testid="step-technical-details-toggle"]').trigger("click");
-    (wrapper.get('[data-testid="requirements-stories"]').element as HTMLDetailsElement).open = true;
+    (wrapper.get('[data-testid="definition-stories-item"]').element as HTMLDetailsElement).open =
+      true;
     (wrapper.get('[data-testid="requirements-checks"]').element as HTMLDetailsElement).open = true;
     await wrapper.get('[data-testid="requirements-toggle-all"]').trigger("click");
 
@@ -1321,7 +1388,7 @@ describe("ProjectRequirementsFlow", () => {
       "true",
     );
     expect(wrapper.get('[data-testid="artifact-view-switch"]').attributes("aria-label")).toBe(
-      "Vista dei requisiti",
+      "Vista della definizione",
     );
     const text = wrapper.get('[data-testid="requirements-text-view"]');
     expect(text.isVisible()).toBe(true);
@@ -1491,7 +1558,7 @@ describe("ProjectRequirementsFlow", () => {
     expect(wrapper.get('[data-testid="requirements-twin-alignment-done"]').text()).toContain(
       "Version 2 of the requirements is ready with the same content. Approve it again below.",
     );
-    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the requirements");
+    expect(wrapper.get('[data-testid="decision-primary"]').text()).toBe("Approve the definition");
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeUndefined();
     await expectAccessible(wrapper.element);
   });
@@ -1610,7 +1677,7 @@ describe("ProjectRequirementsFlow and the titles first", () => {
     const detail = row.get('[data-testid="requirement-detail"]');
     expect(toggle.element.tagName).toBe("BUTTON");
     expect(toggle.attributes("type")).toBe("button");
-    expect(spokenText(toggle.element)).toBe("REQ-001 Create reservations");
+    expect(spokenText(toggle.element)).toBe("Create reservations");
     expect(toggle.attributes("aria-expanded")).toBe("false");
     expect(toggle.attributes("aria-controls")).toBe(detail.attributes("id"));
     expect(detail.isVisible()).toBe(false);
@@ -1806,9 +1873,9 @@ describe("ProjectRequirementsFlow and the titles first", () => {
           .element.compareDocumentPosition(checks.element) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(
-        checks.element.compareDocumentPosition(
-          wrapper.get('[data-testid="requirements-stories"]').element,
-        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+        wrapper
+          .get('[data-testid="definition-stories-item"]')
+          .element.compareDocumentPosition(checks.element) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
 
       await checks.get("summary").trigger("click");
@@ -1894,7 +1961,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     expect(wrapper.find('[data-testid="requirements-gate-closed"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="decision-note"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
-      "La nuova versione aspetta qui sopra: applicala, poi approva qui i requisiti.",
+      "La nuova versione aspetta qui sopra: applicala, poi approva qui la definizione.",
     );
     expect(wrapper.get('[data-testid="decision-primary"]').attributes("disabled")).toBeDefined();
     wrapper.unmount();
@@ -1974,7 +2041,7 @@ describe("ProjectRequirementsFlow and a change asked in words", () => {
     expect(detail.isVisible()).toBe(true);
     expect(detail.text()).toContain("The system must create guest reservations.");
     const primary = wrapper.get('[data-testid="decision-primary"]');
-    expect(primary.text()).toBe("Approve the requirements");
+    expect(primary.text()).toBe("Approve the definition");
     expect(primary.attributes("disabled")).toBeUndefined();
     expect(wrapper.get('[data-testid="step-technical-details"]').text()).toContain(
       "Version 2 · waiting for your decision",
@@ -2252,7 +2319,7 @@ describe("ProjectRequirementsFlow in sections mode", () => {
     await flushPromises();
 
     expect(wrapper.get('[data-testid="requirements-readiness"]').text()).toBe(
-      "Requirements approved by you. Next: Design & Evaluation.",
+      "Definition approved by you. Next: Design & Evaluation.",
     );
     expect(wrapper.find('[data-testid="decision-bar"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="decision-secondary"]').exists()).toBe(false);
@@ -2262,15 +2329,15 @@ describe("ProjectRequirementsFlow in sections mode", () => {
   it.each([
     [
       "en",
-      "You approved these requirements. You can still ask for a change in words: the new version comes back here for your approval.",
+      "You approved this definition. You can still ask for a change in words: the new version comes back here for your approval.",
       "Ask for changes",
-      "Approve the requirements",
+      "Approve the definition",
     ],
     [
       "it",
-      "Hai approvato questi requisiti. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
+      "Hai approvato questa definizione. Puoi ancora chiedere una modifica a parole: la nuova versione torna qui per la tua approvazione.",
       "Chiedi modifiche",
-      "Approva i requisiti",
+      "Approva la definizione",
     ],
   ] as const)(
     "offers in %s the change in words on an approved specification in sections mode",
@@ -2316,7 +2383,7 @@ describe("ProjectRequirementsFlow in sections mode", () => {
       "Add the search by name.",
     );
     expect(wrapper.get('[data-testid="decision-bar"]').text()).toContain(
-      "The new version is waiting above: apply it, then approve the requirements here.",
+      "The new version is waiting above: apply it, then approve the definition here.",
     );
     expect(wrapper.emitted("sections-changed")).toHaveLength(1);
 
@@ -2325,7 +2392,7 @@ describe("ProjectRequirementsFlow in sections mode", () => {
 
     expect(wrapper.emitted("sections-changed")).toHaveLength(2);
     const primary = wrapper.get('[data-testid="decision-primary"]');
-    expect(primary.text()).toBe("Approve the requirements");
+    expect(primary.text()).toBe("Approve the definition");
     expect(primary.attributes("disabled")).toBeUndefined();
 
     await primary.trigger("click");

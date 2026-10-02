@@ -49,6 +49,14 @@ const props = withDefaults(
 
 const messages = {
   en: {
+    needs: { title: "Needs", description: "Needs linked to their scenarios and sources." },
+    noNeeds: "Needs were not recorded in this definition.",
+    context: "Context",
+    criticalities: "Potential difficulties",
+    sources: "Sources",
+    actor: "Actor",
+    needsColumn: "Needs",
+    scenariosColumn: "Scenarios",
     requirements: {
       title: "Requirements",
       description:
@@ -65,9 +73,9 @@ const messages = {
         "Each row is a concrete check that tells whether a requirement is met, and how the check is done.",
     },
     scenarios: {
-      title: "Usage scenarios",
+      title: "Scenarios",
       description:
-        "Each row follows a real situation step by step, from what starts it to the result the person expects.",
+        "Each row follows a possible situation step by step, from what starts it to the result the person expects.",
     },
     risks: {
       title: "Risks",
@@ -148,13 +156,21 @@ const messages = {
     },
   },
   it: {
+    needs: { title: "Bisogni", description: "Bisogni collegati ai loro scenari e alle fonti." },
+    noNeeds: "I bisogni non erano registrati in questa definizione.",
+    context: "Contesto",
+    criticalities: "Criticità",
+    sources: "Fonti",
+    actor: "Attore",
+    needsColumn: "Bisogni",
+    scenariosColumn: "Scenari",
     requirements: {
       title: "Requisiti",
       description:
         "Ogni riga è una cosa che l'app deve fare o rispettare, per chi serve e come verrà controllata.",
     },
     stories: {
-      title: "Storie degli utenti",
+      title: "Storie",
       description: "Ogni riga racconta cosa vuole fare una persona con l'app e perché le serve.",
     },
     criteria: {
@@ -163,9 +179,9 @@ const messages = {
         "Ogni riga è una verifica concreta che dice se un requisito è soddisfatto, e come si fa la verifica.",
     },
     scenarios: {
-      title: "Scenari d'uso",
+      title: "Scenari",
       description:
-        "Ogni riga segue passo per passo una situazione reale, da cosa la avvia al risultato che la persona si aspetta.",
+        "Ogni riga segue passo per passo una situazione ipotizzata, da cosa la avvia al risultato che la persona si aspetta.",
     },
     risks: {
       title: "Rischi",
@@ -256,6 +272,9 @@ const criterionCodes = computed(() => codeLookup(props.specification.acceptance_
 const sections = computed<TableSection[]>(() => {
   const text = copy.value;
   const specification = props.specification;
+  const chain = specification.schema_version === 2;
+  const needTitles = new Map((specification.needs ?? []).map((item) => [item.id, item.title]));
+  const scenarioTitles = new Map(specification.scenarios.map((item) => [item.id, item.title]));
 
   return [
     {
@@ -270,6 +289,7 @@ const sections = computed<TableSection[]>(() => {
         { key: "criteria", label: text.verification, missing: text.missing },
         { key: "twins", label: text.for, nowrap: true },
         { key: "stories", label: text.storiesColumn, nowrap: true },
+        ...(chain ? [{ key: "needs", label: text.needsColumn }] : []),
       ],
       rows: specification.requirements.map((requirement) => ({
         code: requirement.code,
@@ -281,6 +301,7 @@ const sections = computed<TableSection[]>(() => {
         twins: twinNames(requirement.user_twin_references),
         stories: linkedCodes(specification.user_stories, requirement.id),
         criteria: linkedCodes(specification.acceptance_criteria, requirement.id),
+        ...(chain ? { needs: referenceCodes(requirement.need_ids ?? [], needTitles) } : {}),
       })),
     },
     {
@@ -292,6 +313,7 @@ const sections = computed<TableSection[]>(() => {
         { key: "goal", label: text.goal },
         { key: "benefit", label: text.benefit },
         { key: "requirements", label: text.requirementsColumn },
+        ...(chain ? [{ key: "needs", label: text.needsColumn }] : []),
       ],
       rows: specification.user_stories.map((story) => ({
         code: story.code,
@@ -299,6 +321,7 @@ const sections = computed<TableSection[]>(() => {
         goal: story.goal,
         benefit: story.benefit,
         requirements: referenceCodes(story.requirement_ids, requirementCodes.value),
+        ...(chain ? { needs: referenceCodes(story.need_ids ?? [], needTitles) } : {}),
       })),
     },
     {
@@ -325,12 +348,20 @@ const sections = computed<TableSection[]>(() => {
       columns: [
         { key: "code", label: text.code },
         { key: "title", label: text.title },
-        { key: "who", label: text.who },
+        { key: "who", label: text.actor },
         { key: "trigger", label: text.startsWhen },
         { key: "steps", label: text.steps },
         { key: "outcome", label: text.expected },
         { key: "requirements", label: text.requirementsColumn },
         { key: "criteria", label: text.criteriaColumn },
+        ...(chain
+          ? [
+              { key: "context", label: text.context },
+              { key: "goal", label: text.goal },
+              { key: "criticalities", label: text.criticalities },
+              { key: "sources", label: text.sources },
+            ]
+          : []),
       ],
       rows: specification.scenarios.map((scenario) => ({
         code: scenario.code,
@@ -341,6 +372,35 @@ const sections = computed<TableSection[]>(() => {
         outcome: scenario.expected_outcome,
         requirements: referenceCodes(scenario.requirement_ids, requirementCodes.value),
         criteria: referenceCodes(scenario.acceptance_criterion_ids, criterionCodes.value),
+        ...(chain
+          ? {
+              context: scenario.context ?? "",
+              goal: scenario.goal ?? "",
+              criticalities: scenario.criticalities?.join("\n") ?? "",
+              sources:
+                scenario.sources?.map((source) => source.locator ?? source.source_id).join("\n") ??
+                "",
+            }
+          : {}),
+      })),
+    },
+    {
+      key: "needs",
+      ...text.needs,
+      description: (specification.needs ?? []).length > 0 ? text.needs.description : text.noNeeds,
+      columns: [
+        { key: "code", label: text.code },
+        { key: "title", label: text.title },
+        { key: "statement", label: text.needsColumn },
+        { key: "scenarios", label: text.scenariosColumn },
+        { key: "sources", label: text.sources },
+      ],
+      rows: (specification.needs ?? []).map((need) => ({
+        code: need.code,
+        title: need.title,
+        statement: need.statement,
+        scenarios: referenceCodes(need.scenario_ids, scenarioTitles),
+        sources: need.sources.map((source) => source.locator ?? source.source_id).join("\n"),
       })),
     },
     {
@@ -383,7 +443,15 @@ const sections = computed<TableSection[]>(() => {
         requirements: referenceCodes(item.requirement_ids, requirementCodes.value),
       })),
     },
-  ];
+  ].sort(
+    (left, right) =>
+      ["scenarios", "needs", "stories", "requirements", "criteria", "risks", "done"].indexOf(
+        left.key,
+      ) -
+      ["scenarios", "needs", "stories", "requirements", "criteria", "risks", "done"].indexOf(
+        right.key,
+      ),
+  );
 });
 
 const palettes = {

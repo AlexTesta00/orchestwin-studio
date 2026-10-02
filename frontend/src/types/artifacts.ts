@@ -10,6 +10,7 @@ export type ArtifactKind =
 export type ArtifactGraphStage = "CONTEXT" | "REQUIREMENTS" | "DESIGN";
 
 export type ArtifactGraphNodeKind =
+  | "NEED"
   | "PROJECT_BRIEF"
   | "AGENT_TEAM"
   | "USER_MODELING"
@@ -30,6 +31,8 @@ export type ArtifactGraphNodeKind =
   | "PROTOTYPE_SCREEN";
 
 export type ArtifactGraphLinkKind =
+  | "PARTICIPATES_IN"
+  | "REVEALS"
   | "CONTAINS"
   | "GROUNDED_IN"
   | "ACTS_AS"

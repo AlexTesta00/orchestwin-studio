@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ArtifactGraphApi } from "../api/artifacts";
+import type { CrossStageArtifactGraphPayload } from "../types/artifacts";
 import { ARTIFACT_GRAPH, ARTIFACT_GRAPH_PROJECT_ID } from "../test/artifactGraphFixtures";
 import ProjectArtifactGraph from "./ProjectArtifactGraph.vue";
 
@@ -57,6 +58,71 @@ function mountGraph(
 }
 
 describe("ProjectArtifactGraph", () => {
+  it.each(["en", "it"] as const)(
+    "shows and filters the scenario to need chain in %s",
+    async (locale) => {
+      const graph: CrossStageArtifactGraphPayload = structuredClone(ARTIFACT_GRAPH);
+      const twin = {
+        reference: {
+          kind: "USER_TWIN" as const,
+          artifact_id: "twin-32",
+          version_number: 1,
+          content_hash: "e".repeat(64),
+        },
+        stage: "CONTEXT" as const,
+        display_code: "TWIN-001",
+        title: "Receptionist",
+      };
+      graph.nodes.push(twin);
+      graph.stage_counts.CONTEXT += 1;
+      const requirement = graph.nodes.find((node) => node.reference.kind === "REQUIREMENT")!;
+      const scenario = {
+        kind: "SCENARIO" as const,
+        artifact_id: "scenario-32",
+        version_number: null,
+        content_hash: null,
+      };
+      const need = {
+        kind: "NEED" as const,
+        artifact_id: "need-32",
+        version_number: null,
+        content_hash: null,
+      };
+      graph.nodes.push(
+        {
+          reference: scenario,
+          stage: "REQUIREMENTS",
+          display_code: "SCN-001",
+          title: "Guest arrives",
+        },
+        {
+          reference: need,
+          stage: "REQUIREMENTS",
+          display_code: "NED-001",
+          title: "Recognize guests",
+        },
+      );
+      graph.links.push(
+        { kind: "PARTICIPATES_IN", source: twin.reference, target: scenario },
+        { kind: "REVEALS", source: scenario, target: need },
+        { kind: "MOTIVATES", source: need, target: requirement.reference },
+      );
+      graph.stage_counts.REQUIREMENTS += 2;
+      const wrapper = mountGraph({ locale, api: { ...fakeApi(), current: async () => graph } });
+      await flushPromises();
+      expect(wrapper.text()).toContain(locale === "it" ? "partecipa a" : "participates in");
+      expect(wrapper.text()).toContain(locale === "it" ? "rivela" : "reveals");
+      await wrapper.get('[data-testid="artifact-kind-filter"]').setValue("NEED");
+      expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+      expect(
+        wrapper.findAll("tbody tr").every((row) => row.text().includes("Recognize guests")),
+      ).toBe(true);
+      expect(wrapper.findAll("h5").map((heading) => heading.text())).toEqual(["Recognize guests"]);
+      expect(wrapper.get('[data-testid="artifact-kind-filter"]').text()).toContain(
+        locale === "it" ? "Bisogno" : "Need",
+      );
+    },
+  );
   beforeEach(() => {
     setActivePinia(createPinia());
   });
@@ -110,10 +176,12 @@ describe("ProjectArtifactGraph", () => {
       expect(
         wrapper.findAll("section[aria-label] article h4").map((title) => title.text()),
       ).toEqual(stages);
-      expect(wrapper.findAll("select option").map((option) => option.text())).toEqual([
-        allStages,
-        ...stages,
-      ]);
+      expect(
+        wrapper
+          .get("select")
+          .findAll("option")
+          .map((option) => option.text()),
+      ).toEqual([allStages, ...stages]);
       expect(wrapper.text()).not.toMatch(OLD_STEP_NAMES);
       expect(wrapper.text()).not.toMatch(TEAM_WORDS);
     },

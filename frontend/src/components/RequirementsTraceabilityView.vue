@@ -40,6 +40,8 @@ const messages = {
     none: "None",
     kinds: {
       ACTS_AS: "acts as",
+      PARTICIPATES_IN: "participates in",
+      REVEALS: "reveals",
       MOTIVATES: "motivates",
       VERIFIED_BY: "is verified by",
       EXERCISES: "exercises",
@@ -64,6 +66,8 @@ const messages = {
     none: "Nessuno",
     kinds: {
       ACTS_AS: "interpreta",
+      PARTICIPATES_IN: "partecipa a",
+      REVEALS: "rivela",
       MOTIVATES: "motiva",
       VERIFIED_BY: "è verificato da",
       EXERCISES: "mette alla prova",
