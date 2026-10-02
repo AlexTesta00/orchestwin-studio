@@ -67,6 +67,7 @@ from orchestwin.projects.requirements_specifications import (
     create_requirements_specification,
 )
 from orchestwin.workflow.gates import HumanGateAction, HumanGateStatus
+from src.test.python.projects.test_requirements_needs import enriched_specification
 
 pytestmark = pytest.mark.integration
 
@@ -114,6 +115,7 @@ def initial_specification_version(
     *,
     project_id: UUID,
     owner_user_id: UUID,
+    schema_version: int = 1,
 ) -> RequirementsSpecificationVersion:
     """Create one complete version-one requirements baseline."""
     source = RequirementSourceReference(
@@ -194,8 +196,10 @@ def initial_specification_version(
         definition_of_done=(done,),
     )
 
+    if schema_version == 2:
+        specification = enriched_specification(specification)
     return RequirementsSpecificationVersion(
-        id=INITIAL_VERSION_ID,
+        id=UUID(int=INITIAL_VERSION_ID.int + (schema_version - 1) * 10000),
         project_id=project_id,
         version_number=1,
         based_on_version_number=None,
@@ -216,8 +220,14 @@ def iterator_factory(values):
     return next_value
 
 
-async def run_integration_scenario() -> None:
+async def run_integration_scenario(schema_version: int = 1) -> None:
     """Exercise requirements persistence, revisioning, Gate 4, and ownership."""
+    offset = (schema_version - 1) * 10000
+    diff_id = UUID(int=DIFF_ID.int + offset)
+    revised_version_id = UUID(int=REVISED_VERSION_ID.int + offset)
+    gate_id = UUID(int=GATE_ID.int + offset)
+    submit_event_id = UUID(int=SUBMIT_EVENT_ID.int + offset)
+    approve_event_id = UUID(int=APPROVE_EVENT_ID.int + offset)
     database_settings = load_database_settings(env_file=None)
     runtime = create_database_runtime(database_settings)
 
@@ -240,11 +250,11 @@ async def run_integration_scenario() -> None:
         )
 
         owner_result = await identity.register(
-            email="requirements-owner@example.com",
+            email=f"requirements-owner-s{schema_version}@example.com",
             password="Correct horse battery staple!",
         )
         other_result = await identity.register(
-            email="requirements-other@example.com",
+            email=f"requirements-other-s{schema_version}@example.com",
             password="Another correct battery staple!",
         )
 
@@ -265,6 +275,7 @@ async def run_integration_scenario() -> None:
         initial = initial_specification_version(
             project_id=project.id,
             owner_user_id=owner.id,
+            schema_version=schema_version,
         )
 
         async with command_uow_factory(owner_user_id=owner.id) as unit:
@@ -279,6 +290,8 @@ async def run_integration_scenario() -> None:
         )
 
         assert current == initial
+        assert current.specification.schema_version == schema_version
+        assert bool(current.specification.needs) is (schema_version == 2)
         assert (
             await queries.current(
                 owner_user_id=other.id,
@@ -300,7 +313,7 @@ async def run_integration_scenario() -> None:
         )
         revisions = LocalRequirementsRevisionService(
             uow_factory=command_uow_factory,
-            uuid_factory=iterator_factory((DIFF_ID, REVISED_VERSION_ID)),
+            uuid_factory=iterator_factory((diff_id, revised_version_id)),
             clock=iterator_factory(
                 (
                     BASE_TIME + timedelta(minutes=1),
@@ -317,20 +330,32 @@ async def run_integration_scenario() -> None:
 
         assert proposal.status is RequirementsRevisionStatus.CREATED
         assert proposal.diff is not None
-        assert proposal.diff.id == DIFF_ID
+        assert proposal.diff.id == diff_id
+        assert proposal.diff.proposed_specification.needs == initial.specification.needs
 
         decision = await revisions.decide_revision(
             owner_user_id=owner.id,
             project_id=project.id,
-            diff_id=DIFF_ID,
+            diff_id=diff_id,
             decision=RequirementsRevisionDecision.APPROVE,
         )
 
         assert decision.status is RequirementsRevisionStatus.APPLIED
         assert decision.version is not None
-        assert decision.version.id == REVISED_VERSION_ID
+        assert decision.version.id == revised_version_id
         assert decision.version.version_number == 2
         assert decision.version.based_on_version_number == 1
+        assert decision.version.specification.schema_version == schema_version
+        assert decision.version.specification.needs == initial.specification.needs
+        assert decision.version.specification.scenarios == initial.specification.scenarios
+        assert (
+            decision.version.specification.requirements[0].need_ids
+            == initial.specification.requirements[0].need_ids
+        )
+        assert (
+            decision.version.specification.user_stories[0].need_ids
+            == initial.specification.user_stories[0].need_ids
+        )
 
         history = await queries.history(
             owner_user_id=owner.id,
@@ -342,8 +367,14 @@ async def run_integration_scenario() -> None:
         )
 
         assert tuple(version.version_number for version in history) == (1, 2)
+        assert tuple(version.specification.schema_version for version in history) == (
+            schema_version,
+            schema_version,
+        )
+        assert history[0] == initial
+        assert history[1] == decision.version
         assert len(diff_history) == 1
-        assert diff_history[0].applied_specification_version_id == REVISED_VERSION_ID
+        assert diff_history[0].applied_specification_version_id == revised_version_id
 
         gate = LocalRequirementsGateService(
             unit_of_work_factory=SqlAlchemyRequirementsGateUnitOfWorkFactory(
@@ -355,8 +386,8 @@ async def run_integration_scenario() -> None:
                     BASE_TIME + timedelta(minutes=4),
                 )
             ),
-            gate_id_factory=lambda: GATE_ID,
-            event_id_factory=iterator_factory((SUBMIT_EVENT_ID, APPROVE_EVENT_ID)),
+            gate_id_factory=lambda: gate_id,
+            event_id_factory=iterator_factory((submit_event_id, approve_event_id)),
         )
 
         submission = await gate.submit(
@@ -366,7 +397,7 @@ async def run_integration_scenario() -> None:
 
         assert submission.status is RequirementsGateSubmissionStatus.SUBMITTED
         assert submission.gate is not None
-        assert submission.gate.artifact.artifact_id == REVISED_VERSION_ID
+        assert submission.gate.artifact.artifact_id == revised_version_id
         assert submission.gate.status is HumanGateStatus.PENDING_APPROVAL
 
         approval = await gate.decide(
@@ -386,10 +417,11 @@ async def run_integration_scenario() -> None:
         events = await gate.gate_events(
             project_id=project.id,
             owner_user_id=owner.id,
-            gate_id=GATE_ID,
+            gate_id=gate_id,
         )
 
         assert readiness.status is RequirementsWorkflowReadiness.READY_FOR_DESIGN_EXPLORATION
+        assert readiness.version == decision.version
         assert len(events) == 2
 
         async with runtime.engine.connect() as connection:
@@ -397,11 +429,11 @@ async def run_integration_scenario() -> None:
                 (
                     await connection.execute(
                         text(
-                            "SELECT traceability_snapshot, coverage_snapshot "
+                            "SELECT schema_version, traceability_snapshot, coverage_snapshot "
                             "FROM requirements_specification_versions "
                             "WHERE id = :version_id"
                         ),
-                        {"version_id": REVISED_VERSION_ID},
+                        {"version_id": revised_version_id},
                     )
                 )
                 .mappings()
@@ -409,6 +441,11 @@ async def run_integration_scenario() -> None:
             )
 
             assert row["traceability_snapshot"]["links"]
+            assert row["schema_version"] == schema_version
+            assert any(
+                node["reference"]["kind"] == "NEED"
+                for node in row["traceability_snapshot"]["nodes"]
+            ) is (schema_version == 2)
             assert row["coverage_snapshot"]["has_full_acceptance_coverage"] is True
 
         mutation_rejected = False
@@ -423,7 +460,7 @@ async def run_integration_scenario() -> None:
                     ),
                     {
                         "content_hash": "0" * 64,
-                        "version_id": REVISED_VERSION_ID,
+                        "version_id": revised_version_id,
                     },
                 )
         except DBAPIError:
@@ -443,9 +480,10 @@ async def run_integration_scenario() -> None:
         await runtime.dispose()
 
 
-def test_postgresql_requirements_and_gate_four_main_path() -> None:
+@pytest.mark.parametrize("schema_version", (1, 2))
+def test_postgresql_requirements_and_gate_four_main_path(schema_version: int) -> None:
     """Verify the Requirements stage on a migrated PostgreSQL database."""
     asyncio.run(
-        run_integration_scenario(),
+        run_integration_scenario(schema_version),
         loop_factory=asyncio.SelectorEventLoop,
     )

@@ -456,6 +456,7 @@ class ModelRequirementsAdapter:
     async def propose(self, request):
         _require(AgentIdentifier.REQUIREMENTS_ANALYST in request.team.selected_agent_ids)
         from orchestwin.models.requirements_drafts import (
+            REQUIREMENTS_CHAIN_INSTRUCTION,
             REQUIREMENTS_CHANGE_INSTRUCTION,
             RequirementsDraft,
             bind_requirements,
@@ -466,10 +467,11 @@ class ModelRequirementsAdapter:
         route = self.generator.route("requirements", context.get("purpose"))
         instruction = (
             "Write a concise complete requirements baseline in the brief's language. "
-            "Use codes REQ-001, USR-001, AC-001, SCN-001, RSK-001, DOD-001. "
+            "Use codes REQ-001, USR-001, AC-001, SCN-001, NED-001, RSK-001, DOD-001. "
             "References use these codes, never UUIDs. Sources must be exact keys from "
             "context.evidence; twins must be exact keys from context.twins. "
             "Cover every brief requirement and each twin with a story and scenario. "
+            f"{REQUIREMENTS_CHAIN_INSTRUCTION} "
             "Be proportionate to the project: context.limits holds the largest number of items "
             "that each list may have. A limit is a ceiling and not a target: write fewer items "
             "when the project needs fewer. When the brief names more needs than a limit allows, "

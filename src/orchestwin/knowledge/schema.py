@@ -861,7 +861,51 @@ class DefinitionOfDoneItem(_Record):
 
 
 class RequirementsSpecificationSnapshot(_Record):
-    schema_version: Literal[REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION] = Field(
+    model_config = ConfigDict(
+        json_schema_extra={
+            "allOf": [
+                {
+                    "if": {"properties": {"schema_version": {"const": 1}}},
+                    "then": {
+                        "not": {
+                            "anyOf": [
+                                {"required": ["needs"]},
+                                *(
+                                    {
+                                        "properties": {
+                                            name: {"contains": {"required": ["need_ids"]}}
+                                        },
+                                        "required": [name],
+                                    }
+                                    for name in ("requirements", "user_stories")
+                                ),
+                                {
+                                    "properties": {
+                                        "scenarios": {
+                                            "contains": {
+                                                "anyOf": [
+                                                    {"required": [field]}
+                                                    for field in (
+                                                        "context",
+                                                        "goal",
+                                                        "criticalities",
+                                                        "sources",
+                                                    )
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": ["scenarios"],
+                                },
+                            ]
+                        }
+                    },
+                }
+            ]
+        }
+    )
+
+    schema_version: Literal[1] = Field(
         description="Version of the requirements specification format."
     )
     project_id: Uuid = Field(description="Project the specification belongs to.")
@@ -881,6 +925,62 @@ class RequirementsSpecificationSnapshot(_Record):
     definition_of_done: list[DefinitionOfDoneItem] = Field(
         description="Definition of done items in code order."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_has_no_chain(cls, value: object) -> object:
+        if (
+            isinstance(value, Mapping)
+            and value.get("schema_version") == 1
+            and (
+                "needs" in value
+                or any(
+                    "need_ids" in item
+                    for name in ("requirements", "user_stories")
+                    for item in value.get(name, ())
+                    if isinstance(item, Mapping)
+                )
+                or any(
+                    set(item) & {"context", "goal", "criticalities", "sources"}
+                    for item in value.get("scenarios", ())
+                    if isinstance(item, Mapping)
+                )
+            )
+        ):
+            raise ValueError("schema 1 cannot contain needs or enriched scenarios")
+        return value
+
+
+class UserNeed(_Record):
+    id: Uuid
+    code: str = Field(pattern=_code("NED"))
+    title: str = Field(min_length=1, max_length=200)
+    statement: str = Field(min_length=1, max_length=2000)
+    scenario_ids: list[Uuid] = Field(min_length=1)
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
+class Requirement2(Requirement):
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UserStory2(UserStory):
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UsageScenario2(UsageScenario):
+    context: str = Field(min_length=1, max_length=2000)
+    goal: str = Field(min_length=1, max_length=2000)
+    criticalities: list[Annotated[str, Field(min_length=1, max_length=2000)]]
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
+class RequirementsSpecificationSnapshot2(RequirementsSpecificationSnapshot):
+    schema_version: Literal[REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION]
+    needs: list[UserNeed] = Field(min_length=1)
+    requirements: list[Requirement2]
+    user_stories: list[UserStory2]
+    scenarios: list[UsageScenario2]
 
 
 class DesignContextReference(_Record):
@@ -1258,9 +1358,10 @@ class TwinsDocument(_RevisedStageDocument):
 
 
 class RequirementsDocument(_RevisedStageDocument):
-    specification: RequirementsSpecificationSnapshot = Field(
-        description="Content of the approved requirements specification."
-    )
+    specification: Annotated[
+        RequirementsSpecificationSnapshot | RequirementsSpecificationSnapshot2,
+        Field(discriminator="schema_version"),
+    ] = Field(description="Content of the approved requirements specification.")
 
 
 class DesignDocument(_RevisedStageDocument):
@@ -2747,10 +2848,18 @@ def _validate(name: str, payload: object, path: str | None) -> None:
         model.model_validate(payload)
     except ValidationError as error:
         first = error.errors(include_url=False)[0]
+        location = first["loc"]
+        if (
+            name == "requirements"
+            and len(location) > 1
+            and location[0] == "specification"
+            and location[1] in (1, 2)
+        ):
+            location = (location[0], *location[2:])
         raise KnowledgeSchemaError(
             code="DOCUMENT_INVALID",
             document=name,
-            location=_location(first["loc"]),
+            location=_location(location),
             message=first["msg"],
             path=path,
         ) from error

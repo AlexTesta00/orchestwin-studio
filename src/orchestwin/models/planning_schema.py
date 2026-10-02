@@ -61,6 +61,8 @@ def constrain_planning_schema(schema, context, task):
         "requirement_ids": "REQ",
         "stories": "USR",
         "criteria": "AC",
+        "needs": "NED",
+        "scenarios": "SCN",
         "acceptance_criterion_ids": "AC",
         "alternative": "DES",
         "alternatives": "DES",

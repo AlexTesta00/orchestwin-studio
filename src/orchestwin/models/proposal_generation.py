@@ -269,12 +269,14 @@ class ProposalGenerator:
         contract_version = {
             "personas": 4,
             "user-twins": 5,
-            "requirements": 5,
+            "requirements": 6,
             "design": 11,
             "architecture": 7,
             "twin-discussion": 5,
         }.get(task, 1)
         purpose = serialized_context.get("purpose")
+        if task == "requirements" and purpose == "TEST_PLAN":
+            contract_version = 5
         if task == "design" and isinstance(purpose, str):
             contract_version = DESIGN_CONTRACT_VERSIONS.get(purpose, contract_version)
         if task == "brief-dialogue" and serialized_context.get("purpose") == "BRIEF_SYNTHESIS":

@@ -123,7 +123,9 @@ def overview_of(index: str, heading: str) -> list[str]:
 def body_of(text: str) -> str:
     lines = text.splitlines()
     return "\n".join(
-        lines[3:] if lines[2].startswith((*VERSION_LINES, "User Twin versione ")) else lines
+        lines[3:]
+        if lines[2].startswith((*VERSION_LINES, "Versione ", "User Twin versione "))
+        else lines
     )
 
 
@@ -418,13 +420,12 @@ def test_the_views_link_the_tables_by_their_titles() -> None:
 def test_the_risks_read_as_lines_with_the_codes_of_their_requirements() -> None:
     text = folder(real_sources()).files["requirements/requirements.md"]
 
-    risks = text.split("\n## Risks\n\n", 1)[1].split("\n\n", 1)[0].splitlines()
-
-    assert risks == [
-        "- RSK-001: Nomi duplicati possono causare confusione durante l'identificazione degli "
-        "ospiti. Likelihood possible, impact medium. Mitigation: Implementare controllo di "
-        "unicità dei nomi durante l'inserimento. Requirements REQ-001."
-    ]
+    risks = text.split("\n## Rischi\n\n", 1)[1].split("\n## Condizioni di completamento", 1)[0]
+    assert "RSK-001: Nomi duplicati" in risks
+    assert "Probabilità: POSSIBLE" in risks
+    assert "Impatto: MEDIUM" in risks
+    assert "Mitigazione: Implementare controllo" in risks
+    assert "[REQ-001 ·" in risks
 
 
 @pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
@@ -438,9 +439,15 @@ def test_the_text_views_show_codes_and_names_instead_of_identifiers(make) -> Non
             body = re.sub(
                 r"<details><summary>(?:Why\?|Perché\?).*?</details>", "", body, flags=re.DOTALL
             )
+        if path == "requirements/requirements.md":
+            body = re.sub(
+                r"<details><summary>(?:Fonti|Sources).*?</details>", "", body, flags=re.DOTALL
+            )
         assert IDENTITY.search(body) is None, path
         assert DIGEST.search(body) is None, path
-    assert "content hash `" in built.files["requirements/requirements.md"].splitlines()[2]
+    assert ("hash del contenuto `" if make is real_sources else "content hash `") in built.files[
+        "requirements/requirements.md"
+    ].splitlines()[2]
 
 
 @pytest.mark.parametrize("make", [sources, real_sources], ids=["fixture", "real"])
@@ -451,7 +458,8 @@ def test_the_steps_have_their_names_in_the_titles_the_index_and_the_manifest(mak
 
     assert tuple(STAGE_LABELS[stage] for stage in STAGES) == STEP_NAMES
     assert [built.files[stage_text(stage)].splitlines()[0] for stage in STAGES] == [
-        f"# {name}" for name in STEP_NAMES
+        f"# {'Definizione' if make is real_sources and name == 'Definition' else name}"
+        for name in STEP_NAMES
     ]
     assert [built.manifest["stages"][stage]["label"] for stage in STAGES] == list(STEP_NAMES)
     assert [row.split(" | ", 1)[0] for row in stages] == [f"| {name}" for name in STEP_NAMES]
@@ -473,6 +481,12 @@ def test_every_view_of_a_step_says_that_the_owner_approved_it(make) -> None:
 
     for stage in STAGES:
         version = package.version(stage)
+        if make is real_sources and stage == "requirements":
+            assert (
+                built.files[stage_text(stage)].splitlines()[2]
+                == f"Versione {version.version_number}, hash del contenuto `{version.content_hash}`, approvata dal committente il {package.gate(stage).updated_at.isoformat()}."
+            )
+            continue
         assert built.files[stage_text(stage)].splitlines()[2] == (
             f"Version {version.version_number}, content hash `{version.content_hash}`, approved "
             f"by the owner on {package.gate(stage).updated_at.isoformat()}."

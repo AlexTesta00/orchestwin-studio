@@ -112,6 +112,7 @@ def proposal_draft(stage, value, request):
                 "user_stories",
                 "acceptance_criteria",
                 "scenarios",
+                "needs",
                 "risks",
                 "definition_of_done",
             )
@@ -125,6 +126,8 @@ def proposal_draft(stage, value, request):
                     "user_twin_references": "twins",
                     "user_twin_reference": "twin",
                     "actor": "twin",
+                    "need_ids": "needs",
+                    "scenario_ids": "scenarios",
                 }.items():
                     if old in item:
                         item[new] = item.pop(old)

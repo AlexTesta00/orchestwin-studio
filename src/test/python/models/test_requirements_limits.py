@@ -31,13 +31,19 @@ from .test_fake_requirements import proposal_request
 from .test_model_proposals import make_generator
 from .test_perspective_guidance import DEFINITION_SENTENCES
 from .test_proposal_evidence import Command, MemoryEvidence, audited_generator
-from .test_requirements_change_proposals import OWNER_REQUEST, baseline_instruction, sha256
+from .test_requirements_change_proposals import (
+    OWNER_REQUEST,
+    baseline_instruction,
+    legacy_instruction,
+    sha256,
+)
 
 LISTS = (
     "requirements",
     "user_stories",
     "acceptance_criteria",
     "scenarios",
+    "needs",
     "risks",
     "definition_of_done",
 )
@@ -63,7 +69,7 @@ def limits(*values):
     return dict(zip(LISTS, values, strict=True))
 
 
-FIXTURE_LIMITS = limits(5, 2, 5, 1, 3, 3)
+FIXTURE_LIMITS = limits(5, 2, 5, 1, 5, 3, 3)
 
 
 def needs(label, count):
@@ -117,6 +123,10 @@ def at_limits(request):
     answer = requirements_view(generated(request), sources, twins)
     for name, limit in context["limits"].items():
         answer[name] = grown(answer[name], limit)
+    for item in answer["requirements"]:
+        item["needs"] = [need["code"] for need in answer["needs"]]
+    for item in answer["needs"]:
+        item["scenarios"] = [scenario["code"] for scenario in answer["scenarios"]]
     return answer, sources, twins
 
 
@@ -132,7 +142,7 @@ def sent_to_model(tmp_path, request, answer):
 
 
 def test_the_brief_of_the_example_gets_twelve_requirements_and_two_scenarios():
-    assert requirements_limits(example_request()) == limits(12, 4, 12, 2, 3, 5)
+    assert requirements_limits(example_request()) == limits(12, 4, 12, 2, 12, 3, 5)
 
 
 @pytest.mark.parametrize("filled", [False, True], ids=["empty", "filled"])
@@ -144,30 +154,30 @@ def test_five_unknown_lists_and_one_twin_get_the_smallest_limits(filled):
         **{field.value: needs("Stated need", 9) if filled else () for field in BRIEF_LISTS},
     )
 
-    assert requirements_limits(replace(request, brief=brief)) == limits(3, 2, 3, 1, 3, 3)
+    assert requirements_limits(replace(request, brief=brief)) == limits(3, 2, 3, 1, 3, 3, 3)
 
 
 def test_eight_twins_get_one_story_and_one_scenario_each():
-    assert requirements_limits(with_twins(proposal_request(), 8)) == limits(5, 8, 5, 8, 3, 3)
+    assert requirements_limits(with_twins(proposal_request(), 8)) == limits(5, 8, 5, 8, 8, 3, 3)
 
 
-def test_a_change_on_seventeen_requirements_keeps_them_and_leaves_room_for_two_more():
+def test_a_change_on_twelve_requirements_keeps_them_and_leaves_room_for_two_more():
     request = example_request(constraints=4)
     change = change_of(request)
     current = change.current_specification
     context, sources, twins = requirements_context(change)
     answer = deepcopy(context["current_requirements"])
 
-    assert len(current.requirements) == 17
-    assert requirements_limits(request) == limits(12, 4, 12, 2, 3, 5)
-    assert requirements_limits(change) == limits(19, 4, 19, 4, 3, 7)
+    assert len(current.requirements) == 12
+    assert requirements_limits(request) == limits(12, 4, 12, 2, 12, 3, 5)
+    assert requirements_limits(change) == limits(14, 4, 14, 4, 12, 3, 7)
     assert bound(answer, change, sources, twins) == current
 
-    answer["requirements"] = grown(answer["requirements"], 19)
-    assert len(bound(answer, change, sources, twins).requirements) == 19
+    answer["requirements"] = grown(answer["requirements"], 14)
+    assert len(bound(answer, change, sources, twins).requirements) == 14
 
-    answer["requirements"] = grown(answer["requirements"], 20)
-    with pytest.raises(ValueError, match=r"^draft list requirements exceeds its limit of 19$"):
+    answer["requirements"] = grown(answer["requirements"], 15)
+    with pytest.raises(ValueError, match=r"^draft list requirements exceeds its limit of 14$"):
         bound(answer, change, sources, twins)
 
 
@@ -176,10 +186,10 @@ def test_the_context_carries_the_limits_of_the_request():
     change = change_of(request)
 
     assert requirements_context(request)[0]["limits"] == FIXTURE_LIMITS
-    assert requirements_context(change)[0]["limits"] == limits(6, 3, 6, 3, 3, 3)
+    assert requirements_context(change)[0]["limits"] == limits(6, 3, 6, 3, 5, 3, 3)
 
 
-def test_the_schema_bounds_the_six_lists_and_changes_nothing_else():
+def test_the_schema_bounds_the_seven_lists_and_changes_nothing_else():
     context, _, _ = requirements_context(proposal_request())
     bounded = RequirementsDraft.model_json_schema()
     free = RequirementsDraft.model_json_schema()
@@ -193,7 +203,7 @@ def test_the_schema_bounds_the_six_lists_and_changes_nothing_else():
     assert bounded == free
 
 
-def test_the_model_receives_the_limits_in_the_schema_of_contract_five(tmp_path):
+def test_the_model_receives_the_limits_in_the_schema_of_contract_six(tmp_path):
     request = proposal_request()
     answer, _, _ = at_limits(request)
 
@@ -201,13 +211,13 @@ def test_the_model_receives_the_limits_in_the_schema_of_contract_five(tmp_path):
     output_schema = payload["response_format"]["json_schema"]
     sent = json.loads(payload["messages"][1]["content"])
 
-    assert output_schema["name"] == "proposal-requirements-v5"
-    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v5"
+    assert output_schema["name"] == "proposal-requirements-v6"
+    assert payload["metadata"]["orchestwin_prompt_version_ref"] == "proposal-requirements-v6"
     assert sent["context"]["limits"] == FIXTURE_LIMITS
     assert {
         name: output_schema["schema"]["properties"][name]["maxItems"] for name in LISTS
     } == FIXTURE_LIMITS
-    assert [len(getattr(result.specification, name)) for name in LISTS] == [5, 2, 5, 1, 3, 3]
+    assert [len(getattr(result.specification, name)) for name in LISTS] == [5, 2, 5, 1, 5, 3, 3]
 
 
 def test_the_full_schema_of_the_hosted_route_names_the_list_above_its_limit(tmp_path):
@@ -233,7 +243,7 @@ def test_a_draft_at_every_limit_is_accepted():
 
     specification = bound(answer, request, sources, twins)
 
-    assert [len(getattr(specification, name)) for name in LISTS] == [5, 2, 5, 1, 3, 3]
+    assert [len(getattr(specification, name)) for name in LISTS] == [5, 2, 5, 1, 5, 3, 3]
 
 
 @pytest.mark.parametrize(("name", "limit"), list(FIXTURE_LIMITS.items()))
@@ -267,7 +277,10 @@ def test_the_instruction_asks_for_proportion_right_after_the_coverage_and_keeps_
     instruction = baseline_instruction()
     added = f" {PROPORTION} {DEFINITION_SENTENCES}"
 
-    assert f"{COVERAGE}{added} Keep criteria concrete and testable." in instruction
+    assert COVERAGE in instruction
+    assert (
+        f"{PROPORTION} {DEFINITION_SENTENCES} Keep criteria concrete and testable." in instruction
+    )
     assert instruction.count(PROPORTION) == 1
     assert instruction.count("context.limits") == 2
-    assert sha256(instruction.replace(added, "")) == PREVIOUS_INSTRUCTION_SHA256
+    assert sha256(legacy_instruction(instruction).replace(added, "")) == PREVIOUS_INSTRUCTION_SHA256

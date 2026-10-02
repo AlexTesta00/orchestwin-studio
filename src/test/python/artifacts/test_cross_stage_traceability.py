@@ -22,6 +22,7 @@ from orchestwin.artifacts.traceability import (
 )
 from orchestwin.artifacts.traceability_runtime import SqlAlchemyArtifactGraphQueryService
 from orchestwin.projects.requirements_specifications import RequirementsSpecificationVersion
+from src.test.python.projects.test_requirements_needs import enriched_specification
 
 from .design_fixtures import (
     DESIGN_VERSION_ID,
@@ -35,6 +36,61 @@ from .design_fixtures import (
 CHANGED_REQUIREMENTS_ID = UUID("00000000-0000-4000-8000-00000000c001")
 REALIGNED_DESIGN_ID = UUID("00000000-0000-4000-8000-00000000c002")
 CHANGED_AT = datetime(2026, 9, 30, 9, 0, tzinfo=UTC)
+
+
+def test_definition_two_cross_stage_graph_contains_actor_scenario_need_chain():
+    written = requirements_version()
+    specification = enriched_specification(written.specification)
+    version = replace(written, specification=specification, content_hash=specification.content_hash)
+    graph = build_cross_stage_artifact_graph(version)
+    shapes = {
+        (
+            link.kind,
+            link.source.kind,
+            link.source.artifact_id,
+            link.target.kind,
+            link.target.artifact_id,
+        )
+        for link in graph.links
+    }
+    for scenario, need in zip(specification.scenarios, specification.needs, strict=True):
+        assert (
+            ArtifactGraphLinkKind.PARTICIPATES_IN,
+            ArtifactGraphNodeKind.USER_TWIN,
+            scenario.actor.twin_id,
+            ArtifactGraphNodeKind.SCENARIO,
+            scenario.id,
+        ) in shapes
+        assert (
+            ArtifactGraphLinkKind.REVEALS,
+            ArtifactGraphNodeKind.SCENARIO,
+            scenario.id,
+            ArtifactGraphNodeKind.NEED,
+            need.id,
+        ) in shapes
+        for kind, artifacts in (
+            (ArtifactGraphNodeKind.REQUIREMENT, specification.requirements),
+            (ArtifactGraphNodeKind.USER_STORY, specification.user_stories),
+        ):
+            for artifact in artifacts:
+                if need.id in artifact.need_ids:
+                    assert (
+                        ArtifactGraphLinkKind.MOTIVATES,
+                        ArtifactGraphNodeKind.NEED,
+                        need.id,
+                        kind,
+                        artifact.id,
+                    ) in shapes
+    assert graph.requirements_reference.content_hash == version.content_hash
+
+
+def test_legacy_cross_stage_graph_does_not_invent_need_or_actor_scenario_links():
+    graph = build_cross_stage_artifact_graph(requirements_version())
+    assert all(node.reference.kind is not ArtifactGraphNodeKind.NEED for node in graph.nodes)
+    assert all(
+        link.kind not in (ArtifactGraphLinkKind.PARTICIPATES_IN, ArtifactGraphLinkKind.REVEALS)
+        for link in graph.links
+    )
 
 
 def reference(kind: ArtifactGraphNodeKind, artifact_id: UUID) -> ArtifactGraphReference:
