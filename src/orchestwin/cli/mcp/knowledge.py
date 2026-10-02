@@ -240,7 +240,14 @@ def learning(root: Path) -> tuple[Mapping[str, object], ...]:
 
 def requirements_view(document: Mapping[str, object]) -> dict[str, object]:
     specification = _mapping(document.get("specification"))
-    groups = ("requirements", "user_stories", "acceptance_criteria", "scenarios", "needs")
+    groups = (
+        "requirements",
+        "user_stories",
+        "acceptance_criteria",
+        "scenarios",
+        "needs",
+        "journeys",
+    )
     codes = {
         str(item.get("id")): code
         for group in groups
@@ -270,6 +277,7 @@ def requirements_view(document: Mapping[str, object]) -> dict[str, object]:
             "expected_outcome",
         ),
         "needs": ("code", "title", "statement"),
+        "journeys": ("code", "title"),
     }
     view: dict[str, object] = {
         "version_number": _number(document.get("version_number")),
@@ -285,8 +293,25 @@ def requirements_view(document: Mapping[str, object]) -> dict[str, object]:
             for key in ("actor", "user_twin_reference", "user_twin_references", "sources"):
                 if key in item:
                     entry[key] = item[key]
+            if group == "journeys":
+                entry["scenario_code"] = codes.get(str(item.get("scenario_id")))
+                entry["phases"] = [
+                    {
+                        **{
+                            key: phase[key]
+                            for key in ("title", "action", "touchpoint", "criticalities")
+                            if key in phase
+                        },
+                        "need_codes": _codes(phase.get("need_ids"), codes),
+                    }
+                    for phase in mappings(item.get("phases"))
+                ]
+                entry["need_codes"] = list(
+                    dict.fromkeys(code for phase in entry["phases"] for code in phase["need_codes"])
+                )
             entries.append(entry)
-        view[group] = entries
+        if group != "journeys" or entries:
+            view[group] = entries
     view["actors"] = requirement_actors(view)
     return view
 
@@ -308,7 +333,14 @@ def requirement_actors(view: Mapping[str, object]) -> list[Mapping[str, object]]
 def select_codes(
     view: Mapping[str, object], codes: Sequence[str]
 ) -> tuple[dict[str, object], list[str]]:
-    groups = ("requirements", "user_stories", "acceptance_criteria", "scenarios", "needs")
+    groups = (
+        "requirements",
+        "user_stories",
+        "acceptance_criteria",
+        "scenarios",
+        "needs",
+        "journeys",
+    )
     entries = {
         str(item.get("code")): item for group in groups for item in mappings(view.get(group))
     }
@@ -323,16 +355,33 @@ def select_codes(
     )
     downstream = {
         "SCN": (("needs", "scenario_codes"),),
-        "NED": (("requirements", "need_codes"), ("user_stories", "need_codes")),
+        "NED": (
+            ("requirements", "need_codes"),
+            ("user_stories", "need_codes"),
+            ("journeys", "need_codes"),
+        ),
         "REQ": (
             ("user_stories", "requirement_codes"),
             ("acceptance_criteria", "requirement_codes"),
         ),
         "USR": (("acceptance_criteria", "user_story_codes"),),
     }
-    for prefix in ("SCN", "NED", "REQ", "USR"):
+    for prefix in ("SCN", "JRN", "NED", "REQ", "USR"):
         upstream = {code for code in selected if code.startswith(prefix + "-")}
-        for group, key in downstream[prefix]:
+        if prefix == "SCN":
+            selected.update(
+                str(item["code"])
+                for item in mappings(view.get("journeys"))
+                if item.get("scenario_code") in upstream
+            )
+        if prefix == "JRN":
+            selected.update(
+                linked
+                for code in upstream
+                for linked in entries[code].get("need_codes", [])
+                if linked in entries
+            )
+        for group, key in downstream.get(prefix, ()):
             selected.update(
                 str(item["code"])
                 for item in mappings(view.get(group))
@@ -346,6 +395,9 @@ def select_codes(
             for linked in entries[code].get(key, [])
             if linked in entries
         }
+        dependencies.update(
+            linked for code in selected if (linked := entries[code].get("scenario_code")) in entries
+        )
         expanded = selected | dependencies
         if expanded == selected:
             break
@@ -355,6 +407,7 @@ def select_codes(
         **{
             group: [item for item in mappings(view.get(group)) if item.get("code") in selected]
             for group in groups
+            if group in view
         },
     }
     result["actors"] = requirement_actors(result)

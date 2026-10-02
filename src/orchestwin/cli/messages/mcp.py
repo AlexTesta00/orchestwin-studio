@@ -389,8 +389,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The question for the twin, at most 1000 characters.",
     },
     "mcp.parameter_codes": {
-        "it": "Codici da cercare, REQ, USR, AC, NED o SCN; senza codici, tutto.",
-        "en": "Codes to look for, REQ, USR, AC, NED or SCN; without codes, everything.",
+        "it": "Codici da cercare, REQ, USR, AC, NED, SCN o JRN; senza codici, tutto.",
+        "en": "Codes to look for, REQ, USR, AC, NED, SCN or JRN; without codes, everything.",
     },
     "mcp.parameter_screen": {
         "it": "Codice di una schermata del design scelto, per esempio SCR-002.",

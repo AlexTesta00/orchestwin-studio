@@ -37,6 +37,9 @@ def show(console: Console, version: Mapping[str, object], *, details: bool = Fal
         criteria=len(api.entries(version, "acceptance_criteria")),
     )
     console.say("definition.synthetic")
+    journeys = api.entries(version, "journeys")
+    if journeys:
+        console.say("definition.journey_count", count=len(journeys))
     if not api.entries(version, "needs"):
         console.say("definition.legacy")
     titles = {
@@ -45,15 +48,16 @@ def show(console: Console, version: Mapping[str, object], *, details: bool = Fal
         for item in api.entries(version, key)
     }
     scenarios = {str(item.get("id")): item for item in api.entries(version, "scenarios")}
+    main_groups = (*GROUPS[:2], ("journeys", "journeys"), *GROUPS[2:]) if journeys else GROUPS
     groups = (
         (
-            *GROUPS,
+            *main_groups,
             ("acceptance_criteria", "criteria"),
             ("risks", "risks"),
             ("definition_of_done", "done"),
         )
         if details
-        else GROUPS
+        else main_groups
     )
     for key, label in groups:
         items = api.entries(version, key)
@@ -129,6 +133,25 @@ def show_item(
             and actor.get("name")
         ]
         field(console, "actor", list(dict.fromkeys(names)))
+    if group == "journeys":
+        identifier = str(item.get("scenario_id"))
+        scenario = scenarios.get(identifier, {})
+        field(console, "scenarios", titles.get(identifier, identifier))
+        actor = scenario.get("actor")
+        field(console, "actor", actor.get("name") if isinstance(actor, Mapping) else None)
+        console.write(f"  {console.text('definition.phases')}:")
+        for number, phase in enumerate(item.get("phases") or [], start=1):
+            if not isinstance(phase, Mapping):
+                continue
+            console.write(f"  {number}. {phase.get('title') or ''}")
+            field(console, "action", phase.get("action"))
+            field(console, "touchpoint", phase.get("touchpoint") or "-")
+            field(console, "criticalities", phase.get("criticalities"))
+            field(
+                console,
+                "needs",
+                [titles.get(identifier, identifier) for identifier in texts(phase.get("need_ids"))],
+            )
     for key, label in (
         ("scenario_ids", "scenarios"),
         ("need_ids", "needs"),

@@ -870,6 +870,7 @@ class RequirementsSpecificationSnapshot(_Record):
                         "not": {
                             "anyOf": [
                                 {"required": ["needs"]},
+                                {"required": ["journeys"]},
                                 *(
                                     {
                                         "properties": {
@@ -934,6 +935,7 @@ class RequirementsSpecificationSnapshot(_Record):
             and value.get("schema_version") == 1
             and (
                 "needs" in value
+                or "journeys" in value
                 or any(
                     "need_ids" in item
                     for name in ("requirements", "user_stories")
@@ -975,12 +977,30 @@ class UsageScenario2(UsageScenario):
     sources: list[RequirementSource] = Field(min_length=1)
 
 
+class JourneyPhase(_Record):
+    title: str = Field(min_length=1, max_length=200)
+    action: str = Field(min_length=1, max_length=2000)
+    touchpoint: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    criticalities: list[Annotated[str, Field(min_length=1, max_length=2000)]]
+    need_ids: list[Uuid] = Field(min_length=1)
+
+
+class UserJourney(_Record):
+    id: Uuid
+    code: str = Field(pattern=_code("JRN"))
+    title: str = Field(min_length=1, max_length=200)
+    scenario_id: Uuid
+    phases: list[JourneyPhase] = Field(min_length=1, max_length=32)
+    sources: list[RequirementSource] = Field(min_length=1)
+
+
 class RequirementsSpecificationSnapshot2(RequirementsSpecificationSnapshot):
     schema_version: Literal[REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION]
     needs: list[UserNeed] = Field(min_length=1)
     requirements: list[Requirement2]
     user_stories: list[UserStory2]
     scenarios: list[UsageScenario2]
+    journeys: Annotated[list[UserJourney], _OPTIONAL] = Field(default_factory=list, min_length=1)
 
 
 class DesignContextReference(_Record):

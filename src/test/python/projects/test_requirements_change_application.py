@@ -48,6 +48,7 @@ from src.test.python.projects.test_requirements_application import (
     context_reference,
     governed_context,
 )
+from src.test.python.projects.test_requirements_journeys import journey_specification
 from src.test.python.projects.test_requirements_revisions import (
     InMemoryDiffs,
     InMemorySpecifications,
@@ -229,6 +230,59 @@ def test_a_change_request_stores_a_proposed_revision_with_its_operations():
     assert harness.port.open_transactions == [0]
     assert harness.factory.open == 0
     assert harness.governance.calls == 2
+
+
+def test_explicit_journey_request_uses_current_context_and_keeps_one_pending_revision():
+    harness = Harness(
+        outcome=scripted(
+            specification=lambda request: journey_specification(request.current_specification)
+        )
+    )
+    result = asyncio.run(
+        harness.service.request_change(
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+            owner_request="Richiedi journey per gli scenari correnti.",
+            include_journeys=True,
+        )
+    )
+    assert result.status is RequirementsChangeStatus.CREATED
+    [request] = harness.port.requests
+    assert request.include_journeys is True
+    assert request.current_specification == harness.version.specification
+    assert request.to_snapshot()["include_journeys"] is True
+    assert result.revision.diff.status is RequirementsDiffStatus.PROPOSED
+    assert all(
+        operation.artifact_kind.value == "JOURNEY"
+        and operation.operation is RequirementsDiffOperationKind.ADD
+        for operation in result.revision.diff.operations
+    )
+    assert harness.specifications.versions == [harness.version]
+    assert len(harness.diffs.values) == 1
+
+
+def test_ordinary_change_request_omits_the_journey_flag_in_model_snapshot():
+    harness = Harness()
+    harness.run()
+    [request] = harness.port.requests
+    assert request.include_journeys is False
+    assert "include_journeys" not in request.to_snapshot()
+
+
+def test_explicit_journey_request_respects_the_existing_pending_revision_guard():
+    harness = Harness()
+    pending = pending_diff(harness.version)
+    harness.diffs.values[pending.id] = pending
+    result = asyncio.run(
+        harness.service.request_change(
+            owner_user_id=OWNER_ID,
+            project_id=PROJECT_ID,
+            owner_request="Richiedi journey.",
+            include_journeys=True,
+        )
+    )
+    assert result.issue is RequirementsChangeIssueCode.REVISION_PENDING
+    assert harness.port.requests == []
 
 
 @pytest.mark.parametrize(

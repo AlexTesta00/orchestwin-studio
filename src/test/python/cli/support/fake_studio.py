@@ -5447,8 +5447,12 @@ class FakeStudio:
         )
 
     def _route_requirements_change(self, call: _Call) -> _Answer:
-        fields = _Fields(call.json(), ("request",))
+        fields = _Fields(call.json(), ("request", "include_journeys"))
         request = fields.text("request")
+        include_journeys = call.json().get("include_journeys", False)
+        if not isinstance(include_journeys, bool):
+            raise _Invalid([_error(("body", "include_journeys"), "bool_type")])
+        fields.flag("include_journeys")
         fields.check()
         text = (request or "").strip()
         if not 1 <= len(text) <= MAX_CHANGE_REQUEST:
@@ -5456,11 +5460,13 @@ class FakeStudio:
         return self._later(
             call,
             "REQUIREMENTS_CHANGE",
-            {"request": text},
-            lambda: self._changed_requirements(call, text),
+            {"request": text, **({"include_journeys": True} if include_journeys else {})},
+            lambda: self._changed_requirements(call, text, include_journeys=include_journeys),
         )
 
-    def _changed_requirements(self, call: _Call, text: str) -> _Answer:
+    def _changed_requirements(
+        self, call: _Call, text: str, *, include_journeys: bool = False
+    ) -> _Answer:
         project = self._owned(call)
         self._requirements_governance(project)
         assert project is not None
@@ -5473,7 +5479,10 @@ class FakeStudio:
         ):
             raise _Refusal(409, {"code": "REQUIREMENTS_REVISION_PENDING"})
         self._record(project, "REQUIREMENTS_CHANGE")
-        proposed, _ = self._with_requirement(current["specification"], text)
+        if include_journeys:
+            proposed = self._with_journeys(current["specification"])
+        else:
+            proposed, _ = self._with_requirement(current["specification"], text)
         base = {
             **current,
             "specification": _fake_requirements(current["specification"]).to_snapshot(),
@@ -5490,6 +5499,43 @@ class FakeStudio:
         diff = RequirementsSpecificationDiffPayload.from_domain(result.diff).model_dump(mode="json")
         project.requirement_diffs.append(diff)
         return _Answer(201, _revision_payload("CREATED", diff, None))
+
+    def _with_journeys(self, specification: Mapping[str, object]) -> dict[str, object]:
+        proposed = copy.deepcopy(dict(specification))
+        if proposed.get("schema_version", 1) == 1:
+            self._definition(proposed)
+        journeys = proposed.setdefault("journeys", [])
+        covered = {item["scenario_id"] for item in journeys}
+        number = max((_code_number(item["code"]) for item in journeys), default=0)
+        for scenario in proposed["scenarios"]:
+            if scenario["id"] in covered:
+                continue
+            need_ids = [
+                item["id"] for item in proposed["needs"] if scenario["id"] in item["scenario_ids"]
+            ]
+            number += 1
+            journeys.append(
+                {
+                    "id": self._new_id(),
+                    "code": f"JRN-{number:03d}",
+                    "title": scenario["title"],
+                    "scenario_id": scenario["id"],
+                    "phases": [
+                        {
+                            "title": f"{'Fase' if self.language == 'it' else 'Phase'} {index}",
+                            "action": action,
+                            "touchpoint": None,
+                            "criticalities": scenario.get("criticalities", [])
+                            if index == 1
+                            else [],
+                            "need_ids": need_ids,
+                        }
+                        for index, action in enumerate(scenario["steps"][:32], 1)
+                    ],
+                    "sources": copy.deepcopy(scenario["sources"]),
+                }
+            )
+        return proposed
 
     def _with_requirement(
         self, specification: Mapping[str, object], text: str

@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+from dataclasses import replace
 
 import anthropic
 import pytest
 
 from orchestwin.models import hosted_schema
+from orchestwin.models.fake_requirements import FakeDeterministicRequirementsAdapter
 from orchestwin.models.hosted_schema import (
     CLAUDE_CODE_SCHEMA_MAX_CHARACTERS,
     HostedSchemaError,
@@ -18,6 +20,11 @@ from orchestwin.models.hosted_schema import (
 )
 from orchestwin.models.model_proposals import ModelDesignAdapter, ModelRequirementsAdapter
 from orchestwin.models.proposal_generation import ProposalGenerationError, ProposalGenerator
+from orchestwin.models.requirements_drafts import (
+    RequirementsDraft,
+    bind_requirements,
+    requirements_context,
+)
 from orchestwin.models.structured_generation import (
     StructuredGenerationFailureCode,
     StructuredGenerationProviderKind,
@@ -28,6 +35,7 @@ from src.test.python.evaluation import test_proposer_evaluator as review
 from src.test.python.models.test_hosted_support import REVIEW_SCHEMA, VALID_REVIEW
 from src.test.python.models.test_model_proposals import make_generator
 from src.test.python.models.test_proposal_evidence import stage_case
+from src.test.python.models.test_requirements_change_proposals import FAKE_RESULT_SHA256
 
 ANTHROPIC = StructuredGenerationProviderKind.ANTHROPIC_HOSTED
 OPENAI = StructuredGenerationProviderKind.OPENAI_COMPATIBLE_HOSTED
@@ -93,6 +101,7 @@ def real_cases(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("hosted-schemas")
     design_request, design_output, *_ = stage_case("design")
     requirements_request, requirements_output, *_ = stage_case("requirements")
+    requirements_output = {**requirements_output, "journeys": []}
     return {
         "design": (
             _captured_schema(tmp_path, lambda g: ModelDesignAdapter(g).propose(design_request)),
@@ -169,10 +178,43 @@ def test_the_openai_schema_lists_every_property_as_required(real_cases, task):
 
 @pytest.mark.parametrize("task", TASKS)
 @pytest.mark.parametrize("kind", [ANTHROPIC, OPENAI])
-def test_the_hosted_schema_accepts_every_answer_the_full_schema_accepts(real_cases, task, kind):
+def test_the_hosted_schema_accepts_complete_answers_the_full_schema_accepts(real_cases, task, kind):
     canonical, answer = real_cases[task]
     assert validate_against_schema(answer, canonical) == ()
     assert validate_against_schema(answer, hosted_output_schema(canonical, kind)) == ()
+
+
+@pytest.mark.parametrize("kind", [ANTHROPIC, OPENAI, CLAUDE_CODE])
+def test_omitted_canonical_journeys_and_empty_hosted_journeys_bind_the_same_specification(
+    real_cases, kind
+):
+    request, omitted, *_ = stage_case("requirements")
+    canonical, complete = real_cases["requirements"]
+    assert "journeys" not in omitted
+    assert complete == {**omitted, "journeys": []}
+    assert canonical["properties"]["journeys"]["default"] == []
+    assert "journeys" not in canonical["required"]
+    assert validate_against_schema(omitted, canonical) == ()
+    assert validate_against_schema(complete, canonical) == ()
+    reduced = hosted_output_schema(canonical, kind)
+    assert "journeys" in reduced["required"]
+    assert validate_against_schema(omitted, reduced) == (SchemaViolation("$", "required"),)
+    assert validate_against_schema(complete, reduced) == ()
+    before = asyncio.run(FakeDeterministicRequirementsAdapter().propose(request))
+    assert before.content_hash == FAKE_RESULT_SHA256
+    request = replace(
+        request,
+        current_specification=before.specification,
+        owner_request="Keep the current specification.",
+    )
+    _, sources, twins = requirements_context(request)
+    omitted_specification, complete_specification = (
+        bind_requirements(RequirementsDraft.model_validate(answer), request, sources, twins)
+        for answer in (omitted, complete)
+    )
+    assert omitted_specification == complete_specification == before.specification
+    assert omitted_specification.content_hash == before.specification.content_hash
+    assert "journeys" not in complete_specification.to_snapshot()
 
 
 def test_design_keeps_the_vocabulary_of_its_definitions(real_cases):

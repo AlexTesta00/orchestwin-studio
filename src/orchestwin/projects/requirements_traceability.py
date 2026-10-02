@@ -28,6 +28,7 @@ class TraceabilityNodeKind(StrEnum):
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
     SCENARIO = "SCENARIO"
     NEED = "NEED"
+    JOURNEY = "JOURNEY"
     RISK = "RISK"
     DEFINITION_OF_DONE = "DEFINITION_OF_DONE"
 
@@ -38,6 +39,7 @@ class TraceabilityLinkKind(StrEnum):
     ACTS_AS = "ACTS_AS"
     PARTICIPATES_IN = "PARTICIPATES_IN"
     REVEALS = "REVEALS"
+    EXPANDS = "EXPANDS"
     MOTIVATES = "MOTIVATES"
     VERIFIED_BY = "VERIFIED_BY"
     EXERCISES = "EXERCISES"
@@ -127,6 +129,8 @@ class TraceabilityLink:
 
 _ALLOWED_LINK_SHAPES: Final = frozenset(
     {
+        (TraceabilityLinkKind.EXPANDS, TraceabilityNodeKind.SCENARIO, TraceabilityNodeKind.JOURNEY),
+        (TraceabilityLinkKind.REVEALS, TraceabilityNodeKind.JOURNEY, TraceabilityNodeKind.NEED),
         (
             TraceabilityLinkKind.PARTICIPATES_IN,
             TraceabilityNodeKind.USER_TWIN,
@@ -384,6 +388,28 @@ def build_requirements_traceability(
     specification = version.specification
     nodes: list[TraceabilityNode] = []
     links: list[TraceabilityLink] = []
+
+    for journey in specification.journeys:
+        reference = _reference(TraceabilityNodeKind.JOURNEY, journey.id)
+        nodes.append(TraceabilityNode(reference=reference, display_code=journey.code))
+        links.append(
+            TraceabilityLink(
+                kind=TraceabilityLinkKind.EXPANDS,
+                source=_reference(TraceabilityNodeKind.SCENARIO, journey.scenario_id),
+                target=reference,
+            )
+        )
+        links.extend(
+            TraceabilityLink(
+                kind=TraceabilityLinkKind.REVEALS,
+                source=reference,
+                target=_reference(TraceabilityNodeKind.NEED, need_id),
+            )
+            for need_id in sorted(
+                {value for phase in journey.phases for value in phase.need_ids},
+                key=lambda value: value.hex,
+            )
+        )
 
     if specification.schema_version == 2:
         for need in specification.needs:

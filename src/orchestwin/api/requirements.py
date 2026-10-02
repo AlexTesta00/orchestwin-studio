@@ -51,6 +51,7 @@ from orchestwin.projects.requirements_gate import (
     RequirementsReadinessResult,
     RequirementsWorkflowReadiness,
 )
+from orchestwin.projects.requirements_journeys import JourneyPhase, UserJourney
 from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
@@ -560,6 +561,67 @@ class UserNeedPayload(ApiModel):
         )
 
 
+class JourneyPhasePayload(ApiModel):
+    title: str
+    action: str
+    need_ids: tuple[UUID, ...]
+    touchpoint: str | None = None
+    criticalities: tuple[str, ...] = ()
+
+    @classmethod
+    def from_domain(cls, value: JourneyPhase) -> JourneyPhasePayload:
+        return cls(
+            title=value.title,
+            action=value.action,
+            need_ids=value.need_ids,
+            touchpoint=value.touchpoint,
+            criticalities=value.criticalities,
+        )
+
+    def to_domain(self) -> JourneyPhase:
+        return JourneyPhase(
+            title=self.title,
+            action=self.action,
+            need_ids=canonical_uuid_tuple(
+                self.need_ids, label="journey phase need IDs", require_items=True
+            ),
+            touchpoint=self.touchpoint,
+            criticalities=self.criticalities,
+        )
+
+
+class UserJourneyPayload(ApiModel):
+    id: UUID
+    code: str
+    title: str
+    scenario_id: UUID
+    phases: tuple[JourneyPhasePayload, ...]
+    sources: tuple[RequirementSourcePayload, ...]
+
+    @classmethod
+    def from_domain(cls, value: UserJourney) -> UserJourneyPayload:
+        return cls(
+            id=value.id,
+            code=value.code,
+            title=value.title,
+            scenario_id=value.scenario_id,
+            phases=tuple(JourneyPhasePayload.from_domain(phase) for phase in value.phases),
+            sources=tuple(RequirementSourcePayload.from_domain(source) for source in value.sources),
+        )
+
+    def to_domain(self) -> UserJourney:
+        return UserJourney(
+            id=self.id,
+            code=self.code,
+            title=self.title,
+            scenario_id=self.scenario_id,
+            phases=tuple(phase.to_domain() for phase in self.phases),
+            sources=canonical_requirement_sources(
+                (source.to_domain() for source in self.sources), require_items=True
+            ),
+        )
+
+
 class RequirementsSpecificationPayload(ApiModel):
     """Complete typed requirements specification HTTP contract."""
 
@@ -578,6 +640,7 @@ class RequirementsSpecificationPayload(ApiModel):
     definition_of_done: tuple[DefinitionOfDoneItemPayload, ...]
     needs: tuple[UserNeedPayload, ...] = ()
     schema_version: int = Field(default=1, strict=True, ge=1, le=2)
+    journeys: tuple[UserJourneyPayload, ...] = ()
 
     @classmethod
     def from_domain(
@@ -587,6 +650,9 @@ class RequirementsSpecificationPayload(ApiModel):
         """Map a complete specification into the API contract."""
         return cls(
             schema_version=specification.schema_version,
+            journeys=tuple(
+                UserJourneyPayload.from_domain(value) for value in specification.journeys
+            ),
             needs=tuple(UserNeedPayload.from_domain(value) for value in specification.needs),
             project_id=specification.project_id,
             project_brief_reference=(
@@ -632,6 +698,7 @@ class RequirementsSpecificationPayload(ApiModel):
         """Convert this complete payload through aggregate validation."""
         return create_requirements_specification(
             schema_version=self.schema_version,
+            journeys=(value.to_domain() for value in self.journeys),
             needs=(value.to_domain() for value in self.needs),
             project_id=self.project_id,
             project_brief_reference=self.project_brief_reference.to_domain(),
@@ -688,6 +755,7 @@ class RequirementsArtifactEnvelope(ApiModel):
     acceptance_criterion: AcceptanceCriterionPayload | None = None
     scenario: UsageScenarioPayload | None = None
     need: UserNeedPayload | None = None
+    journey: UserJourneyPayload | None = None
     risk: ProjectRiskPayload | None = None
     definition_of_done: DefinitionOfDoneItemPayload | None = None
 
@@ -695,6 +763,7 @@ class RequirementsArtifactEnvelope(ApiModel):
     def validate_shape(self) -> Self:
         """Require exactly the payload selected by artifact kind."""
         values = {
+            RequirementsArtifactKind.JOURNEY: self.journey,
             RequirementsArtifactKind.NEED: self.need,
             RequirementsArtifactKind.REQUIREMENT: self.requirement,
             RequirementsArtifactKind.USER_STORY: self.user_story,
@@ -717,6 +786,11 @@ class RequirementsArtifactEnvelope(ApiModel):
         artifact: RequirementsArtifact,
     ) -> RequirementsArtifactEnvelope:
         """Wrap one heterogeneous requirements artifact."""
+        if isinstance(artifact, UserJourney):
+            return cls(
+                kind=RequirementsArtifactKind.JOURNEY,
+                journey=UserJourneyPayload.from_domain(artifact),
+            )
         if isinstance(artifact, UserNeed):
             return cls(
                 kind=RequirementsArtifactKind.NEED, need=UserNeedPayload.from_domain(artifact)
@@ -998,6 +1072,7 @@ class RequirementsRevisionRequest(ApiModel):
 
 class RequirementsChangeRequest(ApiModel):
     request: str
+    include_journeys: bool = Field(default=False, strict=True)
 
     @field_validator("request")
     @classmethod
@@ -1199,6 +1274,7 @@ class RequirementsChangeService(Protocol):
         owner_user_id: UUID,
         project_id: UUID,
         owner_request: str,
+        include_journeys: bool = False,
     ) -> RequirementsChangeResult: ...
 
 
@@ -1495,11 +1571,19 @@ def create_requirements_router() -> APIRouter:
         ],
     ) -> RequirementsRevisionPayload:
         async def change() -> RequirementsRevisionPayload:
-            result = await service.request_change(
-                owner_user_id=user.id,
-                project_id=project_id,
-                owner_request=payload.request,
-            )
+            if payload.include_journeys:
+                result = await service.request_change(
+                    owner_user_id=user.id,
+                    project_id=project_id,
+                    owner_request=payload.request,
+                    include_journeys=True,
+                )
+            else:
+                result = await service.request_change(
+                    owner_user_id=user.id,
+                    project_id=project_id,
+                    owner_request=payload.request,
+                )
 
             return RequirementsRevisionPayload.from_domain(_changed_revision(result))
 
@@ -1880,6 +1964,7 @@ def _unprocessable(code: str) -> HTTPException:
 
 __all__ = [
     "REQUIREMENTS_API_PREFIX",
+    "JourneyPhasePayload",
     "RequirementsChangeRequest",
     "RequirementsChangeService",
     "RequirementsCoveragePayload",
@@ -1891,6 +1976,7 @@ __all__ = [
     "RequirementsSpecificationPayload",
     "RequirementsSpecificationVersionPayload",
     "RequirementsTraceabilityPayload",
+    "UserJourneyPayload",
     "UserNeedPayload",
     "create_requirements_router",
 ]

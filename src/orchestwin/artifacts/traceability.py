@@ -38,6 +38,7 @@ class ArtifactGraphNodeKind(StrEnum):
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
     SCENARIO = "SCENARIO"
     NEED = "NEED"
+    JOURNEY = "JOURNEY"
     PROJECT_RISK = "PROJECT_RISK"
     DEFINITION_OF_DONE = "DEFINITION_OF_DONE"
     DESIGN_PACKAGE = "DESIGN_PACKAGE"
@@ -57,6 +58,7 @@ class ArtifactGraphLinkKind(StrEnum):
     ACTS_AS = "ACTS_AS"
     PARTICIPATES_IN = "PARTICIPATES_IN"
     REVEALS = "REVEALS"
+    EXPANDS = "EXPANDS"
     MOTIVATES = "MOTIVATES"
     VERIFIED_BY = "VERIFIED_BY"
     EXERCISES = "EXERCISES"
@@ -403,6 +405,33 @@ def _add_requirement_stage(
         _link(ArtifactGraphLinkKind.GROUNDED_IN, requirements_root, target)
         for target in (brief_root, team_root, user_modeling_root)
     )
+
+    for journey in specification.journeys:
+        reference = _plain_reference(ArtifactGraphNodeKind.JOURNEY, journey.id)
+        nodes.append(
+            _node(
+                reference=reference,
+                stage=ArtifactGraphStage.REQUIREMENTS,
+                display_code=journey.code,
+                title=journey.title,
+            )
+        )
+        links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+        links.append(
+            _link(
+                ArtifactGraphLinkKind.EXPANDS,
+                _plain_reference(ArtifactGraphNodeKind.SCENARIO, journey.scenario_id),
+                reference,
+            )
+        )
+        links.extend(
+            _link(
+                ArtifactGraphLinkKind.REVEALS,
+                reference,
+                _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
+            )
+            for need_id in {value for phase in journey.phases for value in phase.need_ids}
+        )
 
     for twin in specification.user_twin_references:
         twin_reference = ArtifactGraphReference(

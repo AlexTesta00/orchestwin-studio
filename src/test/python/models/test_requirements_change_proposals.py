@@ -26,6 +26,7 @@ from orchestwin.models.requirements import (
 from orchestwin.models.requirements_drafts import (
     REQUIREMENTS_CHAIN_INSTRUCTION,
     REQUIREMENTS_CHANGE_INSTRUCTION,
+    REQUIREMENTS_JOURNEYS_INSTRUCTION,
     RequirementsDraft,
     bind_requirements,
     requirements_context,
@@ -54,8 +55,14 @@ LEGACY_CONTEXT_SHA256 = "2c5840187cb8b71c7ad9d52313ccfdc244e40287ae9b407a2838e65
 LEGACY_INSTRUCTION_SHA256 = "be89c73417a9c4b1d1aa3f307d1810a4773596d8c9f577ec83e1418909300d47"
 LEGACY_FAKE_RESULT_SHA256 = "33e23a49845c960a8a58d94141c649b647254fdafa150e720618b3ed0f6b3c37"
 CONTEXT_SHA256 = "fe3bb6903750e3d78856dda12ca298fc0294bea3996fdfa53a164992c7f37213"
-INSTRUCTION_SHA256 = "528fc03a57e201f8dfecdf8660b2246ec36ac069c5a43514290857921b0fd576"
-CHANGE_INSTRUCTION_SHA256 = "0aabba130080d2395e2537a75e88a7d9edfe36b0850fc3b30c53cd5e5cf09199"
+REQUIREMENTS6_INSTRUCTION_SHA256 = (
+    "528fc03a57e201f8dfecdf8660b2246ec36ac069c5a43514290857921b0fd576"
+)
+REQUIREMENTS6_CHANGE_INSTRUCTION_SHA256 = (
+    "0aabba130080d2395e2537a75e88a7d9edfe36b0850fc3b30c53cd5e5cf09199"
+)
+INSTRUCTION_SHA256 = "903de7e95010e81c41c28271bbeef07ebd063eed923405b403243fa56abc134f"
+CHANGE_INSTRUCTION_SHA256 = "61c3fd88d0a0c1014bdf829a2f962ba3a8f7d90e8a535e27dbd1547cff5bd5da"
 FAKE_RESULT_SHA256 = "1ccda16f51de787095bd6458b374f4de3580f0692e2117a2636c022100028365"
 CHANGE_SENTENCE = (
     "The context carries current_requirements, the specification that the owner is reviewing, "
@@ -301,9 +308,15 @@ def baseline_instruction():
     return call["instruction"]
 
 
+def requirements6_instruction(instruction):
+    return instruction.replace(f" {REQUIREMENTS_JOURNEYS_INSTRUCTION}", "")
+
+
 def legacy_instruction(instruction):
-    return instruction.replace(f" {REQUIREMENTS_CHAIN_INSTRUCTION}", "").replace(
-        "SCN-001, NED-001,", "SCN-001,"
+    return (
+        requirements6_instruction(instruction)
+        .replace(f" {REQUIREMENTS_CHAIN_INSTRUCTION}", "")
+        .replace("SCN-001, NED-001,", "SCN-001,")
     )
 
 
@@ -346,6 +359,10 @@ def test_the_historical_generation_pins_are_separate_and_still_verifiable():
     historical = replace(fake, specification=legacy_projection(fake.specification))
     assert sha256(canonical_json(legacy_context(context))) == LEGACY_CONTEXT_SHA256
     assert sha256(legacy_instruction(baseline_instruction())) == LEGACY_INSTRUCTION_SHA256
+    assert (
+        sha256(requirements6_instruction(baseline_instruction()))
+        == REQUIREMENTS6_INSTRUCTION_SHA256
+    )
     assert historical.content_hash == LEGACY_FAKE_RESULT_SHA256
 
 
@@ -462,7 +479,7 @@ def test_the_change_context_carries_the_current_requirements_the_request_and_the
     assert view["user_stories"][0]["twin"] == "T1"
     assert view["user_stories"][0]["requirements"] == ["REQ-001", "REQ-002"]
     assert view["risks"][0]["sources"] == ["brief:risks[0]"]
-    assert set(view) == set(RequirementsDraft.model_fields)
+    assert set(view) == set(RequirementsDraft.model_fields) - {"journeys"}
     assert all(
         str(item.id) not in canonical_json(view)
         for item in artifacts(request.current_specification)
@@ -569,6 +586,10 @@ def test_the_change_instruction_is_appended_word_for_word_after_the_instruction_
     assert sha256(baseline) == INSTRUCTION_SHA256
     assert call["instruction"] == f"{baseline} {CHANGE_SENTENCE}"
     assert sha256(call["instruction"]) == CHANGE_INSTRUCTION_SHA256
+    assert (
+        sha256(requirements6_instruction(call["instruction"]))
+        == REQUIREMENTS6_CHANGE_INSTRUCTION_SHA256
+    )
     assert call["task"] == "requirements"
     assert call["context"]["purpose"] == "REQUIREMENTS_CHANGE"
     assert routes == [("requirements", "REQUIREMENTS_CHANGE")]
