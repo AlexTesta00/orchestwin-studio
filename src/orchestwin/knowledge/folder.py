@@ -86,6 +86,7 @@ DESIGN_MOCKUPS_TEXT: Final = "design/mockups.md"
 _ENTRY_DATE_TIME: Final = (1980, 1, 1, 0, 0, 0)
 _DERIVED_FILES: Final = frozenset({KNOWLEDGE_INDEX, KNOWLEDGE_MANIFEST})
 _REQUIREMENT_KINDS: Final = (
+    ("needs", "NEED"),
     ("requirements", "REQUIREMENT"),
     ("user_stories", "USER_STORY"),
     ("acceptance_criteria", "ACCEPTANCE_CRITERION"),
@@ -270,7 +271,7 @@ def identifiers(sources: KnowledgeSources) -> list[dict[str, object]]:
         )
 
     for key, kind in _REQUIREMENT_KINDS:
-        for item in specification[key]:
+        for item in specification.get(key, ()):
             add("requirements", kind, item)
     if package is None:
         return entries
@@ -302,7 +303,7 @@ def _requirement_files(
     tables = knowledge_tables(specification=specification, package=package)
     files = {
         stage_text("requirements"): requirements_markdown(
-            sources.requirements, sources.requirements_gate
+            sources.requirements, sources.requirements_gate, locale=folder_language(sources) or "en"
         )
         + _views(DiagramStage.REQUIREMENTS, tables, diagrams),
     }

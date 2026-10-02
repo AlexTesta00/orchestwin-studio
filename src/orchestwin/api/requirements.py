@@ -51,6 +51,7 @@ from orchestwin.projects.requirements_gate import (
     RequirementsReadinessResult,
     RequirementsWorkflowReadiness,
 )
+from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
     RequirementsContextReference,
@@ -230,11 +231,13 @@ class RequirementPayload(ApiModel):
         UserTwinVersionReferencePayload,
         ...,
     ] = ()
+    need_ids: tuple[UUID, ...] = ()
 
     @classmethod
     def from_domain(cls, value: Requirement) -> RequirementPayload:
         """Map one domain requirement."""
         return cls(
+            need_ids=value.need_ids,
             id=value.id,
             code=value.code,
             title=value.title,
@@ -251,6 +254,9 @@ class RequirementPayload(ApiModel):
     def to_domain(self) -> Requirement:
         """Convert this payload through requirement invariants."""
         return Requirement(
+            need_ids=canonical_uuid_tuple(
+                self.need_ids, label="requirement need IDs", require_items=False
+            ),
             id=self.id,
             code=self.code,
             title=self.title,
@@ -277,11 +283,13 @@ class UserStoryPayload(ApiModel):
     goal: str
     benefit: str
     requirement_ids: tuple[UUID, ...]
+    need_ids: tuple[UUID, ...] = ()
 
     @classmethod
     def from_domain(cls, value: UserStory) -> UserStoryPayload:
         """Map one domain User Story."""
         return cls(
+            need_ids=value.need_ids,
             id=value.id,
             code=value.code,
             user_twin_reference=(
@@ -295,6 +303,9 @@ class UserStoryPayload(ApiModel):
     def to_domain(self) -> UserStory:
         """Convert this payload through User Story invariants."""
         return UserStory(
+            need_ids=canonical_uuid_tuple(
+                self.need_ids, label="user-story need IDs", require_items=False
+            ),
             id=self.id,
             code=self.code,
             user_twin_reference=self.user_twin_reference.to_domain(),
@@ -366,11 +377,19 @@ class UsageScenarioPayload(ApiModel):
     expected_outcome: str
     requirement_ids: tuple[UUID, ...]
     acceptance_criterion_ids: tuple[UUID, ...]
+    context: str | None = None
+    goal: str | None = None
+    criticalities: tuple[str, ...] = ()
+    sources: tuple[RequirementSourcePayload, ...] = ()
 
     @classmethod
     def from_domain(cls, value: UsageScenario) -> UsageScenarioPayload:
         """Map one usage scenario."""
         return cls(
+            context=value.context,
+            goal=value.goal,
+            criticalities=value.criticalities,
+            sources=tuple(RequirementSourcePayload.from_domain(source) for source in value.sources),
             id=value.id,
             code=value.code,
             title=value.title,
@@ -386,6 +405,12 @@ class UsageScenarioPayload(ApiModel):
     def to_domain(self) -> UsageScenario:
         """Convert this payload through scenario invariants."""
         return UsageScenario(
+            context=self.context,
+            goal=self.goal,
+            criticalities=self.criticalities,
+            sources=canonical_requirement_sources(
+                (source.to_domain() for source in self.sources), require_items=False
+            ),
             id=self.id,
             code=self.code,
             title=self.title,
@@ -501,6 +526,40 @@ class DefinitionOfDoneItemPayload(ApiModel):
         )
 
 
+class UserNeedPayload(ApiModel):
+    id: UUID
+    code: str
+    title: str
+    statement: str
+    scenario_ids: tuple[UUID, ...]
+    sources: tuple[RequirementSourcePayload, ...]
+
+    @classmethod
+    def from_domain(cls, value: UserNeed) -> UserNeedPayload:
+        return cls(
+            id=value.id,
+            code=value.code,
+            title=value.title,
+            statement=value.statement,
+            scenario_ids=value.scenario_ids,
+            sources=tuple(RequirementSourcePayload.from_domain(source) for source in value.sources),
+        )
+
+    def to_domain(self) -> UserNeed:
+        return UserNeed(
+            id=self.id,
+            code=self.code,
+            title=self.title,
+            statement=self.statement,
+            scenario_ids=canonical_uuid_tuple(
+                self.scenario_ids, label="user-need scenario IDs", require_items=True
+            ),
+            sources=canonical_requirement_sources(
+                (source.to_domain() for source in self.sources), require_items=True
+            ),
+        )
+
+
 class RequirementsSpecificationPayload(ApiModel):
     """Complete typed requirements specification HTTP contract."""
 
@@ -517,6 +576,8 @@ class RequirementsSpecificationPayload(ApiModel):
     scenarios: tuple[UsageScenarioPayload, ...]
     risks: tuple[ProjectRiskPayload, ...]
     definition_of_done: tuple[DefinitionOfDoneItemPayload, ...]
+    needs: tuple[UserNeedPayload, ...] = ()
+    schema_version: int = Field(default=1, strict=True, ge=1, le=2)
 
     @classmethod
     def from_domain(
@@ -525,6 +586,8 @@ class RequirementsSpecificationPayload(ApiModel):
     ) -> RequirementsSpecificationPayload:
         """Map a complete specification into the API contract."""
         return cls(
+            schema_version=specification.schema_version,
+            needs=tuple(UserNeedPayload.from_domain(value) for value in specification.needs),
             project_id=specification.project_id,
             project_brief_reference=(
                 RequirementsContextReferencePayload.from_domain(
@@ -568,6 +631,8 @@ class RequirementsSpecificationPayload(ApiModel):
     def to_domain(self) -> RequirementsSpecification:
         """Convert this complete payload through aggregate validation."""
         return create_requirements_specification(
+            schema_version=self.schema_version,
+            needs=(value.to_domain() for value in self.needs),
             project_id=self.project_id,
             project_brief_reference=self.project_brief_reference.to_domain(),
             agent_team_reference=self.agent_team_reference.to_domain(),
@@ -622,6 +687,7 @@ class RequirementsArtifactEnvelope(ApiModel):
     user_story: UserStoryPayload | None = None
     acceptance_criterion: AcceptanceCriterionPayload | None = None
     scenario: UsageScenarioPayload | None = None
+    need: UserNeedPayload | None = None
     risk: ProjectRiskPayload | None = None
     definition_of_done: DefinitionOfDoneItemPayload | None = None
 
@@ -629,6 +695,7 @@ class RequirementsArtifactEnvelope(ApiModel):
     def validate_shape(self) -> Self:
         """Require exactly the payload selected by artifact kind."""
         values = {
+            RequirementsArtifactKind.NEED: self.need,
             RequirementsArtifactKind.REQUIREMENT: self.requirement,
             RequirementsArtifactKind.USER_STORY: self.user_story,
             RequirementsArtifactKind.ACCEPTANCE_CRITERION: (self.acceptance_criterion),
@@ -650,6 +717,10 @@ class RequirementsArtifactEnvelope(ApiModel):
         artifact: RequirementsArtifact,
     ) -> RequirementsArtifactEnvelope:
         """Wrap one heterogeneous requirements artifact."""
+        if isinstance(artifact, UserNeed):
+            return cls(
+                kind=RequirementsArtifactKind.NEED, need=UserNeedPayload.from_domain(artifact)
+            )
         if isinstance(artifact, Requirement):
             return cls(
                 kind=RequirementsArtifactKind.REQUIREMENT,
@@ -1820,5 +1891,6 @@ __all__ = [
     "RequirementsSpecificationPayload",
     "RequirementsSpecificationVersionPayload",
     "RequirementsTraceabilityPayload",
+    "UserNeedPayload",
     "create_requirements_router",
 ]

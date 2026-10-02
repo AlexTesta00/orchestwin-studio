@@ -50,6 +50,8 @@ from .test_requirements_change_proposals import (
     adapter_call,
     baseline_instruction,
     generated_specification,
+    legacy_context,
+    legacy_instruction,
     sha256,
 )
 
@@ -202,7 +204,7 @@ def test_the_context_of_today_moved_only_by_its_perspectives():
     context, _, _ = requirements_context(requirements_fixtures.proposal_request())
 
     assert counted(context["perspectives"]) == [("PRODUCT", 2)]
-    assert sha256(canonical_json(without_perspectives(context))) == (
+    assert sha256(canonical_json(without_perspectives(legacy_context(context)))) == (
         CONTEXT_BEFORE_PERSPECTIVES_SHA256
     )
 
@@ -216,7 +218,7 @@ def test_the_instruction_names_the_perspectives_once_right_after_the_proportion(
         f"{PROPORTION_END} {DEFINITION_SENTENCES} Keep criteria concrete and testable."
         in instruction
     )
-    assert sha256(instruction.replace(f" {DEFINITION_SENTENCES}", "")) == (
+    assert sha256(legacy_instruction(instruction).replace(f" {DEFINITION_SENTENCES}", "")) == (
         INSTRUCTION_BEFORE_PERSPECTIVES_SHA256
     )
     assert instruction_for(MINIMUM_TEAM) == instruction_for(EVERY_AGENT) == instruction
@@ -237,7 +239,7 @@ def test_the_planning_schemas_ignore_the_perspectives():
         assert guided == plain
 
 
-def test_the_model_receives_the_perspectives_in_contract_five_with_the_same_schema(tmp_path):
+def test_the_model_receives_the_perspectives_in_contract_six_with_the_same_schema(tmp_path):
     configuration = local_configuration(tmp_path)
     every, sent = captured(
         ModelRequirementsAdapter, requirements_request(EVERY_AGENT), configuration, CapturePort()
@@ -248,9 +250,9 @@ def test_the_model_receives_the_perspectives_in_contract_five_with_the_same_sche
 
     assert sent["perspectives"] == perspective_guidance(EVERY_AGENT, GuidanceStage.DEFINITION)
     assert every.output_schema.canonical_schema_json == minimum.output_schema.canonical_schema_json
-    assert every.output_schema.schema_id == "proposal-requirements-v5"
-    assert every.output_schema.version_number == 5
-    assert every.prompt_version_ref == "proposal-requirements-v5"
+    assert every.output_schema.schema_id == "proposal-requirements-v6"
+    assert every.output_schema.version_number == 6
+    assert every.prompt_version_ref == "proposal-requirements-v6"
     assert every.task_id == "proposal-requirements-v1"
     assert every.system_instruction.count(DEFINITION_SENTENCES) == 1
 

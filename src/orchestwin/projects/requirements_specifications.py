@@ -12,6 +12,7 @@ from orchestwin.projects.requirements import (
     Requirement,
     UserStory,
 )
+from orchestwin.projects.requirements_needs import UserNeed
 from orchestwin.projects.requirements_primitives import (
     RequirementsContextKind,
     RequirementsContextReference,
@@ -30,7 +31,9 @@ from orchestwin.projects.requirements_quality import (
 )
 from orchestwin.twins.limits import MAX_USER_TWINS, MIN_USER_TWINS
 
-REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION: Final = 1
+REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION: Final = 2
+LEGACY_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION: Final = 1
+SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS: Final = (1, 2)
 MIN_REQUIREMENTS_USER_TWINS: Final = MIN_USER_TWINS
 MAX_REQUIREMENTS_USER_TWINS: Final = MAX_USER_TWINS
 
@@ -117,9 +120,29 @@ class RequirementsSpecification:
         DefinitionOfDoneItem,
         ...,
     ]
+    needs: tuple[UserNeed, ...] = ()
+    schema_version: int = 1
 
     def __post_init__(self) -> None:
         """Protect exact context, canonical order, and references."""
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version not in SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS
+        ):
+            raise ValueError("unsupported requirements specification schema version")
+        if self.schema_version == 1 and (
+            self.needs
+            or any(value.need_ids for value in (*self.requirements, *self.user_stories))
+            or any(
+                value.context is not None
+                or value.goal is not None
+                or value.criticalities
+                or value.sources
+                for value in self.scenarios
+            )
+        ):
+            raise ValueError("schema 1 cannot contain needs or enriched scenarios")
         expected_context_kinds = (
             (
                 self.project_brief_reference,
@@ -170,6 +193,7 @@ class RequirementsSpecification:
             )
 
         collection_rules = (
+            (self.needs, "needs", self.schema_version == 2),
             (
                 self.requirements,
                 "requirements",
@@ -278,10 +302,52 @@ class RequirementsSpecification:
                 label=("Definition of Done requirement IDs"),
             )
 
+        if self.schema_version == 2:
+            scenario_ids = _ids(self.scenarios)
+            need_ids = _ids(self.needs)
+            scenarios = {value.id: value for value in self.scenarios}
+            needs = {value.id: value for value in self.needs}
+            requirements = {value.id: value for value in self.requirements}
+            covered_scenarios: set[UUID] = set()
+            used_needs: set[UUID] = set()
+            for scenario in self.scenarios:
+                if not scenario.context or not scenario.goal or not scenario.sources:
+                    raise ValueError("schema 2 scenarios require context, goal, and sources")
+            for need in self.needs:
+                _require_subset(need.scenario_ids, scenario_ids, label="user-need scenario IDs")
+                covered_scenarios.update(need.scenario_ids)
+            if covered_scenarios != scenario_ids:
+                raise ValueError("every scenario must be referenced by a need")
+            for artifact in (*self.requirements, *self.user_stories):
+                if not artifact.need_ids:
+                    raise ValueError("schema 2 requirements and stories require need IDs")
+                _require_subset(artifact.need_ids, need_ids, label="artifact need IDs")
+                used_needs.update(artifact.need_ids)
+            if used_needs != need_ids:
+                raise ValueError("every need must be used by a requirement or story")
+            for story in self.user_stories:
+                for need_id in story.need_ids:
+                    if not any(
+                        scenarios[value].actor == story.user_twin_reference
+                        for value in needs[need_id].scenario_ids
+                    ):
+                        raise ValueError("story needs must include a scenario of its User Twin")
+                for requirement_id in story.requirement_ids:
+                    if not set(story.need_ids).intersection(requirements[requirement_id].need_ids):
+                        raise ValueError("linked requirements and stories must share a need")
+            for requirement in self.requirements:
+                actors = {
+                    scenarios[value].actor
+                    for need_id in requirement.need_ids
+                    for value in needs[need_id].scenario_ids
+                }
+                if not set(requirement.user_twin_references).issubset(actors):
+                    raise ValueError("requirement User Twins must be actors of its needs")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic complete requirements snapshot."""
-        return {
-            "schema_version": (REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION),
+        snapshot = {
+            "schema_version": self.schema_version,
             "project_id": str(self.project_id),
             "context": {
                 "project_brief": (self.project_brief_reference.to_snapshot()),
@@ -302,6 +368,9 @@ class RequirementsSpecification:
             "risks": [value.to_snapshot() for value in self.risks],
             "definition_of_done": [value.to_snapshot() for value in self.definition_of_done],
         }
+        if self.schema_version == 2:
+            snapshot["needs"] = [value.to_snapshot() for value in self.needs]
+        return snapshot
 
     def canonical_json(self) -> str:
         """Serialize this complete specification deterministically."""
@@ -384,9 +453,13 @@ def create_requirements_specification(
     scenarios: Iterable[UsageScenario],
     risks: Iterable[ProjectRisk],
     definition_of_done: Iterable[DefinitionOfDoneItem],
+    needs: Iterable[UserNeed] = (),
+    schema_version: int = 1,
 ) -> RequirementsSpecification:
     """Create a complete specification in deterministic artifact order."""
     return RequirementsSpecification(
+        schema_version=schema_version,
+        needs=_canonical_artifacts(needs, label="needs", require_items=schema_version == 2),
         project_id=project_id,
         project_brief_reference=project_brief_reference,
         agent_team_reference=agent_team_reference,
@@ -433,9 +506,11 @@ def create_requirements_specification(
 
 
 __all__ = [
+    "LEGACY_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION",
     "MAX_REQUIREMENTS_USER_TWINS",
     "MIN_REQUIREMENTS_USER_TWINS",
     "REQUIREMENTS_SPECIFICATION_SCHEMA_VERSION",
+    "SUPPORTED_REQUIREMENTS_SPECIFICATION_SCHEMA_VERSIONS",
     "RequirementsSpecification",
     "RequirementsSpecificationVersion",
     "create_requirements_specification",

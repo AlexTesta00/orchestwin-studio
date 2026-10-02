@@ -78,6 +78,12 @@ def _sorted(items: list[object]) -> list[object]:
 
 def comparable(node: object, labels: Mapping[str, str], key: str | None = None) -> object:
     if isinstance(node, Mapping):
+        if frozenset(node) == frozenset(
+            {"kind", "source_id", "source_version", "content_hash", "locator"}
+        ) and not any(
+            identifier in labels for identifier in _IDENTITY.findall(str(node["source_id"]))
+        ):
+            return dict(node)
         result: dict[str, object] = {}
         for name, value in node.items():
             if name == "based_on_version_number":

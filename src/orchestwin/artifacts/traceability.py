@@ -37,6 +37,7 @@ class ArtifactGraphNodeKind(StrEnum):
     USER_STORY = "USER_STORY"
     ACCEPTANCE_CRITERION = "ACCEPTANCE_CRITERION"
     SCENARIO = "SCENARIO"
+    NEED = "NEED"
     PROJECT_RISK = "PROJECT_RISK"
     DEFINITION_OF_DONE = "DEFINITION_OF_DONE"
     DESIGN_PACKAGE = "DESIGN_PACKAGE"
@@ -54,6 +55,8 @@ class ArtifactGraphLinkKind(StrEnum):
     CONTAINS = "CONTAINS"
     GROUNDED_IN = "GROUNDED_IN"
     ACTS_AS = "ACTS_AS"
+    PARTICIPATES_IN = "PARTICIPATES_IN"
+    REVEALS = "REVEALS"
     MOTIVATES = "MOTIVATES"
     VERIFIED_BY = "VERIFIED_BY"
     EXERCISES = "EXERCISES"
@@ -429,6 +432,53 @@ def _add_requirement_stage(
             )
         )
         links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+
+    if specification.schema_version == 2:
+        for need in specification.needs:
+            reference = _plain_reference(ArtifactGraphNodeKind.NEED, need.id)
+            nodes.append(
+                _node(
+                    reference=reference,
+                    stage=ArtifactGraphStage.REQUIREMENTS,
+                    display_code=need.code,
+                    title=need.title,
+                )
+            )
+            links.append(_link(ArtifactGraphLinkKind.CONTAINS, requirements_root, reference))
+            links.extend(
+                _link(
+                    ArtifactGraphLinkKind.REVEALS,
+                    _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario_id),
+                    reference,
+                )
+                for scenario_id in need.scenario_ids
+            )
+        for kind, artifacts in (
+            (ArtifactGraphNodeKind.REQUIREMENT, specification.requirements),
+            (ArtifactGraphNodeKind.USER_STORY, specification.user_stories),
+        ):
+            for artifact in artifacts:
+                links.extend(
+                    _link(
+                        ArtifactGraphLinkKind.MOTIVATES,
+                        _plain_reference(ArtifactGraphNodeKind.NEED, need_id),
+                        _plain_reference(kind, artifact.id),
+                    )
+                    for need_id in artifact.need_ids
+                )
+        links.extend(
+            _link(
+                ArtifactGraphLinkKind.PARTICIPATES_IN,
+                ArtifactGraphReference(
+                    kind=ArtifactGraphNodeKind.USER_TWIN,
+                    artifact_id=scenario.actor.twin_id,
+                    version_number=scenario.actor.version_number,
+                    content_hash=scenario.actor.content_hash,
+                ),
+                _plain_reference(ArtifactGraphNodeKind.SCENARIO, scenario.id),
+            )
+            for scenario in specification.scenarios
+        )
 
     for story in specification.user_stories:
         reference = _plain_reference(ArtifactGraphNodeKind.USER_STORY, story.id)

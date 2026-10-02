@@ -58,6 +58,7 @@ class Requirement:
         UserTwinVersionReference,
         ...,
     ] = ()
+    need_ids: tuple[UUID, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect identity, normalized text, and canonical grounding."""
@@ -99,9 +100,14 @@ class Requirement:
         ):
             raise ValueError("requirement User Twin references must use canonical order")
 
+        if self.need_ids != canonical_uuid_tuple(
+            self.need_ids, label="requirement need IDs", require_items=False
+        ):
+            raise ValueError("requirement need IDs must use canonical order")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic requirement snapshot."""
-        return {
+        snapshot = {
             "id": str(self.id),
             "code": self.code,
             "title": self.title,
@@ -113,6 +119,9 @@ class Requirement:
                 reference.to_snapshot() for reference in self.user_twin_references
             ],
         }
+        if self.need_ids:
+            snapshot["need_ids"] = [str(value) for value in self.need_ids]
+        return snapshot
 
     def canonical_json(self) -> str:
         """Serialize this requirement deterministically."""
@@ -134,6 +143,7 @@ class UserStory:
     goal: str
     benefit: str
     requirement_ids: tuple[UUID, ...]
+    need_ids: tuple[UUID, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect identity, normalized intent, and requirement links."""
@@ -170,9 +180,14 @@ class UserStory:
         ):
             raise ValueError("user-story requirement IDs must use canonical order")
 
+        if self.need_ids != canonical_uuid_tuple(
+            self.need_ids, label="user-story need IDs", require_items=False
+        ):
+            raise ValueError("user-story need IDs must use canonical order")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic user-story snapshot."""
-        return {
+        snapshot = {
             "id": str(self.id),
             "code": self.code,
             "user_twin_reference": (self.user_twin_reference.to_snapshot()),
@@ -180,6 +195,9 @@ class UserStory:
             "benefit": self.benefit,
             "requirement_ids": [str(value) for value in self.requirement_ids],
         }
+        if self.need_ids:
+            snapshot["need_ids"] = [str(value) for value in self.need_ids]
+        return snapshot
 
     def canonical_json(self) -> str:
         """Serialize this user story deterministically."""
@@ -201,6 +219,7 @@ def create_requirement(
     priority: RequirementPriority,
     sources: Iterable[RequirementSourceReference],
     user_twin_references: Iterable[UserTwinVersionReference] = (),
+    need_ids: Iterable[UUID] = (),
 ) -> Requirement:
     """Create a normalized requirement with canonical references."""
     return Requirement(
@@ -228,6 +247,7 @@ def create_requirement(
                 require_items=False,
             )
         ),
+        need_ids=canonical_uuid_tuple(need_ids, label="requirement need IDs", require_items=False),
     )
 
 
@@ -239,6 +259,7 @@ def create_user_story(
     goal: str,
     benefit: str,
     requirement_ids: Iterable[UUID],
+    need_ids: Iterable[UUID] = (),
 ) -> UserStory:
     """Create a normalized user story with canonical requirement links."""
     return UserStory(
@@ -260,6 +281,7 @@ def create_user_story(
             label="user-story requirement IDs",
             require_items=True,
         ),
+        need_ids=canonical_uuid_tuple(need_ids, label="user-story need IDs", require_items=False),
     )
 
 

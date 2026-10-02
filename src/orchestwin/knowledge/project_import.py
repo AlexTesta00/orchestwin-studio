@@ -179,6 +179,8 @@ class _Rewriter:
     def rewrite(self, node: object) -> object:
         if isinstance(node, Mapping):
             internal_source = self._internal(node.get("source_id"))
+            if frozenset(node) == _SOURCE_KEYS and not internal_source:
+                return dict(node)
             result: dict[str, object] = {}
             for key, value in node.items():
                 if key in _USER_KEYS:

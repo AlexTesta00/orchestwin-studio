@@ -149,6 +149,10 @@ class UsageScenario:
     expected_outcome: str
     requirement_ids: tuple[UUID, ...]
     acceptance_criterion_ids: tuple[UUID, ...]
+    context: str | None = None
+    goal: str | None = None
+    criticalities: tuple[str, ...] = ()
+    sources: tuple[RequirementSourceReference, ...] = ()
 
     def __post_init__(self) -> None:
         """Protect ordered behavior and traceable references."""
@@ -217,9 +221,22 @@ class UsageScenario:
         ):
             raise ValueError("scenario acceptance-criterion IDs must use canonical order")
 
+        for value, label in ((self.context, "scenario context"), (self.goal, "scenario goal")):
+            if normalize_optional_text(value, label=label, maximum_length=2000) != value:
+                raise ValueError(f"{label} must be normalized")
+        if self.criticalities != normalize_text_items(
+            self.criticalities,
+            label="scenario criticalities",
+            maximum_item_length=2000,
+            require_items=False,
+        ):
+            raise ValueError("scenario criticalities must be normalized")
+        if self.sources != canonical_requirement_sources(self.sources, require_items=False):
+            raise ValueError("scenario sources must use canonical order")
+
     def to_snapshot(self) -> dict[str, object]:
         """Return a deterministic usage-scenario snapshot."""
-        return {
+        snapshot = {
             "id": str(self.id),
             "code": self.code,
             "title": self.title,
@@ -231,6 +248,14 @@ class UsageScenario:
             "requirement_ids": [str(value) for value in self.requirement_ids],
             "acceptance_criterion_ids": [str(value) for value in self.acceptance_criterion_ids],
         }
+        if self.context is not None or self.goal is not None or self.criticalities or self.sources:
+            snapshot.update(
+                context=self.context,
+                goal=self.goal,
+                criticalities=list(self.criticalities),
+                sources=[source.to_snapshot() for source in self.sources],
+            )
+        return snapshot
 
     @property
     def content_hash(self) -> str:
@@ -433,6 +458,10 @@ def create_usage_scenario(
     expected_outcome: str,
     requirement_ids: Iterable[UUID],
     acceptance_criterion_ids: Iterable[UUID],
+    context: str | None = None,
+    goal: str | None = None,
+    criticalities: Iterable[str] = (),
+    sources: Iterable[RequirementSourceReference] = (),
 ) -> UsageScenario:
     """Create a normalized scenario while preserving ordered steps."""
     return UsageScenario(
@@ -478,6 +507,15 @@ def create_usage_scenario(
             label="scenario acceptance-criterion IDs",
             require_items=True,
         ),
+        context=normalize_optional_text(context, label="scenario context", maximum_length=2000),
+        goal=normalize_optional_text(goal, label="scenario goal", maximum_length=2000),
+        criticalities=normalize_text_items(
+            criticalities,
+            label="scenario criticalities",
+            maximum_item_length=2000,
+            require_items=False,
+        ),
+        sources=canonical_requirement_sources(sources, require_items=False),
     )
 
 

@@ -25,6 +25,7 @@ from orchestwin.models.change_review import (
     design_view,
     requirements_view,
 )
+from orchestwin.models.design_drafts import requirements_view as semantic_requirements_view
 from orchestwin.models.output_language import written_in_another_language
 from orchestwin.projects.acceptance_tests import (
     ACTION_ROLES,
@@ -148,7 +149,11 @@ def criteria_view(version) -> list[dict[str, object]]:
 def acceptance_material(*, brief, requirements, design, language: str) -> dict[str, object]:
     return {
         "project_brief": brief_view(brief),
-        "requirements": requirements_view(requirements),
+        "requirements": (
+            semantic_requirements_view(requirements)
+            if requirements.specification.schema_version == 2
+            else requirements_view(requirements)
+        ),
         "acceptance_criteria": criteria_view(requirements),
         "design": design_view(design, language=language),
     }

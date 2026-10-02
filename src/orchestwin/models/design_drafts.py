@@ -228,6 +228,10 @@ def requirements_view(version):
     """Semantic view of an exact immutable requirements version, without repeated hashes."""
     spec = version.specification
     codes = {str(value): key for key, value in requirement_code_map(spec).items()}
+    if spec.schema_version == 2:
+        codes.update(
+            {str(item.id): item.code for group in (spec.scenarios, spec.needs) for item in group}
+        )
     twins = {str(ref.twin_id): f"T{i}" for i, ref in enumerate(spec.user_twin_references, 1)}
 
     def compact(value):
@@ -243,19 +247,23 @@ def requirements_view(version):
             }
         return value
 
-    return {
+    view = {
         "reference": {
             "id": str(version.id),
             "version": version.version_number,
             "content_hash": version.content_hash,
         },
-        "requirements": compact(wire_value(spec.requirements)),
-        "stories": compact(wire_value(spec.user_stories)),
-        "criteria": compact(wire_value(spec.acceptance_criteria)),
-        "scenarios": compact(wire_value(spec.scenarios)),
-        "risks": compact(wire_value(spec.risks)),
-        "definition_of_done": compact(wire_value(spec.definition_of_done)),
+        "requirements": compact([item.to_snapshot() for item in spec.requirements]),
+        "stories": compact([item.to_snapshot() for item in spec.user_stories]),
+        "criteria": compact([item.to_snapshot() for item in spec.acceptance_criteria]),
+        "scenarios": compact([item.to_snapshot() for item in spec.scenarios]),
+        "risks": compact([item.to_snapshot() for item in spec.risks]),
+        "definition_of_done": compact([item.to_snapshot() for item in spec.definition_of_done]),
     }
+    if spec.schema_version == 2:
+        view["schema_version"] = 2
+        view["needs"] = compact([item.to_snapshot() for item in spec.needs])
+    return view
 
 
 def _strings(value):
@@ -272,8 +280,8 @@ def _strings(value):
 def requirements_language(view):
     code = dominant_language(
         text
-        for group in LANGUAGE_GROUPS
-        for text in _strings(view[group])
+        for group in (*LANGUAGE_GROUPS, "needs")
+        for text in _strings(view.get(group, []))
         if word_count(text) >= LANGUAGE_MIN_WORDS
     )
     return None if code is None else {"code": code, "name": LANGUAGE_NAMES[code]}
