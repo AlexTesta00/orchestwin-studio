@@ -42,6 +42,8 @@ const PRIORITY_ORDER: Record<RequirementPriority, number> = {
 const props = withDefaults(
   defineProps<{
     specification: RequirementsSpecificationPayload;
+    versionNumber?: number;
+    contentHash?: string;
     locale?: Locale;
   }>(),
   { locale: "en" },
@@ -613,6 +615,9 @@ function applicability(item: DefinitionOfDoneItemPayload): string {
         :caption="primary.title"
         :columns="primary.columns"
         :rows="primary.rows"
+        :why="['requirements', 'needs', 'scenarios', 'stories'].includes(primary.key)"
+        :version-number="versionNumber"
+        :content-hash="contentHash"
         row-key="code"
         :locale="locale"
       />
@@ -649,6 +654,9 @@ function applicability(item: DefinitionOfDoneItemPayload): string {
             :caption="section.title"
             :columns="section.columns"
             :rows="section.rows"
+            :why="['requirements', 'needs', 'scenarios', 'stories'].includes(section.key)"
+            :version-number="versionNumber"
+            :content-hash="contentHash"
             row-key="code"
             :locale="locale"
           />

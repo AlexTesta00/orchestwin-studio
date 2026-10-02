@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import UserModelingEpistemicBadge from "./UserModelingEpistemicBadge.vue";
 import UserModelingProvenanceInspector from "./UserModelingProvenanceInspector.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
+import { twinClaimCode } from "./whyContext";
 import { claimText, twinRepresentation } from "./twinRepresentation";
 import type { PersonaVersionPayload, UserTwinVersionPayload } from "../types/userModeling";
 
@@ -20,7 +22,7 @@ const copy = computed(() =>
     ? {
         PROVISIONAL: "Provvisorio",
         EVIDENCE_BASED: "Fondato su evidenze",
-        why: "Perché?",
+        provenance: "Provenienza",
         represents: "Rappresenta",
         does_not_represent: "Non rappresenta",
         contexts: "Contesti coperti",
@@ -37,7 +39,7 @@ const copy = computed(() =>
     : {
         PROVISIONAL: "Provisional",
         EVIDENCE_BASED: "Evidence based",
-        why: "Why?",
+        provenance: "Provenance",
         represents: "Represents",
         does_not_represent: "Does not represent",
         contexts: "Covered contexts",
@@ -91,10 +93,20 @@ const personaFields = [
         <dt class="font-semibold text-on-night-2">{{ copy[field] }}</dt>
         <dd class="m-0 grid gap-1.5">
           <span>{{ claimText(view[field], locale) }}</span>
+          <ArtifactWhy
+            :code="twinClaimCode(twin.twin_id, twin.version_number, view[field].observation_key)"
+            :title="copy[field]"
+            kind="USER_TWIN_CLAIM"
+            :artifact-id="twin.twin_id"
+            :version-number="twin.version_number"
+            :content-hash="twin.content_hash"
+            :locale="locale"
+            :test-id="`representation-chain-why-${twin.twin_id}-${field}`"
+          />
           <UserModelingProvenanceInspector
             :observation="view[field]"
             :locale="locale"
-            :summary-label="`${copy.why} ${copy[field]}`"
+            :summary-label="`${copy.provenance} ${copy[field]}`"
           />
         </dd>
       </div>
@@ -116,10 +128,26 @@ const personaFields = [
               :show-details="false"
               :locale="locale"
             />
+            <ArtifactWhy
+              :code="
+                twinClaimCode(
+                  twin.twin_id,
+                  twin.version_number,
+                  `user_twin.${{ description: 'description', goals: 'goals', needs: 'information_needs', behaviours: 'recurring_tasks', pain_points: 'pain_points', constraints: 'operational_constraints', contexts: 'context_of_use' }[field]}`,
+                )
+              "
+              :title="copy[field]"
+              kind="USER_TWIN_CLAIM"
+              :artifact-id="twin.twin_id"
+              :version-number="twin.version_number"
+              :content-hash="twin.content_hash"
+              :locale="locale"
+              :test-id="`persona-chain-why-${twin.twin_id}-${field}`"
+            />
             <UserModelingProvenanceInspector
               :observation="view.persona[field]"
               :locale="locale"
-              :summary-label="`${copy.why} ${copy[field]}`"
+              :summary-label="`${copy.provenance} ${copy[field]}`"
               :test-id="`persona-why-${twin.twin_id}-${field}`"
             />
           </dd>

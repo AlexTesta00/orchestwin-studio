@@ -3043,6 +3043,8 @@ onBeforeUnmount(() => {
 
         <DesignAlternativeComparison
           :alternatives="current.package.alternatives"
+          :version-number="current.version_number"
+          :content-hash="current.content_hash"
           :twins="current.package.grounding.user_twin_references"
           :recommended-alternative-id="current.package.recommended_alternative_id"
           :selected-alternative-id="chosenAlternativeId"

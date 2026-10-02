@@ -2,6 +2,7 @@
 import { computed, ref, useId } from "vue";
 
 import { useSurface } from "./UiSurface.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 
 export interface ArtifactTableColumn {
   key: string;
@@ -30,6 +31,9 @@ const props = withDefaults(
     rowKey: string;
     locale?: Locale;
     emptyText?: string | undefined;
+    why?: boolean;
+    versionNumber?: number | undefined;
+    contentHash?: string | undefined;
   }>(),
   { locale: "en", emptyText: undefined },
 );
@@ -262,6 +266,16 @@ function isEmpty(value: string | undefined): boolean {
                     >—</span
                   >
                   <template v-else>{{ row[column.key] }}</template>
+                  <ArtifactWhy
+                    v-if="why"
+                    :code="row[rowKey] ?? ''"
+                    :title="row.title ?? row.goal ?? row.statement"
+                    :version-number="versionNumber"
+                    :content-hash="contentHash"
+                    :locale="locale"
+                    test-id="table-why"
+                    class="mt-2 font-sans"
+                  />
                 </th>
                 <td
                   v-else

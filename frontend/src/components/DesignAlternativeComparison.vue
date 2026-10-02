@@ -23,6 +23,7 @@ import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { generationFailureText, generationReasonText } from "./DesignIterationPanel.vue";
 import DesignStyleTile from "./DesignStyleTile.vue";
 import GeneratedMockupFrame from "./GeneratedMockupFrame.vue";
+import ArtifactWhy from "./ArtifactWhy.vue";
 import UiButton from "./UiButton.vue";
 import { archetypeLabel } from "./visualLanguage";
 import type { DesignAlternativePayload, UserTwinVersionReferencePayload } from "../types/design";
@@ -45,6 +46,8 @@ const props = withDefaults(
     disabled?: boolean;
     paid?: boolean;
     locale?: Locale;
+    versionNumber?: number;
+    contentHash?: string;
   }>(),
   {
     twins: () => [],
@@ -106,7 +109,7 @@ const messages = {
     details: "Details of the alternative",
     layout: "Layout",
     approach: "Approach",
-    rationale: "Why this alternative",
+    rationale: "Model-generated rationale",
     advantages: "Advantages",
     tradeOffs: "Trade-offs",
     informationArchitecture: "Information architecture",
@@ -153,7 +156,7 @@ const messages = {
     details: "Dettagli dell'alternativa",
     layout: "Impostazione",
     approach: "Approccio",
-    rationale: "Perché questa alternativa",
+    rationale: "Motivazione generata dal modello",
     advantages: "Vantaggi",
     tradeOffs: "Compromessi",
     informationArchitecture: "Architettura dell'informazione",
@@ -437,6 +440,26 @@ onBeforeUnmount(() => {
           {{ card.alternative.title }}
         </h3>
         <p class="text-[15px] leading-normal text-on-night-2">{{ card.alternative.summary }}</p>
+        <ArtifactWhy
+          :code="card.alternative.code"
+          :title="card.alternative.title"
+          kind="DESIGN_ALTERNATIVE"
+          :artifact-id="card.alternative.id"
+          :version-number="versionNumber"
+          :content-hash="contentHash"
+          :locale="locale"
+          test-id="alternative-why"
+        />
+        <ArtifactWhy
+          v-if="card.chosen && versionNumber !== undefined"
+          :code="`CHOICE-v${versionNumber}`"
+          :title="copy.chosen"
+          kind="DESIGN_SELECTION"
+          :version-number="versionNumber"
+          :content-hash="contentHash"
+          :locale="locale"
+          test-id="design-selection-why"
+        />
         <div
           v-if="card.pro !== null || card.con !== null"
           class="grid grid-cols-1 gap-3 text-sm leading-[1.45] text-on-night-2 min-[420px]:grid-cols-2"
