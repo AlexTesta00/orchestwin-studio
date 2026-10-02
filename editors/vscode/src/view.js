@@ -1,6 +1,7 @@
 "use strict";
 
 const { commandLine, costOf } = require("./commands");
+const { whySection } = require("./why-view");
 const {
   formatDate,
   formatDay,
@@ -356,6 +357,20 @@ h3 { margin: 16px 0 6px; color: var(--ot-muted); font-size: 12px; font-weight: 6
 }
 .status:empty { padding: 0; border-top: 0; }
 .status:empty::before { display: none; }
+.why-verbatim, .why-citation blockquote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.why-reference, .why-citation { overflow-wrap: anywhere; }
+#why-form { display: grid; gap: 7px; margin-top: 12px; }
+#why-code, #why-selector {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--ot-card-line);
+  background: var(--vscode-input-background, var(--ot-bg));
+  color: var(--vscode-input-foreground, var(--ot-fg));
+  font: inherit;
+}
+#why-code:focus, #why-selector:focus { outline: 1px solid var(--ot-focus); }
 `;
 
 const SCRIPT = `(() => {
@@ -378,7 +393,22 @@ const SCRIPT = `(() => {
   document.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest("button[data-command]") : null;
     if (target && api) {
-      api.postMessage({ command: target.getAttribute("data-command") });
+      const code = target.getAttribute("data-code");
+      api.postMessage(code === null ? { command: target.getAttribute("data-command") } : { command: target.getAttribute("data-command"), code });
+    }
+  });
+  document.addEventListener("submit", (event) => {
+    if (event.target instanceof HTMLFormElement && event.target.id === "why-form") {
+      event.preventDefault();
+      const input = document.getElementById("why-code");
+      if (api && input instanceof HTMLInputElement) {
+        api.postMessage({ command: "why", code: input.value });
+      }
+    }
+  });
+  document.addEventListener("change", (event) => {
+    if (api && event.target instanceof HTMLSelectElement && event.target.id === "why-selector" && event.target.value) {
+      api.postMessage({ command: "why", code: event.target.value });
     }
   });
   window.addEventListener("message", (event) => {
@@ -432,6 +462,7 @@ function contextOf(options) {
   const timeZone = options.timeZone;
   return {
     language,
+    why: options.why,
     t: (key, values) => text(language, key, values),
     n: (key, count, values) => plural(language, key, count, values),
     date: (value) => formatDate(language, value, { timeZone }),
@@ -1158,6 +1189,7 @@ function linkedBody(state, context) {
     }
     parts.push(twinsSection(state, context));
   }
+  parts.push(whySection(state, context, context.why));
   parts.push(agentsSection(state, context));
   parts.push(footerOf(state, context));
   return parts.filter((part) => part !== "").join("\n");

@@ -18,6 +18,7 @@ const COMMANDS = [
   "orchestwin.twinsUpdate",
   "orchestwin.openReport",
   "orchestwin.connectAgents",
+  "orchestwin.why",
 ];
 
 function readJson(...parts) {
@@ -82,7 +83,7 @@ describe("the manifest of the extension", () => {
     });
   });
 
-  it("contributes the ten commands with their titles and their category", () => {
+  it("contributes the commands with their titles and their category", () => {
     const commands = manifest.contributes.commands;
     assert.deepEqual(
       commands.map((command) => command.command),

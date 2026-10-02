@@ -215,6 +215,7 @@ function start(options = {}) {
     setTimeout: timers.setTimeout.bind(timers),
     clearTimeout: timers.clearTimeout.bind(timers),
     nonce: () => "fixednonce",
+    execFile: options.execFile,
   });
   const context = { subscriptions: [] };
   extension.activate(context);
@@ -551,5 +552,137 @@ describe("the extension", () => {
     assert.equal(typeof extensionModule.activate, "function");
     assert.equal(typeof extensionModule.createExtension, "function");
     assert.doesNotThrow(() => extensionModule.deactivate());
+  });
+
+  function whyAnswer(title = "Exact requirement") {
+    return {
+      kind: "orchestwin.why-answer",
+      schema_version: 1,
+      project_id: fixtures.PROJECT_ID,
+      target: {
+        key: "REQUIREMENT:req:3:hash:context",
+        code: "REQ-001",
+        kind: "REQUIREMENT",
+        title,
+        display_status: "UNKNOWN",
+        current: true,
+        reference: {
+          artifact_id: "req",
+          version_number: 3,
+          content_hash: "hash",
+        },
+        rationale: null,
+        citations: [],
+        gaps: [],
+        declared_context: { perspectives: [] },
+      },
+      summary: {
+        upstream_count: 0,
+        downstream_count: 0,
+        complete_to_twin: false,
+        complete_to_evidence: false,
+        all_paths_complete: false,
+      },
+      upstream: [],
+      downstream: [],
+      links: [],
+      gaps: [],
+      human_validation: [],
+      declared_context: { perspectives: [] },
+      limits: [],
+    };
+  }
+
+  it("opens why through the command and renders a verified offline answer without a terminal", async () => {
+    const calls = [];
+    session = start({
+      folders: [root],
+      execFile: (program, args, options, finish) => {
+        calls.push({ program, args, options });
+        finish(null, JSON.stringify(whyAnswer()), "");
+      },
+    });
+    const focused = [];
+    session.vscode.commands.executeCommand = async (command) => {
+      focused.push(command);
+    };
+    await session.commands.get("orchestwin.why")("REQ-001");
+    assert.deepEqual(focused, ["orchestwin.panel.focus"]);
+    assert.deepEqual(calls[0].args, ["why", "REQ-001", "--offline", "--json"]);
+    assert.equal(calls[0].options.shell, false);
+    assert.equal(calls[0].options.cwd, root);
+    assert.equal(session.created.length, 0);
+    assert.equal(session.opened.length, 0);
+    assert.ok(session.view.webview.html.includes("Exact requirement"));
+    assert.ok(session.view.webview.html.includes(text("en", "why.offline")));
+    await session.extension.receive({ command: "why", code: "REQ-001;calc" });
+    assert.equal(calls.length, 1);
+  });
+
+  it("asks for a selector in a legacy folder and presents ambiguity candidates explicitly", async () => {
+    const key = "ELEMENT:elm:1:hash:alternative-one";
+    const calls = [];
+    session = start({
+      folders: [root],
+      language: "it",
+      execFile: (_program, args, _options, finish) => {
+        calls.push(args);
+        if (args[1] === "ELM-001") {
+          finish(
+            { code: 2 },
+            "",
+            JSON.stringify({
+              error: { code: "WHY_CODE_AMBIGUOUS", candidates: [key] },
+            }),
+          );
+        } else {
+          finish(
+            null,
+            JSON.stringify(whyAnswer("Element of selected alternative")),
+            "",
+          );
+        }
+      },
+    });
+    session.vscode.window.showInputBox = async (options) => {
+      assert.equal(options.prompt, text("it", "why.code"));
+      assert.equal(options.validateInput("ELM-001"), undefined);
+      assert.equal(options.validateInput("$(bad)"), text("it", "why.invalid"));
+      return "ELM-001";
+    };
+    await session.commands.get("orchestwin.why")();
+    assert.ok(plain(session.view.webview.html).includes(text("it", "why.ambiguous")));
+    assert.ok(session.view.webview.html.includes(`data-code="${key}"`));
+    await session.extension.receive({ command: "why", code: key });
+    assert.equal(calls[1][1], key);
+    assert.ok(
+      session.view.webview.html.includes("Element of selected alternative"),
+    );
+  });
+
+  it("discards an earlier why response after refresh and after disposal", async () => {
+    const callbacks = [];
+    session = start({
+      folders: [root],
+      execFile: (_program, _args, _options, finish) => {
+        callbacks.push(finish);
+      },
+    });
+    const pending = session.extension.receive({
+      command: "why",
+      code: "REQ-001",
+    });
+    session.commands.get("orchestwin.refresh")();
+    callbacks[0](null, JSON.stringify(whyAnswer("Stale response")), "");
+    await pending;
+    assert.ok(!session.view.webview.html.includes("Stale response"));
+    const disposed = session.extension.receive({
+      command: "why",
+      code: "REQ-001",
+    });
+    session.extension.dispose();
+    callbacks[1](null, JSON.stringify(whyAnswer("Disposed response")), "");
+    await disposed;
+    assert.ok(!session.view.webview.html.includes("Disposed response"));
   });
 });

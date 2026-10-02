@@ -12,6 +12,7 @@
   "command.twinsUpdate": "Fai imparare i twin dallo sviluppo (ut twins update, può spendere)",
   "command.openReport": "Apri il rapporto dell'ultima verifica",
   "command.connectAgents": "Collega i twin agli agenti dell'editor",
+  "command.why": "Perché? Leggi la catena dell'artefatto dal Dossier locale (ut why --offline)",
   "configuration.title": "OrchesTwin",
-  "configuration.utCommand": "Il programma che i pulsanti del pannello avviano nel terminale: ut, o il suo percorso completo."
+  "configuration.utCommand": "Il programma usato dal pannello: ut, o il suo percorso completo. Perché? lo esegue offline; i comandi di sviluppo si avviano nel terminale."
 }
