@@ -79,6 +79,9 @@ class ProjectImportPlan:
     identities: Mapping[str, str]
     hashes: Mapping[str, str]
     research_evidence: Mapping[str, object] | None = None
+    evaluations: tuple = ()
+    finding_decisions: tuple = ()
+    import_limits: tuple[str, ...] = ()
 
     @property
     def personas(self):
@@ -432,6 +435,17 @@ def _plan(
     if issue is not None:
         raise KnowledgeArchiveError("FOLDER_INCONSISTENT", issue)
 
+    from orchestwin.knowledge.feedback_import import import_feedback
+
+    evaluations, decisions, import_limits = import_feedback(
+        folder,
+        identities=rewriter.identities,
+        hashes=rewriter.hashes,
+        project_id=project_id,
+        owner_user_id=owner_user_id,
+    )
+    if "twins/feedback/learned.json" in folder.files:
+        import_limits = (*import_limits, "LEARNED_PROJECTION_NOT_RESTORED")
     return ProjectImportPlan(
         origin=folder_origin(folder),
         project_id=project_id,
@@ -444,14 +458,29 @@ def _plan(
         design=design,
         identities=dict(rewriter.identities),
         hashes=dict(rewriter.hashes),
+        evaluations=evaluations,
+        finding_decisions=decisions,
+        import_limits=import_limits,
         research_evidence=None
         if evidence is None
-        else imported_evidence(evidence, identities=rewriter.identities, project_id=project_id),
+        else imported_evidence(
+            evidence,
+            identities=rewriter.identities,
+            project_id=project_id,
+            original_twins={
+                item["twin_id"]: item["version_number"]
+                for item in documents["twins"]["snapshot"]["twin_versions"]
+            },
+        ),
     )
 
 
 def imported_evidence(
-    document: Mapping[str, object], *, identities: Mapping[str, str], project_id: UUID
+    document: Mapping[str, object],
+    *,
+    identities: Mapping[str, str],
+    project_id: UUID,
+    original_twins: Mapping[str, int] | None = None,
 ) -> dict[str, object]:
     return {
         "kind": document["kind"],
@@ -482,6 +511,12 @@ def imported_evidence(
                     "twin_id": item["twin_id"],
                     "twin_version": item["twin_version"],
                     "status": item["status"],
+                    **(
+                        {"mapped_twin_version": IMPORTED_VERSION_NUMBER}
+                        if original_twins
+                        and original_twins.get(item["twin_id"]) == item["twin_version"]
+                        else {}
+                    ),
                 },
                 "citation": {
                     **item["citation"],

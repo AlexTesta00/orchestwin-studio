@@ -109,6 +109,7 @@ TOOL_NAMES = [
     "run_tests",
     "get_tasks",
     "get_evidence",
+    "get_why",
 ]
 RUN_FOLDER = ("tests", "20260929-100000")
 

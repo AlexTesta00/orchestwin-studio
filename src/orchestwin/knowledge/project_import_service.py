@@ -12,11 +12,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestwin.agents.persistence.repositories import SqlAlchemyTeamProposalVersionRepository
 from orchestwin.agents.proposals import TeamProposalVersionCreationStatus
+from orchestwin.artifacts.design_evaluation_persistence import (
+    DesignEvaluationWriteStatus,
+    SqlAlchemyDesignEvaluationRepository,
+)
+from orchestwin.artifacts.design_finding_validation_persistence import (
+    FindingValidationWriteStatus,
+    SqlAlchemyFindingValidationRepository,
+)
 from orchestwin.artifacts.design_persistence import SqlAlchemyDesignPackageRepository
 from orchestwin.knowledge.archive import KnowledgeArchiveError, VerifiedFolder, read_verified_folder
 from orchestwin.knowledge.project_import import (
     IMPORTED_VERSION_NUMBER,
     ProjectImportPlan,
+    plan_documents,
     plan_project_import,
     require_complete,
 )
@@ -63,6 +72,8 @@ class ProjectImportResult:
     record: ProjectImportRecord
     plan: ProjectImportPlan
     brief_version: ProjectBriefVersion
+    why_verified: bool = False
+    import_limits: tuple[str, ...] = ()
 
 
 def archive_failure(error: KnowledgeArchiveError) -> ProjectImportError:
@@ -278,6 +289,31 @@ async def _write_import(
             "evidence", evidence.import_dossier(project.id, plan.research_evidence, plan.modeling)
         )
 
+    evaluations = SqlAlchemyDesignEvaluationRepository(session, owner_user_id=owner)
+    for run in plan.evaluations:
+        status = await _attempt("feedback", evaluations.create(run))
+        _require("feedback", status is DesignEvaluationWriteStatus.WRITTEN)
+    validations = SqlAlchemyFindingValidationRepository(session, owner_user_id=owner)
+    for item in sorted(
+        plan.finding_decisions, key=lambda value: (*map(str, value.key), value.sequence_number)
+    ):
+        result = await _attempt(
+            "feedback",
+            validations.append(
+                project_id=project.id,
+                evaluation_run_id=item.evaluation_run_id,
+                twin_id=item.twin_id,
+                finding_id=item.finding_id,
+                decision=item.decision,
+                note=item.note,
+                decided_at=item.decided_at,
+            ),
+        )
+        _require(
+            "feedback",
+            result.status is FindingValidationWriteStatus.WRITTEN and result.validation == item,
+        )
+
     stored = await projects.get_owned(project_id=project.id, owner_user_id=owner)
     _require(
         "project",
@@ -339,14 +375,118 @@ class ProjectImportService:
             stored, brief_version = await _write_import(
                 session, project=project, plan=plan, record=record
             )
+            try:
+                await verify_imported_why(
+                    session,
+                    folder=folder,
+                    plan=plan,
+                    owner_user_id=owner_user_id,
+                    created_at=imported_at,
+                )
+            except (KeyError, TypeError, ValueError) as error:
+                raise ProjectImportError("FOLDER_WHY_MISMATCH", "stored derivation") from error
         return ProjectImportResult(
-            project=stored, record=record, plan=plan, brief_version=brief_version
+            project=stored,
+            record=record,
+            plan=plan,
+            brief_version=brief_version,
+            why_verified="why" in folder.manifest,
+            import_limits=plan.import_limits,
         )
 
     async def origin(self, *, owner_user_id: UUID, project_id: UUID) -> ProjectImportRecord | None:
         async with self._session_factory() as session:
             repository = SqlAlchemyProjectImportRepository(session, owner_user_id=owner_user_id)
             return await repository.for_project(project_id)
+
+
+async def verify_imported_why(session, *, folder, plan, owner_user_id, created_at):
+    from orchestwin.knowledge.why import WHY_DOCUMENT, folder_why, normalized_why
+    from orchestwin.projects.persistence.research_evidence import (
+        SqlAlchemyResearchEvidenceRepository,
+    )
+    from orchestwin.why import build_why_document
+
+    await session.flush()
+    scope = {"project_id": plan.project_id}
+    owner_scope = {**scope, "owner_user_id": owner_user_id, "version_number": 1}
+    versions = {
+        "brief": await SqlAlchemyProjectBriefRepository(session).get_owned_version(**owner_scope),
+        "team": await SqlAlchemyTeamProposalVersionRepository(session).get_owned_version(
+            **owner_scope
+        ),
+        "twins": await SqlAlchemyUserModelingSnapshotRepository(
+            session, owner_user_id=owner_user_id
+        ).current(**scope),
+        "requirements": await SqlAlchemyRequirementsSpecificationRepository(
+            session, owner_user_id=owner_user_id
+        ).current(**scope),
+        "design": await SqlAlchemyDesignPackageRepository(
+            session, owner_user_id=owner_user_id
+        ).current(**scope),
+    }
+    if any(value is None for value in versions.values()):
+        raise ProjectImportError("FOLDER_WHY_MISMATCH", "stored stage missing")
+    wrappers = {
+        "brief": "brief",
+        "team": "proposal",
+        "twins": "snapshot",
+        "requirements": "specification",
+        "design": "package",
+    }
+    documents = {
+        stage: {
+            "id": str(version.id),
+            "project_id": str(version.project_id),
+            "version_number": version.version_number,
+            "content_hash": version.content_hash,
+            wrappers[stage]: getattr(version, wrappers[stage]).to_snapshot(),
+        }
+        for stage, version in versions.items()
+    }
+    evidence = await SqlAlchemyResearchEvidenceRepository(
+        session, owner_user_id=owner_user_id
+    ).dossier(plan.project_id)
+    evaluations = await SqlAlchemyDesignEvaluationRepository(
+        session, owner_user_id=owner_user_id
+    ).list(project_id=plan.project_id, limit=2_147_483_647)
+    decisions = await SqlAlchemyFindingValidationRepository(
+        session, owner_user_id=owner_user_id
+    ).current(project_id=plan.project_id)
+    expected = build_why_document(
+        project_id=str(plan.project_id),
+        stages=plan_documents(plan, owner_user_id=owner_user_id, created_at=created_at),
+        evidence=plan.research_evidence,
+        evaluations=[
+            {
+                "runs": [item.to_snapshot() for item in plan.evaluations],
+                "decisions": [item.to_snapshot() for item in plan.finding_decisions],
+            }
+        ],
+    )
+    actual = build_why_document(
+        project_id=str(plan.project_id),
+        stages=documents,
+        evidence=evidence,
+        evaluations=[
+            {
+                "runs": [item.to_snapshot() for item in evaluations],
+                "decisions": [item.to_snapshot() for item in decisions],
+            }
+        ],
+    )
+    if normalized_why(expected, remap_versions=False) != normalized_why(
+        actual, remap_versions=False
+    ):
+        raise ProjectImportError("FOLDER_WHY_MISMATCH", "stored derivation")
+    if WHY_DOCUMENT in folder.files:
+        original = folder_why(
+            project_id=folder.project_id, documents=folder.documents, files=folder.files
+        )
+        if normalized_why(
+            original, identities=plan.identities, hashes=plan.hashes
+        ) != normalized_why(actual):
+            raise ProjectImportError("FOLDER_WHY_MISMATCH", "exported derivation")
 
 
 __all__ = [

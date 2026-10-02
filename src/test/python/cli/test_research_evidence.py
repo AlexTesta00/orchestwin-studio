@@ -234,6 +234,26 @@ def test_imported_source_reassociates_exact_hash_without_promoting_or_changing_i
         source = project.evidence_versions[0]
         assert source["id"] != document["evidence"][0]["id"]
         assert source["version"] == 2 and source["text_available"] is False
+        assert source["empirical"] is False
+        imported_citation = studio._evidence_citations(project)[0]
+        assert imported_citation["status"] == document["citations"][0]["status"] == "ACTIVE"
+        assert imported_citation["twin_version"] == document["citations"][0]["twin_version"]
+        assert imported_citation["citation"] == {
+            **document["citations"][0]["citation"],
+            "source_id": source["id"],
+        }
+        assert imported_citation["imported_from"]["mapped_twin_version"] == 1
+        why = studio._why_document(project)
+        claim = next(
+            node
+            for node in why["nodes"]
+            if node["kind"] == "USER_TWIN_CLAIM"
+            and node["reference"]["artifact_id"] == imported_citation["twin_id"]
+            and node["code"].endswith(":user_twin.goals")
+        )
+        assert len(claim["citations"]) == 1
+        assert claim["citations"][0]["status"] == "ACTIVE"
+        assert claim["citations"][0]["applicable"] is False
         before = json.dumps(project.snapshot, sort_keys=True)
         original = (
             "Unexported synthetic preface.\r\n"

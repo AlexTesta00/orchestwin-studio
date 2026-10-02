@@ -1602,6 +1602,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/projects/{project_id}/code-tasks", "create_tasks"),
     Route("POST", "/projects/{project_id}/code-tasks/{code}/status", "task_status"),
     Route("GET", "/projects/{project_id}/twin-learning", "twin_learning"),
+    Route("GET", "/projects/{project_id}/artifacts/why", "why"),
+    Route("GET", "/projects/{project_id}/artifacts/why/document", "why_document"),
     Route("GET", "/projects/{project_id}/evidence", "evidence_list"),
     Route("POST", "/projects/{project_id}/evidence", "evidence_add"),
     Route("GET", "/projects/{project_id}/evidence/{evidence_id}", "evidence_show"),
@@ -2237,6 +2239,7 @@ class FakeProject:
         self.mockups: dict[str, dict[str, object]] = {}
         self.iterations: list[dict[str, object]] = []
         self.runs: list[dict[str, object]] = []
+        self.finding_decisions: list[dict[str, object]] = []
         self.packages: list[dict[str, object]] = []
         self.folders: list[dict[str, ArtifactVersion]] = []
         self.gestures: list[dict[str, object]] = []
@@ -7762,18 +7765,23 @@ class FakeStudio:
         project = self._new_project(call.account, name, mode)
         self._seed(project, "design", approve=False)
         imported_at = self._now()
-        if "twins/evidence.json" in verified.files:
+        plan = None
+        if "twins/evidence.json" in verified.files or "why" in verified.manifest:
             from orchestwin.api.design import DesignPackagePayload
             from orchestwin.api.teams import TeamProposalVersionResponse
             from orchestwin.api.user_modeling import UserModelingSnapshotVersionPayload
 
-            plan = plan_project_import(
-                verified,
-                project_id=UUID(project.id),
-                brief_version_id=UUID(self._new_id()),
-                owner_user_id=UUID(call.account.id),
-                created_at=imported_at,
-            )
+            try:
+                plan = plan_project_import(
+                    verified,
+                    project_id=UUID(project.id),
+                    brief_version_id=UUID(self._new_id()),
+                    owner_user_id=UUID(call.account.id),
+                    created_at=imported_at,
+                )
+            except KnowledgeArchiveError as error:
+                self._projects.pop(project.id, None)
+                raise _Refusal(422, {"code": error.code, "location": error.detail}) from None
             documents = plan_documents(
                 plan, owner_user_id=UUID(call.account.id), created_at=imported_at
             )
@@ -7811,8 +7819,13 @@ class FakeStudio:
             ]
             project.gates = {}
             project.gate_events = {}
-            project.evidence_versions = copy.deepcopy(plan.research_evidence["evidence"])
-            for item in plan.research_evidence["citations"]:
+            project.mockups = {}
+            project.runs = [item.to_snapshot() for item in plan.evaluations]
+            project.finding_decisions = [item.to_snapshot() for item in plan.finding_decisions]
+            project.evidence_versions = copy.deepcopy(
+                (plan.research_evidence or {}).get("evidence", [])
+            )
+            for item in (plan.research_evidence or {}).get("citations", []):
                 twin = next(
                     (twin for twin in plan.twins if str(twin.twin_id) == item["twin_id"]), None
                 )
@@ -7825,14 +7838,6 @@ class FakeStudio:
                     None,
                 )
                 citation = item["citation"]
-                matches = any(
-                    reference.source_id == citation["source_id"]
-                    and reference.source_version == citation["source_version"]
-                    and reference.content_hash == citation["content_hash"]
-                    for reference in (
-                        () if observation is None else observation.provenance.references
-                    )
-                )
                 project.evidence_changes.append(
                     {
                         "twin_id": item["twin_id"],
@@ -7859,10 +7864,21 @@ class FakeStudio:
                         "after": observation.to_snapshot()
                         if observation is not None
                         else {"kind": "historical-citation", "profile_available": False},
-                        "retired_at": None
-                        if matches and item["status"] == "ACTIVE"
-                        else _iso(imported_at),
+                        "retired_at": None if item["status"] == "ACTIVE" else _iso(imported_at),
                     }
+                )
+        if plan is not None and "why" in verified.manifest:
+            from orchestwin.knowledge.why import folder_why, normalized_why
+
+            original = folder_why(
+                project_id=verified.project_id, documents=verified.documents, files=verified.files
+            )
+            if normalized_why(
+                original, identities=plan.identities, hashes=plan.hashes
+            ) != normalized_why(self._why_document(project)):
+                self._projects.pop(project.id, None)
+                raise _Refusal(
+                    422, {"code": "FOLDER_WHY_MISMATCH", "location": "exported derivation"}
                 )
         stages = {
             stage: {
@@ -7902,6 +7918,8 @@ class FakeStudio:
                 ],
                 "imported_at": _stamp(imported_at),
                 "approval_required": list(STAGES),
+                "why_verified": plan is not None and "why" in verified.manifest,
+                "import_limits": [] if plan is None else list(plan.import_limits),
             },
         )
 
@@ -9361,6 +9379,66 @@ class FakeStudio:
                 "citations": self._evidence_citations(project),
             },
         )
+
+    def _why_document(self, project: FakeProject) -> dict[str, object]:
+        from orchestwin.why import build_why_document
+
+        return build_why_document(
+            project_id=project.id,
+            stages={
+                "brief": [
+                    {**item.payload, "brief": item.brief.to_snapshot()} for item in project.briefs
+                ],
+                "team": [
+                    {
+                        **{name: value for name, value in item.items() if name != "perspectives"},
+                        "proposal": _fake_team_proposal(item).to_snapshot(),
+                    }
+                    for item in project.teams
+                ],
+                "twins": [
+                    {**item, "snapshot": _fake_modeling(item["snapshot"]).to_snapshot()}
+                    for item in project.snapshots
+                ],
+                "requirements": [
+                    {
+                        **item,
+                        "specification": _fake_requirements(item["specification"]).to_snapshot(),
+                    }
+                    for item in project.requirements
+                ],
+                "design": [
+                    {**item, "package": _fake_design(item["package"]).to_snapshot()}
+                    for item in project.designs
+                ],
+            },
+            evidence={
+                "evidence": project.evidence_versions,
+                "citations": self._evidence_citations(project),
+            },
+            evaluations=[{"runs": project.runs, "decisions": project.finding_decisions}],
+            learning={"twins": self._learning_entries(project)},
+            mockups=[
+                item
+                for item in project.mockups.values()
+                if item.get("base_reference") and item.get("audit_reference")
+            ],
+        )
+
+    def _route_why_document(self, call: _Call) -> _Answer:
+        return _Answer(200, self._why_document(self._code_project(call)))
+
+    def _route_why(self, call: _Call) -> _Answer:
+        from orchestwin.why import WhyError, explain_why
+
+        document = self._why_document(self._code_project(call))
+        try:
+            return _Answer(200, explain_why(document, call.query.get("code", [""])[0]))
+        except WhyError as error:
+            status = {"WHY_CODE_INVALID": 422, "WHY_CODE_AMBIGUOUS": 409}.get(error.code, 404)
+            raise _Refusal(
+                status, {"code": error.code, "candidates": list(error.candidates)}
+            ) from None
 
     def _route_evidence_show(self, call: _Call) -> _Answer:
         project = self._code_project(call)

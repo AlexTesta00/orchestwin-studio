@@ -44,6 +44,7 @@ TOOL_ORDER = [
     "run_tests",
     "get_tasks",
     "get_evidence",
+    "get_why",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -260,6 +261,7 @@ def test_the_twelve_tools_are_listed_with_schemas_that_hold_together(tmp_path: P
         "run_tests": [],
         "get_tasks": [],
         "get_evidence": [],
+        "get_why": ["code"],
     }
     assert tools[10]["inputSchema"]["properties"]["status"] == {
         "type": "string",

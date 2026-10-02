@@ -186,6 +186,7 @@ def test_real_project_import_preserves_exact_quotes_then_reassociation_and_retir
                 "twin_id": old["twin_id"],
                 "twin_version": old["twin_version"],
                 "status": "ACTIVE",
+                "mapped_twin_version": 1,
             }
             assert (
                 historical["citation"]["quote"]

@@ -139,6 +139,7 @@ def test_import_remaps_source_links_but_preserves_quote_and_source_version_hash(
         "twin_id": document["citations"][0]["twin_id"],
         "twin_version": document["citations"][0]["twin_version"],
         "status": "ACTIVE",
+        "mapped_twin_version": 1,
     }
     assert (
         imported["citations"][0]["twin_id"] == plan.identities[document["citations"][0]["twin_id"]]

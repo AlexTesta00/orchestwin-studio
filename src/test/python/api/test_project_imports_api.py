@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from functools import cache
 from uuid import UUID
@@ -176,6 +177,28 @@ def test_import_without_a_display_name_lets_the_service_use_the_folder_name() ->
 
     assert response.status_code == 201
     assert service.calls == [("import", OWNER, ARCHIVE, None)]
+
+
+@pytest.mark.parametrize(
+    ("verified", "limits"),
+    [
+        (False, ()),
+        (True, ("LEARNED_PROJECTION_NOT_RESTORED",)),
+        (False, ("LEGACY_FEEDBACK_CONTEXT_MISSING",)),
+    ],
+)
+def test_import_reports_the_actual_why_verification_and_limits_without_approving_stages(
+    verified: bool, limits: tuple[str, ...]
+) -> None:
+    service = FakeProjectImportService()
+    service.result = replace(service.result, why_verified=verified, import_limits=limits)
+
+    response = client(service).post(IMPORTS, files=upload())
+
+    assert response.status_code == 201
+    assert response.json()["why_verified"] is verified
+    assert response.json()["import_limits"] == list(limits)
+    assert response.json()["approval_required"] == list(STAGES)
 
 
 @pytest.mark.parametrize(

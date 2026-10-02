@@ -199,6 +199,57 @@ class Knowledge:
         document = self.stage("twins")
         return None if document is None else twins_from(twin_chat.twin_versions(document))
 
+    def why(self, *, project_id: str | None = None) -> Mapping[str, object]:
+        from orchestwin.cli.mcp.verification import verify_files
+        from orchestwin.why import build_why_document
+
+        def invalid(relative):
+            return FolderProblem(FOLDER_UNREADABLE, path=relative)
+
+        verify_files(self.root, self.manifest, inside=inside, fail=invalid)
+        identity = _mapping(self.manifest.get("project")).get("id")
+        if not isinstance(identity, str) or (project_id is not None and identity != project_id):
+            raise invalid(MANIFEST)
+        stages = {stage: self.stage(stage) for stage in self.approved}
+        for stage, document in stages.items():
+            entry = _mapping(_mapping(self.manifest.get("stages")).get(stage))
+            if (
+                document is None
+                or document.get("id") != entry.get("version_id")
+                or document.get("content_hash") != entry.get("content_hash")
+                or document.get("version_number") != entry.get("version_number")
+            ):
+                raise invalid(f"{stage}/{stage}.json")
+        reviews = self.document(REVIEWS_DOCUMENT, required=False) or {}
+        learning = self.document(LEARNING_DOCUMENT, required=False) or {}
+        result = build_why_document(
+            project_id=identity,
+            stages=stages,
+            evidence=self.evidence(),
+            evaluations=[reviews] if reviews else [],
+            learning=learning,
+        )
+        declared = self.manifest.get("why")
+        exported = self.document("traceability/why.json", required=False)
+        if declared is not None:
+            if (
+                declared != {"document": "traceability/why.json", "schema_version": 1}
+                or _mapping(self.manifest.get("schemas")).get("why") != "schema/why.schema.json"
+                or exported != result
+            ):
+                raise invalid("traceability/why.json")
+        elif exported is not None:
+            raise invalid("traceability/why.json")
+        return result
+
+    def why_limits(self) -> tuple[str, ...]:
+        if "why" in self.manifest:
+            return ()
+        limits = ["LEGACY_DOSSIER"]
+        if self.read(REVIEWS_DOCUMENT) is None:
+            limits.append("LEGACY_FEEDBACK_CONTEXT_MISSING")
+        return tuple(limits)
+
 
 def load(root: Path) -> Knowledge:
     path = root / MANIFEST

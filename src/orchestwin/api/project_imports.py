@@ -91,6 +91,8 @@ class ProjectImportPayload(ApiModel):
     twins: tuple[ImportedTwinPayload, ...]
     imported_at: datetime
     approval_required: tuple[str, ...]
+    why_verified: bool = False
+    import_limits: tuple[str, ...] = ()
 
     @classmethod
     def from_result(cls, result: ProjectImportResult) -> ProjectImportPayload:
@@ -110,6 +112,8 @@ class ProjectImportPayload(ApiModel):
             ),
             imported_at=result.record.imported_at,
             approval_required=STAGES,
+            why_verified=result.why_verified,
+            import_limits=result.import_limits,
         )
 
 

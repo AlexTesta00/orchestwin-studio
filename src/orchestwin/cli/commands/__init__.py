@@ -18,6 +18,7 @@ from orchestwin.cli.commands import (
     test,
     twins,
     watch,
+    why,
 )
 
 COMMANDS = (
@@ -38,4 +39,5 @@ COMMANDS = (
     test,
     tasks,
     code,
+    why,
 )
