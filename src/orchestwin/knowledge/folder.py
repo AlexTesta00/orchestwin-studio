@@ -83,6 +83,7 @@ from orchestwin.knowledge.state_documents import (
 )
 from orchestwin.knowledge.tables import knowledge_tables
 from orchestwin.knowledge.twins import PortableTwin, portable_twins
+from orchestwin.knowledge.why import WHY_DOCUMENT, folder_why
 from orchestwin.models.output_language import dominant_language
 from orchestwin.workflow.gates import HumanGate
 
@@ -369,6 +370,14 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
             sources.research_evidence, language=folder_language(sources)
         )
         files.update(schema_files(research_evidence=True, only_evidence=True))
+    files[WHY_DOCUMENT] = json_text(
+        folder_why(
+            project_id=str(sources.project_id),
+            documents={stage: stage_document_payload(sources, stage) for stage in present},
+            files=files,
+        )
+    )
+    files.update(schema_files(only_why=True))
     return files
 
 
@@ -512,10 +521,12 @@ def folder_manifest(
             name: schema_document(name)
             for name in (
                 *SCHEMA_NAMES,
+                "why",
                 *(("evidence",) if has_evidence(sources.research_evidence) else ()),
             )
         },
         "files": file_digests(files),
+        "why": {"document": WHY_DOCUMENT, "schema_version": 1},
     }
     if has_evidence(sources.research_evidence):
         result["research_evidence"] = {

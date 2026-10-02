@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "mcp.title_get_why": {"it": "Perché?", "en": "Why?"},
+    "mcp.describe_get_why": {
+        "it": "Legge dal Dossier verificato la catena, le lacune e ciò che resta da verificare con persone vere. Nessuna generazione o spesa.",
+        "en": "Reads the chain, gaps and what remains to verify with real people from the verified Dossier. No generation or spending.",
+    },
+    "mcp.parameter_why_code": {
+        "it": "Codice dell'artefatto o selettore univoco restituito dal catalogo.",
+        "en": "Artifact code or unique selector returned by the catalog.",
+    },
     "mcp.title_get_evidence": {"it": "Leggi le evidenze", "en": "Read evidence"},
     "mcp.describe_get_evidence": {
         "it": "Legge dal Dossier le citazioni approvate, origine, versioni e limiti. Non invia testo originale e non genera; l'approvazione del proprietario non è validazione umana.",

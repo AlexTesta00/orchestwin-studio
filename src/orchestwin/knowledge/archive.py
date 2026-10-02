@@ -290,6 +290,19 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
         raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
     if "design" in documents:
         _verify_generated_mockup(documents["design"]["package"])
+    from orchestwin.knowledge.why import WHY_DOCUMENT, verify_why
+
+    declared_why = manifest.get("why")
+    if declared_why is not None:
+        if (
+            declared_why != {"document": WHY_DOCUMENT, "schema_version": 1}
+            or WHY_DOCUMENT not in files
+            or manifest.get("schemas", {}).get("why") != "schema/why.schema.json"
+        ):
+            raise KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", WHY_DOCUMENT)
+        verify_why(project_id=str(manifest["project"]["id"]), documents=documents, files=files)
+    elif WHY_DOCUMENT in files:
+        raise KnowledgeArchiveError("FOLDER_TAMPERED", WHY_DOCUMENT)
     return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
 
 

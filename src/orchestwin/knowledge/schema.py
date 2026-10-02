@@ -2546,6 +2546,11 @@ class StableIdentifier(_Record):
     id: Uuid = Field(description="Stable identifier of the item.")
 
 
+class WhyEntry(_Record):
+    document: Literal["traceability/why.json"]
+    schema_version: Literal[1]
+
+
 class KnowledgeManifest(_Record):
     model_config = ConfigDict(json_schema_extra=_MANIFEST_VERSION_RULES)
 
@@ -2595,6 +2600,7 @@ class KnowledgeManifest(_Record):
     files: dict[str, Sha256] = Field(
         description="SHA-256 digest of every file, except orchestwin.json and the index."
     )
+    why: Annotated[WhyEntry | None, _OPTIONAL] = None
 
     @model_validator(mode="after")
     def _fits_its_version(self) -> KnowledgeManifest:
@@ -2702,6 +2708,84 @@ class ResearchEvidenceDocument(_Record):
         return self
 
 
+class WhyReference(_Record):
+    artifact_id: str
+    version_number: int | None
+    content_hash: str | None
+
+
+class WhyRationale(_Record):
+    text: str
+    origin: Literal["MODEL", "OWNER", "SYSTEM", "UNKNOWN"]
+    version_number: int | None
+    content_hash: str | None
+
+
+class WhyGap(_Record):
+    code: Literal[
+        "MISSING_NEED",
+        "MISSING_SCENARIO",
+        "MISSING_TWIN",
+        "MISSING_CLAIM",
+        "MISSING_SOURCE",
+        "MISSING_SOURCE_VERSION",
+        "MISSING_RATIONALE",
+        "SOURCE_RETIRED",
+        "SOURCE_TEXT_UNAVAILABLE",
+        "OMITTED_SECTION",
+        "CONTEXT_OUTDATED",
+    ]
+    node_key: str
+    related_code: str | None
+    stage: str | None
+
+
+class WhyContext(_Record):
+    perspectives: list[dict[str, object]]
+
+
+class WhyNode(_Record):
+    key: str
+    code: str
+    kind: str
+    title: str
+    display_status: Literal["EVIDENCED", "INFERRED", "HYPOTHESIZED", "CONTESTED", "UNKNOWN"]
+    reference: WhyReference
+    current: bool
+    rationale: WhyRationale | None
+    citations: list[dict[str, object]]
+    validation_required: bool
+    gaps: list[WhyGap]
+    declared_context: WhyContext
+
+
+class WhyLink(_Record):
+    source: str
+    target: str
+    kind: str
+
+
+class WhyDocument(_Record):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["orchestwin.why"]
+    schema_version: Literal[1]
+    project_id: Uuid
+    nodes: list[WhyNode]
+    links: list[WhyLink]
+    omitted_sections: list[str]
+
+    @model_validator(mode="after")
+    def _references(self):
+        keys = {node.key for node in self.nodes}
+        if len(keys) != len(self.nodes):
+            raise ValueError("why node keys must be unique")
+        if any(link.source not in keys or link.target not in keys for link in self.links):
+            raise ValueError("why links must reference existing nodes")
+        if any(gap.node_key != node.key for node in self.nodes for gap in node.gaps):
+            raise ValueError("why gaps must reference their node")
+        return self
+
+
 _MODELS: Final = {
     "manifest": KnowledgeManifest,
     "brief": BriefDocument,
@@ -2718,9 +2802,11 @@ _MODELS: Final = {
     "tests": TestReviewsDocument,
     "learning": TwinLearningDocument,
     "evidence": ResearchEvidenceDocument,
+    "why": WhyDocument,
 }
 _WRITTEN_BY: Final = "OrchesTwin Studio writes it when it exports the knowledge folder."
 _SCHEMA_TEXTS: Final = {
+    "why": ("Why traceability", "Derived provenance links, gaps and declared context."),
     "evidence": (
         "Research evidence excerpts",
         "Exact approved quotations, source provenance and limits. Original documents are excluded; owner approval does not establish empirical research or human validation.",
@@ -2827,6 +2913,7 @@ _DOCUMENT_PATHS: Final = {
     FEEDBACK_TESTS: "tests",
     FEEDBACK_LEARNING: "learning",
     EVIDENCE_DOCUMENT: "evidence",
+    "traceability/why.json": "why",
 }
 
 
@@ -2894,10 +2981,16 @@ def _published_schema(name: str, *, design_additions: bool) -> dict[str, object]
 
 
 def knowledge_schemas(
-    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+    *,
+    design_additions: bool = False,
+    research_evidence: bool = False,
+    only_evidence: bool = False,
+    only_why: bool = False,
 ) -> dict[str, dict[str, object]]:
     names = (
-        ("evidence",)
+        ("why",)
+        if only_why
+        else ("evidence",)
         if only_evidence
         else (*SCHEMA_NAMES, *(("evidence",) if research_evidence else ()))
     )
@@ -2905,7 +2998,11 @@ def knowledge_schemas(
 
 
 def schema_files(
-    *, design_additions: bool = False, research_evidence: bool = False, only_evidence: bool = False
+    *,
+    design_additions: bool = False,
+    research_evidence: bool = False,
+    only_evidence: bool = False,
+    only_why: bool = False,
 ) -> dict[str, str]:
     return {
         schema_document(name): json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False)
@@ -2914,6 +3011,7 @@ def schema_files(
             design_additions=design_additions,
             research_evidence=research_evidence,
             only_evidence=only_evidence,
+            only_why=only_why,
         ).items()
     }
 

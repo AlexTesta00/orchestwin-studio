@@ -104,6 +104,7 @@ MCP_TOOLS = (
     "run_tests",
     "get_tasks",
     "get_evidence",
+    "get_why",
 )
 
 

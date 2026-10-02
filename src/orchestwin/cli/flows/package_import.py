@@ -147,6 +147,11 @@ def run_import(context: CommandContext, source_text: str, name: str | None) -> i
         origin=verified.project_name,
         version=verified.package_version,
     )
+    if document.get("why_verified") is True:
+        console.say("package.why_verified")
+    for limit in document.get("import_limits", ()):
+        if limit in {"LEGACY_FEEDBACK_CONTEXT_MISSING", "LEARNED_PROJECTION_NOT_RESTORED"}:
+            console.say("package.import_limit." + limit)
     stages = imports.approval_required(document)
     if stages:
         console.say("package.import_approval", count=len(stages))

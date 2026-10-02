@@ -246,6 +246,8 @@ def test_the_fake_serves_every_area_that_the_commands_need(
         ("POST", project + "/code-tasks"),
         ("POST", project + "/code-tasks/{code}/status"),
         ("GET", project + "/twin-learning"),
+        ("GET", project + "/artifacts/why"),
+        ("GET", project + "/artifacts/why/document"),
         ("POST", project + "/user-twins/{twin_id}/updates"),
         ("GET", project + "/twin-updates/{update_id}"),
         ("POST", project + "/twin-updates/{update_id}/decision"),
@@ -276,7 +278,7 @@ def test_the_fake_serves_every_area_that_the_commands_need(
 
     assert needed <= set(route_table())
     assert needed <= real_routes
-    assert len(ROUTES) == 146
+    assert len(ROUTES) == 148
 
 
 class _Client:

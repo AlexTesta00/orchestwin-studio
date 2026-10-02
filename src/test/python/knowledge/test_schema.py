@@ -346,7 +346,7 @@ def test_every_json_document_of_an_exported_folder_matches_its_published_schema(
         for item in turn["statements"]
     ]
 
-    assert set(documents.values()) == set(SCHEMA_NAMES)
+    assert set(documents.values()) == {*SCHEMA_NAMES, "why"}
     assert design["based_on_version_number"] == 1
     assert {"visual_language" in item for item in design["package"]["alternatives"]} == {
         True,
@@ -366,7 +366,7 @@ def test_the_folder_carries_its_own_schemas_and_lists_them_in_the_manifest() -> 
     folder = built_folder()
     manifest = json.loads(folder.files[KNOWLEDGE_MANIFEST])
 
-    assert manifest["schemas"] == {name: schema_document(name) for name in SCHEMA_NAMES}
+    assert manifest["schemas"] == {name: schema_document(name) for name in (*SCHEMA_NAMES, "why")}
     for path, text in schema_files().items():
         assert folder.files[path] == text
         assert manifest["files"][path] == text_digest(text)

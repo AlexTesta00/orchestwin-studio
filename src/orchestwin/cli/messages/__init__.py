@@ -26,6 +26,7 @@ from orchestwin.cli.messages import (
     test,
     twins,
     watch,
+    why,
 )
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ FILES: Final[Mapping[str, Mapping[str, Mapping[str, str]]]] = MappingProxyType(
             test,
             twins,
             watch,
+            why,
         )
     }
 )

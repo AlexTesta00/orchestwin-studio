@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "package.why_verified": {
+        "it": "La catena Perché? è stata ricalcolata dai dati importati e verificata.",
+        "en": "The Why? chain was rebuilt from imported data and verified.",
+    },
+    "package.import_limit.LEGACY_FEEDBACK_CONTEXT_MISSING": {
+        "it": "Il Dossier precedente cita feedback con versioni non esportate: quei rilievi non sono stati ripristinati.",
+        "en": "The legacy Dossier cites feedback with versions that were not exported: those findings were not restored.",
+    },
+    "package.import_limit.LEARNED_PROJECTION_NOT_RESTORED": {
+        "it": "La sintesi informativa learned.json non contiene snapshot completi e non ripristina osservazioni di sviluppo.",
+        "en": "The informative learned.json projection lacks complete snapshots and does not restore development observations.",
+    },
     "package.help": {
         "it": "Porta la cartella di conoscenza tra lo Studio e questa cartella",
         "en": "Move the knowledge folder between the Studio and this folder",

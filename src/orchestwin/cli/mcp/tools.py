@@ -44,6 +44,7 @@ GET_TEST_RESULTS: Final = "get_test_results"
 RUN_TESTS: Final = "run_tests"
 GET_TASKS: Final = "get_tasks"
 GET_EVIDENCE: Final = "get_evidence"
+GET_WHY: Final = "get_why"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
@@ -696,6 +697,19 @@ def get_evidence(session: Session, values: Mapping[str, object]) -> dict[str, ob
     }
 
 
+def get_why(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    from orchestwin.why import WhyError, explain_why
+
+    folder = session.knowledge()
+    document = folder.why(project_id=session.link.project_id)
+    try:
+        answer = explain_why(document, values["code"])
+    except WhyError as error:
+        raise ToolError(error.code, extra={"candidates": list(error.candidates)}) from None
+    answer["limits"] = sorted({*answer["limits"], *folder.why_limits()})
+    return answer
+
+
 def get_requirements(session: Session, values: Mapping[str, object]) -> dict[str, object]:
     document = session.knowledge().stage("requirements")
     if document is None:
@@ -1101,6 +1115,13 @@ TOOLS: Final = (
         "mcp.describe_get_evidence",
         get_evidence,
         (Parameter("code", TEXT, "mcp.parameter_evidence_code", maximum=CODE_LENGTH),),
+    ),
+    Tool(
+        GET_WHY,
+        "mcp.title_get_why",
+        "mcp.describe_get_why",
+        get_why,
+        (Parameter("code", TEXT, "mcp.parameter_why_code", required=True, maximum=2048),),
     ),
 )
 TOOLS_BY_NAME: Final[Mapping[str, Tool]] = MappingProxyType({tool.name: tool for tool in TOOLS})
