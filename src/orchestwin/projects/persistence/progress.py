@@ -35,6 +35,7 @@ from orchestwin.projects.sections import (
     TeamFacts,
     UserTwinsFacts,
     project_sections,
+    requirements_actor_codes,
 )
 from orchestwin.twins.persistence.repositories import PERSONA_PROFILE_VERSIONS
 from orchestwin.workflow.gates import HumanGateStatus, HumanGateType
@@ -479,6 +480,7 @@ def overview_section_facts(row: Mapping[str, Any]) -> SectionFacts | None:
                 [reference.to_snapshot() for reference in specification.user_twin_references]
             ),
             cited_twin_ids=referenced_twin_ids(specification),
+            actor_codes=requirements_actor_codes(specification),
             revision_pending=bool(row["requirements_revision_pending"]),
         )
     design = None

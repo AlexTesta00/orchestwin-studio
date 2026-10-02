@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Final
 from uuid import UUID
@@ -95,6 +95,7 @@ class RequirementsFacts:
     twins: frozenset[ArtifactVersion] = frozenset()
     cited_twin_ids: frozenset[UUID] = frozenset()
     revision_pending: bool = False
+    actor_codes: Mapping[UUID, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
 
     @property
     def twin_ids(self) -> frozenset[UUID]:
@@ -145,6 +146,7 @@ class Section:
     reasons: tuple[SectionReason, ...] = ()
     blocked: SectionBlock | None = None
     codes: tuple[str, ...] = ()
+    affected_codes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -154,6 +156,15 @@ class Section:
             "reasons": [reason.value for reason in self.reasons],
             "blocked": None if self.blocked is None else self.blocked.value,
             "codes": list(self.codes),
+            **(
+                {
+                    "affected_codes": {
+                        key: list(values) for key, values in self.affected_codes.items()
+                    }
+                }
+                if self.affected_codes
+                else {}
+            ),
         }
 
 
@@ -226,7 +237,9 @@ def _section(
         return Section(key=key, state=SectionState.NOT_STARTED)
     number = version.version_number
     if not approved:
-        return Section(key=key, state=SectionState.IN_PROGRESS, version_number=number)
+        return Section(
+            key=key, state=SectionState.IN_PROGRESS, version_number=number, reasons=_ordered(behind)
+        )
     reasons = _ordered(behind)
     if reasons:
         blocked = _blocked(upstream, obstacles)
@@ -376,6 +389,10 @@ def _design_section(facts: SectionFacts, upstream: tuple[Section, ...]) -> Secti
         design.user_modeling != requirements.user_modeling or design.twins != requirements.twins
     ):
         behind.append(SectionReason.USER_TWINS_CHANGED)
+    if facts.user_twins is not None and (
+        design.user_modeling != facts.user_twins.version or design.twins != facts.user_twins.twins
+    ):
+        behind.append(SectionReason.USER_TWINS_CHANGED)
     if requirements is not None and design.team != requirements.team:
         behind.append(SectionReason.PERSPECTIVES_CHANGED)
     offered = []
@@ -462,12 +479,70 @@ def project_sections(facts: SectionFacts) -> ProjectSections:
     design = _design_section(facts, (brief, team, twins, requirements))
     upstream = (brief, team, twins, requirements, design)
     sections = (*upstream, _package_section(facts, upstream))
+    if facts.requirements is not None and facts.user_twins is not None:
+        before = {item.artifact_id: item for item in facts.requirements.twins}
+        changed = {
+            item.artifact_id
+            for item in facts.user_twins.twins
+            if before.get(item.artifact_id) != item
+        }
+        codes = {
+            key: tuple(
+                sorted(
+                    {
+                        code
+                        for twin_id in changed
+                        for code in facts.requirements.actor_codes.get(twin_id, {}).get(key, ())
+                    }
+                )
+            )
+            for key in ("scenarios", "needs", "requirements")
+        }
+        if any(codes.values()):
+            sections = tuple(
+                replace(section, affected_codes=codes)
+                if SectionReason.USER_TWINS_CHANGED in section.reasons
+                or SectionReason.FOLDER_BEHIND in section.reasons
+                else section
+                for section in sections
+            )
     return ProjectSections(
         first_pass_complete=facts.design_approved_once
         or (facts.design is not None and facts.design.approved),
         sections=sections,
         alignment=_alignment(sections, facts),
     )
+
+
+def requirements_actor_codes(specification) -> Mapping[UUID, Mapping[str, tuple[str, ...]]]:
+    result = {}
+    for reference in specification.user_twin_references:
+        scenarios = {
+            item.id for item in specification.scenarios if item.actor.twin_id == reference.twin_id
+        }
+        needs = {
+            item.id for item in specification.needs if scenarios.intersection(item.scenario_ids)
+        }
+        linked_requirements = {
+            requirement_id
+            for item in specification.scenarios
+            if item.id in scenarios
+            for requirement_id in item.requirement_ids
+        }
+        result[reference.twin_id] = {
+            "scenarios": tuple(
+                item.code for item in specification.scenarios if item.id in scenarios
+            ),
+            "needs": tuple(item.code for item in specification.needs if item.id in needs),
+            "requirements": tuple(
+                item.code
+                for item in specification.requirements
+                if item.id in linked_requirements
+                or needs.intersection(item.need_ids)
+                or any(value.twin_id == reference.twin_id for value in item.user_twin_references)
+            ),
+        }
+    return result
 
 
 __all__ = [

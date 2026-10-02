@@ -85,8 +85,11 @@ def run_update(
     subjects: Sequence[Subject],
     *,
     available: bool,
+    evidence: Mapping[str, object] | None = None,
 ) -> int:
-    return TwinUpdates(context, client, project).run(subjects, available=available)
+    return TwinUpdates(context, client, project, evidence=evidence).run(
+        subjects, available=available
+    )
 
 
 def publish_folder(context: CommandContext, client: StudioClient, project: ProjectFolder) -> None:
@@ -104,7 +107,12 @@ def publish_folder(context: CommandContext, client: StudioClient, project: Proje
 
 class TwinUpdates:
     def __init__(
-        self, context: CommandContext, client: StudioClient, project: ProjectFolder
+        self,
+        context: CommandContext,
+        client: StudioClient,
+        project: ProjectFolder,
+        *,
+        evidence: Mapping[str, object] | None = None,
     ) -> None:
         link = project.link()
         self.context = context
@@ -119,6 +127,7 @@ class TwinUpdates:
         self.failed = False
         self.refused = False
         self.stopped = False
+        self.evidence = evidence
 
     def run(self, subjects: Sequence[Subject], *, available: bool) -> int:
         if not available and all(subject.pending is None for subject in subjects):
@@ -156,9 +165,17 @@ class TwinUpdates:
         missing_model = False
         for subject in subjects:
             if subject.pending is not None:
+                if self.evidence is not None:
+                    pending_source = subject.pending.get("evidence") or {}
+                    if pending_source.get("source_id") != self.evidence.get(
+                        "id"
+                    ) or pending_source.get("source_version") != self.evidence.get("version"):
+                        self.report(subject, learning_api.UPDATE_PENDING)
+                        self.failed = True
+                        continue
                 self.console.say("twins.update_resumed", name=subject.name)
                 plan.append((subject, True))
-            elif not subject.new_material:
+            elif not subject.new_material and self.evidence is None:
                 self.console.say("twins.update_nothing_new", name=subject.name)
             elif not available:
                 missing_model = True
@@ -186,6 +203,9 @@ class TwinUpdates:
     def generated(self, subject: Subject) -> Mapping[str, object] | None:
         label = self.context.text("twins.update_label", name=subject.name)
         path = learning_api.propose_path(self.project_id, subject.twin.twin_id)
+        body = learning_api.propose_body(self.locale)
+        if self.evidence is not None:
+            body.update(evidence_id=self.evidence["id"], evidence_version=self.evidence["version"])
         self.console.write()
         try:
             result = jobs.generate(
@@ -193,7 +213,7 @@ class TwinUpdates:
                 self.client,
                 self.project_id,
                 path,
-                learning_api.propose_body(self.locale),
+                body,
                 label=label,
                 limit_seconds=LIMIT_SECONDS,
             )
@@ -246,7 +266,16 @@ class TwinUpdates:
             context.text("twins.update_heading", name=subject.name, label=subject.label)
         )
         changes, tests = learning_api.update_material(update)
-        console.say("twins.update_material", changes=changes, tests=tests)
+        evidence = update.get("evidence")
+        if isinstance(evidence, Mapping):
+            console.say(
+                "twins.update_evidence",
+                source=evidence.get("source_id", "-"),
+                version=evidence.get("source_version", "-"),
+                count=evidence.get("rejected_changes", 0),
+            )
+        else:
+            console.say("twins.update_material", changes=changes, tests=tests)
         comment = learning_api.update_comment(update)
         if comment:
             wrapped(
@@ -305,6 +334,20 @@ class TwinUpdates:
         contradiction = _text(observation.get("contradicts_profile"))
         if contradiction:
             lines.append(context.text("twins.update_contradiction", text=contradiction))
+        evidence = observation.get("evidence")
+        if isinstance(evidence, Mapping):
+            citation = evidence.get("citation") or {}
+            lines.append(
+                context.text(
+                    "twins.update_citation",
+                    effect=evidence.get("effect", "-"),
+                    field=evidence.get("field", "-"),
+                    version=citation.get("source_version", "-"),
+                    first=citation.get("start_line", "-"),
+                    last=citation.get("end_line", "-"),
+                    quote=citation.get("quote", ""),
+                )
+            )
         return lines
 
     def about(self, observation: Mapping[str, object]) -> str:
@@ -385,6 +428,17 @@ class TwinUpdates:
         self.console.write()
         if decision == learning_api.REJECT:
             self.console.say("twins.update_rejected", name=subject.name, label=label)
+            return
+        evidence = update.get("evidence")
+        if isinstance(evidence, Mapping):
+            self.console.say(
+                "twins.update_evidence_approved",
+                name=subject.name,
+                label=label,
+                count=len(kept),
+                source=(self.evidence or {}).get("code") or evidence.get("source_id", "-"),
+                version=evidence.get("source_version", "-"),
+            )
             return
         codes = learning_api.learned_codes(entry, update_id)
         self.console.say(

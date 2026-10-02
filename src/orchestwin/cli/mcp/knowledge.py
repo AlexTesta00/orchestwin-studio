@@ -25,6 +25,8 @@ TESTS_DOCUMENT: Final = "twins/feedback/tests.json"
 TESTS_KIND: Final = "orchestwin.test-reviews"
 LEARNING_DOCUMENT: Final = "twins/feedback/learned.json"
 LEARNING_KIND: Final = "orchestwin.twin-learning"
+EVIDENCE_DOCUMENT: Final = "twins/evidence.json"
+EVIDENCE_KIND: Final = "orchestwin.research-evidence"
 MARKDOWN_SUFFIX: Final = ".md"
 FOLDER_MISSING: Final = "FOLDER_MISSING"
 FOLDER_UNREADABLE: Final = "FOLDER_UNREADABLE"
@@ -167,6 +169,22 @@ class Knowledge:
     def stale_reviews(self) -> int:
         value = _mapping(self.manifest.get("state")).get("stale_reviews")
         return value if _integer(value) and value >= 0 else 0
+
+    def evidence(self) -> Mapping[str, object] | None:
+        declared = _mapping(self.manifest.get("research_evidence"))
+        if not declared:
+            return None
+        document = self.document(EVIDENCE_DOCUMENT)
+        if (
+            document is None
+            or document.get("kind") != EVIDENCE_KIND
+            or document.get("schema_version") != 1
+            or "text" in document
+        ):
+            raise FolderProblem(FOLDER_UNREADABLE, path=EVIDENCE_DOCUMENT)
+        if any("text" in item for item in mappings(document.get("evidence"))):
+            raise FolderProblem(FOLDER_UNREADABLE, path=EVIDENCE_DOCUMENT)
+        return document
 
     def design_reviews(self) -> int:
         relative = _text(_mapping(self.manifest.get("feedback")).get("reviews_document"))

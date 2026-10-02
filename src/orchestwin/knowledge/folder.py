@@ -59,6 +59,12 @@ from orchestwin.knowledge.layout import (
     stage_document,
     stage_text,
 )
+from orchestwin.knowledge.research_evidence import (
+    EVIDENCE_DOCUMENT,
+    EVIDENCE_TEXT,
+    evidence_markdown,
+)
+from orchestwin.knowledge.research_evidence import present as has_evidence
 from orchestwin.knowledge.schema import SCHEMA_NAMES, has_design_additions, schema_files
 from orchestwin.knowledge.sources import KnowledgeSources
 from orchestwin.knowledge.state_documents import (
@@ -357,6 +363,12 @@ def content_files(sources: KnowledgeSources) -> dict[str, str]:
     files.update(
         schema_files(design_additions=package is not None and has_design_additions(package))
     )
+    if has_evidence(sources.research_evidence):
+        files[EVIDENCE_DOCUMENT] = json_text(sources.research_evidence)
+        files[EVIDENCE_TEXT] = evidence_markdown(
+            sources.research_evidence, language=folder_language(sources)
+        )
+        files.update(schema_files(research_evidence=True, only_evidence=True))
     return files
 
 
@@ -473,7 +485,7 @@ def folder_manifest(
     version_number: int,
     created_at: datetime,
 ) -> dict[str, object]:
-    return {
+    result = {
         "schema_version": KNOWLEDGE_SCHEMA_VERSION,
         "kind": KNOWLEDGE_FOLDER_KIND,
         "manifest": KNOWLEDGE_MANIFEST,
@@ -496,9 +508,23 @@ def folder_manifest(
         "views": _view_entries(files, folder_diagrams(sources), sources.present_stages),
         "feedback": _feedback_entry(sources),
         "identifiers": identifiers(sources),
-        "schemas": {name: schema_document(name) for name in SCHEMA_NAMES},
+        "schemas": {
+            name: schema_document(name)
+            for name in (
+                *SCHEMA_NAMES,
+                *(("evidence",) if has_evidence(sources.research_evidence) else ()),
+            )
+        },
         "files": file_digests(files),
     }
+    if has_evidence(sources.research_evidence):
+        result["research_evidence"] = {
+            "document": EVIDENCE_DOCUMENT,
+            "text": EVIDENCE_TEXT,
+            "sources": len(sources.research_evidence.get("evidence", ())),
+            "citations": len(sources.research_evidence.get("citations", ())),
+        }
+    return result
 
 
 def folder_overview(sources: KnowledgeSources) -> list[str]:

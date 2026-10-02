@@ -108,6 +108,7 @@ TOOL_NAMES = [
     "get_test_results",
     "run_tests",
     "get_tasks",
+    "get_evidence",
 ]
 RUN_FOLDER = ("tests", "20260929-100000")
 
@@ -1446,7 +1447,7 @@ def with_test_estimates(monkeypatch: pytest.MonkeyPatch, *, present: bool) -> No
     monkeypatch.setattr(costs, "ESTIMATES", MappingProxyType(estimates))
 
 
-def test_the_eleven_tools_end_with_the_tools_of_the_tests_and_of_the_tasks(
+def test_the_twelve_tools_preserve_the_tests_and_tasks_and_add_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with_test_estimates(monkeypatch, present=True)

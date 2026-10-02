@@ -286,8 +286,13 @@ class ProposalGenerator:
             and serialized_context.get("purpose") == "DISCUSSION_SYNTHESIS"
         ):
             contract_version = 6
+        schema_ref = (
+            f"proposal-{task}-evidence-v1"
+            if purpose == "TWIN_EVIDENCE_UPDATE"
+            else f"proposal-{task}-v{contract_version}"
+        )
         schema = create_structured_json_schema(
-            schema_id=f"proposal-{task}-v{contract_version}",
+            schema_id=schema_ref,
             version_number=contract_version,
             schema_payload=schema_payload,
         )
@@ -305,7 +310,7 @@ class ProposalGenerator:
                 ),
                 input_payload={"context": serialized_context, "output_schema": schema_payload},
                 allowed_evidence_refs=(),
-                prompt_version_ref=f"proposal-{task}-v{contract_version}",
+                prompt_version_ref=schema_ref,
                 temperature=self.configuration.temperature if temperature is None else temperature,
                 max_output_tokens=budget,
                 timeout_seconds=self.configuration.timeout_seconds,

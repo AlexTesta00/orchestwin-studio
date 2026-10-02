@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "mcp.title_get_evidence": {"it": "Leggi le evidenze", "en": "Read evidence"},
+    "mcp.describe_get_evidence": {
+        "it": "Legge dal Dossier le citazioni approvate, origine, versioni e limiti. Non invia testo originale e non genera; l'approvazione del proprietario non è validazione umana.",
+        "en": "Reads approved quotations, origins, versions and limits from the Dossier. Does not send original text or generate; owner approval is not human validation.",
+    },
+    "mcp.parameter_evidence_code": {
+        "it": "Codice facoltativo della fonte, per esempio EVD-001.",
+        "en": "Optional source code, for example EVD-001.",
+    },
     "mcp.help": {
         "it": "Avvia il server MCP orchestwin-twins, che dà agli agenti dell'editor la conoscenza "
         "approvata del progetto",

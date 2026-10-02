@@ -43,6 +43,7 @@ REVIEW_CHANGES: Final = "review_changes"
 GET_TEST_RESULTS: Final = "get_test_results"
 RUN_TESTS: Final = "run_tests"
 GET_TASKS: Final = "get_tasks"
+GET_EVIDENCE: Final = "get_evidence"
 TEXT: Final = "text"
 TWIN: Final = "twin"
 COUNT: Final = "count"
@@ -635,7 +636,7 @@ def get_twin(session: Session, values: Mapping[str, object]) -> dict[str, object
                 "value": observation_value(item),
                 "status": item.get("epistemic_status"),
             }
-    return {
+    result = {
         "twin": {
             "number": twin.number,
             "twin_id": twin.twin_id,
@@ -648,6 +649,50 @@ def get_twin(session: Session, values: Mapping[str, object]) -> dict[str, object
             "observations": observations,
         },
         "learned": None if entry is None else _plain(entry),
+    }
+    evidence = found.evidence()
+    if evidence is not None:
+        result["evidence"] = {
+            "citations": [
+                _plain(item)
+                for item in knowledge.mappings(evidence.get("citations"))
+                if item.get("twin_id") == twin.twin_id
+            ],
+            "sources": [_plain(item) for item in knowledge.mappings(evidence.get("evidence"))],
+        }
+        for item in twin.observations:
+            key = item.get("observation_key")
+            if isinstance(key, str) and key.startswith(OBSERVATION_PREFIX):
+                observations[key.removeprefix(OBSERVATION_PREFIX)]["provenance"] = _plain(
+                    item.get("provenance", [])
+                )
+    return result
+
+
+def get_evidence(session: Session, values: Mapping[str, object]) -> dict[str, object]:
+    document = session.knowledge().evidence()
+    if document is None:
+        return {"evidence": [], "citations": [], "original_text_included": False}
+    sources = knowledge.mappings(document.get("evidence"))
+    code = values.get("code")
+    if isinstance(code, str):
+        sources = [
+            item for item in sources if str(item.get("code", "")).casefold() == code.casefold()
+        ]
+    keys = {(item.get("id"), item.get("version")) for item in sources}
+    citations = [
+        item
+        for item in knowledge.mappings(document.get("citations"))
+        if (
+            item.get("citation", {}).get("source_id"),
+            item.get("citation", {}).get("source_version"),
+        )
+        in keys
+    ]
+    return {
+        "evidence": [_plain(item) for item in sources],
+        "citations": [_plain(item) for item in citations],
+        "original_text_included": False,
     }
 
 
@@ -1049,6 +1094,13 @@ TOOLS: Final = (
         "mcp.describe_get_tasks",
         get_tasks,
         (Parameter(STATUS, STATUS, "mcp.parameter_task_status", default=OPEN_TASKS),),
+    ),
+    Tool(
+        GET_EVIDENCE,
+        "mcp.title_get_evidence",
+        "mcp.describe_get_evidence",
+        get_evidence,
+        (Parameter("code", TEXT, "mcp.parameter_evidence_code", maximum=CODE_LENGTH),),
     ),
 )
 TOOLS_BY_NAME: Final[Mapping[str, Tool]] = MappingProxyType({tool.name: tool for tool in TOOLS})

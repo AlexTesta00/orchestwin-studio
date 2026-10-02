@@ -43,6 +43,7 @@ TOOL_ORDER = [
     "get_test_results",
     "run_tests",
     "get_tasks",
+    "get_evidence",
 ]
 CAPABILITIES = {
     "tools": {"listChanged": False},
@@ -227,7 +228,7 @@ def test_the_version_of_the_client_is_answered_when_it_is_known(
     assert messages(run)[1]["result"]["protocolVersion"] == answered
 
 
-def test_the_eleven_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
+def test_the_twelve_tools_are_listed_with_schemas_that_hold_together(tmp_path: Path) -> None:
     state_folder(tmp_path)
 
     run = serve(tmp_path, initialize(), request(2, "tools/list"))
@@ -258,6 +259,7 @@ def test_the_eleven_tools_are_listed_with_schemas_that_hold_together(tmp_path: P
         "get_test_results": [],
         "run_tests": [],
         "get_tasks": [],
+        "get_evidence": [],
     }
     assert tools[10]["inputSchema"]["properties"]["status"] == {
         "type": "string",

@@ -25,6 +25,7 @@ from orchestwin.projects.code_changes import (
     MAX_TWIN_NAME_LENGTH,
     normalized_line,
 )
+from orchestwin.projects.research_evidence import EvidenceChange, EvidenceUpdateSource
 
 OBSERVATION_CODE_PATTERN: Final = rf"^{OBSERVATION_CODE_PREFIX}-[0-9]{{3,6}}$"
 REQUIREMENT_CODE_PATTERN: Final = r"^REQ-[0-9]{3,6}$"
@@ -425,6 +426,7 @@ class ProposedObservation:
     requirement: str | None = None
     screen: str | None = None
     contradicts_profile: str | None = None
+    evidence: EvidenceChange | None = None
 
     def __post_init__(self) -> None:
         _count(self.index, "proposed observation index", maximum=MAX_UPDATE_OBSERVATIONS - 1)
@@ -435,6 +437,8 @@ class ProposedObservation:
         _optional_normalized(
             self.contradicts_profile, label="profile contradiction", maximum=MAX_BASIS_LENGTH
         )
+        if self.evidence is not None and not isinstance(self.evidence, EvidenceChange):
+            raise ValueError("an evidence observation requires a typed change")
 
     def to_snapshot(self) -> dict[str, object]:
         return {
@@ -443,6 +447,7 @@ class ProposedObservation:
             "basis": self.basis,
             "about": {"requirement": self.requirement, "screen": self.screen},
             "contradicts_profile": self.contradicts_profile,
+            **({"evidence": self.evidence.to_snapshot()} if self.evidence is not None else {}),
         }
 
 
@@ -500,6 +505,7 @@ class TwinUpdate:
     decision: UpdateDecision | None = None
     generation_ids: tuple[UUID, ...] = ()
     cost_microusd: int = 0
+    evidence: EvidenceUpdateSource | None = None
 
     def __post_init__(self) -> None:
         _uuid(self.id, "update ID")
@@ -532,7 +538,7 @@ class TwinUpdate:
             raise ValueError("an update is empty exactly when it proposes no observation")
         _count(self.material_changes, "changes of the material", maximum=MAX_UPDATE_CHANGES)
         _count(self.material_tests, "test runs of the material", maximum=MAX_UPDATE_TESTS)
-        if self.material_changes + self.material_tests < 1:
+        if self.material_changes + self.material_tests < 1 and self.evidence is None:
             raise ValueError("an update is generated from some material")
         decided = self.status in (UpdateStatus.APPROVED, UpdateStatus.REJECTED)
         if decided != (self.decision is not None):
@@ -551,6 +557,19 @@ class TwinUpdate:
         if len(set(self.generation_ids)) != len(self.generation_ids):
             raise ValueError("generation IDs must not repeat")
         _count(self.cost_microusd, "update cost")
+        if self.evidence is not None:
+            if not isinstance(self.evidence, EvidenceUpdateSource):
+                raise ValueError("an evidence update requires a typed source")
+            if len(self.observations) + self.evidence.rejected_changes > MAX_UPDATE_OBSERVATIONS:
+                raise ValueError("accepted and rejected evidence changes exceed the proposal limit")
+            if any(
+                item.evidence is None
+                or item.evidence.citation.source_id != self.evidence.source_id
+                or item.evidence.citation.source_version != self.evidence.source_version
+                or item.evidence.citation.content_hash != self.evidence.content_hash
+                for item in self.observations
+            ):
+                raise ValueError("evidence changes must cite the update source version")
 
     @property
     def pending(self) -> bool:
@@ -614,6 +633,7 @@ class TwinUpdate:
             "material": {"changes": self.material_changes, "tests": self.material_tests},
             "decision": None if self.decision is None else self.decision.to_snapshot(),
             "cost_microusd": self.cost_microusd,
+            **({"evidence": self.evidence.to_snapshot()} if self.evidence is not None else {}),
         }
 
 
@@ -674,6 +694,9 @@ def proposed_observation_from_snapshot(payload: Mapping[str, object]) -> Propose
         requirement=about["requirement"],
         screen=about["screen"],
         contradicts_profile=payload["contradicts_profile"],
+        evidence=None
+        if payload.get("evidence") is None
+        else EvidenceChange.from_snapshot(payload["evidence"]),
     )
 
 
@@ -708,6 +731,9 @@ def twin_update_from_snapshot(payload: Mapping[str, object]) -> TwinUpdate:
         material_tests=material["tests"],
         decision=None if decision is None else update_decision_from_snapshot(decision),
         cost_microusd=payload["cost_microusd"],
+        evidence=None
+        if payload.get("evidence") is None
+        else EvidenceUpdateSource.from_snapshot(payload["evidence"]),
     )
 
 

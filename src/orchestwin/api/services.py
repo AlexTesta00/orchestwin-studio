@@ -60,6 +60,7 @@ from orchestwin.knowledge.package_service import (
     SqlAlchemyKnowledgePackageStore,
 )
 from orchestwin.knowledge.project_import_service import ProjectImportService
+from orchestwin.knowledge.research_evidence import SqlAlchemyKnowledgeEvidenceQueryService
 from orchestwin.knowledge.twin_import_service import TwinImportService
 from orchestwin.knowledge.twin_import_sources import SqlAlchemyTwinImportCandidateQuery
 from orchestwin.models.proposal_evidence_persistence import SqlAlchemyProposalEvidenceStore
@@ -329,6 +330,9 @@ def create_default_runtime(
                 database_runtime.session_factory
             ),
             state_query_service=SqlAlchemyProjectStateQueryService(
+                database_runtime.session_factory
+            ),
+            evidence_query_service=SqlAlchemyKnowledgeEvidenceQueryService(
                 database_runtime.session_factory
             ),
         ),

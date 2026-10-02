@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "twins.option_evidence": {
+        "it": "Proponi aggiornamenti da questa fonte EVD-001.",
+        "en": "Propose updates from this EVD-001 source.",
+    },
+    "twins.update_evidence": {
+        "it": "Fonte {source}, versione {version}. Cambiamenti rifiutati dal controllo della citazione: {count}.",
+        "en": "Source {source}, version {version}. Changes rejected by citation verification: {count}.",
+    },
+    "twins.update_citation": {
+        "it": "{effect} su {field}, fonte v{version}, righe {first}-{last}: «{quote}»",
+        "en": "{effect} on {field}, source v{version}, lines {first}-{last}: “{quote}”",
+    },
     "twins.help_persona": {
         "it": "Mostra la Persona derivata dal User Twin",
         "en": "Show the Persona derived from the User Twin",
@@ -512,6 +524,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "twins.update_approved": {
         "it": "{name} è ora alla versione {label} e ha imparato: {codes}.",
         "en": "{name} is now at version {label} and learned: {codes}.",
+    },
+    "twins.update_evidence_approved": {
+        "it": "{name} è ora alla versione {label}. Modifiche approvate dalla fonte {source} "
+        "v{version}: {count}.",
+        "en": "{name} is now at version {label}. Approved changes from source {source} "
+        "v{version}: {count}.",
     },
     "twins.update_rejected": {
         "it": "{name} non ha imparato niente da questa proposta, che resta scartata (versione "

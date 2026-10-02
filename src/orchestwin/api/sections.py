@@ -5,7 +5,7 @@ from typing import Annotated, Final, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from orchestwin.agents.realignment_service import TeamRealignmentFailure, TeamRealignmentService
 from orchestwin.agents.team_gate import LocalAgentTeamApprovalService
@@ -66,6 +66,9 @@ class SectionPayload(ApiModel):
     reasons: tuple[SectionReason, ...]
     blocked: SectionBlock | None
     codes: tuple[str, ...]
+    affected_codes: dict[str, tuple[str, ...]] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
     @classmethod
     def from_domain(cls, section: Section) -> SectionPayload:
@@ -76,6 +79,7 @@ class SectionPayload(ApiModel):
             reasons=section.reasons,
             blocked=section.blocked,
             codes=section.codes,
+            affected_codes=dict(section.affected_codes),
         )
 
 

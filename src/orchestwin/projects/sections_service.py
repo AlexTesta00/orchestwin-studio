@@ -42,6 +42,7 @@ from orchestwin.projects.sections import (
     TeamFacts,
     UserTwinsFacts,
     project_sections,
+    requirements_actor_codes,
 )
 from orchestwin.twins.persistence.repositories import SqlAlchemyUserModelingSnapshotRepository
 from orchestwin.twins.revision_persistence import SqlAlchemyUserTwinProfileDiffRepository
@@ -302,6 +303,7 @@ def requirements_facts(
         user_modeling=_reference(specification.user_modeling_reference),
         twins=_twins(specification.user_twin_references),
         cited_twin_ids=referenced_twin_ids(specification),
+        actor_codes=requirements_actor_codes(specification),
         revision_pending=revision_pending,
     )
 

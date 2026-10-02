@@ -43,6 +43,7 @@ from orchestwin.api.requirements import create_requirements_router
 from orchestwin.api.requirements_realignment import (
     create_requirements_realignment_router,
 )
+from orchestwin.api.research_evidence import create_research_evidence_router
 from orchestwin.api.sections import create_sections_router
 from orchestwin.api.services import ApplicationRuntime, create_default_runtime
 from orchestwin.api.team_realignment import create_team_realignment_router
@@ -230,6 +231,7 @@ def create_app(
         create_code_change_router(),
         create_acceptance_test_router(),
         create_twin_learning_router(),
+        create_research_evidence_router(),
         create_twin_import_router(),
         create_user_modeling_realignment_router(),
         create_requirements_realignment_router(),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID
@@ -197,6 +198,29 @@ def test_the_sections_answer_exactly_the_payload_of_the_contract():
     assert response.status_code == 200
     assert response.json() == EXAMPLE_JSON
     assert service.calls == [("current", OWNER_ID, PROJECT_ID)]
+
+
+def test_changed_twins_expose_linked_scenarios_needs_and_requirements_in_the_api():
+    codes = {"scenarios": ("SCN-001",), "needs": ("NED-001",), "requirements": ("REQ-001",)}
+    sections = replace(
+        EXAMPLE,
+        sections=tuple(
+            replace(section, affected_codes=codes)
+            if section.key in (RQ, DS, ProjectStage.PACKAGE)
+            else section
+            for section in EXAMPLE.sections
+        ),
+    )
+    response = client(FakeSectionsService(sections=sections)).get(SECTIONS)
+    assert response.status_code == 200
+    by_key = {section["key"]: section for section in response.json()["sections"]}
+    for key in ("REQUIREMENTS", "DESIGN", "PACKAGE"):
+        assert by_key[key]["affected_codes"] == {
+            "scenarios": ["SCN-001"],
+            "needs": ["NED-001"],
+            "requirements": ["REQ-001"],
+        }
+    assert "affected_codes" not in by_key["BRIEF"]
 
 
 def test_a_blocked_section_carries_its_obstacle_and_codes():

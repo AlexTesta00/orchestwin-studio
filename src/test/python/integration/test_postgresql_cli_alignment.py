@@ -103,6 +103,7 @@ MCP_TOOLS = (
     "get_test_results",
     "run_tests",
     "get_tasks",
+    "get_evidence",
 )
 
 

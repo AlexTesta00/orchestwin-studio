@@ -268,6 +268,15 @@ async def _write_import(
 
     imports = SqlAlchemyProjectImportRepository(session, owner_user_id=owner)
     await _attempt("import", imports.add(record))
+    if plan.research_evidence is not None:
+        from orchestwin.projects.persistence.research_evidence import (
+            SqlAlchemyResearchEvidenceRepository,
+        )
+
+        evidence = SqlAlchemyResearchEvidenceRepository(session, owner_user_id=owner)
+        await _attempt(
+            "evidence", evidence.import_dossier(project.id, plan.research_evidence, plan.modeling)
+        )
 
     stored = await projects.get_owned(project_id=project.id, owner_user_id=owner)
     _require(

@@ -24,6 +24,7 @@ from orchestwin.knowledge.layout import (
     present_stages,
     stage_document,
 )
+from orchestwin.knowledge.research_evidence import EVIDENCE_DOCUMENT, EVIDENCE_TEXT
 from orchestwin.knowledge.schema import (
     MAX_DOCUMENT_DEPTH,
     KnowledgeSchemaError,
@@ -272,6 +273,21 @@ def verify_folder(files: Mapping[str, str]) -> VerifiedFolder:
         _state_documents(files, manifest)
     _feedback_document(files, manifest, "tests", FEEDBACK_TESTS)
     _feedback_document(files, manifest, "learned", FEEDBACK_LEARNING)
+    declared_evidence = manifest.get("research_evidence")
+    if declared_evidence is not None:
+        if (
+            not isinstance(declared_evidence, Mapping)
+            or declared_evidence.get("document") != EVIDENCE_DOCUMENT
+            or declared_evidence.get("text") != EVIDENCE_TEXT
+        ):
+            raise KnowledgeArchiveError("FOLDER_DOCUMENT_INVALID", EVIDENCE_DOCUMENT)
+        if (
+            not _same_project(_json(files, EVIDENCE_DOCUMENT), manifest)
+            or EVIDENCE_TEXT not in files
+        ):
+            raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
+    elif EVIDENCE_DOCUMENT in files or EVIDENCE_TEXT in files:
+        raise KnowledgeArchiveError("FOLDER_TAMPERED", EVIDENCE_DOCUMENT)
     if "design" in documents:
         _verify_generated_mockup(documents["design"]["package"])
     return VerifiedFolder(manifest=manifest, documents=documents, files=dict(files))
