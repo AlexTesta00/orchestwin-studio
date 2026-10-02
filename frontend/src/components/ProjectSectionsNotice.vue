@@ -19,7 +19,8 @@ type LineKind =
   | "uncovered"
   | "learned"
   | "covered"
-  | "evaluation";
+  | "evaluation"
+  | "affected";
 
 interface LinePart {
   text: string;
@@ -31,6 +32,7 @@ interface NoticeLine {
   kind: LineKind;
   parts: LinePart[];
   link: ProjectStage | null;
+  summary?: string;
 }
 
 const LEARN_COMMAND = "ut twins update";
@@ -108,6 +110,12 @@ const messages = {
     learned: "The twins learned something during development: see the proposal with {command}.",
     failed: "The sections could not be updated: try again.",
     open: "Open {section}",
+    affected:
+      "Review {section} after the twin changed: {items}. Re-anchoring preserves identities; review what these items say.",
+    affectedSummary: "References to review for {section} ({count})",
+    affectedScenarios: "scenarios {codes}",
+    affectedNeeds: "needs {codes}",
+    affectedRequirements: "requirements {codes}",
   },
   it: {
     archetypesBehind:
@@ -140,6 +148,12 @@ const messages = {
       "I twin hanno imparato qualcosa durante lo sviluppo: guarda la proposta con {command}.",
     failed: "Non è stato possibile aggiornare le sezioni: riprova.",
     open: "Apri {section}",
+    affected:
+      "Rivedi {section} dopo il cambiamento del twin: {items}. Il riaggancio conserva le identità; controlla ciò che dicono questi elementi.",
+    affectedSummary: "Riferimenti da rivedere per {section} ({count})",
+    affectedScenarios: "scenari {codes}",
+    affectedNeeds: "bisogni {codes}",
+    affectedRequirements: "requisiti {codes}",
   },
 } as const;
 
@@ -241,6 +255,37 @@ function availableLines(sections: ProjectSectionsPayload): NoticeLine[] {
   return lines;
 }
 
+function affectedLines(sections: ProjectSectionsPayload): NoticeLine[] {
+  return sections.sections.flatMap((section) => {
+    const codes = section.affected_codes;
+    if (codes === undefined) return [];
+    const items = [
+      codes.scenarios.length > 0
+        ? fill(copy.value.affectedScenarios, { codes: listOf(codes.scenarios) })
+        : null,
+      codes.needs.length > 0
+        ? fill(copy.value.affectedNeeds, { codes: listOf(codes.needs) })
+        : null,
+      codes.requirements.length > 0
+        ? fill(copy.value.affectedRequirements, { codes: listOf(codes.requirements) })
+        : null,
+    ].filter((item): item is string => item !== null);
+    if (items.length === 0) return [];
+    return [
+      {
+        key: `affected-${section.key}`,
+        kind: "affected" as const,
+        parts: partsOf(copy.value.affected, { section: label(section.key), items: listOf(items) }),
+        link: section.key,
+        summary: fill(copy.value.affectedSummary, {
+          section: label(section.key),
+          count: String(new Set([...codes.scenarios, ...codes.needs, ...codes.requirements]).size),
+        }),
+      },
+    ];
+  });
+}
+
 const lines = computed<NoticeLine[]>(() => {
   const result = props.result;
   const collected = result === null ? [] : resultLines(result);
@@ -283,7 +328,7 @@ const lines = computed<NoticeLine[]>(() => {
   if (stuck !== undefined && !reported.has(stuck.key)) {
     collected.push(blockedLine(stuck.key, stuck.blocked, stuck.codes));
   }
-  return [...collected, ...availableLines(props.sections)];
+  return [...collected, ...affectedLines(props.sections), ...availableLines(props.sections)];
 });
 
 const alignable = computed(() => props.sections.alignment.available);
@@ -342,7 +387,24 @@ watch(
         :key="line.key"
         class="flex flex-wrap items-center gap-x-4 gap-y-1"
       >
+        <details
+          v-if="line.kind === 'affected'"
+          class="w-full min-w-0 flex-none sm:w-auto sm:flex-1"
+          data-testid="sections-affected-details"
+        >
+          <summary class="min-h-11 cursor-pointer py-3 text-sm font-semibold text-on-night-2">
+            {{ line.summary }}
+          </summary>
+          <p
+            class="m-0 pb-3 text-[15px] leading-normal text-on-night-2"
+            :data-kind="line.kind"
+            data-testid="sections-notice-line"
+          >
+            <template v-for="(part, index) in line.parts" :key="index">{{ part.text }}</template>
+          </p>
+        </details>
         <p
+          v-else
           :class="['m-0 text-[15px] leading-normal', lineClass(line.kind)]"
           :data-kind="line.kind"
           data-testid="sections-notice-line"

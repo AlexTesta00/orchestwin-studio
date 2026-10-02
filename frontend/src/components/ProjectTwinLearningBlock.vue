@@ -62,6 +62,8 @@ const messages = {
     contradicts: "It contradicts the profile",
     retired: ["1 observation was retired.", "{count} observations were retired."],
     pending: "A proposal waits for your decision: `ut twins update`.",
+    pendingEvidence:
+      "An evidence proposal waits for your decision in the User Twin step. Review its exact quotes and refused changes there.",
     newMaterial: "It has new critiques to learn from, on {material}: `ut twins update`.",
     changes: ["1 commit", "{count} commits"],
     tests: ["1 test run", "{count} test runs"],
@@ -87,6 +89,8 @@ const messages = {
     contradicts: "Contraddice il profilo",
     retired: ["1 osservazione è stata ritirata.", "{count} osservazioni sono state ritirate."],
     pending: "Una proposta attende la tua decisione: `ut twins update`.",
+    pendingEvidence:
+      "Una proposta da evidenza attende la tua decisione nel passo User Twin. Lì trovi le citazioni esatte e i cambiamenti rifiutati.",
     newMaterial: "Ha nuove critiche da cui imparare, su {material}: `ut twins update`.",
     changes: ["1 commit", "{count} commit"],
     tests: ["1 verifica", "{count} verifiche"],
@@ -135,6 +139,7 @@ const twinViews = computed(() =>
     observations: twin.observations.map(observationView),
     retired: twin.retired.length === 0 ? null : plural(twin.retired.length, copy.value.retired),
     pending: twin.pending_update !== null,
+    pendingEvidence: twin.pending_update?.evidence !== undefined,
     material:
       twin.pending_update === null && updateAvailable.value
         ? materialText(twin.new_material)
@@ -341,7 +346,12 @@ watch(() => props.projectId, load, { immediate: true });
             class="m-0 text-sm leading-normal text-on-night-2"
             data-testid="learning-pending"
           >
-            <template v-for="part in commandParts(copy.pending)" :key="part.key">
+            <template
+              v-for="part in commandParts(
+                twin.pendingEvidence ? copy.pendingEvidence : copy.pending,
+              )"
+              :key="part.key"
+            >
               <code
                 v-if="part.command"
                 class="rounded-[4px] bg-on-night/8 px-1 font-mono text-[13px] text-on-night"

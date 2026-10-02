@@ -87,6 +87,10 @@ const messages = {
     participates: "participates in",
     reveals: "reveals",
     motivates: "motivates",
+    evidence: "Evidence source",
+    supports: "supports",
+    contradicts: "contradicts",
+    adds: "adds information to",
   },
   it: {
     eyebrow: "Gestione artefatti e provenienza",
@@ -133,6 +137,10 @@ const messages = {
     participates: "partecipa a",
     reveals: "rivela",
     motivates: "motiva",
+    evidence: "Fonte di evidenza",
+    supports: "sostiene",
+    contradicts: "contraddice",
+    adds: "aggiunge informazioni a",
   },
 } as const;
 
@@ -185,6 +193,7 @@ const nodeKinds = computed(() => [
 ]);
 
 function nodeKindLabel(kind: ArtifactGraphNodeKind): string {
+  if (kind === "RESEARCH_EVIDENCE") return copy.value.evidence;
   return kind === "JOURNEY"
     ? copy.value.journey
     : kind === "NEED"
@@ -194,6 +203,12 @@ function nodeKindLabel(kind: ArtifactGraphNodeKind): string {
         : kind;
 }
 function linkKindLabel(kind: ArtifactGraphLinkKind): string {
+  const evidenceLabels = {
+    SUPPORTS: copy.value.supports,
+    CONTRADICTS: copy.value.contradicts,
+    ADDS: copy.value.adds,
+  };
+  if (kind === "SUPPORTS" || kind === "CONTRADICTS" || kind === "ADDS") return evidenceLabels[kind];
   return kind === "EXPANDS"
     ? copy.value.expands
     : kind === "PARTICIPATES_IN"
@@ -227,9 +242,14 @@ function stageLabel(stage: ArtifactGraphStage): string {
 function nodeLabel(reference: ArtifactGraphReferencePayload): string {
   const node = nodeLookup.value.get(referenceKey(reference));
 
-  return node === undefined
-    ? `${reference.kind} · ${reference.artifact_id}`
-    : `${node.display_code} · ${node.title}`;
+  const label =
+    node === undefined
+      ? `${reference.kind} · ${reference.artifact_id}`
+      : `${node.display_code} · ${node.title}`;
+  return (reference.kind === "RESEARCH_EVIDENCE" || reference.kind === "USER_TWIN") &&
+    reference.version_number !== null
+    ? `${label} · v${reference.version_number}`
+    : label;
 }
 
 function exactReferenceLabel(reference: VersionedArtifactReferencePayload | null): string {
@@ -445,6 +465,15 @@ watch(
                 <div v-if="node.reference.version_number !== null">
                   <dt class="inline font-semibold text-on-night">{{ copy.version }}:</dt>
                   <dd class="inline">{{ node.reference.version_number }}</dd>
+                </div>
+                <div
+                  v-if="
+                    node.reference.kind === 'RESEARCH_EVIDENCE' &&
+                    node.reference.content_hash !== null
+                  "
+                >
+                  <dt class="font-semibold text-on-night">{{ copy.hash }}:</dt>
+                  <dd class="m-0 font-mono break-all">{{ node.reference.content_hash }}</dd>
                 </div>
                 <div>
                   <dt class="inline font-semibold text-on-night">{{ copy.outgoing }}:</dt>

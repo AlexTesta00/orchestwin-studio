@@ -106,6 +106,92 @@ afterEach(() => {
 
 describe("ProjectSectionsNotice", () => {
   it.each(["it", "en"] as const)(
+    "summarises linked references and discloses exact codes after a twin change in %s",
+    async (locale) => {
+      const wrapper = mountNotice(
+        {
+          sections: sectionsOf({
+            REQUIREMENTS: {
+              state: "IN_PROGRESS",
+              reasons: ["USER_TWINS_CHANGED"],
+              affected_codes: {
+                scenarios: ["SCN-002"],
+                needs: ["NEED-003"],
+                requirements: ["REQ-004"],
+              },
+            },
+          }),
+          openKey: "USER_TWINS",
+        },
+        locale,
+      );
+      const details = wrapper.get<HTMLDetailsElement>('[data-testid="sections-affected-details"]');
+      expect(details.element.open).toBe(false);
+      expect(details.get("summary").text()).toBe(
+        locale === "it"
+          ? "Riferimenti da rivedere per Definizione (3)"
+          : "References to review for Definition (3)",
+      );
+      expect(details.get("summary").text()).not.toContain("SCN-002");
+      await details.get("summary").trigger("click");
+      expect(details.element.open).toBe(true);
+      expect(lines(wrapper)).toEqual([expect.stringContaining("SCN-002")]);
+      expect(wrapper.text()).toContain("NEED-003");
+      expect(wrapper.text()).toContain("REQ-004");
+      expect(wrapper.text()).toContain(
+        locale === "it" ? "controlla ciò che dicono" : "review what these items say",
+      );
+      await wrapper.get('[data-testid="sections-notice-open"]').trigger("click");
+      expect(wrapper.emitted("open")).toEqual([["REQUIREMENTS"]]);
+      expect(wrapper.emitted("align")).toBeUndefined();
+    },
+  );
+
+  it.each(["it", "en"] as const)(
+    "keeps each section's twelve references collapsed with its navigation available in %s",
+    async (locale) => {
+      const affected = {
+        scenarios: ["SCN-001"],
+        needs: ["NED-001", "NED-002", "NED-003", "NED-004"],
+        requirements: Array.from({ length: 7 }, (_, index) => `REQ-00${index + 1}`),
+      };
+      const wrapper = mountNotice(
+        {
+          sections: sectionsOf({
+            REQUIREMENTS: { state: "TO_UPDATE", affected_codes: affected },
+            DESIGN: { state: "IN_PROGRESS", affected_codes: affected },
+            PACKAGE: { state: "TO_UPDATE", affected_codes: affected },
+          }),
+          openKey: "USER_TWINS",
+        },
+        locale,
+      );
+      const disclosures = wrapper.findAll<HTMLDetailsElement>(
+        '[data-testid="sections-affected-details"]',
+      );
+      expect(disclosures).toHaveLength(3);
+      for (const disclosure of disclosures) {
+        expect(disclosure.element.open).toBe(false);
+        expect(disclosure.get("summary").text()).toContain("(12)");
+        expect(disclosure.get("summary").text()).not.toContain("REQ-001");
+      }
+      expect(
+        wrapper
+          .findAll('[data-testid="sections-notice-open"]')
+          .map((link) => link.attributes("data-target")),
+      ).toEqual(["REQUIREMENTS", "DESIGN", "PACKAGE"]);
+      const design = disclosures[1];
+      if (design === undefined) throw new Error("Synthetic disclosure missing");
+      await design.get("summary").trigger("click");
+      expect(design.element.open).toBe(true);
+      for (const code of [...affected.scenarios, ...affected.needs, ...affected.requirements])
+        expect(design.text()).toContain(code);
+      expect(wrapper.emitted("align")).toBeUndefined();
+      await expectAccessible(wrapper.element);
+    },
+  );
+
+  it.each(["it", "en"] as const)(
     "explains archetype regeneration and opens User Twin in %s",
     async (locale) => {
       const wrapper = mountNotice(

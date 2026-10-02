@@ -58,6 +58,60 @@ function mountGraph(
 }
 
 describe("ProjectArtifactGraph", () => {
+  it.each(["it", "en"] as const)(
+    "renders versioned evidence links to the exact current twin in %s",
+    async (locale) => {
+      const graph: CrossStageArtifactGraphPayload = structuredClone(ARTIFACT_GRAPH);
+      const evidence = {
+        kind: "RESEARCH_EVIDENCE" as const,
+        artifact_id: "33333333-3333-4333-8333-333333333333",
+        version_number: 2,
+        content_hash: "e".repeat(64),
+      };
+      const twin = {
+        kind: "USER_TWIN" as const,
+        artifact_id: "22222222-2222-4222-8222-222222222222",
+        version_number: 3,
+        content_hash: "f".repeat(64),
+      };
+      graph.nodes.push(
+        {
+          reference: evidence,
+          stage: "CONTEXT",
+          display_code: "EVD-001",
+          title: "Synthetic source",
+        },
+        { reference: twin, stage: "CONTEXT", display_code: "TWIN-001", title: "Calculator user" },
+      );
+      graph.stage_counts.CONTEXT += 2;
+      graph.links.push(
+        ...(["SUPPORTS", "CONTRADICTS", "ADDS"] as const).map((kind) => ({
+          kind,
+          source: evidence,
+          target: twin,
+        })),
+      );
+      const wrapper = mountGraph({ locale, api: { ...fakeApi(), current: async () => graph } });
+      await flushPromises();
+      await wrapper.get('[data-testid="artifact-kind-filter"]').setValue("RESEARCH_EVIDENCE");
+      expect(wrapper.findAll("tbody tr")).toHaveLength(3);
+      expect(wrapper.text()).toContain(locale === "it" ? "Fonte di evidenza" : "Evidence source");
+      expect(wrapper.text()).toContain(locale === "it" ? "contraddice" : "contradicts");
+      expect(wrapper.text()).toContain("e".repeat(64));
+      expect(
+        wrapper
+          .findAll("tbody tr")
+          .every(
+            (row) =>
+              row.text().includes("Synthetic source · v2") &&
+              row.text().includes("Calculator user · v3"),
+          ),
+      ).toBe(true);
+      expect(wrapper.findAll("h5").map((heading) => heading.text())).toEqual(["Synthetic source"]);
+      wrapper.unmount();
+    },
+  );
+
   it.each(["en", "it"] as const)(
     "shows and filters the scenario to need chain in %s",
     async (locale) => {

@@ -48,6 +48,7 @@ export interface ProposedObservationPayload {
   basis: string;
   about: LearningSubjectPayload;
   contradicts_profile: string | null;
+  evidence?: EvidenceChangePayload;
 }
 
 export interface TwinUpdateMaterialPayload {
@@ -74,6 +75,7 @@ export interface TwinUpdatePayload {
   material: TwinUpdateMaterialPayload;
   decision: TwinUpdateDecisionPayload | null;
   cost_microusd: number;
+  evidence?: TwinUpdateEvidencePayload;
 }
 
 export interface LearningTwinPayload extends TwinLearningEntryPayload {
@@ -86,3 +88,4 @@ export interface TwinLearningPayload {
   update_available: boolean;
   twins: LearningTwinPayload[];
 }
+import type { EvidenceChangePayload, TwinUpdateEvidencePayload } from "./researchEvidence";
